@@ -1,13 +1,14 @@
+import { BACKEND_URL } from "@/urls";
 import Axios from "axios";
 import Cookies from "js-cookie";
 
 const axiosInstance = Axios.create({
-  baseURL: "http://localhost:8000",
+  baseURL: BACKEND_URL,
 });
 
 axiosInstance.interceptors.request.use(function (config) {
   
-  const tenant_id = Cookies.get("1");
+  const tenant_id = Cookies.get();
   const accessToken = Cookies.get("clickshow_access_token");
 
   if (tenant_id) {

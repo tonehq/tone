@@ -4,7 +4,6 @@ import * as React from 'react';
 import '@radix-ui/themes/styles.css';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Container from "../shared/ContainerComponent";
-import { Spinner } from "@radix-ui/themes";
 import { Form } from "antd";
 import { useForm } from "antd/es/form/Form";
 import ButtonComponent from "@/components/auth/Shared/ButtonComponent";
@@ -14,7 +13,7 @@ import Link from 'next/link';
 const EmailVerificationContent: React.FC = () => {
   
   const [isLoading, setIsLoading] = React.useState(true);
-  const loadingTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
+  const loadingTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const params = useSearchParams();
   const [form] = useForm();
   const [loader, setLoader] = React.useState(false);
@@ -73,7 +72,6 @@ const EmailVerificationContent: React.FC = () => {
                 htmlType={"submit"}
                 width={"100%"}
               >
-                <Spinner loading={loader} />
                 Resend
               </ButtonComponent>
             </Form.Item>

@@ -1,0 +1,114 @@
+import {
+  ACCESS_TOKEN,
+  REFRESH_TOKEN,
+  SIGNUP,
+  TENANT_ID,
+  USER_PROFILE,
+  FIREBASE_SIGNUP,
+} from "@/constants";
+import axios from "@/utils/axios";
+import { decodeJWT } from "@/utils/jwt";
+import Cookies from "js-cookie";
+// import { setCookie } from "cookies-next";
+
+export const login = async (email: string, password: string) => {
+  const { data: LogInData } = await axios.post("/auth/login", {
+    email,
+    password,
+  });
+  setToken(LogInData);
+
+  return LogInData;
+};
+
+export const setToken = async (LogInData: any) => {
+  const decoded = decodeJWT(LogInData["access_token"]);
+  Cookies.set(ACCESS_TOKEN, LogInData["access_token"], {
+    expires: new Date(decoded.exp * 1000),
+  });
+  Cookies.set(USER_PROFILE, LogInData["profile"]["name"], {
+    expires: new Date(decoded.exp * 1000),
+  });
+  Cookies.set(REFRESH_TOKEN, LogInData["refresh_token"], {
+    expires: new Date(decoded.exp * 1000),
+  });
+  Cookies.set("member_id", LogInData?.['memberships']?.[0]?.["member_id"], {
+    expires: new Date(decoded.exp * 1000),
+  });
+
+  Cookies.set("login_data", JSON.stringify(LogInData), {
+    expires: new Date(decoded.exp * 1000),
+  });
+  // setCookie(
+  //   TENANT_ID,
+  //   LogInData["memberships"].length
+  //     ? LogInData["memberships"]?.[0]?.["organisation_id"]
+  //     : "",
+  //   {
+  //     expires: new Date(decoded.exp * 1000),
+  //   }
+  // );
+
+  Cookies.set(
+    TENANT_ID,
+    LogInData["memberships"].length
+      ? LogInData["memberships"]?.[0]?.["organisation_id"]
+      : "",
+    {
+      expires: new Date(decoded.exp * 1000),
+    }
+  );
+
+  return LogInData;
+};
+
+export const createteam = async (data: string) => {
+  const res = await axios.post(`/org/create_tenants?name=${data}`);
+  return res;
+};
+
+export const forgotPassword = async (email: string) => {
+  const { data } = await axios.get("/auth/forget-password", {
+    params: {
+      email,
+    },
+  });
+  return data;
+};
+
+export const signup = async (
+  email: string,
+  username: string,
+  password: string,
+  profile: any = {},
+  firebase_token: string | null = null
+) => {
+  if (firebase_token !== null) {
+    return await axios
+      .post(
+        FIREBASE_SIGNUP,
+        {
+          email,
+          profile,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${firebase_token}`,
+          },
+        }
+      )
+      .then((res) => {
+        setToken(res.data);
+      })
+      .catch((err) => {
+        alert("something went wrong");
+      });
+  } else {
+    return await axios.post(SIGNUP, {
+      email,
+      password,
+      username,
+      profile,
+    });
+  }
+};

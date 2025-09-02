@@ -12,7 +12,7 @@ const Container = (props: any) => {
   const { children } = props;
   const [form] = useForm();
   const [isLoading, setIsLoading] = useState(true);
-  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
 
   useEffect(() => {
@@ -31,21 +31,21 @@ const Container = (props: any) => {
             <div className="flex flex-col grow max-md:max-w-full">
               <div className='h-[10%]'>
                 {/* <Image src={logo} alt={"logo"} width={150} /> */}
-                <Logo />
+                {/* <Logo /> */}
               </div>
               <div className='h-[80%] flex items-center justify-center'>
                 {props.children}
               </div>
-              <div className='h-[10%]'>
+              {/* <div className='h-[10%]'>
                 <Footer />
-              </div>
+              </div> */}
             </div>
           </section>
           <Testimonial />
         </div>
       </div>
     </main>
-  )F
+  )
 
   // return (
   //   <div className="flex w-full">

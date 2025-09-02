@@ -9,16 +9,15 @@ import { useForm } from "antd/es/form/Form";
 import { Form, Input, Skeleton } from "antd";
 import axios from '@/utils/axios';
 import Container from "../shared/ContainerComponent";
-import { Spinner } from "@radix-ui/themes";
 import ButtonComponent from "@/components/auth/Shared/ButtonComponent";
-import ToastComponent from '@/components/toast';
+// import ToastComponent from '@/components/toast';
 
 const ResetPasswordContent: React.FC = () => {
 
   const [form] = useForm();
 
   const [isLoading, setIsLoading] = React.useState(true);
-  const loadingTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
+ const loadingTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const router = useRouter();
   const [loader, setLoader] = React.useState(false);
   const params = useSearchParams();
@@ -107,17 +106,17 @@ const ResetPasswordContent: React.FC = () => {
               htmlType={"submit"}
               width={"100%"}
             >
-              <Spinner loading={loader} />
+              
               Update New Password
             </ButtonComponent>
           </Form.Item>
         </Form>
-        <ToastComponent
+        {/* <ToastComponent
           open={toastOpen}
           setOpen={setToastOpen}
           title={toastContent.title}
           description={toastContent.description}
-        />
+        /> */}
       </div>
     </Container>
   );
