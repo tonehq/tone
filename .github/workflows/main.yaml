@@ -1,0 +1,58 @@
+name: Main CI/CD
+on:
+  push:
+    branches:
+      - "main"
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+     
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+     
+      - name: Docker Login
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+     
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: |
+            developer390/clickshow-api:latest
+            developer390/clickshow-api:${{ github.sha }}
+          cache-from: type=registry,ref=developer390/clickshow-api:buildcache
+          cache-to: type=registry,ref=developer390/clickshow-api:buildcache,mode=max
+     
+      - name: Set up Kubernetes context
+        uses: azure/k8s-set-context@v2
+        with:
+          kubeconfig: ${{ secrets.KUBE_CONFIG_JSON }}
+     
+      - name: Create or ensure namespace exists
+        run: kubectl create namespace main --dry-run=client -o yaml | kubectl apply -f -
+     
+      # Replace the IMAGE_TAG variable in the deployment file with the actual SHA
+      - name: Replace image tag
+        run: |
+          cd kubernetes/main
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" deployment.yaml
+
+
+      - name: Deploy to Kubernetes
+        uses: azure/k8s-deploy@v1
+        with:
+          namespace: main
+          manifests: |
+            kubernetes/main/deployment.yaml
+            kubernetes/main/ingress_service/service.yaml
+            kubernetes/main/ingress_service/ingress.yaml
+      
+      - name: Force rollout restart
+        run: kubectl rollout restart deployment/clickshow-api-deployment -n main
