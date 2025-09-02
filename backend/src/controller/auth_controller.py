@@ -9,7 +9,6 @@ from src.common.jwt_middleware import get_jwt_claims, require_org_member, requir
 
 # Create router
 router = APIRouter(
-    prefix="/api/v1",
     tags=["auth"]
 )
 
