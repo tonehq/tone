@@ -16,14 +16,6 @@ class Settings:
         
         # Environment
         self.ENVIRONMENT = os.getenv("ENV", "development")
-        
-        # Email configuration (if needed)
-        self.SMTP_HOST = os.getenv("SMTP_HOST")
-        self.SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-        self.SMTP_USERNAME = os.getenv("SMTP_USERNAME")
-        self.SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-        
-        # Firebase configuration (if needed)
         self.FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID")
 
 settings = Settings()
