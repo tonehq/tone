@@ -8,7 +8,10 @@ import logging
 # Import only auth router
 from src.controller.auth_controller import router as auth_router
 
-from src.settings import settings
+from src.settings import settings, load_config
+
+# Load environment configuration at startup
+load_config()
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,6 +27,8 @@ app = FastAPI(
     description="Authentication and B2B User Management System with JWT",
     version="1.0.0"
 )
+adminApp = FastAPI()
+apiApp = FastAPI()
 
 def set_env(env: str):
     os.environ["ENV"] = env
@@ -64,7 +69,7 @@ def prepare():
 def setup_routes():
     """Setup all application routes"""
     # CORS middleware
-    app.add_middleware(
+    apiApp.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
         allow_credentials=True,
@@ -73,12 +78,20 @@ def setup_routes():
     )
     
     # Include only auth router
-    app.include_router(auth_router)
+    apiApp.include_router(auth_router)
 
 
 # Initialize application
 prepare()
 setup_routes()
+
+app.mount('/api/v1', apiApp)
+app.mount('/admin/v1', adminApp)
+
+
+
+
+
 
 
 # Health check endpoints

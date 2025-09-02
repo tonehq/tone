@@ -1,8 +1,16 @@
 import os
 from typing import Optional
+from dotenv import load_dotenv
+
+def load_config():
+    """Load environment variables from .env file"""
+    load_dotenv()
+    print("Environment variables loaded from .env file")
 
 class Settings:
     def __init__(self):
+        # Load environment variables first
+        load_config()
         # Database configuration
         self.DATABASE_URL = os.getenv(
             "DATABASE_URL", 
