@@ -1,16 +1,12 @@
 'use client';
 
 import * as React from 'react';
-import '@radix-ui/themes/styles.css';
 import { useRouter, useSearchParams } from 'next/navigation';
-import logo from '../logo.png';
-import Image from 'next/image';
 import { useForm } from "antd/es/form/Form";
 import { Form, Input, Skeleton } from "antd";
 import axios from '@/utils/axios';
 import Container from "../shared/ContainerComponent";
-import ButtonComponent from "@/components/auth/Shared/ButtonComponent";
-// import ToastComponent from '@/components/toast';
+import ButtonComponent from "@/components/Shared/UI Components/ButtonComponent";
 
 const ResetPasswordContent: React.FC = () => {
 
@@ -21,8 +17,6 @@ const ResetPasswordContent: React.FC = () => {
   const router = useRouter();
   const [loader, setLoader] = React.useState(false);
   const params = useSearchParams();
-  const [toastOpen, setToastOpen] = React.useState(false);
-  const [toastContent, setToastContent] = React.useState({ title: '', description: '' });
 
   React.useEffect(() => {
     loadingTimeoutRef.current = setTimeout(() => {
@@ -40,11 +34,6 @@ const ResetPasswordContent: React.FC = () => {
           `/auth/acceptForgotPassword?email=${params?.get('email')}&password=${(value["password"]).trim()}&token=${params?.get('token')}`
         );
         if (res) {
-          setToastContent({
-            title: 'Success',
-            description: 'Password updated successfully'
-          });
-          setToastOpen(true);
           setTimeout(() => {
             router.push('/auth/login')
           }, 2000)
@@ -56,18 +45,10 @@ const ResetPasswordContent: React.FC = () => {
         if (typeof error === 'object' && error !== null && 'response' in error && 'data' in (error as any).response && 'detail' in (error as any).response.data) {
           errorMessage = (error as any).response.data.detail;
         }
-        setToastContent({
-          title: 'Error',
-          description: errorMessage
-        });
+      
         setLoader(false)
       }
     } else {
-      setToastContent({
-        title: 'Error',
-        description: 'Email does not exist or something went wrong'
-      });
-      setToastOpen(true);
       setLoader(false)
     }
   };
@@ -82,10 +63,10 @@ const ResetPasswordContent: React.FC = () => {
               <Skeleton.Input
                 active
                 style={{ width: "360px", height: "100%" }}
-                className="font-[500] py-4 h-[42px] rounded-lg"
+                className="font-[500] py-4 h-[40px] rounded-lg"
               />
               :
-              <Input.Password className="py-2" placeholder={"Enter your password"} />
+              <Input.Password placeholder={"Enter your password"} />
             }
           </Form.Item>
           <Form.Item name="confirm_password" label="Confirm Password" rules={[{ required: true }]}>
@@ -93,30 +74,23 @@ const ResetPasswordContent: React.FC = () => {
               <Skeleton.Input
                 active
                 style={{ width: "360px", height: "100%" }}
-                className="font-[500] py-4 h-[42px] rounded-lg"
+                className="font-[500] py-4 h-[40px] rounded-lg"
               />
               :
-              <Input.Password className="py-2" placeholder={"Enter your confirm password"} />
+              <Input.Password placeholder={"Enter your confirm password"} />
             }
           </Form.Item>
           <Form.Item>
             <ButtonComponent
-              isLoading={isLoading}
+              loading={loader}
               type={"primary"}
               htmlType={"submit"}
-              width={"100%"}
-            >
-              
-              Update New Password
-            </ButtonComponent>
+              text="Update New Password"
+              active={true}
+              className="w-full"
+            />
           </Form.Item>
         </Form>
-        {/* <ToastComponent
-          open={toastOpen}
-          setOpen={setToastOpen}
-          title={toastContent.title}
-          description={toastContent.description}
-        /> */}
       </div>
     </Container>
   );

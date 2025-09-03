@@ -26,9 +26,6 @@ export const setToken = async (LogInData: any) => {
   Cookies.set(ACCESS_TOKEN, LogInData["access_token"], {
     expires: new Date(decoded.exp * 1000),
   });
-  Cookies.set(USER_PROFILE, LogInData["profile"]["name"], {
-    expires: new Date(decoded.exp * 1000),
-  });
   Cookies.set(REFRESH_TOKEN, LogInData["refresh_token"], {
     expires: new Date(decoded.exp * 1000),
   });
@@ -51,7 +48,7 @@ export const setToken = async (LogInData: any) => {
 
   Cookies.set(
     TENANT_ID,
-    LogInData["memberships"].length
+    LogInData["memberships"]?.length
       ? LogInData["memberships"]?.[0]?.["organisation_id"]
       : "",
     {

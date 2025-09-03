@@ -1,5 +1,4 @@
-import "./globals.scss";
-import Head from "next/head";
+import "./globals.css";
 import { ConfigProvider } from "antd";
 import { Inter } from 'next/font/google';
 
@@ -20,7 +19,7 @@ export default function RootLayout({
         <ConfigProvider
           theme={{
             token: {
-              colorPrimary: "#6366f1", // Purple primary color from screenshot
+              colorPrimary: "#6366f1",
               colorSuccess: "#10b981", 
               colorWarning: "#f59e0b", 
               colorBorder: "#e5e7eb",
@@ -28,12 +27,23 @@ export default function RootLayout({
               colorTextSecondary: "#6b7280",
               fontFamily: inter.style.fontFamily,
               borderRadius: 8,
+              fontSize: 16,
             },
           }}
         >
-          <div>{children}</div>
+          {children}
         </ConfigProvider>
       </body>
     </html>
   );
 }
+
+
+// {Icon && (
+//   typeof Icon === 'function' ? (
+//       <Icon className="w-4 h-4 font-semibold" />
+//   ) : (
+//       <span className="w-4 h-4 font-semibold">{Icon}</span>
+//   )
+// )}
+

@@ -1,11 +1,9 @@
 'use client'
 
 import * as React from 'react';
-import '@radix-ui/themes/styles.css';
 import { Form } from "antd";
 import { useForm } from "antd/es/form/Form";
-import { Spinner } from "@radix-ui/themes";
-import ButtonComponent from "@/components/auth/Shared/ButtonComponent";
+import ButtonComponent from "@/components/Shared/UI Components/ButtonComponent";
 import axios from '@/utils/axios';
 import Container from '../shared/ContainerComponent';
 
@@ -14,7 +12,7 @@ export default function ForgotPasswordVerification() {
   const [form] = useForm();
 
   const [isLoading, setIsLoading] = React.useState(true);
-  const loadingTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
+  const loadingTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [loader, setLoader] = React.useState(false);
   const [toastOpen, setToastOpen] = React.useState(false);
   const [toastContent, setToastContent] = React.useState({ title: '', description: '' });
@@ -62,19 +60,18 @@ export default function ForgotPasswordVerification() {
         <h2 className="mb-8">Email Verification</h2>
 
         <Form onFinish={handleSubmit} className="w-[360px] text-[16px]" requiredMark={false} form={form} name="validateOnly" layout="vertical" autoComplete="off">
-          <div className="mb-4">
+          <div style={{ marginBottom: '24px' }} className="mb-4">
             <p>To complete the verification process, please click the button below:</p>
           </div>
           <Form.Item>
             <ButtonComponent
-              isLoading={isLoading}
+              loading={loader}
               type={"primary"}
               htmlType={"submit"}
-              width={"100%"}
-            >
-              <Spinner loading={loader} />
-              Accept
-            </ButtonComponent>
+              text="Accept"
+              className="w-full mt-2"
+              active={true}
+           />
           </Form.Item>
         </Form>
       </div>

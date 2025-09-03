@@ -14,7 +14,7 @@ const LoginPage = () => {
     try {
       const res: any = await login(value["email"], value["password"]);
       if (res) {
-        router.push("/editor/dashboard");
+        router.push("/home");
         setLoader(false);
       }
     } catch (error) {
@@ -23,11 +23,7 @@ const LoginPage = () => {
     }
   };
 
-  return (
-    <div className="flex w-full">
-      <FormComponent handleSubmit={handleSubmit} loader={loader} />
-    </div>
-  )
+  return <FormComponent handleSubmit={handleSubmit} loader={loader} />
 }
 
 export default LoginPage;
