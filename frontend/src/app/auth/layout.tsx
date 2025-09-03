@@ -5,7 +5,7 @@ interface LayoutProps {
 }
 
 const Layout: React.FunctionComponent<LayoutProps> = ({ children }) => {
-  return <div className="h-full w-[100vw]">{children}</div>;
+  return <div>{children}</div>;
 };
 
 export default Layout;

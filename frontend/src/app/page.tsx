@@ -13,13 +13,13 @@ const IndexPage = () => {
   useEffect(() => {
     if (isInitialMount && typeof window !== "undefined") {
       setIsInitialMount(false);
-      router.push("/home");
+      router.push("/Home");
     }
   }, [isInitialMount, router]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      router.push("/home");
+      router.push("/Home");
       event.preventDefault();
       event.returnValue = ''; 
     };

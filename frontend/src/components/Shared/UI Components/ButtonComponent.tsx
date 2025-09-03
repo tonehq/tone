@@ -2,7 +2,6 @@
 
 import { Button } from "antd"
 import { ChevronRight, LucideIcon } from "lucide-react"
-import "@/components/style.css"
 
 import type { ButtonProps as AntdButtonProps } from "antd";
 

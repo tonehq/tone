@@ -1,49 +1,50 @@
+"use client";
+
+import Sidebar from "@/components/Shared/SidebarComponent";
 import "./globals.css";
 import { ConfigProvider } from "antd";
-import { Inter } from 'next/font/google';
+import { useState } from "react";
+import { usePathname } from "next/navigation"; 
 
-const inter = Inter({
-  subsets: ['latin'],
-  weight: ['300', '400', '500', '600', '700'],
-  variable: '--font-inter',
-});
 
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const [sidebar, setSidebar] = useState<boolean>(true);
+  const pathname = usePathname(); 
+
+  const hideSidebar = pathname.startsWith("/auth");
+
   return (
-    <html lang="en" className={inter.variable}>
-      <body className={inter.className}>
+    <html lang="en">
+      <body>
         <ConfigProvider
           theme={{
             token: {
-              colorPrimary: "#6366f1",
-              colorSuccess: "#10b981", 
-              colorWarning: "#f59e0b", 
-              colorBorder: "#e5e7eb",
-              colorText: "#1f2937",
-              colorTextSecondary: "#6b7280",
-              fontFamily: inter.style.fontFamily,
+              colorPrimary: "#1D4ED8",
+              colorSuccess: "#52c41a",
+              colorWarning: "#faad14",
+              colorBorder: "#e2e8f0",
+              colorBorderSecondary: "#cccbcb",
+              colorText: "#111827",
               borderRadius: 8,
               fontSize: 16,
             },
           }}
         >
-          {children}
+          <div className="flex">
+            {!hideSidebar && (
+              <Sidebar sidebar={sidebar} setSidebar={setSidebar} />
+            )}
+
+            <div style={{ width: "100vw", height: "100vh" }}>
+              {children}
+            </div>
+          </div>
         </ConfigProvider>
       </body>
     </html>
   );
 }
-
-
-// {Icon && (
-//   typeof Icon === 'function' ? (
-//       <Icon className="w-4 h-4 font-semibold" />
-//   ) : (
-//       <span className="w-4 h-4 font-semibold">{Icon}</span>
-//   )
-// )}
-

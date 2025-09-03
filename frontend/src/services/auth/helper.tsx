@@ -109,3 +109,9 @@ export const signup = async (
     });
   }
 };
+
+
+export const getOrganization = async () => {
+  const res = await axios.get(`/org/get_associated_tenants`);
+  return res;
+};
