@@ -16,6 +16,7 @@ from src.model.auth_model import (
 )
 from src.common.jwt_middleware import jwt_manager, JWTClaims
 from src.utils.orm_utils import model_to_dict
+from src.services.email_service import MailService
 
 class AuthService:
     """Service class for handling authentication and user management operations"""
@@ -101,9 +102,13 @@ class AuthService:
         self.db.add(user)
         self.db.commit()
         self.db.refresh(user)
-        
-        # Create email verification
-        self.create_email_verification(user.id, email)
+
+        verification_code = self.create_email_verification(user.id, email)
+        verification_url = f"http://localhost:8001/api/v1/auth/verify_user_email?email={email}&code={verification_code.code}&user_id={user.id}"
+
+
+        mail_service = MailService()
+        mail_service.send_signup_email(email, verification_url)
         
         return {
             "user_id": user.id,
@@ -224,6 +229,8 @@ class AuthService:
         
         self.db.add(verification)
         self.db.commit()
+
+        return verification
         
         # Send email (implement with your email service)
         # self.send_verification_email(email, verification.code)
@@ -448,6 +455,9 @@ class AuthService:
         self.db.add(invitation)
         self.db.commit()
         self.db.refresh(invitation)
+
+        mail_service = MailService()
+        mail_service.send_invite_email(email, invitation.invitation_token)
         
         # Send invitation email (implement with your email service)
         # self.send_invitation_email(email, invitation.invitation_token)
@@ -612,6 +622,11 @@ class AuthService:
         
         self.db.add(reset)
         self.db.commit()
+
+        verification_url = f"http://localhost:3000/auth/forgotpassword?token={reset.token}"
+
+        mail_service = MailService()
+        mail_service.send_forgot_password_email(email, verification_url)
         
         # Send password reset email (implement with your email service)
         # self.send_password_reset_email(email, reset.token)
