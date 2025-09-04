@@ -41,13 +41,13 @@ class MailService:
             return None
 
 
-    def send_invite_email(self, to: str):
+    def send_invite_email(self, to: str, invite_url: str):
         try:
             params = {
                 "from": "noreply@support.suryaweb.app",
                 "to": [to],
                 "subject": "User Invite Email",
-                "html": f"<p>Please click this link to reset your password</p>",
+                "html": f"<p>Please click this to accept the invitation.{invite_url}</p>",
             }
             result = resend.Emails.send(params)
             return result

@@ -104,7 +104,7 @@ class AuthService:
         self.db.refresh(user)
 
         verification_code = self.create_email_verification(user.id, email)
-        verification_url = f"http://localhost:8001/api/v1/auth/verify_user_email?email={email}&code={verification_code.code}&user_id={user.id}"
+        verification_url = f"http://localhost:3000/auth/verify_signup?email={email}&code={verification_code.code}"
 
 
         mail_service = MailService()
@@ -456,8 +456,10 @@ class AuthService:
         self.db.commit()
         self.db.refresh(invitation)
 
+        invite_url = f"http://localhost:3000/verify/user_to_workspace?email={email}&code={invitation.invitation_token}&user_tenant_id={invitation.organization_id}"
+
         mail_service = MailService()
-        mail_service.send_invite_email(email, invitation.invitation_token)
+        mail_service.send_invite_email(email, invite_url)
         
         # Send invitation email (implement with your email service)
         # self.send_invitation_email(email, invitation.invitation_token)
@@ -623,7 +625,7 @@ class AuthService:
         self.db.add(reset)
         self.db.commit()
 
-        verification_url = f"http://localhost:3000/auth/forgotpassword?token={reset.token}"
+        verification_url = f"http://localhost:3000/auth/forgot-password?token={reset.token}&email={user.email}"
 
         mail_service = MailService()
         mail_service.send_forgot_password_email(email, verification_url)
