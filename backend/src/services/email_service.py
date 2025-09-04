@@ -1,0 +1,58 @@
+import os
+import resend
+from loguru import logger
+from dotenv import load_dotenv
+import asyncio
+
+load_dotenv()
+
+resend.api_key = "re_e7ciPfAc_7F676iygTiwtPtex4zybczYa" 
+
+
+class MailService:
+    def send_signup_email(self, to: str, verification_url: str):
+        try:
+            params = {
+                "from": "noreply@support.suryaweb.app",
+                "to": [to],
+                "subject": "Sign Up Email",
+                "html": f"<p>{verification_url}</p>",
+            }
+            result = resend.Emails.send(params)
+            return result
+
+        except Exception as e:
+            logger.error(f"An error occurred while sending email: {e}")
+            return None
+
+    def send_forgot_password_email(self, to: str, verification_url: str):
+        try:
+            params = {
+                "from": "noreply@support.suryaweb.app",
+                "to": [to],
+                "subject": "Forgot Password Email",
+                "html": f"<p>Please click this link to reset your password. {verification_url}</p>",
+            }
+            result = resend.Emails.send(params)
+            return result
+
+        except Exception as e:
+            logger.error(f"An error occurred while sending email: {e}")
+            return None
+
+
+    def send_invite_email(self, to: str, invite_url: str):
+        try:
+            params = {
+                "from": "noreply@support.suryaweb.app",
+                "to": [to],
+                "subject": "User Invite Email",
+                "html": f"<p>Please click this to accept the invitation.{invite_url}</p>",
+            }
+            result = resend.Emails.send(params)
+            return result
+
+        except Exception as e:
+            logger.error(f"An error occurred while sending email: {e}")
+            return None        
+ 
