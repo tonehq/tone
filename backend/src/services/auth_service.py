@@ -17,6 +17,7 @@ from src.model.auth_model import (
 from src.common.jwt_middleware import jwt_manager, JWTClaims
 from src.utils.orm_utils import model_to_dict
 from src.services.email_service import MailService
+import os
 
 class AuthService:
     """Service class for handling authentication and user management operations"""
@@ -102,11 +103,12 @@ class AuthService:
         self.db.add(user)
         self.db.commit()
         self.db.refresh(user)
+        
+        APPLICATION_URL = os.getenv("APPLICATION_URL")
 
         verification_code = self.create_email_verification(user.id, email)
-        verification_url = f"http://localhost:3000/auth/verify_signup?email={email}&code={verification_code.code}"
-
-
+        verification_url = f"{APPLICATION_URL}/auth/verify_signup?email={email}&code={verification_code.code}"
+        
         mail_service = MailService()
         mail_service.send_signup_email(email, verification_url)
         
@@ -456,7 +458,9 @@ class AuthService:
         self.db.commit()
         self.db.refresh(invitation)
 
-        invite_url = f"http://localhost:3000/verify/user_to_workspace?email={email}&code={invitation.invitation_token}&user_tenant_id={invitation.organization_id}"
+        APPLICATION_URL = os.getenv("APPLICATION_URL")
+
+        invite_url = f"{APPLICATION_URL}/verify/user_to_workspace?email={email}&code={invitation.invitation_token}&user_tenant_id={invitation.organization_id}"
 
         mail_service = MailService()
         mail_service.send_invite_email(email, invite_url)
@@ -625,7 +629,9 @@ class AuthService:
         self.db.add(reset)
         self.db.commit()
 
-        verification_url = f"http://localhost:3000/auth/forgot-password?token={reset.token}&email={user.email}"
+        APPLICATION_URL = os.getenv("APPLICATION_URL")
+
+        verification_url = f"{APPLICATION_URL}/auth/forgot-password?token={reset.token}&email={user.email}"
 
         mail_service = MailService()
         mail_service.send_forgot_password_email(email, verification_url)
