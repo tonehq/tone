@@ -1,8 +1,9 @@
 import { getOrganization } from "@/services/auth/helper";
 import { Avatar, Button, Card, Divider, Popover, Skeleton, Space, Spin } from "antd";
-import { Building2, ChevronDown } from "lucide-react";
+import { Building2, ChevronDown, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import ButtonComponent from "../UI Components/ButtonComponent";
+import CreateOrganizationModal from "./ModalComponent";
 
 interface Organization {
     id: string;
@@ -17,8 +18,8 @@ const Organization = (props: any) => {
     const [data, setData] = useState<Organization[]>([])
     const [active, setActive] = useState<Organization | null>(null);
     const [visible, setVisible] = useState(false);
+    const [createOrganization, setCreateOrganization] = useState(false);
 
-    // Helper function to capitalize first letter of each word
     const startCase = (str: string) => {
         return str.replace(/\w\S*/g, (txt) => 
             txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()
@@ -78,19 +79,21 @@ const Organization = (props: any) => {
 
             <ButtonComponent
                 text="Create organization"
-                onClick={() => {setVisible(false)}}
+                onClick={() => {setCreateOrganization(true)}}
+                icon={<Plus size={16} />}
             />
         </div>
     );
 
     return (
-        <div className="pb-2">
+        <div>
+              <div>
             {loader ?  
                 <Skeleton.Button
                     active
                     shape="default"
-                    style={{ width: "242px", height: "60px"}}
-                    className="font-[500] py-4 h-[60px] rounded-[5px]"
+                    style={{ width: "242px", height: "60px", borderRadius: "5px" }}
+                    className="font-[500] h-[60px]"
                 /> :
                 <Popover
                     content={getContents()}
@@ -166,6 +169,14 @@ const Organization = (props: any) => {
                 </Popover>
             }
         </div>
+                <div>
+                    <CreateOrganizationModal
+                        visible={createOrganization}
+                        setVisible={setCreateOrganization}
+                        fetchOrganization={init}
+                    />
+                </div>
+        </div>      
     );
 };
 

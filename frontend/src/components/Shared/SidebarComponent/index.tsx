@@ -7,8 +7,6 @@ import { sidemenu } from "./constant"
 import { useState } from "react"
 import { PanelLeft } from "lucide-react"
 import Organization from "../Organization"
-// import CustomUserButton from "./CustomUserButton"
-// import OrgPopover from "./OrgManager";
 
 interface SidebarItemProps {
     icon: React.ElementType
@@ -101,7 +99,12 @@ function Sidebar(props: any) {
                 <div>
                     <nav className="flex flex-col items-center gap-2 py-2" >
                         {sidemenu.map((item: any, index: number) => (
-                            <SidebarItem key={item.key} icon={item.icon} href={item.path} active={isActive(item.path)} />
+                            <SidebarItem 
+                                key={item.key} 
+                                icon={item.icon} 
+                                href={item.path} 
+                                active={isActive(item.path)} 
+                            />
                         ))}
                     </nav>
                 </div>
@@ -109,7 +112,13 @@ function Sidebar(props: any) {
             ) : (
                 <nav className="flex flex-col items-center gap-2 mx-2 rounded-md" >
                     {sidemenu.map((item: any) => (
-                        <SidebarItemMenu key={item.key} icon={item.icon} title={item.title} href={item.path} active={isActive(item.path)} />
+                        <SidebarItemMenu 
+                            key={item.key} 
+                            icon={item.icon} 
+                            title={item.title} 
+                            href={item.path} 
+                            active={isActive(item.path)} 
+                        />
                     ))}
                 </nav>
             )}

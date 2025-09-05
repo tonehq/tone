@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@types/js-cookie": "^3.0.6",
-    "antd": "^5.27.2",
+    "antd": "^5.27.0",
     "axios": "^1.11.0",
     "buffer": "^6.0.3",
     "cookies-next": "^6.1.0",

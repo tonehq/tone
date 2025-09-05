@@ -1496,10 +1496,10 @@ ansi-styles@^4.0.0, ansi-styles@^4.1.0:
   dependencies:
     color-convert "^2.0.1"
 
-antd@^5.27.2:
-  version "5.27.2"
-  resolved "https://registry.yarnpkg.com/antd/-/antd-5.27.2.tgz#a3dd22db2ccc7fab56b179a026f35639e5450549"
-  integrity sha512-9pYRUTrumIEuulRwZijhcnL6ScBZ1X6Y3iJa67VyNhEZAiXtENA7AtggsnqdVclQIm0WL4ky76qUdWrVhDWF3g==
+antd@^5.27.0:
+  version "5.27.0"
+  resolved "https://registry.yarnpkg.com/antd/-/antd-5.27.0.tgz#2798b4b6d8ee7c295fcdd4e2cd7c037c5e927465"
+  integrity sha512-o54dmpooLOc08RSGCkeEQBYAGPxUSmnhmYJKCNTHH46vzjOVxdteu+wPTRVkRbAkDTbs2VcNr5VL7Lu67rPIiA==
   dependencies:
     "@ant-design/colors" "^7.2.1"
     "@ant-design/cssinjs" "^1.23.0"

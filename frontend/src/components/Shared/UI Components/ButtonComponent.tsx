@@ -16,7 +16,7 @@ interface ButtonProps {
   htmlType?: AntdButtonProps["htmlType"]; 
 }
 
-const Buttons = ({ icon: Icon, text, onClick, type, active, disabled, className, loading, htmlType }: ButtonProps) => {
+const ButtonComponent = ({ icon: Icon, text, onClick, type, active, disabled, className, loading, htmlType }: ButtonProps) => {
     return (
         <>
             {Icon === ChevronRight ? (  
@@ -56,4 +56,4 @@ const Buttons = ({ icon: Icon, text, onClick, type, active, disabled, className,
     )
 }
 
-export default Buttons;
+export default ButtonComponent;

@@ -1,9 +1,13 @@
 "use client";
 
+import { Typography } from "antd";
+
+const { Title } = Typography;
+
 const HomePage = () => {
   return (
     <div>
-      <h1>Home</h1>
+       <Title level={4}>Home</Title>
     </div>
   );
 };

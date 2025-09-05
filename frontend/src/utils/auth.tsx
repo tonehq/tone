@@ -40,7 +40,7 @@ export const isAuthenticated = () => {
 
 
 export const setToken = async (LogInData: any) => {
-  const TENANT_ID = "clickshow_tenant_id";
+  const TENANT_ID = "org_tenant_id";
 
   const decoded = decodeJWT(LogInData["access_token"]);
   Cookies.set(ACCESS_TOKEN, LogInData["access_token"], {
@@ -49,7 +49,7 @@ export const setToken = async (LogInData: any) => {
   Cookies.set(REFRESH_TOKEN, LogInData["refresh_token"], {
     expires: new Date(decoded.exp * 1000),
   });
-  Cookies.set("member_id", LogInData?.['memberships']?.[0]?.["member_id"], {
+  Cookies.set("user_id", LogInData?.['user_id'], {
     expires: new Date(decoded.exp * 1000),
   });
 
@@ -58,8 +58,8 @@ export const setToken = async (LogInData: any) => {
   });
   setCookie(
     TENANT_ID,
-    LogInData["memberships"].length
-      ? LogInData["memberships"]?.[0]?.["organisation_id"]
+    LogInData.organizations.length
+      ? LogInData.organizations?.[0]?.["id"]
       : "",
     {
       expires: new Date(decoded.exp * 1000),

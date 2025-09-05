@@ -3,13 +3,11 @@ import {
   REFRESH_TOKEN,
   SIGNUP,
   TENANT_ID,
-  USER_PROFILE,
   FIREBASE_SIGNUP,
 } from "@/constants";
 import axios from "@/utils/axios";
 import { decodeJWT } from "@/utils/jwt";
 import Cookies from "js-cookie";
-// import { setCookie } from "cookies-next";
 
 export const login = async (email: string, password: string) => {
   const { data: LogInData } = await axios.post("/auth/login", {
@@ -29,22 +27,13 @@ export const setToken = async (LogInData: any) => {
   Cookies.set(REFRESH_TOKEN, LogInData["refresh_token"], {
     expires: new Date(decoded.exp * 1000),
   });
-  Cookies.set("member_id", LogInData?.['memberships']?.[0]?.["member_id"], {
+  Cookies.set("user_id", LogInData?.['user_id'], {
     expires: new Date(decoded.exp * 1000),
   });
 
   Cookies.set("login_data", JSON.stringify(LogInData), {
     expires: new Date(decoded.exp * 1000),
   });
-  // setCookie(
-  //   TENANT_ID,
-  //   LogInData["memberships"].length
-  //     ? LogInData["memberships"]?.[0]?.["organisation_id"]
-  //     : "",
-  //   {
-  //     expires: new Date(decoded.exp * 1000),
-  //   }
-  // );
 
   Cookies.set(
     TENANT_ID,
@@ -113,5 +102,10 @@ export const signup = async (
 
 export const getOrganization = async () => {
   const res = await axios.get(`/org/get_associated_tenants`);
+  return res;
+};
+
+export const createOrganization = async (data: any) => {
+  const res = await axios.post(`org/create_tenants?name=${data.name}`);
   return res;
 };

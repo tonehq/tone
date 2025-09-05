@@ -1,12 +1,11 @@
 "use client";
 
-import TableComponent from "@/components/settings/TableComponent";
+import Settings from "@/components/settings";
 
 const SettingsPage = () => {
     return (
         <div>
-            <p style={{ marginBottom: "24px" }}>Settings</p>
-            <TableComponent />
+            <Settings />
         </div>
     )
 }
