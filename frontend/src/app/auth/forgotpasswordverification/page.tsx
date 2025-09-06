@@ -6,6 +6,7 @@ import { useForm } from "antd/es/form/Form";
 import ButtonComponent from "@/components/Shared/UI Components/ButtonComponent";
 import axios from '@/utils/axios';
 import Container from '../shared/ContainerComponent';
+import { useNotification } from '@/utils/shared/notification';
 
 export default function ForgotPasswordVerification() {
 
@@ -14,8 +15,7 @@ export default function ForgotPasswordVerification() {
   const [isLoading, setIsLoading] = React.useState(true);
   const loadingTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [loader, setLoader] = React.useState(false);
-  const [toastOpen, setToastOpen] = React.useState(false);
-  const [toastContent, setToastContent] = React.useState({ title: '', description: '' });
+  const { notify, contextHolder } = useNotification();
 
   React.useEffect(() => {
     loadingTimeoutRef.current = setTimeout(() => {
@@ -32,11 +32,7 @@ export default function ForgotPasswordVerification() {
       const res = await axios.get(`/auth/verifyUserEmail`);
       setLoader(false);
       if (res) {
-        setToastContent({
-          title: 'Success',
-          description: 'Verification email resend Sucessfully'
-        });
-        setToastOpen(true);
+        notify.success("Success", "Email verification completed successfully", 4, "bottomRight");
       }
     } catch (error) {
       setLoader(false);
@@ -45,17 +41,14 @@ export default function ForgotPasswordVerification() {
       if (typeof error === 'object' && error !== null && 'response' in error && 'data' in (error as any).response && 'detail' in (error as any).response.data) {
         errorMessage = (error as any).response.data.detail;
       }
-      setToastContent({
-        title: 'Error',
-        description: 'Email does not exist  or something went wrong'
-      });
-      setToastOpen(true);
+      notify.error("Verification Failed", errorMessage || "Email does not exist or something went wrong", 5, "bottomRight");
     }
   };
 
 
   return (
     <Container>
+      {contextHolder}
       <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-lg shadow-md">
         <h2 className="mb-8">Email Verification</h2>
 
@@ -71,7 +64,7 @@ export default function ForgotPasswordVerification() {
               text="Accept"
               className="w-full mt-2"
               active={true}
-           />
+            />
           </Form.Item>
         </Form>
       </div>

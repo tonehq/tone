@@ -4,15 +4,17 @@ import * as React from 'react';
 import axios from '@/utils/axios';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Container from '../shared/ContainerComponent';
-import { Form} from "antd";
+import { Form } from "antd";
 import { useForm } from "antd/es/form/Form";
 import ButtonComponent from "@/components/Shared/UI Components/ButtonComponent";
+import { useNotification } from '@/utils/shared/notification';
 
 const EmailVerificationContent = () => {
   const [form] = useForm();
   const [loader, setLoader] = React.useState(false);
   const params = useSearchParams();
   const router = useRouter();
+  const { notify, contextHolder } = useNotification();
 
   const handleSubmit = async () => {
     try {
@@ -20,6 +22,7 @@ const EmailVerificationContent = () => {
       const res = await axios.get(`/auth/verify_user_email?email=${params.get('email')}&code=${params.get('code')}&user_id=${params.get('user_id')}`);
       setLoader(false);
       if (res) {
+        notify.success("Email Verified", "Your email has been verified successfully", 4, "bottomRight");
         router.push('/auth/login')
       }
     } catch (error) {
@@ -28,6 +31,7 @@ const EmailVerificationContent = () => {
       if (typeof error === 'object' && error !== null && 'response' in error && 'data' in (error as any).response && 'detail' in (error as any).response.data) {
         errorMessage = (error as any).response.data.detail;
       }
+      notify.error("Verification Failed", errorMessage || "Invalid verification link", 5, "bottomRight");
       setLoader(false);
     }
   };
@@ -35,6 +39,7 @@ const EmailVerificationContent = () => {
 
   return (
     <Container>
+       {contextHolder}
       <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
         <h2 className="mb-8">Email Verification</h2>
         <Form onFinish={handleSubmit} className="w-[360px] text-[16px]" requiredMark={false} form={form} name="validateOnly" layout="vertical" autoComplete="off">

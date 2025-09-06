@@ -7,6 +7,7 @@ import { Form, Input, Skeleton } from "antd";
 import Container from "../shared/ContainerComponent";
 import { forgotPassword } from '@/services/auth/helper';
 import Link from 'next/link';
+import { useNotification } from '@/utils/shared/notification';
 
 export default function ForgotPassword() {
 
@@ -15,6 +16,7 @@ export default function ForgotPassword() {
   const [isLoading, setIsLoading] = React.useState(true);
   const loadingTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [loader, setLoader] = React.useState(false);
+  const { notify, contextHolder } = useNotification();
 
   React.useEffect(() => {
     loadingTimeoutRef.current = setTimeout(() => {
@@ -30,6 +32,7 @@ export default function ForgotPassword() {
       try {
         const res: any = await forgotPassword(value["email"]);
         if (res) {
+          notify.success("Email Sent", "Password reset instructions sent to your email", 4, "bottomRight");
           setLoader(false)
         }
       } catch (error) {
@@ -38,6 +41,7 @@ export default function ForgotPassword() {
         if (typeof error === 'object' && error !== null && 'response' in error && 'data' in (error as any).response && 'detail' in (error as any).response.data) {
           errorMessage = (error as any).response.data.detail;
         }
+          notify.error("Request Failed", errorMessage || "Something went wrong", 5, "bottomRight");
         setLoader(false)
       }
     } else {
@@ -47,6 +51,7 @@ export default function ForgotPassword() {
 
   return (
     <Container>
+      {contextHolder}
       <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-lg shadow-md">
         <h2 className="mb-4">Password Reset Request</h2>
         <p className="text-gray-600 mb-6">Enter your email to reset your password.</p>

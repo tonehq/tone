@@ -8,6 +8,7 @@ import { useForm } from "antd/es/form/Form";
 import ButtonComponent from "@/components/Shared/UI Components/ButtonComponent";
 import axios from '@/utils/axios';
 import Link from 'next/link';
+import { useNotification } from '@/utils/shared/notification';
 
 const EmailVerificationContent: React.FC = () => {
   
@@ -16,6 +17,7 @@ const EmailVerificationContent: React.FC = () => {
   const params = useSearchParams();
   const [form] = useForm();
   const [loader, setLoader] = React.useState(false);
+  const { notify, contextHolder } = useNotification();
 
   React.useEffect(() => {
     loadingTimeoutRef.current = setTimeout(() => {
@@ -30,6 +32,7 @@ const EmailVerificationContent: React.FC = () => {
     try {
       setLoader(true);
       await axios.get(`/auth/resend_verification_email?email=${params?.get('email')?.trim()}`);
+      notify.success("Email Sent", "Verification email resent successfully", 4, "bottomRight");
     } catch (error) {
       setLoader(false);
       let errorMessage = '';
@@ -37,6 +40,7 @@ const EmailVerificationContent: React.FC = () => {
       if (typeof error === 'object' && error !== null && 'response' in error && 'data' in (error as any).response && 'detail' in (error as any).response.data) {
         errorMessage = (error as any).response.data.detail;
       }
+      notify.error("Resend Failed", errorMessage || "Something went wrong", 5, "bottomRight");
     } finally {
       setLoader(false);
     }
@@ -44,6 +48,7 @@ const EmailVerificationContent: React.FC = () => {
 
   return (
     <div className="flex">
+       {contextHolder}
       <Container>
         <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
           <h2 className="mb-8">Thanks for Signing up!</h2>
