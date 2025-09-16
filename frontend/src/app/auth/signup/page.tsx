@@ -1,16 +1,14 @@
 "use client";
 
 import * as React from "react";
-import "@radix-ui/themes/styles.css";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signup } from "@/services/auth/helper";
-import ButtonComponent from "@/components/auth/Shared/ButtonComponent";
-import ToastComponent from '@/components/toast';
+import ButtonComponent from "@/components/Shared/UI Components/ButtonComponent";
 import { useForm } from "antd/es/form/Form";
 import { Form, Input, Skeleton } from "antd";
-import { Spinner } from "@radix-ui/themes";
 import Link from "next/link";
 import Container from "../shared/ContainerComponent";
+import { useNotification } from "@/utils/shared/notification";
 
 export default () => {
   return (
@@ -34,10 +32,11 @@ function SignIn() {
     confirmpassword: "",
   });
 
-  const loadingTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
+  const loadingTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [loader, setLoader] = React.useState(false);
   const [active, setActive] = React.useState(0);
   const [tabs, setTabs] = React.useState("individual");
+  const { notify, contextHolder } = useNotification();
 
   React.useEffect(() => {
     const firebase_signup = params.get("firebase_signup");
@@ -49,12 +48,6 @@ function SignIn() {
       setActive(1);
     }
   }, [params]);
-
-  const [toastOpen, setToastOpen] = React.useState(false);
-  const [toastContent, setToastContent] = React.useState({
-    title: "",
-    description: "",
-  });
 
   React.useEffect(() => {
     loadingTimeoutRef.current = setTimeout(() => {
@@ -75,8 +68,9 @@ function SignIn() {
         tabs === 'individual' ? { name: value["username"] } : { name: value["org_name"] },
         params.get("firebase_uid")
       );
+       notify.success("Account Created", "Please check your email for verification", 4, "bottomRight");
       if (params.get("firebase_signup") === "true") {
-        router.push("/editor/dashboard");
+        router.push("/home");
       }
       else {
         router.push("/auth/login")
@@ -97,26 +91,23 @@ function SignIn() {
       ) {
         errorMessage = (error as any).response.data.detail;
       }
-      setToastContent({
-        title: "Error",
-        description: errorMessage,
-      });
-      setToastOpen(true);
+       notify.error("Sign Up Failed", errorMessage, 5, "bottomRight");
       setLoader(false);
     }
   };
 
   return (
     <Container>
-      <div className="max-w-md mx-auto px-6 bg-white rounded-lg shadow-md">
+       {contextHolder}
+      <div className="max-w-xl mx-auto px-6 bg-white rounded-lg shadow-md">
         <h2 className="mb-4">Sign Up</h2>
-        <Form onFinish={handleSubmit} className="lg:w-[360px] max-w-[360px] text-[16px]" requiredMark={false} form={form} name="validateOnly" layout="vertical" autoComplete="off">
+        <Form onFinish={handleSubmit} className="w-[400px] text-[16px]" requiredMark={false} form={form} name="validateOnly" layout="vertical" autoComplete="off">
           <Form.Item name="usename" label="Username" rules={[{ required: true }]}>
             {isLoading ?
               <Skeleton.Input
                 active
-                style={{ width: "360px", height: "100%" }}
-                className="font-[500] py-4 h-[42px] rounded-lg"
+                style={{ width: "400px", height: "42px" }}
+                className="font-[500] py-4 rounded-[5px]"
               />
               :
               <Input className="py-2" placeholder={"Enter Your Username"} />
@@ -126,8 +117,8 @@ function SignIn() {
             {isLoading ?
               <Skeleton.Input
                 active
-                style={{ width: "360px", height: "100%" }}
-                className="font-[500] py-4 h-[42px] rounded-lg"
+                style={{ width: "400px", height: "42px" }}
+                className="font-[500] py-4 rounded-[5px]"
               />
               :
               <Input className="py-2" placeholder={"Enter Your Email"} />
@@ -137,8 +128,8 @@ function SignIn() {
             {isLoading ?
               <Skeleton.Input
                 active
-                style={{ width: "360px", height: "100%" }}
-                className="font-[500] py-4 h-[42px] rounded-lg"
+                style={{ width: "400px", height: "42px" }}
+                className="font-[500] py-4 rounded-[5px]"
               />
               :
               <Input.Password className="py-2" placeholder={"Enter your password"} />
@@ -148,8 +139,8 @@ function SignIn() {
             {isLoading ?
               <Skeleton.Input
                 active
-                style={{ width: "360px", height: "100%" }}
-                className="font-[500] py-4 h-[42px] rounded-lg"
+                style={{ width: "400px", height: "42px" }}
+                className="font-[500] py-4 rounded-[5px]"
               />
               :
               <Input className="py-2" placeholder={"Enter your organisation name"} />
@@ -157,29 +148,26 @@ function SignIn() {
           </Form.Item>
           <Form.Item>
             <ButtonComponent
-              isLoading={isLoading}
+              loading={false}
               type={"primary"}
               htmlType={"submit"}
-              width={"100%"}
-            >
-              <Spinner loading={loader} />
-              Create account
-            </ButtonComponent>
+              text="Create account"
+              className="w-full"
+              active={true}
+            />
           </Form.Item>
           <Form.Item>
             <ButtonComponent
-              isLoading={isLoading}
+              loading={false}
               type={"default"}
-              width={"100%"}
-            >
-              <span>
-                <img loading="lazy" src="https://cdn.builder.io/api/v1/image/assets/TEMP/f6bb794390c33066b1b287c6fed32b735307648872bb255ad515b99fcf51d92b?apiKey=99f610f079bc4250a85747146003507a&amp;&amp;apiKey=99f610f079bc4250a85747146003507a" alt="" />
-              </span>
-              <span className="ml-4">Sign in with Google</span>
-            </ButtonComponent>
+              text="Sign in with Google"
+              className="w-full"
+              icon={<img loading="lazy" width={16} height={16} src="https://cdn.builder.io/api/v1/image/assets/TEMP/f6bb794390c33066b1b287c6fed32b735307648872bb255ad515b99fcf51d92b?apiKey=99f610f079bc4250a85747146003507a&amp;&amp;apiKey=99f610f079bc4250a85747146003507a" alt="" />}
+            />
+
           </Form.Item>
           <Form.Item>
-            <div className="flex justify-center items-center">
+            <div className="flex text-[14px] justify-center items-center">
               <span>Already have an account?</span>
               <span className="font-[500] text-[#4058ff] ml-1">
                 <Link href={"/auth/login"} className="cursor-pointer">
@@ -189,13 +177,6 @@ function SignIn() {
             </div>
           </Form.Item>
         </Form>
-
-        <ToastComponent
-          open={toastOpen}
-          setOpen={setToastOpen}
-          title={toastContent.title}
-          description={toastContent.description}
-        />
       </div>
     </Container>
   );

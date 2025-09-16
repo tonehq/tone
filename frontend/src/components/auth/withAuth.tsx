@@ -15,7 +15,7 @@ const withAuth = <P extends WithAuthProps>(
 
     useEffect(() => {
       if (typeof window !== "undefined") {
-        const token = Cokkies.get("clickshow_access_token");
+        const token = Cokkies.get("access_token");
         if (!token) {
           router.push("/auth/login");
         }

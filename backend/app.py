@@ -57,7 +57,7 @@ if __name__ == "__main__":
     if env_arg:
         set_env(env_arg)
     
-    uvicorn.run("app:app", host="0.0.0.0", port=8001, reload=True)
+    uvicorn.run("app:app", host="0.0.0.0", port=8000, reload=True)
 
 
 def prepare():

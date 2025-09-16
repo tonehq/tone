@@ -5,6 +5,8 @@ from typing import Optional, Dict, Any
 import time
 from pydantic import BaseModel
 from src.settings import settings
+from loguru import logger
+
 
 # JWT Bearer token extractor
 security = HTTPBearer()
@@ -106,10 +108,11 @@ def require_org_member(claims: JWTClaims = Depends(get_jwt_claims)) -> JWTClaims
     """
     Dependency that ensures user has organization access
     """
-    if not claims.org_id:
+  
+    if not claims.user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Organization ID is required for this operation"
+            detail="User ID is required for this operation"
         )
     return claims
 
@@ -117,7 +120,7 @@ def require_admin_or_owner(claims: JWTClaims = Depends(get_jwt_claims)) -> JWTCl
     """
     Dependency that ensures user has admin or owner role
     """
-    if not claims.role or claims.role not in ["admin", "owner"]:
+    if not claims.user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin or Owner role required"

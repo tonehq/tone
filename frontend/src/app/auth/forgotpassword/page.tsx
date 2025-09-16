@@ -2,22 +2,21 @@
 
 import * as React from 'react';
 import { useForm } from "antd/es/form/Form";
-import ButtonComponent from "@/components/auth/Shared/ButtonComponent";
-import { Spinner } from "@radix-ui/themes";
+import ButtonComponent from "@/components/Shared/UI Components/ButtonComponent";
 import { Form, Input, Skeleton } from "antd";
 import Container from "../shared/ContainerComponent";
 import { forgotPassword } from '@/services/auth/helper';
 import Link from 'next/link';
+import { useNotification } from '@/utils/shared/notification';
 
 export default function ForgotPassword() {
 
   const [form] = useForm();
 
   const [isLoading, setIsLoading] = React.useState(true);
-  const loadingTimeoutRef = React.useRef<ReturnType<typeof setTimeout>>();
+  const loadingTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [loader, setLoader] = React.useState(false);
-  const [toastOpen, setToastOpen] = React.useState(false);
-  const [toastContent, setToastContent] = React.useState({ title: '', description: '' });
+  const { notify, contextHolder } = useNotification();
 
   React.useEffect(() => {
     loadingTimeoutRef.current = setTimeout(() => {
@@ -33,38 +32,26 @@ export default function ForgotPassword() {
       try {
         const res: any = await forgotPassword(value["email"]);
         if (res) {
-          setToastContent({
-            title: 'Success',
-            description: 'Verification email has been sent to your mail'
-          });
-          setToastOpen(true);
+          notify.success("Email Sent", "Password reset instructions sent to your email", 4, "bottomRight");
+          setLoader(false)
         }
-        setLoader(false)
       } catch (error) {
         let errorMessage = '';
 
         if (typeof error === 'object' && error !== null && 'response' in error && 'data' in (error as any).response && 'detail' in (error as any).response.data) {
           errorMessage = (error as any).response.data.detail;
         }
-        setToastContent({
-          title: 'Error',
-          description: 'Email does not exist or something went wrong'
-        });
-        setToastOpen(true);
+          notify.error("Request Failed", errorMessage || "Something went wrong", 5, "bottomRight");
         setLoader(false)
       }
     } else {
-      setToastContent({
-        title: 'Error',
-        description: 'Email not exist  or something went wrong'
-      });
-      setToastOpen(true);
       setLoader(false)
     }
   };
 
   return (
     <Container>
+      {contextHolder}
       <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-lg shadow-md">
         <h2 className="mb-4">Password Reset Request</h2>
         <p className="text-gray-600 mb-6">Enter your email to reset your password.</p>
@@ -75,8 +62,8 @@ export default function ForgotPassword() {
             {isLoading ?
               <Skeleton.Input
                 active
-                style={{ width: "360px", height: "100%" }}
-                className="font-[500] py-4 h-[42px] rounded-lg"
+                style={{ width: "360px", height: "42px" }}
+                className="font-[500] py-4 rounded-lg"
               />
               :
               <Input className="py-2" placeholder={"Enter Your Email"} />
@@ -84,14 +71,13 @@ export default function ForgotPassword() {
           </Form.Item>
           <Form.Item>
             <ButtonComponent
-              isLoading={isLoading}
+              loading={loader}
               type={"primary"}
               htmlType={"submit"}
-              width={"100%"}
-            >
-              <Spinner loading={loader} />
-              Request
-            </ButtonComponent>
+              text="Request"
+              className="w-full"
+              active={true}
+            />
           </Form.Item>
           <Form.Item>
             <div className="flex justify-center items-center">

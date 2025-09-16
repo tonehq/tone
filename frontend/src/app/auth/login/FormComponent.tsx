@@ -1,13 +1,18 @@
+"use client"
+
 import { Form, Input, Skeleton } from "antd";
 import { useForm } from "antd/es/form/Form";
-import ButtonComponent from "@/components/auth/Shared/ButtonComponent";
+import ButtonComponent from "@/components/Shared/UI Components/ButtonComponent";
 import { useEffect, useRef, useState } from "react";
 import Container from "../shared/ContainerComponent";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import axios from "axios";
-import { setToken } from "@/services/auth/helper";
+import { auth } from "@/utils/firebase";
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import axios from "@/utils/axios";
 import { BACKEND_URL } from "@/urls";
+import { setToken } from "@/utils/auth";
+
 
 
 const FormComponent = (props: any) => {
@@ -29,35 +34,35 @@ const FormComponent = (props: any) => {
 
 
     const handleSignIn = async () => {
-        // await auth.signOut();
-        // const provider = new GoogleAuthProvider();
-        // signInWithPopup(auth, provider).then(async (result :any) => {
-        //   const token = await result.user.getIdToken();
-        //   try {
-        //     const resp = await axios.get(
-        //       BACKEND_URL + "/auth/get_app_access_token_by_firebase",
-        //       {
-        //         headers: {
-        //           Authorization: `Bearer ${token}`,
-        //         },
-        //       }
-        //     );
-        //     await setToken(resp.data);
-        //     router.push("/editor/dashboard")
-        //   } catch (error: any) {
-        //     if (error?.response?.data?.detail === "USER_NOT_FOUND") {
-        //       router.push(
-        //         "/auth/signup?email=" +
-        //           result.user.email +
-        //           "&name=" +
-        //           result.user.displayName +
-        //           "&firebase_uid=" +
-        //           token +
-        //           "&firebase_signup=true"
-        //       );
-        //     }
-        //   }
-        // });
+        await auth.signOut();
+        const provider = new GoogleAuthProvider();
+        signInWithPopup(auth, provider).then(async (result :any) => {
+          const token = await result.user.getIdToken();
+          try {
+            const resp = await axios.get(
+              BACKEND_URL + "/auth/get_app_access_token_by_firebase",
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              }
+            );
+            await setToken(resp.data);
+            router.push("/home")
+          } catch (error: any) {
+            if (error?.response?.data?.detail === "USER_NOT_FOUND") {
+              router.push(
+                "/auth/signup?email=" +
+                  result.user.email +
+                  "&name=" +
+                  result.user.displayName +
+                  "&firebase_uid=" +
+                  token +
+                  "&firebase_signup=true"
+              );
+            }
+          }
+        });
     };
 
 
@@ -65,52 +70,49 @@ const FormComponent = (props: any) => {
         <Container>
             <div>
                 <h2 className="mb-8">Sign in</h2>
-                <Form onFinish={handleSubmit} className="w-[360px] text-[16px]" requiredMark={false} form={form} name="validateOnly" layout="vertical" autoComplete="off">
+                <Form onFinish={handleSubmit} className="w-[400px] text-[16px]" requiredMark={false} form={form} name="validateOnly" layout="vertical" autoComplete="off">
                     <Form.Item name="email" label="Email" rules={[{ required: true }]}>
                         {isLoading ?
                             <Skeleton.Input
                                 active
-                                style={{ width: "360px", height: "100%" }}
-                                className="font-[500] py-4 h-[42px] rounded-lg"
+                                style={{ width: "400px", height: "42px" }}
+                                className="font-[500] py-4 rounded-[5px]"
                             />
                             :
-                            <Input className="py-2" placeholder={"Enter Your Email"} />
+                            <Input placeholder={"Enter Your Email"} />
                         }
                     </Form.Item>
                     <Form.Item name="password" label="Password" rules={[{ required: true }]}>
                         {isLoading ?
                             <Skeleton.Input
                                 active
-                                style={{ width: "360px", height: "100%" }}
-                                className="font-[500] py-4 h-[42px] rounded-lg"
+                                style={{ width: "400px", height: "42px" }}
+                                className="font-[500] py-4 h-[40px] rounded-[5px]"
                             />
                             :
-                            <Input.Password className="py-2" placeholder={"Enter your passwordl"} />
+                            <Input.Password  placeholder={"Enter your passwordl"} />
                         }
                     </Form.Item>
                     <Form.Item>
                         <ButtonComponent
-                            isLoading={isLoading}
+                            text="Sign in"
+                            loading={loader}
                             type={"primary"}
                             htmlType={"submit"}
-                            width={"100%"}
-                        >
+                            className={"w-full"}
+                            active={true}
+                        />
 
-                            Sign in
-                        </ButtonComponent>
                     </Form.Item>
                     <Form.Item>
                         <ButtonComponent
-                            isLoading={isLoading}
+                            text="Sign in with Google"
+                            loading={false}
                             type={"default"}
-                            width={"100%"}
+                            className={"w-full"}
                             onClick={handleSignIn}
-                        >
-                            <span>
-                                <img loading="lazy" src="https://cdn.builder.io/api/v1/image/assets/TEMP/f6bb794390c33066b1b287c6fed32b735307648872bb255ad515b99fcf51d92b?apiKey=99f610f079bc4250a85747146003507a&amp;&amp;apiKey=99f610f079bc4250a85747146003507a" alt="" />
-                            </span>
-                            <span className="ml-4">Sign in with Google</span>
-                        </ButtonComponent>
+                            icon={<img loading="lazy" src="https://developers.google.com/identity/images/g-logo.png" alt="Google" width={16} height={16} className="w-4 h-4" />}
+                        />
                     </Form.Item>
                     <Form.Item>
                         <div className="flex justify-center items-center">
@@ -122,7 +124,7 @@ const FormComponent = (props: any) => {
                         </div>
                     </Form.Item>
                     <Form.Item>
-                        <div className="flex justify-center items-center">
+                        <div className="flex text-[14px] justify-center items-center">
                             <span>Don't have an account ?</span>
                             <span className="font-[500] text-[#4058ff] ml-1">
                                 <Link href="/auth/signup" className='cursor-pointer'>
