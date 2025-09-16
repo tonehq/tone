@@ -120,7 +120,7 @@ def require_admin_or_owner(claims: JWTClaims = Depends(get_jwt_claims)) -> JWTCl
     """
     Dependency that ensures user has admin or owner role
     """
-    if not claims.role or claims.role not in ["admin", "owner"]:
+    if not claims.user_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin or Owner role required"

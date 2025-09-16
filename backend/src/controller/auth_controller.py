@@ -176,13 +176,13 @@ def create_tenants(
     auth_service = AuthService(db, user_id=claims.user_id)
     return auth_service.create_organization(name, claims.user_id)
 
-
 # API 9: Invite Member
 @organization_router.post("/invite_user_to_organization")
 def invite_user_to_organization(
     invite_data: Dict[str, str] = Body(...),
     claims: JWTClaims = Depends(require_admin_or_owner),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    org_id: int | None = Header(None, alias="tenant_id"),
 ):
     """
     Invite member to organization
@@ -191,6 +191,25 @@ def invite_user_to_organization(
     name = invite_data.get("name")
     email = invite_data.get("email")
     role = invite_data.get("role")
+
+    from src.model.auth_model import Member
+    member = db.query(Member).filter(
+        Member.user_id == claims.user_id,
+        Member.organization_id == org_id,
+        Member.status == 'active'
+    ).first()
+    
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is not a member of this organization"
+        )
+
+    if member.role.value not in ["owner", "admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admins or owners can invite members"
+        )
     
     if not all([name, email, role]):
         raise HTTPException(
@@ -198,16 +217,11 @@ def invite_user_to_organization(
             detail="Name, email, and role are required"
         )
     
-    if not claims.org_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Organization ID is required"
-        )
-    
-    auth_service = AuthService(db, org_id=claims.org_id, user_id=claims.user_id)
+    auth_service = AuthService(db, org_id=org_id, user_id=claims.user_id)
     return auth_service.invite_user_to_organization(
-        claims.org_id, name, email, role, claims.user_id
+        org_id, name, email, role, claims.user_id
     )
+
 
 
 # API 10: Delete Member

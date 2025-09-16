@@ -16,6 +16,8 @@ from src.model.auth_model import (
 )
 from src.common.jwt_middleware import jwt_manager, JWTClaims
 from src.utils.orm_utils import model_to_dict
+from loguru import logger
+
 
 class AuthService:
     """Service class for handling authentication and user management operations"""
@@ -408,10 +410,15 @@ class AuthService:
             )
         
         # Check if user is already a member
-        existing_member = self.db.query(Member).join(User).filter(
-            User.email == email,
-            Member.organization_id == org_id
-        ).first()
+        existing_member = (
+                self.db.query(Member)
+                .join(User, Member.user_id == User.id) 
+                .filter(
+                    User.email == email,
+                    Member.organization_id == org_id
+                )
+                .first()
+            )
         
         if existing_member:
             raise HTTPException(
@@ -431,7 +438,7 @@ class AuthService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Pending invitation already exists"
             )
-        
+                    
         # Create invitation
         invitation = OrganizationInvite(
             organization_id=org_id,
