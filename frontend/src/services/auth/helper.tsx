@@ -20,6 +20,7 @@ export const setToken = async (LogInData: any) => {
   Cookies.set(ACCESS_TOKEN, LogInData['access_token'], {
     expires: new Date(decoded.exp * 1000),
   });
+
   Cookies.set('user_id', LogInData?.['user_id'], {
     expires: new Date(decoded.exp * 1000),
   });
