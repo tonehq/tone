@@ -1,9 +1,12 @@
-"use client";
+'use client';
 
-import { Modal, Form, Input, Space, message } from "antd";
-import ButtonComponent from "../UI Components/ButtonComponent";
-import { useState } from "react";
-import { createOrganization } from "@/services/auth/helper";
+import { useState } from 'react';
+
+import { Modal, Form, Input, Space, message } from 'antd';
+
+import { createOrganization } from '@/services/auth/helper';
+
+import ButtonComponent from '../UI Components/ButtonComponent';
 
 const CreateOrganizationModal = (props: any) => {
   const { visible, setVisible, fetchOrganization } = props;
@@ -11,12 +14,12 @@ const CreateOrganizationModal = (props: any) => {
   const [loading, setLoading] = useState(false);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value || "";
+    const value = e.target.value || '';
     const slug = value
       .toLowerCase()
       .trim()
-      .replace(/[^a-z0-9]+/g, "-") 
-      .replace(/^-+|-+$/g, ""); 
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
     form.setFieldsValue({ slug });
   };
 
@@ -26,17 +29,17 @@ const CreateOrganizationModal = (props: any) => {
       const values = await form.validateFields();
 
       const res = await createOrganization(values);
-      if(res.data) {
-        message.success("Organization created successfully");
+      if (res.data) {
+        message.success('Organization created successfully');
         await fetchOrganization();
       } else {
-        message.error("Organization creation failed");
+        message.error('Organization creation failed');
       }
 
       form.resetFields();
       setVisible(false);
     } catch (err) {
-      console.log("Validation Failed:", err);
+      console.log('Validation Failed:', err);
     } finally {
       setLoading(false);
     }
@@ -65,15 +68,12 @@ const CreateOrganizationModal = (props: any) => {
           <Form.Item
             name="name"
             label="Organization Name"
-            rules={[{ required: true, message: "Please enter organization name" }]}
+            rules={[{ required: true, message: 'Please enter organization name' }]}
           >
             <Input placeholder="Enter organization name" onChange={handleNameChange} />
           </Form.Item>
 
-          <Form.Item
-            name="slug"
-            label="Organization Slug"
-          >
+          <Form.Item name="slug" label="Organization Slug">
             <Input disabled placeholder="Organization slug" />
           </Form.Item>
 

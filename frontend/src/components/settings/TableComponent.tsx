@@ -1,24 +1,10 @@
-import React, { useState } from 'react';
-import { 
-  Table, 
-  Avatar, 
-  Input, 
-  Select, 
-  Tabs, 
-  Space, 
-  Dropdown, 
-  Menu,
-  Tag, 
-  message,
-  MenuProps
-} from 'antd';
-import { 
-  Search, 
-  UserPlus,
-  MoreHorizontal 
-} from 'lucide-react';
-import ButtonComponent from '../Shared/UI Components/ButtonComponent';
-import ModalComponent from './ModalComponent';
+import { useState } from 'react';
+
+import { Avatar, Dropdown, Input, MenuProps, Select, Space, Table, Tabs, Tag, message } from 'antd';
+import { MoreHorizontal, Search, UserPlus } from 'lucide-react';
+
+import ModalComponent from '@/components/settings/ModalComponent';
+import ButtonComponent from '@/components/Shared/UI Components/ButtonComponent';
 
 const { Option } = Select;
 
@@ -40,22 +26,19 @@ interface InvitationData {
   role: string;
 }
 
-
 const MembersTable = () => {
   const [activeTab, setActiveTab] = useState('members');
   const [searchText, setSearchText] = useState('');
   const [sortBy, setSortBy] = useState('joined');
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  
   const handleInviteUser = async (values: { name: string; email: string; role: string }) => {
     setLoading(true);
     try {
       // Replace with your API call
-      console.log("Inviting user:", values);
+      console.log('Inviting user:', values);
 
-      // Example: 
+      // Example:
       // await fetch("/api/invite", {
       //   method: "POST",
       //   headers: { "Content-Type": "application/json" },
@@ -65,7 +48,7 @@ const MembersTable = () => {
       message.success(`Invitation sent to ${values.email}`);
       setInviteModalOpen(false);
     } catch (error) {
-      message.error("Failed to send invitation");
+      message.error('Failed to send invitation');
     } finally {
       setLoading(false);
     }
@@ -115,21 +98,23 @@ const MembersTable = () => {
     if (name.includes('@')) {
       return name.charAt(0).toUpperCase();
     }
-    return name.split(' ').map((n: string) => n[0]).join('').toUpperCase();
+    return name
+      .split(' ')
+      .map((n: string) => n[0])
+      .join('')
+      .toUpperCase();
   };
-
-  
-const items: MenuProps["items"] = [
-  {
-    key: "edit",
-    label: "Edit Role",
-  },
-  {
-    key: "remove",
-    label: "Remove User",
-    danger: true,
-  },
-];
+  const items: MenuProps['items'] = [
+    {
+      key: 'edit',
+      label: 'Edit Role',
+    },
+    {
+      key: 'remove',
+      label: 'Remove User',
+      danger: true,
+    },
+  ];
 
   const memberColumns = [
     {
@@ -138,12 +123,12 @@ const items: MenuProps["items"] = [
       key: 'user',
       render: (text: string, record: MemberData) => (
         <Space>
-          <Avatar 
+          <Avatar
             size={40}
-            style={{ 
+            style={{
               backgroundColor: '#7c3aed',
               fontSize: '16px',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
             }}
           >
             {getInitials(text)}
@@ -168,12 +153,7 @@ const items: MenuProps["items"] = [
       dataIndex: 'role',
       key: 'role',
       render: (role: string) => (
-        <Select 
-          value={role} 
-          style={{ width: 120 }}
-          variant="borderless"
-          suffixIcon={null}
-        >
+        <Select value={role} style={{ width: 120 }} variant="borderless" suffixIcon={null}>
           <Option value="Admin">Admin</Option>
           <Option value="Member">Member</Option>
         </Select>
@@ -185,21 +165,17 @@ const items: MenuProps["items"] = [
       width: 50,
       render: (_: any, record: MemberData) => (
         <Dropdown
-        menu={{
-          items,
-          style: { width: 130 },
-        }}
-        trigger={["click"]}
-        getPopupContainer={(triggerNode) => triggerNode?.parentElement || document.body}
-
-      >
-        <span>
-          <ButtonComponent
-            type="text"
-            icon={<MoreHorizontal size={16} />}
-          />
-        </span>
-      </Dropdown>
+          menu={{
+            items,
+            style: { width: 130 },
+          }}
+          trigger={['click']}
+          getPopupContainer={(triggerNode) => triggerNode?.parentElement || document.body}
+        >
+          <span>
+            <ButtonComponent type="text" icon={<MoreHorizontal size={16} />} />
+          </span>
+        </Dropdown>
       ),
     },
   ];
@@ -211,12 +187,12 @@ const items: MenuProps["items"] = [
       key: 'user',
       render: (text: string, record: InvitationData) => (
         <Space>
-          <Avatar 
+          <Avatar
             size={40}
-            style={{ 
+            style={{
               backgroundColor: '#7c3aed',
               fontSize: '16px',
-              fontWeight: 'bold'
+              fontWeight: 'bold',
             }}
           >
             {getInitials(text)}
@@ -238,9 +214,7 @@ const items: MenuProps["items"] = [
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => (
-        <Tag color={status === 'Pending' ? 'orange' : 'blue'}>
-          {status}
-        </Tag>
+        <Tag color={status === 'Pending' ? 'orange' : 'blue'}>{status}</Tag>
       ),
     },
     {
@@ -248,12 +222,7 @@ const items: MenuProps["items"] = [
       dataIndex: 'role',
       key: 'role',
       render: (role: string) => (
-        <Select 
-          value={role} 
-          style={{ width: 120 }}
-          variant="borderless"
-          suffixIcon={null}
-        >
+        <Select value={role} style={{ width: 120 }} variant="borderless" suffixIcon={null}>
           <Option value="Admin">Admin</Option>
           <Option value="Member">Member</Option>
         </Select>
@@ -280,10 +249,7 @@ const items: MenuProps["items"] = [
           }}
           trigger={['click']}
         >
-          <ButtonComponent 
-            type="text" 
-            icon={<MoreHorizontal size={16} />} 
-          />
+          <ButtonComponent type="text" icon={<MoreHorizontal size={16} />} />
         </Dropdown>
       ),
     },
@@ -297,7 +263,7 @@ const items: MenuProps["items"] = [
     {
       key: 'invitations',
       label: 'Invitations',
-    }
+    },
   ];
 
   return (
@@ -308,25 +274,27 @@ const items: MenuProps["items"] = [
           activeKey={activeTab}
           onChange={setActiveTab}
           items={tabItems}
-          style={{ 
+          style={{
             paddingLeft: '24px',
             marginBottom: 0,
           }}
           tabBarStyle={{
             borderBottom: '1px solid #f0f0f0',
-            marginBottom: '24px'
+            marginBottom: '24px',
           }}
         />
 
         {/* Table Content */}
         <div style={{ padding: '0 24px 24px' }}>
           {/* Header Controls */}
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center',
-            marginBottom: '16px'
-          }}>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '16px',
+            }}
+          >
             <Space>
               <Input
                 placeholder="Search..."
@@ -336,14 +304,14 @@ const items: MenuProps["items"] = [
                 prefix={<Search size={16} color="#c1bfbf" style={{ marginRight: 8 }} />}
               />
             </Space>
-            <ButtonComponent 
+            <ButtonComponent
               text="Invite user"
-              type="primary" 
+              type="primary"
               icon={<UserPlus size={16} />}
               onClick={() => setInviteModalOpen(true)}
               active={true}
             />
-          </div >
+          </div>
 
           {/* Table */}
           {activeTab === 'members' ? (

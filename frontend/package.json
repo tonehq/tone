@@ -6,7 +6,9 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "next lint",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write ."
   },
   "dependencies": {
     "@types/js-cookie": "^3.0.6",
@@ -30,10 +32,15 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@typescript-eslint/eslint-plugin": "^8.44.0",
+    "@typescript-eslint/parser": "^8.44.0",
     "autoprefixer": "^10.4.21",
-    "eslint": "^9",
-    "eslint-config-next": "15.5.2",
+    "eslint": "^9.35.0",
+    "eslint-config-next": "^15.5.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
     "postcss": "^8.5.6",
+    "prettier": "^3.6.2",
     "tailwindcss": "^4.1.12",
     "typescript": "^5"
   }

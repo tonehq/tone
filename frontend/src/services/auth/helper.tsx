@@ -1,16 +1,12 @@
-import {
-  ACCESS_TOKEN,
-  REFRESH_TOKEN,
-  SIGNUP,
-  TENANT_ID,
-  FIREBASE_SIGNUP,
-} from "@/constants";
-import axios from "@/utils/axios";
-import { decodeJWT } from "@/utils/jwt";
-import Cookies from "js-cookie";
+import Cookies from 'js-cookie';
+
+import { ACCESS_TOKEN, REFRESH_TOKEN, SIGNUP, TENANT_ID, FIREBASE_SIGNUP } from '@/constants';
+
+import axios from '@/utils/axios';
+import { decodeJWT } from '@/utils/jwt';
 
 export const login = async (email: string, password: string) => {
-  const { data: LogInData } = await axios.post("/auth/login", {
+  const { data: LogInData } = await axios.post('/auth/login', {
     email,
     password,
   });
@@ -20,29 +16,27 @@ export const login = async (email: string, password: string) => {
 };
 
 export const setToken = async (LogInData: any) => {
-  const decoded = decodeJWT(LogInData["access_token"]);
-  Cookies.set(ACCESS_TOKEN, LogInData["access_token"], {
+  const decoded = decodeJWT(LogInData['access_token']);
+  Cookies.set(ACCESS_TOKEN, LogInData['access_token'], {
     expires: new Date(decoded.exp * 1000),
   });
-  Cookies.set(REFRESH_TOKEN, LogInData["refresh_token"], {
+  Cookies.set(REFRESH_TOKEN, LogInData['refresh_token'], {
     expires: new Date(decoded.exp * 1000),
   });
-  Cookies.set("user_id", LogInData?.['user_id'], {
+  Cookies.set('user_id', LogInData?.['user_id'], {
     expires: new Date(decoded.exp * 1000),
   });
 
-  Cookies.set("login_data", JSON.stringify(LogInData), {
+  Cookies.set('login_data', JSON.stringify(LogInData), {
     expires: new Date(decoded.exp * 1000),
   });
 
   Cookies.set(
     TENANT_ID,
-    LogInData["memberships"]?.length
-      ? LogInData["memberships"]?.[0]?.["organisation_id"]
-      : "",
+    LogInData['memberships']?.length ? LogInData['memberships']?.[0]?.['organisation_id'] : '',
     {
       expires: new Date(decoded.exp * 1000),
-    }
+    },
   );
 
   return LogInData;
@@ -54,7 +48,7 @@ export const createteam = async (data: string) => {
 };
 
 export const forgotPassword = async (email: string) => {
-  const { data } = await axios.get("/auth/forget-password", {
+  const { data } = await axios.get('/auth/forget-password', {
     params: {
       email,
     },
@@ -67,7 +61,7 @@ export const signup = async (
   username: string,
   password: string,
   profile: any = {},
-  firebase_token: string | null = null
+  firebase_token: string | null = null,
 ) => {
   if (firebase_token !== null) {
     return await axios
@@ -81,13 +75,13 @@ export const signup = async (
           headers: {
             Authorization: `Bearer ${firebase_token}`,
           },
-        }
+        },
       )
       .then((res) => {
         setToken(res.data);
       })
       .catch((err) => {
-        alert("something went wrong");
+        alert('something went wrong');
       });
   } else {
     return await axios.post(SIGNUP, {
@@ -99,9 +93,8 @@ export const signup = async (
   }
 };
 
-
 export const getOrganization = async () => {
-  const res = await axios.get(`/org/get_associated_tenants`);
+  const res = await axios.get('/org/get_associated_tenants');
   return res;
 };
 

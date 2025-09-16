@@ -51,7 +51,6 @@
 //     return () => clearTimeout(loadingTimeoutRef.current);
 //   }, []);
 
-
 //   const handleNext = (event: React.FormEvent<HTMLFormElement>) => {
 //     event.preventDefault();
 //     setCurrentpage(currentpage + 1)
@@ -226,10 +225,3 @@
 // }
 
 // export default Onboard;
-
-
-
-
-
-
-

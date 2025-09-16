@@ -1,6 +1,8 @@
-import React from "react";
-import { Modal, Form, Input, Select } from "antd";
-import ButtonComponent from "../Shared/UI Components/ButtonComponent";
+import React from 'react';
+
+import { Modal, Form, Input, Select } from 'antd';
+
+import ButtonComponent from '../Shared/UI Components/ButtonComponent';
 
 const { Option } = Select;
 
@@ -48,7 +50,7 @@ const ModalComponent: React.FC<ModalComponentProps> = ({ open, onCancel, onInvit
         <Form.Item
           name="name"
           label="Full Name"
-          rules={[{ required: true, message: "Please enter name" }]}
+          rules={[{ required: true, message: 'Please enter name' }]}
         >
           <Input placeholder="John Doe" />
         </Form.Item>
@@ -57,19 +59,14 @@ const ModalComponent: React.FC<ModalComponentProps> = ({ open, onCancel, onInvit
           name="email"
           label="Email"
           rules={[
-            { required: true, message: "Please enter email" },
-            { type: "email", message: "Enter a valid email" },
+            { required: true, message: 'Please enter email' },
+            { type: 'email', message: 'Enter a valid email' },
           ]}
         >
           <Input placeholder="john@example.com" />
         </Form.Item>
 
-        <Form.Item
-          name="role"
-          label="Role"
-          initialValue="Member"
-          rules={[{ required: true }]}
-        >
+        <Form.Item name="role" label="Role" initialValue="Member" rules={[{ required: true }]}>
           <Select>
             <Option value="Admin">Admin</Option>
             <Option value="Member">Member</Option>
