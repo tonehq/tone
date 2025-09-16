@@ -11,6 +11,12 @@
     "format": "prettier --write .",
     "prepare": "husky"
   },
+  "lint-staged": {
+    "src/**/*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ]
+  },
   "dependencies": {
     "@types/js-cookie": "^3.0.6",
     "antd": "^5.27.0",
