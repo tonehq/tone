@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Body, Query, Head
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 import time
+from loguru import logger
 
 from src.database import get_db
 from src.services.auth_service import AuthService
@@ -128,23 +129,26 @@ def get_associated_tenants(
 
 
 # API 6: List of Members
+
 @user_router.post("/get_all_users_for_organization")
 def get_all_users_for_organization(
+    org_id: int | None = Header(None, alias="tenant_id"),
     claims: JWTClaims = Depends(require_org_member),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Get all members in organization
     """
-    if not claims.org_id:
+    # Pick org_id from header first, else from claims
+    if not claims.user_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Organization ID is required"
         )
-    
-    auth_service = AuthService(db, org_id=claims.org_id, user_id=claims.user_id)
-    return auth_service.get_all_users_for_organization(claims.org_id)
 
+    auth_service = AuthService(db, org_id=org_id)
+    return auth_service.get_all_users_for_organization(org_id)
+   
 
 # API 7: Get Roles
 @permissions_router.get("/get_roles_by_scope")
