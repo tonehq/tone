@@ -5,8 +5,6 @@ from typing import Optional, Dict, Any
 import time
 from pydantic import BaseModel
 from src.settings import settings
-from loguru import logger
-
 
 # JWT Bearer token extractor
 security = HTTPBearer()

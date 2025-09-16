@@ -334,8 +334,36 @@ class AuthService:
                 "joined_at": member.joined_at,
                 "last_activity_at": member.last_activity_at
             })
+
+            logger.info(f"Result: {result}")
         
         return result
+    
+      # API 6: Get All Users for Organization
+   
+    def get_all_invited_users_for_organization(self, org_id: int) -> List[Dict[str, Any]]:
+        """
+        Get all members of an organization
+        """
+        members = self.db.query(OrganizationInvite).filter(
+            OrganizationInvite.organization_id == org_id,
+        ).all()
+
+        result = []
+        for member in members:
+            result.append({
+                "member_id": member.id,
+                "email": member.email,
+                "username": member.name,
+                "name": member.name,
+                "role": member.role,
+                "status": member.status,
+            })
+
+            logger.info(f"Result: {result}")
+        
+        return result
+    
     
     # API 7: Get Roles by Scope
     def get_roles_by_scope(self) -> List[Dict[str, str]]:
