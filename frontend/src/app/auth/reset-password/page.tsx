@@ -7,16 +7,18 @@ import { Form, Input, Skeleton } from "antd";
 import axios from '@/utils/axios';
 import Container from "../shared/ContainerComponent";
 import ButtonComponent from "@/components/Shared/UI Components/ButtonComponent";
+import { useNotification } from '@/utils/shared/notification';
 
 const ResetPasswordContent: React.FC = () => {
 
   const [form] = useForm();
 
   const [isLoading, setIsLoading] = React.useState(true);
- const loadingTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const loadingTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const router = useRouter();
   const [loader, setLoader] = React.useState(false);
   const params = useSearchParams();
+  const { notify, contextHolder } = useNotification();
 
   React.useEffect(() => {
     loadingTimeoutRef.current = setTimeout(() => {
@@ -34,6 +36,7 @@ const ResetPasswordContent: React.FC = () => {
           `/auth/acceptForgotPassword?email=${params?.get('email')}&password=${(value["password"]).trim()}&token=${params?.get('token')}`
         );
         if (res) {
+          notify.success("Password Reset", "Your password has been updated successfully", 4, "bottomRight");
           setTimeout(() => {
             router.push('/auth/login')
           }, 2000)
@@ -45,7 +48,8 @@ const ResetPasswordContent: React.FC = () => {
         if (typeof error === 'object' && error !== null && 'response' in error && 'data' in (error as any).response && 'detail' in (error as any).response.data) {
           errorMessage = (error as any).response.data.detail;
         }
-      
+        notify.error("Reset Failed", errorMessage || "Something went wrong", 5, "bottomRight");
+
         setLoader(false)
       }
     } else {
@@ -55,6 +59,7 @@ const ResetPasswordContent: React.FC = () => {
 
   return (
     <Container>
+       {contextHolder}
       <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
         <h2 className="mb-8">Reset password</h2>
         <Form onFinish={handleSubmit} className="w-[360px] text-[16px]" requiredMark={false} form={form} name="validateOnly" layout="vertical" autoComplete="off">

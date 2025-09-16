@@ -8,6 +8,7 @@ import { useForm } from "antd/es/form/Form";
 import { Form, Input, Skeleton } from "antd";
 import Link from "next/link";
 import Container from "../shared/ContainerComponent";
+import { useNotification } from "@/utils/shared/notification";
 
 export default () => {
   return (
@@ -35,6 +36,7 @@ function SignIn() {
   const [loader, setLoader] = React.useState(false);
   const [active, setActive] = React.useState(0);
   const [tabs, setTabs] = React.useState("individual");
+  const { notify, contextHolder } = useNotification();
 
   React.useEffect(() => {
     const firebase_signup = params.get("firebase_signup");
@@ -66,6 +68,7 @@ function SignIn() {
         tabs === 'individual' ? { name: value["username"] } : { name: value["org_name"] },
         params.get("firebase_uid")
       );
+       notify.success("Account Created", "Please check your email for verification", 4, "bottomRight");
       if (params.get("firebase_signup") === "true") {
         router.push("/home");
       }
@@ -88,12 +91,14 @@ function SignIn() {
       ) {
         errorMessage = (error as any).response.data.detail;
       }
+       notify.error("Sign Up Failed", errorMessage, 5, "bottomRight");
       setLoader(false);
     }
   };
 
   return (
     <Container>
+       {contextHolder}
       <div className="max-w-xl mx-auto px-6 bg-white rounded-lg shadow-md">
         <h2 className="mb-4">Sign Up</h2>
         <Form onFinish={handleSubmit} className="w-[400px] text-[16px]" requiredMark={false} form={form} name="validateOnly" layout="vertical" autoComplete="off">
@@ -159,7 +164,7 @@ function SignIn() {
               className="w-full"
               icon={<img loading="lazy" width={16} height={16} src="https://cdn.builder.io/api/v1/image/assets/TEMP/f6bb794390c33066b1b287c6fed32b735307648872bb255ad515b99fcf51d92b?apiKey=99f610f079bc4250a85747146003507a&amp;&amp;apiKey=99f610f079bc4250a85747146003507a" alt="" />}
             />
-          
+
           </Form.Item>
           <Form.Item>
             <div className="flex text-[14px] justify-center items-center">
