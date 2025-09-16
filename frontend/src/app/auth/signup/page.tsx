@@ -101,8 +101,8 @@ function SignIn() {
             {isLoading ?
               <Skeleton.Input
                 active
-                style={{ width: "400px", height: "100%" }}
-                className="font-[500] py-4 h-[40px] rounded-[5px]"
+                style={{ width: "400px", height: "42px" }}
+                className="font-[500] py-4 rounded-[5px]"
               />
               :
               <Input className="py-2" placeholder={"Enter Your Username"} />
@@ -112,8 +112,8 @@ function SignIn() {
             {isLoading ?
               <Skeleton.Input
                 active
-                style={{ width: "400px", height: "100%" }}
-                className="font-[500] py-4 h-[40px] rounded-[5px]"
+                style={{ width: "400px", height: "42px" }}
+                className="font-[500] py-4 rounded-[5px]"
               />
               :
               <Input className="py-2" placeholder={"Enter Your Email"} />
@@ -123,8 +123,8 @@ function SignIn() {
             {isLoading ?
               <Skeleton.Input
                 active
-                style={{ width: "400px", height: "100%" }}
-                className="font-[500] py-4 h-[40px] rounded-[5px]"
+                style={{ width: "400px", height: "42px" }}
+                className="font-[500] py-4 rounded-[5px]"
               />
               :
               <Input.Password className="py-2" placeholder={"Enter your password"} />
@@ -134,8 +134,8 @@ function SignIn() {
             {isLoading ?
               <Skeleton.Input
                 active
-                style={{ width: "400px", height: "100%" }}
-                className="font-[500] py-4 h-[40px] rounded-[5px]"
+                style={{ width: "400px", height: "42px" }}
+                className="font-[500] py-4 rounded-[5px]"
               />
               :
               <Input className="py-2" placeholder={"Enter your organisation name"} />

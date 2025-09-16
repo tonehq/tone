@@ -75,8 +75,8 @@ const FormComponent = (props: any) => {
                         {isLoading ?
                             <Skeleton.Input
                                 active
-                                style={{ width: "400px", height: "100%" }}
-                                className="font-[500] py-4 h-[40px] rounded-[5px]"
+                                style={{ width: "400px", height: "42px" }}
+                                className="font-[500] py-4 rounded-[5px]"
                             />
                             :
                             <Input placeholder={"Enter Your Email"} />
@@ -86,7 +86,7 @@ const FormComponent = (props: any) => {
                         {isLoading ?
                             <Skeleton.Input
                                 active
-                                style={{ width: "400px", height: "100%" }}
+                                style={{ width: "400px", height: "42px" }}
                                 className="font-[500] py-4 h-[40px] rounded-[5px]"
                             />
                             :

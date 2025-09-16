@@ -57,8 +57,8 @@ export default function ForgotPassword() {
             {isLoading ?
               <Skeleton.Input
                 active
-                style={{ width: "360px", height: "100%" }}
-                className="font-[500] py-4 h-[40px] rounded-lg"
+                style={{ width: "360px", height: "42px" }}
+                className="font-[500] py-4 rounded-lg"
               />
               :
               <Input className="py-2" placeholder={"Enter Your Email"} />
