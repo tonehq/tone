@@ -1,16 +1,20 @@
-'use client'
+'use client';
 
 import * as React from 'react';
-import { useForm } from "antd/es/form/Form";
-import ButtonComponent from "@/components/Shared/UI Components/ButtonComponent";
-import { Form, Input, Skeleton } from "antd";
-import Container from "../shared/ContainerComponent";
-import { forgotPassword } from '@/services/auth/helper';
+
+import { Form, Input, Skeleton } from 'antd';
+import { useForm } from 'antd/es/form/Form';
 import Link from 'next/link';
+
+import ButtonComponent from '@/components/Shared/UI Components/ButtonComponent';
+
+import { forgotPassword } from '@/services/auth/helper';
+
 import { useNotification } from '@/utils/shared/notification';
 
-export default function ForgotPassword() {
+import Container from '../shared/ContainerComponent';
 
+export default function ForgotPassword() {
   const [form] = useForm();
 
   const [isLoading, setIsLoading] = React.useState(true);
@@ -27,25 +31,36 @@ export default function ForgotPassword() {
   }, []);
 
   const handleSubmit = async (value: any) => {
-    setLoader(true)
-    if (value["email"]) {
+    setLoader(true);
+    if (value['email']) {
       try {
-        const res: any = await forgotPassword(value["email"]);
+        const res: any = await forgotPassword(value['email']);
         if (res) {
-          notify.success("Email Sent", "Password reset instructions sent to your email", 4, "bottomRight");
-          setLoader(false)
+          notify.success(
+            'Email Sent',
+            'Password reset instructions sent to your email',
+            4,
+            'bottomRight',
+          );
+          setLoader(false);
         }
       } catch (error) {
         let errorMessage = '';
 
-        if (typeof error === 'object' && error !== null && 'response' in error && 'data' in (error as any).response && 'detail' in (error as any).response.data) {
+        if (
+          typeof error === 'object' &&
+          error !== null &&
+          'response' in error &&
+          'data' in (error as any).response &&
+          'detail' in (error as any).response.data
+        ) {
           errorMessage = (error as any).response.data.detail;
         }
-          notify.error("Request Failed", errorMessage || "Something went wrong", 5, "bottomRight");
-        setLoader(false)
+        notify.error('Request Failed', errorMessage || 'Something went wrong', 5, 'bottomRight');
+        setLoader(false);
       }
     } else {
-      setLoader(false)
+      setLoader(false);
     }
   };
 
@@ -55,25 +70,31 @@ export default function ForgotPassword() {
       <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-lg shadow-md">
         <h2 className="mb-4">Password Reset Request</h2>
         <p className="text-gray-600 mb-6">Enter your email to reset your password.</p>
-        <Form onFinish={handleSubmit} className='w-[360px] text-[16px]' requiredMark={false}
+        <Form
+          onFinish={handleSubmit}
+          className="w-[360px] text-[16px]"
+          requiredMark={false}
           form={form}
-          name="validateOnly" layout="vertical" autoComplete="off">
+          name="validateOnly"
+          layout="vertical"
+          autoComplete="off"
+        >
           <Form.Item name="email" label="Email" rules={[{ required: true }]}>
-            {isLoading ?
+            {isLoading ? (
               <Skeleton.Input
                 active
-                style={{ width: "360px", height: "42px" }}
+                style={{ width: '360px', height: '42px' }}
                 className="font-[500] py-4 rounded-lg"
               />
-              :
-              <Input className="py-2" placeholder={"Enter Your Email"} />
-            }
+            ) : (
+              <Input className="py-2" placeholder={'Enter Your Email'} />
+            )}
           </Form.Item>
           <Form.Item>
             <ButtonComponent
               loading={loader}
-              type={"primary"}
-              htmlType={"submit"}
+              type={'primary'}
+              htmlType={'submit'}
               text="Request"
               className="w-full"
               active={true}
@@ -82,7 +103,7 @@ export default function ForgotPassword() {
           <Form.Item>
             <div className="flex justify-center items-center">
               <div className="font-[500] text-[16px] text-[#4058ff]">
-                <Link href="/auth/login" className='cursor-pointer'>
+                <Link href="/auth/login" className="cursor-pointer">
                   Back to Login
                 </Link>
               </div>

@@ -1,27 +1,27 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import withAuth from "@/components/auth/withAuth";
+import { useEffect, useState } from 'react';
 
+import { useRouter } from 'next/navigation';
 
+import withAuth from '@/components/auth/withAuth';
 
 const IndexPage = () => {
   const router = useRouter();
   const [isInitialMount, setIsInitialMount] = useState(true);
 
   useEffect(() => {
-    if (isInitialMount && typeof window !== "undefined") {
+    if (isInitialMount && typeof window !== 'undefined') {
       setIsInitialMount(false);
-      router.push("/Home");
+      router.push('/Home');
     }
   }, [isInitialMount, router]);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      router.push("/Home");
+      router.push('/Home');
       event.preventDefault();
-      event.returnValue = ''; 
+      event.returnValue = '';
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);

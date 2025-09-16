@@ -1,13 +1,11 @@
-"use client";
+'use client';
 
-import Settings from "@/components/settings";
+import Settings from '@/components/settings';
 
-const SettingsPage = () => {
-    return (
-        <div>
-            <Settings />
-        </div>
-    )
-}
+const SettingsPage = () => (
+  <div>
+    <Settings />
+  </div>
+);
 
 export default SettingsPage;

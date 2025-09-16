@@ -1,7 +1,9 @@
-import { ACCESS_TOKEN } from "@/constants";
-import { decodeJWT } from "./jwt";
-import Cookies from "js-cookie";
-import { setCookie } from "cookies-next";
+import { setCookie } from 'cookies-next';
+import Cookies from 'js-cookie';
+
+import { ACCESS_TOKEN } from '@/constants';
+
+import { decodeJWT } from './jwt';
 
 export async function getToken() {
   let accessToken = Cookies.get(ACCESS_TOKEN);
@@ -9,9 +11,9 @@ export async function getToken() {
   if (!accessToken) return null;
 
   if (!accessToken) {
-    const res = await fetch(`${process.env["APP_API"]}/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+    const res = await fetch(`${process.env['APP_API']}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: accessToken }),
     });
 
@@ -19,11 +21,11 @@ export async function getToken() {
 
     if (!tokens) return null;
 
-    const accessClaims = decodeJWT(tokens["access_token"]);
-    Cookies.set(ACCESS_TOKEN, tokens["access_token"], {
+    const accessClaims = decodeJWT(tokens['access_token']);
+    Cookies.set(ACCESS_TOKEN, tokens['access_token'], {
       expires: new Date(accessClaims.exp * 1000),
     });
-    accessToken = tokens["access_token"];
+    accessToken = tokens['access_token'];
   }
 
   return accessToken;
@@ -35,41 +37,31 @@ export const isAuthenticated = () => {
   return false;
 };
 
-
-
 export const setToken = async (LogInData: any) => {
-  const TENANT_ID = "org_tenant_id";
+  const TENANT_ID = 'org_tenant_id';
 
-  const decoded = decodeJWT(LogInData["access_token"]);
-  Cookies.set(ACCESS_TOKEN, LogInData["access_token"], {
-    expires: new Date(decoded.exp * 1000),
-  });
-  
-  Cookies.set("user_id", LogInData?.['user_id'], {
+  const decoded = decodeJWT(LogInData['access_token']);
+  Cookies.set(ACCESS_TOKEN, LogInData['access_token'], {
     expires: new Date(decoded.exp * 1000),
   });
 
-  Cookies.set("login_data", JSON.stringify(LogInData), {
+  Cookies.set('user_id', LogInData?.['user_id'], {
     expires: new Date(decoded.exp * 1000),
   });
-  setCookie(
-    TENANT_ID,
-    LogInData.organizations.length
-      ? LogInData.organizations?.[0]?.["id"]
-      : "",
-    {
-      expires: new Date(decoded.exp * 1000),
-    }
-  );
+
+  Cookies.set('login_data', JSON.stringify(LogInData), {
+    expires: new Date(decoded.exp * 1000),
+  });
+  setCookie(TENANT_ID, LogInData.organizations.length ? LogInData.organizations?.[0]?.['id'] : '', {
+    expires: new Date(decoded.exp * 1000),
+  });
 
   Cookies.set(
     TENANT_ID,
-    LogInData["organizations"].length
-      ? LogInData["organizations"]?.[0]?.["id"]
-      : "",
+    LogInData['memberships'].length ? LogInData['memberships']?.[0]?.['organisation_id'] : '',
     {
       expires: new Date(decoded.exp * 1000),
-    }
+    },
   );
 
   return LogInData;

@@ -1,23 +1,22 @@
-'use client'
+'use client';
 
-import { FC, ComponentType, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import Cokkies from "js-cookie";
+import { ComponentType, FC, useEffect } from 'react';
+
+import Cokkies from 'js-cookie';
+import { useRouter } from 'next/navigation';
 interface WithAuthProps {
   [key: string]: any;
 }
 
-const withAuth = <P extends WithAuthProps>(
-  WrappedComponent: ComponentType<P>
-) => {
+const withAuth = <P extends WithAuthProps>(WrappedComponent: ComponentType<P>) => {
   const WithAuthComponent: FC<P> = (props) => {
     const router = useRouter();
 
     useEffect(() => {
-      if (typeof window !== "undefined") {
-        const token = Cokkies.get("access_token");
+      if (typeof window !== 'undefined') {
+        const token = Cokkies.get('access_token');
         if (!token) {
-          router.push("/auth/login");
+          router.push('/auth/login');
         }
       }
     }, [router]);
