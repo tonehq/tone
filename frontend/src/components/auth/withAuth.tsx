@@ -1,6 +1,6 @@
 'use client';
 
-import { FC, ComponentType, useEffect } from 'react';
+import { ComponentType, FC, useEffect } from 'react';
 
 import Cokkies from 'js-cookie';
 import { useRouter } from 'next/navigation';
@@ -14,7 +14,7 @@ const withAuth = <P extends WithAuthProps>(WrappedComponent: ComponentType<P>) =
 
     useEffect(() => {
       if (typeof window !== 'undefined') {
-        const token = Cokkies.get('clickshow_access_token');
+        const token = Cokkies.get('access_token');
         if (!token) {
           router.push('/auth/login');
         }

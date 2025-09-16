@@ -1,6 +1,6 @@
 import Cookies from 'js-cookie';
 
-import { ACCESS_TOKEN, REFRESH_TOKEN, SIGNUP, TENANT_ID, FIREBASE_SIGNUP } from '@/constants';
+import { ACCESS_TOKEN, FIREBASE_SIGNUP, SIGNUP, TENANT_ID } from '@/constants';
 
 import axios from '@/utils/axios';
 import { decodeJWT } from '@/utils/jwt';
@@ -20,9 +20,6 @@ export const setToken = async (LogInData: any) => {
   Cookies.set(ACCESS_TOKEN, LogInData['access_token'], {
     expires: new Date(decoded.exp * 1000),
   });
-  Cookies.set(REFRESH_TOKEN, LogInData['refresh_token'], {
-    expires: new Date(decoded.exp * 1000),
-  });
   Cookies.set('user_id', LogInData?.['user_id'], {
     expires: new Date(decoded.exp * 1000),
   });
@@ -33,7 +30,7 @@ export const setToken = async (LogInData: any) => {
 
   Cookies.set(
     TENANT_ID,
-    LogInData['memberships']?.length ? LogInData['memberships']?.[0]?.['organisation_id'] : '',
+    LogInData['organizations']?.length ? LogInData['organizations']?.[0]?.['id'] : '',
     {
       expires: new Date(decoded.exp * 1000),
     },

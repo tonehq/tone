@@ -8,8 +8,8 @@ const axiosInstance = Axios.create({
 });
 
 axiosInstance.interceptors.request.use(function (config) {
-  const tenant_id = Cookies.get();
-  const accessToken = Cookies.get('clickshow_access_token');
+  const tenant_id = Cookies.get('org_tenant_id');
+  const accessToken = Cookies.get('access_token');
 
   if (tenant_id) {
     config.headers['tenant_id'] = Number(tenant_id);
