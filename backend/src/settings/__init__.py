@@ -10,12 +10,13 @@ def load_config():
 class Settings:
     def __init__(self):
         # Load environment variables first
-        load_config()
+        #load_config()
         # Database configuration
         self.DATABASE_URL = os.getenv(
             "DATABASE_URL", 
             "postgresql://user:password@localhost:5432/tone_db"
         )
+        print(f"Database URL: {self.DATABASE_URL}")
         
         # JWT configuration
         self.JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
