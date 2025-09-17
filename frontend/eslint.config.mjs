@@ -129,6 +129,7 @@ const eslintConfig = [
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ]
     },
+    "@next/next/no-img-element": "off"
   },
 ];
 
