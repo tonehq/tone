@@ -1,0 +1,13 @@
+.customTableWrapper :global(.ant-table) {
+  width: 100%;
+}
+
+.customTableWrapper :global(.ant-table-tbody > tr:last-child > td) {
+  border-bottom: none !important;
+}
+
+.customTableWrapper {
+  min-height: 0;
+}
+
+

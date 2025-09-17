@@ -142,7 +142,6 @@ const MembersTable = () => {
               rowKey={(r) => String(r.member_id)}
               columns={memberColumns}
               data={membersData}
-              showHeader
               size="large"
               style={{ backgroundColor: 'white' }}
               loading={membersLoading}
@@ -151,10 +150,9 @@ const MembersTable = () => {
             />
           ) : (
             <CustomTable
-              rowKey={(r) => String(r.member_id * Math.random() * 1000)}
+              rowKey={(r) => String(r.member_id)}
               columns={invitationColumns}
-              data={[...invitationsData, ...invitationsData]}
-              showHeader
+              data={invitationsData}
               size="large"
               style={{ backgroundColor: 'white' }}
               loading={invitationsLoading}

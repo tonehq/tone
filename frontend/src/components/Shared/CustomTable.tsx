@@ -1,5 +1,5 @@
 import CustomPagination from '@/components/Shared/CustomPagination';
-import styles from '@/styles/table.module.css';
+import styles from '@/styles/table.module.scss';
 import { useAdaptiveTableScrollY } from '@/utils/table';
 import { PaginationProps, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';

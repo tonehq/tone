@@ -16,6 +16,7 @@ export const getMemberColumns = (
     title: 'User',
     dataIndex: 'name',
     key: 'user',
+    width: 220,
     render: (_: any, record: OrganizationMemberApi) => {
       const rawName = [record.first_name, record.last_name].filter(Boolean).join(' ').trim() || record.username || record.email || 'Unknown User';
       const displayName = capitalize(rawName);
@@ -42,12 +43,14 @@ export const getMemberColumns = (
     dataIndex: 'joined_at',
     key: 'joined',
     sorter: true,
+    width: 100,
     render: (value: number | null | undefined) => formatEpochToDate(value ?? null),
   },
   {
     title: 'Role',
     dataIndex: 'role',
     key: 'role',
+    width: 100,
     render: (role: string) => (
       <Select value={role} style={{ width: 120 }} variant="borderless" suffixIcon={null}>
         <Option value="admin">{capitalize('admin')}</Option>
@@ -79,6 +82,7 @@ export const getInvitationColumns = (): ColumnsType<OrganizationInviteApi> => [
     title: 'User',
     dataIndex: 'name',
     key: 'user',
+    width: 250,
     render: (_: any, record: OrganizationInviteApi) => (
       <Space>
         <Avatar
@@ -97,6 +101,7 @@ export const getInvitationColumns = (): ColumnsType<OrganizationInviteApi> => [
     title: 'Invited',
     dataIndex: 'invitedDate',
     key: 'invited',
+    width: 150,
     sorter: true,
   },
   {
