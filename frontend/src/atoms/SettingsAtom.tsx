@@ -1,4 +1,4 @@
-import { getAllInvitedUsersForOrganization, getAllUsersForOrganization } from '@/services/auth/userService';
+import { getAllInvitedUsersForOrganization, getAllUsersForOrganization, inviteUserToOrganization } from '@/services/auth/userService';
 import { OrganizationInviteApi, OrganizationMemberApi } from '@/types/settings/members';
 import { atom } from 'jotai';
 import { loadable } from 'jotai/utils';
@@ -56,13 +56,28 @@ const invitationsRowsAtom = atom<Promise<OrganizationInviteApi[]>>(async (get) =
 const loadableMembersRowsAtom = loadable(membersRowsAtom);
 const loadableInvitationsRowsAtom = loadable(invitationsRowsAtom);
 
-// public actions to trigger refresh for each dataset
 const refetchMembersAtom = atom(null, (_get, set) => {
   set(membersRefreshAtom, (c) => c + 1);
 });
+
 const refetchInvitationsAtom = atom(null, (_get, set) => {
   set(invitationsRefreshAtom, (c) => c + 1);
 });
 
-export { loadableInvitationsRowsAtom, loadableMembersRowsAtom, refetchInvitationsAtom, refetchMembersAtom, settingsAtom };
+const inviteUserToOrganizationAtom = atom(
+  null,
+  async (_get, set, payload: { name: string; email: string; role: string }) => {
+    await inviteUserToOrganization(payload);
+    set(invitationsRefreshAtom, (c) => c + 1);
+  },
+);
+
+export {
+  inviteUserToOrganizationAtom,
+  loadableInvitationsRowsAtom,
+  loadableMembersRowsAtom,
+  refetchInvitationsAtom,
+  refetchMembersAtom,
+  settingsAtom
+};
 

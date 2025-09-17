@@ -18,6 +18,7 @@ export const getMemberColumns = (
     title: 'User',
     dataIndex: 'name',
     key: 'user',
+    sorter: true,
     width: 220,
     // Use wrapping instead of ellipsis
     render: (_: any, record: OrganizationMemberApi) => {
@@ -81,6 +82,7 @@ export const getInvitationColumns = (): ColumnsType<OrganizationInviteApi> => [
     title: 'User',
     dataIndex: 'name',
     key: 'user',
+    sorter: true,
     width: 250,
     // Use wrapping instead of ellipsis
     render: (_: any, record: OrganizationInviteApi) => (

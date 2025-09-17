@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
 
 import {
   Input,
@@ -9,13 +9,14 @@ import {
 import { useAtom, useSetAtom } from 'jotai';
 import { Search, UserPlus } from 'lucide-react';
 
-import { loadableInvitationsRowsAtom, loadableMembersRowsAtom, refetchInvitationsAtom, refetchMembersAtom } from '@/atoms/SettingsAtom';
+import { inviteUserToOrganizationAtom, loadableInvitationsRowsAtom, loadableMembersRowsAtom, refetchInvitationsAtom, refetchMembersAtom } from '@/atoms/SettingsAtom';
 
 import ModalComponent from '@/components/settings/ModalComponent';
 import ButtonComponent from '@/components/Shared/UI Components/ButtonComponent';
 
 import CustomTable from '@/components/Shared/CustomTable';
 import { OrganizationInviteApi, OrganizationMemberApi } from '@/types/settings/members';
+import { filterByFields } from '@/utils/filter';
 import { getInvitationColumns, getMemberColumns } from '@/utils/settings';
 
 const MembersTable = () => {
@@ -23,19 +24,20 @@ const MembersTable = () => {
   const [searchText, setSearchText] = useState('');
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const deferredSearch = useDeferredValue(searchText);
 
   // Loadable atoms
   const [membersLoadable] = useAtom(loadableMembersRowsAtom);
   const [invitationsLoadable] = useAtom(loadableInvitationsRowsAtom);
   const refetchMembers = useSetAtom(refetchMembersAtom);
   const refetchInvitations = useSetAtom(refetchInvitationsAtom);
+  const inviteUser = useSetAtom(inviteUserToOrganizationAtom);
 
   const handleInviteUser = async (values: { name: string; email: string; role: string }) => {
     setLoading(true);
     try {
-      // Replace with your API call
-      console.log('Inviting user:', values);
-
+      await inviteUser({ name: values.name, email: values.email, role: values.role });
+      refetchInvitations();
       message.success(`Invitation sent to ${values.email}`);
       setInviteModalOpen(false);
     } catch (error) {
@@ -91,6 +93,18 @@ const MembersTable = () => {
     }
   };
 
+  // Filter helpers
+  const filteredMembersData = useMemo(() => {
+    const term = deferredSearch.trim().toLowerCase();
+    const getFullName = (r: any) => [r?.first_name, r?.last_name].filter(Boolean).join(' ');
+    return filterByFields(membersData, term, [(r: any) => getFullName(r), (r: any) => r?.username, (r: any) => r?.email]);
+  }, [deferredSearch, membersData]);
+
+  const filteredInvitationsData = useMemo(() => {
+    const term = deferredSearch.trim().toLowerCase();
+    return filterByFields(invitationsData, term, [(r: any) => r?.name, (r: any) => r?.username, (r: any) => r?.email]);
+  }, [deferredSearch, invitationsData]);
+
   return (
     <div style={{ padding: '24px', backgroundColor: '#f5f5f5', height: 'calc(100vh - 75px)' }}>
       <div style={{ backgroundColor: 'white', borderRadius: '8px', overflow: 'hidden' }}>
@@ -141,7 +155,7 @@ const MembersTable = () => {
             <CustomTable
               rowKey={(r) => String(r.member_id)}
               columns={memberColumns}
-              data={membersData}
+              data={filteredMembersData}
               size="large"
               style={{ backgroundColor: 'white' }}
               loading={membersLoading}
@@ -152,7 +166,7 @@ const MembersTable = () => {
             <CustomTable
               rowKey={(r) => String(r.member_id)}
               columns={invitationColumns}
-              data={invitationsData}
+              data={filteredInvitationsData}
               size="large"
               style={{ backgroundColor: 'white' }}
               loading={invitationsLoading}

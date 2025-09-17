@@ -21,3 +21,18 @@ export const getAllInvitedUsersForOrganization = async () => {
     throw error;
   }
 };
+
+// Invite user to organization
+export const inviteUserToOrganization = async (payload: {
+  name: string;
+  email: string;
+  role: string;
+}) => {
+  try {
+    const response = await axios.post('/api/v1/organization/invite_user_to_organization', payload);
+    return response.data;
+  } catch (error) {
+    console.error('Error inviting user to organization:', error);
+    throw error;
+  }
+};

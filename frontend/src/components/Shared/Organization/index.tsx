@@ -46,10 +46,10 @@ const Organization = (props: any) => {
   }, []);
 
   useEffect(() => {
-    if (data?.length && !Cookies.get('org_tenant_id')) {
-      setActive(data?.[0]);
-    } else if (data?.length && Cookies.get('org_tenant_id')) {
+    if (data?.length && Cookies.get('org_tenant_id')) {
       setActive(data?.find((org) => String(org.id) === Cookies.get('org_tenant_id')) || null);
+    } else if (data?.length) {
+      setActive(data?.[0]);
     }
   }, [data]);
 
