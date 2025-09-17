@@ -36,3 +36,16 @@ export const inviteUserToOrganization = async (payload: {
     throw error;
   }
 };
+
+// Update member role
+export const updateOrganizationMemberRole = async (memberId: number, role: string) => {
+  try {
+    const response = await axios.post(`/api/v1/organization/update_member_role`, null, {
+      params: { member_id: memberId, role },
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error updating member role:', error);
+    throw error;
+  }
+};

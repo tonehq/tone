@@ -9,7 +9,7 @@ import {
 import { useAtom, useSetAtom } from 'jotai';
 import { Search, UserPlus } from 'lucide-react';
 
-import { inviteUserToOrganizationAtom, loadableInvitationsRowsAtom, loadableMembersRowsAtom, refetchInvitationsAtom, refetchMembersAtom } from '@/atoms/SettingsAtom';
+import { inviteUserToOrganizationAtom, loadableInvitationsRowsAtom, loadableMembersRowsAtom, refetchInvitationsAtom, refetchMembersAtom, updateMemberRoleAtom } from '@/atoms/SettingsAtom';
 
 import ModalComponent from '@/components/settings/ModalComponent';
 import ButtonComponent from '@/components/Shared/UI Components/ButtonComponent';
@@ -69,7 +69,16 @@ const MembersTable = () => {
     },
   ];
 
-  const memberColumns = getMemberColumns(items);
+  const updateMemberRole = useSetAtom(updateMemberRoleAtom);
+
+  const memberColumns = getMemberColumns(items, async (memberId: number, role: string) => {
+    try {
+      await updateMemberRole({ memberId, role });
+      message.success('Role updated');
+    } catch (e) {
+      message.error('Failed to update role');
+    }
+  });
   const invitationColumns = getInvitationColumns();
 
   const tabItems = [

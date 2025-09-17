@@ -1,4 +1,4 @@
-import { getAllInvitedUsersForOrganization, getAllUsersForOrganization, inviteUserToOrganization } from '@/services/auth/userService';
+import { getAllInvitedUsersForOrganization, getAllUsersForOrganization, inviteUserToOrganization, updateOrganizationMemberRole } from '@/services/auth/userService';
 import { OrganizationInviteApi, OrganizationMemberApi } from '@/types/settings/members';
 import { atom } from 'jotai';
 import { loadable } from 'jotai/utils';
@@ -72,12 +72,20 @@ const inviteUserToOrganizationAtom = atom(
   },
 );
 
+// Action: update member role and refresh members
+const updateMemberRoleAtom = atom(
+  null,
+  async (_get, set, payload: { memberId: number; role: string }) => {
+    await updateOrganizationMemberRole(payload.memberId, payload.role);
+    set(membersRefreshAtom, (c) => c + 1);
+  },
+);
+
 export {
-  inviteUserToOrganizationAtom,
-  loadableInvitationsRowsAtom,
+  inviteUserToOrganizationAtom, loadableInvitationsRowsAtom,
   loadableMembersRowsAtom,
   refetchInvitationsAtom,
   refetchMembersAtom,
-  settingsAtom
+  settingsAtom, updateMemberRoleAtom
 };
 

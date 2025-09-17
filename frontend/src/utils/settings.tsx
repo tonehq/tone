@@ -12,7 +12,8 @@ import { formatEpochToDate, getInitialsFromName } from '@/utils/format';
 const { Option } = Select;
 
 export const getMemberColumns = (
-  actionMenuItems: MenuProps['items']
+  actionMenuItems: MenuProps['items'],
+  onRoleChange?: (memberId: number, role: string) => void,
 ): ColumnsType<OrganizationMemberApi> => [
   {
     title: 'User',
@@ -52,8 +53,14 @@ export const getMemberColumns = (
     dataIndex: 'role',
     key: 'role',
     width: 100,
-    render: (role: string) => (
-      <Select value={role} className="roleSelect" variant="borderless" suffixIcon={null}>
+    render: (role: string, record: any) => (
+      <Select
+        value={role}
+        className="roleSelect"
+        variant="borderless"
+        suffixIcon={null}
+        onChange={(val) => onRoleChange && onRoleChange(Number(record?.member_id ?? record?.id), val)}
+      >
         <Option value="admin">{capitalize('admin')}</Option>
         <Option value="member">{capitalize('member')}</Option>
       </Select>
