@@ -1,15 +1,68 @@
+import { getAllInvitedUsersForOrganization, getAllUsersForOrganization } from '@/services/auth/userService';
+import { OrganizationInviteApi, OrganizationMemberApi } from '@/types/settings/members';
 import { atom } from 'jotai';
+import { loadable } from 'jotai/utils';
+
+interface MemberData {
+  key: string;
+  name: string;
+  email: string;
+  joinedDate: string;
+  role: string;
+  avatar: string | null;
+}
+
+interface InvitationData {
+  key: string;
+  name: string;
+  email: string;
+  invitedDate: string;
+  status: string;
+  role: string;
+}
 
 interface SettingsState {
   organizationList: any[];
+  membersList: MemberData[];
+  invitationsList: InvitationData[];
+  membersLoading: boolean;
+  invitationsLoading: boolean;
 }
 
-export const settingsAtom = atom<SettingsState>({
+const settingsAtom = atom<SettingsState>({
   organizationList: [],
+  membersList: [],
+  invitationsList: [],
+  membersLoading: false,
+  invitationsLoading: false,
 });
 
-export const fetchOrganizationList = atom(null, async (_, set, args: any) => {
-  set(settingsAtom, (prev: any) => ({ ...prev, organizationList: args }));
+// Trigger to force refetch in loadable atoms
+const membersRefreshAtom = atom(0);
+const invitationsRefreshAtom = atom(0);
+
+const membersRowsAtom = atom<Promise<OrganizationMemberApi[]>>(async (get) => {
+  get(membersRefreshAtom);
+  const apiData = (await getAllUsersForOrganization()) as OrganizationMemberApi[];
+  return apiData;
 });
 
-export default settingsAtom;
+const invitationsRowsAtom = atom<Promise<OrganizationInviteApi[]>>(async (get) => {
+  get(invitationsRefreshAtom);
+  const apiData = (await getAllInvitedUsersForOrganization()) as OrganizationInviteApi[];
+  return apiData;
+});
+
+const loadableMembersRowsAtom = loadable(membersRowsAtom);
+const loadableInvitationsRowsAtom = loadable(invitationsRowsAtom);
+
+// public actions to trigger refresh for each dataset
+const refetchMembersAtom = atom(null, (_get, set) => {
+  set(membersRefreshAtom, (c) => c + 1);
+});
+const refetchInvitationsAtom = atom(null, (_get, set) => {
+  set(invitationsRefreshAtom, (c) => c + 1);
+});
+
+export { loadableInvitationsRowsAtom, loadableMembersRowsAtom, refetchInvitationsAtom, refetchMembersAtom, settingsAtom };
+
