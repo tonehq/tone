@@ -1,0 +1,94 @@
+/* Common text utilities (Tailwind-like) */
+
+/* Truncation */
+.truncate,
+.text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis; /* shows ... */
+  white-space: nowrap;
+  min-width: 0; /* allow flex children to shrink */
+  display: block; /* ensure ellipsis works in flex layouts */
+  width: 100%; /* fill available width for proper ellipsis */
+}
+
+/* Inline version of truncate when you cannot use block */
+.truncate-inline {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: bottom;
+}
+
+/* Line clamping (multi-line truncate) */
+.line-clamp-1,
+.line-clamp-2,
+.line-clamp-3,
+.line-clamp-4,
+.line-clamp-5,
+.line-clamp-6 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.line-clamp-1 { -webkit-line-clamp: 1; }
+.line-clamp-2 { -webkit-line-clamp: 2; }
+.line-clamp-3 { -webkit-line-clamp: 3; }
+.line-clamp-4 { -webkit-line-clamp: 4; }
+.line-clamp-5 { -webkit-line-clamp: 5; }
+.line-clamp-6 { -webkit-line-clamp: 6; }
+
+/* Standard property for broader compatibility */
+.line-clamp-1 { line-clamp: 1; }
+.line-clamp-2 { line-clamp: 2; }
+.line-clamp-3 { line-clamp: 3; }
+.line-clamp-4 { line-clamp: 4; }
+.line-clamp-5 { line-clamp: 5; }
+.line-clamp-6 { line-clamp: 6; }
+
+/* Wrapping */
+.break-words { overflow-wrap: break-word; }
+.break-all { word-break: break-all; }
+.text-nowrap, .no-wrap { white-space: nowrap; }
+.text-wrap { white-space: normal; }
+
+/* Modern text wrapping */
+@supports (text-wrap: balance) {
+  .text-balance { text-wrap: balance; }
+}
+@supports (text-wrap: pretty) {
+  .text-pretty { text-wrap: pretty; }
+}
+
+/* Decoration */
+.underline { text-decoration: underline; }
+.line-through { text-decoration: line-through; }
+.no-underline { text-decoration: none; }
+
+/* Transform */
+.uppercase { text-transform: uppercase; }
+.lowercase { text-transform: lowercase; }
+.capitalize { text-transform: capitalize; }
+
+/* Alignment */
+.text-left { text-align: left; }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+
+/* Weight */
+.font-normal { font-weight: 400; }
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.font-bold { font-weight: 700; }
+
+/* Letter spacing */
+.tracking-tight { letter-spacing: -0.01em; }
+.tracking-normal { letter-spacing: 0; }
+.tracking-wide { letter-spacing: 0.02em; }
+
+/* Color helpers */
+.text-muted { color: var(--color-text-muted, #6b7280); }
+
+

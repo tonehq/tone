@@ -1,3 +1,5 @@
+import '@/styles/settings-table.scss';
+import '@/styles/text.scss';
 import { Avatar, Dropdown, MenuProps, Select, Space, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { capitalize } from 'lodash';
@@ -17,21 +19,19 @@ export const getMemberColumns = (
     dataIndex: 'name',
     key: 'user',
     width: 220,
+    // Use wrapping instead of ellipsis
     render: (_: any, record: OrganizationMemberApi) => {
       const rawName = [record.first_name, record.last_name].filter(Boolean).join(' ').trim() || record.username || record.email || 'Unknown User';
       const displayName = capitalize(rawName);
       return (
-        <Space>
-          <Avatar
-            size={40}
-            style={{ backgroundColor: '#7c3aed', fontSize: '16px', fontWeight: 'bold' }}
-          >
+        <Space className="memberCell">
+          <Avatar size={40} className="memberAvatar">
             {getInitialsFromName(rawName)}
           </Avatar>
-          <div>
-            <div style={{ fontWeight: 500 }}>{displayName}</div>
+          <div className="memberTextWrap">
+            <div className="memberName text-wrap">{displayName}</div>
             {record.email && record.email !== displayName && (
-              <div style={{ color: '#666', fontSize: '12px' }}>{record.email}</div>
+              <div className="memberEmail text-wrap">{record.email}</div>
             )}
           </div>
         </Space>
@@ -52,7 +52,7 @@ export const getMemberColumns = (
     key: 'role',
     width: 100,
     render: (role: string) => (
-      <Select value={role} style={{ width: 120 }} variant="borderless" suffixIcon={null}>
+      <Select value={role} className="roleSelect" variant="borderless" suffixIcon={null}>
         <Option value="admin">{capitalize('admin')}</Option>
         <Option value="member">{capitalize('member')}</Option>
       </Select>
@@ -66,7 +66,6 @@ export const getMemberColumns = (
       <Dropdown
         menu={{
           items: actionMenuItems,
-          style: { width: 130 },
         }}
         trigger={['click']}
         getPopupContainer={(triggerNode) => triggerNode?.parentElement || document.body}
@@ -83,16 +82,14 @@ export const getInvitationColumns = (): ColumnsType<OrganizationInviteApi> => [
     dataIndex: 'name',
     key: 'user',
     width: 250,
+    // Use wrapping instead of ellipsis
     render: (_: any, record: OrganizationInviteApi) => (
-      <Space>
-        <Avatar
-          size={40}
-          style={{ backgroundColor: '#7c3aed', fontSize: '16px', fontWeight: 'bold' }}
-        >
+      <Space className="memberCell">
+        <Avatar size={40} className="memberAvatar">
           {getInitialsFromName(record.name || record.username || record.email || '')}
         </Avatar>
-        <div>
-          <div style={{ fontWeight: 500 }}>{record?.email}</div>
+        <div className="memberTextWrap">
+          <div className="memberName text-wrap">{record?.email}</div>
         </div>
       </Space>
     ),
