@@ -14,16 +14,18 @@ export function handleError({ error, defaultError }: HandleErrorOptions) {
       description: error?.response?.data?.detail || 'Your session has expired. Please login again.'
     });
     setTimeout(() => {
-      localStorage.clear();
-      if (typeof document !== 'undefined') {
-        const cookiesArr = document.cookie.split(';');
-        for (const cookie of cookiesArr) {
-          const eqPos = cookie.indexOf('=');
-          const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
-          document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+      if (typeof window !== 'undefined') {
+        localStorage.clear();
+        if (typeof document !== 'undefined') {
+          const cookiesArr = document.cookie.split(';');
+          for (const cookie of cookiesArr) {
+            const eqPos = cookie.indexOf('=');
+            const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
+            document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+          }
         }
+        window.location.href = '/auth/login';
       }
-      window.location.href = '/auth/login';
     }, 1000);
     return;
   }

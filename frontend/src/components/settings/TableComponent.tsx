@@ -3,7 +3,6 @@ import { useDeferredValue, useMemo, useState } from 'react';
 import {
   Input,
   MenuProps,
-  message,
   Tabs
 } from 'antd';
 import { useAtom, useSetAtom } from 'jotai';
@@ -17,7 +16,9 @@ import ButtonComponent from '@/components/Shared/UI Components/ButtonComponent';
 import CustomTable from '@/components/Shared/CustomTable';
 import { OrganizationInviteApi, OrganizationMemberApi } from '@/types/settings/members';
 import { filterByFields } from '@/utils/filter';
+import { handleError } from '@/utils/handleError';
 import { getInvitationColumns, getMemberColumns } from '@/utils/settings';
+import { showToast } from '@/utils/showToast';
 
 const MembersTable = () => {
   const [activeTab, setActiveTab] = useState('members');
@@ -38,11 +39,15 @@ const MembersTable = () => {
     try {
       await inviteUser({ name: values.name, email: values.email, role: values.role });
       refetchInvitations();
-      message.success(`Invitation sent to ${values.email}`);
+      showToast({
+        status: 'success',
+        message: `Invitation sent to ${values.email}`,
+        variant: 'message',
+      })
       setInviteModalOpen(false);
     } catch (error) {
-      message.error('Failed to send invitation');
-    } finally {
+      handleError({ error })
+        } finally {
       setLoading(false);
     }
   };
@@ -71,15 +76,19 @@ const MembersTable = () => {
 
   const updateMemberRole = useSetAtom(updateMemberRoleAtom);
 
-  const memberColumns = getMemberColumns(items, async (memberId: number, role: string) => {
+  const handleRoleUpdate = async (memberId: number, role: string) => {
     try {
       await updateMemberRole({ memberId, role });
-      message.success('Role updated');
-    } catch (e) {
-      message.error('Failed to update role');
-    }
-  });
-  const invitationColumns = getInvitationColumns();
+      showToast({
+        status: 'success',
+        message: 'Role updated successfully',
+        variant: 'message',
+      });
+    } catch (e) {}
+  }
+
+  const memberColumns = useMemo(() => getMemberColumns(items, handleRoleUpdate), [items, handleRoleUpdate]);
+  const invitationColumns = useMemo(() => getInvitationColumns(), []);
 
   const tabItems = [
     {
