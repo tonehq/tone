@@ -1,12 +1,13 @@
+import Cookies from 'js-cookie';
 import { useEffect, useState } from 'react';
 
-import { Avatar, Button, Card, Divider, Popover, Skeleton, Space, Spin } from 'antd';
+import { Avatar, Card, Divider, Popover, Skeleton, Space } from 'antd';
 import { Building2, ChevronDown, Plus } from 'lucide-react';
 
 import { getOrganization } from '@/services/auth/helper';
 
-import CreateOrganizationModal from './ModalComponent';
 import ButtonComponent from '../UI Components/ButtonComponent';
+import CreateOrganizationModal from './ModalComponent';
 
 interface Organization {
   id: string;
@@ -45,7 +46,9 @@ const Organization = (props: any) => {
   }, []);
 
   useEffect(() => {
-    if (data?.length) {
+    if (data?.length && Cookies.get('org_tenant_id')) {
+      setActive(data?.find((org) => String(org.id) === Cookies.get('org_tenant_id')) || null);
+    } else if (data?.length) {
       setActive(data?.[0]);
     }
   }, [data]);
@@ -56,7 +59,11 @@ const Organization = (props: any) => {
       {data?.map((membership) => (
         <div
           key={membership.id}
-          onClick={() => setActive(membership)}
+          onClick={() => {
+            setActive(membership);
+            Cookies.set('org_tenant_id', String(membership.id));
+            window.location.reload();
+          }}
           className={`mb-2 hover:bg-[#e5e7eb] ${
             active?.id === membership.id ? 'bg-[#e5e7eb] font-[600]' : ''
           }`}

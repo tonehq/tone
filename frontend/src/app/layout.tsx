@@ -1,10 +1,10 @@
 'use client';
 
 import Sidebar from '@/components/Shared/SidebarComponent';
-
-import './globals.css';
 import { useState } from 'react';
+import './globals.css';
 
+import { initToast } from '@/utils/showToast';
 import { ConfigProvider } from 'antd';
 import { usePathname } from 'next/navigation';
 
@@ -15,6 +15,7 @@ export default function RootLayout({
 }>) {
   const [sidebar, setSidebar] = useState<boolean>(true);
   const pathname = usePathname();
+  const toastHolder = initToast();
 
   const hideSidebar = pathname.startsWith('/auth');
 
@@ -35,9 +36,9 @@ export default function RootLayout({
             },
           }}
         >
+          {toastHolder}
           <div className="flex">
             {!hideSidebar && <Sidebar sidebar={sidebar} setSidebar={setSidebar} />}
-
             <div style={{ width: '100vw', height: '100vh' }}>{children}</div>
           </div>
         </ConfigProvider>

@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
-import { Modal, Form, Input, Select } from 'antd';
+import { Form, Input, Modal, Select } from 'antd';
 
 import ButtonComponent from '../Shared/UI Components/ButtonComponent';
 
@@ -20,11 +20,16 @@ const ModalComponent: React.FC<ModalComponentProps> = ({ open, onCancel, onInvit
     try {
       const values = await form.validateFields();
       onInvite(values);
-      form.resetFields();
     } catch (err) {
       // validation error
     }
   };
+
+  useEffect(() => {
+    if (open) {
+      form.resetFields();
+    }
+  }, [open]);
 
   return (
     <Modal

@@ -1,0 +1,18 @@
+.customTableWrapper :global(.ant-table) {
+  width: 100%;
+}
+
+.customTableWrapper :global(.ant-table-tbody > tr:last-child > td) {
+  border-bottom: none !important;
+}
+
+.customTableWrapper {
+  min-height: 0;
+}
+
+/* Allow cells to shrink so text truncation can occur */
+.customTableWrapper :global(.ant-table-cell) {
+  min-width: 0;
+}
+
+
