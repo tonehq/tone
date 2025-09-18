@@ -1,6 +1,4 @@
-import '@/styles/settings-table.scss';
-import '@/styles/text.scss';
-import { Avatar, Dropdown, MenuProps, Select, Space, Tag } from 'antd';
+import { Avatar, Dropdown, MenuProps, Select, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { capitalize } from 'lodash';
 import { MoreHorizontal } from 'lucide-react';
@@ -21,22 +19,31 @@ export const getMemberColumns = (
     key: 'user',
     sorter: true,
     width: 220,
-    // Use wrapping instead of ellipsis
     render: (_: any, record: OrganizationMemberApi) => {
-      const rawName = [record.first_name, record.last_name].filter(Boolean).join(' ').trim() || record.username || record.email || 'Unknown User';
+      const rawName =
+        [record.first_name, record.last_name].filter(Boolean).join(' ').trim() ||
+        record.username ||
+        record.email ||
+        'Unknown User';
       const displayName = capitalize(rawName);
       return (
-        <Space className="memberCell">
-          <Avatar size={40} className="memberAvatar">
+        <div className="flex items-center gap-2 min-w-0">
+          <Avatar
+            size={40}
+            className="text-white font-bold text-base flex items-center justify-center"
+            style={{
+              backgroundColor: '#7c3aed',
+            }}
+          >
             {getInitialsFromName(rawName)}
           </Avatar>
-          <div className="memberTextWrap">
-            <div className="memberName text-wrap">{displayName}</div>
+          <div className="min-w-0">
+            <div className="font-medium break-words">{displayName}</div>
             {record.email && record.email !== displayName && (
-              <div className="memberEmail text-wrap">{record.email}</div>
+              <div className="text-gray-600 text-xs break-words">{record.email}</div>
             )}
           </div>
-        </Space>
+        </div>
       );
     },
   },
@@ -56,7 +63,7 @@ export const getMemberColumns = (
     render: (role: string, record: any) => (
       <Select
         value={role}
-        className="roleSelect"
+        className="w-32"
         variant="borderless"
         suffixIcon={null}
         onChange={(val) => onRoleChange && onRoleChange(Number(record?.member_id ?? record?.id), val)}
@@ -91,16 +98,21 @@ export const getInvitationColumns = (): ColumnsType<OrganizationInviteApi> => [
     key: 'user',
     sorter: true,
     width: 250,
-    // Use wrapping instead of ellipsis
     render: (_: any, record: OrganizationInviteApi) => (
-      <Space className="memberCell">
-        <Avatar size={40} className="memberAvatar">
+      <div className="flex items-center gap-2 min-w-0">
+        <Avatar
+          size={40}
+          className="text-white font-bold text-base flex items-center justify-center"
+          style={{
+            backgroundColor: '#7c3aed',
+          }}
+        >
           {getInitialsFromName(record.name || record.username || record.email || '')}
         </Avatar>
-        <div className="memberTextWrap">
-          <div className="memberName text-wrap">{record?.email}</div>
+        <div className="min-w-0">
+          <div className="font-medium break-words">{record?.email}</div>
         </div>
-      </Space>
+      </div>
     ),
   },
   {
@@ -117,7 +129,12 @@ export const getInvitationColumns = (): ColumnsType<OrganizationInviteApi> => [
     width: 100,
     render: (status: string) => {
       const normalized = (status || '').toString().toLowerCase();
-      const color = normalized === 'pending' ? 'orange' : normalized === 'accepted' ? 'blue' : 'default';
+      const color =
+        normalized === 'pending'
+          ? 'orange'
+          : normalized === 'accepted'
+          ? 'blue'
+          : 'default';
       return <Tag color={color}>{capitalize(status)}</Tag>;
     },
   },
@@ -140,5 +157,3 @@ export const getInvitationColumns = (): ColumnsType<OrganizationInviteApi> => [
     ),
   },
 ];
-
-

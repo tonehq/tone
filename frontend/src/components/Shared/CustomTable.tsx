@@ -64,7 +64,7 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
       {withPagination && (
         <CustomPagination
           current={pagination?.current ?? 1}
-          total={pagination?.total ?? data.length}
+          total={pagination?.total ?? data?.length}
           pageSize={pagination?.pageSize ?? 10}
           onChange={(page) => pagination?.onChange && pagination?.onChange(page, pagination?.pageSize ?? 10)}
           showSizeChanger={pagination?.showSizeChanger || false}
