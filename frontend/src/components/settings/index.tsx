@@ -9,6 +9,7 @@ const Settings = () => (
     <Title className="mb-4" level={4}>
       Settings
     </Title>
+    {/* <PageHeader title="Settings" /> */}
     <ContentSection />
   </>
 );

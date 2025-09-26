@@ -1,13 +1,14 @@
-import Cookies from 'js-cookie';
 import { useEffect, useState } from 'react';
 
 import { Avatar, Card, Divider, Popover, Skeleton, Space } from 'antd';
+import Cookies from 'js-cookie';
 import { Building2, ChevronDown, Plus } from 'lucide-react';
+
+import CreateOrganizationModal from '@/components/settings/ModalComponent';
 
 import { getOrganization } from '@/services/auth/helper';
 
 import ButtonComponent from '../UI Components/ButtonComponent';
-import CreateOrganizationModal from './ModalComponent';
 
 interface Organization {
   id: string;
@@ -17,7 +18,7 @@ interface Organization {
 }
 
 const Organization = (props: any) => {
-  const { sidebar } = props;
+  const { isSidebarExpanded } = props;
   const [loader, setLoader] = useState(false);
   const [data, setData] = useState<Organization[]>([]);
   const [active, setActive] = useState<Organization | null>(null);
@@ -90,71 +91,47 @@ const Organization = (props: any) => {
   );
 
   return (
-    <div>
-      <div>
-        {loader ? (
-          <Skeleton.Button
-            active
-            shape="default"
-            style={{ width: '242px', height: '60px', borderRadius: '5px' }}
-            className="font-[500] h-[60px]"
-          />
-        ) : (
-          <Popover
-            content={getContents()}
-            trigger="click"
-            open={visible}
-            onOpenChange={setVisible}
-            placement="bottomLeft"
+    <>
+      {loader ? (
+        <Skeleton.Input active className="h-[62px] !w-full bg-[#636363] rounded-lg" />
+      ) : (
+        <Popover
+          content={getContents()}
+          trigger="click"
+          open={visible}
+          onOpenChange={setVisible}
+          placement="bottomLeft"
+        >
+          <Card
+            hoverable
+            style={{
+              width: isSidebarExpanded ? 240 : '100%',
+              borderRadius: 5,
+              cursor: 'pointer',
+              border: '1px solid #e5e7eb',
+              transition: 'width 0.3s ease-in-out, padding 0.3s ease-in-out',
+            }}
+            styles={{
+              body: {
+                padding: isSidebarExpanded ? '4px 12px' : '8px',
+                display: 'flex',
+                justifyContent: 'center',
+                transition: 'padding 0.3s ease-in-out',
+              },
+            }}
           >
-            <Card
-              hoverable
-              style={{
-                width: sidebar ? 240 : 48,
-                borderRadius: 5,
-                cursor: 'pointer',
-                border: '1px solid #e5e7eb',
-                transition: 'width 0.3s ease-in-out, padding 0.3s ease-in-out',
-              }}
-              styles={{
-                body: {
-                  padding: sidebar ? '4px 12px' : '8px',
+            {isSidebarExpanded ? (
+              <div
+                style={{
                   display: 'flex',
-                  justifyContent: 'center',
-                  transition: 'padding 0.3s ease-in-out',
-                },
-              }}
-            >
-              {sidebar ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    width: '100%',
-                    transition: 'opacity 0.3s ease-in-out',
-                    opacity: sidebar ? 1 : 0,
-                  }}
-                >
-                  <Space>
-                    {active?.image_url ? (
-                      <Avatar
-                        src={active?.name.charAt(0)}
-                        size={28}
-                        style={{ backgroundColor: '#f0f0f0' }}
-                      />
-                    ) : (
-                      <Building2 size={20} />
-                    )}
-                    <div style={{ transition: 'opacity 0.3s ease-in-out' }}>
-                      <div className="font-semibold">{active?.name || 'Select Organization'}</div>
-                      <div className="text-sm text-gray-500 mt-2">{active?.slug || 'Web app'}</div>
-                    </div>
-                  </Space>
-                  <ChevronDown size={16} />
-                </div>
-              ) : (
-                <div style={{ transition: 'opacity 0.3s ease-in-out' }}>
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  width: '100%',
+                  transition: 'opacity 0.3s ease-in-out',
+                  opacity: isSidebarExpanded ? 1 : 0,
+                }}
+              >
+                <Space>
                   {active?.image_url ? (
                     <Avatar
                       src={active?.name.charAt(0)}
@@ -164,20 +141,35 @@ const Organization = (props: any) => {
                   ) : (
                     <Building2 size={20} />
                   )}
-                </div>
-              )}
-            </Card>
-          </Popover>
-        )}
-      </div>
-      <div>
-        <CreateOrganizationModal
-          visible={createOrganization}
-          setVisible={setCreateOrganization}
-          fetchOrganization={init}
-        />
-      </div>
-    </div>
+                  <div style={{ transition: 'opacity 0.3s ease-in-out' }}>
+                    <div className="font-semibold">{active?.name || 'Select Organization'}</div>
+                    <div className="text-sm text-gray-500 mt-2">{active?.slug || 'Web app'}</div>
+                  </div>
+                </Space>
+                <ChevronDown size={16} />
+              </div>
+            ) : (
+              <div style={{ transition: 'opacity 0.3s ease-in-out' }}>
+                {active?.image_url ? (
+                  <Avatar
+                    src={active?.name.charAt(0)}
+                    size={28}
+                    style={{ backgroundColor: '#f0f0f0' }}
+                  />
+                ) : (
+                  <Building2 size={20} />
+                )}
+              </div>
+            )}
+          </Card>
+        </Popover>
+      )}
+      <CreateOrganizationModal
+        open={createOrganization || false}
+        onCancel={() => setCreateOrganization(false)}
+        onInvite={() => {}}
+      />
+    </>
   );
 };
 
