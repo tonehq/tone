@@ -1,8 +1,9 @@
-import { message, notification } from "antd";
-import React from "react";
+import React from 'react';
 
-export type ToastStatus = "success" | "error" | "info" | "warning";
-export type ToastVariant = "notification" | "message";
+import { message, notification } from 'antd';
+
+export type ToastStatus = 'success' | 'error' | 'info' | 'warning';
+export type ToastVariant = 'notification' | 'message';
 
 let notificationApi: ReturnType<typeof notification.useNotification>[0];
 let messageApi: ReturnType<typeof message.useMessage>[0];
@@ -28,7 +29,7 @@ export interface ShowToastConfig {
   message: string;
   description?: string;
   duration?: number;
-  placement?: "topRight" | "topLeft" | "top" | "bottomRight" | "bottomLeft" | "bottom";
+  placement?: 'topRight' | 'topLeft' | 'top' | 'bottomRight' | 'bottomLeft' | 'bottom';
   variant?: ToastVariant; // notification or message
   style?: React.CSSProperties; // only for message variant
 }
@@ -36,15 +37,15 @@ export interface ShowToastConfig {
 export function showToast({
   status,
   message: msg,
-  description = "",
+  description = '',
   duration = 3,
-  placement = "bottomRight",
-  variant = "notification", // default
-  style
+  placement = 'bottomRight',
+  variant = 'notification', // default
+  style,
 }: ShowToastConfig) {
-  if (variant === "notification") {
+  if (variant === 'notification') {
     if (!notificationApi) {
-      console.error("⚠️ initToast() not initialized. Call it in App root.");
+      console.error('⚠️ initToast() not initialized. Call it in App root.');
       return;
     }
 
@@ -55,11 +56,11 @@ export function showToast({
       description,
       duration,
       placement,
-      style
+      style,
     });
   } else {
     if (!messageApi) {
-      console.error("⚠️ initToast() not initialized. Call it in App root.");
+      console.error('⚠️ initToast() not initialized. Call it in App root.');
       return;
     }
 

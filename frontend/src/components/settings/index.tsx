@@ -1,16 +1,16 @@
 import { Typography } from 'antd';
 
-import MembersTable from './TableComponent';
+import ContentSection from './ContentSection';
 
 const { Title } = Typography;
 
 const Settings = () => (
-  <div>
+  <>
     <Title className="mb-4" level={4}>
       Settings
     </Title>
-    <MembersTable />
-  </div>
+    <ContentSection />
+  </>
 );
 
 export default Settings;

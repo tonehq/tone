@@ -1,11 +1,15 @@
-import CustomPagination from '@/components/Shared/CustomPagination';
-import styles from '@/styles/table.module.scss';
-import { useAdaptiveTableScrollY } from '@/utils/table';
-import { PaginationProps, Table } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
 import React from 'react';
 
-type CustomTableProps<RecordType> = {
+import { PaginationProps, Table } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+
+import CustomPagination from '@/components/Shared/CustomPagination';
+
+import { useAdaptiveTableScrollY } from '@/utils/table';
+
+import styles from '@/styles/table.module.scss';
+
+interface CustomTableProps<RecordType> {
   columns: ColumnsType<RecordType>;
   data: RecordType[];
   rowKey: string | ((record: RecordType) => string);
@@ -17,7 +21,7 @@ type CustomTableProps<RecordType> = {
   pagination?: PaginationProps;
   scroll?: { x?: number | true | string; y?: number | string };
   minScrollYPx?: number;
-};
+}
 
 const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
   const {
@@ -66,7 +70,9 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
           current={pagination?.current ?? 1}
           total={pagination?.total ?? data?.length}
           pageSize={pagination?.pageSize ?? 10}
-          onChange={(page) => pagination?.onChange && pagination?.onChange(page, pagination?.pageSize ?? 10)}
+          onChange={(page) =>
+            pagination?.onChange && pagination?.onChange(page, pagination?.pageSize ?? 10)
+          }
           showSizeChanger={pagination?.showSizeChanger || false}
         />
       )}
@@ -75,5 +81,3 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
 };
 
 export default CustomTable;
-
-

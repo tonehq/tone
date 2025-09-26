@@ -15,7 +15,7 @@ import { useNotification } from '@/utils/shared/notification';
 
 import Container from '../shared/ContainerComponent';
 
-export default () => (
+const SignupPage = () => (
   <React.Suspense>
     <SignIn />
   </React.Suspense>
@@ -202,3 +202,5 @@ function SignIn() {
     </Container>
   );
 }
+
+export default SignupPage;

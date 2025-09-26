@@ -1,12 +1,15 @@
 'use client';
 
-import Sidebar from '@/components/Shared/SidebarComponent';
 import { useState } from 'react';
+
+import { ConfigProvider } from 'antd';
+import { usePathname } from 'next/navigation';
+
+import Sidebar from '@/components/Shared/SidebarComponent';
+
 import './globals.css';
 
 import { initToast } from '@/utils/showToast';
-import { ConfigProvider } from 'antd';
-import { usePathname } from 'next/navigation';
 
 export default function RootLayout({
   children,

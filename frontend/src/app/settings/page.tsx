@@ -2,10 +2,6 @@
 
 import Settings from '@/components/settings';
 
-const SettingsPage = () => (
-  <div>
-    <Settings />
-  </div>
-);
+const SettingsPage = () => <Settings />;
 
 export default SettingsPage;

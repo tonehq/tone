@@ -14,7 +14,7 @@ const withAuth = <P extends WithAuthProps>(WrappedComponent: ComponentType<P>) =
 
     useEffect(() => {
       if (typeof window !== 'undefined') {
-        const token = Cokkies.get('access_token');
+        const token = Cokkies.get('tone_access_token');
         if (!token) {
           router.push('/auth/login');
         }

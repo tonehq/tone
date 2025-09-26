@@ -11,7 +11,7 @@ export function handleError({ error, defaultError }: HandleErrorOptions) {
     showToast({
       status: 'error',
       message: 'Unauthorized',
-      description: error?.response?.data?.detail || 'Your session has expired. Please login again.'
+      description: error?.response?.data?.detail || 'Your session has expired. Please login again.',
     });
     setTimeout(() => {
       if (typeof window !== 'undefined') {
@@ -21,7 +21,7 @@ export function handleError({ error, defaultError }: HandleErrorOptions) {
           for (const cookie of cookiesArr) {
             const eqPos = cookie.indexOf('=');
             const name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
-            document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
           }
         }
         window.location.href = '/auth/login';
@@ -35,7 +35,7 @@ export function handleError({ error, defaultError }: HandleErrorOptions) {
     showToast({
       status: 'error',
       message: 'Network Error',
-      description: 'A network error occurred. Please check your connection.'
+      description: 'A network error occurred. Please check your connection.',
     });
     return;
   }
@@ -48,7 +48,7 @@ export function handleError({ error, defaultError }: HandleErrorOptions) {
       showToast({
         status: 'error',
         message: 'Error',
-        description: errors.detail
+        description: errors.detail,
       });
       return;
     }
@@ -59,14 +59,14 @@ export function handleError({ error, defaultError }: HandleErrorOptions) {
             showToast({
               status: 'error',
               message: key,
-              description: msg
+              description: msg,
             });
           });
         } else {
           showToast({
             status: 'error',
             message: key,
-            description: errors[key]
+            description: errors[key],
           });
         }
       });
@@ -76,14 +76,14 @@ export function handleError({ error, defaultError }: HandleErrorOptions) {
       showToast({
         status: 'error',
         message: 'Error',
-        description: `${values}`
+        description: `${values}`,
       });
       return;
     } else {
       showToast({
         status: 'error',
         message: 'Error',
-        description: errors?.message || defaultError || 'An error occurred.'
+        description: errors?.message || defaultError || 'An error occurred.',
       });
       return;
     }
@@ -93,6 +93,6 @@ export function handleError({ error, defaultError }: HandleErrorOptions) {
   showToast({
     status: 'error',
     message: 'Error',
-    description: defaultError || 'Oops! Something went wrong.'
+    description: defaultError || 'Oops! Something went wrong.',
   });
 }

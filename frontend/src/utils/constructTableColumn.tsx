@@ -4,7 +4,9 @@ import { capitalize } from 'lodash';
 import { MoreHorizontal } from 'lucide-react';
 
 import ButtonComponent from '@/components/Shared/UI Components/ButtonComponent';
+
 import { OrganizationInviteApi, OrganizationMemberApi } from '@/types/settings/members';
+
 import { formatEpochToDate, getInitialsFromName } from '@/utils/format';
 
 const { Option } = Select;
@@ -51,13 +53,12 @@ const renderInviteUser = (record: OrganizationInviteApi) => (
   </div>
 );
 
-const renderJoined = (value: number | null | undefined) =>
-  formatEpochToDate(value ?? null);
+const renderJoined = (value: number | null | undefined) => formatEpochToDate(value ?? null);
 
 const renderRole = (
   role: string,
   record: OrganizationMemberApi,
-  onRoleChange?: (memberId: number, role: string) => void
+  onRoleChange?: (memberId: number, role: string) => void,
 ) => (
   <Select
     value={role}
@@ -74,11 +75,7 @@ const renderRole = (
 const renderStatus = (status: string) => {
   const normalized = (status || '').toLowerCase();
   const color =
-    normalized === 'pending'
-      ? 'orange'
-      : normalized === 'accepted'
-      ? 'blue'
-      : 'default';
+    normalized === 'pending' ? 'orange' : normalized === 'accepted' ? 'blue' : 'default';
   return <Tag color={color}>{capitalize(status)}</Tag>;
 };
 
@@ -88,46 +85,44 @@ const renderActions = (items: MenuProps['items']) => (
   </Dropdown>
 );
 
-type ColumnConfig = {
+interface ColumnConfig {
   key: string;
   title?: string;
   width?: number;
   sorter?: boolean;
-};
+}
 
-type ExtraHandlers = {
+interface ExtraHandlers {
   onRoleChange?: (memberId: number, role: string) => void;
   actionMenuItems?: MenuProps['items'];
-};
+}
 
 export const constructColumns = <T extends object>(
   configs: ColumnConfig[],
-  extra?: ExtraHandlers
+  extra?: ExtraHandlers,
 ): ColumnsType<T> =>
-  configs.map((col) => {
-    return {
-      title: col.title || '',
-      key: col.key,
-      dataIndex: col.key,
-      width: col.width,
-      sorter: col.sorter,
-      render: (value: any, record: any) => {
-        switch (col.key) {
-          case 'user':
-            return 'first_name' in record || 'last_name' in record
-              ? renderUser(record)
-              : renderInviteUser(record as OrganizationInviteApi);
-          case 'joined':
-            return renderJoined(value);
-          case 'role':
-            return renderRole(value, record, extra?.onRoleChange);
-          case 'status':
-            return renderStatus(value);
-          case 'actions':
-            return renderActions(extra?.actionMenuItems ?? []);
-          default:
-            return <div>{value ?? '-'}</div>;
-        }
-      },
-    };
-  });
+  configs.map((col) => ({
+    title: col.title || '',
+    key: col.key,
+    dataIndex: col.key,
+    width: col.width,
+    sorter: col.sorter,
+    render: (value: any, record: any) => {
+      switch (col.key) {
+        case 'user':
+          return 'first_name' in record || 'last_name' in record
+            ? renderUser(record)
+            : renderInviteUser(record as OrganizationInviteApi);
+        case 'joined':
+          return renderJoined(value);
+        case 'role':
+          return renderRole(value, record, extra?.onRoleChange);
+        case 'status':
+          return renderStatus(value);
+        case 'actions':
+          return renderActions(extra?.actionMenuItems ?? []);
+        default:
+          return <div>{value ?? '-'}</div>;
+      }
+    },
+  }));
