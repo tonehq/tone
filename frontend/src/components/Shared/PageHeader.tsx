@@ -1,35 +1,28 @@
-import React from 'react';
+import React, { memo } from 'react';
 
-import { HomeOutlined } from '@ant-design/icons';
-import { Breadcrumb, Typography } from 'antd';
-import Link from 'next/link';
+import { BreadcrumbProps, Typography } from 'antd';
 
-interface BreadcrumbItem {
-  label: string;
-  href?: string;
-}
+import CustomBreadCrumb from '@/components/Shared/CustomBreadCrumb';
 
 interface PageHeaderProps {
   title: string;
-  breadcrumbItems?: BreadcrumbItem[];
+  breadcrumbItems?: BreadcrumbProps['items'];
+  breadcrumbItemRender?: BreadcrumbProps['itemRender'];
 }
 
-const PageHeader: React.FC<PageHeaderProps> = ({ title, breadcrumbItems = [] }) => {
-  const items = [
-    { title: <HomeOutlined />, href: '/' },
-    ...breadcrumbItems.map((item) => ({
-      title: item.href ? <Link href={item.href}>{item.label}</Link> : item.label,
-    })),
-  ];
+const PageHeader: React.FC<PageHeaderProps> = ({
+  title,
+  breadcrumbItems = [],
+  breadcrumbItemRender,
+}) => (
+  <div className="w-full bg-[#f3f5f9] py-2">
+    <Typography.Title level={4} style={{ marginTop: 0, marginBottom: 4 }}>
+      {title}
+    </Typography.Title>
+    {breadcrumbItems.length > 0 && (
+      <CustomBreadCrumb items={breadcrumbItems} itemRender={breadcrumbItemRender} />
+    )}
+  </div>
+);
 
-  return (
-    <div className="w-full bg-[#f3f5f9] px-6 py-4">
-      <Typography.Title level={2} style={{ marginTop: 8, marginBottom: 0 }}>
-        {title}
-      </Typography.Title>
-      {breadcrumbItems.length > 0 && <Breadcrumb items={items} />}
-    </div>
-  );
-};
-
-export default PageHeader;
+export default memo(PageHeader);

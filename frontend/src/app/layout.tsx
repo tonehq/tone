@@ -33,6 +33,9 @@ export default function RootLayout({
               Layout: {
                 siderBg: '#3f3f46',
               },
+              Breadcrumb: {
+                separatorMargin: 4,
+              },
             },
           }}
         >

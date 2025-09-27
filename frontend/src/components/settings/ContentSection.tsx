@@ -62,7 +62,7 @@ const ContentSection = () => {
   };
 
   return (
-    <div style={{ padding: '24px', backgroundColor: '#f5f5f5', height: 'calc(100vh - 75px)' }}>
+    <>
       <div style={{ backgroundColor: 'white', borderRadius: '8px', overflow: 'hidden' }}>
         <Tabs
           activeKey={activeTab}
@@ -105,14 +105,13 @@ const ContentSection = () => {
           )}
         </div>
       </div>
-
       <ModalComponent
         open={inviteModalOpen}
         onCancel={() => setInviteModalOpen(false)}
         onInvite={handleInviteUser}
         loading={loading}
       />
-    </div>
+    </>
   );
 };
 

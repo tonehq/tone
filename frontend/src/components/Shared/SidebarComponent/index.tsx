@@ -56,28 +56,26 @@ function Sidebar(props: any) {
 
   return (
     <aside className={'h-full !space-y-5 transition-all duration-1000 ease-in-out'}>
-      {!isSidebarExpanded ? (
-        <div className="flex items-center justify-center size-9 text-white bg-blue-700 rounded-md m-auto">
-          <span className="text-md font-semibold">T</span>
-        </div>
-      ) : (
-        <div className="flex items-center justify-between w-full">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center size-9 justify-center text-white bg-blue-700 rounded-md">
-              <span className="text-md font-semibold">T</span>
-            </div>
-            <div className="text-lg font-semibold py-2">Tone App</div>
-          </div>
+      <div className="flex items-center justify-between w-full">
+        <div className={cn('flex items-center gap-2', !isSidebarExpanded && 'm-auto')}>
           <div
-            className={'cursor-pointer bg-gray-100 p-2 my-shadow rounded-md opacity-100'}
-            onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
+            className={'flex items-center size-9 justify-center text-white bg-blue-700 rounded-md'}
           >
-            <ArrowLeftToLine color="#414651" size={20} />
+            <span className="text-md font-semibold">T</span>
           </div>
+          {isSidebarExpanded && <div className="text-lg font-semibold py-2">Tone App</div>}
         </div>
-      )}
+        {isSidebarExpanded && (
+          <button
+            onClick={() => setIsSidebarExpanded(false)}
+            className="p-2 rounded-md bg-gray-100 my-shadow cursor-pointer"
+          >
+            <ArrowLeftToLine className="text-gray-700" size={20} />
+          </button>
+        )}
+      </div>
       <Divider className="bg-[#736f6f]" style={{ marginBlock: 12 }} />
-      {!isSidebarExpanded ? (
+      {!isSidebarExpanded && (
         <>
           <div
             className={
@@ -89,9 +87,8 @@ function Sidebar(props: any) {
           </div>
           <Divider className="bg-[#736f6f]" style={{ marginBlock: 12 }} />
         </>
-      ) : (
-        ''
       )}
+
       <Organization isSidebarExpanded={isSidebarExpanded} />
       <Divider className="bg-[#736f6f]" style={{ marginBlock: 12 }} />
 
