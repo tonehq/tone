@@ -11,7 +11,7 @@ import { getOrganization } from '@/services/auth/helper';
 import { cn } from '@/utils/cn';
 import { handleError } from '@/utils/handleError';
 
-import ButtonComponent from '../UI Components/ButtonComponent';
+import ButtonComponent from '../ButtonComponent';
 
 interface Organization {
   id: string;

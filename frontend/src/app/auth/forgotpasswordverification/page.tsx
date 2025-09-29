@@ -5,7 +5,7 @@ import * as React from 'react';
 import { Form } from 'antd';
 import { useForm } from 'antd/es/form/Form';
 
-import ButtonComponent from '@/components/shared/UI Components/ButtonComponent';
+import ButtonComponent from '@/components/shared/ButtonComponent';
 
 import axios from '@/utils/axios';
 import { useNotification } from '@/utils/shared/notification';

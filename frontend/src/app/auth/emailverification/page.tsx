@@ -7,7 +7,7 @@ import { useForm } from 'antd/es/form/Form';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
-import ButtonComponent from '@/components/shared/UI Components/ButtonComponent';
+import ButtonComponent from '@/components/shared/ButtonComponent';
 
 import axios from '@/utils/axios';
 import { useNotification } from '@/utils/shared/notification';

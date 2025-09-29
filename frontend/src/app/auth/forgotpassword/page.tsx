@@ -6,7 +6,7 @@ import { Form, Input, Skeleton } from 'antd';
 import { useForm } from 'antd/es/form/Form';
 import Link from 'next/link';
 
-import ButtonComponent from '@/components/shared/UI Components/ButtonComponent';
+import ButtonComponent from '@/components/shared/ButtonComponent';
 
 import { forgotPassword } from '@/services/auth/helper';
 

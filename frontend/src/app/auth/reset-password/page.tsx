@@ -6,7 +6,7 @@ import { Form, Input, Skeleton } from 'antd';
 import { useForm } from 'antd/es/form/Form';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-import ButtonComponent from '@/components/shared/UI Components/ButtonComponent';
+import ButtonComponent from '@/components/shared/ButtonComponent';
 
 import axios from '@/utils/axios';
 import { useNotification } from '@/utils/shared/notification';

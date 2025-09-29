@@ -8,7 +8,7 @@ import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-import ButtonComponent from '@/components/shared/UI Components/ButtonComponent';
+import ButtonComponent from '@/components/shared/ButtonComponent';
 
 import { BACKEND_URL } from '@/urls';
 

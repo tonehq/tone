@@ -11,8 +11,8 @@ import {
 } from '@/atoms/SettingsAtom';
 
 import ModalComponent from '@/components/settings/ModalComponent';
+import ButtonComponent from '@/components/shared/ButtonComponent';
 import CustomTab from '@/components/shared/CustomTab';
-import ButtonComponent from '@/components/shared/UI Components/ButtonComponent';
 
 import { TabItem } from '@/types/tab';
 
