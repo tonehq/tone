@@ -4,7 +4,7 @@ import { useAtom } from 'jotai';
 
 import { loadableInvitationsRowsAtom } from '@/atoms/SettingsAtom';
 
-import CustomTable from '@/components/Shared/CustomTable';
+import CustomTable from '@/components/shared/CustomTable';
 
 import { filterByFields } from '@/utils/filter';
 import { getInvitationColumns } from '@/utils/settings';

@@ -3,7 +3,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { capitalize } from 'lodash';
 import { MoreHorizontal } from 'lucide-react';
 
-import ButtonComponent from '@/components/Shared/UI Components/ButtonComponent';
+import ButtonComponent from '@/components/shared/UI Components/ButtonComponent';
 
 import { OrganizationInviteApi, OrganizationMemberApi } from '@/types/settings/members';
 

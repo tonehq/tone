@@ -1,7 +1,7 @@
 import { BreadcrumbProps } from 'antd';
 import { Home } from 'lucide-react';
 
-import PageHeader from '@/components/Shared/PageHeader';
+import PageHeader from '@/components/shared/PageHeader';
 
 import ContentSection from './ContentSection';
 

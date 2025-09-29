@@ -1,6 +1,6 @@
 'use client';
 
-import PageHeader from '@/components/Shared/PageHeader';
+import PageHeader from '@/components/shared/PageHeader';
 
 export default function HomePage() {
   return (

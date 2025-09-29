@@ -6,7 +6,7 @@ import { Bell, LogOut, Settings, User } from 'lucide-react';
 
 import { authAtom, getCurrentUserAtom, logoutAtom } from '@/atoms/AuthAtom';
 
-import CustomBreadCrumb from '@/components/Shared/CustomBreadCrumb';
+import CustomBreadCrumb from '@/components/shared/CustomBreadCrumb';
 
 import { cn } from '@/utils/cn';
 import { getInitialsFromName } from '@/utils/format';

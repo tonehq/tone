@@ -4,7 +4,7 @@ import { useAtom, useSetAtom } from 'jotai';
 
 import { loadableMembersRowsAtom, updateMemberRoleAtom } from '@/atoms/SettingsAtom';
 
-import CustomTable from '@/components/Shared/CustomTable';
+import CustomTable from '@/components/shared/CustomTable';
 
 import { filterByFields } from '@/utils/filter';
 import { getMemberColumns } from '@/utils/settings';

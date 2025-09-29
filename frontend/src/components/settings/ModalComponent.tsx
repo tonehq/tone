@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 
 import { Form, Input, Modal, Select } from 'antd';
 
-import ButtonComponent from '../Shared/UI Components/ButtonComponent';
+import ButtonComponent from '../shared/UI Components/ButtonComponent';
 
 const { Option } = Select;
 

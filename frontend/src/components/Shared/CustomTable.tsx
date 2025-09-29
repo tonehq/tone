@@ -3,7 +3,7 @@ import React from 'react';
 import { PaginationProps, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
-import CustomPagination from '@/components/Shared/CustomPagination';
+import CustomPagination from '@/components/shared/CustomPagination';
 
 import { DynamicScrollConfig, useDynamicScrollHeight } from '@/utils/table';
 
