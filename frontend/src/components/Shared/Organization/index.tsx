@@ -8,6 +8,8 @@ import CreateOrganizationModal from '@/components/settings/ModalComponent';
 
 import { getOrganization } from '@/services/auth/helper';
 
+import { handleError } from '@/utils/handleError';
+
 import ButtonComponent from '../UI Components/ButtonComponent';
 
 interface Organization {
@@ -36,8 +38,8 @@ const Organization = (props: any) => {
         setData(res.data);
         setLoader(false);
       }
-    } catch (err) {
-      console.log(err);
+    } catch (error) {
+      handleError({ error });
       setLoader(false);
     }
   };

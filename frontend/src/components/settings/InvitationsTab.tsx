@@ -8,6 +8,7 @@ import CustomTable from '@/components/Shared/CustomTable';
 
 import { filterByFields } from '@/utils/filter';
 import { getInvitationColumns } from '@/utils/settings';
+import { CSS_HEIGHT_PRESETS } from '@/utils/table';
 
 interface Props {
   search: string;
@@ -39,7 +40,7 @@ const InvitationsTab = ({ search }: Props) => {
       style={{ backgroundColor: 'white' }}
       loading={invitationsLoading}
       withPagination
-      minScrollYPx={180}
+      scroll={{ y: CSS_HEIGHT_PRESETS.SETTINGS }}
     />
   );
 };

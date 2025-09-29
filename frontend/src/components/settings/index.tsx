@@ -10,14 +10,14 @@ const Settings = () => {
     {
       title: <Home size={14} />,
       href: '/home',
-      className: '!flex items-center justify-center',
+      className: '!flex items-center justify-center mt-[1px]',
     },
     { title: 'Settings' },
   ];
 
   return (
     <div className="space-y-4">
-      <PageHeader title="Settings" breadcrumbItems={breadcrumbItems} />
+      <PageHeader title="Settings" breadcrumbItems={breadcrumbItems} showNotifications={false} />
       <ContentSection />
     </div>
   );

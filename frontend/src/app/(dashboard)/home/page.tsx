@@ -1,13 +1,11 @@
 'use client';
 
-import { Typography } from 'antd';
-
-const { Title } = Typography;
+import PageHeader from '@/components/Shared/PageHeader';
 
 export default function HomePage() {
   return (
     <div>
-      <Title level={4}>Home</Title>
+      <PageHeader title="Home" showNotifications={false} />
     </div>
   );
 }

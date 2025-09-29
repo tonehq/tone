@@ -9,6 +9,7 @@ import CustomTable from '@/components/Shared/CustomTable';
 import { filterByFields } from '@/utils/filter';
 import { getMemberColumns } from '@/utils/settings';
 import { showToast } from '@/utils/showToast';
+import { CSS_HEIGHT_PRESETS } from '@/utils/table';
 
 interface Props {
   search: string;
@@ -57,7 +58,7 @@ const MembersTab = ({ search }: Props) => {
       style={{ backgroundColor: 'white' }}
       loading={membersLoading}
       withPagination
-      minScrollYPx={180}
+      scroll={{ y: CSS_HEIGHT_PRESETS.SETTINGS }}
     />
   );
 };

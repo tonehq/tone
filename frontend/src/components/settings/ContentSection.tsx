@@ -1,8 +1,8 @@
 import { useDeferredValue, useState } from 'react';
 
-import { Input, Tabs } from 'antd';
+import { Input } from 'antd';
 import { useSetAtom } from 'jotai';
-import { Search, UserPlus } from 'lucide-react';
+import { Mail, Search, UserPlus, Users } from 'lucide-react';
 
 import {
   inviteUserToOrganizationAtom,
@@ -11,10 +11,12 @@ import {
 } from '@/atoms/SettingsAtom';
 
 import ModalComponent from '@/components/settings/ModalComponent';
+import CustomTab from '@/components/Shared/CustomTab';
 import ButtonComponent from '@/components/Shared/UI Components/ButtonComponent';
 
-import { settingsTabItems } from '@/constants/settings';
+import { TabItem } from '@/types/tab';
 
+import { cn } from '@/utils/cn';
 import { handleError } from '@/utils/handleError';
 import { showToast } from '@/utils/showToast';
 
@@ -43,6 +45,21 @@ const ContentSection = () => {
     }
   };
 
+  const tabItems: TabItem[] = [
+    {
+      key: 'members',
+      label: 'Members',
+      icon: <Users size={16} />,
+      content: <MembersTab search={deferredSearch} />,
+    },
+    {
+      key: 'invitations',
+      label: 'Invitations',
+      icon: <Mail size={16} />,
+      content: <InvitationsTab search={deferredSearch} />,
+    },
+  ];
+
   const handleInviteUser = async (values: { name: string; email: string; role: string }) => {
     setLoading(true);
     try {
@@ -63,47 +80,32 @@ const ContentSection = () => {
 
   return (
     <>
-      <div style={{ backgroundColor: 'white', borderRadius: '8px', overflow: 'hidden' }}>
-        <Tabs
+      <div className={cn('bg-white rounded-lg overflow-hidden p-6')}>
+        <div className={cn('flex justify-between items-center mb-6')}>
+          <Input
+            placeholder="Search"
+            value={searchText}
+            onChange={(e: any) => setSearchText(e.target.value)}
+            className={cn('!w-80')}
+            prefix={<Search size={16} className={cn('text-gray-400 mr-2')} />}
+          />
+          <ButtonComponent
+            text="Invite user"
+            type="primary"
+            icon={<UserPlus size={16} />}
+            onClick={() => setInviteModalOpen(true)}
+            active
+          />
+        </div>
+
+        <CustomTab
+          items={tabItems}
           activeKey={activeTab}
           onChange={handleTabChange}
-          items={settingsTabItems}
-          style={{ paddingLeft: '24px', marginBottom: 0 }}
-          tabBarStyle={{ borderBottom: '1px solid #f0f0f0', marginBottom: '24px' }}
+          variant="underline"
+          size="medium"
+          animated={true}
         />
-
-        <div style={{ padding: '0 24px 0 24px' }}>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '16px',
-            }}
-          >
-            <Input
-              placeholder="Search..."
-              value={searchText}
-              onChange={(e: any) => setSearchText(e.target.value)}
-              style={{ width: 300 }}
-              prefix={<Search size={16} color="#c1bfbf" style={{ marginRight: 8 }} />}
-            />
-            <ButtonComponent
-              text="Invite user"
-              type="primary"
-              icon={<UserPlus size={16} />}
-              onClick={() => setInviteModalOpen(true)}
-              active
-            />
-          </div>
-
-          {/* Lazy-load tabs */}
-          {activeTab === 'members' ? (
-            <MembersTab search={deferredSearch} />
-          ) : (
-            <InvitationsTab search={deferredSearch} />
-          )}
-        </div>
       </div>
       <ModalComponent
         open={inviteModalOpen}
