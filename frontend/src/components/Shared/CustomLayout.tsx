@@ -7,7 +7,7 @@ const { Sider, Content } = Layout;
 interface CustomLayoutProps {
   sidebarContent: ReactNode;
   children: ReactNode;
-  siderWidth?: number;
+  siderWidth?: number | string;
   layoutStyle?: React.CSSProperties;
   siderStyle?: React.CSSProperties;
 }
