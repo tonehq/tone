@@ -2,11 +2,11 @@
 
 import { useState } from 'react';
 
-import { Modal, Form, Input, Space, message } from 'antd';
+import { Form, Input, Modal, Space, message } from 'antd';
 
 import { createOrganization } from '@/services/auth/helper';
 
-import ButtonComponent from '../UI Components/ButtonComponent';
+import ButtonComponent from '../ButtonComponent';
 
 const CreateOrganizationModal = (props: any) => {
   const { visible, setVisible, fetchOrganization } = props;

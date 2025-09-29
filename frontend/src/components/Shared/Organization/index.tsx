@@ -1,13 +1,17 @@
-import Cookies from 'js-cookie';
 import { useEffect, useState } from 'react';
 
 import { Avatar, Card, Divider, Popover, Skeleton, Space } from 'antd';
+import Cookies from 'js-cookie';
 import { Building2, ChevronDown, Plus } from 'lucide-react';
+
+import CreateOrganizationModal from '@/components/settings/ModalComponent';
 
 import { getOrganization } from '@/services/auth/helper';
 
-import ButtonComponent from '../UI Components/ButtonComponent';
-import CreateOrganizationModal from './ModalComponent';
+import { cn } from '@/utils/cn';
+import { handleError } from '@/utils/handleError';
+
+import ButtonComponent from '../ButtonComponent';
 
 interface Organization {
   id: string;
@@ -17,7 +21,7 @@ interface Organization {
 }
 
 const Organization = (props: any) => {
-  const { sidebar } = props;
+  const { isSidebarExpanded } = props;
   const [loader, setLoader] = useState(false);
   const [data, setData] = useState<Organization[]>([]);
   const [active, setActive] = useState<Organization | null>(null);
@@ -35,8 +39,8 @@ const Organization = (props: any) => {
         setData(res.data);
         setLoader(false);
       }
-    } catch (err) {
-      console.log(err);
+    } catch (error) {
+      handleError({ error });
       setLoader(false);
     }
   };
@@ -54,8 +58,8 @@ const Organization = (props: any) => {
   }, [data]);
 
   const getContents = () => (
-    <div style={{ width: 220 }}>
-      <div style={{ marginBottom: 8, display: 'block', color: '#8c8c8c' }}>Organization List</div>
+    <div className="w-55">
+      <div className="mb-2 text-gray-500">Organization List</div>
       {data?.map((membership) => (
         <div
           key={membership.id}
@@ -64,120 +68,85 @@ const Organization = (props: any) => {
             Cookies.set('org_tenant_id', String(membership.id));
             window.location.reload();
           }}
-          className={`mb-2 hover:bg-[#e5e7eb] ${
-            active?.id === membership.id ? 'bg-[#e5e7eb] font-[600]' : ''
-          }`}
-          style={{
-            padding: '6px 8px',
-            borderRadius: 4,
-            cursor: 'pointer',
-          }}
+          className={cn(
+            'mb-1 hover:bg-gray-200 px-2 py-1.5 rounded cursor-pointer',
+            active?.id === membership.id && 'bg-gray-200 font-semibold',
+          )}
         >
           {startCase(membership.name)}
         </div>
       ))}
-
-      <Divider style={{ margin: '8px 0' }} />
-
+      <Divider className="!my-2" />
       <ButtonComponent
         text="Create organization"
-        onClick={() => {
-          setCreateOrganization(true);
-        }}
+        onClick={() => setCreateOrganization(true)}
         icon={<Plus size={16} />}
       />
     </div>
   );
 
   return (
-    <div>
-      <div>
-        {loader ? (
-          <Skeleton.Button
-            active
-            shape="default"
-            style={{ width: '242px', height: '60px', borderRadius: '5px' }}
-            className="font-[500] h-[60px]"
-          />
-        ) : (
-          <Popover
-            content={getContents()}
-            trigger="click"
-            open={visible}
-            onOpenChange={setVisible}
-            placement="bottomLeft"
+    <>
+      {loader ? (
+        <div className="mb-0">
+          <Skeleton.Input active className="!w-full bg-[#636363] rounded-t-lg" />
+          <Skeleton.Input active className="!w-full bg-[#636363] rounded-b-lg" />
+        </div>
+      ) : (
+        <Popover
+          content={getContents()}
+          trigger="click"
+          open={visible}
+          onOpenChange={setVisible}
+          placement="bottomLeft"
+        >
+          <Card
+            hoverable
+            className={cn(
+              'cursor-pointer border border-gray-200 transition-all duration-300 rounded-md',
+              isSidebarExpanded ? 'w-full' : 'w-fit !m-auto',
+            )}
+            styles={{
+              body: {
+                padding: isSidebarExpanded ? '4px 12px' : '8px',
+                display: 'flex',
+                justifyContent: 'center',
+              },
+            }}
           >
-            <Card
-              hoverable
-              style={{
-                width: sidebar ? 240 : 48,
-                borderRadius: 5,
-                cursor: 'pointer',
-                border: '1px solid #e5e7eb',
-                transition: 'width 0.3s ease-in-out, padding 0.3s ease-in-out',
-              }}
-              styles={{
-                body: {
-                  padding: sidebar ? '4px 12px' : '8px',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  transition: 'padding 0.3s ease-in-out',
-                },
-              }}
-            >
-              {sidebar ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    width: '100%',
-                    transition: 'opacity 0.3s ease-in-out',
-                    opacity: sidebar ? 1 : 0,
-                  }}
-                >
-                  <Space>
-                    {active?.image_url ? (
-                      <Avatar
-                        src={active?.name.charAt(0)}
-                        size={28}
-                        style={{ backgroundColor: '#f0f0f0' }}
-                      />
-                    ) : (
-                      <Building2 size={20} />
-                    )}
-                    <div style={{ transition: 'opacity 0.3s ease-in-out' }}>
-                      <div className="font-semibold">{active?.name || 'Select Organization'}</div>
-                      <div className="text-sm text-gray-500 mt-2">{active?.slug || 'Web app'}</div>
-                    </div>
-                  </Space>
-                  <ChevronDown size={16} />
-                </div>
-              ) : (
-                <div style={{ transition: 'opacity 0.3s ease-in-out' }}>
+            {isSidebarExpanded ? (
+              <div className="flex items-center justify-between w-full">
+                <Space>
                   {active?.image_url ? (
-                    <Avatar
-                      src={active?.name.charAt(0)}
-                      size={28}
-                      style={{ backgroundColor: '#f0f0f0' }}
-                    />
+                    <Avatar src={active?.name.charAt(0)} size={28} className="bg-gray-100" />
                   ) : (
                     <Building2 size={20} />
                   )}
-                </div>
-              )}
-            </Card>
-          </Popover>
-        )}
-      </div>
-      <div>
-        <CreateOrganizationModal
-          visible={createOrganization}
-          setVisible={setCreateOrganization}
-          fetchOrganization={init}
-        />
-      </div>
-    </div>
+                  <div>
+                    <div className="font-semibold">{active?.name || 'Select Organization'}</div>
+                    <div className="text-sm text-gray-500 mt-2">{active?.slug || 'Web app'}</div>
+                  </div>
+                </Space>
+                <ChevronDown size={16} />
+              </div>
+            ) : (
+              <div>
+                {active?.image_url ? (
+                  <Avatar src={active?.name.charAt(0)} size={28} className="bg-gray-100" />
+                ) : (
+                  <Building2 size={20} />
+                )}
+              </div>
+            )}
+          </Card>
+        </Popover>
+      )}
+      <CreateOrganizationModal
+        open={createOrganization || false}
+        onCancel={() => setCreateOrganization(false)}
+        onInvite={() => {}}
+      />
+    </>
   );
 };
 

@@ -41,5 +41,3 @@ export interface InvitationRow {
   status: string;
   role: string;
 }
-
-

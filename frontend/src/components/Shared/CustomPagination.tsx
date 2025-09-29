@@ -1,18 +1,25 @@
+import React from 'react';
+
 import type { SelectProps } from 'antd';
 import { Button, Pagination } from 'antd';
 import type { DefaultOptionType } from 'antd/es/select';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import React from 'react';
 
-type CustomPaginationProps = {
+interface CustomPaginationProps {
   current: number;
   total: number;
   pageSize: number;
   onChange: (page: number) => void;
   showSizeChanger?: boolean | SelectProps<any, DefaultOptionType>;
-};
+}
 
-const CustomPagination: React.FC<CustomPaginationProps> = ({ current, total, pageSize, onChange, showSizeChanger }) => {
+const CustomPagination: React.FC<CustomPaginationProps> = ({
+  current,
+  total,
+  pageSize,
+  onChange,
+  showSizeChanger,
+}) => {
   const totalPages = Math.max(1, Math.ceil(total / Math.max(pageSize, 1)));
 
   const goPrev = () => {
@@ -23,7 +30,14 @@ const CustomPagination: React.FC<CustomPaginationProps> = ({ current, total, pag
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 8px' }}>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '12px 8px',
+      }}
+    >
       <Button
         icon={<ChevronLeft size={16} />}
         onClick={goPrev}
@@ -91,5 +105,3 @@ const CustomPagination: React.FC<CustomPaginationProps> = ({ current, total, pag
 };
 
 export default CustomPagination;
-
-

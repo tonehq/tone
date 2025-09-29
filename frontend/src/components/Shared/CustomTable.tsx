@@ -1,11 +1,15 @@
-import CustomPagination from '@/components/Shared/CustomPagination';
-import styles from '@/styles/table.module.scss';
-import { useAdaptiveTableScrollY } from '@/utils/table';
-import { PaginationProps, Table } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
 import React from 'react';
 
-type CustomTableProps<RecordType> = {
+import { PaginationProps, Table } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
+
+import CustomPagination from '@/components/shared/CustomPagination';
+
+import { DynamicScrollConfig, useDynamicScrollHeight } from '@/utils/table';
+
+import styles from '@/styles/table.module.scss';
+
+interface CustomTableProps<RecordType> {
   columns: ColumnsType<RecordType>;
   data: RecordType[];
   rowKey: string | ((record: RecordType) => string);
@@ -16,8 +20,8 @@ type CustomTableProps<RecordType> = {
   withPagination?: boolean;
   pagination?: PaginationProps;
   scroll?: { x?: number | true | string; y?: number | string };
-  minScrollYPx?: number;
-};
+  dynamicScrollConfig?: DynamicScrollConfig;
+}
 
 const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
   const {
@@ -31,21 +35,20 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
     withPagination = false,
     pagination,
     scroll,
-    minScrollYPx = 50,
+    dynamicScrollConfig,
   } = props;
 
-  const { scrollY, containerRef } = useAdaptiveTableScrollY({
-    minScrollYPx,
-  });
+  // Calculate dynamic scroll height based on scroll.y and window size
+  const calculatedScrollY = useDynamicScrollHeight(scroll?.y, dynamicScrollConfig);
 
-  const effectiveY = ((): number | undefined => {
-    if (scroll && scroll.y !== undefined) return scroll.y as number;
-    if (scrollY !== undefined) return scrollY;
-    return minScrollYPx;
-  })();
+  // Merge scroll configuration with calculated height
+  const finalScroll = {
+    ...(scroll?.x !== undefined ? { x: scroll.x } : {}),
+    ...(calculatedScrollY !== undefined ? { y: calculatedScrollY } : {}),
+  };
 
   return (
-    <div style={{ width: '100%' }} className={styles.customTableWrapper} ref={containerRef}>
+    <div style={{ width: '100%' }} className={styles.customTableWrapper}>
       <Table<T>
         columns={columns}
         dataSource={data}
@@ -55,18 +58,17 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
         size={size}
         style={{ border: '1px solid #e5e7eb', borderRadius: 6, ...style }}
         pagination={false}
-        sticky={!!effectiveY}
-        scroll={{
-          ...(scroll?.x !== undefined ? { x: scroll.x } : {}),
-          ...(effectiveY !== undefined ? { y: effectiveY } : {}),
-        }}
+        sticky={!!finalScroll?.y}
+        scroll={Object.keys(finalScroll).length > 0 ? finalScroll : undefined}
       />
       {withPagination && (
         <CustomPagination
           current={pagination?.current ?? 1}
           total={pagination?.total ?? data?.length}
           pageSize={pagination?.pageSize ?? 10}
-          onChange={(page) => pagination?.onChange && pagination?.onChange(page, pagination?.pageSize ?? 10)}
+          onChange={(page) =>
+            pagination?.onChange && pagination?.onChange(page, pagination?.pageSize ?? 10)
+          }
           showSizeChanger={pagination?.showSizeChanger || false}
         />
       )}
@@ -75,5 +77,3 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
 };
 
 export default CustomTable;
-
-

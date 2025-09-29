@@ -1,4 +1,8 @@
-export const filterByFields = <T>(items: T[], term: string, selectors: Array<(item: T) => unknown>): T[] => {
+export const filterByFields = <T>(
+  items: T[],
+  term: string,
+  selectors: Array<(item: T) => unknown>,
+): T[] => {
   const normalized = term.trim().toLowerCase();
   if (!normalized) return items;
   return items.filter((item) => {
@@ -11,5 +15,3 @@ export const filterByFields = <T>(items: T[], term: string, selectors: Array<(it
     return false;
   });
 };
-
-

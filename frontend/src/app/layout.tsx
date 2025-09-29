@@ -1,23 +1,18 @@
 'use client';
 
-import Sidebar from '@/components/Shared/SidebarComponent';
-import { useState } from 'react';
+import { ConfigProvider } from 'antd';
+
 import './globals.css';
 
 import { initToast } from '@/utils/showToast';
-import { ConfigProvider } from 'antd';
-import { usePathname } from 'next/navigation';
+import '@ant-design/v5-patch-for-react-19';
 
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [sidebar, setSidebar] = useState<boolean>(true);
-  const pathname = usePathname();
   const toastHolder = initToast();
-
-  const hideSidebar = pathname.startsWith('/auth');
 
   return (
     <html lang="en">
@@ -34,13 +29,18 @@ export default function RootLayout({
               borderRadius: 8,
               fontSize: 16,
             },
+            components: {
+              Layout: {
+                siderBg: '#3f3f46',
+              },
+              Breadcrumb: {
+                separatorMargin: 4,
+              },
+            },
           }}
         >
           {toastHolder}
-          <div className="flex">
-            {!hideSidebar && <Sidebar sidebar={sidebar} setSidebar={setSidebar} />}
-            <div style={{ width: '100vw', height: '100vh' }}>{children}</div>
-          </div>
+          <div className="h-screen w-screen">{children}</div>
         </ConfigProvider>
       </body>
     </html>

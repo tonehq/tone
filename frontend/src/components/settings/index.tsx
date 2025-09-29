@@ -1,16 +1,26 @@
-import { Typography } from 'antd';
+import { BreadcrumbProps } from 'antd';
+import { Home } from 'lucide-react';
 
-import MembersTable from './TableComponent';
+import PageHeader from '@/components/shared/PageHeader';
 
-const { Title } = Typography;
+import ContentSection from './ContentSection';
 
-const Settings = () => (
-  <div>
-    <Title className="mb-4" level={4}>
-      Settings
-    </Title>
-    <MembersTable />
-  </div>
-);
+const Settings = () => {
+  const breadcrumbItems: BreadcrumbProps['items'] = [
+    {
+      title: <Home size={14} />,
+      href: '/home',
+      className: '!flex items-center justify-center mt-[1px]',
+    },
+    { title: 'Settings' },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <PageHeader title="Settings" breadcrumbItems={breadcrumbItems} showNotifications={false} />
+      <ContentSection />
+    </div>
+  );
+};
 
 export default Settings;

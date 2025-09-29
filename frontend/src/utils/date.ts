@@ -13,14 +13,22 @@ export const toDayjs = (input: DateInput): Dayjs | null => {
   return value.isValid() ? value : null;
 };
 
-export const formatDate = (input: DateInput, format: string = 'MMMM D, YYYY', tz?: string): string => {
+export const formatDate = (
+  input: DateInput,
+  format: string = 'MMMM D, YYYY',
+  tz?: string,
+): string => {
   const d = toDayjs(input);
   if (!d) return 'Unknown';
   const source = tz ? d.tz(tz) : d;
   return source.format(format);
 };
 
-export const formatEpochSeconds = (epochSeconds: number | null | undefined, format: string = 'MMMM D, YYYY', tz?: string): string => {
+export const formatEpochSeconds = (
+  epochSeconds: number | null | undefined,
+  format: string = 'MMMM D, YYYY',
+  tz?: string,
+): string => {
   if (!epochSeconds && epochSeconds !== 0) return 'Unknown';
   const millis = epochSeconds * 1000;
   return formatDate(millis, format, tz);

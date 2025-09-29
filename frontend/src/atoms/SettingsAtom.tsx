@@ -1,7 +1,14 @@
-import { getAllInvitedUsersForOrganization, getAllUsersForOrganization, inviteUserToOrganization, updateOrganizationMemberRole } from '@/services/auth/userService';
-import { OrganizationInviteApi, OrganizationMemberApi } from '@/types/settings/members';
 import { atom } from 'jotai';
 import { loadable } from 'jotai/utils';
+
+import {
+  getAllInvitedUsersForOrganization,
+  getAllUsersForOrganization,
+  inviteUserToOrganization,
+  updateOrganizationMemberRole,
+} from '@/services/userService';
+
+import { OrganizationInviteApi, OrganizationMemberApi } from '@/types/settings/members';
 
 interface MemberData {
   key: string;
@@ -82,10 +89,11 @@ const updateMemberRoleAtom = atom(
 );
 
 export {
-  inviteUserToOrganizationAtom, loadableInvitationsRowsAtom,
+  inviteUserToOrganizationAtom,
+  loadableInvitationsRowsAtom,
   loadableMembersRowsAtom,
   refetchInvitationsAtom,
   refetchMembersAtom,
-  settingsAtom, updateMemberRoleAtom
+  settingsAtom,
+  updateMemberRoleAtom,
 };
-

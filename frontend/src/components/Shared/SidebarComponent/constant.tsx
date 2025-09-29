@@ -1,4 +1,4 @@
-import { LayoutDashboard, Cog } from 'lucide-react';
+import { Cog, LayoutDashboard } from 'lucide-react';
 
 export const sidemenu = [
   {
