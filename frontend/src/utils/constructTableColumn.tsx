@@ -1,9 +1,9 @@
-import { Avatar, Dropdown, MenuProps, Select, Tag } from 'antd';
+import { Avatar, Button, MenuProps, Select, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { capitalize } from 'lodash';
 import { MoreHorizontal } from 'lucide-react';
 
-import ButtonComponent from '@/components/shared/ButtonComponent';
+import CustomDropdown from '@/components/shared/CustomDropdown';
 
 import { OrganizationInviteApi, OrganizationMemberApi } from '@/types/settings/members';
 
@@ -80,9 +80,9 @@ const renderStatus = (status: string) => {
 };
 
 const renderActions = (items: MenuProps['items']) => (
-  <Dropdown menu={{ items }} trigger={['click']}>
-    <ButtonComponent type="text" icon={<MoreHorizontal size={16} />} />
-  </Dropdown>
+  <CustomDropdown items={items}>
+    <Button type="text" icon={<MoreHorizontal size={16} />} />
+  </CustomDropdown>
 );
 
 interface ColumnConfig {
