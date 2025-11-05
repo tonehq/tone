@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { Avatar, Card, Divider, Popover, Skeleton, Space } from 'antd';
+import { Avatar, Card, CardContent, Divider, Popover, Skeleton, Stack } from '@mui/material';
 import Cookies from 'js-cookie';
 import { Building2, ChevronDown, Plus } from 'lucide-react';
 
@@ -11,7 +11,7 @@ import { getOrganization } from '@/services/auth/helper';
 import { cn } from '@/utils/cn';
 import { handleError } from '@/utils/handleError';
 
-import ButtonComponent from '../ButtonComponent';
+import CustomButton from '../CustomButton';
 
 interface Organization {
   id: string;
@@ -27,6 +27,7 @@ const Organization = (props: any) => {
   const [active, setActive] = useState<Organization | null>(null);
   const [visible, setVisible] = useState(false);
   const [createOrganization, setCreateOrganization] = useState(false);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
   const startCase = (str: string) =>
     str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
@@ -57,6 +58,16 @@ const Organization = (props: any) => {
     }
   }, [data]);
 
+  const handleClick = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+    setVisible(true);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+    setVisible(false);
+  };
+
   const getContents = () => (
     <div className="w-55">
       <div className="mb-2 text-gray-500">Organization List</div>
@@ -76,8 +87,8 @@ const Organization = (props: any) => {
           {startCase(membership.name)}
         </div>
       ))}
-      <Divider className="!my-2" />
-      <ButtonComponent
+      <Divider sx={{ my: 2 }} />
+      <CustomButton
         text="Create organization"
         onClick={() => setCreateOrganization(true)}
         icon={<Plus size={16} />}
@@ -89,36 +100,65 @@ const Organization = (props: any) => {
     <>
       {loader ? (
         <div className="mb-0">
-          <Skeleton.Input active className="!w-full bg-[#636363] rounded-t-lg" />
-          <Skeleton.Input active className="!w-full bg-[#636363] rounded-b-lg" />
+          <Skeleton
+            variant="rectangular"
+            height={40}
+            sx={{ width: '100%', bgcolor: '#636363', borderRadius: '8px 8px 0 0' }}
+          />
+          <Skeleton
+            variant="rectangular"
+            height={40}
+            sx={{ width: '100%', bgcolor: '#636363', borderRadius: '0 0 8px 8px' }}
+          />
         </div>
       ) : (
         <Popover
-          content={getContents()}
-          trigger="click"
           open={visible}
-          onOpenChange={setVisible}
-          placement="bottomLeft"
+          anchorEl={anchorEl}
+          onClose={handleClose}
+          anchorOrigin={{
+            vertical: 'bottom',
+            horizontal: 'left',
+          }}
+          transformOrigin={{
+            vertical: 'top',
+            horizontal: 'left',
+          }}
         >
+          {getContents()}
+        </Popover>
+      )}
           <Card
-            hoverable
-            className={cn(
-              'cursor-pointer border border-gray-200 transition-all duration-300 rounded-md',
-              isSidebarExpanded ? 'w-full' : 'w-fit !m-auto',
-            )}
-            styles={{
-              body: {
+        onClick={handleClick}
+        sx={{
+          cursor: 'pointer',
+          border: '1px solid #e5e7eb',
+          borderRadius: '6px',
+          transition: 'all 0.3s',
+          '&:hover': {
+            boxShadow: 2,
+          },
+          width: isSidebarExpanded ? '100%' : 'fit-content',
+          margin: '0 auto',
+        }}
+      >
+        <CardContent
+          sx={{
                 padding: isSidebarExpanded ? '4px 12px' : '8px',
                 display: 'flex',
                 justifyContent: 'center',
+            '&:last-child': {
+              paddingBottom: isSidebarExpanded ? '4px' : '8px',
               },
             }}
           >
             {isSidebarExpanded ? (
-              <div className="flex items-center justify-between w-full">
-                <Space>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" width="100%">
+              <Stack direction="row" spacing={1} alignItems="center">
                   {active?.image_url ? (
-                    <Avatar src={active?.name.charAt(0)} size={28} className="bg-gray-100" />
+                  <Avatar sx={{ width: 28, height: 28, bgcolor: '#f3f4f6' }}>
+                    {active?.name.charAt(0)}
+                  </Avatar>
                   ) : (
                     <Building2 size={20} />
                   )}
@@ -126,21 +166,22 @@ const Organization = (props: any) => {
                     <div className="font-semibold">{active?.name || 'Select Organization'}</div>
                     <div className="text-sm text-gray-500 mt-2">{active?.slug || 'Web app'}</div>
                   </div>
-                </Space>
+              </Stack>
                 <ChevronDown size={16} />
-              </div>
+            </Stack>
             ) : (
               <div>
                 {active?.image_url ? (
-                  <Avatar src={active?.name.charAt(0)} size={28} className="bg-gray-100" />
+                <Avatar sx={{ width: 28, height: 28, bgcolor: '#f3f4f6' }}>
+                  {active?.name.charAt(0)}
+                </Avatar>
                 ) : (
                   <Building2 size={20} />
                 )}
               </div>
             )}
+        </CardContent>
           </Card>
-        </Popover>
-      )}
       <CreateOrganizationModal
         open={createOrganization || false}
         onCancel={() => setCreateOrganization(false)}

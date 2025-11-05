@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { Form, Input, Skeleton } from 'antd';
-import { useForm } from 'antd/es/form/Form';
+import { Box, Stack } from '@mui/material';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-import ButtonComponent from '@/components/shared/ButtonComponent';
+import CustomButton from '@/components/shared/CustomButton';
+import { TextInput } from '@/components/shared/CustomFormFields';
+import { Form } from '@/components/shared/FormComponent';
 
 import { BACKEND_URL } from '@/urls';
 
@@ -20,7 +21,6 @@ import Container from '../shared/ContainerComponent';
 
 const FormComponent = (props: any) => {
   const { handleSubmit, loader } = props;
-  const [form] = useForm();
   const [isLoading, setIsLoading] = useState(true);
   const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const router = useRouter();
@@ -58,53 +58,47 @@ const FormComponent = (props: any) => {
     });
   };
 
+  const handleFormSubmit = (values: any) => {
+    handleSubmit(values);
+  };
+
   return (
     <Container>
       <div>
         <h2 className="mb-8">Sign in</h2>
         <Form
-          onFinish={handleSubmit}
+          onFinish={handleFormSubmit}
           className="w-[400px] text-[16px]"
-          requiredMark={false}
-          form={form}
-          name="validateOnly"
           layout="vertical"
           autoComplete="off"
         >
-          <Form.Item name="email" label="Email" rules={[{ required: true }]}>
-            {isLoading ? (
-              <Skeleton.Input
-                active
-                style={{ width: '400px', height: '42px' }}
-                className="font-[500] rounded-[5px]"
-              />
-            ) : (
-              <Input placeholder={'Enter Your Email'} />
-            )}
-          </Form.Item>
-          <Form.Item name="password" label="Password" rules={[{ required: true }]}>
-            {isLoading ? (
-              <Skeleton.Input
-                active
-                style={{ width: '400px', height: '42px' }}
-                className="font-[500] h-[40px] rounded-[5px]"
-              />
-            ) : (
-              <Input.Password placeholder={'Enter your passwordl'} />
-            )}
-          </Form.Item>
-          <Form.Item>
-            <ButtonComponent
+          <TextInput
+            name="email"
+            type="email"
+            label="Email"
+            placeholder="Enter Your Email"
+            isRequired
+            rules={[{ required: true }]}
+            loading={isLoading}
+          />
+          <TextInput
+            name="password"
+            type="password"
+            label="Password"
+            placeholder="Enter your password"
+            isRequired
+            rules={[{ required: true }]}
+            loading={isLoading}
+          />
+          <Stack spacing={2} sx={{ mt: 2 }}>
+            <CustomButton
               text="Sign in"
               loading={loader}
-              type={'primary'}
-              htmlType={'submit'}
-              className={'w-full'}
-              active={true}
+              type="primary"
+              htmlType="submit"
+              className="w-full"
             />
-          </Form.Item>
-          <Form.Item>
-            <ButtonComponent
+            <CustomButton
               text="Sign in with Google"
               loading={false}
               type={'default'}
@@ -121,26 +115,36 @@ const FormComponent = (props: any) => {
                 />
               }
             />
-          </Form.Item>
-          <Form.Item>
-            <div className="flex justify-center items-center">
-              <div className="font-[500] text-[16px] text-[#4058ff]">
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <Box
+                component="div"
+                sx={{
+                  fontWeight: 500,
+                  fontSize: '16px',
+                  color: '#4058ff',
+                }}
+              >
                 <Link href="/auth/forgotpassword" className="cursor-pointer">
                   Forgot Password
                 </Link>
-              </div>
-            </div>
-          </Form.Item>
-          <Form.Item>
-            <div className="flex text-[14px] justify-center items-center">
-              <span>Don't have an account ?</span>
-              <span className="font-[500] text-[#4058ff] ml-1">
+              </Box>
+            </Box>
+            <Box
+              sx={{
+                display: 'flex',
+                fontSize: '14px',
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              Don't have an account?
+              <span style={{ fontWeight: 500, color: '#4058ff', marginLeft: '4px' }}>
                 <Link href="/auth/signup" className="cursor-pointer">
                   Sign Up
                 </Link>
               </span>
-            </div>
-          </Form.Item>
+            </Box>
+          </Stack>
         </Form>
       </div>
     </Container>

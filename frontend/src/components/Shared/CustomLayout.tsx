@@ -1,8 +1,6 @@
 import React, { ReactNode } from 'react';
 
-import { Layout } from 'antd';
-
-const { Sider, Content } = Layout;
+import { Box } from '@mui/material';
 
 interface CustomLayoutProps {
   sidebarContent: ReactNode;
@@ -18,35 +16,47 @@ const CustomLayout: React.FC<CustomLayoutProps> = ({
   siderWidth = 200,
   layoutStyle,
   siderStyle,
-}) => {
-  const defaultLayoutStyle: React.CSSProperties = {
-    width: '100%',
-    minHeight: '100%',
-    padding: 16,
-    ...layoutStyle,
-  };
-
-  const defaultSiderStyle: React.CSSProperties = {
-    borderRadius: 8,
-    padding: 16,
-    color: 'white',
-    minHeight: '100%',
-    marginInline: 8,
-    ...siderStyle,
-  };
-
-  const defaultContentStyle: React.CSSProperties = {
-    paddingInline: 24,
-  };
-
-  return (
-    <Layout style={defaultLayoutStyle}>
-      <Sider width={siderWidth} style={defaultSiderStyle}>
-        {sidebarContent}
-      </Sider>
-      <Content style={defaultContentStyle}>{children || 'testing'}</Content>
-    </Layout>
-  );
-};
+}) => (
+  <Box
+    sx={{
+      width: '100%',
+      height: '100%',
+      padding: 2,
+      boxSizing: 'border-box',
+      display: 'flex',
+      flexDirection: 'row',
+      gap: 2,
+      ...layoutStyle,
+    }}
+  >
+    <Box
+      sx={{
+        width: siderWidth,
+        borderRadius: 2,
+        padding: 2,
+        color: 'white',
+        height: '100%',
+        backgroundColor: '#3f3f46',
+        boxSizing: 'border-box',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        ...siderStyle,
+      }}
+    >
+      {sidebarContent}
+    </Box>
+    <Box
+      sx={{
+        flex: 1,
+        height: '100%',
+        overflow: 'auto',
+        boxSizing: 'border-box',
+      }}
+    >
+      {children}
+    </Box>
+  </Box>
+);
 
 export default CustomLayout;

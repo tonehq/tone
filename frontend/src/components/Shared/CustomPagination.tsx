@@ -1,8 +1,6 @@
 import React from 'react';
 
-import type { SelectProps } from 'antd';
-import { Button, Pagination } from 'antd';
-import type { DefaultOptionType } from 'antd/es/select';
+import { Button, Pagination, Select, MenuItem, FormControl, Stack } from '@mui/material';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface CustomPaginationProps {
@@ -10,7 +8,7 @@ interface CustomPaginationProps {
   total: number;
   pageSize: number;
   onChange: (page: number) => void;
-  showSizeChanger?: boolean | SelectProps<any, DefaultOptionType>;
+  showSizeChanger?: boolean;
 }
 
 const CustomPagination: React.FC<CustomPaginationProps> = ({
@@ -25,82 +23,85 @@ const CustomPagination: React.FC<CustomPaginationProps> = ({
   const goPrev = () => {
     if (current > 1) onChange(current - 1);
   };
+
   const goNext = () => {
     if (current < totalPages) onChange(current + 1);
   };
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '12px 8px',
-      }}
+    <Stack
+      direction="row"
+      alignItems="center"
+      justifyContent="space-between"
+      sx={{ padding: '12px 8px' }}
     >
       <Button
-        icon={<ChevronLeft size={16} />}
+        startIcon={<ChevronLeft size={16} />}
         onClick={goPrev}
         disabled={current === 1}
-        style={{
+        variant="outlined"
+        sx={{
           height: 36,
-          borderRadius: 8,
-          display: 'flex',
-          alignItems: 'center',
+          borderRadius: 2,
+          textTransform: 'none',
         }}
       >
         Previous
       </Button>
 
       <Pagination
-        current={current}
-        total={total}
-        pageSize={pageSize}
-        showSizeChanger={showSizeChanger}
-        onChange={(page) => onChange(page)}
-        itemRender={(page, type, original) => {
-          if (type === 'page') {
-            const isActive = page === current;
+        page={current}
+        count={totalPages}
+        onChange={(_, page) => onChange(page)}
+        renderItem={(item) => {
+          if (item.type === 'page') {
+            const isActive = item.page === current;
             return (
               <Button
-                type={isActive ? 'primary' : 'default'}
+                variant={isActive ? 'contained' : 'outlined'}
                 size="small"
-                style={{
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (item.page) onChange(item.page);
+                }}
+                sx={{
+                  minWidth: 32,
                   width: 32,
                   height: 32,
                   padding: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: 6,
+                  borderRadius: 1.5,
+                  ...(isActive && {
+                    backgroundColor: 'var(--color-primary)',
+                    '&:hover': {
+                      backgroundColor: 'var(--color-primary-dark)',
+                    },
+                  }),
                 }}
               >
-                {page}
+                {item.page}
               </Button>
             );
           }
-          // hide prev/next items since we render custom buttons
-          return <span style={{ display: 'none' }} />;
+          return null;
         }}
-        showLessItems
-        responsive
+        hidePrevButton
+        hideNextButton
       />
 
       <Button
-        icon={<ChevronRight size={16} />}
-        iconPosition="end"
+        endIcon={<ChevronRight size={16} />}
         onClick={goNext}
         disabled={current === totalPages}
-        style={{
+        variant="outlined"
+        sx={{
           height: 36,
-          borderRadius: 8,
-          display: 'flex',
-          alignItems: 'center',
+          borderRadius: 2,
+          textTransform: 'none',
         }}
       >
         Next
       </Button>
-    </div>
+    </Stack>
   );
 };
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-import { Badge } from 'antd';
+import { Badge, Tabs, Tab, Box } from '@mui/material';
 
 import { TabItem } from '@/types/tab';
 
@@ -35,9 +35,77 @@ const CustomTab: React.FC<CustomTabProps> = ({
 
   const activeKey = controlledActiveKey !== undefined ? controlledActiveKey : internalActiveKey;
 
+  const handleTabChange = (_: React.SyntheticEvent, newValue: string) => {
+    if (controlledActiveKey === undefined) {
+      setInternalActiveKey(newValue);
+    }
+    onChange?.(newValue);
+  };
+
+  const activeItem = items.find((item) => item.key === activeKey);
+
+  // Use MUI Tabs for underline variant, custom for others
+  if (variant === 'underline') {
+    return (
+      <div className="w-full">
+        <Tabs
+          value={activeKey}
+          onChange={handleTabChange}
+          centered={centered}
+          className={className}
+          sx={{
+            borderBottom: 1,
+            borderColor: 'divider',
+            '& .MuiTab-root': {
+              textTransform: 'none',
+              fontWeight: 500,
+              minHeight: size === 'small' ? 40 : size === 'large' ? 56 : 48,
+              fontSize: size === 'small' ? 14 : size === 'large' ? 16 : 15,
+            },
+          }}
+        >
+          {items.map((item) => (
+            <Tab
+              key={item.key}
+              value={item.key}
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  {item.icon && <span>{item.icon}</span>}
+                  <span>{item.label}</span>
+                  {item.badge && (
+                    <Badge
+                      badgeContent={item.badge}
+                      color="primary"
+                      sx={{
+                        '& .MuiBadge-badge': {
+                          fontSize: '10px',
+                          height: '16px',
+                          minWidth: '16px',
+                        },
+                      }}
+                    />
+                  )}
+                </Box>
+              }
+              disabled={item.disabled}
+            />
+          ))}
+        </Tabs>
+        {activeItem?.content && (
+          <Box
+            key={activeKey}
+            sx={{ mt: 2, ...(animated && { animation: 'fadeIn 0.3s ease-out' }) }}
+          >
+            {activeItem.content}
+          </Box>
+        )}
+      </div>
+    );
+  }
+
+  // Custom implementation for other variants
   const handleTabClick = (key: string, disabled?: boolean) => {
     if (disabled) return;
-
     if (controlledActiveKey === undefined) {
       setInternalActiveKey(key);
     }
@@ -60,12 +128,12 @@ const CustomTab: React.FC<CustomTabProps> = ({
       pills: isActive
         ? 'text-white bg-blue-600 rounded-full shadow-lg'
         : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-full',
-      underline: isActive
-        ? 'text-blue-600 border-b-2 border-blue-600'
-        : 'text-gray-600 hover:text-blue-500 border-b-2 border-transparent',
       cards: isActive
         ? 'text-blue-600 bg-white rounded-t-lg border border-gray-200 border-b-white -mb-px shadow-sm'
         : 'text-gray-600 hover:text-blue-500 hover:bg-gray-50 rounded-t-lg border border-transparent',
+      underline: isActive
+        ? 'text-blue-600 border-b-2 border-blue-600'
+        : 'text-gray-600 hover:text-blue-500 border-b-2 border-transparent',
     };
 
     return cn(
@@ -88,8 +156,6 @@ const CustomTab: React.FC<CustomTabProps> = ({
 
     return cn(baseClasses, centeredClasses, variantContainerClasses[variant], className);
   };
-
-  const activeItem = items.find((item) => item.key === activeKey);
 
   return (
     <div className="w-full">
@@ -118,30 +184,15 @@ const CustomTab: React.FC<CustomTabProps> = ({
 
               {item.badge && (
                 <Badge
-                  count={item.badge}
-                  size="small"
-                  className={cn(
-                    'ml-1',
-                    isActive
-                      ? '[&_.ant-badge-count]:bg-white [&_.ant-badge-count]:text-blue-600'
-                      : '[&_.ant-badge-count]:bg-blue-600 [&_.ant-badge-count]:text-white',
-                  )}
-                />
-              )}
-
-              {animated && isActive && variant === 'underline' && (
-                <div
-                  className={cn(
-                    'absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 rounded-full transition-all duration-300 ease-out scale-x-100 origin-left',
-                  )}
-                />
-              )}
-
-              {animated && isActive && variant === 'pills' && (
-                <div
-                  className={cn(
-                    'absolute inset-0 bg-blue-600 rounded-full -z-10 transition-all duration-300 ease-out scale-100 opacity-100',
-                  )}
+                  badgeContent={item.badge}
+                  color="primary"
+                  sx={{
+                    '& .MuiBadge-badge': {
+                      fontSize: '10px',
+                      height: '16px',
+                      minWidth: '16px',
+                    },
+                  }}
                 />
               )}
             </div>

@@ -2,7 +2,7 @@
 
 import type React from 'react';
 
-import { Divider, Tooltip } from 'antd';
+import { Divider, Tooltip } from '@mui/material';
 import { ArrowLeftToLine, ArrowRightToLine } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -25,93 +25,67 @@ function SidebarItemMenu({ icon: Icon, href, active, title, isCollapsed }: Sideb
     <Link
       href={href}
       className={cn(
-        'flex items-center w-full py-3 px-4 mx-4 rounded-md cursor-pointer select-none whitespace-nowrap hover:!bg-white/20 !text-white transition-[background,transform] duration-200 ease-in-out',
+        'flex items-center w-full py-3 px-4 rounded-md cursor-pointer select-none whitespace-nowrap hover:!bg-white/20 !text-white transition-[background,transform] duration-200 ease-in-out',
         {
           '!bg-white/20 shadow-md': active,
-          'py-2 my-0': isCollapsed,
         },
       )}
     >
-      <div className="flex items-center justify-center gap-2">
-        <Icon className="w-5 h-5" />
-        {!isCollapsed && <span className="text-sm">{title}</span>}
-      </div>
+      <Icon className="w-5 h-5 flex-shrink-0" />
+      {!isCollapsed && <span className="ml-3 font-medium">{title}</span>}
     </Link>
   );
 
-  return isCollapsed ? (
-    <Tooltip placement="right" title={title} mouseEnterDelay={0.05}>
-      {content}
-    </Tooltip>
-  ) : (
-    content
-  );
+  if (isCollapsed) {
+    return (
+      <Tooltip title={title} placement="right" arrow>
+        {content}
+      </Tooltip>
+    );
+  }
+
+  return content;
 }
 
 function Sidebar(props: any) {
   const { isSidebarExpanded, setIsSidebarExpanded } = props;
   const pathname = usePathname();
 
-  const isActive = (path: string) =>
-    pathname === path || pathname?.split('/')[1] === path.split('/')[1];
-
   return (
-    <aside
-      className={cn(
-        'h-full transition-all duration-1000 ease-in-out',
-        isSidebarExpanded ? 'space-y-5' : 'space-y-4',
-      )}
-    >
-      <div className="flex items-center justify-between w-full">
-        <div className={cn('flex items-center gap-2', !isSidebarExpanded && 'm-auto')}>
-          <div
-            className={'flex items-center size-9 justify-center text-white bg-blue-700 rounded-md'}
-          >
-            <span className="text-md font-semibold">T</span>
-          </div>
-          {isSidebarExpanded && <div className="text-lg font-semibold py-2">Tone App</div>}
-        </div>
-        {isSidebarExpanded && (
-          <button
-            onClick={() => setIsSidebarExpanded(false)}
-            className="p-1.5 rounded-sm bg-gray-100 my-shadow cursor-pointer"
-          >
-            <ArrowLeftToLine className="text-gray-700" size={20} />
-          </button>
-        )}
+    <div className="flex flex-col h-full bg-[#3f3f46]">
+      <div className="flex-1 overflow-y-auto">
+        <Organization isSidebarExpanded={isSidebarExpanded} />
+        <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.1)', margin: '8px 0' }} />
+        <nav className="flex-1 space-y-3">
+          {sidemenu.map((item) => {
+            const itemPath = (item as any).path || (item as any).href;
+            const isActive = pathname === itemPath || pathname?.startsWith(`${itemPath}/`);
+            return (
+              <SidebarItemMenu
+                key={itemPath}
+                icon={item.icon}
+                href={itemPath}
+                active={isActive}
+                title={item.title}
+                isCollapsed={!isSidebarExpanded}
+              />
+            );
+          })}
+        </nav>
       </div>
-      <Divider className="bg-[#736f6f]" style={{ marginBlock: 10 }} />
-      {!isSidebarExpanded && (
-        <>
-          <div
-            className={cn(
-              'cursor-pointer bg-[#f0f0f0] my-shadow flex justify-center rounded-sm opacity-100',
-              'p-1.5 w-fit !m-auto',
-            )}
-            onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
-          >
-            <ArrowRightToLine color="#414651" size={20} />
-          </div>
-          <Divider className="bg-[#736f6f]" style={{ marginBlock: 10 }} />
-        </>
-      )}
-
-      <Organization isSidebarExpanded={isSidebarExpanded} />
-      <Divider className="bg-[#736f6f]" style={{ marginBlock: 10 }} />
-
-      <nav className={cn('flex flex-col items-center rounded-md gap-1.5')}>
-        {sidemenu.map((item: any) => (
-          <SidebarItemMenu
-            key={item.key}
-            icon={item.icon}
-            title={item.title}
-            href={item.path}
-            active={isActive(item.path)}
-            isCollapsed={!isSidebarExpanded}
-          />
-        ))}
-      </nav>
-    </aside>
+      <div className="p-4 border-t border-white/10">
+        <button
+          onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
+          className="w-full flex items-center justify-center p-2 rounded-md hover:bg-white/10 text-white transition-colors"
+        >
+          {isSidebarExpanded ? (
+            <ArrowLeftToLine className="w-5 h-5" />
+          ) : (
+            <ArrowRightToLine className="w-5 h-5" />
+          )}
+        </button>
+      </div>
+    </div>
   );
 }
 

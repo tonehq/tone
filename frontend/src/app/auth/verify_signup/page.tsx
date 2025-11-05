@@ -1,12 +1,12 @@
 'use client';
 
-import * as React from 'react';
+import { useState } from 'react';
 
-import { Form } from 'antd';
-import { useForm } from 'antd/es/form/Form';
+import { Box, Stack } from '@mui/material';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-import ButtonComponent from '@/components/shared/ButtonComponent';
+import CustomButton from '@/components/shared/CustomButton';
+import { Form } from '@/components/shared/FormComponent';
 
 import axios from '@/utils/axios';
 import { useNotification } from '@/utils/shared/notification';
@@ -14,8 +14,7 @@ import { useNotification } from '@/utils/shared/notification';
 import Container from '../shared/ContainerComponent';
 
 const EmailVerificationContent = () => {
-  const [form] = useForm();
-  const [loader, setLoader] = React.useState(false);
+  const [loader, setLoader] = useState(false);
   const params = useSearchParams();
   const router = useRouter();
   const { notify, contextHolder } = useNotification();
@@ -61,40 +60,32 @@ const EmailVerificationContent = () => {
   return (
     <Container>
       {contextHolder}
-      <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
+      <div>
         <h2 className="mb-8">Email Verification</h2>
         <Form
           onFinish={handleSubmit}
-          className="w-[360px] text-[16px]"
-          requiredMark={false}
-          form={form}
-          name="validateOnly"
+          className="w-[400px] text-[16px]"
           layout="vertical"
           autoComplete="off"
         >
-          <div style={{ marginBottom: '24px' }} className="mb-4">
+          <Box sx={{ marginBottom: 3 }}>
             <p>To complete the verification process, please click the button below:</p>
-          </div>
-          <Form.Item>
-            <ButtonComponent
-              loading={loader}
-              type={'primary'}
-              htmlType={'submit'}
+          </Box>
+          <Stack spacing={2} sx={{ mt: 2 }}>
+            <CustomButton
               text="Accept"
-              active={true}
+              loading={loader}
+              type="primary"
+              htmlType="submit"
               className="w-full"
             />
-          </Form.Item>
+          </Stack>
         </Form>
       </div>
     </Container>
   );
 };
 
-const EmailVerification: React.FC = () => (
-  <React.Suspense fallback={<div>Loading...</div>}>
-    <EmailVerificationContent />
-  </React.Suspense>
-);
+const EmailVerification: React.FC = () => <EmailVerificationContent />;
 
 export default EmailVerification;

@@ -1,13 +1,18 @@
-import { MenuProps, Select } from 'antd';
-
 import { OrganizationInviteApi, OrganizationMemberApi } from '@/types/settings/members';
 
 import { constructColumns } from './constructTableColumn';
 
-const { Option } = Select;
+interface MenuItemType {
+  key: string;
+  label: React.ReactNode;
+  icon?: React.ReactNode;
+  danger?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+}
 
 export const getMemberColumns = (
-  actionMenuItems: MenuProps['items'],
+  actionMenuItems: MenuItemType[],
   onRoleChange?: (memberId: number, role: string) => void,
 ) =>
   constructColumns<OrganizationMemberApi>(

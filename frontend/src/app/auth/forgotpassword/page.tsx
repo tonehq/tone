@@ -1,12 +1,13 @@
 'use client';
 
-import * as React from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import { Form, Input, Skeleton } from 'antd';
-import { useForm } from 'antd/es/form/Form';
+import { Box, Stack } from '@mui/material';
 import Link from 'next/link';
 
-import ButtonComponent from '@/components/shared/ButtonComponent';
+import CustomButton from '@/components/shared/CustomButton';
+import { TextInput } from '@/components/shared/CustomFormFields';
+import { Form } from '@/components/shared/FormComponent';
 
 import { forgotPassword } from '@/services/auth/helper';
 
@@ -15,14 +16,12 @@ import { useNotification } from '@/utils/shared/notification';
 import Container from '../shared/ContainerComponent';
 
 export default function ForgotPassword() {
-  const [form] = useForm();
-
-  const [isLoading, setIsLoading] = React.useState(true);
-  const loadingTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const [loader, setLoader] = React.useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [loader, setLoader] = useState(false);
   const { notify, contextHolder } = useNotification();
 
-  React.useEffect(() => {
+  useEffect(() => {
     loadingTimeoutRef.current = setTimeout(() => {
       setIsLoading(false);
     }, 2000);
@@ -67,48 +66,47 @@ export default function ForgotPassword() {
   return (
     <Container>
       {contextHolder}
-      <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-lg shadow-md">
-        <h2 className="mb-4">Password Reset Request</h2>
+      <div>
+        <h2 className="mb-8">Password Reset Request</h2>
         <p className="text-gray-600 mb-6">Enter your email to reset your password.</p>
         <Form
           onFinish={handleSubmit}
-          className="w-[360px] text-[16px]"
-          requiredMark={false}
-          form={form}
-          name="validateOnly"
+          className="w-[400px] text-[16px]"
           layout="vertical"
           autoComplete="off"
         >
-          <Form.Item name="email" label="Email" rules={[{ required: true }]}>
-            {isLoading ? (
-              <Skeleton.Input
-                active
-                style={{ width: '360px', height: '42px' }}
-                className="font-[500] py-4 rounded-lg"
-              />
-            ) : (
-              <Input className="py-2" placeholder={'Enter Your Email'} />
-            )}
-          </Form.Item>
-          <Form.Item>
-            <ButtonComponent
-              loading={loader}
-              type={'primary'}
-              htmlType={'submit'}
+          <TextInput
+            name="email"
+            type="email"
+            label="Email"
+            placeholder="Enter Your Email"
+            isRequired
+            rules={[{ required: true }]}
+            loading={isLoading}
+          />
+          <Stack spacing={2} sx={{ mt: 2 }}>
+            <CustomButton
               text="Request"
+              loading={loader}
+              type="primary"
+              htmlType="submit"
               className="w-full"
-              active={true}
             />
-          </Form.Item>
-          <Form.Item>
-            <div className="flex justify-center items-center">
-              <div className="font-[500] text-[16px] text-[#4058ff]">
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <Box
+                component="div"
+                sx={{
+                  fontWeight: 500,
+                  fontSize: '16px',
+                  color: '#4058ff',
+                }}
+              >
                 <Link href="/auth/login" className="cursor-pointer">
                   Back to Login
                 </Link>
-              </div>
-            </div>
-          </Form.Item>
+              </Box>
+            </Box>
+          </Stack>
         </Form>
       </div>
     </Container>

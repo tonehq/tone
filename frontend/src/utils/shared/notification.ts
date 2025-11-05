@@ -1,8 +1,6 @@
-import { notification } from 'antd';
+import { showToast } from '../showToast';
 
 export const useNotification = () => {
-  const [api, contextHolder] = notification.useNotification();
-
   const notify = {
     success: (
       message: string,
@@ -10,11 +8,13 @@ export const useNotification = () => {
       duration?: number,
       placement?: 'top' | 'topLeft' | 'topRight' | 'bottom' | 'bottomLeft' | 'bottomRight',
     ) => {
-      api.success({
+      showToast({
+        status: 'success',
         message,
         description,
         duration: duration || 4,
         placement: placement || 'topRight',
+        variant: 'notification',
       });
     },
     error: (
@@ -23,11 +23,13 @@ export const useNotification = () => {
       duration?: number,
       placement?: 'top' | 'topLeft' | 'topRight' | 'bottom' | 'bottomLeft' | 'bottomRight',
     ) => {
-      api.error({
+      showToast({
+        status: 'error',
         message,
         description,
         duration: duration || 4,
         placement: placement || 'topRight',
+        variant: 'notification',
       });
     },
     info: (
@@ -36,11 +38,13 @@ export const useNotification = () => {
       duration?: number,
       placement?: 'top' | 'topLeft' | 'topRight' | 'bottom' | 'bottomLeft' | 'bottomRight',
     ) => {
-      api.info({
+      showToast({
+        status: 'info',
         message,
         description,
         duration: duration || 4,
         placement: placement || 'topRight',
+        variant: 'notification',
       });
     },
     warning: (
@@ -49,14 +53,16 @@ export const useNotification = () => {
       duration?: number,
       placement?: 'top' | 'topLeft' | 'topRight' | 'bottom' | 'bottomLeft' | 'bottomRight',
     ) => {
-      api.warning({
+      showToast({
+        status: 'warning',
         message,
         description,
         duration: duration || 4,
         placement: placement || 'topRight',
+        variant: 'notification',
       });
     },
   };
 
-  return { notify, contextHolder };
+  return { notify, contextHolder: null };
 };

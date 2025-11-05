@@ -1,6 +1,6 @@
 import { useDeferredValue, useState } from 'react';
 
-import { Input } from 'antd';
+import { InputAdornment, TextField } from '@mui/material';
 import { useSetAtom } from 'jotai';
 import { Mail, Search, UserPlus, Users } from 'lucide-react';
 
@@ -11,7 +11,7 @@ import {
 } from '@/atoms/SettingsAtom';
 
 import ModalComponent from '@/components/settings/ModalComponent';
-import ButtonComponent from '@/components/shared/ButtonComponent';
+import CustomButton from '@/components/shared/CustomButton';
 import CustomTab from '@/components/shared/CustomTab';
 
 import { TabItem } from '@/types/tab';
@@ -82,14 +82,21 @@ const ContentSection = () => {
     <>
       <div className={cn('bg-white rounded-lg overflow-hidden p-6')}>
         <div className={cn('flex justify-between items-center mb-6')}>
-          <Input
+          <TextField
             placeholder="Search"
             value={searchText}
-            onChange={(e: any) => setSearchText(e.target.value)}
-            className={cn('!w-80')}
-            prefix={<Search size={16} className={cn('text-gray-400 mr-2')} />}
+            onChange={(e) => setSearchText(e.target.value)}
+            sx={{ width: 320 }}
+            size="small"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search size={16} className={cn('text-gray-400')} />
+                </InputAdornment>
+              ),
+            }}
           />
-          <ButtonComponent
+          <CustomButton
             text="Invite user"
             type="primary"
             icon={<UserPlus size={16} />}

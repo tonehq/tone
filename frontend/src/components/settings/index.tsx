@@ -1,12 +1,17 @@
-import { BreadcrumbProps } from 'antd';
 import { Home } from 'lucide-react';
 
 import PageHeader from '@/components/shared/PageHeader';
 
 import ContentSection from './ContentSection';
 
+interface BreadcrumbItem {
+  title: React.ReactNode;
+  href?: string;
+  className?: string;
+}
+
 const Settings = () => {
-  const breadcrumbItems: BreadcrumbProps['items'] = [
+  const breadcrumbItems: BreadcrumbItem[] = [
     {
       title: <Home size={14} />,
       href: '/home',

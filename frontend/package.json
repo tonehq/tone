@@ -18,9 +18,14 @@
     ]
   },
   "dependencies": {
-    "@ant-design/v5-patch-for-react-19": "^1.0.3",
+    "@emotion/cache": "^11.13.5",
+    "@emotion/react": "^11.13.5",
+    "@emotion/styled": "^11.13.5",
+    "@mui/icons-material": "^6.2.1",
+    "@mui/material": "^6.2.1",
+    "@mui/material-nextjs": "^6.0.0",
+    "@mui/system": "^6.2.1",
     "@types/js-cookie": "^3.0.6",
-    "antd": "^5.27.0",
     "axios": "^1.11.0",
     "buffer": "^6.0.3",
     "camelcase-keys": "^10.0.0",

@@ -1,24 +1,41 @@
 import React from 'react';
 
-import { PaginationProps, Table } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+  CircularProgress,
+  TableSortLabel,
+} from '@mui/material';
 
 import CustomPagination from '@/components/shared/CustomPagination';
+
+import { TableColumn } from '@/utils/constructTableColumn';
 
 import { DynamicScrollConfig, useDynamicScrollHeight } from '@/utils/table';
 
 import styles from '@/styles/table.module.scss';
 
 interface CustomTableProps<RecordType> {
-  columns: ColumnsType<RecordType>;
+  columns: TableColumn<RecordType>[];
   data: RecordType[];
   rowKey: string | ((record: RecordType) => string);
   loading?: boolean;
   showHeader?: boolean;
-  size?: 'small' | 'middle' | 'large';
+  size?: 'small' | 'medium' | 'large';
   style?: React.CSSProperties;
   withPagination?: boolean;
-  pagination?: PaginationProps;
+  pagination?: {
+    current?: number;
+    total?: number;
+    pageSize?: number;
+    onChange?: (page: number, pageSize?: number) => void;
+    showSizeChanger?: boolean;
+  };
   scroll?: { x?: number | true | string; y?: number | string };
   dynamicScrollConfig?: DynamicScrollConfig;
 }
@@ -30,7 +47,7 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
     rowKey,
     loading,
     showHeader = true,
-    size = 'large',
+    size = 'medium',
     style,
     withPagination = false,
     pagination,
@@ -38,36 +55,98 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
     dynamicScrollConfig,
   } = props;
 
-  // Calculate dynamic scroll height based on scroll.y and window size
   const calculatedScrollY = useDynamicScrollHeight(scroll?.y, dynamicScrollConfig);
 
-  // Merge scroll configuration with calculated height
-  const finalScroll = {
-    ...(scroll?.x !== undefined ? { x: scroll.x } : {}),
-    ...(calculatedScrollY !== undefined ? { y: calculatedScrollY } : {}),
+  const getRowKey = (record: T, index: number): string => {
+    if (typeof rowKey === 'function') {
+      return rowKey(record);
+    }
+    return (record as any)[rowKey]?.toString() || index.toString();
   };
 
   return (
     <div style={{ width: '100%' }} className={styles.customTableWrapper}>
-      <Table<T>
-        columns={columns}
-        dataSource={data}
-        rowKey={rowKey as any}
-        loading={loading}
-        showHeader={showHeader}
-        size={size}
-        style={{ border: '1px solid #e5e7eb', borderRadius: 6, ...style }}
-        pagination={false}
-        sticky={!!finalScroll?.y}
-        scroll={Object.keys(finalScroll).length > 0 ? finalScroll : undefined}
-      />
+      <TableContainer
+        component={Paper}
+        sx={{
+          maxHeight: calculatedScrollY
+            ? typeof calculatedScrollY === 'string'
+              ? calculatedScrollY
+              : `${calculatedScrollY}px`
+            : 'none',
+          border: '1px solid #e5e7eb',
+          borderRadius: '6px',
+          ...style,
+        }}
+      >
+        <Table stickyHeader={!!calculatedScrollY} size={size === 'large' ? 'medium' : size}>
+          {showHeader && (
+            <TableHead>
+              <TableRow>
+                {columns.map((column) => (
+                  <TableCell
+                    key={column.key}
+                    sx={{
+                      width: column.width,
+                      minWidth: column.width,
+                      fontWeight: 600,
+                      backgroundColor: 'var(--color-background-secondary)',
+                      borderBottom: '1px solid var(--color-border)',
+                    }}
+                  >
+                    {column.sorter ? <TableSortLabel>{column.title}</TableSortLabel> : column.title}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+          )}
+          <TableBody>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={columns.length} align="center" sx={{ padding: 4 }}>
+                  <CircularProgress />
+                </TableCell>
+              </TableRow>
+            ) : data.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={columns.length} align="center" sx={{ padding: 4 }}>
+                  No data
+                </TableCell>
+              </TableRow>
+            ) : (
+              data.map((record, index) => (
+                <TableRow key={getRowKey(record, index)} hover>
+                  {columns.map((column) => {
+                    const value = (record as any)[column.dataIndex];
+                    const renderedValue = column.render
+                      ? column.render(value, record)
+                      : (value ?? '-');
+                    return (
+                      <TableCell
+                        key={column.key}
+                        sx={{
+                          width: column.width,
+                          minWidth: 0,
+                          borderBottom: '1px solid var(--color-border)',
+                        }}
+                      >
+                        {renderedValue}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
       {withPagination && (
         <CustomPagination
           current={pagination?.current ?? 1}
           total={pagination?.total ?? data?.length}
           pageSize={pagination?.pageSize ?? 10}
           onChange={(page) =>
-            pagination?.onChange && pagination?.onChange(page, pagination?.pageSize ?? 10)
+            pagination?.onChange && pagination.onChange(page, pagination?.pageSize ?? 10)
           }
           showSizeChanger={pagination?.showSizeChanger || false}
         />

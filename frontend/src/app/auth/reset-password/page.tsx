@@ -1,12 +1,13 @@
 'use client';
 
-import * as React from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import { Form, Input, Skeleton } from 'antd';
-import { useForm } from 'antd/es/form/Form';
+import { Stack } from '@mui/material';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-import ButtonComponent from '@/components/shared/ButtonComponent';
+import CustomButton from '@/components/shared/CustomButton';
+import { TextInput } from '@/components/shared/CustomFormFields';
+import { Form } from '@/components/shared/FormComponent';
 
 import axios from '@/utils/axios';
 import { useNotification } from '@/utils/shared/notification';
@@ -14,16 +15,14 @@ import { useNotification } from '@/utils/shared/notification';
 import Container from '../shared/ContainerComponent';
 
 const ResetPasswordContent: React.FC = () => {
-  const [form] = useForm();
-
-  const [isLoading, setIsLoading] = React.useState(true);
-  const loadingTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [isLoading, setIsLoading] = useState(true);
+  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const router = useRouter();
-  const [loader, setLoader] = React.useState(false);
+  const [loader, setLoader] = useState(false);
   const params = useSearchParams();
   const { notify, contextHolder } = useNotification();
 
-  React.useEffect(() => {
+  useEffect(() => {
     loadingTimeoutRef.current = setTimeout(() => {
       setIsLoading(false);
     }, 2000);
@@ -78,59 +77,47 @@ const ResetPasswordContent: React.FC = () => {
   return (
     <Container>
       {contextHolder}
-      <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
+      <div>
         <h2 className="mb-8">Reset password</h2>
         <Form
           onFinish={handleSubmit}
-          className="w-[360px] text-[16px]"
-          requiredMark={false}
-          form={form}
-          name="validateOnly"
+          className="w-[400px] text-[16px]"
           layout="vertical"
           autoComplete="off"
         >
-          <Form.Item name="password" label="Password" rules={[{ required: true }]}>
-            {isLoading ? (
-              <Skeleton.Input
-                active
-                style={{ width: '360px', height: '42px' }}
-                className="font-[500] py-4 rounded-lg"
-              />
-            ) : (
-              <Input.Password placeholder={'Enter your password'} />
-            )}
-          </Form.Item>
-          <Form.Item name="confirm_password" label="Confirm Password" rules={[{ required: true }]}>
-            {isLoading ? (
-              <Skeleton.Input
-                active
-                style={{ width: '360px', height: '42px' }}
-                className="font-[500] py-4 rounded-lg"
-              />
-            ) : (
-              <Input.Password placeholder={'Enter your confirm password'} />
-            )}
-          </Form.Item>
-          <Form.Item>
-            <ButtonComponent
-              loading={loader}
-              type={'primary'}
-              htmlType={'submit'}
+          <TextInput
+            name="password"
+            type="password"
+            label="Password"
+            placeholder="Enter your password"
+            isRequired
+            rules={[{ required: true }]}
+            loading={isLoading}
+          />
+          <TextInput
+            name="confirm_password"
+            type="password"
+            label="Confirm Password"
+            placeholder="Enter your confirm password"
+            isRequired
+            rules={[{ required: true }]}
+            loading={isLoading}
+          />
+          <Stack spacing={2} sx={{ mt: 2 }}>
+            <CustomButton
               text="Update New Password"
-              active={true}
+              loading={loader}
+              type="primary"
+              htmlType="submit"
               className="w-full"
             />
-          </Form.Item>
+          </Stack>
         </Form>
       </div>
     </Container>
   );
 };
 
-const ResetPassword: React.FC = () => (
-  <React.Suspense fallback={<div>Loading...</div>}>
-    <ResetPasswordContent />
-  </React.Suspense>
-);
+const ResetPassword: React.FC = () => <ResetPasswordContent />;
 
 export default ResetPassword;

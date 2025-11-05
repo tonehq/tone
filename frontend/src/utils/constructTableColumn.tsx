@@ -1,5 +1,6 @@
-import { Avatar, Button, MenuProps, Select, Tag } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import React from 'react';
+
+import { Avatar, Button, Chip, Select, MenuItem, FormControl } from '@mui/material';
 import { capitalize } from 'lodash';
 import { MoreHorizontal } from 'lucide-react';
 
@@ -9,7 +10,15 @@ import { OrganizationInviteApi, OrganizationMemberApi } from '@/types/settings/m
 
 import { formatEpochToDate, getInitialsFromName } from '@/utils/format';
 
-const { Option } = Select;
+// Define column type for MUI table compatibility
+export interface TableColumn<T> {
+  title: string;
+  key: string;
+  dataIndex: string;
+  width?: number;
+  sorter?: boolean;
+  render?: (value: any, record: T) => React.ReactNode;
+}
 
 const renderUser = (record: any) => {
   const rawName =
@@ -22,9 +31,14 @@ const renderUser = (record: any) => {
   return (
     <div className="flex items-center gap-2 min-w-0">
       <Avatar
-        size={40}
-        className="text-white font-bold text-base flex items-center justify-center"
-        style={{ backgroundColor: '#7c3aed' }}
+        sx={{
+          width: 40,
+          height: 40,
+          backgroundColor: '#7c3aed',
+          color: 'white',
+          fontWeight: 'bold',
+          fontSize: '16px',
+        }}
       >
         {getInitialsFromName(displayName)}
       </Avatar>
@@ -41,9 +55,14 @@ const renderUser = (record: any) => {
 const renderInviteUser = (record: OrganizationInviteApi) => (
   <div className="flex items-center gap-2 min-w-0">
     <Avatar
-      size={40}
-      className="text-white font-bold text-base flex items-center justify-center"
-      style={{ backgroundColor: '#7c3aed' }}
+      sx={{
+        width: 40,
+        height: 40,
+        backgroundColor: '#7c3aed',
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: '16px',
+      }}
     >
       {getInitialsFromName(record.name || record.username || record.email || '')}
     </Avatar>
@@ -60,28 +79,53 @@ const renderRole = (
   record: OrganizationMemberApi,
   onRoleChange?: (memberId: number, role: string) => void,
 ) => (
+  <FormControl size="small" sx={{ minWidth: 128 }}>
   <Select
     value={role}
-    className="w-32"
-    variant="borderless"
-    suffixIcon={null}
-    onChange={(val) => onRoleChange?.(Number(record?.member_id), val)}
-  >
-    <Option value="admin">{capitalize('admin')}</Option>
-    <Option value="member">{capitalize('member')}</Option>
+      onChange={(e) => onRoleChange?.(Number(record?.member_id), e.target.value)}
+      variant="standard"
+      disableUnderline
+      sx={{
+        fontSize: '14px',
+        '& .MuiSelect-select': {
+          padding: '4px 8px',
+        },
+      }}
+    >
+      <MenuItem value="admin">{capitalize('admin')}</MenuItem>
+      <MenuItem value="member">{capitalize('member')}</MenuItem>
   </Select>
+  </FormControl>
 );
 
 const renderStatus = (status: string) => {
   const normalized = (status || '').toLowerCase();
-  const color =
-    normalized === 'pending' ? 'orange' : normalized === 'accepted' ? 'blue' : 'default';
-  return <Tag color={color}>{capitalize(status)}</Tag>;
+  const colorMap: Record<
+    string,
+    'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'
+  > = {
+    pending: 'warning',
+    accepted: 'info',
+    default: 'default',
+  };
+  const color = colorMap[normalized] || 'default';
+  return <Chip label={capitalize(status)} color={color} size="small" />;
 };
 
-const renderActions = (items: MenuProps['items']) => (
+interface MenuItemType {
+  key: string;
+  label: React.ReactNode;
+  icon?: React.ReactNode;
+  danger?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+}
+
+const renderActions = (items: MenuItemType[]) => (
   <CustomDropdown items={items}>
-    <Button type="text" icon={<MoreHorizontal size={16} />} />
+    <Button type="button" variant="text" sx={{ minWidth: 'auto', padding: '4px' }}>
+      <MoreHorizontal size={16} />
+    </Button>
   </CustomDropdown>
 );
 
@@ -94,13 +138,13 @@ interface ColumnConfig {
 
 interface ExtraHandlers {
   onRoleChange?: (memberId: number, role: string) => void;
-  actionMenuItems?: MenuProps['items'];
+  actionMenuItems?: MenuItemType[];
 }
 
 export const constructColumns = <T extends object>(
   configs: ColumnConfig[],
   extra?: ExtraHandlers,
-): ColumnsType<T> =>
+): TableColumn<T>[] =>
   configs.map((col) => ({
     title: col.title || '',
     key: col.key,

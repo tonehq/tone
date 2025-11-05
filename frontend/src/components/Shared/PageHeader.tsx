@@ -1,12 +1,13 @@
 import React, { memo, useEffect } from 'react';
 
-import { Avatar, BreadcrumbProps, Button, Dropdown, MenuProps, Space, Typography } from 'antd';
+import { Avatar, Badge, Button, IconButton, Stack, Typography } from '@mui/material';
 import { useAtom, useSetAtom } from 'jotai';
 import { Bell, LogOut, Settings, User } from 'lucide-react';
 
 import { authAtom, getCurrentUserAtom, logoutAtom } from '@/atoms/AuthAtom';
 
 import CustomBreadCrumb from '@/components/shared/CustomBreadCrumb';
+import CustomDropdown from '@/components/shared/CustomDropdown';
 
 import { cn } from '@/utils/cn';
 import { getInitialsFromName } from '@/utils/format';
@@ -20,10 +21,20 @@ export interface ButtonConfig {
   disabled?: boolean;
 }
 
+interface BreadcrumbItem {
+  title: React.ReactNode;
+  href?: string;
+  className?: string;
+}
+
 interface PageHeaderProps {
   title: string;
-  breadcrumbItems?: BreadcrumbProps['items'];
-  breadcrumbItemRender?: BreadcrumbProps['itemRender'];
+  breadcrumbItems?: BreadcrumbItem[];
+  breadcrumbItemRender?: (
+    item: BreadcrumbItem,
+    index: number,
+    items: BreadcrumbItem[],
+  ) => React.ReactNode;
   buttons?: ButtonConfig[];
   showAvatar?: boolean;
   showNotifications?: boolean;
@@ -61,7 +72,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
       authState.user.email
     : 'User';
 
-  const avatarMenuItems: MenuProps['items'] = [
+  const avatarMenuItems = [
     {
       key: 'profile',
       label: (
@@ -83,9 +94,6 @@ const PageHeader: React.FC<PageHeaderProps> = ({
       onClick: () => console.log('Settings clicked'),
     },
     {
-      type: 'divider',
-    },
-    {
       key: 'logout',
       label: (
         <div className="flex items-center gap-3 py-1 text-red-600">
@@ -94,6 +102,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
         </div>
       ),
       onClick: handleLogout,
+      danger: true,
     },
   ];
 
@@ -102,12 +111,18 @@ const PageHeader: React.FC<PageHeaderProps> = ({
       <div className="flex items-center justify-between">
         {/* Left section - Title and Breadcrumbs */}
         <div className="flex-1">
-          <Typography.Title
-            level={3}
-            className="!mt-0 !mb-0 !font-semibold !text-gray-900 !text-2xl"
+          <Typography
+            variant="h3"
+            sx={{
+              marginTop: 0,
+              marginBottom: 0,
+              fontWeight: 600,
+              color: '#111827',
+              fontSize: '24px',
+            }}
           >
             {title}
-          </Typography.Title>
+          </Typography>
           {breadcrumbItems.length > 0 && (
             <div className="mb-1">
               <CustomBreadCrumb items={breadcrumbItems} itemRender={breadcrumbItemRender} />
@@ -116,59 +131,82 @@ const PageHeader: React.FC<PageHeaderProps> = ({
         </div>
 
         {/* Right section - Search, Notifications, Avatar */}
-        <div className="flex items-center gap-4">
+        <Stack direction="row" spacing={2} alignItems="center">
           {/* Notifications */}
           {showNotifications && (
-            <Button
-              type="text"
-              icon={<Bell size={18} />}
-              className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-gray-100 border-0 relative text-gray-500"
+            <IconButton
+              sx={{
+                width: 40,
+                height: 40,
+                borderRadius: '50%',
+                '&:hover': {
+                  backgroundColor: '#f3f4f6',
+                },
+              }}
             >
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full"></span>
-            </Button>
+              <Badge
+                badgeContent={1}
+                color="error"
+                sx={{
+                  '& .MuiBadge-badge': {
+                    width: 8,
+                    height: 8,
+                    minWidth: 8,
+                  },
+                }}
+              >
+                <Bell size={18} />
+              </Badge>
+            </IconButton>
           )}
 
           {/* Action Buttons */}
           {buttons.length > 0 && (
-            <Space size="small" className="ml-2">
-              {buttons.map((button) => (
-                <Button
-                  key={button.key}
-                  type={button.type || 'default'}
-                  icon={button.icon}
-                  onClick={button.onClick}
-                  disabled={button.disabled}
-                  className={cn('flex items-center shadow-sm rounded-lg font-medium')}
-                >
-                  {button.label}
-                </Button>
-              ))}
-            </Space>
+            <Stack direction="row" spacing={1}>
+              {buttons.map((button) => {
+                const getVariant = () => {
+                  if (button.type === 'primary') return 'contained';
+                  if (button.type === 'text' || button.type === 'link') return 'text';
+                  return 'outlined';
+                };
+
+                return (
+                  <Button
+                    key={button.key}
+                    variant={getVariant()}
+                    startIcon={button.icon}
+                    onClick={button.onClick}
+                    disabled={button.disabled}
+                    className={cn('shadow-sm rounded-lg font-medium')}
+                    sx={{
+                      textTransform: 'none',
+                    }}
+                  >
+                    {button.label}
+                  </Button>
+                );
+              })}
+            </Stack>
           )}
 
           {/* Avatar Dropdown */}
           {showAvatar && (
-            <Dropdown
-              menu={{ items: avatarMenuItems }}
-              trigger={['click']}
-              placement="bottomRight"
-              overlayClassName={cn('min-w-64 shadow-lg rounded-xl overflow-hidden')}
-            >
+            <CustomDropdown items={avatarMenuItems}>
               <Avatar
-                size={42}
-                className={cn(
-                  'text-white font-semibold text-base flex items-center justify-center shadow-md bg-gradient-to-br from-indigo-500 to-purple-600 cursor-pointer',
-                )}
-                style={{
-                  backgroundColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                sx={{
+                  width: 42,
+                  height: 42,
                   background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                  fontWeight: 600,
                 }}
               >
                 {getInitialsFromName(userName)}
               </Avatar>
-            </Dropdown>
+            </CustomDropdown>
           )}
-        </div>
+        </Stack>
       </div>
     </div>
   );
