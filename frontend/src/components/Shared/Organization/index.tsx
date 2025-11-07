@@ -102,7 +102,7 @@ const Organization = (props: any) => {
         <Skeleton
           variant="rectangular"
           height={63}
-          sx={{ width: '100%', bgcolor: '#636363', borderRadius: '8px 8px 0 0' }}
+          sx={{ width: '100%', bgcolor: '#636363', borderRadius: '8px' }}
         />
       ) : (
         <>
