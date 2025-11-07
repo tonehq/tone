@@ -1,21 +1,20 @@
 import React from 'react';
 
 import {
+  CircularProgress,
+  Paper,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
-  CircularProgress,
   TableSortLabel,
 } from '@mui/material';
 
 import CustomPagination from '@/components/shared/CustomPagination';
 
 import { TableColumn } from '@/utils/constructTableColumn';
-
 import { DynamicScrollConfig, useDynamicScrollHeight } from '@/utils/table';
 
 import styles from '@/styles/table.module.scss';
@@ -65,17 +64,23 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
   };
 
   return (
-    <div style={{ width: '100%' }} className={styles.customTableWrapper}>
+    <div
+      style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}
+      className={styles.customTableWrapper}
+    >
       <TableContainer
         component={Paper}
         sx={{
+          flex: calculatedScrollY ? '1 1 auto' : '0 1 auto',
           maxHeight: calculatedScrollY
             ? typeof calculatedScrollY === 'string'
               ? calculatedScrollY
               : `${calculatedScrollY}px`
             : 'none',
+          overflow: calculatedScrollY ? 'auto' : 'visible',
           border: '1px solid #e5e7eb',
           borderRadius: '6px',
+          minHeight: 0,
           ...style,
         }}
       >
@@ -100,11 +105,11 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
               </TableRow>
             </TableHead>
           )}
-          <TableBody>
+          <TableBody suppressHydrationWarning>
             {loading ? (
               <TableRow>
                 <TableCell colSpan={columns.length} align="center" sx={{ padding: 4 }}>
-                  <CircularProgress />
+                  <CircularProgress size={40} />
                 </TableCell>
               </TableRow>
             ) : data.length === 0 ? (
@@ -141,15 +146,17 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
         </Table>
       </TableContainer>
       {withPagination && (
-        <CustomPagination
-          current={pagination?.current ?? 1}
-          total={pagination?.total ?? data?.length}
-          pageSize={pagination?.pageSize ?? 10}
-          onChange={(page) =>
-            pagination?.onChange && pagination.onChange(page, pagination?.pageSize ?? 10)
-          }
-          showSizeChanger={pagination?.showSizeChanger || false}
-        />
+        <div style={{ flexShrink: 0 }}>
+          <CustomPagination
+            current={pagination?.current ?? 1}
+            total={pagination?.total ?? data?.length}
+            pageSize={pagination?.pageSize ?? 10}
+            onChange={(page) =>
+              pagination?.onChange && pagination.onChange(page, pagination?.pageSize ?? 10)
+            }
+            showSizeChanger={pagination?.showSizeChanger || false}
+          />
+        </div>
       )}
     </div>
   );

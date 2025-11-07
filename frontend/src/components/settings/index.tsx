@@ -21,7 +21,7 @@ const Settings = () => {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col h-full overflow-hidden">
       <PageHeader title="Settings" breadcrumbItems={breadcrumbItems} showNotifications={false} />
       <ContentSection />
     </div>

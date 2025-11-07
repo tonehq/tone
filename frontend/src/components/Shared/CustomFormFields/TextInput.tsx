@@ -27,6 +27,10 @@ interface TextInputProps {
   rules?: Array<{ required?: boolean; message?: string }>;
   withFormItem?: boolean;
   loading?: boolean;
+  InputProps?: {
+    startAdornment?: React.ReactNode;
+    endAdornment?: React.ReactNode;
+  };
 }
 
 const TextInput: FC<TextInputProps> = memo(
@@ -50,6 +54,7 @@ const TextInput: FC<TextInputProps> = memo(
     rules,
     withFormItem = true,
     loading = false,
+    InputProps,
   }) => {
     const [showPassword, setShowPassword] = useState(false);
 
@@ -97,8 +102,9 @@ const TextInput: FC<TextInputProps> = memo(
         autoComplete={getAutoComplete()}
         variant="outlined"
         className={inputClassName}
-        InputProps={
-          showPasswordToggle && type === 'password'
+        InputProps={{
+          ...(InputProps || {}),
+          ...(showPasswordToggle && type === 'password'
             ? {
                 endAdornment: (
                   <InputAdornment position="end">
@@ -119,8 +125,8 @@ const TextInput: FC<TextInputProps> = memo(
                   </InputAdornment>
                 ),
               }
-            : undefined
-        }
+            : {}),
+        }}
         sx={{
           '& .MuiOutlinedInput-root': {
             height: '42px',
@@ -143,7 +149,6 @@ const TextInput: FC<TextInputProps> = memo(
             },
           },
           '& .MuiInputBase-input': {
-            padding: '10px 14px',
             paddingRight: showPasswordToggle && type === 'password' ? '40px' : '14px',
           },
           '& .MuiFormHelperText-root': {

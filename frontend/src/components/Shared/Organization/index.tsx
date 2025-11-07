@@ -99,89 +99,89 @@ const Organization = (props: any) => {
   return (
     <>
       {loader ? (
-        <div className="mb-0">
-          <Skeleton
-            variant="rectangular"
-            height={40}
-            sx={{ width: '100%', bgcolor: '#636363', borderRadius: '8px 8px 0 0' }}
-          />
-          <Skeleton
-            variant="rectangular"
-            height={40}
-            sx={{ width: '100%', bgcolor: '#636363', borderRadius: '0 0 8px 8px' }}
-          />
-        </div>
+        <Skeleton
+          variant="rectangular"
+          height={63}
+          sx={{ width: '100%', bgcolor: '#636363', borderRadius: '8px 8px 0 0' }}
+        />
       ) : (
-        <Popover
-          open={visible}
-          anchorEl={anchorEl}
-          onClose={handleClose}
-          anchorOrigin={{
-            vertical: 'bottom',
-            horizontal: 'left',
-          }}
-          transformOrigin={{
-            vertical: 'top',
-            horizontal: 'left',
-          }}
-        >
-          {getContents()}
-        </Popover>
-      )}
+        <>
+          <Popover
+            open={visible}
+            anchorEl={anchorEl}
+            onClose={handleClose}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'left',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'left',
+            }}
+          >
+            {getContents()}
+          </Popover>
           <Card
-        onClick={handleClick}
-        sx={{
-          cursor: 'pointer',
-          border: '1px solid #e5e7eb',
-          borderRadius: '6px',
-          transition: 'all 0.3s',
-          '&:hover': {
-            boxShadow: 2,
-          },
-          width: isSidebarExpanded ? '100%' : 'fit-content',
-          margin: '0 auto',
-        }}
-      >
-        <CardContent
-          sx={{
+            onClick={handleClick}
+            sx={{
+              cursor: 'pointer',
+              border: '1px solid #e5e7eb',
+              borderRadius: '6px',
+              transition: 'all 0.3s',
+              '&:hover': {
+                boxShadow: 2,
+              },
+              width: isSidebarExpanded ? '100%' : 'fit-content',
+              margin: '0 auto',
+            }}
+          >
+            <CardContent
+              sx={{
                 padding: isSidebarExpanded ? '4px 12px' : '8px',
                 display: 'flex',
                 justifyContent: 'center',
-            '&:last-child': {
-              paddingBottom: isSidebarExpanded ? '4px' : '8px',
-              },
-            }}
-          >
-            {isSidebarExpanded ? (
-            <Stack direction="row" alignItems="center" justifyContent="space-between" width="100%">
-              <Stack direction="row" spacing={1} alignItems="center">
+                '&:last-child': {
+                  paddingBottom: isSidebarExpanded ? '4px' : '8px',
+                },
+              }}
+            >
+              {isSidebarExpanded ? (
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  width="100%"
+                >
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    {active?.image_url ? (
+                      <Avatar sx={{ width: 28, height: 28, bgcolor: '#f3f4f6' }}>
+                        {active?.name.charAt(0)}
+                      </Avatar>
+                    ) : (
+                      <Building2 size={20} />
+                    )}
+                    <div>
+                      <div className="font-semibold">{active?.name || 'Select Organization'}</div>
+                      <div className="text-sm text-gray-500 mt-2">{active?.slug || 'Web app'}</div>
+                    </div>
+                  </Stack>
+                  <ChevronDown size={16} />
+                </Stack>
+              ) : (
+                <div>
                   {active?.image_url ? (
-                  <Avatar sx={{ width: 28, height: 28, bgcolor: '#f3f4f6' }}>
-                    {active?.name.charAt(0)}
-                  </Avatar>
+                    <Avatar sx={{ width: 28, height: 28, bgcolor: '#f3f4f6' }}>
+                      {active?.name.charAt(0)}
+                    </Avatar>
                   ) : (
                     <Building2 size={20} />
                   )}
-                  <div>
-                    <div className="font-semibold">{active?.name || 'Select Organization'}</div>
-                    <div className="text-sm text-gray-500 mt-2">{active?.slug || 'Web app'}</div>
-                  </div>
-              </Stack>
-                <ChevronDown size={16} />
-            </Stack>
-            ) : (
-              <div>
-                {active?.image_url ? (
-                <Avatar sx={{ width: 28, height: 28, bgcolor: '#f3f4f6' }}>
-                  {active?.name.charAt(0)}
-                </Avatar>
-                ) : (
-                  <Building2 size={20} />
-                )}
-              </div>
-            )}
-        </CardContent>
+                </div>
+              )}
+            </CardContent>
           </Card>
+        </>
+      )}
       <CreateOrganizationModal
         open={createOrganization || false}
         onCancel={() => setCreateOrganization(false)}

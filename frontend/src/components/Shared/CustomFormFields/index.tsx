@@ -1,3 +1,4 @@
+import { SelectInput, SelectOption } from './SelectInput';
 import { TextInput } from './TextInput';
 
-export { TextInput };
+export { SelectInput, TextInput, type SelectOption };

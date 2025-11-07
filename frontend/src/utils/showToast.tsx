@@ -242,7 +242,5 @@ export function initToast() {
 export function showToast(config: ShowToastConfig) {
   if (toastContext) {
     toastContext.showToast(config);
-  } else {
-    console.error('⚠️ ToastProvider not initialized. Wrap your app with ToastProvider.');
   }
 }

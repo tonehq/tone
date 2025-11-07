@@ -1,19 +1,8 @@
 import React, { useEffect, useState } from 'react';
 
-import {
-  Box,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControl,
-  MenuItem,
-  Select,
-  TextField,
-} from '@mui/material';
-
-import CustomButton from '../shared/CustomButton';
-import { Form, FormItem } from '../shared/FormComponent';
+import { SelectInput, SelectOption, TextInput } from '@/components/shared/CustomFormFields';
+import { Form } from '@/components/shared/FormComponent';
+import Modal, { ModalAction } from '@/components/shared/Modal';
 
 interface ModalComponentProps {
   open: boolean;
@@ -25,7 +14,7 @@ interface ModalComponentProps {
 const ModalComponent: React.FC<ModalComponentProps> = ({ open, onCancel, onInvite, loading }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('Member');
+  const [role, setRole] = useState('member');
 
   const handleOk = async () => {
     if (!name || !email || !role) {
@@ -38,79 +27,71 @@ const ModalComponent: React.FC<ModalComponentProps> = ({ open, onCancel, onInvit
     if (open) {
       setName('');
       setEmail('');
-      setRole('Member');
+      setRole('member');
     }
   }, [open]);
 
+  const roleOptions: SelectOption[] = [
+    { value: 'admin', label: 'Admin' },
+    { value: 'member', label: 'Member' },
+  ];
+
+  const modalActions: ModalAction[] = [
+    {
+      key: 'cancel',
+      text: 'Cancel',
+      type: 'default',
+      onClick: onCancel,
+    },
+    {
+      key: 'invite',
+      text: 'Invite',
+      type: 'primary',
+      onClick: handleOk,
+      loading,
+    },
+  ];
+
   return (
-    <Dialog
+    <Modal
       open={open}
       onClose={onCancel}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{
-        sx: {
-          borderRadius: '5px',
-        },
-      }}
+      title="Invite User"
+      actions={modalActions}
+      titleClassName="!mb-0"
     >
-      <DialogTitle>Invite User</DialogTitle>
-      <DialogContent>
-        <Box sx={{ mt: 2 }}>
-          <Form layout="vertical">
-            <FormItem
-              name="name"
-              label="Full Name"
-              rules={[{ required: true, message: 'Please enter name' }]}
-            >
-              <TextField
-                placeholder="John Doe"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                fullWidth
-                variant="outlined"
-                size="small"
-              />
-            </FormItem>
-
-            <FormItem
-              name="email"
-              label="Email"
-              rules={[{ required: true, message: 'Please enter email' }]}
-            >
-              <TextField
-                placeholder="john@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                fullWidth
-                variant="outlined"
-                size="small"
-                type="email"
-              />
-            </FormItem>
-
-            <FormItem name="role" label="Role" rules={[{ required: true }]}>
-              <FormControl fullWidth size="small">
-                <Select value={role} onChange={(e) => setRole(e.target.value)}>
-                  <MenuItem value="Admin">Admin</MenuItem>
-                  <MenuItem value="Member">Member</MenuItem>
-                </Select>
-              </FormControl>
-            </FormItem>
-          </Form>
-        </Box>
-      </DialogContent>
-      <DialogActions sx={{ padding: 2, gap: 1 }}>
-        <CustomButton key="cancel" text="Cancel" type="default" onClick={onCancel} />
-        <CustomButton
-          key="invite"
-          text="Invite"
-          type="primary"
-          onClick={handleOk}
-          loading={loading}
+      <Form layout="vertical" onFinish={handleOk}>
+        <TextInput
+          name="name"
+          type="text"
+          label="Full Name"
+          placeholder="John Doe"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          isRequired
+          rules={[{ required: true, message: 'Please enter name' }]}
         />
-      </DialogActions>
-    </Dialog>
+        <TextInput
+          name="email"
+          type="email"
+          label="Email"
+          placeholder="john@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          isRequired
+          rules={[{ required: true, message: 'Please enter email' }]}
+        />
+        <SelectInput
+          name="role"
+          label="Role"
+          value={role}
+          onChange={(e) => setRole(e.target.value as string)}
+          options={roleOptions}
+          isRequired
+          rules={[{ required: true }]}
+        />
+      </Form>
+    </Modal>
   );
 };
 

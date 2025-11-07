@@ -73,7 +73,7 @@ function Sidebar(props: any) {
           })}
         </nav>
       </div>
-      <div className="p-4 border-t border-white/10">
+      <div className="border-t border-white/10">
         <button
           onClick={() => setIsSidebarExpanded(!isSidebarExpanded)}
           className="w-full flex items-center justify-center p-2 rounded-md hover:bg-white/10 text-white transition-colors"

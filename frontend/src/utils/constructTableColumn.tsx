@@ -1,10 +1,11 @@
 import React from 'react';
 
-import { Avatar, Button, Chip, Select, MenuItem, FormControl } from '@mui/material';
+import { Avatar, Button, Chip } from '@mui/material';
 import { capitalize } from 'lodash';
 import { MoreHorizontal } from 'lucide-react';
 
 import CustomDropdown from '@/components/shared/CustomDropdown';
+import { SelectInput, SelectOption } from '@/components/shared/CustomFormFields';
 
 import { OrganizationInviteApi, OrganizationMemberApi } from '@/types/settings/members';
 
@@ -78,25 +79,27 @@ const renderRole = (
   role: string,
   record: OrganizationMemberApi,
   onRoleChange?: (memberId: number, role: string) => void,
-) => (
-  <FormControl size="small" sx={{ minWidth: 128 }}>
-  <Select
-    value={role}
-      onChange={(e) => onRoleChange?.(Number(record?.member_id), e.target.value)}
+) => {
+  const roleOptions: SelectOption[] = [
+    { value: 'admin', label: capitalize('admin') },
+    { value: 'member', label: capitalize('member') },
+  ];
+
+  return (
+    <SelectInput
+      name={`role-${record?.member_id}`}
+      value={role || ''}
+      placeholder="Role"
+      onChange={(e) => onRoleChange?.(Number(record?.member_id), e.target.value as string)}
+      options={roleOptions}
+      withFormItem={false}
+      size="small"
       variant="standard"
       disableUnderline
-      sx={{
-        fontSize: '14px',
-        '& .MuiSelect-select': {
-          padding: '4px 8px',
-        },
-      }}
-    >
-      <MenuItem value="admin">{capitalize('admin')}</MenuItem>
-      <MenuItem value="member">{capitalize('member')}</MenuItem>
-  </Select>
-  </FormControl>
-);
+      fullWidth={false}
+    />
+  );
+};
 
 const renderStatus = (status: string) => {
   const normalized = (status || '').toLowerCase();

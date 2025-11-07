@@ -45,5 +45,5 @@ export const calculateScrollHeight = (
 };
 
 export const CSS_HEIGHT_PRESETS = {
-  SETTINGS: 'calc(100vh - 420px)',
+  SETTINGS: 'calc(100vh - 350px)',
 } as const;

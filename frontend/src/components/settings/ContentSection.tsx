@@ -1,6 +1,6 @@
 import { useDeferredValue, useState } from 'react';
 
-import { InputAdornment, TextField } from '@mui/material';
+import { Box, InputAdornment } from '@mui/material';
 import { useSetAtom } from 'jotai';
 import { Mail, Search, UserPlus, Users } from 'lucide-react';
 
@@ -12,6 +12,7 @@ import {
 
 import ModalComponent from '@/components/settings/ModalComponent';
 import CustomButton from '@/components/shared/CustomButton';
+import { TextInput } from '@/components/shared/CustomFormFields';
 import CustomTab from '@/components/shared/CustomTab';
 
 import { TabItem } from '@/types/tab';
@@ -80,31 +81,33 @@ const ContentSection = () => {
 
   return (
     <>
-      <div className={cn('bg-white rounded-lg overflow-hidden p-6')}>
+      <div className={cn('bg-white rounded-lg overflow-hidden p-6 flex-shrink-0')}>
         <div className={cn('flex justify-between items-center mb-6')}>
-          <TextField
-            placeholder="Search"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            sx={{ width: 320 }}
-            size="small"
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <Search size={16} className={cn('text-gray-400')} />
-                </InputAdornment>
-              ),
-            }}
-          />
+          <Box sx={{ width: 320 }}>
+            <TextInput
+              name="search"
+              type="search"
+              placeholder="Search"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              withFormItem={false}
+              fullWidth
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search size={16} className={cn('text-gray-400')} />
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Box>
           <CustomButton
             text="Invite user"
             type="primary"
             icon={<UserPlus size={16} />}
             onClick={() => setInviteModalOpen(true)}
-            active
           />
         </div>
-
         <CustomTab
           items={tabItems}
           activeKey={activeTab}
