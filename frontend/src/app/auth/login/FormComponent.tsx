@@ -71,7 +71,7 @@ const FormComponent = (props: any) => {
         </Typography>
         <Form
           onFinish={handleFormSubmit}
-          sx={{ width: 400, fontSize: '16px' }}
+          sx={{ width: 400, fontSize: (theme) => theme.custom.typography.fontSize.base }}
           layout="vertical"
           autoComplete="off"
         >
@@ -122,8 +122,8 @@ const FormComponent = (props: any) => {
                 component={Link}
                 href="/auth/forgotpassword"
                 sx={{
-                  fontWeight: 500,
-                  fontSize: '16px',
+                  fontWeight: theme.custom.typography.fontWeight.medium,
+                  fontSize: theme.custom.typography.fontSize.base,
                   color: theme.palette.primary.main,
                   cursor: 'pointer',
                   textDecoration: 'none',
@@ -138,7 +138,7 @@ const FormComponent = (props: any) => {
             <Box
               sx={{
                 display: 'flex',
-                fontSize: '14px',
+                fontSize: theme.custom.typography.fontSize.sm,
                 justifyContent: 'center',
                 alignItems: 'center',
               }}
@@ -148,7 +148,7 @@ const FormComponent = (props: any) => {
                 component={Link}
                 href="/auth/signup"
                 sx={{
-                  fontWeight: 500,
+                  fontWeight: theme.custom.typography.fontWeight.medium,
                   color: theme.palette.primary.main,
                   ml: 0.5,
                   cursor: 'pointer',

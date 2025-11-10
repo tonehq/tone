@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { Avatar, Box, Button, Chip, Typography } from '@mui/material';
+import { Avatar, Box, Button, Chip, Typography, useTheme } from '@mui/material';
 import { capitalize } from 'lodash';
 import { MoreHorizontal } from 'lucide-react';
 
@@ -21,7 +21,8 @@ export interface TableColumn<T> {
   render?: (value: any, record: T) => React.ReactNode;
 }
 
-const renderUser = (record: any) => {
+const RenderUser = ({ record }: { record: any }) => {
+  const theme = useTheme();
   const rawName =
     [record.first_name, record.last_name].filter(Boolean).join(' ').trim() ||
     record.username ||
@@ -37,14 +38,17 @@ const renderUser = (record: any) => {
           height: 40,
           backgroundColor: 'secondary.main',
           color: 'white',
-          fontWeight: 'bold',
-          fontSize: '16px',
+          fontWeight: theme.custom.typography.fontWeight.bold,
+          fontSize: theme.custom.typography.fontSize.base,
         }}
       >
         {getInitialsFromName(displayName)}
       </Avatar>
       <Box sx={{ minWidth: 0 }}>
-        <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
+        <Typography
+          variant="body2"
+          sx={{ fontWeight: theme.custom.typography.fontWeight.medium, wordBreak: 'break-word' }}
+        >
           {displayName}
         </Typography>
         {record.email && record.email !== displayName && (
@@ -60,26 +64,38 @@ const renderUser = (record: any) => {
   );
 };
 
-const renderInviteUser = (record: OrganizationInviteApi) => (
-  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
-    <Avatar
-      sx={{
-        width: 40,
-        height: 40,
-        backgroundColor: 'secondary.main',
-        color: 'white',
-        fontWeight: 'bold',
-        fontSize: '16px',
-      }}
-    >
-      {getInitialsFromName(record.name || record.username || record.email || '')}
-    </Avatar>
-    <Box sx={{ minWidth: 0 }}>
-      <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
-        {record?.email}
-      </Typography>
+const renderUser = (record: any) => <RenderUser record={record} />;
+
+const RenderInviteUser = ({ record }: { record: OrganizationInviteApi }) => {
+  const theme = useTheme();
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+      <Avatar
+        sx={{
+          width: 40,
+          height: 40,
+          backgroundColor: 'secondary.main',
+          color: 'white',
+          fontWeight: theme.custom.typography.fontWeight.bold,
+          fontSize: theme.custom.typography.fontSize.base,
+        }}
+      >
+        {getInitialsFromName(record.name || record.username || record.email || '')}
+      </Avatar>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography
+          variant="body2"
+          sx={{ fontWeight: theme.custom.typography.fontWeight.medium, wordBreak: 'break-word' }}
+        >
+          {record?.email}
+        </Typography>
+      </Box>
     </Box>
-  </Box>
+  );
+};
+
+const renderInviteUser = (record: OrganizationInviteApi) => (
+  <RenderInviteUser record={record} />
 );
 
 const renderJoined = (value: number | null | undefined) => formatEpochToDate(value ?? null);

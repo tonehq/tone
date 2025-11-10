@@ -76,7 +76,7 @@ export default function ForgotPassword() {
         </Typography>
         <Form
           onFinish={handleSubmit}
-          sx={{ width: 400, fontSize: '16px' }}
+          sx={{ width: 400, fontSize: (theme) => theme.custom.typography.fontSize.base }}
           layout="vertical"
           autoComplete="off"
         >
@@ -102,8 +102,8 @@ export default function ForgotPassword() {
                 component={Link}
                 href="/auth/login"
                 sx={{
-                  fontWeight: 500,
-                  fontSize: '16px',
+                  fontWeight: theme.custom.typography.fontWeight.medium,
+                  fontSize: theme.custom.typography.fontSize.base,
                   color: theme.palette.primary.main,
                   cursor: 'pointer',
                   textDecoration: 'none',

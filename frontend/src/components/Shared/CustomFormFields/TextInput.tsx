@@ -132,7 +132,7 @@ const TextInput: FC<TextInputProps> = memo(
             height: '42px',
             backgroundColor: '#f9fafb',
             borderRadius: '5px',
-            fontSize: '16px',
+            fontSize: (theme) => theme.custom.typography.fontSize.base,
             '& fieldset': {
               borderColor: error ? '#ef4444' : '#e2e8f0',
               borderWidth: '1px',
@@ -153,7 +153,7 @@ const TextInput: FC<TextInputProps> = memo(
           },
           '& .MuiFormHelperText-root': {
             marginTop: '4px',
-            fontSize: '12px',
+            fontSize: (theme) => theme.custom.typography.fontSize.xs,
           },
         }}
       />

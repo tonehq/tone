@@ -67,7 +67,7 @@ function SidebarItemMenu({ icon: Icon, href, active, title, isCollapsed }: Sideb
           variant="body2"
           sx={{
             color: theme.palette.common.white,
-            fontWeight: 500,
+            fontWeight: theme.custom.typography.fontWeight.medium,
           }}
         >
           {title}
@@ -131,8 +131,8 @@ function Sidebar(props: any) {
                 backgroundColor: theme.palette.primary.main,
                 borderRadius: 1,
                 color: theme.palette.common.white,
-                fontWeight: 600,
-                fontSize: '1.125rem',
+                fontWeight: theme.custom.typography.fontWeight.semibold,
+                fontSize: theme.custom.typography.fontSize.lg,
               }}
             >
               T
@@ -142,7 +142,7 @@ function Sidebar(props: any) {
                 variant="h6"
                 sx={{
                   color: theme.palette.common.white,
-                  fontWeight: 600,
+                  fontWeight: theme.custom.typography.fontWeight.semibold,
                 }}
               >
                 Tone App

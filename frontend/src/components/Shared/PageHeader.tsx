@@ -47,6 +47,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
   showAvatar = true,
   showNotifications = true,
 }) => {
+  const theme = useTheme();
   const [authState] = useAtom(authAtom);
   const getCurrentUser = useSetAtom(getCurrentUserAtom);
   const logout = useSetAtom(logoutAtom);
@@ -128,9 +129,9 @@ const PageHeader: React.FC<PageHeaderProps> = ({
             sx={{
               marginTop: 0,
               marginBottom: 0,
-              fontWeight: 600,
+              fontWeight: theme.custom.typography.fontWeight.semibold,
               color: 'text.primary',
-              fontSize: '24px',
+              fontSize: theme.custom.typography.fontSize['2xl'],
             }}
           >
             {title}
@@ -193,7 +194,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
                       textTransform: 'none',
                       boxShadow: 1,
                       borderRadius: 2,
-                      fontWeight: 500,
+                      fontWeight: theme.custom.typography.fontWeight.medium,
                     }}
                   >
                     {button.label}
@@ -213,7 +214,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
                   background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                   cursor: 'pointer',
                   boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-                  fontWeight: 600,
+                  fontWeight: theme.custom.typography.fontWeight.semibold,
                 }}
               >
                 {getInitialsFromName(userName)}

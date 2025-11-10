@@ -55,7 +55,7 @@ export default function ForgotPasswordVerification() {
         </Typography>
         <Form
           onFinish={handleSubmit}
-          sx={{ width: 400, fontSize: '16px' }}
+          sx={{ width: 400, fontSize: (theme) => theme.custom.typography.fontSize.base }}
           layout="vertical"
           autoComplete="off"
         >

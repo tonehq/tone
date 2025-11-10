@@ -100,7 +100,7 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
                     sx={{
                       width: column.width,
                       minWidth: column.width,
-                      fontWeight: 600,
+                      fontWeight: theme.custom.typography.fontWeight.semibold,
                       backgroundColor: theme.palette.background.paper,
                       borderBottom: `1px solid ${theme.palette.divider}`,
                     }}

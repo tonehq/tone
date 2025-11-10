@@ -53,7 +53,7 @@ const EmailVerificationContent: React.FC = () => {
         </Typography>
         <Form
           onFinish={handleSubmit}
-          sx={{ width: 400, fontSize: '16px' }}
+          sx={{ width: 400, fontSize: (theme) => theme.custom.typography.fontSize.base }}
           layout="vertical"
           autoComplete="off"
         >
@@ -76,8 +76,8 @@ const EmailVerificationContent: React.FC = () => {
                 component={Link}
                 href="/auth/login"
                 sx={{
-                  fontWeight: 500,
-                  fontSize: '16px',
+                  fontWeight: theme.custom.typography.fontWeight.medium,
+                  fontSize: theme.custom.typography.fontSize.base,
                   color: theme.palette.primary.main,
                   cursor: 'pointer',
                   textDecoration: 'none',

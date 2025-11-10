@@ -180,8 +180,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography
               sx={{
-                fontSize: '16px',
-                fontWeight: 500,
+                fontSize: (theme) => theme.custom.typography.fontSize.base,
+                fontWeight: (theme) => theme.custom.typography.fontWeight.medium,
                 lineHeight: '24px',
                 color: 'rgba(0, 0, 0, 0.85)',
                 marginBottom: toastState.description ? '4px' : 0,
@@ -192,7 +192,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             {toastState.description && (
               <Typography
                 sx={{
-                  fontSize: '14px',
+                  fontSize: (theme) => theme.custom.typography.fontSize.sm,
                   lineHeight: '22px',
                   color: 'rgba(0, 0, 0, 0.65)',
                   marginTop: '4px',

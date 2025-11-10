@@ -81,7 +81,7 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
             disabled={item.disabled}
             sx={{
               padding: '8px 16px',
-              fontSize: '14px',
+              fontSize: theme.custom.typography.fontSize.sm,
               '&:hover': {
                 backgroundColor: '#f9fafb',
               },

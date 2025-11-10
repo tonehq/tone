@@ -2,6 +2,42 @@
 
 import { createTheme } from '@mui/material/styles';
 
+// Typography tokens - utility system
+const typographyTokens = {
+  fontSize: {
+    xs: '0.75rem', // 12px
+    sm: '0.875rem', // 14px
+    base: '1rem', // 16px
+    lg: '1.125rem', // 18px
+    xl: '1.25rem', // 20px
+    '2xl': '1.5rem', // 24px
+    '3xl': '1.875rem', // 30px
+    '4xl': '2.25rem', // 36px
+    '5xl': '3rem', // 48px
+  },
+  // Font weights
+  fontWeight: {
+    thin: 100,
+    extralight: 200,
+    light: 300,
+    normal: 400,
+    medium: 500,
+    semibold: 600,
+    bold: 700,
+    extrabold: 800,
+    black: 900,
+  },
+  // Line heights
+  lineHeight: {
+    none: 1,
+    tight: 1.25,
+    snug: 1.375,
+    normal: 1.5,
+    relaxed: 1.625,
+    loose: 2,
+  },
+};
+
 // Create Material UI theme with actual color values (MUI doesn't support CSS vars in palette)
 export const muiTheme = createTheme({
   palette: {
@@ -56,8 +92,7 @@ export const muiTheme = createTheme({
       900: '#0f172a',
     },
   },
-  // Custom button colors accessible via theme.custom
-  // Note: active button colors use palette.primary for consistency
+  // Custom tokens - includes button styles and typography tokens
   custom: {
     button: {
       active: {
@@ -87,40 +122,42 @@ export const muiTheme = createTheme({
         inactive: '#334155',
       },
     },
+    // Typography tokens (Tailwind-like)
+    typography: typographyTokens,
   },
   typography: {
     fontFamily:
       'Roobert, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"',
     fontSize: 16,
     h1: {
-      fontSize: '2.5rem',
-      fontWeight: 600,
+      fontSize: typographyTokens.fontSize['4xl'],
+      fontWeight: typographyTokens.fontWeight.semibold,
     },
     h2: {
-      fontSize: '2rem',
-      fontWeight: 600,
+      fontSize: typographyTokens.fontSize['3xl'],
+      fontWeight: typographyTokens.fontWeight.semibold,
     },
     h3: {
-      fontSize: '1.75rem',
-      fontWeight: 600,
+      fontSize: typographyTokens.fontSize['2xl'],
+      fontWeight: typographyTokens.fontWeight.semibold,
     },
     h4: {
-      fontSize: '1.5rem',
-      fontWeight: 600,
+      fontSize: typographyTokens.fontSize.xl,
+      fontWeight: typographyTokens.fontWeight.semibold,
     },
     h5: {
-      fontSize: '1.25rem',
-      fontWeight: 600,
+      fontSize: typographyTokens.fontSize.lg,
+      fontWeight: typographyTokens.fontWeight.semibold,
     },
     h6: {
-      fontSize: '1rem',
-      fontWeight: 600,
+      fontSize: typographyTokens.fontSize.base,
+      fontWeight: typographyTokens.fontWeight.semibold,
     },
     body1: {
-      fontSize: 16,
+      fontSize: typographyTokens.fontSize.base,
     },
     body2: {
-      fontSize: 14,
+      fontSize: typographyTokens.fontSize.sm,
     },
   },
   shape: {
@@ -132,8 +169,8 @@ export const muiTheme = createTheme({
         root: {
           borderRadius: 5,
           textTransform: 'none',
-          fontWeight: 500,
-          fontSize: 14,
+          fontWeight: typographyTokens.fontWeight.medium,
+          fontSize: typographyTokens.fontSize.sm,
           padding: '8px 16px',
           height: '36px',
           boxShadow: 'none',
@@ -161,7 +198,7 @@ export const muiTheme = createTheme({
         root: {
           '& .MuiOutlinedInput-root': {
             borderRadius: 5,
-            fontSize: 14,
+            fontSize: typographyTokens.fontSize.sm,
             '& fieldset': {
               borderColor: '#e2e8f0',
             },
@@ -180,7 +217,7 @@ export const muiTheme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 5,
-          fontSize: 14,
+          fontSize: typographyTokens.fontSize.sm,
           '& .MuiOutlinedInput-notchedOutline': {
             borderColor: '#e2e8f0',
           },
@@ -215,7 +252,7 @@ export const muiTheme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: 5,
-          fontSize: 14,
+          fontSize: typographyTokens.fontSize.sm,
         },
       },
     },
@@ -232,7 +269,7 @@ export const muiTheme = createTheme({
         root: {
           '& .MuiTableCell-root': {
             backgroundColor: '#f9fafb',
-            fontWeight: 600,
+            fontWeight: typographyTokens.fontWeight.semibold,
           },
         },
       },
@@ -256,7 +293,7 @@ export const muiTheme = createTheme({
       styleOverrides: {
         root: {
           padding: '8px 16px',
-          fontSize: 14,
+          fontSize: typographyTokens.fontSize.sm,
           '&:hover': {
             backgroundColor: '#f9fafb',
           },
@@ -279,3 +316,6 @@ export const muiTheme = createTheme({
     },
   },
 });
+
+// Export typography tokens for direct use in components
+export { typographyTokens };

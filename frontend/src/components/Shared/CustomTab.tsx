@@ -54,9 +54,14 @@ const CustomTab: React.FC<CustomTabProps> = ({
             borderColor: 'divider',
             '& .MuiTab-root': {
               textTransform: 'none',
-              fontWeight: 500,
+              fontWeight: theme.custom.typography.fontWeight.medium,
               minHeight: size === 'small' ? 40 : size === 'large' ? 56 : 48,
-              fontSize: size === 'small' ? 14 : size === 'large' ? 16 : 15,
+              fontSize:
+                size === 'small'
+                  ? theme.custom.typography.fontSize.sm
+                  : size === 'large'
+                    ? theme.custom.typography.fontSize.base
+                    : theme.custom.typography.fontSize.sm,
             },
           }}
         >
@@ -74,7 +79,7 @@ const CustomTab: React.FC<CustomTabProps> = ({
                       color="primary"
                       sx={{
                         '& .MuiBadge-badge': {
-                          fontSize: '10px',
+                          fontSize: theme.custom.typography.fontSize.xs,
                           height: '16px',
                           minWidth: '16px',
                         },
@@ -110,9 +115,9 @@ const CustomTab: React.FC<CustomTabProps> = ({
 
   const getTabSx = (item: TabItem, isActive: boolean): SxProps<Theme> => {
     const sizeStyles: Record<string, SxProps<Theme>> = {
-      small: { px: 1.5, py: 0.75, fontSize: '0.875rem' },
-      medium: { px: 2, py: 1, fontSize: '1rem' },
-      large: { px: 3, py: 1.5, fontSize: '1.125rem' },
+      small: { px: 1.5, py: 0.75, fontSize: theme.custom.typography.fontSize.sm },
+      medium: { px: 2, py: 1, fontSize: theme.custom.typography.fontSize.base },
+      large: { px: 3, py: 1.5, fontSize: theme.custom.typography.fontSize.lg },
     };
 
     const variantStyles: Record<string, SxProps<Theme>> = {
@@ -241,7 +246,7 @@ const CustomTab: React.FC<CustomTabProps> = ({
                 </Box>
               )}
 
-              <Box component="span" sx={{ fontWeight: 500 }}>
+              <Box component="span" sx={{ fontWeight: theme.custom.typography.fontWeight.medium }}>
                 {item.label}
               </Box>
 
@@ -251,7 +256,7 @@ const CustomTab: React.FC<CustomTabProps> = ({
                   color="primary"
                   sx={{
                     '& .MuiBadge-badge': {
-                      fontSize: '10px',
+                      fontSize: theme.custom.typography.fontSize.xs,
                       height: '16px',
                       minWidth: '16px',
                     },

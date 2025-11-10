@@ -15,7 +15,14 @@ interface FormItemProps {
 export const FormItem: React.FC<FormItemProps> = ({ label, children, rules, className }) => (
   <Box sx={{ marginBottom: 2 }} className={className}>
     {label && (
-      <Box component="label" sx={{ display: 'block', marginBottom: 1, fontWeight: 500 }}>
+      <Box
+        component="label"
+        sx={{
+          display: 'block',
+          marginBottom: 1,
+          fontWeight: (theme) => theme.custom.typography.fontWeight.medium,
+        }}
+      >
         {label}
         {rules?.some((r) => r.required) && <span style={{ color: 'red' }}> *</span>}
       </Box>

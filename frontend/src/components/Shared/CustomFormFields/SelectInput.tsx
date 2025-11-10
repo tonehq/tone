@@ -75,7 +75,7 @@ const SelectInput: FC<SelectInputProps> = memo(
             height: variant === 'outlined' ? '42px' : 'auto',
             backgroundColor: variant === 'outlined' ? '#f9fafb' : 'transparent',
             borderRadius: '5px',
-            fontSize: '16px',
+            fontSize: (theme) => theme.custom.typography.fontSize.base,
             '& fieldset': {
               borderColor: error ? '#ef4444' : '#e2e8f0',
               borderWidth: '1px',
@@ -96,7 +96,7 @@ const SelectInput: FC<SelectInputProps> = memo(
           },
           '& .MuiFormHelperText-root': {
             marginTop: '4px',
-            fontSize: '12px',
+            fontSize: (theme) => theme.custom.typography.fontSize.xs,
           },
           ...(variant === 'standard' &&
             disableUnderline && {
@@ -140,7 +140,7 @@ const SelectInput: FC<SelectInputProps> = memo(
             return selectedOption ? selectedOption.label : selected || '';
           }}
           sx={{
-            fontSize: '14px',
+            fontSize: (theme) => theme.custom.typography.fontSize.sm,
             ...(variant === 'standard' && {
               '& .MuiSelect-select': {
                 padding: '0',
@@ -161,7 +161,13 @@ const SelectInput: FC<SelectInputProps> = memo(
           ))}
         </Select>
         {helperText && variant === 'outlined' && (
-          <Box sx={{ fontSize: '12px', color: error ? '#ef4444' : '#6b7280', marginTop: '4px' }}>
+          <Box
+            sx={{
+              fontSize: (theme) => theme.custom.typography.fontSize.xs,
+              color: error ? '#ef4444' : '#6b7280',
+              marginTop: '4px',
+            }}
+          >
             {helperText}
           </Box>
         )}

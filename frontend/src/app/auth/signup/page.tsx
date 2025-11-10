@@ -94,7 +94,7 @@ const SignupPage = () => {
         </Typography>
         <Form
           onFinish={handleSubmit}
-          sx={{ width: 400, fontSize: '16px' }}
+          sx={{ width: 400, fontSize: (theme) => theme.custom.typography.fontSize.base }}
           layout="vertical"
           autoComplete="off"
         >
@@ -162,7 +162,7 @@ const SignupPage = () => {
             <Box
               sx={{
                 display: 'flex',
-                fontSize: '14px',
+                fontSize: theme.custom.typography.fontSize.sm,
                 justifyContent: 'center',
                 alignItems: 'center',
               }}
@@ -172,7 +172,7 @@ const SignupPage = () => {
                 component={Link}
                 href="/auth/login"
                 sx={{
-                  fontWeight: 500,
+                  fontWeight: theme.custom.typography.fontWeight.medium,
                   color: theme.palette.primary.main,
                   ml: 0.5,
                   cursor: 'pointer',

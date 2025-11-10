@@ -103,7 +103,7 @@ const Organization = (props: any) => {
             },
             ...(active?.id === membership.id && {
               backgroundColor: theme.palette.grey[200],
-              fontWeight: 600,
+              fontWeight: theme.custom.typography.fontWeight.semibold,
             }),
           }}
         >
@@ -184,7 +184,10 @@ const Organization = (props: any) => {
                       <Building2 size={20} />
                     )}
                     <Box>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ fontWeight: theme.custom.typography.fontWeight.semibold }}
+                      >
                         {active?.name || 'Select Organization'}
                       </Typography>
                       <Typography

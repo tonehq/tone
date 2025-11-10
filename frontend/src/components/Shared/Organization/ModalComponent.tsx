@@ -92,7 +92,15 @@ const CreateOrganizationModal = (props: any) => {
       }}
     >
       <DialogTitle>
-        <Box sx={{ fontSize: '18px', mb: 3, fontWeight: 500 }}>Create New Organization</Box>
+        <Box
+          sx={{
+            fontSize: (theme) => theme.custom.typography.fontSize.lg,
+            mb: 3,
+            fontWeight: (theme) => theme.custom.typography.fontWeight.medium,
+          }}
+        >
+          Create New Organization
+        </Box>
       </DialogTitle>
       <DialogContent>
         <Box sx={{ mt: 2 }}>

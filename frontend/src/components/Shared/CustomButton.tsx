@@ -8,12 +8,7 @@ import { ChevronRight } from 'lucide-react';
 import { ButtonProps } from '@/types/button';
 
 // Button style constants - moved from constants file
-const BUTTON_STYLES = {
-  height: '36px',
-  borderRadius: '5px',
-  fontWeight: 500,
-  fontSize: '16px',
-} as const;
+// Note: fontWeight and fontSize are now dynamically retrieved from theme in the component
 
 const CustomButton: React.FC<ButtonProps> = ({
   icon: Icon,
@@ -128,9 +123,10 @@ const CustomButton: React.FC<ButtonProps> = ({
     type: htmlType || 'button',
     className: className,
     sx: {
-      height: BUTTON_STYLES.height,
-      borderRadius: BUTTON_STYLES.borderRadius,
-      fontWeight: BUTTON_STYLES.fontWeight,
+      height: '36px',
+      borderRadius: '5px',
+      fontWeight: theme.custom.typography.fontWeight.medium,
+      fontSize: theme.custom.typography.fontSize.base,
       textAlign: 'center',
       textTransform: 'none',
       position: 'relative',
@@ -144,10 +140,12 @@ const CustomButton: React.FC<ButtonProps> = ({
   const renderIcon = () => {
     if (!Icon) return null;
     if (Icon === ChevronRight) {
-      return <Icon size={16} style={{ fontWeight: 600 }} />;
+      return <Icon size={16} style={{ fontWeight: theme.custom.typography.fontWeight.semibold }} />;
     }
     if (typeof Icon === 'function') {
-      return <Icon size={16} style={{ fontWeight: 600 }} />;
+      return (
+        <Icon size={16} style={{ fontWeight: theme.custom.typography.fontWeight.semibold }} />
+      );
     }
     return Icon;
   };
