@@ -38,6 +38,18 @@ const typographyTokens = {
   },
 };
 
+// Border radius tokens - utility system
+const borderRadiusTokens = {
+  none: '0px',
+  sm: '2px',
+  base: '5px',
+  md: '8px',
+  lg: '12px',
+  xl: '16px',
+  '2xl': '20px',
+  full: '9999px',
+};
+
 // Create Material UI theme with actual color values (MUI doesn't support CSS vars in palette)
 export const muiTheme = createTheme({
   palette: {
@@ -124,6 +136,8 @@ export const muiTheme = createTheme({
     },
     // Typography tokens (Tailwind-like)
     typography: typographyTokens,
+    // Border radius tokens (Tailwind-like)
+    borderRadius: borderRadiusTokens,
   },
   typography: {
     fontFamily:
@@ -161,13 +175,13 @@ export const muiTheme = createTheme({
     },
   },
   shape: {
-    borderRadius: 8,
+    borderRadius: 5, // Use base borderRadius token value
   },
   components: {
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 5,
+          borderRadius: borderRadiusTokens.base,
           textTransform: 'none',
           fontWeight: typographyTokens.fontWeight.medium,
           fontSize: typographyTokens.fontSize.sm,
@@ -197,7 +211,7 @@ export const muiTheme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiOutlinedInput-root': {
-            borderRadius: 5,
+            borderRadius: borderRadiusTokens.base,
             fontSize: typographyTokens.fontSize.sm,
             '& fieldset': {
               borderColor: '#e2e8f0',
@@ -216,7 +230,7 @@ export const muiTheme = createTheme({
     MuiSelect: {
       styleOverrides: {
         root: {
-          borderRadius: 5,
+          borderRadius: borderRadiusTokens.base,
           fontSize: typographyTokens.fontSize.sm,
           '& .MuiOutlinedInput-notchedOutline': {
             borderColor: '#e2e8f0',
@@ -230,7 +244,7 @@ export const muiTheme = createTheme({
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: borderRadiusTokens.base,
           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
         },
       },
@@ -238,7 +252,7 @@ export const muiTheme = createTheme({
     MuiPaper: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: borderRadiusTokens.base,
         },
         elevation1: {
           boxShadow: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
@@ -251,7 +265,7 @@ export const muiTheme = createTheme({
     MuiChip: {
       styleOverrides: {
         root: {
-          borderRadius: 5,
+          borderRadius: borderRadiusTokens.base,
           fontSize: typographyTokens.fontSize.sm,
         },
       },
@@ -259,7 +273,7 @@ export const muiTheme = createTheme({
     MuiTableContainer: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: borderRadiusTokens.base,
           border: '1px solid #e2e8f0',
         },
       },
@@ -284,7 +298,7 @@ export const muiTheme = createTheme({
     MuiMenu: {
       styleOverrides: {
         paper: {
-          borderRadius: 8,
+          borderRadius: borderRadiusTokens.base,
           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
         },
       },
@@ -303,7 +317,7 @@ export const muiTheme = createTheme({
     MuiDialog: {
       styleOverrides: {
         paper: {
-          borderRadius: 8,
+          borderRadius: borderRadiusTokens.base,
         },
       },
     },
@@ -317,5 +331,5 @@ export const muiTheme = createTheme({
   },
 });
 
-// Export typography tokens for direct use in components
-export { typographyTokens };
+// Export typography and borderRadius tokens for direct use in components
+export { borderRadiusTokens, typographyTokens };

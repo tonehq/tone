@@ -112,7 +112,8 @@ const PageHeader: React.FC<PageHeaderProps> = ({
     <Box
       sx={{
         width: '100%',
-        backgroundColor: 'background.default',
+        background:
+          'linear-gradient(to right, #ffffff 0%, rgba(128, 128, 128, 0.1) 30%, rgba(128, 128, 128, 0.3) 60%, rgba(128, 128, 128, 0.4) 100%)',
         py: 1,
         px: 3,
         borderRadius: '5px',

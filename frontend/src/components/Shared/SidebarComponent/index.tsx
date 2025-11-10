@@ -27,7 +27,7 @@ function SidebarItemMenu({ icon: Icon, href, active, title, isCollapsed }: Sideb
       sx={{
         display: 'flex',
         alignItems: 'center',
-        borderRadius: 1,
+        borderRadius: theme.custom.borderRadius.base,
         cursor: 'pointer',
         userSelect: 'none',
         whiteSpace: 'nowrap',
@@ -129,7 +129,7 @@ function Sidebar(props: any) {
                 width: 36,
                 height: 36,
                 backgroundColor: theme.palette.primary.main,
-                borderRadius: 1,
+                borderRadius: theme.custom.borderRadius.base,
                 color: theme.palette.common.white,
                 fontWeight: theme.custom.typography.fontWeight.semibold,
                 fontSize: theme.custom.typography.fontSize.lg,
@@ -156,7 +156,7 @@ function Sidebar(props: any) {
                 width: 32,
                 height: 32,
                 padding: 1,
-                borderRadius: 0.5,
+                borderRadius: theme.custom.borderRadius.base,
                 backgroundColor: theme.palette.grey[100],
                 '&:hover': {
                   backgroundColor: theme.palette.grey[200],
@@ -187,7 +187,7 @@ function Sidebar(props: any) {
                 width: 40,
                 height: 40,
                 padding: 1.5,
-                borderRadius: 0.5,
+                borderRadius: theme.custom.borderRadius.base,
                 backgroundColor: '#f0f0f0',
                 '&:hover': {
                   backgroundColor: theme.palette.grey[200],

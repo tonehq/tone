@@ -32,7 +32,7 @@ const CustomLayout: React.FC<CustomLayoutProps> = ({
     <Box
       sx={{
         width: siderWidth,
-        borderRadius: 2,
+        borderRadius: (theme) => theme.custom.borderRadius.base,
         padding: 2,
         color: 'white',
         height: '100%',

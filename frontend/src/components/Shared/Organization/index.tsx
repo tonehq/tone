@@ -96,7 +96,7 @@ const Organization = (props: any) => {
             mb: 1,
             px: 2,
             py: 1.5,
-            borderRadius: 1,
+            borderRadius: theme.custom.borderRadius.base,
             cursor: 'pointer',
             '&:hover': {
               backgroundColor: theme.palette.grey[200],
@@ -125,7 +125,7 @@ const Organization = (props: any) => {
         <Skeleton
           variant="rectangular"
           height={63}
-          sx={{ width: '100%', bgcolor: '#636363', borderRadius: '8px' }}
+          sx={{ width: '100%', bgcolor: '#636363', borderRadius: theme.custom.borderRadius.base }}
         />
       ) : (
         <>
@@ -149,7 +149,7 @@ const Organization = (props: any) => {
             sx={{
               cursor: 'pointer',
               border: '1px solid #e5e7eb',
-              borderRadius: '6px',
+              borderRadius: theme.custom.borderRadius.base,
               transition: 'all 0.3s',
               '&:hover': {
                 boxShadow: 2,

@@ -71,7 +71,7 @@ const CustomTab: React.FC<CustomTabProps> = ({
               value={item.key}
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  {item.icon && <Box component="span">{item.icon}</Box>}
+                  {item.icon && <>{item.icon}</>}
                   <Box component="span">{item.label}</Box>
                   {item.badge && (
                     <Badge
@@ -107,9 +107,7 @@ const CustomTab: React.FC<CustomTabProps> = ({
   // Custom implementation for other variants
   const handleTabClick = (key: string, disabled?: boolean) => {
     if (disabled) return;
-    if (controlledActiveKey === undefined) {
-      setInternalActiveKey(key);
-    }
+    setInternalActiveKey(key);
     onChange?.(key);
   };
 

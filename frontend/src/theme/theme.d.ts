@@ -34,6 +34,18 @@ export interface TypographyTokens {
   };
 }
 
+// Border radius token types
+export interface BorderRadiusTokens {
+  none: string;
+  sm: string;
+  base: string;
+  md: string;
+  lg: string;
+  xl: string;
+  '2xl': string;
+  full: string;
+}
+
 declare module '@mui/material/styles' {
   interface Theme {
     custom: {
@@ -66,6 +78,11 @@ declare module '@mui/material/styles' {
         };
       };
       typography: TypographyTokens;
+      borderRadius: BorderRadiusTokens;
+      colors: {
+        sidebarSelectedBg: string;
+        tonehqT: string;
+      };
     };
   }
 
@@ -100,6 +117,11 @@ declare module '@mui/material/styles' {
         };
       };
       typography?: TypographyTokens;
+      borderRadius?: BorderRadiusTokens;
+      colors?: {
+        sidebarSelectedBg?: string;
+        tonehqT?: string;
+      };
     };
   }
 }
