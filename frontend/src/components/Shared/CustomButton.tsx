@@ -143,9 +143,7 @@ const CustomButton: React.FC<ButtonProps> = ({
       return <Icon size={16} style={{ fontWeight: theme.custom.typography.fontWeight.semibold }} />;
     }
     if (typeof Icon === 'function') {
-      return (
-        <Icon size={16} style={{ fontWeight: theme.custom.typography.fontWeight.semibold }} />
-      );
+      return <Icon size={16} style={{ fontWeight: theme.custom.typography.fontWeight.semibold }} />;
     }
     return Icon;
   };

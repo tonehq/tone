@@ -1,6 +1,6 @@
 import React, { memo, useEffect } from 'react';
 
-import { Avatar, Badge, Box, Button, IconButton, Stack, Typography } from '@mui/material';
+import { Avatar, Badge, Box, Button, IconButton, Stack, Typography, useTheme } from '@mui/material';
 import { useAtom, useSetAtom } from 'jotai';
 import { Bell, LogOut, Settings, User } from 'lucide-react';
 
@@ -115,9 +115,9 @@ const PageHeader: React.FC<PageHeaderProps> = ({
         backgroundColor: 'background.default',
         py: 1,
         px: 3,
-        borderRadius: 2,
+        borderRadius: '5px',
         boxShadow:
-          '0 0 0 1px rgba(0, 0, 0, 0.05), 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 -2px 4px -1px rgba(0, 0, 0, 0.06)',
+          '0 0 0 1px rgba(32, 32, 32, 0.05), 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 -2px 4px -1px rgba(0, 0, 0, 0.06)',
         margin: '0 0 16px 0',
       }}
     >
