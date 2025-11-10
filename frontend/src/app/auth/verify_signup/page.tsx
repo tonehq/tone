@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-import { Box, Stack } from '@mui/material';
+import { Box, Stack, Typography } from '@mui/material';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import CustomButton from '@/components/shared/CustomButton';
@@ -60,16 +60,20 @@ const EmailVerificationContent = () => {
   return (
     <Container>
       {contextHolder}
-      <div>
-        <h2 className="mb-8">Email Verification</h2>
+      <Box>
+        <Typography variant="h2" sx={{ mb: 4 }}>
+          Email Verification
+        </Typography>
         <Form
           onFinish={handleSubmit}
-          className="w-[400px] text-[16px]"
+          sx={{ width: 400, fontSize: '16px' }}
           layout="vertical"
           autoComplete="off"
         >
           <Box sx={{ marginBottom: 3 }}>
-            <p>To complete the verification process, please click the button below:</p>
+            <Typography variant="body1">
+              To complete the verification process, please click the button below:
+            </Typography>
           </Box>
           <Stack spacing={2} sx={{ mt: 2 }}>
             <CustomButton
@@ -77,11 +81,11 @@ const EmailVerificationContent = () => {
               loading={loader}
               type="primary"
               htmlType="submit"
-              className="w-full"
+              sx={{ width: '100%' }}
             />
           </Stack>
         </Form>
-      </div>
+      </Box>
     </Container>
   );
 };

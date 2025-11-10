@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { Box, Stack } from '@mui/material';
+import { Box, Stack, Typography, useTheme } from '@mui/material';
 import Link from 'next/link';
 
 import CustomButton from '@/components/shared/CustomButton';
@@ -20,6 +20,7 @@ export default function ForgotPassword() {
   const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [loader, setLoader] = useState(false);
   const { notify, contextHolder } = useNotification();
+  const theme = useTheme();
 
   useEffect(() => {
     loadingTimeoutRef.current = setTimeout(() => {
@@ -66,12 +67,16 @@ export default function ForgotPassword() {
   return (
     <Container>
       {contextHolder}
-      <div>
-        <h2 className="mb-8">Password Reset Request</h2>
-        <p className="text-gray-600 mb-6">Enter your email to reset your password.</p>
+      <Box>
+        <Typography variant="h2" sx={{ mb: 4 }}>
+          Password Reset Request
+        </Typography>
+        <Typography variant="body1" sx={{ color: 'text.secondary', mb: 3 }}>
+          Enter your email to reset your password.
+        </Typography>
         <Form
           onFinish={handleSubmit}
-          className="w-[400px] text-[16px]"
+          sx={{ width: 400, fontSize: '16px' }}
           layout="vertical"
           autoComplete="off"
         >
@@ -90,25 +95,29 @@ export default function ForgotPassword() {
               loading={loader}
               type="primary"
               htmlType="submit"
-              className="w-full"
+              sx={{ width: '100%' }}
             />
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-              <Box
-                component="div"
+              <Typography
+                component={Link}
+                href="/auth/login"
                 sx={{
                   fontWeight: 500,
                   fontSize: '16px',
-                  color: '#4058ff',
+                  color: theme.palette.primary.main,
+                  cursor: 'pointer',
+                  textDecoration: 'none',
+                  '&:hover': {
+                    textDecoration: 'underline',
+                  },
                 }}
               >
-                <Link href="/auth/login" className="cursor-pointer">
-                  Back to Login
-                </Link>
-              </Box>
+                Back to Login
+              </Typography>
             </Box>
           </Stack>
         </Form>
-      </div>
+      </Box>
     </Container>
   );
 }

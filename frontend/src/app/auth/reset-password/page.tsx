@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { Stack } from '@mui/material';
+import { Box, Stack, Typography } from '@mui/material';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import CustomButton from '@/components/shared/CustomButton';
@@ -77,11 +77,13 @@ const ResetPasswordContent: React.FC = () => {
   return (
     <Container>
       {contextHolder}
-      <div>
-        <h2 className="mb-8">Reset password</h2>
+      <Box>
+        <Typography variant="h2" sx={{ mb: 4 }}>
+          Reset password
+        </Typography>
         <Form
           onFinish={handleSubmit}
-          className="w-[400px] text-[16px]"
+          sx={{ width: 400, fontSize: '16px' }}
           layout="vertical"
           autoComplete="off"
         >
@@ -109,11 +111,11 @@ const ResetPasswordContent: React.FC = () => {
               loading={loader}
               type="primary"
               htmlType="submit"
-              className="w-full"
+              sx={{ width: '100%' }}
             />
           </Stack>
         </Form>
-      </div>
+      </Box>
     </Container>
   );
 };

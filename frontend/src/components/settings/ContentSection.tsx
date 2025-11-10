@@ -1,6 +1,6 @@
 import { useDeferredValue, useState } from 'react';
 
-import { Box, InputAdornment } from '@mui/material';
+import { Box, InputAdornment, useTheme } from '@mui/material';
 import { useSetAtom } from 'jotai';
 import { Mail, Search, UserPlus, Users } from 'lucide-react';
 
@@ -17,7 +17,6 @@ import CustomTab from '@/components/shared/CustomTab';
 
 import { TabItem } from '@/types/tab';
 
-import { cn } from '@/utils/cn';
 import { handleError } from '@/utils/handleError';
 import { showToast } from '@/utils/showToast';
 
@@ -30,6 +29,7 @@ const ContentSection = () => {
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const deferredSearch = useDeferredValue(searchText);
+  const theme = useTheme();
 
   const refetchMembers = useSetAtom(refetchMembersAtom);
   const refetchInvitations = useSetAtom(refetchInvitationsAtom);
@@ -81,8 +81,23 @@ const ContentSection = () => {
 
   return (
     <>
-      <div className={cn('bg-white rounded-lg overflow-hidden p-6 flex-shrink-0')}>
-        <div className={cn('flex justify-between items-center mb-6')}>
+      <Box
+        sx={{
+          backgroundColor: theme.palette.background.default,
+          borderRadius: 2,
+          overflow: 'hidden',
+          p: 3,
+          flexShrink: 0,
+        }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            mb: 3,
+          }}
+        >
           <Box sx={{ width: 320 }}>
             <TextInput
               name="search"
@@ -95,7 +110,7 @@ const ContentSection = () => {
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
-                    <Search size={16} className={cn('text-gray-400')} />
+                    <Search size={16} style={{ color: theme.palette.text.secondary }} />
                   </InputAdornment>
                 ),
               }}
@@ -107,7 +122,7 @@ const ContentSection = () => {
             icon={<UserPlus size={16} />}
             onClick={() => setInviteModalOpen(true)}
           />
-        </div>
+        </Box>
         <CustomTab
           items={tabItems}
           activeKey={activeTab}
@@ -116,7 +131,7 @@ const ContentSection = () => {
           size="medium"
           animated={true}
         />
-      </div>
+      </Box>
       <ModalComponent
         open={inviteModalOpen}
         onCancel={() => setInviteModalOpen(false)}

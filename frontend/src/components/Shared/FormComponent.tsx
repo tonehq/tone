@@ -2,7 +2,7 @@
 
 import React from 'react';
 
-import { Box } from '@mui/material';
+import { Box, SxProps, Theme } from '@mui/material';
 
 interface FormItemProps {
   name?: string;
@@ -27,12 +27,13 @@ export const FormItem: React.FC<FormItemProps> = ({ label, children, rules, clas
 interface FormProps {
   onFinish?: (values: any) => void;
   className?: string;
+  sx?: SxProps<Theme>;
   children: React.ReactNode;
   layout?: 'vertical' | 'horizontal';
   autoComplete?: string;
 }
 
-export const Form: React.FC<FormProps> = ({ onFinish, className, children, autoComplete }) => {
+export const Form: React.FC<FormProps> = ({ onFinish, className, sx, children, autoComplete }) => {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const values: any = {};
@@ -50,8 +51,14 @@ export const Form: React.FC<FormProps> = ({ onFinish, className, children, autoC
   };
 
   return (
-    <form onSubmit={handleSubmit} className={className} autoComplete={autoComplete}>
+    <Box
+      component="form"
+      onSubmit={handleSubmit}
+      className={className}
+      sx={sx}
+      autoComplete={autoComplete}
+    >
       {children}
-    </form>
+    </Box>
   );
 };

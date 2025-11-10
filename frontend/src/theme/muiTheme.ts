@@ -12,6 +12,12 @@ export const muiTheme = createTheme({
       light: '#3b82f6',
       contrastText: '#ffffff',
     },
+    secondary: {
+      main: '#9333EA',
+      dark: '#7e22ce',
+      light: '#a855f7',
+      contrastText: '#ffffff',
+    },
     success: {
       main: '#52c41a',
       dark: '#389e0d',

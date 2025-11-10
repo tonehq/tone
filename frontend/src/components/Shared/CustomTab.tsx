@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 
-import { Badge, Tabs, Tab, Box } from '@mui/material';
+import { alpha, Badge, Box, SxProps, Tab, Tabs, Theme, useTheme } from '@mui/material';
 
 import { TabItem } from '@/types/tab';
-
-import { cn } from '@/utils/cn';
 
 interface CustomTabProps {
   items: TabItem[];
@@ -14,7 +12,6 @@ interface CustomTabProps {
   variant?: 'default' | 'pills' | 'underline' | 'cards';
   size?: 'small' | 'medium' | 'large';
   centered?: boolean;
-  className?: string;
   animated?: boolean;
 }
 
@@ -26,7 +23,6 @@ const CustomTab: React.FC<CustomTabProps> = ({
   variant = 'default',
   size = 'medium',
   centered = false,
-  className = '',
   animated = true,
 }) => {
   const [internalActiveKey, setInternalActiveKey] = useState(
@@ -44,15 +40,15 @@ const CustomTab: React.FC<CustomTabProps> = ({
 
   const activeItem = items.find((item) => item.key === activeKey);
 
+  const theme = useTheme();
   // Use MUI Tabs for underline variant, custom for others
   if (variant === 'underline') {
     return (
-      <div className="w-full">
+      <Box sx={{ width: '100%' }}>
         <Tabs
           value={activeKey}
           onChange={handleTabChange}
           centered={centered}
-          className={className}
           sx={{
             borderBottom: 1,
             borderColor: 'divider',
@@ -70,8 +66,8 @@ const CustomTab: React.FC<CustomTabProps> = ({
               value={item.key}
               label={
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  {item.icon && <span>{item.icon}</span>}
-                  <span>{item.label}</span>
+                  {item.icon && <Box component="span">{item.icon}</Box>}
+                  <Box component="span">{item.label}</Box>
                   {item.badge && (
                     <Badge
                       badgeContent={item.badge}
@@ -99,7 +95,7 @@ const CustomTab: React.FC<CustomTabProps> = ({
             {activeItem.content}
           </Box>
         )}
-      </div>
+      </Box>
     );
   }
 
@@ -112,75 +108,142 @@ const CustomTab: React.FC<CustomTabProps> = ({
     onChange?.(key);
   };
 
-  const getTabClasses = (item: TabItem, isActive: boolean) => {
-    const baseClasses =
-      'relative cursor-pointer transition-all duration-300 flex items-center gap-2';
-    const sizeClasses = {
-      small: 'px-3 py-1.5 text-sm',
-      medium: 'px-4 py-2 text-base',
-      large: 'px-6 py-3 text-lg',
+  const getTabSx = (item: TabItem, isActive: boolean): SxProps<Theme> => {
+    const sizeStyles: Record<string, SxProps<Theme>> = {
+      small: { px: 1.5, py: 0.75, fontSize: '0.875rem' },
+      medium: { px: 2, py: 1, fontSize: '1rem' },
+      large: { px: 3, py: 1.5, fontSize: '1.125rem' },
     };
 
-    const variantClasses = {
+    const variantStyles: Record<string, SxProps<Theme>> = {
       default: isActive
-        ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
-        : 'text-gray-600 hover:text-blue-500 hover:bg-gray-50',
+        ? {
+            color: theme.palette.primary.main,
+            borderBottom: `2px solid ${theme.palette.primary.main}`,
+            backgroundColor: alpha(theme.palette.primary.main, 0.05),
+          }
+        : {
+            color: theme.palette.text.secondary,
+            '&:hover': {
+              color: theme.palette.primary.main,
+              backgroundColor: theme.palette.grey[50],
+            },
+          },
       pills: isActive
-        ? 'text-white bg-blue-600 rounded-full shadow-lg'
-        : 'text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-full',
+        ? {
+            color: theme.palette.common.white,
+            backgroundColor: theme.palette.primary.main,
+            borderRadius: '9999px',
+            boxShadow: 2,
+          }
+        : {
+            color: theme.palette.text.secondary,
+            borderRadius: '9999px',
+            '&:hover': {
+              color: theme.palette.primary.main,
+              backgroundColor: alpha(theme.palette.primary.main, 0.05),
+            },
+          },
       cards: isActive
-        ? 'text-blue-600 bg-white rounded-t-lg border border-gray-200 border-b-white -mb-px shadow-sm'
-        : 'text-gray-600 hover:text-blue-500 hover:bg-gray-50 rounded-t-lg border border-transparent',
+        ? {
+            color: theme.palette.primary.main,
+            backgroundColor: theme.palette.background.default,
+            borderTopLeftRadius: 8,
+            borderTopRightRadius: 8,
+            border: `1px solid ${theme.palette.divider}`,
+            borderBottom: `1px solid ${theme.palette.background.default}`,
+            marginBottom: '-1px',
+            boxShadow: 1,
+          }
+        : {
+            color: theme.palette.text.secondary,
+            borderTopLeftRadius: 8,
+            borderTopRightRadius: 8,
+            border: '1px solid transparent',
+            '&:hover': {
+              color: theme.palette.primary.main,
+              backgroundColor: theme.palette.grey[50],
+            },
+          },
       underline: isActive
-        ? 'text-blue-600 border-b-2 border-blue-600'
-        : 'text-gray-600 hover:text-blue-500 border-b-2 border-transparent',
+        ? {
+            color: theme.palette.primary.main,
+            borderBottom: `2px solid ${theme.palette.primary.main}`,
+          }
+        : {
+            color: theme.palette.text.secondary,
+            borderBottom: '2px solid transparent',
+            '&:hover': {
+              color: theme.palette.primary.main,
+            },
+          },
     };
 
-    return cn(
-      baseClasses,
-      sizeClasses[size],
-      variantClasses[variant],
-      item.disabled && 'opacity-50 cursor-not-allowed hover:bg-transparent hover:text-gray-600',
-    );
+    return {
+      position: 'relative',
+      cursor: item.disabled ? 'not-allowed' : 'pointer',
+      transition: 'all 0.3s',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 1,
+      ...sizeStyles[size],
+      ...variantStyles[variant],
+      ...(item.disabled && {
+        opacity: 0.5,
+        '&:hover': {
+          backgroundColor: 'transparent',
+          color: theme.palette.text.secondary,
+        },
+      }),
+    } as SxProps<Theme>;
   };
 
-  const getContainerClasses = () => {
-    const baseClasses = 'flex relative';
-    const centeredClasses = centered ? 'justify-center' : 'justify-start';
-    const variantContainerClasses = {
-      default: 'border-b border-gray-200',
-      pills: 'bg-gray-100 rounded-full p-1',
-      underline: 'border-b border-gray-200',
-      cards: 'border-b border-gray-200',
+  const getContainerSx = () => {
+    const variantContainerStyles = {
+      default: { borderBottom: `1px solid ${theme.palette.divider}` },
+      pills: { backgroundColor: theme.palette.grey[100], borderRadius: '9999px', p: 0.5 },
+      underline: { borderBottom: `1px solid ${theme.palette.divider}` },
+      cards: { borderBottom: `1px solid ${theme.palette.divider}` },
     };
 
-    return cn(baseClasses, centeredClasses, variantContainerClasses[variant], className);
+    return {
+      display: 'flex',
+      position: 'relative',
+      justifyContent: centered ? 'center' : 'flex-start',
+      ...variantContainerStyles[variant],
+    };
   };
 
   return (
-    <div className="w-full">
-      <div className={getContainerClasses()}>
+    <Box sx={{ width: '100%' }}>
+      <Box sx={getContainerSx()}>
         {items.map((item) => {
           const isActive = item.key === activeKey;
 
           return (
-            <div
+            <Box
               key={item.key}
-              className={getTabClasses(item, isActive)}
+              sx={getTabSx(item, isActive)}
               onClick={() => handleTabClick(item.key, item.disabled)}
               role="tab"
               aria-selected={isActive}
               aria-disabled={item.disabled}
             >
               {item.icon && (
-                <span
-                  className={cn(isActive ? 'text-current' : 'text-gray-400', 'transition-colors')}
+                <Box
+                  component="span"
+                  sx={{
+                    color: isActive ? 'currentColor' : theme.palette.text.disabled,
+                    transition: 'color 0.3s',
+                  }}
                 >
                   {item.icon}
-                </span>
+                </Box>
               )}
 
-              <span className="font-medium">{item.label}</span>
+              <Box component="span" sx={{ fontWeight: 500 }}>
+                {item.label}
+              </Box>
 
               {item.badge && (
                 <Badge
@@ -195,17 +258,23 @@ const CustomTab: React.FC<CustomTabProps> = ({
                   }}
                 />
               )}
-            </div>
+            </Box>
           );
         })}
-      </div>
+      </Box>
 
       {activeItem?.content && (
-        <div key={activeKey} className={cn('mt-4', animated && 'animate-fade-in')}>
+        <Box
+          key={activeKey}
+          sx={{
+            mt: 2,
+            ...(animated && { animation: 'fadeIn 0.3s ease-out' }),
+          }}
+        >
           {activeItem.content}
-        </div>
+        </Box>
       )}
-    </div>
+    </Box>
   );
 };
 

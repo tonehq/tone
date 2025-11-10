@@ -3,8 +3,6 @@ import { FC, memo } from 'react';
 import { Breadcrumbs, Typography } from '@mui/material';
 import Link from 'next/link';
 
-import { cn } from '@/utils/cn';
-
 interface BreadcrumbItem {
   title: React.ReactNode;
   href?: string;
@@ -22,19 +20,28 @@ const CustomBreadCrumb: FC<CustomBreadCrumbProps> = ({ items, itemRender }) => {
 
     if (item.href && !isLast) {
       return (
-        <Link
+        <Typography
+          component={Link}
           href={item.href}
-          className={cn('text-sm no-underline hover:underline', item.className)}
-          style={{ color: 'inherit' }}
+          variant="body2"
+          className={item.className}
+          sx={{
+            color: 'inherit',
+            textDecoration: 'none',
+            '&:hover': {
+              textDecoration: 'underline',
+            },
+          }}
         >
           {item.title}
-        </Link>
+        </Typography>
       );
     }
 
     return (
       <Typography
-        className={cn('text-sm', item.className)}
+        variant="body2"
+        className={item.className}
         sx={{
           color: isLast ? 'text.primary' : 'text.secondary',
         }}

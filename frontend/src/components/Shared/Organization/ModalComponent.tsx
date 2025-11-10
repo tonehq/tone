@@ -92,7 +92,7 @@ const CreateOrganizationModal = (props: any) => {
       }}
     >
       <DialogTitle>
-        <div className="text-[18px] mb-6 font-[500]">Create New Organization</div>
+        <Box sx={{ fontSize: '18px', mb: 3, fontWeight: 500 }}>Create New Organization</Box>
       </DialogTitle>
       <DialogContent>
         <Box sx={{ mt: 2 }}>
@@ -132,14 +132,14 @@ const CreateOrganizationModal = (props: any) => {
             onClick={handleCancel}
             type="default"
             htmlType="button"
-            className="w-full"
+            sx={{ width: '100%' }}
           />
           <CustomButton
             text="Create"
             onClick={handleOk}
             type="primary"
             htmlType="submit"
-            className="w-full"
+            sx={{ width: '100%' }}
             loading={loading}
           />
         </Stack>

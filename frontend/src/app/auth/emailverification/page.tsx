@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-import { Box, Stack } from '@mui/material';
+import { Box, Stack, Typography, useTheme } from '@mui/material';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
@@ -18,6 +18,7 @@ const EmailVerificationContent: React.FC = () => {
   const params = useSearchParams();
   const [loader, setLoader] = useState(false);
   const { notify, contextHolder } = useNotification();
+  const theme = useTheme();
 
   const handleSubmit = async () => {
     try {
@@ -46,19 +47,21 @@ const EmailVerificationContent: React.FC = () => {
   return (
     <Container>
       {contextHolder}
-      <div>
-        <h2 className="mb-8">Thanks for Signing up!</h2>
+      <Box>
+        <Typography variant="h2" sx={{ mb: 4 }}>
+          Thanks for Signing up!
+        </Typography>
         <Form
           onFinish={handleSubmit}
-          className="w-[400px] text-[16px]"
+          sx={{ width: 400, fontSize: '16px' }}
           layout="vertical"
           autoComplete="off"
         >
           <Box sx={{ marginBottom: 3 }}>
-            <p>
+            <Typography variant="body1">
               Please check your email. In a few moments, you will receive a verification email to
               confirm your account.
-            </p>
+            </Typography>
           </Box>
           <Stack spacing={2} sx={{ mt: 2 }}>
             <CustomButton
@@ -66,25 +69,29 @@ const EmailVerificationContent: React.FC = () => {
               loading={loader}
               type="primary"
               htmlType="submit"
-              className="w-full"
+              sx={{ width: '100%' }}
             />
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-              <Box
-                component="div"
+              <Typography
+                component={Link}
+                href="/auth/login"
                 sx={{
                   fontWeight: 500,
                   fontSize: '16px',
-                  color: '#4058ff',
+                  color: theme.palette.primary.main,
+                  cursor: 'pointer',
+                  textDecoration: 'none',
+                  '&:hover': {
+                    textDecoration: 'underline',
+                  },
                 }}
               >
-                <Link href="/auth/login" className="cursor-pointer">
-                  Back to Signin
-                </Link>
-              </Box>
+                Back to Signin
+              </Typography>
             </Box>
           </Stack>
         </Form>
-      </div>
+      </Box>
     </Container>
   );
 };

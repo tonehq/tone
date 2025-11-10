@@ -1,9 +1,8 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 
-import { Menu, MenuItem, MenuProps as MuiMenuProps } from '@mui/material';
-import type { MenuItemProps } from '@mui/material';
+import { Menu, MenuItem, MenuProps as MuiMenuProps, useTheme } from '@mui/material';
 
 interface MenuItemType {
   key: string;
@@ -26,6 +25,7 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
   trigger = ['click'],
   ...rest
 }) => {
+  const theme = useTheme();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
 
@@ -86,9 +86,9 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
                 backgroundColor: '#f9fafb',
               },
               ...(item.danger && {
-                color: 'var(--color-error)',
+                color: theme.palette.error.main,
                 '&:hover': {
-                  backgroundColor: '#fee2e2',
+                  backgroundColor: theme.palette.error.light,
                 },
               }),
             }}

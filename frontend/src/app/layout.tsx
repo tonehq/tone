@@ -5,6 +5,8 @@ import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
 
+import { Box } from '@mui/material';
+
 import '@/styles/variables.css';
 import './globals.css';
 
@@ -24,7 +26,7 @@ export default function RootLayout({
           <ThemeProvider theme={muiTheme}>
             <CssBaseline />
             <ToastProvider>
-              <div className="h-screen w-screen">{children}</div>
+              <Box sx={{ height: '100vh', width: '100vw' }}>{children}</Box>
             </ToastProvider>
           </ThemeProvider>
         </AppRouterCacheProvider>

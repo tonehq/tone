@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { Avatar, Button, Chip } from '@mui/material';
+import { Avatar, Box, Button, Chip, Typography } from '@mui/material';
 import { capitalize } from 'lodash';
 import { MoreHorizontal } from 'lucide-react';
 
@@ -30,12 +30,12 @@ const renderUser = (record: any) => {
   const displayName = capitalize(rawName);
 
   return (
-    <div className="flex items-center gap-2 min-w-0">
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
       <Avatar
         sx={{
           width: 40,
           height: 40,
-          backgroundColor: '#7c3aed',
+          backgroundColor: 'secondary.main',
           color: 'white',
           fontWeight: 'bold',
           fontSize: '16px',
@@ -43,23 +43,30 @@ const renderUser = (record: any) => {
       >
         {getInitialsFromName(displayName)}
       </Avatar>
-      <div className="min-w-0">
-        <div className="font-medium break-words">{displayName}</div>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
+          {displayName}
+        </Typography>
         {record.email && record.email !== displayName && (
-          <div className="text-gray-600 text-xs break-words">{record.email}</div>
+          <Typography
+            variant="caption"
+            sx={{ color: 'text.secondary', wordBreak: 'break-word', display: 'block' }}
+          >
+            {record.email}
+          </Typography>
         )}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 };
 
 const renderInviteUser = (record: OrganizationInviteApi) => (
-  <div className="flex items-center gap-2 min-w-0">
+  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
     <Avatar
       sx={{
         width: 40,
         height: 40,
-        backgroundColor: '#7c3aed',
+        backgroundColor: 'secondary.main',
         color: 'white',
         fontWeight: 'bold',
         fontSize: '16px',
@@ -67,10 +74,12 @@ const renderInviteUser = (record: OrganizationInviteApi) => (
     >
       {getInitialsFromName(record.name || record.username || record.email || '')}
     </Avatar>
-    <div className="min-w-0">
-      <div className="font-medium break-words">{record?.email}</div>
-    </div>
-  </div>
+    <Box sx={{ minWidth: 0 }}>
+      <Typography variant="body2" sx={{ fontWeight: 500, wordBreak: 'break-word' }}>
+        {record?.email}
+      </Typography>
+    </Box>
+  </Box>
 );
 
 const renderJoined = (value: number | null | undefined) => formatEpochToDate(value ?? null);
@@ -169,7 +178,7 @@ export const constructColumns = <T extends object>(
         case 'actions':
           return renderActions(extra?.actionMenuItems ?? []);
         default:
-          return <div>{value ?? '-'}</div>;
+          return <Box>{value ?? '-'}</Box>;
       }
     },
   }));

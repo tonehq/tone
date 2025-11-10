@@ -2,15 +2,10 @@
 
 import type React from 'react';
 
-import { Divider, Tooltip } from '@mui/material';
-import { useAtom } from 'jotai';
+import { Box, Divider, IconButton, Tooltip, Typography, useTheme } from '@mui/material';
 import { ArrowLeftToLine, ArrowRightToLine } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-
-import { authAtom } from '@/atoms/AuthAtom';
-
-import { cn } from '@/utils/cn';
 
 import Organization from '../Organization';
 import { sidemenu } from './constant';
@@ -24,20 +19,61 @@ interface SidebarItemProps {
 }
 
 function SidebarItemMenu({ icon: Icon, href, active, title, isCollapsed }: SidebarItemProps) {
+  const theme = useTheme();
   const content = (
-    <Link
+    <Box
+      component={Link}
       href={href}
-      className={cn(
-        'flex items-center rounded-md cursor-pointer select-none whitespace-nowrap transition-all duration-200',
-        isCollapsed
-          ? 'justify-center w-10 h-10 mx-auto hover:bg-white/20'
-          : 'w-full py-3 px-4 hover:bg-white/20',
-        active && 'bg-white/20',
-      )}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        borderRadius: 1,
+        cursor: 'pointer',
+        userSelect: 'none',
+        whiteSpace: 'nowrap',
+        transition: 'all 0.2s',
+        ...(isCollapsed
+          ? {
+              justifyContent: 'center',
+              width: 40,
+              height: 40,
+              mx: 'auto',
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              },
+            }
+          : {
+              width: '100%',
+              py: 1.5,
+              px: 2,
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              },
+            }),
+        ...(active && {
+          backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        }),
+      }}
     >
-      <Icon className={cn('w-5 h-5 text-white', !isCollapsed && 'mr-3')} />
-      {!isCollapsed && <span className="text-sm text-white font-medium">{title}</span>}
-    </Link>
+      <Icon
+        size={20}
+        style={{
+          color: theme.palette.common.white,
+          ...(!isCollapsed && { marginRight: theme.spacing(1.5) }),
+        }}
+      />
+      {!isCollapsed && (
+        <Typography
+          variant="body2"
+          sx={{
+            color: theme.palette.common.white,
+            fontWeight: 500,
+          }}
+        >
+          {title}
+        </Typography>
+      )}
+    </Box>
   );
 
   return isCollapsed ? (
@@ -52,69 +88,142 @@ function SidebarItemMenu({ icon: Icon, href, active, title, isCollapsed }: Sideb
 function Sidebar(props: any) {
   const { isSidebarExpanded, setIsSidebarExpanded } = props;
   const pathname = usePathname();
-  const [authState] = useAtom(authAtom);
+  const theme = useTheme();
 
   const isActive = (path: string) =>
     pathname === path || pathname?.split('/')[1] === path.split('/')[1];
 
-  const userName = authState.user
-    ? `${authState.user.first_name || ''} ${authState.user.last_name || ''}`.trim() ||
-      authState.user.username ||
-      authState.user.email
-    : 'User';
-
   return (
-    <aside className="flex flex-col h-full bg-[#3f3f46] gap-2">
+    <Box
+      component="aside"
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        backgroundColor: '#3f3f46',
+        gap: 1,
+      }}
+    >
       {/* Header Section */}
-      <div className="flex-shrink-0">
-        <div className="flex items-center justify-between">
-          <div className={cn('flex items-center gap-2', !isSidebarExpanded && 'mx-auto')}>
-            <div className="flex items-center justify-center w-9 h-9 bg-[#1d4ed8] rounded-md text-white font-semibold text-lg">
-              T
-            </div>
-            {isSidebarExpanded && (
-              <span className="text-lg font-semibold text-white">Tone App</span>
-            )}
-          </div>
-          {isSidebarExpanded && (
-            <button
-              onClick={() => setIsSidebarExpanded(false)}
-              className="flex items-center justify-center w-8 h-8 p-1.5 rounded-sm bg-gray-100 hover:bg-gray-200 transition-colors"
+      <Box sx={{ flexShrink: 0 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              ...(!isSidebarExpanded && { mx: 'auto' }),
+            }}
+          >
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 36,
+                height: 36,
+                backgroundColor: theme.palette.primary.main,
+                borderRadius: 1,
+                color: theme.palette.common.white,
+                fontWeight: 600,
+                fontSize: '1.125rem',
+              }}
             >
-              <ArrowLeftToLine className="text-gray-700" size={18} />
-            </button>
+              T
+            </Box>
+            {isSidebarExpanded && (
+              <Typography
+                variant="h6"
+                sx={{
+                  color: theme.palette.common.white,
+                  fontWeight: 600,
+                }}
+              >
+                Tone App
+              </Typography>
+            )}
+          </Box>
+          {isSidebarExpanded && (
+            <IconButton
+              onClick={() => setIsSidebarExpanded(false)}
+              sx={{
+                width: 32,
+                height: 32,
+                padding: 1,
+                borderRadius: 0.5,
+                backgroundColor: theme.palette.grey[100],
+                '&:hover': {
+                  backgroundColor: theme.palette.grey[200],
+                },
+              }}
+            >
+              <ArrowLeftToLine size={18} style={{ color: theme.palette.grey[700] }} />
+            </IconButton>
           )}
-        </div>
-      </div>
+        </Box>
+      </Box>
 
       <Divider sx={{ borderColor: '#736f6f', margin: '8px 0' }} />
 
       {/* Expand Button (Collapsed Only) */}
       {!isSidebarExpanded && (
         <>
-          <div className="flex justify-center gap-2">
-            <button
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: 1,
+            }}
+          >
+            <IconButton
               onClick={() => setIsSidebarExpanded(true)}
-              className="flex items-center justify-center w-10 h-10 p-1.5 rounded-sm bg-[#f0f0f0] hover:bg-gray-200 transition-colors"
+              sx={{
+                width: 40,
+                height: 40,
+                padding: 1.5,
+                borderRadius: 0.5,
+                backgroundColor: '#f0f0f0',
+                '&:hover': {
+                  backgroundColor: theme.palette.grey[200],
+                },
+              }}
             >
-              <ArrowRightToLine className="text-[#414651]" size={18} />
-            </button>
-          </div>
+              <ArrowRightToLine size={18} style={{ color: '#414651' }} />
+            </IconButton>
+          </Box>
           <Divider sx={{ borderColor: '#736f6f', margin: '8px 0' }} />
         </>
       )}
 
       {/* Scrollable Content */}
-      <div className="flex-1 overflow-y-auto">
+      <Box
+        sx={{
+          flex: 1,
+          overflowY: 'auto',
+        }}
+      >
         {/* Organization Section */}
-        <div className="mb-2">
+        <Box sx={{ mb: 2 }}>
           <Organization isSidebarExpanded={isSidebarExpanded} />
-        </div>
+        </Box>
 
         <Divider sx={{ borderColor: '#736f6f', margin: '8px 0' }} />
 
         {/* Navigation Menu */}
-        <nav className={cn('flex flex-col', !isSidebarExpanded ? 'items-center gap-2' : 'gap-1')}>
+        <Box
+          component="nav"
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            ...(!isSidebarExpanded ? { alignItems: 'center', gap: 1 } : { gap: 1 }),
+          }}
+        >
           {sidemenu.map((item: any) => (
             <SidebarItemMenu
               key={item.key}
@@ -125,9 +234,9 @@ function Sidebar(props: any) {
               isCollapsed={!isSidebarExpanded}
             />
           ))}
-        </nav>
-      </div>
-    </aside>
+        </Box>
+      </Box>
+    </Box>
   );
 }
 

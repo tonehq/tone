@@ -1,6 +1,7 @@
 import React from 'react';
 
 import {
+  Box,
   CircularProgress,
   Paper,
   Table,
@@ -10,14 +11,13 @@ import {
   TableHead,
   TableRow,
   TableSortLabel,
+  useTheme,
 } from '@mui/material';
 
 import CustomPagination from '@/components/shared/CustomPagination';
 
 import { TableColumn } from '@/utils/constructTableColumn';
 import { DynamicScrollConfig, useDynamicScrollHeight } from '@/utils/table';
-
-import styles from '@/styles/table.module.scss';
 
 interface CustomTableProps<RecordType> {
   columns: TableColumn<RecordType>[];
@@ -53,6 +53,7 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
     scroll,
     dynamicScrollConfig,
   } = props;
+  const theme = useTheme();
 
   const calculatedScrollY = useDynamicScrollHeight(scroll?.y, dynamicScrollConfig);
 
@@ -64,9 +65,14 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
   };
 
   return (
-    <div
-      style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}
-      className={styles.customTableWrapper}
+    <Box
+      sx={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
+      }}
     >
       <TableContainer
         component={Paper}
@@ -95,8 +101,8 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
                       width: column.width,
                       minWidth: column.width,
                       fontWeight: 600,
-                      backgroundColor: 'var(--color-background-secondary)',
-                      borderBottom: '1px solid var(--color-border)',
+                      backgroundColor: theme.palette.background.paper,
+                      borderBottom: `1px solid ${theme.palette.divider}`,
                     }}
                   >
                     {column.sorter ? <TableSortLabel>{column.title}</TableSortLabel> : column.title}
@@ -132,7 +138,7 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
                         sx={{
                           width: column.width,
                           minWidth: 0,
-                          borderBottom: '1px solid var(--color-border)',
+                          borderBottom: `1px solid ${theme.palette.divider}`,
                         }}
                       >
                         {renderedValue}
@@ -146,7 +152,7 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
         </Table>
       </TableContainer>
       {withPagination && (
-        <div style={{ flexShrink: 0 }}>
+        <Box sx={{ flexShrink: 0 }}>
           <CustomPagination
             current={pagination?.current ?? 1}
             total={pagination?.total ?? data?.length}
@@ -156,9 +162,9 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
             }
             showSizeChanger={pagination?.showSizeChanger || false}
           />
-        </div>
+        </Box>
       )}
-    </div>
+    </Box>
   );
 };
 

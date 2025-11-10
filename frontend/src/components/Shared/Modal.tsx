@@ -114,7 +114,7 @@ const Modal: React.FC<ModalProps> = ({
             onClick={action.onClick}
             loading={action.loading}
             disabled={action.disabled}
-            className={isFooterExpanded ? 'w-full' : ''}
+            sx={isFooterExpanded ? { width: '100%' } : {}}
           />
         ))}
       </DialogActions>

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { Box, Stack } from '@mui/material';
+import { Box, Stack, Typography, useTheme } from '@mui/material';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -25,6 +25,7 @@ const SignupPage = () => {
   const [active, setActive] = useState(0);
   const [tabs] = useState('individual');
   const { notify, contextHolder } = useNotification();
+  const theme = useTheme();
 
   useEffect(() => {
     const firebase_signup = params.get('firebase_signup');
@@ -87,11 +88,13 @@ const SignupPage = () => {
   return (
     <Container>
       {contextHolder}
-      <div>
-        <h2 className="mb-8">Sign Up</h2>
+      <Box>
+        <Typography variant="h2" sx={{ mb: 4 }}>
+          Sign Up
+        </Typography>
         <Form
           onFinish={handleSubmit}
-          className="w-[400px] text-[16px]"
+          sx={{ width: 400, fontSize: '16px' }}
           layout="vertical"
           autoComplete="off"
         >
@@ -139,13 +142,13 @@ const SignupPage = () => {
               loading={loader}
               type="primary"
               htmlType="submit"
-              className="w-full"
+              sx={{ width: '100%' }}
             />
             <CustomButton
               text="Sign in with Google"
               loading={false}
               type="default"
-              className="w-full"
+              sx={{ width: '100%' }}
               icon={
                 <img
                   loading="lazy"
@@ -153,7 +156,6 @@ const SignupPage = () => {
                   alt="Google"
                   width={16}
                   height={16}
-                  className="w-4 h-4"
                 />
               }
             />
@@ -165,16 +167,27 @@ const SignupPage = () => {
                 alignItems: 'center',
               }}
             >
-              Already have an account?
-              <span style={{ fontWeight: 500, color: '#4058ff', marginLeft: '4px' }}>
-                <Link href="/auth/login" className="cursor-pointer">
-                  Log in
-                </Link>
-              </span>
+              <Typography variant="body2">Already have an account?</Typography>
+              <Typography
+                component={Link}
+                href="/auth/login"
+                sx={{
+                  fontWeight: 500,
+                  color: theme.palette.primary.main,
+                  ml: 0.5,
+                  cursor: 'pointer',
+                  textDecoration: 'none',
+                  '&:hover': {
+                    textDecoration: 'underline',
+                  },
+                }}
+              >
+                Log in
+              </Typography>
             </Box>
           </Stack>
         </Form>
-      </div>
+      </Box>
     </Container>
   );
 };

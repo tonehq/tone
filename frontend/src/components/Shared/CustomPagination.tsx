@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { Button, Pagination, Select, MenuItem, FormControl, Stack } from '@mui/material';
+import { Button, Pagination, Stack, useTheme } from '@mui/material';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface CustomPaginationProps {
@@ -8,7 +8,6 @@ interface CustomPaginationProps {
   total: number;
   pageSize: number;
   onChange: (page: number) => void;
-  showSizeChanger?: boolean;
 }
 
 const CustomPagination: React.FC<CustomPaginationProps> = ({
@@ -16,8 +15,8 @@ const CustomPagination: React.FC<CustomPaginationProps> = ({
   total,
   pageSize,
   onChange,
-  showSizeChanger,
 }) => {
+  const theme = useTheme();
   const totalPages = Math.max(1, Math.ceil(total / Math.max(pageSize, 1)));
 
   const goPrev = () => {
@@ -71,9 +70,9 @@ const CustomPagination: React.FC<CustomPaginationProps> = ({
                   padding: 0,
                   borderRadius: 1.5,
                   ...(isActive && {
-                    backgroundColor: 'var(--color-primary)',
+                    backgroundColor: theme.palette.primary.main,
                     '&:hover': {
-                      backgroundColor: 'var(--color-primary-dark)',
+                      backgroundColor: theme.palette.primary.dark,
                     },
                   }),
                 }}

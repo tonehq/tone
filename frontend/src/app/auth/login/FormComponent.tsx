@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { Box, Stack } from '@mui/material';
+import { Box, Stack, Typography, useTheme } from '@mui/material';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -24,6 +24,7 @@ const FormComponent = (props: any) => {
   const [isLoading, setIsLoading] = useState(true);
   const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const router = useRouter();
+  const theme = useTheme();
 
   useEffect(() => {
     loadingTimeoutRef.current = setTimeout(() => {
@@ -64,11 +65,13 @@ const FormComponent = (props: any) => {
 
   return (
     <Container>
-      <div>
-        <h2 className="mb-8">Sign in</h2>
+      <Box>
+        <Typography variant="h2" sx={{ mb: 4 }}>
+          Sign in
+        </Typography>
         <Form
           onFinish={handleFormSubmit}
-          className="w-[400px] text-[16px]"
+          sx={{ width: 400, fontSize: '16px' }}
           layout="vertical"
           autoComplete="off"
         >
@@ -96,13 +99,13 @@ const FormComponent = (props: any) => {
               loading={loader}
               type="primary"
               htmlType="submit"
-              className="w-full"
+              sx={{ width: '100%' }}
             />
             <CustomButton
               text="Sign in with Google"
               loading={false}
               type={'default'}
-              className={'w-full'}
+              sx={{ width: '100%' }}
               onClick={handleSignIn}
               icon={
                 <img
@@ -111,23 +114,26 @@ const FormComponent = (props: any) => {
                   alt="Google"
                   width={16}
                   height={16}
-                  className="w-4 h-4"
                 />
               }
             />
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-              <Box
-                component="div"
+              <Typography
+                component={Link}
+                href="/auth/forgotpassword"
                 sx={{
                   fontWeight: 500,
                   fontSize: '16px',
-                  color: '#4058ff',
+                  color: theme.palette.primary.main,
+                  cursor: 'pointer',
+                  textDecoration: 'none',
+                  '&:hover': {
+                    textDecoration: 'underline',
+                  },
                 }}
               >
-                <Link href="/auth/forgotpassword" className="cursor-pointer">
-                  Forgot Password
-                </Link>
-              </Box>
+                Forgot Password
+              </Typography>
             </Box>
             <Box
               sx={{
@@ -137,16 +143,27 @@ const FormComponent = (props: any) => {
                 alignItems: 'center',
               }}
             >
-              Don't have an account?
-              <span style={{ fontWeight: 500, color: '#4058ff', marginLeft: '4px' }}>
-                <Link href="/auth/signup" className="cursor-pointer">
-                  Sign Up
-                </Link>
-              </span>
+              <Typography variant="body2">Don't have an account?</Typography>
+              <Typography
+                component={Link}
+                href="/auth/signup"
+                sx={{
+                  fontWeight: 500,
+                  color: theme.palette.primary.main,
+                  ml: 0.5,
+                  cursor: 'pointer',
+                  textDecoration: 'none',
+                  '&:hover': {
+                    textDecoration: 'underline',
+                  },
+                }}
+              >
+                Sign Up
+              </Typography>
             </Box>
           </Stack>
         </Form>
-      </div>
+      </Box>
     </Container>
   );
 };

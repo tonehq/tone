@@ -29,7 +29,6 @@
     "axios": "^1.11.0",
     "buffer": "^6.0.3",
     "camelcase-keys": "^10.0.0",
-    "clsx": "^2.1.1",
     "cookies-next": "^6.1.0",
     "dayjs": "^1.11.13",
     "firebase": "^12.2.1",
@@ -41,12 +40,10 @@
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "sass": "^1.91.0",
-    "snakecase-keys": "^9.0.2",
-    "tailwind-merge": "^3.3.1"
+    "snakecase-keys": "^9.0.2"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@tailwindcss/postcss": "^4",
     "@types/lodash": "^4.14.202",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -62,7 +59,6 @@
     "lint-staged": "^16.1.6",
     "postcss": "^8.5.6",
     "prettier": "^3.6.2",
-    "tailwindcss": "^4.1.12",
     "typescript": "^5"
   }
 }

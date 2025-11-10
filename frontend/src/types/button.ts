@@ -1,6 +1,6 @@
 import React from 'react';
 
-import { ButtonProps as MuiButtonProps } from '@mui/material';
+import { ButtonProps as MuiButtonProps, SxProps, Theme } from '@mui/material';
 import { LucideIcon } from 'lucide-react';
 
 export interface ButtonProps {
@@ -9,6 +9,7 @@ export interface ButtonProps {
   onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   disabled?: boolean;
   className?: string;
+  sx?: SxProps<Theme>;
   loading?: boolean;
   type?: 'primary' | 'default' | 'dashed' | 'link' | 'text';
   htmlType?: MuiButtonProps['type'];

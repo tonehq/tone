@@ -1,3 +1,4 @@
+import { Box } from '@mui/material';
 import { Home } from 'lucide-react';
 
 import PageHeader from '@/components/shared/PageHeader';
@@ -15,16 +16,22 @@ const Settings = () => {
     {
       title: <Home size={14} />,
       href: '/home',
-      className: '!flex items-center justify-center mt-[1px]',
     },
     { title: 'Settings' },
   ];
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        overflow: 'hidden',
+      }}
+    >
       <PageHeader title="Settings" breadcrumbItems={breadcrumbItems} showNotifications={false} />
       <ContentSection />
-    </div>
+    </Box>
   );
 };
 

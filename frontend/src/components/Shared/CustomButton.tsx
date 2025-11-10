@@ -13,8 +13,6 @@ const BUTTON_STYLES = {
   borderRadius: '5px',
   fontWeight: 500,
   fontSize: '16px',
-  defaultClassName:
-    'border-slate-200 !outline-none !ring-0 !shadow-none h-9 bg-white text-sm text-slate-700 hover:bg-slate-50',
 } as const;
 
 const CustomButton: React.FC<ButtonProps> = ({
@@ -24,12 +22,12 @@ const CustomButton: React.FC<ButtonProps> = ({
   type = 'default',
   disabled,
   className,
+  sx,
   loading,
   htmlType,
 }) => {
   const theme = useTheme();
 
-  // Map Ant Design types to MUI variants
   const getVariant = () => {
     if (type === 'primary') return 'contained';
     if (type === 'text' || type === 'link') return 'text';
@@ -128,7 +126,7 @@ const CustomButton: React.FC<ButtonProps> = ({
     onClick: handleClick,
     disabled: disabled || loading,
     type: htmlType || 'button',
-    className: `${BUTTON_STYLES.defaultClassName} ${className || ''}`,
+    className: className,
     sx: {
       height: BUTTON_STYLES.height,
       borderRadius: BUTTON_STYLES.borderRadius,
@@ -136,19 +134,22 @@ const CustomButton: React.FC<ButtonProps> = ({
       textAlign: 'center',
       textTransform: 'none',
       position: 'relative',
+      outline: 'none',
+      boxShadow: 'none',
       ...getButtonStyles(),
+      ...sx,
     },
   };
 
   const renderIcon = () => {
     if (!Icon) return null;
     if (Icon === ChevronRight) {
-      return <Icon className="w-4 h-4 font-semibold" />;
+      return <Icon size={16} style={{ fontWeight: 600 }} />;
     }
     if (typeof Icon === 'function') {
-      return <Icon className="w-4 h-4 font-semibold" />;
+      return <Icon size={16} style={{ fontWeight: 600 }} />;
     }
-    return <span className="w-4 h-4 font-semibold">{Icon}</span>;
+    return Icon;
   };
 
   const renderContent = () => {

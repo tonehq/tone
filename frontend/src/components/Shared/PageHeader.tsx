@@ -9,7 +9,6 @@ import { authAtom, getCurrentUserAtom, logoutAtom } from '@/atoms/AuthAtom';
 import CustomBreadCrumb from '@/components/shared/CustomBreadCrumb';
 import CustomDropdown from '@/components/shared/CustomDropdown';
 
-import { cn } from '@/utils/cn';
 import { getInitialsFromName } from '@/utils/format';
 
 export interface ButtonConfig {
@@ -76,30 +75,32 @@ const PageHeader: React.FC<PageHeaderProps> = ({
     {
       key: 'profile',
       label: (
-        <div className="flex items-center gap-3 py-1">
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.5 }}>
           <User size={16} />
-          <span>View Profile</span>
-        </div>
+          <Typography variant="body2">View Profile</Typography>
+        </Box>
       ),
       onClick: handleProfileClick,
     },
     {
       key: 'settings',
       label: (
-        <div className="flex items-center gap-3 py-1">
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.5 }}>
           <Settings size={16} />
-          <span>Settings</span>
-        </div>
+          <Typography variant="body2">Settings</Typography>
+        </Box>
       ),
       onClick: () => console.log('Settings clicked'),
     },
     {
       key: 'logout',
       label: (
-        <div className="flex items-center gap-3 py-1 text-red-600">
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, py: 0.5, color: 'error.main' }}>
           <LogOut size={16} />
-          <span>Logout</span>
-        </div>
+          <Typography variant="body2" sx={{ color: 'error.main' }}>
+            Logout
+          </Typography>
+        </Box>
       ),
       onClick: handleLogout,
       danger: true,
@@ -108,34 +109,38 @@ const PageHeader: React.FC<PageHeaderProps> = ({
 
   return (
     <Box
-      className="w-full bg-white py-2 px-6 rounded-lg"
       sx={{
+        width: '100%',
+        backgroundColor: 'background.default',
+        py: 1,
+        px: 3,
+        borderRadius: 2,
         boxShadow:
           '0 0 0 1px rgba(0, 0, 0, 0.05), 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06), 0 -2px 4px -1px rgba(0, 0, 0, 0.06)',
         margin: '0 0 16px 0',
       }}
     >
-      <div className="flex items-center justify-between">
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         {/* Left section - Title and Breadcrumbs */}
-        <div className="flex-1">
+        <Box sx={{ flex: 1 }}>
           <Typography
             variant="h3"
             sx={{
               marginTop: 0,
               marginBottom: 0,
               fontWeight: 600,
-              color: '#111827',
+              color: 'text.primary',
               fontSize: '24px',
             }}
           >
             {title}
           </Typography>
           {breadcrumbItems.length > 0 && (
-            <div className="mb-1">
+            <Box sx={{ mb: 1 }}>
               <CustomBreadCrumb items={breadcrumbItems} itemRender={breadcrumbItemRender} />
-            </div>
+            </Box>
           )}
-        </div>
+        </Box>
 
         {/* Right section - Search, Notifications, Avatar */}
         <Stack direction="row" spacing={2} alignItems="center">
@@ -184,9 +189,11 @@ const PageHeader: React.FC<PageHeaderProps> = ({
                     startIcon={button.icon}
                     onClick={button.onClick}
                     disabled={button.disabled}
-                    className={cn('shadow-sm rounded-lg font-medium')}
                     sx={{
                       textTransform: 'none',
+                      boxShadow: 1,
+                      borderRadius: 2,
+                      fontWeight: 500,
                     }}
                   >
                     {button.label}
@@ -214,7 +221,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({
             </CustomDropdown>
           )}
         </Stack>
-      </div>
+      </Box>
     </Box>
   );
 };

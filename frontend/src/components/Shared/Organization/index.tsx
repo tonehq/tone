@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react';
 
-import { Avatar, Card, CardContent, Divider, Popover, Skeleton, Stack } from '@mui/material';
+import {
+  Avatar,
+  Box,
+  Card,
+  CardContent,
+  Divider,
+  Popover,
+  Skeleton,
+  Stack,
+  Typography,
+  useTheme,
+} from '@mui/material';
 import Cookies from 'js-cookie';
 import { Building2, ChevronDown, Plus } from 'lucide-react';
 
@@ -8,7 +19,6 @@ import CreateOrganizationModal from '@/components/settings/ModalComponent';
 
 import { getOrganization } from '@/services/auth/helper';
 
-import { cn } from '@/utils/cn';
 import { handleError } from '@/utils/handleError';
 
 import CustomButton from '../CustomButton';
@@ -68,24 +78,37 @@ const Organization = (props: any) => {
     setVisible(false);
   };
 
+  const theme = useTheme();
   const getContents = () => (
-    <div className="w-55">
-      <div className="mb-2 text-gray-500">Organization List</div>
+    <Box sx={{ width: 220 }}>
+      <Typography variant="body2" sx={{ mb: 2, color: theme.palette.text.secondary }}>
+        Organization List
+      </Typography>
       {data?.map((membership) => (
-        <div
+        <Box
           key={membership.id}
           onClick={() => {
             setActive(membership);
             Cookies.set('org_tenant_id', String(membership.id));
             window.location.reload();
           }}
-          className={cn(
-            'mb-1 hover:bg-gray-200 px-2 py-1.5 rounded cursor-pointer',
-            active?.id === membership.id && 'bg-gray-200 font-semibold',
-          )}
+          sx={{
+            mb: 1,
+            px: 2,
+            py: 1.5,
+            borderRadius: 1,
+            cursor: 'pointer',
+            '&:hover': {
+              backgroundColor: theme.palette.grey[200],
+            },
+            ...(active?.id === membership.id && {
+              backgroundColor: theme.palette.grey[200],
+              fontWeight: 600,
+            }),
+          }}
         >
           {startCase(membership.name)}
-        </div>
+        </Box>
       ))}
       <Divider sx={{ my: 2 }} />
       <CustomButton
@@ -93,7 +116,7 @@ const Organization = (props: any) => {
         onClick={() => setCreateOrganization(true)}
         icon={<Plus size={16} />}
       />
-    </div>
+    </Box>
   );
 
   return (
@@ -160,15 +183,22 @@ const Organization = (props: any) => {
                     ) : (
                       <Building2 size={20} />
                     )}
-                    <div>
-                      <div className="font-semibold">{active?.name || 'Select Organization'}</div>
-                      <div className="text-sm text-gray-500 mt-2">{active?.slug || 'Web app'}</div>
-                    </div>
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {active?.name || 'Select Organization'}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        sx={{ color: theme.palette.text.secondary, mt: 0.5, display: 'block' }}
+                      >
+                        {active?.slug || 'Web app'}
+                      </Typography>
+                    </Box>
                   </Stack>
                   <ChevronDown size={16} />
                 </Stack>
               ) : (
-                <div>
+                <Box>
                   {active?.image_url ? (
                     <Avatar sx={{ width: 28, height: 28, bgcolor: '#f3f4f6' }}>
                       {active?.name.charAt(0)}
@@ -176,7 +206,7 @@ const Organization = (props: any) => {
                   ) : (
                     <Building2 size={20} />
                   )}
-                </div>
+                </Box>
               )}
             </CardContent>
           </Card>
