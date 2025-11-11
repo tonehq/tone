@@ -1,0 +1,58 @@
+/* CSS Variables for Material UI Theme */
+:root {
+  /* Primary Colors */
+  --color-primary: #1d4ed8;
+  --color-primary-dark: #1e40af;
+  --color-primary-light: #3b82f6;
+
+  /* Success Colors */
+  --color-success: #52c41a;
+  --color-success-dark: #389e0d;
+  --color-success-light: #73d13d;
+
+  /* Warning Colors */
+  --color-warning: #faad14;
+  --color-warning-dark: #d48806;
+  --color-warning-light: #ffc53d;
+
+  /* Error Colors */
+  --color-error: #f5222d;
+  --color-error-dark: #cf1322;
+  --color-error-light: #ff4d4f;
+
+  /* Border Colors */
+  --color-border: #e2e8f0;
+  --color-border-secondary: #cccbcb;
+  --color-border-hover: #cbd5e1;
+
+  /* Text Colors */
+  --color-text-primary: #111827;
+  --color-text-secondary: #6b7280;
+  --color-text-tertiary: #9ca3af;
+  --color-text-disabled: #d1d5db;
+
+  /* Background Colors */
+  --color-background: #ffffff;
+  --color-background-secondary: #f9fafb;
+  --color-background-tertiary: #f3f4f6;
+  --color-sidebar-background: #3f3f46;
+
+  /* Spacing */
+  --spacing-unit: 8px;
+  --border-radius: 8px;
+  --border-radius-small: 5px;
+
+  /* Typography */
+  --font-family:
+    'Roobert', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+  --font-size-base: 16px;
+  --font-size-small: 14px;
+  --font-size-large: 18px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}

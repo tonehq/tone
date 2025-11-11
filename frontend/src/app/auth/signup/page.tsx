@@ -1,13 +1,14 @@
 'use client';
 
-import * as React from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import { Form, Input, Skeleton } from 'antd';
-import { useForm } from 'antd/es/form/Form';
+import { Box, Stack, Typography, useTheme } from '@mui/material';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-import ButtonComponent from '@/components/Shared/UI Components/ButtonComponent';
+import CustomButton from '@/components/shared/CustomButton';
+import { TextInput } from '@/components/shared/CustomFormFields';
+import { Form } from '@/components/shared/FormComponent';
 
 import { signup } from '@/services/auth/helper';
 
@@ -15,43 +16,25 @@ import { useNotification } from '@/utils/shared/notification';
 
 import Container from '../shared/ContainerComponent';
 
-export default () => (
-  <React.Suspense>
-    <SignIn />
-  </React.Suspense>
-);
-
-function SignIn() {
-  const [form] = useForm();
-
-  const [isLoading, setIsLoading] = React.useState(true);
+const SignupPage = () => {
+  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const params = useSearchParams();
-  const [formData, setFormData] = React.useState({
-    email: '',
-    password: '',
-    username: '',
-    confirmpassword: '',
-  });
-
-  const loadingTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const [loader, setLoader] = React.useState(false);
-  const [active, setActive] = React.useState(0);
-  const [tabs, setTabs] = React.useState('individual');
+  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [loader, setLoader] = useState(false);
+  const [active, setActive] = useState(0);
+  const [tabs] = useState('individual');
   const { notify, contextHolder } = useNotification();
+  const theme = useTheme();
 
-  React.useEffect(() => {
+  useEffect(() => {
     const firebase_signup = params.get('firebase_signup');
     if (firebase_signup === 'true') {
-      setFormData((prevData) => ({
-        ...prevData,
-        email: params.get('email') || '',
-      }));
       setActive(1);
     }
   }, [params]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     loadingTimeoutRef.current = setTimeout(() => {
       setIsLoading(false);
     }, 2000);
@@ -105,100 +88,108 @@ function SignIn() {
   return (
     <Container>
       {contextHolder}
-      <div className="max-w-xl mx-auto px-6 bg-white rounded-lg shadow-md">
-        <h2 className="mb-4">Sign Up</h2>
+      <Box>
+        <Typography variant="h2" sx={{ mb: 4 }}>
+          Sign Up
+        </Typography>
         <Form
           onFinish={handleSubmit}
-          className="w-[400px] text-[16px]"
-          requiredMark={false}
-          form={form}
-          name="validateOnly"
+          sx={{ width: 400, fontSize: (theme) => theme.custom.typography.fontSize.base }}
           layout="vertical"
           autoComplete="off"
         >
-          <Form.Item name="usename" label="Username" rules={[{ required: true }]}>
-            {isLoading ? (
-              <Skeleton.Input
-                active
-                style={{ width: '400px', height: '42px' }}
-                className="font-[500] py-4 rounded-[5px]"
-              />
-            ) : (
-              <Input className="py-2" placeholder={'Enter Your Username'} />
-            )}
-          </Form.Item>
-          <Form.Item name="email" label="Email" rules={[{ required: true }]}>
-            {isLoading ? (
-              <Skeleton.Input
-                active
-                style={{ width: '400px', height: '42px' }}
-                className="font-[500] py-4 rounded-[5px]"
-              />
-            ) : (
-              <Input className="py-2" placeholder={'Enter Your Email'} />
-            )}
-          </Form.Item>
-          <Form.Item name="password" label="Password" rules={[{ required: true }]}>
-            {isLoading ? (
-              <Skeleton.Input
-                active
-                style={{ width: '400px', height: '42px' }}
-                className="font-[500] py-4 rounded-[5px]"
-              />
-            ) : (
-              <Input.Password className="py-2" placeholder={'Enter your password'} />
-            )}
-          </Form.Item>
-          <Form.Item name="org_name" label="Organisation name" rules={[{ required: true }]}>
-            {isLoading ? (
-              <Skeleton.Input
-                active
-                style={{ width: '400px', height: '42px' }}
-                className="font-[500] py-4 rounded-[5px]"
-              />
-            ) : (
-              <Input className="py-2" placeholder={'Enter your organisation name'} />
-            )}
-          </Form.Item>
-          <Form.Item>
-            <ButtonComponent
-              loading={false}
-              type={'primary'}
-              htmlType={'submit'}
+          <TextInput
+            name="username"
+            type="text"
+            label="Username"
+            placeholder="Enter Your Username"
+            isRequired
+            rules={[{ required: true }]}
+            loading={isLoading}
+            defaultValue={params.get('email')?.split('@')[0] || ''}
+          />
+          <TextInput
+            name="email"
+            type="email"
+            label="Email"
+            placeholder="Enter Your Email"
+            isRequired
+            rules={[{ required: true }]}
+            loading={isLoading}
+            defaultValue={params.get('email') || ''}
+          />
+          <TextInput
+            name="password"
+            type="password"
+            label="Password"
+            placeholder="Enter your password"
+            isRequired
+            rules={[{ required: true }]}
+            loading={isLoading}
+          />
+          <TextInput
+            name="org_name"
+            type="text"
+            label="Organisation name"
+            placeholder="Enter your organisation name"
+            isRequired
+            rules={[{ required: true }]}
+            loading={isLoading}
+          />
+          <Stack spacing={2} sx={{ mt: 2 }}>
+            <CustomButton
               text="Create account"
-              className="w-full"
-              active={true}
+              loading={loader}
+              type="primary"
+              htmlType="submit"
+              sx={{ width: '100%' }}
             />
-          </Form.Item>
-          <Form.Item>
-            <ButtonComponent
-              loading={false}
-              type={'default'}
+            <CustomButton
               text="Sign in with Google"
-              className="w-full"
+              loading={false}
+              type="default"
+              sx={{ width: '100%' }}
               icon={
                 <img
                   loading="lazy"
+                  src="https://developers.google.com/identity/images/g-logo.png"
+                  alt="Google"
                   width={16}
                   height={16}
-                  src="https://cdn.builder.io/api/v1/image/assets/TEMP/f6bb794390c33066b1b287c6fed32b735307648872bb255ad515b99fcf51d92b?apiKey=99f610f079bc4250a85747146003507a&amp;&amp;apiKey=99f610f079bc4250a85747146003507a"
-                  alt=""
                 />
               }
             />
-          </Form.Item>
-          <Form.Item>
-            <div className="flex text-[14px] justify-center items-center">
-              <span>Already have an account?</span>
-              <span className="font-[500] text-[#4058ff] ml-1">
-                <Link href={'/auth/login'} className="cursor-pointer">
-                  Log in
-                </Link>
-              </span>
-            </div>
-          </Form.Item>
+            <Box
+              sx={{
+                display: 'flex',
+                fontSize: theme.custom.typography.fontSize.sm,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <Typography variant="body2">Already have an account?</Typography>
+              <Typography
+                component={Link}
+                href="/auth/login"
+                sx={{
+                  fontWeight: theme.custom.typography.fontWeight.medium,
+                  color: theme.palette.primary.main,
+                  ml: 0.5,
+                  cursor: 'pointer',
+                  textDecoration: 'none',
+                  '&:hover': {
+                    textDecoration: 'underline',
+                  },
+                }}
+              >
+                Log in
+              </Typography>
+            </Box>
+          </Stack>
         </Form>
-      </div>
+      </Box>
     </Container>
   );
-}
+};
+
+export default SignupPage;

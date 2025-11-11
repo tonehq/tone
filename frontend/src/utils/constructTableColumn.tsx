@@ -1,15 +1,28 @@
-import { Avatar, Dropdown, MenuProps, Select, Tag } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import React from 'react';
+
+import { Avatar, Box, Button, Chip, Typography, useTheme } from '@mui/material';
 import { capitalize } from 'lodash';
 import { MoreHorizontal } from 'lucide-react';
 
-import ButtonComponent from '@/components/Shared/UI Components/ButtonComponent';
+import CustomDropdown from '@/components/shared/CustomDropdown';
+import { SelectInput, SelectOption } from '@/components/shared/CustomFormFields';
+
 import { OrganizationInviteApi, OrganizationMemberApi } from '@/types/settings/members';
+
 import { formatEpochToDate, getInitialsFromName } from '@/utils/format';
 
-const { Option } = Select;
+// Define column type for MUI table compatibility
+export interface TableColumn<T> {
+  title: string;
+  key: string;
+  dataIndex: string;
+  width?: number;
+  sorter?: boolean;
+  render?: (value: any, record: T) => React.ReactNode;
+}
 
-const renderUser = (record: any) => {
+const RenderUser = ({ record }: { record: any }) => {
+  const theme = useTheme();
   const rawName =
     [record.first_name, record.last_name].filter(Boolean).join(' ').trim() ||
     record.username ||
@@ -18,116 +31,170 @@ const renderUser = (record: any) => {
   const displayName = capitalize(rawName);
 
   return (
-    <div className="flex items-center gap-2 min-w-0">
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
       <Avatar
-        size={40}
-        className="text-white font-bold text-base flex items-center justify-center"
-        style={{ backgroundColor: '#7c3aed' }}
+        sx={{
+          width: 40,
+          height: 40,
+          backgroundColor: 'secondary.main',
+          color: 'white',
+          fontWeight: theme.custom.typography.fontWeight.bold,
+          fontSize: theme.custom.typography.fontSize.base,
+        }}
       >
         {getInitialsFromName(displayName)}
       </Avatar>
-      <div className="min-w-0">
-        <div className="font-medium break-words">{displayName}</div>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography
+          variant="body2"
+          sx={{ fontWeight: theme.custom.typography.fontWeight.medium, wordBreak: 'break-word' }}
+        >
+          {displayName}
+        </Typography>
         {record.email && record.email !== displayName && (
-          <div className="text-gray-600 text-xs break-words">{record.email}</div>
+          <Typography
+            variant="caption"
+            sx={{ color: 'text.secondary', wordBreak: 'break-word', display: 'block' }}
+          >
+            {record.email}
+          </Typography>
         )}
-      </div>
-    </div>
+      </Box>
+    </Box>
+  );
+};
+
+const renderUser = (record: any) => <RenderUser record={record} />;
+
+const RenderInviteUser = ({ record }: { record: OrganizationInviteApi }) => {
+  const theme = useTheme();
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+      <Avatar
+        sx={{
+          width: 40,
+          height: 40,
+          backgroundColor: 'secondary.main',
+          color: 'white',
+          fontWeight: theme.custom.typography.fontWeight.bold,
+          fontSize: theme.custom.typography.fontSize.base,
+        }}
+      >
+        {getInitialsFromName(record.name || record.username || record.email || '')}
+      </Avatar>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography
+          variant="body2"
+          sx={{ fontWeight: theme.custom.typography.fontWeight.medium, wordBreak: 'break-word' }}
+        >
+          {record?.email}
+        </Typography>
+      </Box>
+    </Box>
   );
 };
 
 const renderInviteUser = (record: OrganizationInviteApi) => (
-  <div className="flex items-center gap-2 min-w-0">
-    <Avatar
-      size={40}
-      className="text-white font-bold text-base flex items-center justify-center"
-      style={{ backgroundColor: '#7c3aed' }}
-    >
-      {getInitialsFromName(record.name || record.username || record.email || '')}
-    </Avatar>
-    <div className="min-w-0">
-      <div className="font-medium break-words">{record?.email}</div>
-    </div>
-  </div>
+  <RenderInviteUser record={record} />
 );
 
-const renderJoined = (value: number | null | undefined) =>
-  formatEpochToDate(value ?? null);
+const renderJoined = (value: number | null | undefined) => formatEpochToDate(value ?? null);
 
 const renderRole = (
   role: string,
   record: OrganizationMemberApi,
-  onRoleChange?: (memberId: number, role: string) => void
-) => (
-  <Select
-    value={role}
-    className="w-32"
-    variant="borderless"
-    suffixIcon={null}
-    onChange={(val) => onRoleChange?.(Number(record?.member_id), val)}
-  >
-    <Option value="admin">{capitalize('admin')}</Option>
-    <Option value="member">{capitalize('member')}</Option>
-  </Select>
-);
+  onRoleChange?: (memberId: number, role: string) => void,
+) => {
+  const roleOptions: SelectOption[] = [
+    { value: 'admin', label: capitalize('admin') },
+    { value: 'member', label: capitalize('member') },
+  ];
+
+  return (
+    <SelectInput
+      name={`role-${record?.member_id}`}
+      value={role || ''}
+      placeholder="Role"
+      onChange={(e) => onRoleChange?.(Number(record?.member_id), e.target.value as string)}
+      options={roleOptions}
+      withFormItem={false}
+      size="small"
+      variant="standard"
+      disableUnderline
+      fullWidth={false}
+    />
+  );
+};
 
 const renderStatus = (status: string) => {
   const normalized = (status || '').toLowerCase();
-  const color =
-    normalized === 'pending'
-      ? 'orange'
-      : normalized === 'accepted'
-      ? 'blue'
-      : 'default';
-  return <Tag color={color}>{capitalize(status)}</Tag>;
+  const colorMap: Record<
+    string,
+    'default' | 'primary' | 'secondary' | 'error' | 'info' | 'success' | 'warning'
+  > = {
+    pending: 'warning',
+    accepted: 'info',
+    default: 'default',
+  };
+  const color = colorMap[normalized] || 'default';
+  return <Chip label={capitalize(status)} color={color} size="small" />;
 };
 
-const renderActions = (items: MenuProps['items']) => (
-  <Dropdown menu={{ items }} trigger={['click']}>
-    <ButtonComponent type="text" icon={<MoreHorizontal size={16} />} />
-  </Dropdown>
+interface MenuItemType {
+  key: string;
+  label: React.ReactNode;
+  icon?: React.ReactNode;
+  danger?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+}
+
+const renderActions = (items: MenuItemType[]) => (
+  <CustomDropdown items={items}>
+    <Button type="button" variant="text" sx={{ minWidth: 'auto', padding: '4px' }}>
+      <MoreHorizontal size={16} />
+    </Button>
+  </CustomDropdown>
 );
 
-type ColumnConfig = {
+interface ColumnConfig {
   key: string;
   title?: string;
   width?: number;
   sorter?: boolean;
-};
+}
 
-type ExtraHandlers = {
+interface ExtraHandlers {
   onRoleChange?: (memberId: number, role: string) => void;
-  actionMenuItems?: MenuProps['items'];
-};
+  actionMenuItems?: MenuItemType[];
+}
 
 export const constructColumns = <T extends object>(
   configs: ColumnConfig[],
-  extra?: ExtraHandlers
-): ColumnsType<T> =>
-  configs.map((col) => {
-    return {
-      title: col.title || '',
-      key: col.key,
-      dataIndex: col.key,
-      width: col.width,
-      sorter: col.sorter,
-      render: (value: any, record: any) => {
-        switch (col.key) {
-          case 'user':
-            return 'first_name' in record || 'last_name' in record
-              ? renderUser(record)
-              : renderInviteUser(record as OrganizationInviteApi);
-          case 'joined':
-            return renderJoined(value);
-          case 'role':
-            return renderRole(value, record, extra?.onRoleChange);
-          case 'status':
-            return renderStatus(value);
-          case 'actions':
-            return renderActions(extra?.actionMenuItems ?? []);
-          default:
-            return <div>{value ?? '-'}</div>;
-        }
-      },
-    };
-  });
+  extra?: ExtraHandlers,
+): TableColumn<T>[] =>
+  configs.map((col) => ({
+    title: col.title || '',
+    key: col.key,
+    dataIndex: col.key,
+    width: col.width,
+    sorter: col.sorter,
+    render: (value: any, record: any) => {
+      switch (col.key) {
+        case 'user':
+          return 'first_name' in record || 'last_name' in record
+            ? renderUser(record)
+            : renderInviteUser(record as OrganizationInviteApi);
+        case 'joined':
+          return renderJoined(value);
+        case 'role':
+          return renderRole(value, record, extra?.onRoleChange);
+        case 'status':
+          return renderStatus(value);
+        case 'actions':
+          return renderActions(extra?.actionMenuItems ?? []);
+        default:
+          return <Box>{value ?? '-'}</Box>;
+      }
+    },
+  }));

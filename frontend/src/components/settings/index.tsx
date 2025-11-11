@@ -1,16 +1,38 @@
-import { Typography } from 'antd';
+import { Box } from '@mui/material';
+import { Home } from 'lucide-react';
 
-import MembersTable from './TableComponent';
+import PageHeader from '@/components/shared/PageHeader';
 
-const { Title } = Typography;
+import ContentSection from './ContentSection';
 
-const Settings = () => (
-  <div>
-    <Title className="mb-4" level={4}>
-      Settings
-    </Title>
-    <MembersTable />
-  </div>
-);
+interface BreadcrumbItem {
+  title: React.ReactNode;
+  href?: string;
+  className?: string;
+}
+
+const Settings = () => {
+  const breadcrumbItems: BreadcrumbItem[] = [
+    {
+      title: <Home size={14} />,
+      href: '/home',
+    },
+    { title: 'Settings' },
+  ];
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        overflow: 'hidden',
+      }}
+    >
+      <PageHeader title="Settings" breadcrumbItems={breadcrumbItems} showNotifications={false} />
+      <ContentSection />
+    </Box>
+  );
+};
 
 export default Settings;

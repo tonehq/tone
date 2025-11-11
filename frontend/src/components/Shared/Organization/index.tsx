@@ -1,13 +1,27 @@
-import Cookies from 'js-cookie';
 import { useEffect, useState } from 'react';
 
-import { Avatar, Card, Divider, Popover, Skeleton, Space } from 'antd';
+import {
+  Avatar,
+  Box,
+  Card,
+  CardContent,
+  Divider,
+  Popover,
+  Skeleton,
+  Stack,
+  Typography,
+  useTheme,
+} from '@mui/material';
+import Cookies from 'js-cookie';
 import { Building2, ChevronDown, Plus } from 'lucide-react';
+
+import CreateOrganizationModal from '@/components/settings/ModalComponent';
 
 import { getOrganization } from '@/services/auth/helper';
 
-import ButtonComponent from '../UI Components/ButtonComponent';
-import CreateOrganizationModal from './ModalComponent';
+import { handleError } from '@/utils/handleError';
+
+import CustomButton from '../CustomButton';
 
 interface Organization {
   id: string;
@@ -17,12 +31,13 @@ interface Organization {
 }
 
 const Organization = (props: any) => {
-  const { sidebar } = props;
+  const { isSidebarExpanded } = props;
   const [loader, setLoader] = useState(false);
   const [data, setData] = useState<Organization[]>([]);
   const [active, setActive] = useState<Organization | null>(null);
   const [visible, setVisible] = useState(false);
   const [createOrganization, setCreateOrganization] = useState(false);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
   const startCase = (str: string) =>
     str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
@@ -35,8 +50,8 @@ const Organization = (props: any) => {
         setData(res.data);
         setLoader(false);
       }
-    } catch (err) {
-      console.log(err);
+    } catch (error) {
+      handleError({ error });
       setLoader(false);
     }
   };
@@ -53,131 +68,159 @@ const Organization = (props: any) => {
     }
   }, [data]);
 
+  const handleClick = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+    setVisible(true);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+    setVisible(false);
+  };
+
+  const theme = useTheme();
   const getContents = () => (
-    <div style={{ width: 220 }}>
-      <div style={{ marginBottom: 8, display: 'block', color: '#8c8c8c' }}>Organization List</div>
+    <Box sx={{ width: 220 }}>
+      <Typography variant="body2" sx={{ mb: 2, color: theme.palette.text.secondary }}>
+        Organization List
+      </Typography>
       {data?.map((membership) => (
-        <div
+        <Box
           key={membership.id}
           onClick={() => {
             setActive(membership);
             Cookies.set('org_tenant_id', String(membership.id));
             window.location.reload();
           }}
-          className={`mb-2 hover:bg-[#e5e7eb] ${
-            active?.id === membership.id ? 'bg-[#e5e7eb] font-[600]' : ''
-          }`}
-          style={{
-            padding: '6px 8px',
-            borderRadius: 4,
+          sx={{
+            mb: 1,
+            px: 2,
+            py: 1.5,
+            borderRadius: theme.custom.borderRadius.base,
             cursor: 'pointer',
+            '&:hover': {
+              backgroundColor: theme.palette.grey[200],
+            },
+            ...(active?.id === membership.id && {
+              backgroundColor: theme.palette.grey[200],
+              fontWeight: theme.custom.typography.fontWeight.semibold,
+            }),
           }}
         >
           {startCase(membership.name)}
-        </div>
+        </Box>
       ))}
-
-      <Divider style={{ margin: '8px 0' }} />
-
-      <ButtonComponent
+      <Divider sx={{ my: 2 }} />
+      <CustomButton
         text="Create organization"
-        onClick={() => {
-          setCreateOrganization(true);
-        }}
+        onClick={() => setCreateOrganization(true)}
         icon={<Plus size={16} />}
       />
-    </div>
+    </Box>
   );
 
   return (
-    <div>
-      <div>
-        {loader ? (
-          <Skeleton.Button
-            active
-            shape="default"
-            style={{ width: '242px', height: '60px', borderRadius: '5px' }}
-            className="font-[500] h-[60px]"
-          />
-        ) : (
+    <>
+      {loader ? (
+        <Skeleton
+          variant="rectangular"
+          height={63}
+          sx={{ width: '100%', bgcolor: '#636363', borderRadius: theme.custom.borderRadius.base }}
+        />
+      ) : (
+        <>
           <Popover
-            content={getContents()}
-            trigger="click"
             open={visible}
-            onOpenChange={setVisible}
-            placement="bottomLeft"
+            anchorEl={anchorEl}
+            onClose={handleClose}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'left',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'left',
+            }}
           >
-            <Card
-              hoverable
-              style={{
-                width: sidebar ? 240 : 48,
-                borderRadius: 5,
-                cursor: 'pointer',
-                border: '1px solid #e5e7eb',
-                transition: 'width 0.3s ease-in-out, padding 0.3s ease-in-out',
-              }}
-              styles={{
-                body: {
-                  padding: sidebar ? '4px 12px' : '8px',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  transition: 'padding 0.3s ease-in-out',
+            {getContents()}
+          </Popover>
+          <Card
+            onClick={handleClick}
+            sx={{
+              cursor: 'pointer',
+              border: '1px solid #e5e7eb',
+              borderRadius: theme.custom.borderRadius.base,
+              transition: 'all 0.3s',
+              '&:hover': {
+                boxShadow: 2,
+              },
+              width: isSidebarExpanded ? '100%' : 'fit-content',
+              margin: '0 auto',
+            }}
+          >
+            <CardContent
+              sx={{
+                padding: isSidebarExpanded ? '4px 12px' : '8px',
+                display: 'flex',
+                justifyContent: 'center',
+                '&:last-child': {
+                  paddingBottom: isSidebarExpanded ? '4px' : '8px',
                 },
               }}
             >
-              {sidebar ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    width: '100%',
-                    transition: 'opacity 0.3s ease-in-out',
-                    opacity: sidebar ? 1 : 0,
-                  }}
+              {isSidebarExpanded ? (
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  justifyContent="space-between"
+                  width="100%"
                 >
-                  <Space>
+                  <Stack direction="row" spacing={1} alignItems="center">
                     {active?.image_url ? (
-                      <Avatar
-                        src={active?.name.charAt(0)}
-                        size={28}
-                        style={{ backgroundColor: '#f0f0f0' }}
-                      />
+                      <Avatar sx={{ width: 28, height: 28, bgcolor: '#f3f4f6' }}>
+                        {active?.name.charAt(0)}
+                      </Avatar>
                     ) : (
                       <Building2 size={20} />
                     )}
-                    <div style={{ transition: 'opacity 0.3s ease-in-out' }}>
-                      <div className="font-semibold">{active?.name || 'Select Organization'}</div>
-                      <div className="text-sm text-gray-500 mt-2">{active?.slug || 'Web app'}</div>
-                    </div>
-                  </Space>
+                    <Box>
+                      <Typography
+                        variant="body2"
+                        sx={{ fontWeight: theme.custom.typography.fontWeight.semibold }}
+                      >
+                        {active?.name || 'Select Organization'}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        sx={{ color: theme.palette.text.secondary, mt: 0.5, display: 'block' }}
+                      >
+                        {active?.slug || 'Web app'}
+                      </Typography>
+                    </Box>
+                  </Stack>
                   <ChevronDown size={16} />
-                </div>
+                </Stack>
               ) : (
-                <div style={{ transition: 'opacity 0.3s ease-in-out' }}>
+                <Box>
                   {active?.image_url ? (
-                    <Avatar
-                      src={active?.name.charAt(0)}
-                      size={28}
-                      style={{ backgroundColor: '#f0f0f0' }}
-                    />
+                    <Avatar sx={{ width: 28, height: 28, bgcolor: '#f3f4f6' }}>
+                      {active?.name.charAt(0)}
+                    </Avatar>
                   ) : (
                     <Building2 size={20} />
                   )}
-                </div>
+                </Box>
               )}
-            </Card>
-          </Popover>
-        )}
-      </div>
-      <div>
-        <CreateOrganizationModal
-          visible={createOrganization}
-          setVisible={setCreateOrganization}
-          fetchOrganization={init}
-        />
-      </div>
-    </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
+      <CreateOrganizationModal
+        open={createOrganization || false}
+        onCancel={() => setCreateOrganization(false)}
+        onInvite={() => {}}
+      />
+    </>
   );
 };
 

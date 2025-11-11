@@ -1,120 +1,229 @@
 'use client';
 
 import type React from 'react';
-import { useState } from 'react';
 
-import { PanelLeft } from 'lucide-react';
+import { Box, Divider, IconButton, Tooltip, Typography, useTheme } from '@mui/material';
+import { ArrowLeftToLine, ArrowRightToLine } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { sidemenu } from './constant';
 import Organization from '../Organization';
+import { sidemenu } from './constant';
 
 interface SidebarItemProps {
   icon: React.ElementType;
   href: string;
   active?: boolean;
+  title?: string;
+  isCollapsed: boolean;
 }
 
-function SidebarItem({ icon: Icon, href, active }: SidebarItemProps) {
-  return (
-    <Link
+function SidebarItemMenu({ icon: Icon, href, active, title, isCollapsed }: SidebarItemProps) {
+  const theme = useTheme();
+  const content = (
+    <Box
+      component={Link}
       href={href}
-      className={`flex items-center justify-center w-10 h-10 rounded-md transition-colors ${active ? 'bg-[#e5e7eb] text-text' : 'text-text hover:bg-[#e5e7eb] hover:text-slate-900'}`}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        borderRadius: theme.custom.borderRadius.base,
+        cursor: 'pointer',
+        userSelect: 'none',
+        whiteSpace: 'nowrap',
+        transition: 'all 0.2s',
+        ...(isCollapsed
+          ? {
+              justifyContent: 'center',
+              width: 40,
+              height: 40,
+              mx: 'auto',
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              },
+            }
+          : {
+              width: '100%',
+              py: 1.5,
+              px: 2,
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              },
+            }),
+        ...(active && {
+          backgroundColor: 'rgba(255, 255, 255, 0.2)',
+        }),
+      }}
     >
-      <Icon className="w-5 h-5" />
-    </Link>
+      <Icon
+        size={20}
+        style={{
+          color: theme.palette.common.white,
+          ...(!isCollapsed && { marginRight: theme.spacing(1.5) }),
+        }}
+      />
+      {!isCollapsed && (
+        <Typography
+          variant="body2"
+          sx={{
+            color: theme.palette.common.white,
+            fontWeight: theme.custom.typography.fontWeight.medium,
+          }}
+        >
+          {title}
+        </Typography>
+      )}
+    </Box>
   );
-}
 
-function SidebarItemMenu({ icon: Icon, href, active, title }: any) {
-  return (
-    <Link
-      href={href}
-      className={`flex items-center w-full px-[10%] h-10 transition-colors ${active ? 'bg-[#e5e7eb] text-text font-semibold' : 'text-text hover:bg-[#e5e7eb] hover:text-slate-900'}`}
-    >
-      <div className="flex items-center justify-center gap-2">
-        <Icon className="w-5 h-5" />
-        <span className="text-md">{title}</span>
-      </div>
-    </Link>
+  return isCollapsed ? (
+    <Tooltip title={title} placement="right" arrow>
+      {content}
+    </Tooltip>
+  ) : (
+    content
   );
 }
 
 function Sidebar(props: any) {
-  const { sidebar, setSidebar } = props;
+  const { isSidebarExpanded, setIsSidebarExpanded } = props;
   const pathname = usePathname();
-  const [showToggleIcon, setShowToggleIcon] = useState(false);
+  const theme = useTheme();
 
   const isActive = (path: string) =>
     pathname === path || pathname?.split('/')[1] === path.split('/')[1];
 
   return (
-    <aside
-      className={`flex flex-col h-screen bg-white border-r border-[#e2e8f0]
-                transition-all duration-300 ease-in-out
-                ${sidebar ? 'w-[300px]' : 'w-[60px]'}`}
-      onMouseEnter={() => setShowToggleIcon(true)}
-      onMouseLeave={() => setShowToggleIcon(false)}
+    <Box
+      component="aside"
+      sx={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        backgroundColor: '#3f3f46',
+        gap: 1,
+      }}
     >
-      <div
-        style={{ height: '48px' }}
-        className={`flex items-center border-b border-[#e2e8f0] ${!sidebar ? 'justify-center' : 'justify-start'}`}
-      >
-        {!sidebar ? (
-          <div className="flex items-center justify-center w-8 h-8 text-white bg-blue-700 rounded-md">
-            <span className="text-md font-semibold">T</span>
-          </div>
-        ) : (
-          <div className="flex px-[10%] items-center justify-between w-full">
-            <div className="flex items-center gap-2">
-              <div
-                style={{ width: '24px', height: '24px' }}
-                className="flex items-center justify-center text-white bg-blue-700 rounded-md"
-              >
-                <span className="text-md font-semibold">T</span>
-              </div>
-              <div className="text-lg font-semibold text-text py-2">Tone App</div>
-            </div>
-
-            <div
-              className={`cursor-pointer hover:bg-gray-100 p-2 my-shadow rounded-md ${!sidebar ? 'opacity-100' : showToggleIcon ? 'opacity-100' : 'opacity-0'}`}
-              onClick={() => setSidebar(!sidebar)}
-            >
-              <PanelLeft color="#414651" size={20} />
-            </div>
-          </div>
-        )}
-      </div>
-      {!sidebar ? (
-        <div
-          className={`flex mt-2 justify-center cursor-pointer mx-2 my-shadow rounded-md p-1 py-2 ${!sidebar ? 'opacity-100' : 'opacity-0'}`}
-          onClick={() => setSidebar(!sidebar)}
+      {/* Header Section */}
+      <Box sx={{ flexShrink: 0 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
         >
-          <PanelLeft color="#414651" size={20} />
-        </div>
-      ) : (
-        ''
-      )}
-      <div className="m-2">
-        <Organization sidebar={sidebar} />
-      </div>
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 2,
+              ...(!isSidebarExpanded && { mx: 'auto' }),
+            }}
+          >
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 36,
+                height: 36,
+                backgroundColor: theme.palette.primary.main,
+                borderRadius: theme.custom.borderRadius.base,
+                color: theme.palette.common.white,
+                fontWeight: theme.custom.typography.fontWeight.semibold,
+                fontSize: theme.custom.typography.fontSize.lg,
+              }}
+            >
+              T
+            </Box>
+            {isSidebarExpanded && (
+              <Typography
+                variant="h6"
+                sx={{
+                  color: theme.palette.common.white,
+                  fontWeight: theme.custom.typography.fontWeight.semibold,
+                }}
+              >
+                Tone App
+              </Typography>
+            )}
+          </Box>
+          {isSidebarExpanded && (
+            <IconButton
+              onClick={() => setIsSidebarExpanded(false)}
+              sx={{
+                width: 32,
+                height: 32,
+                padding: 1,
+                borderRadius: theme.custom.borderRadius.base,
+                backgroundColor: theme.palette.grey[100],
+                '&:hover': {
+                  backgroundColor: theme.palette.grey[200],
+                },
+              }}
+            >
+              <ArrowLeftToLine size={18} style={{ color: theme.palette.grey[700] }} />
+            </IconButton>
+          )}
+        </Box>
+      </Box>
 
-      {!sidebar ? (
-        <div>
-          <nav className="flex flex-col items-center gap-2 py-2">
-            {sidemenu.map((item: any, index: number) => (
-              <SidebarItem
-                key={item.key}
-                icon={item.icon}
-                href={item.path}
-                active={isActive(item.path)}
-              />
-            ))}
-          </nav>
-        </div>
-      ) : (
-        <nav className="flex flex-col items-center gap-2 mx-2 rounded-md">
+      <Divider sx={{ borderColor: '#736f6f', margin: '8px 0' }} />
+
+      {/* Expand Button (Collapsed Only) */}
+      {!isSidebarExpanded && (
+        <>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'center',
+              gap: 1,
+            }}
+          >
+            <IconButton
+              onClick={() => setIsSidebarExpanded(true)}
+              sx={{
+                width: 40,
+                height: 40,
+                padding: 1.5,
+                borderRadius: theme.custom.borderRadius.base,
+                backgroundColor: '#f0f0f0',
+                '&:hover': {
+                  backgroundColor: theme.palette.grey[200],
+                },
+              }}
+            >
+              <ArrowRightToLine size={18} style={{ color: '#414651' }} />
+            </IconButton>
+          </Box>
+          <Divider sx={{ borderColor: '#736f6f', margin: '8px 0' }} />
+        </>
+      )}
+
+      {/* Scrollable Content */}
+      <Box
+        sx={{
+          flex: 1,
+          overflowY: 'auto',
+        }}
+      >
+        {/* Organization Section */}
+        <Box sx={{ mb: 2 }}>
+          <Organization isSidebarExpanded={isSidebarExpanded} />
+        </Box>
+
+        <Divider sx={{ borderColor: '#736f6f', margin: '8px 0' }} />
+
+        {/* Navigation Menu */}
+        <Box
+          component="nav"
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            ...(!isSidebarExpanded ? { alignItems: 'center', gap: 1 } : { gap: 1 }),
+          }}
+        >
           {sidemenu.map((item: any) => (
             <SidebarItemMenu
               key={item.key}
@@ -122,15 +231,12 @@ function Sidebar(props: any) {
               title={item.title}
               href={item.path}
               active={isActive(item.path)}
+              isCollapsed={!isSidebarExpanded}
             />
           ))}
-        </nav>
-      )}
-
-      <div className="flex flex-col items-center justify-center mt-auto gap-4">
-        {/* <CustomUserButton sidebar={sidebar} /> */}
-      </div>
-    </aside>
+        </Box>
+      </Box>
+    </Box>
   );
 }
 

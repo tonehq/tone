@@ -1,10 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 
-import { Form, Input, Modal, Select } from 'antd';
-
-import ButtonComponent from '../Shared/UI Components/ButtonComponent';
-
-const { Option } = Select;
+import { SelectInput, SelectOption, TextInput } from '@/components/shared/CustomFormFields';
+import { Form } from '@/components/shared/FormComponent';
+import Modal, { ModalAction } from '@/components/shared/Modal';
 
 interface ModalComponentProps {
   open: boolean;
@@ -14,69 +12,84 @@ interface ModalComponentProps {
 }
 
 const ModalComponent: React.FC<ModalComponentProps> = ({ open, onCancel, onInvite, loading }) => {
-  const [form] = Form.useForm();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('member');
 
   const handleOk = async () => {
-    try {
-      const values = await form.validateFields();
-      onInvite(values);
-    } catch (err) {
-      // validation error
+    if (!name || !email || !role) {
+      return;
     }
+    onInvite({ name, email, role });
   };
 
   useEffect(() => {
     if (open) {
-      form.resetFields();
+      setName('');
+      setEmail('');
+      setRole('member');
     }
   }, [open]);
 
+  const roleOptions: SelectOption[] = [
+    { value: 'admin', label: 'Admin' },
+    { value: 'member', label: 'Member' },
+  ];
+
+  const modalActions: ModalAction[] = [
+    {
+      key: 'cancel',
+      text: 'Cancel',
+      type: 'default',
+      onClick: onCancel,
+    },
+    {
+      key: 'invite',
+      text: 'Invite',
+      type: 'primary',
+      onClick: handleOk,
+      loading,
+    },
+  ];
+
   return (
     <Modal
-      title="Invite User"
       open={open}
-      onCancel={onCancel}
-      footer={[
-        <ButtonComponent key="cancel" text="Cancel" type="default" onClick={onCancel} />,
-        <ButtonComponent
-          key="invite"
-          text="Invite"
-          type="primary"
-          active
-          onClick={handleOk}
-          loading={loading}
-        />,
-      ]}
-      styles={{
-        content: { borderRadius: 5 },
-      }}
+      onClose={onCancel}
+      title="Invite User"
+      actions={modalActions}
+      titleClassName="!mb-0"
     >
-      <Form requiredMark={false} form={form} layout="vertical">
-        <Form.Item
+      <Form layout="vertical" onFinish={handleOk}>
+        <TextInput
           name="name"
+          type="text"
           label="Full Name"
+          placeholder="John Doe"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          isRequired
           rules={[{ required: true, message: 'Please enter name' }]}
-        >
-          <Input placeholder="John Doe" />
-        </Form.Item>
-
-        <Form.Item
+        />
+        <TextInput
           name="email"
+          type="email"
           label="Email"
-          rules={[
-            { required: true, message: 'Please enter email' },
-            { type: 'email', message: 'Enter a valid email' },
-          ]}
-        >
-          <Input placeholder="john@example.com" />
-        </Form.Item>
-
-        <Form.Item name="role" label="Role" initialValue="Member" rules={[{ required: true }]}>
-          <Select>
-            <Option value="Admin">Admin</Option>
-            <Option value="Member">Member</Option>
-          </Select>
-        </Form.Item>
+          placeholder="john@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          isRequired
+          rules={[{ required: true, message: 'Please enter email' }]}
+        />
+        <SelectInput
+          name="role"
+          label="Role"
+          value={role}
+          onChange={(e) => setRole(e.target.value as string)}
+          options={roleOptions}
+          isRequired
+          rules={[{ required: true }]}
+        />
       </Form>
     </Modal>
   );

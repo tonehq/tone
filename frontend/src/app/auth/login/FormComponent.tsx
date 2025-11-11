@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { Form, Input, Skeleton } from 'antd';
-import { useForm } from 'antd/es/form/Form';
+import { Box, Stack, Typography, useTheme } from '@mui/material';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-import ButtonComponent from '@/components/Shared/UI Components/ButtonComponent';
+import CustomButton from '@/components/shared/CustomButton';
+import { TextInput } from '@/components/shared/CustomFormFields';
+import { Form } from '@/components/shared/FormComponent';
 
 import { BACKEND_URL } from '@/urls';
 
@@ -20,10 +21,10 @@ import Container from '../shared/ContainerComponent';
 
 const FormComponent = (props: any) => {
   const { handleSubmit, loader } = props;
-  const [form] = useForm();
   const [isLoading, setIsLoading] = useState(true);
   const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const router = useRouter();
+  const theme = useTheme();
 
   useEffect(() => {
     loadingTimeoutRef.current = setTimeout(() => {
@@ -58,57 +59,53 @@ const FormComponent = (props: any) => {
     });
   };
 
+  const handleFormSubmit = (values: any) => {
+    handleSubmit(values);
+  };
+
   return (
     <Container>
-      <div>
-        <h2 className="mb-8">Sign in</h2>
+      <Box>
+        <Typography variant="h2" sx={{ mb: 4 }}>
+          Sign in
+        </Typography>
         <Form
-          onFinish={handleSubmit}
-          className="w-[400px] text-[16px]"
-          requiredMark={false}
-          form={form}
-          name="validateOnly"
+          onFinish={handleFormSubmit}
+          sx={{ width: 400, fontSize: (theme) => theme.custom.typography.fontSize.base }}
           layout="vertical"
           autoComplete="off"
         >
-          <Form.Item name="email" label="Email" rules={[{ required: true }]}>
-            {isLoading ? (
-              <Skeleton.Input
-                active
-                style={{ width: '400px', height: '42px' }}
-                className="font-[500] py-4 rounded-[5px]"
-              />
-            ) : (
-              <Input placeholder={'Enter Your Email'} />
-            )}
-          </Form.Item>
-          <Form.Item name="password" label="Password" rules={[{ required: true }]}>
-            {isLoading ? (
-              <Skeleton.Input
-                active
-                style={{ width: '400px', height: '42px' }}
-                className="font-[500] py-4 h-[40px] rounded-[5px]"
-              />
-            ) : (
-              <Input.Password placeholder={'Enter your passwordl'} />
-            )}
-          </Form.Item>
-          <Form.Item>
-            <ButtonComponent
+          <TextInput
+            name="email"
+            type="email"
+            label="Email"
+            placeholder="Enter Your Email"
+            isRequired
+            rules={[{ required: true }]}
+            loading={isLoading}
+          />
+          <TextInput
+            name="password"
+            type="password"
+            label="Password"
+            placeholder="Enter your password"
+            isRequired
+            rules={[{ required: true }]}
+            loading={isLoading}
+          />
+          <Stack spacing={2} sx={{ mt: 2 }}>
+            <CustomButton
               text="Sign in"
               loading={loader}
-              type={'primary'}
-              htmlType={'submit'}
-              className={'w-full'}
-              active={true}
+              type="primary"
+              htmlType="submit"
+              sx={{ width: '100%' }}
             />
-          </Form.Item>
-          <Form.Item>
-            <ButtonComponent
+            <CustomButton
               text="Sign in with Google"
               loading={false}
               type={'default'}
-              className={'w-full'}
+              sx={{ width: '100%' }}
               onClick={handleSignIn}
               icon={
                 <img
@@ -117,32 +114,56 @@ const FormComponent = (props: any) => {
                   alt="Google"
                   width={16}
                   height={16}
-                  className="w-4 h-4"
                 />
               }
             />
-          </Form.Item>
-          <Form.Item>
-            <div className="flex justify-center items-center">
-              <div className="font-[500] text-[16px] text-[#4058ff]">
-                <Link href="/auth/forgotpassword" className="cursor-pointer">
-                  Forgot Password
-                </Link>
-              </div>
-            </div>
-          </Form.Item>
-          <Form.Item>
-            <div className="flex text-[14px] justify-center items-center">
-              <span>Don't have an account ?</span>
-              <span className="font-[500] text-[#4058ff] ml-1">
-                <Link href="/auth/signup" className="cursor-pointer">
-                  Sign Up
-                </Link>
-              </span>
-            </div>
-          </Form.Item>
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+              <Typography
+                component={Link}
+                href="/auth/forgotpassword"
+                sx={{
+                  fontWeight: theme.custom.typography.fontWeight.medium,
+                  fontSize: theme.custom.typography.fontSize.base,
+                  color: theme.palette.primary.main,
+                  cursor: 'pointer',
+                  textDecoration: 'none',
+                  '&:hover': {
+                    textDecoration: 'underline',
+                  },
+                }}
+              >
+                Forgot Password
+              </Typography>
+            </Box>
+            <Box
+              sx={{
+                display: 'flex',
+                fontSize: theme.custom.typography.fontSize.sm,
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <Typography variant="body2">Don't have an account?</Typography>
+              <Typography
+                component={Link}
+                href="/auth/signup"
+                sx={{
+                  fontWeight: theme.custom.typography.fontWeight.medium,
+                  color: theme.palette.primary.main,
+                  ml: 0.5,
+                  cursor: 'pointer',
+                  textDecoration: 'none',
+                  '&:hover': {
+                    textDecoration: 'underline',
+                  },
+                }}
+              >
+                Sign Up
+              </Typography>
+            </Box>
+          </Stack>
         </Form>
-      </div>
+      </Box>
     </Container>
   );
 };

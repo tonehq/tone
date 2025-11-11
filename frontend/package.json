@@ -18,8 +18,14 @@
     ]
   },
   "dependencies": {
+    "@emotion/cache": "^11.13.5",
+    "@emotion/react": "^11.13.5",
+    "@emotion/styled": "^11.13.5",
+    "@mui/icons-material": "^6.2.1",
+    "@mui/material": "^6.2.1",
+    "@mui/material-nextjs": "^6.0.0",
+    "@mui/system": "^6.2.1",
     "@types/js-cookie": "^3.0.6",
-    "antd": "^5.27.0",
     "axios": "^1.11.0",
     "buffer": "^6.0.3",
     "camelcase-keys": "^10.0.0",
@@ -38,7 +44,6 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@tailwindcss/postcss": "^4",
     "@types/lodash": "^4.14.202",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -54,7 +59,6 @@
     "lint-staged": "^16.1.6",
     "postcss": "^8.5.6",
     "prettier": "^3.6.2",
-    "tailwindcss": "^4.1.12",
     "typescript": "^5"
   }
 }

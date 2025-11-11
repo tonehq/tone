@@ -1,23 +1,43 @@
-import CustomPagination from '@/components/Shared/CustomPagination';
-import styles from '@/styles/table.module.scss';
-import { useAdaptiveTableScrollY } from '@/utils/table';
-import { PaginationProps, Table } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
 import React from 'react';
 
-type CustomTableProps<RecordType> = {
-  columns: ColumnsType<RecordType>;
+import {
+  Box,
+  CircularProgress,
+  Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TableSortLabel,
+  useTheme,
+} from '@mui/material';
+
+import CustomPagination from '@/components/shared/CustomPagination';
+
+import { TableColumn } from '@/utils/constructTableColumn';
+import { DynamicScrollConfig, useDynamicScrollHeight } from '@/utils/table';
+
+interface CustomTableProps<RecordType> {
+  columns: TableColumn<RecordType>[];
   data: RecordType[];
   rowKey: string | ((record: RecordType) => string);
   loading?: boolean;
   showHeader?: boolean;
-  size?: 'small' | 'middle' | 'large';
+  size?: 'small' | 'medium' | 'large';
   style?: React.CSSProperties;
   withPagination?: boolean;
-  pagination?: PaginationProps;
+  pagination?: {
+    current?: number;
+    total?: number;
+    pageSize?: number;
+    onChange?: (page: number, pageSize?: number) => void;
+    showSizeChanger?: boolean;
+  };
   scroll?: { x?: number | true | string; y?: number | string };
-  minScrollYPx?: number;
-};
+  dynamicScrollConfig?: DynamicScrollConfig;
+}
 
 const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
   const {
@@ -26,54 +46,126 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
     rowKey,
     loading,
     showHeader = true,
-    size = 'large',
+    size = 'medium',
     style,
     withPagination = false,
     pagination,
     scroll,
-    minScrollYPx = 50,
+    dynamicScrollConfig,
   } = props;
+  const theme = useTheme();
 
-  const { scrollY, containerRef } = useAdaptiveTableScrollY({
-    minScrollYPx,
-  });
+  const calculatedScrollY = useDynamicScrollHeight(scroll?.y, dynamicScrollConfig);
 
-  const effectiveY = ((): number | undefined => {
-    if (scroll && scroll.y !== undefined) return scroll.y as number;
-    if (scrollY !== undefined) return scrollY;
-    return minScrollYPx;
-  })();
+  const getRowKey = (record: T, index: number): string => {
+    if (typeof rowKey === 'function') {
+      return rowKey(record);
+    }
+    return (record as any)[rowKey]?.toString() || index.toString();
+  };
 
   return (
-    <div style={{ width: '100%' }} className={styles.customTableWrapper} ref={containerRef}>
-      <Table<T>
-        columns={columns}
-        dataSource={data}
-        rowKey={rowKey as any}
-        loading={loading}
-        showHeader={showHeader}
-        size={size}
-        style={{ border: '1px solid #e5e7eb', borderRadius: 6, ...style }}
-        pagination={false}
-        sticky={!!effectiveY}
-        scroll={{
-          ...(scroll?.x !== undefined ? { x: scroll.x } : {}),
-          ...(effectiveY !== undefined ? { y: effectiveY } : {}),
+    <Box
+      sx={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: 0,
+      }}
+    >
+      <TableContainer
+        component={Paper}
+        sx={{
+          flex: calculatedScrollY ? '1 1 auto' : '0 1 auto',
+          maxHeight: calculatedScrollY
+            ? typeof calculatedScrollY === 'string'
+              ? calculatedScrollY
+              : `${calculatedScrollY}px`
+            : 'none',
+          overflow: calculatedScrollY ? 'auto' : 'visible',
+          border: '1px solid #e5e7eb',
+          borderRadius: '6px',
+          minHeight: 0,
+          ...style,
         }}
-      />
+      >
+        <Table stickyHeader={!!calculatedScrollY} size={size === 'large' ? 'medium' : size}>
+          {showHeader && (
+            <TableHead>
+              <TableRow>
+                {columns.map((column) => (
+                  <TableCell
+                    key={column.key}
+                    sx={{
+                      width: column.width,
+                      minWidth: column.width,
+                      fontWeight: theme.custom.typography.fontWeight.semibold,
+                      backgroundColor: theme.palette.background.paper,
+                      borderBottom: `1px solid ${theme.palette.divider}`,
+                    }}
+                  >
+                    {column.sorter ? <TableSortLabel>{column.title}</TableSortLabel> : column.title}
+                  </TableCell>
+                ))}
+              </TableRow>
+            </TableHead>
+          )}
+          <TableBody suppressHydrationWarning>
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={columns.length} align="center" sx={{ padding: 4 }}>
+                  <CircularProgress size={40} />
+                </TableCell>
+              </TableRow>
+            ) : data.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={columns.length} align="center" sx={{ padding: 4 }}>
+                  No data
+                </TableCell>
+              </TableRow>
+            ) : (
+              data.map((record, index) => (
+                <TableRow key={getRowKey(record, index)} hover>
+                  {columns.map((column) => {
+                    const value = (record as any)[column.dataIndex];
+                    const renderedValue = column.render
+                      ? column.render(value, record)
+                      : (value ?? '-');
+                    return (
+                      <TableCell
+                        key={column.key}
+                        sx={{
+                          width: column.width,
+                          minWidth: 0,
+                          borderBottom: `1px solid ${theme.palette.divider}`,
+                        }}
+                      >
+                        {renderedValue}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </TableContainer>
       {withPagination && (
-        <CustomPagination
-          current={pagination?.current ?? 1}
-          total={pagination?.total ?? data?.length}
-          pageSize={pagination?.pageSize ?? 10}
-          onChange={(page) => pagination?.onChange && pagination?.onChange(page, pagination?.pageSize ?? 10)}
-          showSizeChanger={pagination?.showSizeChanger || false}
-        />
+        <Box sx={{ flexShrink: 0 }}>
+          <CustomPagination
+            current={pagination?.current ?? 1}
+            total={pagination?.total ?? data?.length}
+            pageSize={pagination?.pageSize ?? 10}
+            onChange={(page) =>
+              pagination?.onChange && pagination.onChange(page, pagination?.pageSize ?? 10)
+            }
+            showSizeChanger={pagination?.showSizeChanger || false}
+          />
+        </Box>
       )}
-    </div>
+    </Box>
   );
 };
 
 export default CustomTable;
-
-

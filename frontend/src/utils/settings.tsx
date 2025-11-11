@@ -1,13 +1,19 @@
-import { MenuProps, Select } from 'antd';
-
 import { OrganizationInviteApi, OrganizationMemberApi } from '@/types/settings/members';
+
 import { constructColumns } from './constructTableColumn';
 
-const { Option } = Select;
+interface MenuItemType {
+  key: string;
+  label: React.ReactNode;
+  icon?: React.ReactNode;
+  danger?: boolean;
+  disabled?: boolean;
+  onClick?: () => void;
+}
 
 export const getMemberColumns = (
-  actionMenuItems: MenuProps['items'],
-  onRoleChange?: (memberId: number, role: string) => void
+  actionMenuItems: MenuItemType[],
+  onRoleChange?: (memberId: number, role: string) => void,
 ) =>
   constructColumns<OrganizationMemberApi>(
     [
@@ -16,7 +22,7 @@ export const getMemberColumns = (
       { key: 'role', title: 'Role', width: 100 },
       { key: 'actions', title: '', width: 40 },
     ],
-    { actionMenuItems, onRoleChange }
+    { actionMenuItems, onRoleChange },
   );
 
 export const getInvitationColumns = () =>
@@ -32,5 +38,5 @@ export const getInvitationColumns = () =>
         { key: 'resend', label: 'Resend Invitation' },
         { key: 'cancel', label: 'Cancel Invitation', danger: true },
       ],
-    }
+    },
   );

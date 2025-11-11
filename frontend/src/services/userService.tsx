@@ -41,7 +41,7 @@ export const inviteUserToOrganization = async (payload: {
 // Update member role
 export const updateOrganizationMemberRole = async (memberId: number, role: string) => {
   try {
-    const response = await axios.post(`/api/v1/organization/update_member_role`, null, {
+    const response = await axios.post('/api/v1/organization/update_member_role', null, {
       params: { member_id: memberId, role },
     });
     return response.data;

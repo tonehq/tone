@@ -1,59 +1,49 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+export interface DynamicScrollConfig {
+  useCSSHeight?: boolean;
+  cssHeight?: string;
+  fallbackHeight?: number;
+}
 
-type AdaptiveScrollOptions = {
-  reservedHeightPx?: number;
-  minScrollYPx?: number;
+const DEFAULT_SCROLL_CONFIG: Required<DynamicScrollConfig> = {
+  useCSSHeight: true,
+  cssHeight: 'calc(100vh - 400px)',
+  fallbackHeight: 400,
 };
 
-// Calculates and returns a vertical scroll height only when the table content overflows
-// the available viewport height (window.innerHeight - reservedHeightPx). Returns undefined otherwise.
-export const useAdaptiveTableScrollY = (
-  options: AdaptiveScrollOptions = {}
-) => {
-  const { reservedHeightPx = 420, minScrollYPx = 180 } = options;
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [scrollY, setScrollY] = useState<number | undefined>(undefined);
+export const useDynamicScrollHeight = (
+  scrollY: number | string | undefined,
+  config: DynamicScrollConfig = {},
+): number | string | undefined => {
+  const finalConfig = { ...DEFAULT_SCROLL_CONFIG, ...config };
 
-  const recompute = () => {
-    if (typeof window === 'undefined') return;
-    const available = Math.max(minScrollYPx, window.innerHeight - reservedHeightPx);
+  if (typeof scrollY === 'string') {
+    return scrollY;
+  }
 
-    // Find the table body inside the container
-    const body = containerRef.current?.querySelector<HTMLElement>('.ant-table-body');
-    if (!body) {
-      // If body not yet rendered, set tentative value; a later layout effect will refine it
-      setScrollY(undefined);
-      return;
-    }
+  if (finalConfig.useCSSHeight && finalConfig.cssHeight) {
+    return finalConfig.cssHeight;
+  }
 
-    const hasOverflow = body.scrollHeight > available;
-    setScrollY(hasOverflow ? available : undefined);
-  };
-
-  useLayoutEffect(() => {
-    recompute();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const onResize = () => recompute();
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Recompute when the table content size changes.
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const body = containerRef.current.querySelector('.ant-table-body');
-    if (!body) return;
-    const ro = new ResizeObserver(() => recompute());
-    ro.observe(body);
-    return () => ro.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [containerRef.current]);
-
-  return { scrollY, containerRef } as const;
+  return scrollY || finalConfig.fallbackHeight;
 };
 
+export const calculateScrollHeight = (
+  scrollY: number | string | undefined,
+  config: DynamicScrollConfig = {},
+): number | string | undefined => {
+  const finalConfig = { ...DEFAULT_SCROLL_CONFIG, ...config };
 
+  if (typeof scrollY === 'string') {
+    return scrollY;
+  }
+
+  if (finalConfig.useCSSHeight && finalConfig.cssHeight) {
+    return finalConfig.cssHeight;
+  }
+
+  return scrollY || finalConfig.fallbackHeight;
+};
+
+export const CSS_HEIGHT_PRESETS = {
+  SETTINGS: 'calc(100vh - 350px)',
+} as const;
