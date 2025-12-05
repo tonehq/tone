@@ -33,7 +33,7 @@ class MailService:
                 "from": "no-reply@updates.suryaweb.app",
                 "to": [to],
                 "subject": "Forgot Password Email",
-                "html": f"<p>lease click this link to reset your password: {verification_url}</p>",
+                "html": f"<p>Please click this link to reset your password: <a href=\"{verification_url}\">{verification_url}</a></p>",
             }
             result = resend.Emails.send(params)
             return result
