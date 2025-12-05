@@ -7,7 +7,7 @@ import requests
 
 load_dotenv()
 
-resend.api_key = os.getenv("RESEND_API_KEY")
+resend.api_key = "re_SMutgeWp_3aVdrY5NmdVztr7TVvv6MQB2"
 
 
 class MailService:
@@ -30,10 +30,10 @@ class MailService:
     def send_forgot_password_email(self, to: str, verification_url: str):
         try:
             params = {
-                "from": "onboarding@resend.dev",
+                "from": "no-reply@updates.suryaweb.app",
                 "to": [to],
                 "subject": "Forgot Password Email",
-                "html": f"<p>lease click this link to reset your password: {verification_url}</p>",
+                "html": f"<p>Please click this link to reset your password: <a href=\"{verification_url}\">{verification_url}</a></p>",
             }
             result = resend.Emails.send(params)
             return result
