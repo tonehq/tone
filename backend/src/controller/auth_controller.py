@@ -36,21 +36,34 @@ def signup(
 ):
     """
     Create a new user account with email and password
-    Expected payload: {email, password, username, profile}
+    Expected payload: {email, password, username, profile, org_name}
     """
     email = user_data.get("email")
     password = user_data.get("password")
     username = user_data.get("username")
-    profile = user_data.get("profile")
-    
+    profile = user_data.get("profile") or {}
+    org_name = user_data.get("org_name")
+
+    if org_name:
+        profile["org_name"] = org_name
+
     if not email or not password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email and password are required"
         )
-    
+
     auth_service = AuthService(db)
     return auth_service.signup(email, password, username, profile)
+
+
+@auth_router.get("/check_organization_exists")
+def check_organization_exists(
+    name: str = Query(..., description="Organization name to check"),
+    db: Session = Depends(get_db)
+):
+    auth_service = AuthService(db)
+    return auth_service.check_organization_exists(name)
 
 
 # API 2: Firebase Signup
@@ -245,6 +258,16 @@ def invite_user_to_organization(
     )
 
 
+@organization_router.get("/accept_invitation")
+def accept_invitation(
+    email: str = Query(..., description="Email of the invited user"),
+    code: str = Query(..., description="Invitation token"),
+    user_tenant_id: int = Query(..., description="Organization ID"),
+    db: Session = Depends(get_db)
+):
+    auth_service = AuthService(db)
+    return auth_service.accept_invitation(email, code, user_tenant_id)
+
 
 # API 10: Delete Member
 @organization_router.delete("/remove_user_from_organization")
@@ -280,6 +303,76 @@ def update_member_role(
     """
     auth_service = AuthService(db, org_id=org_id, user_id=claims.user_id)
     return auth_service.update_member_role(member_id, role)
+
+
+@organization_router.get("/settings")
+def get_organization_settings(
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+    org_id: int | None = Header(None, alias="tenant_id"),
+):
+    auth_service = AuthService(db, org_id=org_id, user_id=claims.user_id)
+    return auth_service.get_organization_settings(org_id)
+
+
+@organization_router.put("/settings")
+def update_organization_settings(
+    settings_data: Dict[str, Any] = Body(...),
+    claims: JWTClaims = Depends(require_admin_or_owner),
+    db: Session = Depends(get_db),
+    org_id: int | None = Header(None, alias="tenant_id"),
+):
+    auth_service = AuthService(db, org_id=org_id, user_id=claims.user_id)
+    return auth_service.update_organization_settings(org_id, settings_data)
+
+
+@organization_router.post("/request_access")
+def request_organization_access(
+    request_data: Dict[str, Any] = Body(...),
+    claims: JWTClaims = Depends(get_jwt_claims),
+    db: Session = Depends(get_db),
+):
+    org_id = request_data.get("org_id")
+    message = request_data.get("message")
+
+    if not org_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Organization ID is required"
+        )
+
+    auth_service = AuthService(db, user_id=claims.user_id)
+    return auth_service.request_organization_access(claims.user_id, org_id, message)
+
+
+@organization_router.get("/access_requests")
+def get_access_requests(
+    claims: JWTClaims = Depends(require_admin_or_owner),
+    db: Session = Depends(get_db),
+    org_id: int | None = Header(None, alias="tenant_id"),
+):
+    auth_service = AuthService(db, org_id=org_id, user_id=claims.user_id)
+    return auth_service.get_access_requests(org_id)
+
+
+@organization_router.post("/handle_access_request")
+def handle_access_request(
+    request_data: Dict[str, Any] = Body(...),
+    claims: JWTClaims = Depends(require_admin_or_owner),
+    db: Session = Depends(get_db),
+    org_id: int | None = Header(None, alias="tenant_id"),
+):
+    request_id = request_data.get("request_id")
+    action = request_data.get("action")
+
+    if not request_id or not action:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Request ID and action are required"
+        )
+
+    auth_service = AuthService(db, org_id=org_id, user_id=claims.user_id)
+    return auth_service.handle_access_request(request_id, action, claims.user_id)
 
 
 # API 12: Sign In

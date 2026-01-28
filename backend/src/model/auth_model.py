@@ -28,6 +28,11 @@ class InviteStatus(enum.Enum):
     EXPIRED = "expired"
     CANCELLED = "cancelled"
 
+class AccessRequestStatus(enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
 class AuthProvider(enum.Enum):
     EMAIL = "email"
     FIREBASE = "firebase"
@@ -210,3 +215,22 @@ class PasswordReset(Base):
     # Security
     ip_address = Column(String)
     user_agent = Column(Text)
+
+class OrganizationAccessRequest(Base):
+    __tablename__ = 'organization_access_requests'
+    __table_args__ = (
+        UniqueConstraint('user_id', 'organization_id', name='org_access_request_unique'),
+    )
+
+    id = Column(BigInteger, primary_key=True)
+    user_id = Column(BigInteger, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
+    organization_id = Column(BigInteger, ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False)
+
+    status = Column(Enum(AccessRequestStatus), default=AccessRequestStatus.PENDING)
+    message = Column(Text)
+
+    reviewed_by = Column(BigInteger, ForeignKey('users.id'), nullable=True)
+    reviewed_at = Column(BigInteger)
+
+    created_at = Column(BigInteger, nullable=False)
+    updated_at = Column(BigInteger, nullable=False)

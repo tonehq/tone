@@ -9,10 +9,11 @@ import hashlib
 import bcrypt
 from fastapi import HTTPException, status
 import requests
+from sqlalchemy import func
 from src.model.auth_model import (
-    User, Organization, Member, OrganizationInvite, 
-    EmailVerification, PasswordReset, 
-    UserStatus, OrganizationStatus, Role, InviteStatus, AuthProvider
+    User, Organization, Member, OrganizationInvite,
+    EmailVerification, PasswordReset, OrganizationAccessRequest,
+    UserStatus, OrganizationStatus, Role, InviteStatus, AuthProvider, AccessRequestStatus
 )
 from src.common.jwt_middleware import jwt_manager, JWTClaims
 from src.utils.orm_utils import model_to_dict
@@ -110,10 +111,10 @@ class AuthService:
         APPLICATION_URL = os.getenv("APPLICATION_URL")
 
         verification_code = self.create_email_verification(user.id, email)
-        verification_url = f"{APPLICATION_URL}/auth/verify_signup?email={email}&code={verification_code.code}"
-        
+        verification_url = f"{APPLICATION_URL}/auth/verify_signup?email={email}&code={verification_code.code}&user_id={user.id}"
+
         mail_service = MailService()
-        mail_service.send_signup_email(email, verification_url)
+        mail_service.send_signup_email(email, verification_url, username or email.split('@')[0])
         
         return {
             "user_id": user.id,
@@ -246,7 +247,7 @@ class AuthService:
         Verify user email with code
         """
         current_time = int(time.time())
-        
+
         verification = self.db.query(EmailVerification).filter(
             EmailVerification.email == email,
             EmailVerification.code == code,
@@ -254,34 +255,37 @@ class AuthService:
             EmailVerification.verified == False,
             EmailVerification.expires_at > current_time
         ).first()
-        
+
         if not verification:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid or expired verification code"
             )
-        
+
         if verification.attempts >= verification.max_attempts:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Maximum verification attempts exceeded"
             )
-        
-        # Update verification
+
         verification.verified = True
         verification.verified_at = current_time
         verification.updated_at = current_time
-        
-        # Update user
+
         user = self.db.query(User).filter(User.id == user_id).first()
         if user:
             user.email_verified = True
             user.email_verified_at = current_time
             user.status = UserStatus.ACTIVE
             user.updated_at = current_time
-        
-        self.db.commit()
-        
+            self.db.commit()
+
+            org_name = user.profile.get("org_name") if user.profile else None
+            if org_name:
+                self.create_organization(org_name, user_id)
+        else:
+            self.db.commit()
+
         return {"message": "Email verified successfully"}
     
     # API 5: Get Associated Organizations
@@ -428,7 +432,225 @@ class AuthService:
             "slug": organization.slug,
             "role": "owner"
         }
-    
+
+    def check_organization_exists(self, name: str) -> Dict[str, Any]:
+        existing_org = self.db.query(Organization).filter(
+            func.lower(Organization.name) == name.lower().strip(),
+            Organization.status == OrganizationStatus.ACTIVE
+        ).first()
+
+        if existing_org:
+            settings = existing_org.settings or {}
+            allow_requests = settings.get("allow_access_requests", False)
+            return {
+                "exists": True,
+                "organization": {
+                    "id": existing_org.id,
+                    "name": existing_org.name,
+                    "slug": existing_org.slug,
+                    "allow_access_requests": allow_requests
+                }
+            }
+        return {"exists": False, "organization": None}
+
+    def request_organization_access(self, user_id: int, org_id: int, message: str = None) -> Dict[str, Any]:
+        current_time = int(time.time())
+
+        org = self.db.query(Organization).filter(Organization.id == org_id).first()
+        if not org:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Organization not found"
+            )
+
+        settings = org.settings or {}
+        if not settings.get("allow_access_requests", False):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This organization does not accept access requests"
+            )
+
+        existing_member = self.db.query(Member).filter(
+            Member.user_id == user_id,
+            Member.organization_id == org_id
+        ).first()
+
+        if existing_member:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You are already a member of this organization"
+            )
+
+        existing_request = self.db.query(OrganizationAccessRequest).filter(
+            OrganizationAccessRequest.user_id == user_id,
+            OrganizationAccessRequest.organization_id == org_id,
+            OrganizationAccessRequest.status == AccessRequestStatus.PENDING
+        ).first()
+
+        if existing_request:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You already have a pending access request for this organization"
+            )
+
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+
+        if settings.get("auto_verify_same_domain", False):
+            org_domain = self._get_org_email_domain(org_id)
+            user_domain = user.email.split("@")[-1].lower() if user.email else None
+
+            if org_domain and user_domain and org_domain == user_domain:
+                member = Member(
+                    user_id=user_id,
+                    organization_id=org_id,
+                    role=Role.MEMBER,
+                    status='active',
+                    created_by=user_id,
+                    created_at=current_time,
+                    updated_at=current_time,
+                    joined_at=current_time
+                )
+                self.db.add(member)
+                self.db.commit()
+
+                return {
+                    "status": "auto_approved",
+                    "message": "You have been automatically added to the organization"
+                }
+
+        access_request = OrganizationAccessRequest(
+            user_id=user_id,
+            organization_id=org_id,
+            status=AccessRequestStatus.PENDING,
+            message=message,
+            created_at=current_time,
+            updated_at=current_time
+        )
+
+        self.db.add(access_request)
+        self.db.commit()
+
+        return {
+            "status": "pending",
+            "message": "Your access request has been submitted"
+        }
+
+    def _get_org_email_domain(self, org_id: int) -> Optional[str]:
+        owner_member = self.db.query(Member).filter(
+            Member.organization_id == org_id,
+            Member.role == Role.OWNER
+        ).first()
+
+        if owner_member:
+            owner = self.db.query(User).filter(User.id == owner_member.user_id).first()
+            if owner and owner.email:
+                return owner.email.split("@")[-1].lower()
+        return None
+
+    def update_organization_settings(self, org_id: int, settings: Dict[str, Any]) -> Dict[str, Any]:
+        org = self.db.query(Organization).filter(Organization.id == org_id).first()
+        if not org:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Organization not found"
+            )
+
+        current_settings = org.settings or {}
+        current_settings.update(settings)
+        org.settings = current_settings
+        org.updated_at = int(time.time())
+
+        self.db.commit()
+
+        return {"message": "Settings updated successfully", "settings": org.settings}
+
+    def get_organization_settings(self, org_id: int) -> Dict[str, Any]:
+        org = self.db.query(Organization).filter(Organization.id == org_id).first()
+        if not org:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Organization not found"
+            )
+
+        return org.settings or {}
+
+    def get_access_requests(self, org_id: int) -> List[Dict[str, Any]]:
+        requests = self.db.query(OrganizationAccessRequest, User).join(
+            User, OrganizationAccessRequest.user_id == User.id
+        ).filter(
+            OrganizationAccessRequest.organization_id == org_id,
+            OrganizationAccessRequest.status == AccessRequestStatus.PENDING
+        ).all()
+
+        return [{
+            "id": req.id,
+            "user_id": req.user_id,
+            "email": user.email,
+            "username": user.username,
+            "message": req.message,
+            "created_at": req.created_at
+        } for req, user in requests]
+
+    def handle_access_request(self, request_id: int, action: str, reviewer_id: int) -> Dict[str, str]:
+        current_time = int(time.time())
+
+        access_request = self.db.query(OrganizationAccessRequest).filter(
+            OrganizationAccessRequest.id == request_id
+        ).first()
+
+        if not access_request:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Access request not found"
+            )
+
+        if access_request.status != AccessRequestStatus.PENDING:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This request has already been processed"
+            )
+
+        if action == "approve":
+            access_request.status = AccessRequestStatus.APPROVED
+            access_request.reviewed_by = reviewer_id
+            access_request.reviewed_at = current_time
+            access_request.updated_at = current_time
+
+            member = Member(
+                user_id=access_request.user_id,
+                organization_id=access_request.organization_id,
+                role=Role.MEMBER,
+                status='active',
+                created_by=reviewer_id,
+                created_at=current_time,
+                updated_at=current_time,
+                joined_at=current_time
+            )
+            self.db.add(member)
+            self.db.commit()
+
+            return {"message": "Access request approved"}
+
+        elif action == "reject":
+            access_request.status = AccessRequestStatus.REJECTED
+            access_request.reviewed_by = reviewer_id
+            access_request.reviewed_at = current_time
+            access_request.updated_at = current_time
+            self.db.commit()
+
+            return {"message": "Access request rejected"}
+
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid action. Use 'approve' or 'reject'"
+            )
+
     # API 9: Invite User to Organization
     def invite_user_to_organization(self, org_id: int, name: str, email: str, 
                                    role: str, invited_by: int) -> Dict[str, Any]:
@@ -511,7 +733,78 @@ class AuthService:
             "status": invitation.status.value,
             "expires_at": invitation.expires_at
         }
-    
+
+    def accept_invitation(self, email: str, token: str, org_id: int) -> Dict[str, Any]:
+        current_time = int(time.time())
+
+        invitation = self.db.query(OrganizationInvite).filter(
+            OrganizationInvite.email == email,
+            OrganizationInvite.invitation_token == token,
+            OrganizationInvite.organization_id == org_id,
+            OrganizationInvite.status == InviteStatus.PENDING,
+            OrganizationInvite.expires_at > current_time
+        ).first()
+
+        if not invitation:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired invitation"
+            )
+
+        user = self.db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Please sign up first before accepting the invitation"
+            )
+
+        if user.status != UserStatus.ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Please verify your email before accepting the invitation"
+            )
+
+        existing_member = self.db.query(Member).filter(
+            Member.user_id == user.id,
+            Member.organization_id == org_id
+        ).first()
+
+        if existing_member:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="You are already a member of this organization"
+            )
+
+        member = Member(
+            user_id=user.id,
+            organization_id=org_id,
+            role=invitation.role,
+            status='active',
+            created_by=invitation.invited_by,
+            created_at=current_time,
+            updated_at=current_time,
+            joined_at=current_time
+        )
+
+        self.db.add(member)
+
+        invitation.status = InviteStatus.ACCEPTED
+        invitation.updated_at = current_time
+
+        self.db.commit()
+
+        org = self.db.query(Organization).filter(Organization.id == org_id).first()
+
+        return {
+            "message": "Invitation accepted successfully",
+            "organization": {
+                "id": org.id,
+                "name": org.name,
+                "slug": org.slug
+            } if org else None,
+            "role": invitation.role.value
+        }
+
     # API 10: Remove User from Organization
     def remove_user_from_organization(self, org_id: int, user_id: int) -> Dict[str, str]:
         """
@@ -552,7 +845,6 @@ class AuthService:
         """
         Update member role
         """
-        # Validate role
         try:
             role_enum = Role(new_role.lower())
         except ValueError:
@@ -560,32 +852,57 @@ class AuthService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid role"
             )
-        
+
         member = self.db.query(Member).filter(Member.id == member_id).first()
         if not member:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Member not found"
             )
-        
-        # Don't allow changing the last owner
+
+        current_user_member = self.db.query(Member).filter(
+            Member.user_id == self.user_id,
+            Member.organization_id == member.organization_id,
+            Member.status == 'active'
+        ).first()
+
+        if not current_user_member:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Not a member of this organization"
+            )
+
+        current_user_role = current_user_member.role
+
+        if current_user_role == Role.ADMIN:
+            if member.role == Role.OWNER:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Admins cannot modify owner roles"
+                )
+            if role_enum == Role.OWNER:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Admins cannot promote users to owner"
+                )
+
         if member.role == Role.OWNER and role_enum != Role.OWNER:
             owner_count = self.db.query(Member).filter(
                 Member.organization_id == member.organization_id,
                 Member.role == Role.OWNER,
                 Member.status == 'active'
             ).count()
-            
+
             if owner_count <= 1:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Cannot change role of the last owner"
                 )
-        
+
         member.role = role_enum
         member.updated_at = int(time.time())
         self.db.commit()
-        
+
         return {
             "member_id": member.id,
             "role": member.role.value,
@@ -666,8 +983,9 @@ class AuthService:
         self.db.commit()
 
         APPLICATION_URL = os.getenv("APPLICATION_URL")
+        print("application url", APPLICATION_URL)
 
-        verification_url = f"{APPLICATION_URL}/auth/forgot-password?token={reset.token}&email={user.email}"
+        verification_url = f"{APPLICATION_URL}/auth/reset-password?token={reset.token}&email={user.email}"
 
         mail_service = MailService()
         mail_service.send_forgot_password_email(email, verification_url)
