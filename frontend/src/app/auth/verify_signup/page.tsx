@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 
 import { Box, Stack, Typography } from '@mui/material';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -23,7 +23,7 @@ const EmailVerificationContent = () => {
     try {
       setLoader(true);
       const res = await axios.get(
-        `/auth/verify_user_email?email=${params.get('email')}&code=${params.get('code')}&user_id=${params.get('user_id')}`,
+        `/api/v1/auth/verify_user_email?email=${params.get('email')}&code=${params.get('code')}&user_id=${params.get('user_id')}`,
       );
       setLoader(false);
       if (res) {
@@ -33,7 +33,13 @@ const EmailVerificationContent = () => {
           4,
           'bottomRight',
         );
-        router.push('/auth/login');
+        const inviteRedirect = localStorage.getItem('invite_redirect');
+        if (inviteRedirect) {
+          localStorage.removeItem('invite_redirect');
+          router.push(inviteRedirect);
+        } else {
+          router.push('/auth/login');
+        }
       }
     } catch (error) {
       let errorMessage = '';
@@ -90,6 +96,10 @@ const EmailVerificationContent = () => {
   );
 };
 
-const EmailVerification: React.FC = () => <EmailVerificationContent />;
+const EmailVerification: React.FC = () => (
+  <Suspense fallback={null}>
+    <EmailVerificationContent />
+  </Suspense>
+);
 
 export default EmailVerification;

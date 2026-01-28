@@ -104,11 +104,29 @@ const renderRole = (
   role: string,
   record: OrganizationMemberApi,
   onRoleChange?: (memberId: number, role: string) => void,
+  currentUserRole?: 'owner' | 'admin' | 'member' | 'viewer',
 ) => {
-  const roleOptions: SelectOption[] = [
-    { value: 'admin', label: capitalize('admin') },
-    { value: 'member', label: capitalize('member') },
-  ];
+  const isOwner = currentUserRole === 'owner';
+  const isAdmin = currentUserRole === 'admin';
+  const canManage = isOwner || isAdmin;
+
+  const targetIsOwner = record.role === 'owner';
+  const canEditThisRole = canManage && (isOwner || !targetIsOwner);
+
+  const roleOptions: SelectOption[] = isOwner
+    ? [
+        { value: 'owner', label: capitalize('owner') },
+        { value: 'admin', label: capitalize('admin') },
+        { value: 'member', label: capitalize('member') },
+      ]
+    : [
+        { value: 'admin', label: capitalize('admin') },
+        { value: 'member', label: capitalize('member') },
+      ];
+
+  if (!canEditThisRole) {
+    return <Typography variant="body2">{capitalize(role)}</Typography>;
+  }
 
   return (
     <SelectInput
@@ -167,6 +185,7 @@ interface ColumnConfig {
 interface ExtraHandlers {
   onRoleChange?: (memberId: number, role: string) => void;
   actionMenuItems?: MenuItemType[];
+  currentUserRole?: 'owner' | 'admin' | 'member' | 'viewer';
 }
 
 export const constructColumns = <T extends object>(
@@ -186,9 +205,10 @@ export const constructColumns = <T extends object>(
             ? renderUser(record)
             : renderInviteUser(record as OrganizationInviteApi);
         case 'joined':
+        case 'joined_at':
           return renderJoined(value);
         case 'role':
-          return renderRole(value, record, extra?.onRoleChange);
+          return renderRole(value, record, extra?.onRoleChange, extra?.currentUserRole);
         case 'status':
           return renderStatus(value);
         case 'actions':

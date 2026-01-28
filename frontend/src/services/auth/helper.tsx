@@ -60,6 +60,7 @@ export const signup = async (
   password: string,
   profile: any = {},
   firebase_token: string | null = null,
+  org_name: string | null = null,
 ) => {
   if (firebase_token !== null) {
     return await axios
@@ -87,6 +88,7 @@ export const signup = async (
       password,
       username,
       profile,
+      org_name,
     });
   }
 };

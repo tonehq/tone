@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 
-import { Box, Stack, Typography, useTheme } from '@mui/material';
+import { Alert, Box, Stack, Typography, useTheme } from '@mui/material';
+import { debounce } from 'lodash';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
@@ -12,20 +13,29 @@ import { Form } from '@/components/shared/FormComponent';
 
 import { signup } from '@/services/auth/helper';
 
+import axios from '@/utils/axios';
 import { useNotification } from '@/utils/shared/notification';
 
 import Container from '../shared/ContainerComponent';
 
-const SignupPage = () => {
+interface ExistingOrg {
+  id: number;
+  name: string;
+  slug: string;
+  allow_access_requests: boolean;
+}
+
+const SignupContent = () => {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const params = useSearchParams();
   const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [loader, setLoader] = useState(false);
   const [active, setActive] = useState(0);
-  const [tabs] = useState('individual');
   const { notify, contextHolder } = useNotification();
   const theme = useTheme();
+  const [existingOrg, setExistingOrg] = useState<ExistingOrg | null>(null);
+  const [checkingOrg, setCheckingOrg] = useState(false);
 
   useEffect(() => {
     const firebase_signup = params.get('firebase_signup');
@@ -42,7 +52,47 @@ const SignupPage = () => {
     return () => clearTimeout(loadingTimeoutRef.current);
   }, []);
 
+  const checkOrgExists = useCallback(
+    debounce(async (orgName: string) => {
+      if (!orgName || orgName.trim().length < 2) {
+        setExistingOrg(null);
+        return;
+      }
+
+      setCheckingOrg(true);
+      try {
+        const res = await axios.get(
+          `/api/v1/auth/check_organization_exists?name=${encodeURIComponent(orgName.trim())}`,
+        );
+        if (res.data.exists) {
+          setExistingOrg(res.data.organization);
+        } else {
+          setExistingOrg(null);
+        }
+      } catch {
+        setExistingOrg(null);
+      } finally {
+        setCheckingOrg(false);
+      }
+    }, 500),
+    [],
+  );
+
+  const handleOrgNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    checkOrgExists(e.target.value);
+  };
+
   const handleSubmit = async (value: any) => {
+    if (existingOrg) {
+      notify.warning(
+        'Organization Exists',
+        'An organization with this name already exists. Please choose a different name or request access.',
+        5,
+        'bottomRight',
+      );
+      return;
+    }
+
     setLoader(true);
 
     try {
@@ -50,8 +100,9 @@ const SignupPage = () => {
         value['email'],
         value['username'],
         value['password'],
-        tabs === 'individual' ? { name: value['username'] } : { name: value['org_name'] },
+        { name: value['username'] },
         params.get('firebase_uid'),
+        value['org_name'],
       );
       notify.success(
         'Account Created',
@@ -62,7 +113,11 @@ const SignupPage = () => {
       if (params.get('firebase_signup') === 'true') {
         router.push('/home');
       } else {
-        router.push('/auth/login');
+        const redirect = params.get('redirect');
+        if (redirect) {
+          localStorage.setItem('invite_redirect', redirect);
+        }
+        router.push(`/auth/check-email?username=${encodeURIComponent(value['username'])}&email=${encodeURIComponent(value['email'])}`);
       }
       if (res.status === 200) {
         setLoader(false);
@@ -130,19 +185,40 @@ const SignupPage = () => {
           <TextInput
             name="org_name"
             type="text"
-            label="Organisation name"
+            label="Organisation name (optional)"
             placeholder="Enter your organisation name"
-            isRequired
-            rules={[{ required: true }]}
             loading={isLoading}
+            onChange={handleOrgNameChange}
           />
+
+          {existingOrg && (
+            <Alert
+              severity={existingOrg.allow_access_requests ? 'info' : 'warning'}
+              sx={{ mt: 1, mb: 2 }}
+            >
+              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                Organization &quot;{existingOrg.name}&quot; already exists.
+              </Typography>
+              {existingOrg.allow_access_requests ? (
+                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                  You can request access after signing up.
+                </Typography>
+              ) : (
+                <Typography variant="body2" sx={{ mt: 0.5 }}>
+                  Please choose a different name or contact the organization admin.
+                </Typography>
+              )}
+            </Alert>
+          )}
+
           <Stack spacing={2} sx={{ mt: 2 }}>
             <CustomButton
-              text="Create account"
-              loading={loader}
+              text={existingOrg ? 'Sign up & Request Access' : 'Create account'}
+              loading={loader || checkingOrg}
               type="primary"
               htmlType="submit"
               sx={{ width: '100%' }}
+              disabled={existingOrg ? !existingOrg.allow_access_requests : false}
             />
             <CustomButton
               text="Sign in with Google"
@@ -191,5 +267,11 @@ const SignupPage = () => {
     </Container>
   );
 };
+
+const SignupPage = () => (
+  <Suspense fallback={null}>
+    <SignupContent />
+  </Suspense>
+);
 
 export default SignupPage;

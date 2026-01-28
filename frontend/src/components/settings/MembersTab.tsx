@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import { useAtom, useSetAtom } from 'jotai';
 
@@ -13,27 +13,41 @@ import { CSS_HEIGHT_PRESETS } from '@/utils/table';
 
 interface Props {
   search: string;
+  userRole?: 'owner' | 'admin' | 'member' | 'viewer';
 }
 
-const MembersTab = ({ search }: Props) => {
+const MembersTab = ({ search, userRole }: Props) => {
   const [membersLoadable] = useAtom(loadableMembersRowsAtom);
   const updateMemberRole = useSetAtom(updateMemberRoleAtom);
 
-  const handleRoleUpdate = async (memberId: number, role: string) => {
-    try {
-      await updateMemberRole({ memberId, role });
-      showToast({ status: 'success', message: 'Role updated successfully', variant: 'message' });
-    } catch {}
-  };
+  const isOwner = userRole === 'owner';
+  const isAdmin = userRole === 'admin';
+  const canManageMembers = isOwner || isAdmin;
 
-  const items = [
-    { key: 'edit', label: 'Edit Role' },
-    { key: 'remove', label: 'Remove User', danger: true },
-  ];
+  const handleRoleUpdate = useCallback(
+    async (memberId: number, role: string) => {
+      try {
+        await updateMemberRole({ memberId, role });
+        showToast({ status: 'success', message: 'Role updated successfully', variant: 'message' });
+      } catch {}
+    },
+    [updateMemberRole],
+  );
+
+  const items = useMemo(
+    () =>
+      canManageMembers
+        ? [
+            { key: 'edit', label: 'Edit Role' },
+            { key: 'remove', label: 'Remove User', danger: true },
+          ]
+        : [],
+    [canManageMembers],
+  );
 
   const memberColumns = useMemo(
-    () => getMemberColumns(items, handleRoleUpdate),
-    [items, handleRoleUpdate],
+    () => getMemberColumns(items, canManageMembers ? handleRoleUpdate : undefined, userRole),
+    [items, handleRoleUpdate, canManageMembers, userRole],
   );
 
   const membersData = membersLoadable.state === 'hasData' ? membersLoadable.data : [];

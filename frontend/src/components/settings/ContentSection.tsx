@@ -1,8 +1,10 @@
-import { useDeferredValue, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 
 import { Box, InputAdornment, useTheme } from '@mui/material';
-import { useSetAtom } from 'jotai';
-import { Mail, Search, UserPlus, Users } from 'lucide-react';
+import { useAtom, useSetAtom } from 'jotai';
+import { Mail, Search, Settings, UserPlus, Users } from 'lucide-react';
+
+import { authAtom, getCurrentUserAtom } from '@/atoms/AuthAtom';
 
 import {
   inviteUserToOrganizationAtom,
@@ -13,7 +15,7 @@ import {
 import ModalComponent from '@/components/settings/ModalComponent';
 import CustomButton from '@/components/shared/CustomButton';
 import { TextInput } from '@/components/shared/CustomFormFields';
-import CustomTab from '@/components/shared/CustomTab';
+import CustomTab from '@/components/Shared/CustomTab';
 
 import { TabItem } from '@/types/tab';
 
@@ -22,6 +24,7 @@ import { showToast } from '@/utils/showToast';
 
 import InvitationsTab from './InvitationsTab';
 import MembersTab from './MembersTab';
+import OrganizationSettingsTab from './OrganizationSettingsTab';
 
 const ContentSection = () => {
   const [activeTab, setActiveTab] = useState('members');
@@ -30,6 +33,18 @@ const ContentSection = () => {
   const [loading, setLoading] = useState(false);
   const deferredSearch = useDeferredValue(searchText);
   const theme = useTheme();
+
+  const [auth] = useAtom(authAtom);
+  const getCurrentUser = useSetAtom(getCurrentUserAtom);
+  const userRole = auth.user?.role;
+
+  const isOwner = userRole === 'owner';
+  const isAdmin = userRole === 'admin';
+  const canManageMembers = isOwner || isAdmin;
+
+  useEffect(() => {
+    getCurrentUser();
+  }, [getCurrentUser]);
 
   const refetchMembers = useSetAtom(refetchMembersAtom);
   const refetchInvitations = useSetAtom(refetchInvitationsAtom);
@@ -46,20 +61,36 @@ const ContentSection = () => {
     }
   };
 
-  const tabItems: TabItem[] = [
-    {
-      key: 'members',
-      label: 'Members',
-      icon: <Users size={16} />,
-      content: <MembersTab search={deferredSearch} />,
-    },
-    {
-      key: 'invitations',
-      label: 'Invitations',
-      icon: <Mail size={16} />,
-      content: <InvitationsTab search={deferredSearch} />,
-    },
-  ];
+  const tabItems: TabItem[] = useMemo(() => {
+    const tabs: TabItem[] = [
+      {
+        key: 'members',
+        label: 'Members',
+        icon: <Users size={16} />,
+        content: <MembersTab search={deferredSearch} userRole={userRole} />,
+      },
+    ];
+
+    if (canManageMembers) {
+      tabs.push({
+        key: 'invitations',
+        label: 'Invitations',
+        icon: <Mail size={16} />,
+        content: <InvitationsTab search={deferredSearch} />,
+      });
+    }
+
+    if (isOwner) {
+      tabs.push({
+        key: 'org-settings',
+        label: 'Organization',
+        icon: <Settings size={16} />,
+        content: <OrganizationSettingsTab />,
+      });
+    }
+
+    return tabs;
+  }, [deferredSearch, userRole, canManageMembers, isOwner]);
 
   const handleInviteUser = async (values: { name: string; email: string; role: string }) => {
     setLoading(true);
@@ -116,12 +147,14 @@ const ContentSection = () => {
               }}
             />
           </Box>
-          <CustomButton
-            text="Invite user"
-            type="primary"
-            icon={<UserPlus size={16} />}
-            onClick={() => setInviteModalOpen(true)}
-          />
+          {canManageMembers && (
+            <CustomButton
+              text="Invite user"
+              type="primary"
+              icon={<UserPlus size={16} />}
+              onClick={() => setInviteModalOpen(true)}
+            />
+          )}
         </Box>
         <CustomTab
           items={tabItems}
