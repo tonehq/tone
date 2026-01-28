@@ -9,6 +9,7 @@ interface User {
   username?: string;
   first_name?: string;
   last_name?: string;
+  role?: 'owner' | 'admin' | 'member' | 'viewer';
 }
 
 interface AuthState {
@@ -58,14 +59,23 @@ const logoutAtom = atom(null, async (_get, set) => {
 const getCurrentUserAtom = atom(null, (_get, set) => {
   try {
     const loginData = Cookies.get('login_data');
+    const tenantId = Cookies.get(TENANT_ID);
     if (loginData) {
       const parsedData = JSON.parse(loginData);
+
+      const currentOrgId = tenantId ? parseInt(tenantId, 10) : null;
+      const organizations = parsedData.organizations || [];
+      const currentOrg = currentOrgId
+        ? organizations.find((org: any) => org.id === currentOrgId)
+        : organizations[0];
+
       const user: User = {
         id: parsedData.user_id || '',
         email: parsedData.email || '',
         username: parsedData.username || '',
         first_name: parsedData.first_name || '',
         last_name: parsedData.last_name || '',
+        role: currentOrg?.role || undefined,
       };
 
       set(authAtom, {

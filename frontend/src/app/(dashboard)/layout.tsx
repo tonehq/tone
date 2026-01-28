@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 
-import CustomLayout from '@/components/shared/CustomLayout';
-import Sidebar from '@/components/shared/SidebarComponent';
+import CustomLayout from '@/components/Shared/CustomLayout';
+import Sidebar from '@/components/Shared/SidebarComponent';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(true);

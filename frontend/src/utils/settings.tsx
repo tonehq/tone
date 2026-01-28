@@ -14,16 +14,26 @@ interface MenuItemType {
 export const getMemberColumns = (
   actionMenuItems: MenuItemType[],
   onRoleChange?: (memberId: number, role: string) => void,
-) =>
-  constructColumns<OrganizationMemberApi>(
-    [
-      { key: 'user', title: 'User', sorter: true, width: 220 },
-      { key: 'joined_at', title: 'Joined', sorter: true, width: 100 },
-      { key: 'role', title: 'Role', width: 100 },
-      { key: 'actions', title: '', width: 40 },
-    ],
-    { actionMenuItems, onRoleChange },
-  );
+  currentUserRole?: 'owner' | 'admin' | 'member' | 'viewer',
+) => {
+  const canManage = currentUserRole === 'owner' || currentUserRole === 'admin';
+
+  const columns = [
+    { key: 'user', title: 'User', sorter: true, width: 220 },
+    { key: 'joined_at', title: 'Joined', sorter: true, width: 100 },
+    { key: 'role', title: 'Role', width: 100 },
+  ];
+
+  if (canManage) {
+    columns.push({ key: 'actions', title: '', width: 40 });
+  }
+
+  return constructColumns<OrganizationMemberApi>(columns, {
+    actionMenuItems,
+    onRoleChange,
+    currentUserRole,
+  });
+};
 
 export const getInvitationColumns = () =>
   constructColumns<OrganizationInviteApi>(

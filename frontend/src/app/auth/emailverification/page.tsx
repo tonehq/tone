@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 
 import { Box, Stack, Typography, useTheme } from '@mui/material';
 import Link from 'next/link';
@@ -96,6 +96,10 @@ const EmailVerificationContent: React.FC = () => {
   );
 };
 
-const EmailVerification: React.FC = () => <EmailVerificationContent />;
+const EmailVerification: React.FC = () => (
+  <Suspense fallback={null}>
+    <EmailVerificationContent />
+  </Suspense>
+);
 
 export default EmailVerification;

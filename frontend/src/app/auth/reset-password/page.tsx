@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 
 import { Box, Stack, Typography } from '@mui/material';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -39,7 +39,7 @@ const ResetPasswordContent: React.FC = () => {
     ) {
       try {
         const res = await axios.get(
-          `/auth/acceptForgotPassword?email=${params?.get('email')}&password=${value['password'].trim()}&token=${params?.get('token')}`,
+          `api/v1/auth/acceptForgotPassword?email=${params?.get('email')}&password=${value['password'].trim()}&token=${params?.get('token')}`,
         );
         if (res) {
           notify.success(
@@ -120,6 +120,10 @@ const ResetPasswordContent: React.FC = () => {
   );
 };
 
-const ResetPassword: React.FC = () => <ResetPasswordContent />;
+const ResetPassword: React.FC = () => (
+  <Suspense fallback={null}>
+    <ResetPasswordContent />
+  </Suspense>
+);
 
 export default ResetPassword;

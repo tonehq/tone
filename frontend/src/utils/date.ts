@@ -26,7 +26,7 @@ export const formatDate = (
 
 export const formatEpochSeconds = (
   epochSeconds: number | null | undefined,
-  format: string = 'MMMM D, YYYY',
+  format: string = 'DD MMMM YYYY',
   tz?: string,
 ): string => {
   if (!epochSeconds && epochSeconds !== 0) return 'Unknown';
