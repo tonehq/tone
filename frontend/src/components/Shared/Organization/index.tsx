@@ -16,12 +16,11 @@ import Cookies from 'js-cookie';
 import { Building2, ChevronDown, Plus } from 'lucide-react';
 
 import CreateOrganizationModal from '@/components/settings/ModalComponent';
+import CustomButton from '@/components/shared/CustomButton';
 
 import { getOrganization } from '@/services/auth/helper';
 
 import { handleError } from '@/utils/handleError';
-
-import CustomButton from '../CustomButton';
 
 interface Organization {
   id: string;
@@ -80,7 +79,7 @@ const Organization = (props: any) => {
 
   const theme = useTheme();
   const getContents = () => (
-    <Box sx={{ width: 220 }}>
+    <Box sx={{ padding: 2, width: 250 }}>
       <Typography variant="body2" sx={{ mb: 2, color: theme.palette.text.secondary }}>
         Organization List
       </Typography>
@@ -192,9 +191,14 @@ const Organization = (props: any) => {
                       </Typography>
                       <Typography
                         variant="caption"
-                        sx={{ color: theme.palette.text.secondary, mt: 0.5, display: 'block' }}
+                        sx={{
+                          color: theme.palette.text.secondary,
+                          mt: 0.2,
+                          fontSize: '12px',
+                          display: 'block',
+                        }}
                       >
-                        {active?.slug || 'Web app'}
+                        {'Current Organization'}
                       </Typography>
                     </Box>
                   </Stack>

@@ -1,11 +1,9 @@
 'use client';
 
-// eslint-disable-next-line import/order
+import { Box } from '@mui/material';
 import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider } from '@mui/material/styles';
-
-import { Box } from '@mui/material';
 
 import '@/styles/variables.css';
 import './globals.css';
