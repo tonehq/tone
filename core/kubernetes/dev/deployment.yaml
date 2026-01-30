@@ -30,20 +30,13 @@ spec:
               cpu: "256m"
               memory: "1Gi"
           env:
-            - name: USE_INFISICAL
-              value: "true"
             - name: ENV
               value: "dev"
-            - name: INFISICAL_CLIENT_ID
+            - name: INFISICAL_TOKEN
               valueFrom:
                 secretKeyRef:
                   name: infisical-credentials
-                  key: client_id
-            - name: INFISICAL_CLIENT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: infisical-credentials
-                  key: client_secret
+                  key: token
             - name: INFISICAL_PROJECT_ID
               valueFrom:
                 secretKeyRef:
