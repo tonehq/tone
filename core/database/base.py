@@ -1,6 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base
 import logging
+import time
 
 from core.config import settings
 
@@ -22,4 +23,13 @@ engine = create_engine(
     connect_args=keepalive_kwargs,
 )
 
+
 Base = declarative_base()
+
+
+def _set_updated_at(mapper, connection, target):
+    if hasattr(target, "updated_at"):
+        target.updated_at = int(time.time())
+
+
+

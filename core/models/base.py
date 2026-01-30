@@ -1,11 +1,12 @@
-from sqlalchemy import event
+from sqlalchemy import Column, BigInteger
+from core.database.base import Base
 import time
 
 
-def _set_updated_at(mapper, connection, target):
-    if hasattr(target, "updated_at"):
-        target.updated_at = int(time.time())
+class TimestampModel(Base):
+    __abstract__ = True
 
+    id = Column(BigInteger, primary_key=True)
+    created_at = Column(BigInteger, nullable=False, default=lambda: int(time.time()))
+    updated_at = Column(BigInteger, nullable=False, default=lambda: int(time.time()))
 
-def setup_timestamp_listeners(base):
-    event.listen(base, "before_update", _set_updated_at, propagate=True)
