@@ -1,0 +1,19 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: tone-api-certificate
+  namespace: dev
+spec:
+  secretName: tone-api-certificate
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  commonName: dev-api.trytone.ai
+  dnsNames:
+  - dev-api.trytone.ai
+  duration: 2160h # 90 days
+  renewBefore: 720h # 30 days
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048
