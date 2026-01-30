@@ -6,6 +6,7 @@ import time
 from pydantic import BaseModel
 
 from core.config import settings
+from core.context import set_tenant_context
 
 
 security = HTTPBearer()
@@ -88,7 +89,10 @@ jwt_manager = JWTManager()
 
 
 def get_jwt_claims(credentials: HTTPAuthorizationCredentials = Depends(security)) -> JWTClaims:
-    return jwt_manager.verify_token(credentials)
+    claims = jwt_manager.verify_token(credentials)
+    org_id = claims.org_id or settings.DEFAULT_ORG_ID
+    set_tenant_context(org_id=org_id, user_id=claims.user_id, role=claims.role)
+    return claims
 
 
 def get_optional_jwt_claims(
