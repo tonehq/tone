@@ -4,8 +4,6 @@ import { Box, Card, CardContent, Typography, useTheme } from '@mui/material';
 import { Settings, Users } from 'lucide-react';
 import Link from 'next/link';
 
-import PageHeader from '@/components/shared/PageHeader';
-
 export default function HomePage() {
   const theme = useTheme();
 
@@ -26,8 +24,6 @@ export default function HomePage() {
 
   return (
     <Box>
-      <PageHeader title="Home" showNotifications={false} />
-
       <Box sx={{ p: 3 }}>
         <Box sx={{ mb: 4 }}>
           <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
@@ -69,7 +65,10 @@ export default function HomePage() {
                   }}
                 >
                   {link.icon}
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: theme.palette.text.primary }}>
+                  <Typography
+                    variant="h6"
+                    sx={{ fontWeight: 600, color: theme.palette.text.primary }}
+                  >
                     {link.title}
                   </Typography>
                 </Box>

@@ -52,12 +52,7 @@ const AcceptInvitationContent = () => {
       const inviteUrl = encodeURIComponent(window.location.href);
 
       if (errorMessage.includes('sign up first')) {
-        notify.info(
-          'Account Required',
-          'Redirecting you to sign up...',
-          3,
-          'bottomRight',
-        );
+        notify.info('Account Required', 'Redirecting you to sign up...', 3, 'bottomRight');
         setTimeout(() => {
           router.push(`/auth/signup?email=${encodeURIComponent(email)}&redirect=${inviteUrl}`);
         }, 1500);
@@ -130,8 +125,8 @@ const AcceptInvitationContent = () => {
             mb: 4,
           }}
         >
-          You have been invited to join an organization on Tone.
-          Click the button below to accept the invitation.
+          You have been invited to join an organization on Tone. Click the button below to accept
+          the invitation.
         </Typography>
 
         <Box

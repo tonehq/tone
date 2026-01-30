@@ -1,8 +1,6 @@
 import { Box } from '@mui/material';
 import { Home } from 'lucide-react';
 
-import PageHeader from '@/components/shared/PageHeader';
-
 import ContentSection from './ContentSection';
 
 interface BreadcrumbItem {
@@ -29,7 +27,6 @@ const Settings = () => {
         overflow: 'hidden',
       }}
     >
-      <PageHeader title="Settings" breadcrumbItems={breadcrumbItems} showNotifications={false} />
       <ContentSection />
     </Box>
   );

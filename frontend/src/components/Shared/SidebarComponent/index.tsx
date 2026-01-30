@@ -8,7 +8,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import Organization from '../Organization';
-import { sidemenu } from './constant';
+import { sidemenu_ce, sidemenu_ee } from './constant';
+import UserMenu from './userMenu';
 
 interface SidebarItemProps {
   icon: React.ElementType;
@@ -86,9 +87,11 @@ function SidebarItemMenu({ icon: Icon, href, active, title, isCollapsed }: Sideb
 }
 
 function Sidebar(props: any) {
-  const { isSidebarExpanded, setIsSidebarExpanded } = props;
+  const { isSidebarExpanded, setIsSidebarExpanded, organization_id } = props;
   const pathname = usePathname();
   const theme = useTheme();
+
+  console.log(!organization_id);
 
   const isActive = (path: string) =>
     pathname === path || pathname?.split('/')[1] === path.split('/')[1];
@@ -209,11 +212,15 @@ function Sidebar(props: any) {
         }}
       >
         {/* Organization Section */}
-        <Box sx={{ mb: 2 }}>
-          <Organization isSidebarExpanded={isSidebarExpanded} />
-        </Box>
+        {organization_id && (
+          <Box>
+            <Box sx={{ mb: 2 }}>
+              <Organization isSidebarExpanded={isSidebarExpanded} />
+            </Box>
 
-        <Divider sx={{ borderColor: '#736f6f', margin: '8px 0' }} />
+            <Divider sx={{ borderColor: '#736f6f', margin: '8px 0' }} />
+          </Box>
+        )}
 
         {/* Navigation Menu */}
         <Box
@@ -224,7 +231,7 @@ function Sidebar(props: any) {
             ...(!isSidebarExpanded ? { alignItems: 'center', gap: 1 } : { gap: 1 }),
           }}
         >
-          {sidemenu.map((item: any) => (
+          {(!!organization_id ? sidemenu_ee : sidemenu_ce).map((item: any) => (
             <SidebarItemMenu
               key={item.key}
               icon={item.icon}
@@ -236,6 +243,7 @@ function Sidebar(props: any) {
           ))}
         </Box>
       </Box>
+      <UserMenu />
     </Box>
   );
 }

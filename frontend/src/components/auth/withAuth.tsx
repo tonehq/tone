@@ -1,9 +1,9 @@
 'use client';
 
 import { ComponentType, FC, useEffect } from 'react';
-
-import Cokkies from 'js-cookie';
+import Cookies from 'js-cookie';
 import { useRouter } from 'next/navigation';
+
 interface WithAuthProps {
   [key: string]: any;
 }
@@ -14,9 +14,9 @@ const withAuth = <P extends WithAuthProps>(WrappedComponent: ComponentType<P>) =
 
     useEffect(() => {
       if (typeof window !== 'undefined') {
-        const token = Cokkies.get('tone_access_token');
+        const token = Cookies.get('tone_access_token');
         if (!token) {
-          router.push('/auth/login');
+          router.replace('/auth/login');
         }
       }
     }, [router]);
