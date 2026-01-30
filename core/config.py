@@ -1,7 +1,7 @@
 import os
 from typing import Optional
 from dotenv import load_dotenv
-
+import traceback
 load_dotenv()
 
 
@@ -9,38 +9,37 @@ def get_infisical_secrets() -> dict:
     """Fetch secrets from Infisical"""
     
     # Check if we should use Infisical (based on environment)
-    use_infisical = os.getenv("USE_INFISICAL", "false").lower() == "true"
+    use_infisical = os.getenv("USE_INFISICAL", "true").lower() == "true"
     
     if not use_infisical:
         return {}
     
     try:
-        from infisical_client import ClientSettings, InfisicalClient, GetSecretOptions, ListSecretsOptions
-        
-        client = InfisicalClient(ClientSettings(
-            client_id=os.getenv("INFISICAL_CLIENT_ID"),
-            client_secret=os.getenv("INFISICAL_CLIENT_SECRET"),
-            site_url=os.getenv("INFISICAL_SITE_URL", "https://app.infisical.com"),
-        ))
-        
+        from infisical_sdk import InfisicalSDKClient
+
+        client = InfisicalSDKClient(
+            host=os.getenv("INFISICAL_SITE_URL", "https://app.infisical.com"),
+            token=os.getenv("INFISICAL_TOKEN"),
+        )
+
         project_id = os.getenv("INFISICAL_PROJECT_ID")
-        environment = os.getenv("ENV", "dev")
-        
-        # Fetch all secrets from Infisical
-        secrets_list = client.listSecrets(options=ListSecretsOptions(
-            environment=environment,
+        environment = os.getenv("INFISICAL_ENV", os.getenv("ENV", "dev"))
+
+        secrets_response = client.secrets.list_secrets(
             project_id=project_id,
-            path="/",
-        ))
-        
-        # Convert to dictionary
+            environment_slug=environment,
+            secret_path="/",
+        )
+        print(f"Fetched secrets from Infisical")
+
         secrets = {}
-        for secret in secrets_list:
-            secrets[secret.secret_key] = secret.secret_value
-            
+        for secret in secrets_response.secrets:
+            secrets[secret.secretKey] = secret.secretValue
+        print(f"Infisical secrets keys: {list(secrets.keys())}")
         return secrets
         
     except Exception as e:
+        print(traceback.format_exc())
         print(f"Warning: Failed to fetch secrets from Infisical: {e}")
         return {}
 
@@ -52,6 +51,8 @@ class Settings:
         
         # Helper to get value from Infisical first, then env, then default
         def get_secret(key: str, default: str = "") -> str:
+            print(f"Fetching secret for key: {key}")
+            print(f"Infisical secrets available: {list(infisical_secrets.keys())}")
             return infisical_secrets.get(key) or os.getenv(key, default)
         
         self.DATABASE_URL: str = get_secret("CE_DATABASE_URL", get_secret("DATABASE_URL", ""))
