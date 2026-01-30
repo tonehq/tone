@@ -24,6 +24,7 @@ from core.models.service import Service
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
 from core.models.agent_phone_numbers import AgentPhoneNumbers
+from core.models.models import Model
 
 config = context.config
 

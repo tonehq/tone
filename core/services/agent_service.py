@@ -10,6 +10,8 @@ from fastapi import HTTPException, status
 
 from core.services.base import BaseService
 from core.models.agent import Agent
+from core.models.agent_config import AgentConfig
+from core.models.service_provider import ServiceProvider
 
 
 def _agent_unique_constraint_detail(exc: IntegrityError) -> str:
@@ -114,3 +116,81 @@ class AgentService(BaseService):
             ) from e
         agent = self.db.query(Agent).filter(Agent.uuid == agent_uuid).first()
         return agent
+
+    def get_all_agents(self, agent_id=None):
+        """Return all agents with joined agent_config and service_providers (llm, tts, stt). If agent_id is given, return only that agent."""
+        from sqlalchemy.orm import aliased
+
+        llm_provider = aliased(ServiceProvider)
+        tts_provider = aliased(ServiceProvider)
+        stt_provider = aliased(ServiceProvider)
+
+        q = (
+            self.db.query(Agent, AgentConfig, llm_provider, tts_provider, stt_provider)
+            .outerjoin(AgentConfig, AgentConfig.agent_id == Agent.id)
+            .outerjoin(llm_provider, AgentConfig.llm_service_id == llm_provider.id)
+            .outerjoin(tts_provider, AgentConfig.tts_service_id == tts_provider.id)
+            .outerjoin(stt_provider, AgentConfig.stt_service_id == stt_provider.id)
+        )
+        if agent_id is not None:
+            q = q.filter(Agent.id == agent_id)
+        rows = q.order_by(Agent.id).all()
+
+        result = []
+        for agent, config, llm_sp, tts_sp, stt_sp in rows:
+            item = {
+                "id": agent.id,
+                "uuid": str(agent.uuid),
+                "name": agent.name,
+                "description": agent.description,
+                "is_public": agent.is_public,
+                "tags": agent.tags,
+                "total_calls": agent.total_calls,
+                "total_minutes": float(agent.total_minutes) if agent.total_minutes is not None else None,
+                "average_rating": float(agent.average_rating) if agent.average_rating is not None else None,
+                "created_by": agent.created_by,
+                "created_at": agent.created_at,
+                "updated_at": agent.updated_at,
+                "agent_config": None
+            }
+            if config:
+                item["agent_config"] = {
+                    "id": config.id,
+                    "uuid": str(config.uuid),
+                    "agent_id": config.agent_id,
+                    "llm_service_id": config.llm_service_id,
+                    "tts_service_id": config.tts_service_id,
+                    "stt_service_id": config.stt_service_id,
+                    "first_message": config.first_message,
+                    "system_prompt": config.system_prompt,
+                    "end_call_message": config.end_call_message,
+                    "voicemail_message": config.voicemail_message,
+                    "status": config.status,
+                    "description": config.description,
+                }
+            # if llm_sp:
+            #     item["llm_service_provider"] = {
+            #         "id": llm_sp.id,
+            #         "uuid": str(llm_sp.uuid),
+            #         "name": llm_sp.name,
+            #         "display_name": llm_sp.display_name,
+            #         "provider_type": llm_sp.provider_type,
+            #     }
+            # if tts_sp:
+            #     item["tts_service_provider"] = {
+            #         "id": tts_sp.id,
+            #         "uuid": str(tts_sp.uuid),
+            #         "name": tts_sp.name,
+            #         "display_name": tts_sp.display_name,
+            #         "provider_type": tts_sp.provider_type,
+            #     }
+            # if stt_sp:
+            #     item["stt_service_provider"] = {
+            #         "id": stt_sp.id,
+            #         "uuid": str(stt_sp.uuid),
+            #         "name": stt_sp.name,
+            #         "display_name": stt_sp.display_name,
+            #         "provider_type": stt_sp.provider_type,
+            #     }
+            result.append(item)
+        return result
