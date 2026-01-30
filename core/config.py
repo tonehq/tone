@@ -7,7 +7,7 @@ load_dotenv()
 
 class Settings:
     def __init__(self):
-        self.DATABASE_URL: str = os.getenv("SINGLE_TENANT_DATABASE_URL", os.getenv("DATABASE_URL", ""))
+        self.DATABASE_URL: str = os.getenv("CE_DATABASE_URL", os.getenv("DATABASE_URL", ""))
 
         self.JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
         self.JWT_ALGORITHM: str = "HS256"

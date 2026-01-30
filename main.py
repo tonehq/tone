@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
-from core.api.v1 import auth, users, organizations
+from core.api.v1 import auth, users, organizations, api_keys, services, service_providers
 
 app = FastAPI(title="Tone API - Core", version="1.0.0")
 
@@ -18,6 +18,9 @@ api_v1 = FastAPI()
 api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
 api_v1.include_router(users.router, prefix="/user", tags=["users"])
 api_v1.include_router(organizations.router, prefix="/organization", tags=["organization"])
+api_v1.include_router(service_providers.router, prefix="/service-providers", tags=["service-providers"])
+api_v1.include_router(api_keys.router, prefix="/api-keys", tags=["api-keys"])
+api_v1.include_router(services.router, prefix="/services", tags=["services"])
 
 app.mount("/api/v1", api_v1)
 

@@ -1,13 +1,11 @@
 from sqlalchemy import Column, BigInteger, String, Boolean, Text, ForeignKey
-import time
 
-from core.database.base import Base
+from core.models.base import TimestampModel
 
 
-class PasswordReset(Base):
+class PasswordReset(TimestampModel):
     __tablename__ = 'password_resets'
 
-    id = Column(BigInteger, primary_key=True)
     user_id = Column(BigInteger, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     email = Column(String, nullable=False, index=True)
     token = Column(String, nullable=False, unique=True)
@@ -16,5 +14,4 @@ class PasswordReset(Base):
     used_at = Column(BigInteger)
     ip_address = Column(String)
     user_agent = Column(Text)
-    created_at = Column(BigInteger, nullable=False, default=lambda: int(time.time()))
-    updated_at = Column(BigInteger, nullable=False, default=lambda: int(time.time()))
+

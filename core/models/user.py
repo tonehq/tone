@@ -1,21 +1,19 @@
 from sqlalchemy import Column, BigInteger, String, Boolean, Enum, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
-import time
 
-from core.database.base import Base
+from core.models.base import TimestampModel
 from core.models.enums import UserStatus, AuthProvider
 
 
-class User(Base):
+class User(TimestampModel):
     __tablename__ = 'users'
     __table_args__ = (
         UniqueConstraint('email', name='user_email_unique'),
         UniqueConstraint('username', name='user_username_unique'),
     )
 
-    id = Column(BigInteger, primary_key=True)
-    uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True)
+    uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
     email = Column(String, nullable=False, index=True)
     username = Column(String, nullable=True, index=True)
     password_hash = Column(String, nullable=True)
@@ -34,5 +32,4 @@ class User(Base):
     phone_verified_at = Column(BigInteger)
     last_login_at = Column(BigInteger)
     user_metadata = Column(JSONB, default={})
-    created_at = Column(BigInteger, nullable=False, default=lambda: int(time.time()))
-    updated_at = Column(BigInteger, nullable=False, default=lambda: int(time.time()))
+

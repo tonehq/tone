@@ -1,18 +1,16 @@
 from sqlalchemy import Column, BigInteger, String, Text, Enum, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
-import time
 
-from core.database.base import Base
+from core.models.base import TimestampModel
 from core.models.enums import Role, InviteStatus
 
 
-class OrganizationInvite(Base):
+class OrganizationInvite(TimestampModel):
     __tablename__ = 'organization_invites'
     __table_args__ = (UniqueConstraint('email', name='invite_email_unique'),)
 
-    id = Column(BigInteger, primary_key=True)
-    uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True)
+    uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
     email = Column(String, nullable=False, index=True)
     name = Column(String)
     role = Column(Enum(Role), default=Role.MEMBER)
@@ -24,5 +22,4 @@ class OrganizationInvite(Base):
     accepted_at = Column(BigInteger)
     message = Column(Text)
     custom_permissions = Column(JSONB, default=[])
-    created_at = Column(BigInteger, nullable=False, default=lambda: int(time.time()))
-    updated_at = Column(BigInteger, nullable=False, default=lambda: int(time.time()))
+
