@@ -30,4 +30,4 @@ spec:
               cpu: "256m"        # Limit to 0.256 CPU cores
               memory: "1Gi"      # Set a reasonable memory limit
       imagePullSecrets:
-        - name: acr-auth
+        - name: dockerhub-auth
