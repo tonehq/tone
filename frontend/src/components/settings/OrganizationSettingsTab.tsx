@@ -145,6 +145,3 @@ const OrganizationSettingsTab = () => {
 };
 
 export default OrganizationSettingsTab;
-
-
-//model | voice | transcriber
