@@ -9,7 +9,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(true);
   return (
     <CustomLayout
-      siderWidth={isSidebarExpanded ? '19%' : '6%'}
+      siderWidth={isSidebarExpanded ? '16%' : '6%'}
+      isSidebarExpanded={isSidebarExpanded}
       sidebarContent={
         <Sidebar
           isSidebarExpanded={isSidebarExpanded}
