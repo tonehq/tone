@@ -24,10 +24,30 @@ spec:
           command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
           resources:
             requests:
-              cpu: "100m"        # Request 0.1 CPU cores
-              memory: "512Mi"    # Request 512 MiB of memory
+              cpu: "100m"
+              memory: "512Mi"
             limits:
-              cpu: "256m"        # Limit to 0.256 CPU cores
-              memory: "1Gi"      # Set a reasonable memory limit
+              cpu: "256m"
+              memory: "1Gi"
+          env:
+            - name: USE_INFISICAL
+              value: "true"
+            - name: ENV
+              value: "dev"
+            - name: INFISICAL_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: infisical-credentials
+                  key: client_id
+            - name: INFISICAL_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: infisical-credentials
+                  key: client_secret
+            - name: INFISICAL_PROJECT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: infisical-credentials
+                  key: project_id
       imagePullSecrets:
-        - name: acr-auth
+        - name: dockerhub-auth

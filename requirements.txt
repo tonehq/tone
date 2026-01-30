@@ -175,3 +175,4 @@ yarl==1.8.2
 zope.deprecation==4.4.0
 zope.interface==5.5.2
 zopfli==0.2.3
+infisical-python>=1.0.22
