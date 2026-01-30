@@ -153,17 +153,17 @@ function Sidebar(props: any) {
             <IconButton
               onClick={() => setIsSidebarExpanded(false)}
               sx={{
-                width: 32,
-                height: 32,
+                width: 40,
+                height: 40,
                 padding: 1,
                 borderRadius: theme.custom.borderRadius.base,
-                backgroundColor: theme.palette.grey[100],
+                backgroundColor: 'rgba(255, 255, 255, 0.2)',
                 '&:hover': {
-                  backgroundColor: theme.palette.grey[200],
+                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
                 },
               }}
             >
-              <ArrowLeftToLine size={18} style={{ color: theme.palette.grey[700] }} />
+              <ArrowLeftToLine size={18} style={{ color: theme.palette.common.white }} />
             </IconButton>
           )}
         </Box>
@@ -186,15 +186,15 @@ function Sidebar(props: any) {
               sx={{
                 width: 40,
                 height: 40,
-                padding: 1.5,
+                padding: 1,
                 borderRadius: theme.custom.borderRadius.base,
-                backgroundColor: '#f0f0f0',
+                backgroundColor: 'rgba(255, 255, 255, 0.2)',
                 '&:hover': {
-                  backgroundColor: theme.palette.grey[200],
+                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
                 },
               }}
             >
-              <ArrowRightToLine size={18} style={{ color: '#414651' }} />
+              <ArrowRightToLine size={18} style={{ color: theme.palette.common.white }} />
             </IconButton>
           </Box>
           <Divider sx={{ borderColor: '#736f6f', margin: '8px 0' }} />

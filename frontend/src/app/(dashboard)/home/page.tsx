@@ -1,10 +1,10 @@
 'use client';
 
 import { Box, Card, CardContent, Typography, useTheme } from '@mui/material';
-import { Home, Settings, Users } from 'lucide-react';
+import { Settings, Users } from 'lucide-react';
 import Link from 'next/link';
 
-import PageHeader from '@/components/Shared/PageHeader';
+import PageHeader from '@/components/shared/PageHeader';
 
 export default function HomePage() {
   const theme = useTheme();

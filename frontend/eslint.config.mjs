@@ -16,9 +16,18 @@ const tsParser = tsParserNS.default ?? tsParserNS;
 
 const eslintConfig = [
   ...compat.extends('next/core-web-vitals', 'next/typescript'),
+
   {
-    ignores: ['node_modules/**', '.next/**', 'out/**', 'build/**', 'next-env.d.ts', '*.config.js'],
+    ignores: [
+      'node_modules/**',
+      '.next/**',
+      'out/**',
+      'build/**',
+      'next-env.d.ts',
+      '*.config.js',
+    ],
   },
+
   {
     files: ['**/*.{js,jsx,ts,tsx}'],
     languageOptions: {
@@ -82,35 +91,7 @@ const eslintConfig = [
       'no-use-before-define': 'off',
       'no-undef': 0,
       'no-unsafe-optional-chaining': 0,
-      'import/no-unresolved': 0,
-      'import/order': [
-        'error',
-        {
-          groups: ['builtin', 'external', 'internal'],
-          pathGroups: [
-            { pattern: 'react', group: 'external', position: 'before' },
-            { pattern: '@/atoms/**', group: 'internal', position: 'before' },
-            { pattern: '@/components/**', group: 'internal', position: 'before' },
-            { pattern: '@/constatns/**', group: 'internal', position: 'before' },
-            { pattern: '@/services/**', group: 'internal', position: 'before' },
-            { pattern: '@/utils/**', group: 'internal', position: 'after' },
-            { pattern: '@/assets/**', group: 'internal', position: 'before' },
-            { pattern: '@/styles/**', group: 'internal', position: 'after' },
-          ],
-          pathGroupsExcludedImportTypes: ['react'],
-          'newlines-between': 'always',
-          alphabetize: {
-            order: 'asc',
-            caseInsensitive: true,
-          },
-        },
-      ],
-      'react/sort-comp': [
-        'error',
-        {
-          order: ['static-methods', 'lifecycle', 'everything-else', 'render'],
-        },
-      ],
+
       '@typescript-eslint/consistent-type-definitions': ['error', 'interface'],
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-non-null-assertion': 'off',
@@ -118,6 +99,7 @@ const eslintConfig = [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
+
       '@next/next/no-img-element': 'off',
     },
   },

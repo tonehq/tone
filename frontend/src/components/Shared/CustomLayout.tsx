@@ -8,9 +8,11 @@ interface CustomLayoutProps {
   siderWidth?: number | string;
   layoutStyle?: React.CSSProperties;
   siderStyle?: React.CSSProperties;
+  isSidebarExpanded: boolean;
 }
 
 const CustomLayout: React.FC<CustomLayoutProps> = ({
+  isSidebarExpanded,
   sidebarContent,
   children,
   siderWidth = 200,
@@ -21,7 +23,7 @@ const CustomLayout: React.FC<CustomLayoutProps> = ({
     sx={{
       width: '100%',
       height: '100%',
-      padding: 2,
+      padding: isSidebarExpanded ? 2 : 1,
       boxSizing: 'border-box',
       display: 'flex',
       flexDirection: 'row',
@@ -31,9 +33,10 @@ const CustomLayout: React.FC<CustomLayoutProps> = ({
   >
     <Box
       sx={{
+        minWidth: isSidebarExpanded ? '240px' : '',
         width: siderWidth,
         borderRadius: (theme) => theme.custom.borderRadius.base,
-        padding: 2,
+        padding: isSidebarExpanded ? 2 : 1,
         color: 'white',
         height: '100%',
         backgroundColor: '#3f3f46',

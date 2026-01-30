@@ -123,6 +123,7 @@ const CustomButton: React.FC<ButtonProps> = ({
     type: htmlType || 'button',
     className: className,
     sx: {
+      width: '100%',
       height: '36px',
       borderRadius: '5px',
       fontWeight: theme.custom.typography.fontWeight.medium,

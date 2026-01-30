@@ -160,7 +160,6 @@ const CustomTable = <T extends object>(props: CustomTableProps<T>) => {
             onChange={(page) =>
               pagination?.onChange && pagination.onChange(page, pagination?.pageSize ?? 10)
             }
-            showSizeChanger={pagination?.showSizeChanger || false}
           />
         </Box>
       )}

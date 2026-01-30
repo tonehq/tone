@@ -5,7 +5,6 @@ import { useAtom, useSetAtom } from 'jotai';
 import { Mail, Search, Settings, UserPlus, Users } from 'lucide-react';
 
 import { authAtom, getCurrentUserAtom } from '@/atoms/AuthAtom';
-
 import {
   inviteUserToOrganizationAtom,
   refetchInvitationsAtom,
@@ -15,7 +14,7 @@ import {
 import ModalComponent from '@/components/settings/ModalComponent';
 import CustomButton from '@/components/shared/CustomButton';
 import { TextInput } from '@/components/shared/CustomFormFields';
-import CustomTab from '@/components/Shared/CustomTab';
+import CustomTab from '@/components/shared/CustomTab';
 
 import { TabItem } from '@/types/tab';
 
@@ -148,12 +147,14 @@ const ContentSection = () => {
             />
           </Box>
           {canManageMembers && (
-            <CustomButton
-              text="Invite user"
-              type="primary"
-              icon={<UserPlus size={16} />}
-              onClick={() => setInviteModalOpen(true)}
-            />
+            <Box sx={{ width: 150 }}>
+              <CustomButton
+                text="Invite user"
+                type="primary"
+                icon={<UserPlus size={16} />}
+                onClick={() => setInviteModalOpen(true)}
+              />
+            </Box>
           )}
         </Box>
         <CustomTab
