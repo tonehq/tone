@@ -9,7 +9,7 @@ class ServiceProvider(TimestampModel):
     __tablename__ = 'service_providers'
 
     uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
-    name = Column(String, nullable=False, unique=True)
+    name = Column(String, nullable=False)
     display_name = Column(String, nullable=False)
     description = Column(Text)
     provider_type = Column(String, nullable=False)

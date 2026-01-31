@@ -16,3 +16,7 @@ dependencies = [
     "sqlalchemy>=2.0.0",
     "uvicorn[standard]>=0.24.0",
 ]
+
+[tool.setuptools.packages.find]
+include = ["core*", "ee*"]
+exclude = ["frontend*", "pipecatfork*"]
