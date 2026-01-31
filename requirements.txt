@@ -226,7 +226,7 @@ tldextract==3.1.0
 tokenizers==0.22.2
 tomli==2.0.1
 tomlkit==0.11.6
--e git+https://github.com/tonehq/tone.git@c3d78365dcc663bc3baed49eedd1852fd1334b8e#egg=tone
+# -e git+https://github.com/tonehq/tone.git@c3d78365dcc663bc3baed49eedd1852fd1334b8e#egg=tone
 tornado==6.3.3
 tqdm==4.66.1
 transformers==4.57.6

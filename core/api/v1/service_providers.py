@@ -39,7 +39,8 @@ def upsert_service_provider(
         supports_streaming=data.get("supports_streaming", False),
         config_schema=data.get("config_schema"),
         is_system=data.get("is_system", False),
-        provider_status=data.get("status")
+        provider_status=data.get("status"),
+        provider_id=data.get("id"),
     )
 
 
@@ -70,3 +71,4 @@ def delete_service_provider(
     db: Session = Depends(get_db)
 ):
     return ServiceProviderService(db, user_id=claims.user_id).delete_service_provider(provider_id)
+
