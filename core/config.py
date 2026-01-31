@@ -7,7 +7,10 @@ load_dotenv()
 
 def get_infisical_secrets() -> dict:
     """Fetch secrets from Infisical using token auth"""
+    use_infisical = os.getenv("USE_INFISICAL", "false").lower() == "true"
     
+    if not use_infisical:
+        return {}
     try:
         from infisical_sdk import InfisicalSDKClient
         
