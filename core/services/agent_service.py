@@ -12,6 +12,20 @@ from core.services.base import BaseService
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
 from core.models.service_provider import ServiceProvider
+from core.services.agent_config_service import AgentConfigService
+
+# Keys from request JSON to store in agent_config.agent_metadata
+AGENT_METADATA_KEYS = (
+    "custom_vocabulary",
+    "filter_words",
+    "realistic_filler_words",
+    "language",
+    "voice_speed",
+    "patience_level",
+    "speech_recognition",
+    "call_recording",
+    "call_transcription",
+)
 
 
 def _agent_unique_constraint_detail(exc: IntegrityError) -> str:
@@ -66,6 +80,7 @@ class AgentService(BaseService):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="name is required",
             )
+        # description (if present) is for the agent only, not agent_config
         agent_id = agent_data.get("id")
         agent_uuid_raw = agent_data.get("uuid")
         if agent_id is not None:
@@ -84,6 +99,7 @@ class AgentService(BaseService):
         values = {
             "uuid": agent_uuid,
             "name": agent_data["name"],
+            "description": agent_data.get("description"),
             "created_by": created_by,
             "created_at": now,
             "updated_at": now,
@@ -115,9 +131,79 @@ class AgentService(BaseService):
                 detail=detail,
             ) from e
         agent = self.db.query(Agent).filter(Agent.uuid == agent_uuid).first()
-        return agent
 
-    def get_all_agents(self, agent_id=None):
+        # When id present: edit both agent and agent_config. When id absent: create agent then create agent_config.
+        if agent_data.get("system_prompt"):
+            config_data = self._build_agent_config_data(agent.id, agent_data)
+            existing_config = self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).first()
+            if existing_config:
+                config_data["id"] = existing_config.id
+                config_data["uuid"] = str(existing_config.uuid)
+            AgentConfigService(self.db).upsert_agent_config(config_data)
+
+        config = self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).first()
+        return self._agent_response_item(agent, config)
+
+    def _agent_response_item(self, agent: Agent, config: Any) -> Dict[str, Any]:
+        """Build response dict: agent + config as single flat object (no agent_config key)."""
+        item = {
+            "id": agent.id,
+            "uuid": str(agent.uuid),
+            "name": agent.name,
+            "description": agent.description,
+            "is_public": agent.is_public,
+            "tags": agent.tags,
+            "total_calls": agent.total_calls,
+            "total_minutes": float(agent.total_minutes) if agent.total_minutes is not None else None,
+            "average_rating": float(agent.average_rating) if agent.average_rating is not None else None,
+            "created_by": agent.created_by,
+            "created_at": agent.created_at,
+            "updated_at": agent.updated_at,
+        }
+        if config:
+            agent_meta = config.agent_metadata if isinstance(config.agent_metadata, dict) else {}
+            llm_meta = config.llm_metadata if isinstance(config.llm_metadata, dict) else {}
+            tts_meta = config.tts_metadata if isinstance(config.tts_metadata, dict) else {}
+            stt_meta = config.stt_metadata if isinstance(config.stt_metadata, dict) else {}
+            item.update({
+                "llm_service_id": config.llm_service_id,
+                "tts_service_id": config.tts_service_id,
+                "stt_service_id": config.stt_service_id,
+                "llm_model_id": llm_meta.get("model_id"),
+                "tts_model_id": tts_meta.get("model_id"),
+                "stt_model_id": stt_meta.get("model_id"),
+                "first_message": config.first_message,
+                "system_prompt": config.system_prompt,
+                "end_call_message": config.end_call_message,
+                "voicemail_message": config.voicemail_message,
+                "status": config.status,
+                **{k: agent_meta.get(k) for k in AGENT_METADATA_KEYS},
+            })
+        return item
+
+    def _build_agent_config_data(self, agent_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Build agent_config payload from combined request; agent_metadata from AGENT_METADATA_KEYS."""
+        voicemail = data.get("voice_mail_message") or data.get("voicemail_message")
+        llm_model_id = data.get("llm_model_id")
+        tts_model_id = data.get("tts_model_id")
+        stt_model_id = data.get("stt_model_id") or data.get("stt_model_it")
+        config_data = {
+            "agent_id": agent_id,
+            "llm_service_id": data.get("llm_service_id"),
+            "tts_service_id": data.get("tts_service_id"),
+            "stt_service_id": data.get("stt_service_id"),
+            "first_message": data.get("first_message"),
+            "system_prompt": data.get("system_prompt") or "",
+            "end_call_message": data.get("end_call_message"),
+            "voicemail_message": voicemail,
+            "llm_metadata": {"model_id": llm_model_id} if llm_model_id is not None else {},
+            "tts_metadata": {"model_id": tts_model_id} if tts_model_id is not None else {},
+            "stt_metadata": {"model_id": stt_model_id} if stt_model_id is not None else {},
+            "agent_metadata": {k: data[k] for k in AGENT_METADATA_KEYS if k in data},
+        }
+        return config_data
+
+    def get_all_agents(self, agent_id=None, created_by=None):
         """Return all agents with joined agent_config and service_providers (llm, tts, stt). If agent_id is given, return only that agent."""
         from sqlalchemy.orm import aliased
 
@@ -134,63 +220,11 @@ class AgentService(BaseService):
         )
         if agent_id is not None:
             q = q.filter(Agent.id == agent_id)
+        if created_by is not None:
+            q = q.filter(Agent.created_by == created_by)
         rows = q.order_by(Agent.id).all()
 
         result = []
         for agent, config, llm_sp, tts_sp, stt_sp in rows:
-            item = {
-                "id": agent.id,
-                "uuid": str(agent.uuid),
-                "name": agent.name,
-                "description": agent.description,
-                "is_public": agent.is_public,
-                "tags": agent.tags,
-                "total_calls": agent.total_calls,
-                "total_minutes": float(agent.total_minutes) if agent.total_minutes is not None else None,
-                "average_rating": float(agent.average_rating) if agent.average_rating is not None else None,
-                "created_by": agent.created_by,
-                "created_at": agent.created_at,
-                "updated_at": agent.updated_at,
-                "agent_config": None
-            }
-            if config:
-                item["agent_config"] = {
-                    "id": config.id,
-                    "uuid": str(config.uuid),
-                    "agent_id": config.agent_id,
-                    "llm_service_id": config.llm_service_id,
-                    "tts_service_id": config.tts_service_id,
-                    "stt_service_id": config.stt_service_id,
-                    "first_message": config.first_message,
-                    "system_prompt": config.system_prompt,
-                    "end_call_message": config.end_call_message,
-                    "voicemail_message": config.voicemail_message,
-                    "status": config.status,
-                    "description": config.description,
-                }
-            # if llm_sp:
-            #     item["llm_service_provider"] = {
-            #         "id": llm_sp.id,
-            #         "uuid": str(llm_sp.uuid),
-            #         "name": llm_sp.name,
-            #         "display_name": llm_sp.display_name,
-            #         "provider_type": llm_sp.provider_type,
-            #     }
-            # if tts_sp:
-            #     item["tts_service_provider"] = {
-            #         "id": tts_sp.id,
-            #         "uuid": str(tts_sp.uuid),
-            #         "name": tts_sp.name,
-            #         "display_name": tts_sp.display_name,
-            #         "provider_type": tts_sp.provider_type,
-            #     }
-            # if stt_sp:
-            #     item["stt_service_provider"] = {
-            #         "id": stt_sp.id,
-            #         "uuid": str(stt_sp.uuid),
-            #         "name": stt_sp.name,
-            #         "display_name": stt_sp.display_name,
-            #         "provider_type": stt_sp.provider_type,
-            #     }
-            result.append(item)
+            result.append(self._agent_response_item(agent, config))
         return result
