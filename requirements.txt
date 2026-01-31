@@ -218,7 +218,6 @@ speechmatics-rt==0.5.3
 speechmatics-voice==0.2.8
 SQLAlchemy==2.0.46
 starlette==0.50.0
-supertokens-python==0.18.5
 sympy==1.14.0
 tenacity==9.1.2
 tinycss2==1.2.1

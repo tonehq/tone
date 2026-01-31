@@ -6,43 +6,38 @@ load_dotenv()
 
 
 def get_infisical_secrets() -> dict:
-    """Fetch secrets from Infisical"""
-    
-    # Check if we should use Infisical (based on environment)
-    use_infisical = os.getenv("USE_INFISICAL", "true").lower() == "true"
-    
-    if not use_infisical:
-        return {}
+    """Fetch secrets from Infisical using token auth"""
     
     try:
         from infisical_sdk import InfisicalSDKClient
-
-        client = InfisicalSDKClient(
-            host=os.getenv("INFISICAL_SITE_URL", "https://app.infisical.com"),
-            token=os.getenv("INFISICAL_TOKEN"),
-        )
-
+        
+        token = os.getenv("INFISICAL_TOKEN")
         project_id = os.getenv("INFISICAL_PROJECT_ID")
-        environment = os.getenv("INFISICAL_ENV", os.getenv("ENV", "dev"))
-
+        environment = os.getenv("INFISICAL_ENV", "dev")
+        
+        # Initialize the client with token
+        client = InfisicalSDKClient(
+            host="https://app.infisical.com",
+            token=token
+        )
+        
+        # Fetch all secrets
         secrets_response = client.secrets.list_secrets(
             project_id=project_id,
             environment_slug=environment,
-            secret_path="/",
+            secret_path="/"
         )
-        print(f"Fetched secrets from Infisical")
-
+        
+        # Convert to dictionary
         secrets = {}
         for secret in secrets_response.secrets:
             secrets[secret.secretKey] = secret.secretValue
-        print(f"Infisical secrets keys: {list(secrets.keys())}")
+            
         return secrets
         
     except Exception as e:
-        print(traceback.format_exc())
         print(f"Warning: Failed to fetch secrets from Infisical: {e}")
         return {}
-
 
 class Settings:
     def __init__(self):
