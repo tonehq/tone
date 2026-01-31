@@ -16,7 +16,7 @@ def get_all_agents(
     db: Session = Depends(get_db),
 ):
     """Return all agents with joined agent_config and service_providers (llm, tts, stt). If agent_id is given, return only that agent."""
-    return AgentService(db).get_all_agents(agent_id=agent_id)
+    return AgentService(db).get_all_agents(agent_id=agent_id, created_by=claims.user_id)
 
 
 @router.post("/upsert_agent", status_code=status.HTTP_200_OK)
