@@ -1,71 +1,47 @@
 'use client';
 
 import React from 'react';
-
 import { Box, SxProps, Theme } from '@mui/material';
 
-interface FormItemProps {
-  name?: string;
-  label?: string;
-  children: React.ReactNode;
-  rules?: Array<{ required?: boolean; message?: string }>;
-  className?: string;
-}
-
-export const FormItem: React.FC<FormItemProps> = ({ label, children, rules, className }) => (
-  <Box sx={{ marginBottom: 2 }} className={className}>
-    {label && (
-      <Box
-        component="label"
-        sx={{
-          display: 'block',
-          marginBottom: 1,
-          fontWeight: (theme) => theme.custom.typography.fontWeight.medium,
-        }}
-      >
-        {label}
-        {rules?.some((r) => r.required) && <span style={{ color: 'red' }}> *</span>}
-      </Box>
-    )}
-    {children}
-  </Box>
-);
-
 interface FormProps {
-  onFinish?: (values: any) => void;
-  className?: string;
-  sx?: SxProps<Theme>;
   children: React.ReactNode;
-  layout?: 'vertical' | 'horizontal';
+  onFinish: (values: any) => void;
+  sx?: SxProps<Theme>;
+  layout?: 'horizontal' | 'vertical';
   autoComplete?: string;
 }
 
-export const Form: React.FC<FormProps> = ({ onFinish, className, sx, children, autoComplete }) => {
+export const Form: React.FC<FormProps> = ({
+  children,
+  onFinish,
+  sx,
+  layout = 'vertical',
+  autoComplete = 'off',
+}) => {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const values: any = {};
-
-    // Get all input elements
-    const inputs = e.currentTarget.querySelectorAll('input, select, textarea');
-    inputs.forEach((input) => {
-      const element = input as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
-      if (element.name) {
-        values[element.name] = element.value;
-      }
+    const formData = new FormData(e.currentTarget);
+    const values: Record<string, any> = {};
+    formData.forEach((value, key) => {
+      values[key] = value;
     });
-
-    onFinish?.(values);
+    onFinish(values);
   };
 
   return (
     <Box
       component="form"
       onSubmit={handleSubmit}
-      className={className}
-      sx={sx}
       autoComplete={autoComplete}
+      sx={{
+        display: 'flex',
+        flexDirection: layout === 'vertical' ? 'column' : 'row',
+        ...sx,
+      }}
     >
       {children}
     </Box>
   );
 };
+
+export default Form;

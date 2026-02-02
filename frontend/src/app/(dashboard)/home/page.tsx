@@ -1,57 +1,111 @@
 'use client';
 
-import { Box, Card, CardContent, Typography, useTheme } from '@mui/material';
-import { Settings, Users } from 'lucide-react';
+import { Box, Card, CardContent, Typography, useTheme, Grid } from '@mui/material';
+import { Users, Settings, Bot, Phone, BarChart3, Zap } from 'lucide-react';
 import Link from 'next/link';
-
-import PageHeader from '@/components/shared/PageHeader';
 
 export default function HomePage() {
   const theme = useTheme();
 
   const quickLinks = [
     {
+      title: 'Agents',
+      description: 'Create and manage your AI voice agents',
+      icon: <Bot size={24} />,
+      href: '/agents',
+      color: '#8b5cf6',
+    },
+    {
+      title: 'Phone Numbers',
+      description: 'Manage your phone numbers for calls',
+      icon: <Phone size={24} />,
+      href: '/phone-numbers',
+      color: '#10b981',
+    },
+    {
+      title: 'Analytics',
+      description: 'View performance metrics and insights',
+      icon: <BarChart3 size={24} />,
+      href: '/analytics',
+      color: '#3b82f6',
+    },
+    {
+      title: 'Actions',
+      description: 'Configure automated actions and triggers',
+      icon: <Zap size={24} />,
+      href: '/actions',
+      color: '#f59e0b',
+    },
+    {
       title: 'Team Members',
       description: 'Manage your team and invite new members',
       icon: <Users size={24} />,
       href: '/settings',
+      color: '#ec4899',
     },
     {
       title: 'Settings',
       description: 'Configure your organization settings',
       icon: <Settings size={24} />,
       href: '/settings',
+      color: '#6b7280',
     },
   ];
 
   return (
-    <Box>
-      <PageHeader title="Home" showNotifications={false} />
-
-      <Box sx={{ p: 3 }}>
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h5" sx={{ fontWeight: 600, mb: 1 }}>
-            Welcome to Tone
-          </Typography>
-          <Typography variant="body1" sx={{ color: theme.palette.text.secondary }}>
-            Manage your organization efficiently with powerful tools for team collaboration.
-          </Typography>
-        </Box>
-
-        <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-          Quick Links
+    <Box sx={{ p: 3 }}>
+      {/* Header */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h4" sx={{ fontWeight: 600, mb: 1 }}>
+          Welcome to Synthflow
         </Typography>
+        <Typography variant="body1" sx={{ color: theme.palette.text.secondary }}>
+          Build and deploy AI voice agents in minutes. Get started with the quick links below.
+        </Typography>
+      </Box>
 
-        <Box sx={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-          {quickLinks.map((link) => (
+      {/* Stats Cards */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        {[
+          { label: 'Total Agents', value: '6', change: '+2 this week' },
+          { label: 'Active Calls', value: '0', change: 'Real-time' },
+          { label: 'Minutes Used', value: '0', change: 'This month' },
+          { label: 'Success Rate', value: '0%', change: 'Last 30 days' },
+        ].map((stat) => (
+          <Grid item xs={12} sm={6} md={3} key={stat.label}>
+            <Card sx={{ height: '100%' }}>
+              <CardContent>
+                <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mb: 1 }}>
+                  {stat.label}
+                </Typography>
+                <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
+                  {stat.value}
+                </Typography>
+                <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                  {stat.change}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+
+      {/* Quick Links */}
+      <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+        Quick Links
+      </Typography>
+
+      <Grid container spacing={3}>
+        {quickLinks.map((link) => (
+          <Grid item xs={12} sm={6} md={4} key={link.title}>
             <Card
-              key={link.title}
               component={Link}
               href={link.href}
               sx={{
-                width: 280,
+                height: '100%',
                 textDecoration: 'none',
                 transition: 'all 0.2s',
+                cursor: 'pointer',
                 '&:hover': {
                   transform: 'translateY(-2px)',
                   boxShadow: theme.shadows[4],
@@ -64,12 +118,27 @@ export default function HomePage() {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 2,
-                    mb: 1,
-                    color: theme.palette.primary.main,
+                    mb: 1.5,
                   }}
                 >
-                  {link.icon}
-                  <Typography variant="h6" sx={{ fontWeight: 600, color: theme.palette.text.primary }}>
+                  <Box
+                    sx={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: '12px',
+                      backgroundColor: `${link.color}15`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: link.color,
+                    }}
+                  >
+                    {link.icon}
+                  </Box>
+                  <Typography
+                    variant="h6"
+                    sx={{ fontWeight: 600, color: theme.palette.text.primary }}
+                  >
                     {link.title}
                   </Typography>
                 </Box>
@@ -78,9 +147,9 @@ export default function HomePage() {
                 </Typography>
               </CardContent>
             </Card>
-          ))}
-        </Box>
-      </Box>
+          </Grid>
+        ))}
+      </Grid>
     </Box>
   );
 }

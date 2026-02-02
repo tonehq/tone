@@ -1,22 +1,33 @@
-import { Bot, Cog, LayoutDashboard } from 'lucide-react';
+import {
+  BarChart3,
+  Bot,
+  Phone,
+  Settings
+} from 'lucide-react';
 
 export const sidemenu = [
   {
     key: 1,
     title: 'Home',
     path: '/home',
-    icon: LayoutDashboard,
+    icon: BarChart3,
   },
   {
     key: 2,
-    title: 'Settings',
-    path: '/settings',
-    icon: Cog,
-  },
-  {
-    key: 3,
     title: 'Agents',
     path: '/agents',
-    icon: Bot, // Or directly import Users above and use icon: Users,
+    icon: Bot,
+  },
+  {
+    key: 8,
+    title: 'Phone Numbers',
+    path: '/phone-numbers',
+    icon: Phone,
+  },
+  {
+    key: 12,
+    title: 'Settings',
+    path: '/settings',
+    icon: Settings,
   },
 ];

@@ -1,21 +1,17 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { Alert, Box, Stack, Typography, useTheme } from '@mui/material';
+import CustomButton from '@/components/Shared/CustomButton';
+import { Form } from '@/components/Shared/FormComponent';
+import TextInput from '@/components/Shared/TextInput';
+import { signup } from '@/services/auth/helper';
+import axios from '@/utils/axios';
+import { useNotification } from '@/utils/notification';
+import { Box, Stack, Typography, useTheme } from '@mui/material';
 import { debounce } from 'lodash';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-
-import CustomButton from '@/components/shared/CustomButton';
-import { TextInput } from '@/components/shared/CustomFormFields';
-import { Form } from '@/components/shared/FormComponent';
-
-import { signup } from '@/services/auth/helper';
-
-import axios from '@/utils/axios';
-import { useNotification } from '@/utils/shared/notification';
-
 import Container from '../shared/ContainerComponent';
 
 interface ExistingOrg {
@@ -25,7 +21,7 @@ interface ExistingOrg {
   allow_access_requests: boolean;
 }
 
-const SignupContent = () => {
+const SignupPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const params = useSearchParams();
@@ -62,7 +58,7 @@ const SignupContent = () => {
       setCheckingOrg(true);
       try {
         const res = await axios.get(
-          `/api/v1/auth/check_organization_exists?name=${encodeURIComponent(orgName.trim())}`,
+          `/auth/check_organization_exists?name=${encodeURIComponent(orgName.trim())}`,
         );
         if (res.data.exists) {
           setExistingOrg(res.data.organization);
@@ -87,8 +83,7 @@ const SignupContent = () => {
       notify.warning(
         'Organization Exists',
         'An organization with this name already exists. Please choose a different name or request access.',
-        5,
-        'bottomRight',
+        5
       );
       return;
     }
@@ -108,7 +103,6 @@ const SignupContent = () => {
         'Account Created',
         'Please check your email for verification',
         4,
-        'bottomRight',
       );
       if (params.get('firebase_signup') === 'true') {
         router.push('/home');
@@ -135,7 +129,7 @@ const SignupContent = () => {
       ) {
         errorMessage = (error as any).response.data.detail;
       }
-      notify.error('Sign Up Failed', errorMessage, 5, 'bottomRight');
+      notify.error('Sign Up Failed', errorMessage, 5);
       setLoader(false);
     }
   };
@@ -143,91 +137,58 @@ const SignupContent = () => {
   return (
     <Container>
       {contextHolder}
-      <Box>
-        <Typography variant="h2" sx={{ mb: 4 }}>
-          Sign Up
+      <Box sx={{ width: '100%', maxWidth: 400 }}>
+        <Typography variant="h4" sx={{ mb: 1, fontWeight: 600 }}>
+          Create your account
         </Typography>
-        <Form
-          onFinish={handleSubmit}
-          sx={{ width: 400, fontSize: (theme) => theme.custom.typography.fontSize.base }}
-          layout="vertical"
-          autoComplete="off"
-        >
+        <Typography variant="body1" sx={{ mb: 4, color: theme.palette.text.secondary }}>
+          Get started with Voice AI in minutes
+        </Typography>
+
+        <Form onFinish={handleSubmit} layout="vertical" autoComplete="off">
           <TextInput
             name="username"
             type="text"
             label="Username"
-            placeholder="Enter Your Username"
+            placeholder="Enter your username"
             isRequired
-            rules={[{ required: true }]}
-            loading={isLoading}
-            defaultValue={params.get('email')?.split('@')[0] || ''}
           />
           <TextInput
             name="email"
             type="email"
             label="Email"
-            placeholder="Enter Your Email"
+            placeholder="Enter your email"
             isRequired
-            rules={[{ required: true }]}
-            loading={isLoading}
-            defaultValue={params.get('email') || ''}
           />
           <TextInput
             name="password"
             type="password"
             label="Password"
-            placeholder="Enter your password"
+            placeholder="Create a password"
             isRequired
-            rules={[{ required: true }]}
-            loading={isLoading}
           />
           <TextInput
             name="org_name"
             type="text"
             label="Organisation name (optional)"
             placeholder="Enter your organisation name"
-            loading={isLoading}
             onChange={handleOrgNameChange}
           />
 
-          {existingOrg && (
-            <Alert
-              severity={existingOrg.allow_access_requests ? 'info' : 'warning'}
-              sx={{ mt: 1, mb: 2 }}
-            >
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                Organization &quot;{existingOrg.name}&quot; already exists.
-              </Typography>
-              {existingOrg.allow_access_requests ? (
-                <Typography variant="body2" sx={{ mt: 0.5 }}>
-                  You can request access after signing up.
-                </Typography>
-              ) : (
-                <Typography variant="body2" sx={{ mt: 0.5 }}>
-                  Please choose a different name or contact the organization admin.
-                </Typography>
-              )}
-            </Alert>
-          )}
-
           <Stack spacing={2} sx={{ mt: 2 }}>
             <CustomButton
-              text={existingOrg ? 'Sign up & Request Access' : 'Create account'}
-              loading={loader || checkingOrg}
+              text="Create account"
+              loading={loader}
               type="primary"
               htmlType="submit"
-              sx={{ width: '100%' }}
-              disabled={existingOrg ? !existingOrg.allow_access_requests : false}
+              fullWidth
             />
             <CustomButton
-              text="Sign in with Google"
-              loading={false}
+              text="Sign up with Google"
               type="default"
-              sx={{ width: '100%' }}
+              fullWidth
               icon={
                 <img
-                  loading="lazy"
                   src="https://developers.google.com/identity/images/g-logo.png"
                   alt="Google"
                   width={16}
@@ -235,43 +196,35 @@ const SignupContent = () => {
                 />
               }
             />
-            <Box
+          </Stack>
+
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              mt: 3,
+              gap: 0.5,
+            }}
+          >
+            <Typography variant="body2">Already have an account?</Typography>
+            <Typography
+              component={Link}
+              href="/auth/login"
               sx={{
-                display: 'flex',
-                fontSize: theme.custom.typography.fontSize.sm,
-                justifyContent: 'center',
-                alignItems: 'center',
+                fontWeight: theme.custom.typography.fontWeight.medium,
+                color: theme.palette.primary.main,
+                textDecoration: 'none',
+                '&:hover': { textDecoration: 'underline' },
               }}
             >
-              <Typography variant="body2">Already have an account?</Typography>
-              <Typography
-                component={Link}
-                href="/auth/login"
-                sx={{
-                  fontWeight: theme.custom.typography.fontWeight.medium,
-                  color: theme.palette.primary.main,
-                  ml: 0.5,
-                  cursor: 'pointer',
-                  textDecoration: 'none',
-                  '&:hover': {
-                    textDecoration: 'underline',
-                  },
-                }}
-              >
-                Log in
-              </Typography>
-            </Box>
-          </Stack>
+              Log in
+            </Typography>
+          </Box>
         </Form>
       </Box>
     </Container>
   );
 };
-
-const SignupPage = () => (
-  <Suspense fallback={null}>
-    <SignupContent />
-  </Suspense>
-);
 
 export default SignupPage;
