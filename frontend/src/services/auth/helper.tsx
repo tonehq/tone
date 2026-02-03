@@ -5,16 +5,6 @@ import { ACCESS_TOKEN, FIREBASE_SIGNUP, SIGNUP, TENANT_ID } from '@/constants';
 import axios from '@/utils/axios';
 import { decodeJWT } from '@/utils/jwt';
 
-export const login = async (email: string, password: string) => {
-  const { data: LogInData } = await axios.post('/auth/login', {
-    email,
-    password,
-  });
-  setToken(LogInData);
-
-  return LogInData;
-};
-
 export const setToken = async (LogInData: any) => {
   const decoded = decodeJWT(LogInData['access_token']);
   Cookies.set(ACCESS_TOKEN, LogInData['access_token'], {
@@ -36,6 +26,16 @@ export const setToken = async (LogInData: any) => {
       expires: new Date(decoded.exp * 1000),
     },
   );
+
+  return LogInData;
+};
+
+export const login = async (email: string, password: string) => {
+  const { data: LogInData } = await axios.post('/auth/login', {
+    email,
+    password,
+  });
+  setToken(LogInData);
 
   return LogInData;
 };
@@ -79,7 +79,7 @@ export const signup = async (
       .then((res) => {
         setToken(res.data);
       })
-      .catch((err) => {
+      .catch((_err) => {
         alert('something went wrong');
       });
   } else {

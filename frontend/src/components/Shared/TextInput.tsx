@@ -50,7 +50,7 @@ const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
       fullWidth = true,
       InputProps,
     },
-    ref
+    ref,
   ) => {
     const theme = useTheme();
     const [showPassword, setShowPassword] = useState(false);
@@ -161,7 +161,7 @@ const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
     );
 
     return loading ? skeleton : inputField;
-  }
+  },
 );
 
 TextInput.displayName = 'TextInput';

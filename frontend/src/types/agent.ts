@@ -21,7 +21,7 @@ export interface AgentFormData {
   timezone: string;
   knowledgeBase?: string;
   customVocabulary?: string[];
-  
+
   // Voice Configuration
   language: string;
   voice: string;
@@ -35,7 +35,7 @@ export interface AgentFormData {
   voicePrompting: string;
   filterWords?: string[];
   useRealisticFillerWords: boolean;
-  
+
   // Call Configuration
   maxCallDuration?: number;
   greeting?: string;

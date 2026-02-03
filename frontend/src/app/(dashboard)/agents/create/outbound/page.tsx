@@ -1,10 +1,6 @@
 'use client';
 
-import {
-  CallConfigurationTab,
-  GeneralTab,
-  VoiceTab,
-} from '@/components/agents/agent-form';
+import { CallConfigurationTab, GeneralTab, VoiceTab } from '@/components/agents/agent-form';
 import {
   ArrowBack as ArrowBackIcon,
   Phone as PhoneIcon,
@@ -12,17 +8,7 @@ import {
   Settings as SettingsIcon,
   VolumeUp as VoiceIcon,
 } from '@mui/icons-material';
-import {
-  Alert,
-  Avatar,
-  Box,
-  Button,
-  Chip,
-  Tab,
-  Tabs,
-  Typography,
-  useTheme,
-} from '@mui/material';
+import { Alert, Avatar, Box, Button, Chip, Tab, Tabs, Typography, useTheme } from '@mui/material';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
@@ -84,7 +70,7 @@ export default function CreateOutboundAgentPage() {
     if (
       typeof window !== 'undefined' &&
       window.confirm(
-        'Deleting an agent will erase personalized data, voice profiles, and integrations. Are you sure?'
+        'Deleting an agent will erase personalized data, voice profiles, and integrations. Are you sure?',
       )
     ) {
       router.push('/agents');
@@ -200,10 +186,22 @@ export default function CreateOutboundAgentPage() {
         </Box>
 
         <Box sx={{ px: 3 }}>
-          <Tabs value={activeTab} onChange={handleTabChange} sx={{ borderBottom: '1px solid #e2e8f0' }}>
-            <Tab icon={<SettingsIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="General" />
+          <Tabs
+            value={activeTab}
+            onChange={handleTabChange}
+            sx={{ borderBottom: '1px solid #e2e8f0' }}
+          >
+            <Tab
+              icon={<SettingsIcon sx={{ fontSize: 18 }} />}
+              iconPosition="start"
+              label="General"
+            />
             <Tab icon={<VoiceIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Voice" />
-            <Tab icon={<PhoneIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Call Configuration" />
+            <Tab
+              icon={<PhoneIcon sx={{ fontSize: 18 }} />}
+              iconPosition="start"
+              label="Call Configuration"
+            />
           </Tabs>
         </Box>
 
@@ -226,14 +224,14 @@ export default function CreateOutboundAgentPage() {
           </TabPanel>
 
           <TabPanel value={activeTab} index={1}>
-          <VoiceTab
+            <VoiceTab
               formData={{
                 language: formData.language,
                 voiceSpeed: formData.voiceSpeed,
                 voiceProvider: formData.voiceProvider,
                 sttProvider: formData.sttProvider,
                 patienceLevel: formData.patienceLevel as 'low' | 'medium' | 'high',
-                speechRecognition: formData.speechRecognition as 'fast' | 'accurate'
+                speechRecognition: formData.speechRecognition as 'fast' | 'accurate',
               }}
               onFormChange={handleFormChange}
             />

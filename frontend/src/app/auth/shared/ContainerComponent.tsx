@@ -8,7 +8,7 @@ interface ContainerProps {
 }
 
 const Container: React.FC<ContainerProps> = ({ children }) => {
-  const theme = useTheme();
+  const _theme = useTheme();
 
   return (
     <Box
@@ -163,7 +163,9 @@ const Container: React.FC<ContainerProps> = ({ children }) => {
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <Box component="span" sx={{ color: '#fbbf24' }}>★</Box>
+              <Box component="span" sx={{ color: '#fbbf24' }}>
+                ★
+              </Box>
               4.4★ 200+ reviews
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>

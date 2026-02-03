@@ -13,7 +13,10 @@ const switchSx = {
   '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#8b5cf6' },
 };
 
-export default function CallConfigurationTab({ formData, onFormChange }: CallConfigurationTabProps) {
+export default function CallConfigurationTab({
+  formData,
+  onFormChange,
+}: CallConfigurationTabProps) {
   const theme = useTheme();
 
   return (

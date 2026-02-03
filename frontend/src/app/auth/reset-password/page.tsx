@@ -28,11 +28,7 @@ const ResetPasswordContent = () => {
           `api/v1/auth/acceptForgotPassword?email=${params?.get('email')}&password=${value['password'].trim()}&token=${params?.get('token')}`,
         );
         if (res) {
-          notify.success(
-            'Password Reset',
-            'Your password has been updated successfully',
-            4,
-          );
+          notify.success('Password Reset', 'Your password has been updated successfully', 4);
           setTimeout(() => {
             router.push('/auth/login');
           }, 2000);

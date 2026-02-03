@@ -1,9 +1,4 @@
-import {
-  BarChart3,
-  Bot,
-  Phone,
-  Settings
-} from 'lucide-react';
+import { BarChart3, Bot, Phone, Settings } from 'lucide-react';
 
 export const sidemenu = [
   {

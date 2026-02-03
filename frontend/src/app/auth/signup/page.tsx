@@ -22,7 +22,7 @@ interface ExistingOrg {
 }
 
 const SignupPage = () => {
-  const [isLoading, setIsLoading] = useState(true);
+  const [_isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const params = useSearchParams();
   const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -31,7 +31,7 @@ const SignupPage = () => {
   const { notify, contextHolder } = useNotification();
   const theme = useTheme();
   const [existingOrg, setExistingOrg] = useState<ExistingOrg | null>(null);
-  const [checkingOrg, setCheckingOrg] = useState(false);
+  const [_checkingOrg, setCheckingOrg] = useState(false);
 
   useEffect(() => {
     const firebase_signup = params.get('firebase_signup');
@@ -83,7 +83,7 @@ const SignupPage = () => {
       notify.warning(
         'Organization Exists',
         'An organization with this name already exists. Please choose a different name or request access.',
-        5
+        5,
       );
       return;
     }
@@ -99,11 +99,7 @@ const SignupPage = () => {
         params.get('firebase_uid'),
         value['org_name'],
       );
-      notify.success(
-        'Account Created',
-        'Please check your email for verification',
-        4,
-      );
+      notify.success('Account Created', 'Please check your email for verification', 4);
       if (params.get('firebase_signup') === 'true') {
         router.push('/home');
       } else {
@@ -111,7 +107,9 @@ const SignupPage = () => {
         if (redirect) {
           localStorage.setItem('invite_redirect', redirect);
         }
-        router.push(`/auth/check-email?username=${encodeURIComponent(value['username'])}&email=${encodeURIComponent(value['email'])}`);
+        router.push(
+          `/auth/check-email?username=${encodeURIComponent(value['username'])}&email=${encodeURIComponent(value['email'])}`,
+        );
       }
       if (res.status === 200) {
         setLoader(false);

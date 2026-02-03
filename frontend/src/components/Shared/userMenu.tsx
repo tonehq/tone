@@ -1,15 +1,15 @@
 import {
-    Avatar,
-    Box,
-    ClickAwayListener,
-    Divider,
-    Grow,
-    ListItemIcon,
-    MenuItem,
-    MenuList,
-    Paper,
-    Popper,
-    Typography,
+  Avatar,
+  Box,
+  ClickAwayListener,
+  Divider,
+  Grow,
+  ListItemIcon,
+  MenuItem,
+  MenuList,
+  Paper,
+  Popper,
+  Typography,
 } from '@mui/material';
 import * as React from 'react';
 
@@ -104,8 +104,8 @@ export default function ProfileMenu(props: any) {
           userSelect: 'none',
         }}
       >
-    {isExpanded ? 
-         <Box
+        {isExpanded ? (
+          <Box
             sx={{
               mt: 2,
               display: 'flex',
@@ -123,11 +123,11 @@ export default function ProfileMenu(props: any) {
                 fontWeight: 600,
               }}
             >
-               {authState?.user?.first_name
-            ? startCase(authState?.user?.first_name.charAt(0))
-            : authState?.user?.email
-              ? authState?.user?.email.charAt(0).toUpperCase()
-              : ''}
+              {authState?.user?.first_name
+                ? startCase(authState?.user?.first_name.charAt(0))
+                : authState?.user?.email
+                  ? authState?.user?.email.charAt(0).toUpperCase()
+                  : ''}
             </Avatar>
             <Typography
               sx={{
@@ -138,36 +138,37 @@ export default function ProfileMenu(props: any) {
                 whiteSpace: 'nowrap',
               }}
             >
-                  {getEllipsedEmail(userEmail ?? '', 18)}
+              {getEllipsedEmail(userEmail ?? '', 18)}
             </Typography>
             <ChevronDown size={14} color="rgba(255, 255, 255, 0.6)" />
-          </Box> :
+          </Box>
+        ) : (
           <Box
-          sx={{
-            mt: 2,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            px: 1,
-          }}
-        >
-          <Avatar
             sx={{
-              width: 32,
-              height: 32,
-              backgroundColor: '#f59e0b',
-              fontSize: '0.75rem',
-              fontWeight: 600,
+              mt: 2,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              px: 1,
             }}
           >
-             {authState?.user?.first_name
-          ? startCase(authState?.user?.first_name.charAt(0))
-          : authState?.user?.email
-            ? authState?.user?.email.charAt(0).toUpperCase()
-            : ''}
-          </Avatar>
-        </Box> 
-        }
+            <Avatar
+              sx={{
+                width: 32,
+                height: 32,
+                backgroundColor: '#f59e0b',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+              }}
+            >
+              {authState?.user?.first_name
+                ? startCase(authState?.user?.first_name.charAt(0))
+                : authState?.user?.email
+                  ? authState?.user?.email.charAt(0).toUpperCase()
+                  : ''}
+            </Avatar>
+          </Box>
+        )}
       </Box>
 
       {/* Dropdown */}

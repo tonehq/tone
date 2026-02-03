@@ -12,7 +12,6 @@ import {
   Switch,
   FormControlLabel,
   Avatar,
-  Divider,
   useTheme,
   InputAdornment,
   IconButton,
@@ -226,7 +225,8 @@ export default function SettingsPage() {
                           Auto-approve users with same email domain
                         </Typography>
                         <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-                          Automatically approve access requests from users with the same email domain
+                          Automatically approve access requests from users with the same email
+                          domain
                         </Typography>
                       </Box>
                     }

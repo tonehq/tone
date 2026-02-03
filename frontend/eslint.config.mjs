@@ -18,14 +18,7 @@ const eslintConfig = [
   ...compat.extends('next/core-web-vitals', 'next/typescript'),
 
   {
-    ignores: [
-      'node_modules/**',
-      '.next/**',
-      'out/**',
-      'build/**',
-      'next-env.d.ts',
-      '*.config.js',
-    ],
+    ignores: ['node_modules/**', '.next/**', 'out/**', 'build/**', 'next-env.d.ts', '*.config.js'],
   },
 
   {
@@ -52,11 +45,11 @@ const eslintConfig = [
       'comma-dangle': [
         'error',
         {
-          arrays: 'ignore',
-          objects: 'ignore',
-          imports: 'ignore',
-          exports: 'never',
-          functions: 'ignore',
+          arrays: 'always-multiline',
+          objects: 'always-multiline',
+          imports: 'always-multiline',
+          exports: 'always-multiline',
+          functions: 'always-multiline',
         },
       ],
       'object-curly-spacing': ['error', 'always'],

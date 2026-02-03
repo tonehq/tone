@@ -63,13 +63,23 @@ function FormRow({
   );
 }
 
+function parseJsonArray(str?: string): string[] | undefined {
+  if (!str) return undefined;
+  try {
+    const parsed = JSON.parse(str);
+    return Array.isArray(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export default function GeneralTab({
   formData,
   onFormChange,
   onDeleteAgent,
   onFormSubmit,
 }: GeneralTabProps) {
-  const theme = useTheme();
+  const _theme = useTheme();
   const [vocabularyInput, setVocabularyInput] = useState('');
   const [filterWordsInput, setFilterWordsInput] = useState('');
 
@@ -83,23 +93,12 @@ export default function GeneralTab({
       aiModel: values.aiModel ?? formData.aiModel,
       customVocabulary: customVocabulary ?? formData.customVocabulary,
       filterWords: filterWords ?? formData.filterWords,
-      useRealisticFillerWords:
-        useRealisticFillerWords ?? formData.useRealisticFillerWords,
+      useRealisticFillerWords: useRealisticFillerWords ?? formData.useRealisticFillerWords,
     };
 
     onFormChange(next);
     onFormSubmit?.({ ...formData, ...next });
   };
-
-  function parseJsonArray(str?: string): string[] | undefined {
-    if (!str) return undefined;
-    try {
-      const parsed = JSON.parse(str);
-      return Array.isArray(parsed) ? parsed : undefined;
-    } catch {
-      return undefined;
-    }
-  }
 
   const addVocabulary = () => {
     const trimmed = vocabularyInput.trim();
@@ -143,10 +142,7 @@ export default function GeneralTab({
         readOnly
       />
 
-      <FormRow
-        label="Agent Name"
-        description="What name will your agent go by."
-      >
+      <FormRow label="Agent Name" description="What name will your agent go by.">
         <TextField
           value={formData.name}
           onChange={(e) => onFormChange({ name: e.target.value })}
@@ -169,17 +165,12 @@ export default function GeneralTab({
         />
       </FormRow>
 
-      <FormRow
-        label="AI Model"
-        description="Opt for speed or depth to suit your agent's role."
-      >
+      <FormRow label="AI Model" description="Opt for speed or depth to suit your agent's role.">
         <FormControl size="small" fullWidth>
           <Select
             value={formData.aiModel}
             onChange={(e) => onFormChange({ aiModel: e.target.value })}
-            renderValue={(v) =>
-              aiModels.find((m) => m.value === v)?.label ?? v
-            }
+            renderValue={(v) => aiModels.find((m) => m.value === v)?.label ?? v}
           >
             {aiModels.map((model) => (
               <MenuItem key={model.value} value={model.value}>
@@ -204,10 +195,7 @@ export default function GeneralTab({
         />
       </FormRow>
 
-      <FormRow
-        label="End Call Message"
-        description="Message sent at the end of a conversation."
-      >
+      <FormRow label="End Call Message" description="Message sent at the end of a conversation.">
         <TextField
           value={formData.end_call_message}
           onChange={(e) => onFormChange({ end_call_message: e.target.value })}
@@ -218,10 +206,7 @@ export default function GeneralTab({
         />
       </FormRow>
 
-      <FormRow
-        label="Custom Vocabulary"
-        description="Add business terms to improve accuracy."
-      >
+      <FormRow label="Custom Vocabulary" description="Add business terms to improve accuracy.">
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           <Box sx={{ display: 'flex', gap: 1 }}>
             <TextField
@@ -246,9 +231,7 @@ export default function GeneralTab({
                 size="small"
                 onDelete={() =>
                   onFormChange({
-                    customVocabulary: formData.customVocabulary.filter(
-                      (w) => w !== word
-                    ),
+                    customVocabulary: formData.customVocabulary.filter((w) => w !== word),
                   })
                 }
               />
@@ -257,10 +240,7 @@ export default function GeneralTab({
         </Box>
       </FormRow>
 
-      <FormRow
-        label="Filter Words"
-        description="Words the agent should not speak."
-      >
+      <FormRow label="Filter Words" description="Words the agent should not speak.">
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
           <Box sx={{ display: 'flex', gap: 1 }}>
             <TextField
@@ -285,9 +265,7 @@ export default function GeneralTab({
                 size="small"
                 onDelete={() =>
                   onFormChange({
-                    filterWords: formData.filterWords.filter(
-                      (w) => w !== word
-                    ),
+                    filterWords: formData.filterWords.filter((w) => w !== word),
                   })
                 }
               />
@@ -302,16 +280,11 @@ export default function GeneralTab({
       >
         <Switch
           checked={formData.useRealisticFillerWords}
-          onChange={(e) =>
-            onFormChange({ useRealisticFillerWords: e.target.checked })
-          }
+          onChange={(e) => onFormChange({ useRealisticFillerWords: e.target.checked })}
         />
       </FormRow>
 
-      <FormRow
-        label="Delete Agent"
-        description="Deleting an agent removes all associated data."
-      >
+      <FormRow label="Delete Agent" description="Deleting an agent removes all associated data.">
         <Button variant="contained" color="error" onClick={onDeleteAgent}>
           Delete Agent
         </Button>

@@ -1,10 +1,6 @@
 'use client';
 
-import {
-  CallConfigurationTab,
-  GeneralTab,
-  VoiceTab,
-} from '@/components/agents/agent-form';
+import { CallConfigurationTab, GeneralTab, VoiceTab } from '@/components/agents/agent-form';
 import PromptPage from '@/components/agents/agent-form/promptPage';
 import {
   ArrowBack as ArrowBackIcon,
@@ -13,17 +9,7 @@ import {
   Settings as SettingsIcon,
   VolumeUp as VoiceIcon,
 } from '@mui/icons-material';
-import {
-  Alert,
-  Avatar,
-  Box,
-  Button,
-  Chip,
-  Tab,
-  Tabs,
-  Typography,
-  useTheme,
-} from '@mui/material';
+import { Alert, Avatar, Box, Button, Chip, Tab, Tabs, Typography, useTheme } from '@mui/material';
 import { startCase } from 'lodash';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -47,10 +33,10 @@ export default function CreateInboundAgentPage() {
   const router = useRouter();
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState(0);
-  const [currentMenu, setCurrentMenu] = useState('configure')
+  const [currentMenu, setCurrentMenu] = useState('configure');
   const [formData, setFormData] = useState({
     name: 'My Inbound Assistant',
-    description: 'Description', 
+    description: 'Description',
     aiModel: 'gpt-4.1',
     end_call_message: 'something end',
     first_message: 'first message something',
@@ -67,7 +53,7 @@ export default function CreateInboundAgentPage() {
     voicePrompting: 'slowly and at good volume',
     useRealisticFillerWords: false,
     callRecording: false,
-    callTranscription: false
+    callTranscription: false,
   });
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
@@ -87,7 +73,7 @@ export default function CreateInboundAgentPage() {
     if (
       typeof window !== 'undefined' &&
       window.confirm(
-        'Deleting an agent will erase personalized data, voice profiles, and integrations. Are you sure?'
+        'Deleting an agent will erase personalized data, voice profiles, and integrations. Are you sure?',
       )
     ) {
       router.push('/agents');
@@ -148,7 +134,7 @@ export default function CreateInboundAgentPage() {
         </Box>
 
         <Box sx={{ flex: 1, py: 2 }}>
-          {['configure', 'prompt','deployments'].map((item, index) => (
+          {['configure', 'prompt', 'deployments'].map((item) => (
             <Box
               key={item}
               sx={{
@@ -156,12 +142,14 @@ export default function CreateInboundAgentPage() {
                 px: 2,
                 cursor: 'pointer',
                 backgroundColor: item === currentMenu ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
-                color: item === currentMenu  ? '#8b5cf6' : theme.palette.text.primary,
-                fontWeight:600,
+                color: item === currentMenu ? '#8b5cf6' : theme.palette.text.primary,
+                fontWeight: 600,
               }}
               onClick={() => setCurrentMenu(item)}
             >
-              <Typography variant="body2" sx={{ fontWeight:600 }}>{startCase(item)}</Typography>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                {startCase(item)}
+              </Typography>
             </Box>
           ))}
         </Box>
@@ -178,8 +166,8 @@ export default function CreateInboundAgentPage() {
             </Button>
           }
         >
-          <strong>Important</strong> Your agent doesn&apos;t have a phone number and can&apos;t receive
-          calls.
+          <strong>Important</strong> Your agent doesn&apos;t have a phone number and can&apos;t
+          receive calls.
         </Alert>
 
         <Box
@@ -204,79 +192,93 @@ export default function CreateInboundAgentPage() {
           </Button>
         </Box>
 
-        {currentMenu === 'configure' && <Box>
-          <Box sx={{ px: 3 }}>
-            <Tabs
-              value={activeTab}
-              onChange={handleTabChange}
-              sx={{
-                borderBottom: '1px solid #e2e8f0',
-                '& .MuiTab-root': {
-                  marginRight: '16px',
-                  minHeight: 48,
-                  textTransform: 'none',
-                },
-              }}
-            >
-              <Tab icon={<SettingsIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="General" />
-              <Tab icon={<VoiceIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Voice" />
-              <Tab icon={<PhoneIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Call Configuration" />
-            </Tabs>
-          </Box>
-
-          <Box sx={{ p: 3, background: 'white',  height: '73vh', overflow: 'auto' }}>
-            <TabPanel value={activeTab} index={0}>
-              <GeneralTab
-                formData={{
-                  name: formData.name,
-                  description: formData.description,
-                  aiModel: formData.aiModel,
-                  end_call_message: formData.end_call_message,
-                  first_message: formData.first_message,
-                  customVocabulary: formData.customVocabulary,
-                  filterWords: formData.filterWords,
-                  useRealisticFillerWords: formData.useRealisticFillerWords,
-                }}
-                onFormChange={handleFormChange}
-                onDeleteAgent={handleDeleteAgent}
-              />
-            </TabPanel>
-
-            <TabPanel value={activeTab} index={1}>
-              <VoiceTab
-                formData={{
-                  language: formData.language,
-                  voiceSpeed: formData.voiceSpeed,
-                  voiceProvider: formData.voiceProvider,
-                  sttProvider: formData.sttProvider,
-                  patienceLevel: formData.patienceLevel as 'low' | 'medium' | 'high',
-                  speechRecognition: formData.speechRecognition as 'fast' | 'accurate'
-                }}
-                onFormChange={handleFormChange}
-              />
-            </TabPanel>
-
-            <TabPanel value={activeTab} index={2}>
-              <CallConfigurationTab
-                formData={{
-                  callRecording: formData.callRecording,
-                  callTranscription: formData.callTranscription,
-                }}
-                onFormChange={handleFormChange}
-              />
-            </TabPanel>
-          </Box>
-        </Box>}
-        {currentMenu === 'prompt' &&
+        {currentMenu === 'configure' && (
           <Box>
-              <PromptPage 
-                   formData={{
-                    voicePrompting: formData.voicePrompting,
+            <Box sx={{ px: 3 }}>
+              <Tabs
+                value={activeTab}
+                onChange={handleTabChange}
+                sx={{
+                  borderBottom: '1px solid #e2e8f0',
+                  '& .MuiTab-root': {
+                    marginRight: '16px',
+                    minHeight: 48,
+                    textTransform: 'none',
+                  },
+                }}
+              >
+                <Tab
+                  icon={<SettingsIcon sx={{ fontSize: 18 }} />}
+                  iconPosition="start"
+                  label="General"
+                />
+                <Tab
+                  icon={<VoiceIcon sx={{ fontSize: 18 }} />}
+                  iconPosition="start"
+                  label="Voice"
+                />
+                <Tab
+                  icon={<PhoneIcon sx={{ fontSize: 18 }} />}
+                  iconPosition="start"
+                  label="Call Configuration"
+                />
+              </Tabs>
+            </Box>
+
+            <Box sx={{ p: 3, background: 'white', height: '73vh', overflow: 'auto' }}>
+              <TabPanel value={activeTab} index={0}>
+                <GeneralTab
+                  formData={{
+                    name: formData.name,
+                    description: formData.description,
+                    aiModel: formData.aiModel,
+                    end_call_message: formData.end_call_message,
+                    first_message: formData.first_message,
+                    customVocabulary: formData.customVocabulary,
+                    filterWords: formData.filterWords,
+                    useRealisticFillerWords: formData.useRealisticFillerWords,
                   }}
                   onFormChange={handleFormChange}
-              />
+                  onDeleteAgent={handleDeleteAgent}
+                />
+              </TabPanel>
+
+              <TabPanel value={activeTab} index={1}>
+                <VoiceTab
+                  formData={{
+                    language: formData.language,
+                    voiceSpeed: formData.voiceSpeed,
+                    voiceProvider: formData.voiceProvider,
+                    sttProvider: formData.sttProvider,
+                    patienceLevel: formData.patienceLevel as 'low' | 'medium' | 'high',
+                    speechRecognition: formData.speechRecognition as 'fast' | 'accurate',
+                  }}
+                  onFormChange={handleFormChange}
+                />
+              </TabPanel>
+
+              <TabPanel value={activeTab} index={2}>
+                <CallConfigurationTab
+                  formData={{
+                    callRecording: formData.callRecording,
+                    callTranscription: formData.callTranscription,
+                  }}
+                  onFormChange={handleFormChange}
+                />
+              </TabPanel>
+            </Box>
           </Box>
-        }
+        )}
+        {currentMenu === 'prompt' && (
+          <Box>
+            <PromptPage
+              formData={{
+                voicePrompting: formData.voicePrompting,
+              }}
+              onFormChange={handleFormChange}
+            />
+          </Box>
+        )}
       </Box>
     </Box>
   );

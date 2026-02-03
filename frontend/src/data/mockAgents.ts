@@ -102,8 +102,20 @@ export const sttProviders = [
 ];
 
 export const voices = [
-  { value: 'jessica', label: 'Jessica', provider: 'ElevenLabs', accent: 'american', gender: 'female' },
-  { value: 'michael', label: 'Michael', provider: 'ElevenLabs', accent: 'american', gender: 'male' },
+  {
+    value: 'jessica',
+    label: 'Jessica',
+    provider: 'ElevenLabs',
+    accent: 'american',
+    gender: 'female',
+  },
+  {
+    value: 'michael',
+    label: 'Michael',
+    provider: 'ElevenLabs',
+    accent: 'american',
+    gender: 'male',
+  },
   { value: 'emma', label: 'Emma', provider: 'ElevenLabs', accent: 'british', gender: 'female' },
   { value: 'james', label: 'James', provider: 'ElevenLabs', accent: 'british', gender: 'male' },
 ];

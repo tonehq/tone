@@ -10,7 +10,7 @@ import {
   RadioGroup,
   Select,
   Slider,
-  Typography
+  Typography,
 } from '@mui/material';
 import type { AgentVoiceFormData } from './types';
 
@@ -20,13 +20,10 @@ interface VoiceTabProps {
 }
 
 export default function VoiceTab({ formData, onFormChange }: VoiceTabProps) {
-
   const Row = ({ left, right }: { left: React.ReactNode; right: React.ReactNode }) => (
     <Box sx={{ display: 'flex', mb: 4 }}>
       <Box sx={{ width: '60%' }}>{left}</Box>
-      <Box sx={{ width: '40%', display: 'flex', justifyContent: 'flex-start' }}>
-        {right}
-      </Box>
+      <Box sx={{ width: '40%', display: 'flex', justifyContent: 'flex-start' }}>{right}</Box>
     </Box>
   );
 
@@ -73,18 +70,18 @@ export default function VoiceTab({ formData, onFormChange }: VoiceTabProps) {
           </>
         }
         right={
-            <FormControl  size="small" fullWidth>
-              <Select
-                value={formData.voiceProvider}
-                onChange={(e) => onFormChange({ voiceProvider: e.target.value })}
-              >
-                {voiceProviders.map((v) => (
-                  <MenuItem key={v.value} value={v.value}>
-                    {v.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+          <FormControl size="small" fullWidth>
+            <Select
+              value={formData.voiceProvider}
+              onChange={(e) => onFormChange({ voiceProvider: e.target.value })}
+            >
+              {voiceProviders.map((v) => (
+                <MenuItem key={v.value} value={v.value}>
+                  {v.label}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         }
       />
 
@@ -105,7 +102,6 @@ export default function VoiceTab({ formData, onFormChange }: VoiceTabProps) {
             <Select
               value={formData.sttProvider}
               onChange={(e) => onFormChange({ sttProvider: e.target.value })}
-              
             >
               {sttProviders.map((s) => (
                 <MenuItem key={s.value} value={s.value}>
@@ -185,8 +181,7 @@ export default function VoiceTab({ formData, onFormChange }: VoiceTabProps) {
                       borderRadius: 2,
                       border: '1px solid',
                       cursor: 'pointer',
-                      borderColor:
-                        formData.patienceLevel === item.value ? '#a78bfa' : 'divider',
+                      borderColor: formData.patienceLevel === item.value ? '#a78bfa' : 'divider',
                       backgroundColor:
                         formData.patienceLevel === item.value
                           ? 'rgba(167, 139, 250, 0.12)'
@@ -251,9 +246,7 @@ export default function VoiceTab({ formData, onFormChange }: VoiceTabProps) {
                       border: '1px solid',
                       cursor: 'pointer',
                       borderColor:
-                        formData.speechRecognition === item.value
-                          ? '#a78bfa'
-                          : 'divider',
+                        formData.speechRecognition === item.value ? '#a78bfa' : 'divider',
                       backgroundColor:
                         formData.speechRecognition === item.value
                           ? 'rgba(167, 139, 250, 0.12)'

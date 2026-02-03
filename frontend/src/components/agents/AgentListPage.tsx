@@ -8,7 +8,7 @@ import {
   CallReceived as InboundIcon,
   MoreVert as MoreVertIcon,
   CallMade as OutboundIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import {
   Avatar,
@@ -22,11 +22,7 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import {
-  GridColDef,
-  GridPaginationModel,
-  GridRenderCellParams
-} from '@mui/x-data-grid';
+import { GridColDef, GridPaginationModel, GridRenderCellParams } from '@mui/x-data-grid';
 import { format } from 'date-fns';
 import { useAtom } from 'jotai';
 import React, { useEffect, useRef, useState } from 'react';
@@ -35,7 +31,7 @@ import CreateAgentModal from './CreateAgentModal';
 const AgentListPage: React.FC = () => {
   const theme = useTheme();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [paginationModel, setPaginationModel] = useState<GridPaginationModel>({
+  const [_paginationModel, _setPaginationModel] = useState<GridPaginationModel>({
     page: 0,
     pageSize: 10,
   });
@@ -62,7 +58,6 @@ const AgentListPage: React.FC = () => {
     };
 
     init();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   console.log(data, loader, 'loader');
@@ -78,31 +73,31 @@ const AgentListPage: React.FC = () => {
   const defaultColumns = [
     {
       key: 1,
-      label: 'AGENT NAME', 
-      value: 'name'
-    }, 
+      label: 'AGENT NAME',
+      value: 'name',
+    },
     {
       key: 2,
       label: 'PHONE NUMBER',
-      value: 'phone_number'
+      value: 'phone_number',
     },
     {
       key: 3,
       label: 'LAST EDITED',
-      value: 'updated_at'
+      value: 'updated_at',
     },
     {
       key: 4,
       label: 'AGENT TYPE',
-      value: 'agent_type'
+      value: 'agent_type',
     },
     {
       key: 5,
       label: 'ACTION',
-      value: 'action'
+      value: 'action',
     },
-  ]
-  const columns: GridColDef<Agent>[] = [
+  ];
+  const _columns: GridColDef<Agent>[] = [
     {
       field: 'name',
       headerName: 'AGENT NAME',
@@ -165,9 +160,7 @@ const AgentListPage: React.FC = () => {
             label={isInbound ? 'Inbound' : 'Outbound'}
             size="small"
             sx={{
-              backgroundColor: isInbound
-                ? 'rgba(16, 185, 129, 0.1)'
-                : 'rgba(139, 92, 246, 0.1)',
+              backgroundColor: isInbound ? 'rgba(16, 185, 129, 0.1)' : 'rgba(139, 92, 246, 0.1)',
               color: isInbound ? '#10b981' : '#8b5cf6',
               fontWeight: 500,
               '& .MuiChip-icon': {
@@ -191,7 +184,7 @@ const AgentListPage: React.FC = () => {
     },
   ];
 
-  const column = constructTable(defaultColumns)
+  const _column = constructTable(defaultColumns);
 
   return (
     <Box sx={{ p: 3, height: '100%' }}>
@@ -246,15 +239,10 @@ const AgentListPage: React.FC = () => {
           overflow: 'hidden',
         }}
         elevation={0}
-      >
-       
-      </Paper>
+      ></Paper>
 
       {/* Create Agent Modal */}
-      <CreateAgentModal
-        open={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-      />
+      <CreateAgentModal open={isModalOpen} onClose={() => setIsModalOpen(false)} />
     </Box>
   );
 };

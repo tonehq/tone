@@ -20,11 +20,7 @@ const ForgotPasswordPage = () => {
       try {
         const res: any = await forgotPassword(value['email']);
         if (res) {
-          notify.success(
-            'Email Sent',
-            'Password reset instructions sent to your email',
-            4
-          );
+          notify.success('Email Sent', 'Password reset instructions sent to your email', 4);
           setLoader(false);
         }
       } catch (error) {
@@ -55,7 +51,8 @@ const ForgotPasswordPage = () => {
           Reset password
         </Typography>
         <Typography variant="body1" sx={{ mb: 4, color: theme.palette.text.secondary }}>
-          If there&apos;s an account associated with this email, we will send you a link to reset your password.
+          If there&apos;s an account associated with this email, we will send you a link to reset
+          your password.
         </Typography>
 
         <Form onFinish={handleSubmit} layout="vertical" autoComplete="off">

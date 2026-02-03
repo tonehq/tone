@@ -5,7 +5,7 @@ import {
   ArrowBack as ArrowBackIcon,
   Close as CloseIcon,
   CallReceived as InboundIcon,
-  CallMade as OutboundIcon
+  CallMade as OutboundIcon,
 } from '@mui/icons-material';
 import {
   Box,
@@ -85,21 +85,13 @@ const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ open, onClose }) =>
           pb: 2,
         }}
       >
-        <IconButton
-          onClick={onClose}
-          size="small"
-          sx={{ color: theme.palette.text.secondary }}
-        >
+        <IconButton onClick={onClose} size="small" sx={{ color: theme.palette.text.secondary }}>
           <ArrowBackIcon fontSize="small" />
         </IconButton>
         <Typography variant="h6" component="span" sx={{ flexGrow: 1, fontWeight: 600 }}>
           Choose type of agent
         </Typography>
-        <IconButton
-          onClick={onClose}
-          size="small"
-          sx={{ color: theme.palette.text.secondary }}
-        >
+        <IconButton onClick={onClose} size="small" sx={{ color: theme.palette.text.secondary }}>
           <CloseIcon fontSize="small" />
         </IconButton>
       </DialogTitle>
@@ -112,7 +104,7 @@ const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ open, onClose }) =>
                 onClick={() => handleSelectAgent(option.type)}
                 sx={{
                   p: 2.5,
-                  mt:2,
+                  mt: 2,
                   border: '1px solid #e2e8f0',
                   borderRadius: '12px',
                   cursor: 'pointer',

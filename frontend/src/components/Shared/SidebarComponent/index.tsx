@@ -1,13 +1,6 @@
 'use client';
 
-import {
-  Avatar,
-  Box,
-  Divider,
-  IconButton,
-  Tooltip,
-  Typography
-} from '@mui/material';
+import { Avatar, Box, Divider, IconButton, Tooltip, Typography } from '@mui/material';
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -24,7 +17,6 @@ interface SidebarItemProps {
 }
 
 function SidebarItemMenu({ icon: Icon, href, active, title, isCollapsed }: SidebarItemProps) {
-  
   const content = (
     <Box
       component={Link}
@@ -99,16 +91,10 @@ interface SidebarProps {
   onToggle?: () => void;
 }
 
-function Sidebar({
-  isExpanded = true,
-  onToggle,
-}: SidebarProps) {
+function Sidebar({ isExpanded = true, onToggle }: SidebarProps) {
   const pathname = usePathname();
 
-  const isActive = (path: string) => {
-    return pathname === path || pathname?.startsWith(`${path}/`);
-  };
-
+  const isActive = (path: string) => pathname === path || pathname?.startsWith(`${path}/`);
 
   return (
     <Box
@@ -163,7 +149,6 @@ function Sidebar({
           </Typography>
         )}
       </Box>
-     
 
       <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.1)', mx: 2 }} />
 

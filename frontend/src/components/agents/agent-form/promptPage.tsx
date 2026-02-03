@@ -1,43 +1,45 @@
-import Heading from '@tiptap/extension-heading'
-import Link from '@tiptap/extension-link'
-import Paragraph from '@tiptap/extension-paragraph'
-import TextAlign from '@tiptap/extension-text-align'
-import Underline from '@tiptap/extension-underline'
-import { EditorContent, useEditor } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import { useEffect, useState } from 'react'
+import Heading from '@tiptap/extension-heading';
+import Link from '@tiptap/extension-link';
+import Paragraph from '@tiptap/extension-paragraph';
+import TextAlign from '@tiptap/extension-text-align';
+import Underline from '@tiptap/extension-underline';
+import { EditorContent, useEditor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import { useEffect, useState } from 'react';
 
 import {
-    Box,
-    Divider,
-    FormControl,
-    IconButton,
-    MenuItem,
-    Paper,
-    Select,
-    Stack,
-    Typography,
-} from '@mui/material'
+  Box,
+  Divider,
+  FormControl,
+  IconButton,
+  MenuItem,
+  Paper,
+  Select,
+  Stack,
+  Typography,
+} from '@mui/material';
 
 import {
-    AlignCenter,
-    AlignLeft,
-    AlignRight,
-    Bold,
-    Italic,
-    List,
-    Underline as Under,
-} from 'lucide-react'
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Bold,
+  Italic,
+  List,
+  Underline as Under,
+} from 'lucide-react';
 
-type StepThreeProps = {
+interface StepThreeProps {
   formData: {
-    voicePrompting?: string
-  }
-  onFormChange: <T extends object>(partial: T) => void
+    voicePrompting?: string;
+  };
+  onFormChange: <T extends object>(partial: T) => void;
 }
 
 export default function StepThree({ formData, onFormChange }: StepThreeProps) {
-  const [headingType, setHeadingType] = useState<'normal' | 'heading1' | 'heading2' | 'heading3'>('normal')
+  const [headingType, setHeadingType] = useState<'normal' | 'heading1' | 'heading2' | 'heading3'>(
+    'normal',
+  );
 
   const [active, setActive] = useState({
     bold: false,
@@ -45,7 +47,7 @@ export default function StepThree({ formData, onFormChange }: StepThreeProps) {
     underline: false,
     bulletList: false,
     align: 'left' as 'left' | 'center' | 'right',
-  })
+  });
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -73,14 +75,14 @@ export default function StepThree({ formData, onFormChange }: StepThreeProps) {
 
     // ✅ STORE VALUE IN PARENT
     onUpdate({ editor }) {
-      const html = editor.getHTML()
-      onFormChange({ voicePrompting: html })
+      const html = editor.getHTML();
+      onFormChange({ voicePrompting: html });
     },
-  })
+  });
 
   /* 🔁 Sync toolbar state */
   useEffect(() => {
-    if (!editor) return
+    if (!editor) return;
 
     const syncState = () => {
       setActive({
@@ -91,72 +93,72 @@ export default function StepThree({ formData, onFormChange }: StepThreeProps) {
         align: editor.isActive({ textAlign: 'center' })
           ? 'center'
           : editor.isActive({ textAlign: 'right' })
-          ? 'right'
-          : 'left',
-      })
+            ? 'right'
+            : 'left',
+      });
 
-      if (editor.isActive('heading', { level: 1 })) setHeadingType('heading1')
-      else if (editor.isActive('heading', { level: 2 })) setHeadingType('heading2')
-      else if (editor.isActive('heading', { level: 3 })) setHeadingType('heading3')
-      else setHeadingType('normal')
-    }
+      if (editor.isActive('heading', { level: 1 })) setHeadingType('heading1');
+      else if (editor.isActive('heading', { level: 2 })) setHeadingType('heading2');
+      else if (editor.isActive('heading', { level: 3 })) setHeadingType('heading3');
+      else setHeadingType('normal');
+    };
 
-    editor.on('selectionUpdate', syncState)
-    editor.on('transaction', syncState)
+    editor.on('selectionUpdate', syncState);
+    editor.on('transaction', syncState);
 
     return () => {
-      editor.off('selectionUpdate', syncState)
-      editor.off('transaction', syncState)
-    }
-  }, [editor])
+      editor.off('selectionUpdate', syncState);
+      editor.off('transaction', syncState);
+    };
+  }, [editor]);
 
   const toggleStyle = (style: string) => {
-    if (!editor) return
-    const chain = editor.chain().focus()
+    if (!editor) return;
+    const chain = editor.chain().focus();
 
     switch (style) {
       case 'bold':
-        chain.toggleBold().run()
-        break
+        chain.toggleBold().run();
+        break;
       case 'italic':
-        chain.toggleItalic().run()
-        break
+        chain.toggleItalic().run();
+        break;
       case 'underline':
-        chain.toggleUnderline().run()
-        break
+        chain.toggleUnderline().run();
+        break;
       case 'bulletList':
-        chain.toggleBulletList().run()
-        break
+        chain.toggleBulletList().run();
+        break;
       case 'left':
-        chain.setTextAlign('left').run()
-        break
+        chain.setTextAlign('left').run();
+        break;
       case 'center':
-        chain.setTextAlign('center').run()
-        break
+        chain.setTextAlign('center').run();
+        break;
       case 'right':
-        chain.setTextAlign('right').run()
-        break
+        chain.setTextAlign('right').run();
+        break;
     }
-  }
+  };
 
   const handleHeadingChange = (e: any) => {
-    if (!editor) return
-    const value = e.target.value
-    setHeadingType(value)
+    if (!editor) return;
+    const value = e.target.value;
+    setHeadingType(value);
 
-    const chain = editor.chain().focus()
+    const chain = editor.chain().focus();
 
-    if (value === 'normal') chain.setParagraph().run()
-    if (value === 'heading1') chain.toggleHeading({ level: 1 }).run()
-    if (value === 'heading2') chain.toggleHeading({ level: 2 }).run()
-    if (value === 'heading3') chain.toggleHeading({ level: 3 }).run()
-  }
+    if (value === 'normal') chain.setParagraph().run();
+    if (value === 'heading1') chain.toggleHeading({ level: 1 }).run();
+    if (value === 'heading2') chain.toggleHeading({ level: 2 }).run();
+    if (value === 'heading3') chain.toggleHeading({ level: 3 }).run();
+  };
 
   const clearContent = () => {
-    editor?.commands.clearContent()
-    editor?.commands.focus()
-    onFormChange({ voicePrompting: '' })
-  }
+    editor?.commands.clearContent();
+    editor?.commands.focus();
+    onFormChange({ voicePrompting: '' });
+  };
 
   return (
     <Box sx={{ p: 2 }}>
@@ -178,41 +180,67 @@ export default function StepThree({ formData, onFormChange }: StepThreeProps) {
 
           <Divider orientation="vertical" flexItem />
 
-          <IconButton color={active.bold ? 'primary' : 'default'} onClick={() => toggleStyle('bold')}>
+          <IconButton
+            color={active.bold ? 'primary' : 'default'}
+            onClick={() => toggleStyle('bold')}
+          >
             <Bold size={18} />
           </IconButton>
 
-          <IconButton color={active.italic ? 'primary' : 'default'} onClick={() => toggleStyle('italic')}>
+          <IconButton
+            color={active.italic ? 'primary' : 'default'}
+            onClick={() => toggleStyle('italic')}
+          >
             <Italic size={18} />
           </IconButton>
 
-          <IconButton color={active.underline ? 'primary' : 'default'} onClick={() => toggleStyle('underline')}>
+          <IconButton
+            color={active.underline ? 'primary' : 'default'}
+            onClick={() => toggleStyle('underline')}
+          >
             <Under size={18} />
           </IconButton>
 
           <Divider orientation="vertical" flexItem />
 
-          <IconButton color={active.bulletList ? 'primary' : 'default'} onClick={() => toggleStyle('bulletList')}>
+          <IconButton
+            color={active.bulletList ? 'primary' : 'default'}
+            onClick={() => toggleStyle('bulletList')}
+          >
             <List size={18} />
           </IconButton>
 
           <Divider orientation="vertical" flexItem />
 
-          <IconButton color={active.align === 'left' ? 'primary' : 'default'} onClick={() => toggleStyle('left')}>
+          <IconButton
+            color={active.align === 'left' ? 'primary' : 'default'}
+            onClick={() => toggleStyle('left')}
+          >
             <AlignLeft size={18} />
           </IconButton>
 
-          <IconButton color={active.align === 'center' ? 'primary' : 'default'} onClick={() => toggleStyle('center')}>
+          <IconButton
+            color={active.align === 'center' ? 'primary' : 'default'}
+            onClick={() => toggleStyle('center')}
+          >
             <AlignCenter size={18} />
           </IconButton>
 
-          <IconButton color={active.align === 'right' ? 'primary' : 'default'} onClick={() => toggleStyle('right')}>
+          <IconButton
+            color={active.align === 'right' ? 'primary' : 'default'}
+            onClick={() => toggleStyle('right')}
+          >
             <AlignRight size={18} />
           </IconButton>
 
           <Box flexGrow={1} />
 
-          <Typography fontSize={14} color="error.main" sx={{ cursor: 'pointer' }} onClick={clearContent}>
+          <Typography
+            fontSize={14}
+            color="error.main"
+            sx={{ cursor: 'pointer' }}
+            onClick={clearContent}
+          >
             Clear all
           </Typography>
         </Stack>
@@ -239,5 +267,5 @@ export default function StepThree({ formData, onFormChange }: StepThreeProps) {
         </Box>
       </Paper>
     </Box>
-  )
+  );
 }

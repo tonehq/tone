@@ -17,7 +17,7 @@ const LoginPage = () => {
   const searchParams = useSearchParams();
   const { notify, contextHolder } = useNotification();
   const theme = useTheme();
-  const redirectTo = searchParams.get('redirect') ?? '/home';
+  const _redirectTo = searchParams.get('redirect') ?? '/home';
 
   const handleSubmit = async (values: any) => {
     setLoader(true);
@@ -27,8 +27,8 @@ const LoginPage = () => {
 
       if (res) {
         notify.success('Login Successful', 'Welcome back!', 3);
-        router.push('/home')      }
-        else {
+        router.push('/home');
+      } else {
         notify.error('Login Failed', 'Please enter email and password', 3);
       }
     } catch (error) {
@@ -66,7 +66,9 @@ const LoginPage = () => {
             isRequired
           />
 
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Box
+            sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}
+          >
             <FormControlLabel
               control={<Checkbox size="small" defaultChecked />}
               label={<Typography variant="body2">Remember me</Typography>}

@@ -1,5 +1,5 @@
-import { getAgents } from "@/services/agentsService";
-import { atom } from "jotai";
+import { getAgents } from '@/services/agentsService';
+import { atom } from 'jotai';
 
 export interface Agent {
   id: number;
@@ -44,24 +44,21 @@ const agentsAtom = atom<AgentsState>({
   agentList: [],
 });
 
-export const fetchAgentList = atom(
-  null,
-  async (_get, set) => {
-    const res = await getAgents();
-    if (Array.isArray(res)) {
-      set(agentsAtom, (prev) => ({
-        ...prev,
-        agentList: res as Agent[],
-      }));
-    } else if (res && Array.isArray(res.data)) {
-      set(agentsAtom, (prev) => ({
-        ...prev,
-        agentList: res.data as Agent[],
-      }));
-    } else {
-      set(agentsAtom, (prev) => ({ ...prev, agentList: [] }));
-    }
+export const fetchAgentList = atom(null, async (_get, set) => {
+  const res = await getAgents();
+  if (Array.isArray(res)) {
+    set(agentsAtom, (prev) => ({
+      ...prev,
+      agentList: res as Agent[],
+    }));
+  } else if (res && Array.isArray(res.data)) {
+    set(agentsAtom, (prev) => ({
+      ...prev,
+      agentList: res.data as Agent[],
+    }));
+  } else {
+    set(agentsAtom, (prev) => ({ ...prev, agentList: [] }));
   }
-);
+});
 
 export default agentsAtom;

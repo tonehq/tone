@@ -21,7 +21,7 @@ export const inviteUserToOrganization = async (payload: {
 
 export const updateOrganizationMemberRole = async (
   memberId: number,
-  role: string
+  role: string,
 ): Promise<void> => {
   await axios.patch(`/organizations/members/${memberId}`, { role });
 };

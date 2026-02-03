@@ -24,11 +24,7 @@ const EmailVerificationContent = () => {
       );
       setLoader(false);
       if (res) {
-        notify.success(
-          'Email Verified',
-          'Your email has been verified successfully',
-          4,
-        );
+        notify.success('Email Verified', 'Your email has been verified successfully', 4);
         const inviteRedirect = localStorage.getItem('invite_redirect');
         if (inviteRedirect) {
           localStorage.removeItem('invite_redirect');
@@ -49,11 +45,7 @@ const EmailVerificationContent = () => {
       ) {
         errorMessage = (error as any).response.data.detail;
       }
-      notify.error(
-        'Verification Failed',
-        errorMessage || 'Invalid verification link',
-        5,
-      );
+      notify.error('Verification Failed', errorMessage || 'Invalid verification link', 5);
       setLoader(false);
     }
   };
