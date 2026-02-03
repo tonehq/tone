@@ -10,8 +10,8 @@ from core.models.service_provider import ServiceProvider
 
 
 class ModelService(BaseService):
-    CREATED_ATTRS = ("service_provider_id", "name", "meta_data")
-    UPDATABLE_ATTRS = ("service_provider_id", "name", "meta_data", "updated_at")
+    CREATED_ATTRS = ("service_provider_id", "name", "meta_data", "api_key_id", "status", "service_type")
+    UPDATABLE_ATTRS = ("service_provider_id", "name", "meta_data", "api_key_id", "status", "service_type", "updated_at")
 
     def upsert_model(self, data: Dict[str, Any]):
         if data.get("service_provider_id") is None and data.get("id") is None:
@@ -43,6 +43,12 @@ class ModelService(BaseService):
                 update_fields["name"] = data["name"]
             if "meta_data" in data:
                 update_fields["meta_data"] = data["meta_data"]
+            if "api_key_id" in data:
+                update_fields["api_key_id"] = int(data["api_key_id"]) if data["api_key_id"] is not None else None
+            if "status" in data:
+                update_fields["status"] = data["status"]
+            if "service_type" in data:
+                update_fields["service_type"] = data["service_type"]
             update_fields["updated_at"] = now
             for key, value in update_fields.items():
                 setattr(existing, key, value)
@@ -56,6 +62,9 @@ class ModelService(BaseService):
             "service_provider_id": service_provider_id,
             "name": data["name"],
             "meta_data": data.get("meta_data"),
+            "api_key_id": int(data["api_key_id"]) if data.get("api_key_id") is not None else None,
+            "status": data.get("status", "active"),
+            "service_type": data.get("service_type"),
             "created_at": now,
             "updated_at": now,
         }

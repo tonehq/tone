@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
 from core.models.api_key import ApiKey
-from core.models.service import Service
+from core.models.models import Model
 from core.models.service_provider import ServiceProvider
 from core.services.base import BaseService
 from core.utils.encryption import decrypt
@@ -20,7 +20,6 @@ class AgentFactoryService(BaseService):
     def _get_agent_config(self, agent: Any) -> Optional[AgentConfig]:
         """Get the active agent config for the given agent (Agent model or agent_id)."""
         agent_id = agent.id if hasattr(agent, "id") else agent
-        print("agent_id in _get_agent_config ===========", agent_id)
         return (
             self.db.query(AgentConfig)
             .filter(
@@ -32,22 +31,21 @@ class AgentFactoryService(BaseService):
 
     def _get_service_and_credentials(
         self, service_provider_id: Optional[int], service_type: str
-    ) -> Optional[Tuple[Service, ServiceProvider, str]]:
+    ) -> Optional[Tuple[Model, ServiceProvider, str]]:
         """
-        Get the default (or first) active Service for the given provider and type,
-        plus decrypted API key. Returns (Service, ServiceProvider, decrypted_api_key) or None.
+        Get the first active Model for the given provider and type, plus decrypted API key.
+        Returns (Model, ServiceProvider, decrypted_api_key) or None.
         """
         if not service_provider_id:
             return None
         result = (
-            self.db.query(Service, ServiceProvider)
-            .join(ServiceProvider, Service.service_provider_id == ServiceProvider.id)
+            self.db.query(Model, ServiceProvider)
+            .join(ServiceProvider, Model.service_provider_id == ServiceProvider.id)
             .filter(
-                Service.service_provider_id == service_provider_id,
-                Service.service_type == service_type,
-                Service.status == "active",
+                Model.service_provider_id == service_provider_id,
+                Model.service_type == service_type,
+                Model.status == "active",
             )
-            .order_by(Service.is_default.desc().nulls_last())
             .first()
         )
         if not result:
@@ -60,7 +58,7 @@ class AgentFactoryService(BaseService):
                 try:
                     api_key_value = decrypt(api_key.api_key_encrypted)
                 except Exception as e:
-                    logger.warning("Failed to decrypt API key for service %s: %s", svc.id, e)
+                    logger.warning("Failed to decrypt API key for model %s: %s", svc.id, e)
         if not api_key_value:
             return None
         return (svc, provider, api_key_value)
@@ -72,6 +70,7 @@ class AgentFactoryService(BaseService):
         Returns None if config or credentials are missing or provider is unsupported.
         """
         config = self._get_agent_config(agent)
+
         if not config or not config.llm_service_id:
             return None
         result = self._get_service_and_credentials(config.llm_service_id, "llm")
@@ -79,13 +78,15 @@ class AgentFactoryService(BaseService):
             return None
         svc, provider, api_key = result
         metadata = (config.llm_metadata or {}) if hasattr(config, "llm_metadata") else {}
-        model = (svc.config or {}).get("model") or metadata.get("model") or "gpt-4o"
+        model_meta = (svc.meta_data or {}) if isinstance(getattr(svc, "meta_data", None), dict) else {}
+        model = model_meta.get("model") or metadata.get("model") or "gpt-4o"
         provider_name = (provider.name or "").strip().lower()
+
 
         try:
             if provider_name == "openai":
                 from pipecatfork.src.pipecat.services.openai.llm import OpenAILLMService
-                return OpenAILLMService(api_key=api_key, model=model)
+                return OpenAILLMService(api_key=f"{api_key}", model="gpt-4.1")
             if provider_name == "anthropic":
                 from pipecatfork.src.pipecat.services.anthropic.llm import AnthropicLLMService
                 return AnthropicLLMService(api_key=api_key, model=model)
@@ -95,10 +96,37 @@ class AgentFactoryService(BaseService):
             if provider_name == "openrouter":
                 from pipecatfork.src.pipecat.services.openrouter.llm import OpenRouterLLMService
                 return OpenRouterLLMService(api_key=api_key, model=metadata.get("model") or model)
+            if provider_name == "aws_bedrock":
+                from pipecatfork.src.pipecat.services.aws.llm import AWSBedrockLLMService
+                return AWSBedrockLLMService(api_key=api_key, model=model)
+            if provider_name == "aws_nova_sonic":
+                from pipecatfork.src.pipecat.services.aws.llm import AWSNovaSonicLLMService
+                return AWSNovaSonicLLMService(api_key=api_key, model=model)
+            if provider_name == "google":
+                from pipecatfork.src.pipecat.services.google.llm import GoogleLLMService
+                return GoogleLLMService(api_key=api_key, model=model)
+            if provider_name == "gemini_live":
+                from pipecatfork.src.pipecat.services.google.llm import GeminiLiveLLMService
+                return GeminiLiveLLMService(api_key=api_key, model=model)
+            if provider_name == "grok_realtime":
+                from pipecatfork.src.pipecat.services.grok.llm import GrokRealtimeLLMService
+                return GrokRealtimeLLMService(api_key=api_key, model=model)
+            if provider_name == "base_openai":
+                from pipecatfork.src.pipecat.services.openai.llm import BaseOpenAILLMService
+                return BaseOpenAILLMService(api_key=api_key, model=model)
+            if provider_name == "openai_realtime":
+                from pipecatfork.src.pipecat.services.openai.llm import OpenAIRealtimeLLMService
+                return OpenAIRealtimeLLMService(api_key=api_key, model=model)
+            if provider_name == "openai_realtime_beta":
+                from pipecatfork.src.pipecat.services.openai.llm import OpenAIRealtimeBetaLLMService
+                return OpenAIRealtimeBetaLLMService(api_key=api_key, model=model)
+            if provider_name == "ultravox_realtime":
+                from pipecatfork.src.pipecat.services.ultravox.llm import UltravoxRealtimeLLMService
+                return UltravoxRealtimeLLMService(api_key=api_key, model=model)
             logger.warning("Unsupported LLM provider: %s", provider.name)
             return None
         except ImportError as e:
-            logger.warning("LLM provider %s not available: %s", provider_name, e)
+            logger.exception("LLM provider %s not available", provider_name)
             return None
 
     def get_stt_for_agent(self, agent: Any) -> Optional[Any]:
@@ -126,6 +154,27 @@ class AgentFactoryService(BaseService):
             if provider_name == "groq":
                 from pipecatfork.src.pipecat.services.groq.stt import GroqSTTService
                 return GroqSTTService(api_key=api_key)
+            if provider_name == "segmented":
+                from pipecatfork.src.pipecat.services.segmented.stt import SegmentedSTTService
+                return SegmentedSTTService(api_key=api_key)
+            if provider_name == "azure":
+                from pipecatfork.src.pipecat.services.azure.stt import AzureSTTService
+                return AzureSTTService(api_key=api_key)
+            if provider_name == "deepgram_sagemaker":
+                from pipecatfork.src.pipecat.services.deepgram.stt import DeepgramSageMakerSTTService
+                return DeepgramSageMakerSTTService(api_key=api_key)
+            if provider_name == "google":
+                from pipecatfork.src.pipecat.services.google.stt import GoogleSTTService
+                return GoogleSTTService(api_key=api_key)
+            if provider_name == "nvidia":
+                from pipecatfork.src.pipecat.services.nvidia.stt import NvidiaSTTService
+                return NvidiaSTTService(api_key=api_key)
+            if provider_name == "sarvam":
+                from pipecatfork.src.pipecat.services.sarvam.stt import SarvamSTTService
+                return SarvamSTTService(api_key=api_key)
+            if provider_name == "speechmatics":
+                from pipecatfork.src.pipecat.services.speechmatics.stt import SpeechmaticsSTTService
+                return SpeechmaticsSTTService(api_key=api_key)
             logger.warning("Unsupported STT provider: %s", provider.name)
             return None
         except ImportError as e:
@@ -146,7 +195,8 @@ class AgentFactoryService(BaseService):
             return None
         svc, provider, api_key = result
         metadata = (config.tts_metadata or {}) if hasattr(config, "tts_metadata") else {}
-        voice_id = (svc.config or {}).get("voice_id") or metadata.get("voice_id") or "71a7ad14-091c-4e8e-a314-022ece01c121"
+        model_meta = (svc.meta_data or {}) if isinstance(getattr(svc, "meta_data", None), dict) else {}
+        voice_id = model_meta.get("voice_id") or metadata.get("voice_id") or "71a7ad14-091c-4e8e-a314-022ece01c121"
         provider_name = (provider.name or "").strip().lower()
 
         try:
@@ -161,9 +211,68 @@ class AgentFactoryService(BaseService):
                 return ElevenLabsTTSService(api_key=api_key, voice_id=voice_id)
             if provider_name == "playht":
                 from pipecatfork.src.pipecat.services.playht.tts import PlayHTTTSService
-                user_id = (svc.config or {}).get("user_id") or metadata.get("user_id") or ""
-                voice_url = (svc.config or {}).get("voice_url") or metadata.get("voice_url") or ""
+                user_id = model_meta.get("user_id") or metadata.get("user_id") or ""
+                voice_url = model_meta.get("voice_url") or metadata.get("voice_url") or ""
                 return PlayHTTTSService(api_key=api_key, user_id=user_id, voice_url=voice_url)
+            if provider_name == "word":
+                from pipecatfork.src.pipecat.services.word.tts import WordTTSService
+                return WordTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "asyncai_http":
+                from pipecatfork.src.pipecat.services.asyncai.tts import AsyncAIHttpTTSService
+                return AsyncAIHttpTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "aws_polly":
+                from pipecatfork.src.pipecat.services.aws.tts import AWSPollyTTSService
+                return AWSPollyTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "camb":
+                from pipecatfork.src.pipecat.services.camb.tts import CambTTSService
+                return CambTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "cartesia_http":
+                from pipecatfork.src.pipecat.services.cartesia.tts import CartesiaHttpTTSService
+                return CartesiaHttpTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "deepgram_http":
+                from pipecatfork.src.pipecat.services.deepgram.tts import DeepgramHttpTTSService
+                return DeepgramHttpTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "google_http":
+                from pipecatfork.src.pipecat.services.google.tts import GoogleHttpTTSService
+                return GoogleHttpTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "google_base":
+                from pipecatfork.src.pipecat.services.google.tts import GoogleBaseTTSService
+                return GoogleBaseTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "groq":
+                from pipecatfork.src.pipecat.services.groq.tts import GroqTTSService
+                return GroqTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "hathora":
+                from pipecatfork.src.pipecat.services.hathora.tts import HathoraTTSService
+                return HathoraTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "minimax_http":
+                from pipecatfork.src.pipecat.services.minimax.tts import MiniMaxHttpTTSService
+                return MiniMaxHttpTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "neuphonic_http":
+                from pipecatfork.src.pipecat.services.neuphonic.tts import NeuphonicHttpTTSService
+                return NeuphonicHttpTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "nvidia":
+                from pipecatfork.src.pipecat.services.nvidia.tts import NvidiaTTSService
+                return NvidiaTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "piper":
+                from pipecatfork.src.pipecat.services.piper.tts import PiperTTSService
+                return PiperTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "playht_http":
+                from pipecatfork.src.pipecat.services.playht.tts import PlayHTHttpTTSService
+                user_id = model_meta.get("user_id") or metadata.get("user_id") or ""
+                voice_url = model_meta.get("voice_url") or metadata.get("voice_url") or ""
+                return PlayHTHttpTTSService(api_key=api_key, user_id=user_id, voice_url=voice_url)
+            if provider_name == "rime_http":
+                from pipecatfork.src.pipecat.services.rime.tts import RimeHttpTTSService
+                return RimeHttpTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "sarvam_http":
+                from pipecatfork.src.pipecat.services.sarvam.tts import SarvamHttpTTSService
+                return SarvamHttpTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "speechmatics":
+                from pipecatfork.src.pipecat.services.speechmatics.tts import SpeechmaticsTTSService
+                return SpeechmaticsTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "xtts":
+                from pipecatfork.src.pipecat.services.xtts.tts import XTTSService
+                return XTTSService(api_key=api_key, voice_id=voice_id)
             logger.warning("Unsupported TTS provider: %s", provider.name)
             return None
         except ImportError as e:
@@ -225,6 +334,7 @@ class AgentFactoryService(BaseService):
         from pipecatfork.src.pipecat.pipeline.runner import PipelineRunner
         from pipecatfork.src.pipecat.pipeline.task import PipelineParams, PipelineTask
 
+
         tools = NOT_GIVEN
         context = LLMContext(messages, tools)
         context_aggregator = LLMContextAggregatorPair(context)
@@ -275,8 +385,6 @@ class AgentFactoryService(BaseService):
     async def run_bot_for_agent(
         self, agent: Any, transport: Any, runner_args: Any
     ) -> None:
-        print("agent ===========", agent)
-        print("agent.id ===========", agent.id)
         """
         Get all agent data (llm, stt, tts, prompt) from config and run the bot pipeline.
         Raises ValueError if agent has no config or missing services.
