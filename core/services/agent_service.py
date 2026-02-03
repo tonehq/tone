@@ -12,6 +12,7 @@ from core.services.base import BaseService
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
 from core.models.service_provider import ServiceProvider
+from core.models.enums import AgentType
 from core.services.agent_config_service import AgentConfigService
 
 # Keys from request JSON to store in agent_config.agent_metadata
@@ -53,10 +54,12 @@ class AgentService(BaseService):
     CREATED_ATTRS = (
         "name", "description", "is_public", "tags",
         "total_calls", "total_minutes", "average_rating",
+        "meta_data", "status", "agent_type",
     )
     UPDATABLE_ATTRS = (
         "name", "description", "is_public", "tags",
         "total_calls", "total_minutes", "average_rating",
+        "meta_data", "status", "agent_type",
     )
 
     def _normalize_agent_value(self, key: str, value: Any) -> Any:
@@ -72,7 +75,26 @@ class AgentService(BaseService):
                 return int(value) if value != "" else None
             except (TypeError, ValueError):
                 return None
+        if key == "agent_type":
+            return self._normalize_agent_type(value)
+        if key == "meta_data":
+            return value if isinstance(value, dict) else None
         return value
+
+    def _normalize_agent_type(self, value: Any) -> AgentType | None:
+        """Accept int (0,1,2) or string (inbound, outbound, chatbot) and return AgentType."""
+        if value is None:
+            return None
+        if isinstance(value, AgentType):
+            return value
+        if isinstance(value, int) and 0 <= value <= 2:
+            return list(AgentType)[value]
+        if isinstance(value, str) and value:
+            name = value.strip().upper()
+            for at in AgentType:
+                if at.name == name or (getattr(at, "value", None) == value):
+                    return at
+        return None
 
     def upsert_agent(self, agent_data: Dict[str, Any], created_by: int):
         if not agent_data.get("name"):
@@ -111,8 +133,10 @@ class AgentService(BaseService):
                 normalized = self._normalize_agent_value(key, agent_data[key])
                 if normalized is not None:
                     values[key] = normalized
+        if agent_id is None and "status" not in values:
+            values["status"] = "active"
         update_fields = ["name", "description", "is_public", "tags", "updated_at"]
-        for key in ("total_calls", "total_minutes", "average_rating"):
+        for key in ("total_calls", "total_minutes", "average_rating", "meta_data", "status", "agent_type"):
             if key in values:
                 update_fields.append(key)
         try:
@@ -159,6 +183,9 @@ class AgentService(BaseService):
             "created_by": agent.created_by,
             "created_at": agent.created_at,
             "updated_at": agent.updated_at,
+            "meta_data": agent.meta_data,
+            "status": agent.status,
+            "agent_type": agent.agent_type.value if agent.agent_type is not None else None,
         }
         if config:
             agent_meta = config.agent_metadata if isinstance(config.agent_metadata, dict) else {}
@@ -176,7 +203,7 @@ class AgentService(BaseService):
                 "system_prompt": config.system_prompt,
                 "end_call_message": config.end_call_message,
                 "voicemail_message": config.voicemail_message,
-                "status": config.status,
+                "config_status": config.status,
                 **{k: agent_meta.get(k) for k in AGENT_METADATA_KEYS},
             })
         return item
