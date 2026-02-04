@@ -1,8 +1,8 @@
 'use client';
 
-import CustomButton from '@/components/Shared/CustomButton';
-import { Form } from '@/components/Shared/FormComponent';
-import TextInput from '@/components/Shared/TextInput';
+import CustomButton from '@/components/shared/CustomButton';
+import { Form } from '@/components/shared/FormComponent';
+import TextInput from '@/components/shared/TextInput';
 import { login } from '@/services/auth/helper';
 import { useNotification } from '@/utils/notification';
 import { Box, Checkbox, FormControlLabel, Stack, Typography, useTheme } from '@mui/material';
