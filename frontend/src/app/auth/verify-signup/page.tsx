@@ -2,8 +2,8 @@
 
 import { Suspense, useState } from 'react';
 
-import CustomButton from '@/components/Shared/CustomButton';
-import { Form } from '@/components/Shared/FormComponent';
+import CustomButton from '@/components/shared/CustomButton';
+import { Form } from '@/components/shared/FormComponent';
 import axios from '@/utils/axios';
 import { useNotification } from '@/utils/notification';
 import { Box, Stack, Typography } from '@mui/material';

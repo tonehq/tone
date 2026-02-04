@@ -41,8 +41,6 @@ const AgentListPage: React.FC = () => {
     init();
   }, []);
 
-  console.log(data, loader, 'loader');
-
   const defaultColumns = [
     {
       key: 1,

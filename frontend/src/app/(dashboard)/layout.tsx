@@ -1,6 +1,6 @@
 'use client';
 
-import Sidebar from '@/components/Shared/SidebarComponent';
+import Sidebar from '@/components/shared/SidebarComponent';
 import { Box } from '@mui/material';
 import React, { useState } from 'react';
 

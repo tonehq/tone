@@ -1,18 +1,18 @@
 'use client';
 
-import { Form } from '@/components/Shared/FormComponent';
+import { Form } from '@/components/shared/FormComponent';
 import { aiModels } from '@/data/mockAgents';
 import {
-  Box,
-  Button,
-  Chip,
-  FormControl,
-  MenuItem,
-  Select,
-  Switch,
-  TextField,
-  Typography,
-  useTheme,
+    Box,
+    Button,
+    Chip,
+    FormControl,
+    MenuItem,
+    Select,
+    Switch,
+    TextField,
+    Typography,
+    useTheme,
 } from '@mui/material';
 import { KeyboardEvent, ReactNode, useState } from 'react';
 import type { AgentGeneralFormData } from './types';

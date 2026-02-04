@@ -38,7 +38,7 @@ const eslintConfig = [
       'template-curly-spacing': 'off',
       'react/no-unescaped-entities': 'off',
       indent: 'off',
-      'linebreak-style': ['error', process.platform === 'win32' ? 'windows' : 'unix'],
+      'linebreak-style': 'off',
       quotes: ['error', 'single'],
       'arrow-body-style': ['error', 'as-needed'],
       'lines-between-class-members': ['error', 'always'],
