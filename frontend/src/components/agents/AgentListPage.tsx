@@ -2,28 +2,9 @@
 
 import agentsAtom, { fetchAgentList } from '@/atoms/AgentsAtom';
 import { constructTable } from '@/services/shared/helper';
-import { Agent } from '@/types/agent';
-import {
-  Add as AddIcon,
-  CallReceived as InboundIcon,
-  MoreVert as MoreVertIcon,
-  CallMade as OutboundIcon,
-  Search as SearchIcon,
-} from '@mui/icons-material';
-import {
-  Avatar,
-  Box,
-  Button,
-  Chip,
-  IconButton,
-  InputAdornment,
-  Paper,
-  TextField,
-  Typography,
-  useTheme,
-} from '@mui/material';
-import { GridColDef, GridPaginationModel, GridRenderCellParams } from '@mui/x-data-grid';
-import { format } from 'date-fns';
+import { Add as AddIcon, Search as SearchIcon } from '@mui/icons-material';
+import { Box, Button, InputAdornment, Paper, TextField, Typography, useTheme } from '@mui/material';
+import { DataGrid, GridColDef, GridPaginationModel } from '@mui/x-data-grid';
 import { useAtom } from 'jotai';
 import React, { useEffect, useRef, useState } from 'react';
 import CreateAgentModal from './CreateAgentModal';
@@ -62,14 +43,6 @@ const AgentListPage: React.FC = () => {
 
   console.log(data, loader, 'loader');
 
-  const formatDate = (dateString: string) => {
-    try {
-      return format(new Date(dateString), 'MMM dd, yyyy HH:mm');
-    } catch {
-      return dateString;
-    }
-  };
-
   const defaultColumns = [
     {
       key: 1,
@@ -97,94 +70,14 @@ const AgentListPage: React.FC = () => {
       value: 'action',
     },
   ];
-  const _columns: GridColDef<Agent>[] = [
-    {
-      field: 'name',
-      headerName: 'AGENT NAME',
-      flex: 1,
-      minWidth: 250,
-      renderCell: (params: GridRenderCellParams<Agent>) => (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Avatar
-            src={params.row.avatar}
-            sx={{
-              width: 36,
-              height: 36,
-              backgroundColor: params.row.avatar ? 'transparent' : '#e2e8f0',
-              color: '#6b7280',
-            }}
-          >
-            {!params.row.avatar && params.row.name.charAt(0).toUpperCase()}
-          </Avatar>
-          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-            {params.row.name}
-          </Typography>
-        </Box>
-      ),
-    },
-    {
-      field: 'phoneNumber',
-      headerName: 'PHONE NUMBER',
-      width: 180,
-      renderCell: (params: GridRenderCellParams<Agent>) => (
-        <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-          {params.row.phoneNumber || '—'}
-        </Typography>
-      ),
-    },
-    {
-      field: 'lastEdited',
-      headerName: 'LAST EDITED',
-      width: 180,
-      renderCell: (params: GridRenderCellParams<Agent>) => (
-        <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-          {formatDate(params.row.lastEdited)}
-        </Typography>
-      ),
-    },
-    {
-      field: 'type',
-      headerName: 'TYPE',
-      width: 140,
-      renderCell: (params: GridRenderCellParams<Agent>) => {
-        const isInbound = params.row.type === 'inbound';
-        return (
-          <Chip
-            icon={
-              isInbound ? (
-                <InboundIcon sx={{ fontSize: 16 }} />
-              ) : (
-                <OutboundIcon sx={{ fontSize: 16 }} />
-              )
-            }
-            label={isInbound ? 'Inbound' : 'Outbound'}
-            size="small"
-            sx={{
-              backgroundColor: isInbound ? 'rgba(16, 185, 129, 0.1)' : 'rgba(139, 92, 246, 0.1)',
-              color: isInbound ? '#10b981' : '#8b5cf6',
-              fontWeight: 500,
-              '& .MuiChip-icon': {
-                color: isInbound ? '#10b981' : '#8b5cf6',
-              },
-            }}
-          />
-        );
-      },
-    },
-    {
-      field: 'actions',
-      headerName: '',
-      width: 60,
-      sortable: false,
-      renderCell: () => (
-        <IconButton size="small">
-          <MoreVertIcon fontSize="small" />
-        </IconButton>
-      ),
-    },
-  ];
 
-  const _column = constructTable(defaultColumns);
+  const columns = constructTable(
+    defaultColumns,
+    (row) => console.log('Edit row:', row),
+    (row) => console.log('Delete row:', row),
+  );
+
+  console.log(columns, 'columns', data.agentList);
 
   return (
     <Box sx={{ p: 3, height: '100%' }}>
@@ -232,14 +125,60 @@ const AgentListPage: React.FC = () => {
       {/* Data Grid */}
       <Paper
         sx={{
-          height: 'calc(100vh - 180px)',
+          height: 'calc(100vh - 120px)',
           width: '100%',
           border: '1px solid #e2e8f0',
           borderRadius: '8px',
           overflow: 'hidden',
         }}
         elevation={0}
-      ></Paper>
+      >
+        <DataGrid
+          rows={data?.agentList}
+          columns={columns as GridColDef<any>[]}
+          loading={loader}
+          paginationModel={_paginationModel}
+          onPaginationModelChange={_setPaginationModel}
+          pageSizeOptions={[10, 20, 50]}
+          rowCount={data.agentList.length}
+          paginationMode="server"
+          disableRowSelectionOnClick
+          onRowClick={(params) => console.log('Row clicked:', params)}
+          sx={{
+            border: 'none',
+
+            '& .MuiDataGrid-columnHeaders': {
+              backgroundColor: '#e5e7eb',
+            },
+            '& .MuiDataGrid-columnHeadersInner': {
+              backgroundColor: '#e5e7eb',
+            },
+            '& .MuiDataGrid-columnHeader': {
+              backgroundColor: '#e5e7eb',
+            },
+
+            '& .MuiDataGrid-columnHeaderTitle': {
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              fontSize: '12px',
+              color: '#475569',
+            },
+
+            '& .MuiDataGrid-columnSeparator': {
+              display: 'none',
+            },
+
+            '& .MuiDataGrid-row': {
+              borderBottom: '1px solid #e5e7eb',
+            },
+
+            '& .MuiDataGrid-cell': {
+              display: 'flex',
+              alignItems: 'center',
+            },
+          }}
+        />
+      </Paper>
 
       {/* Create Agent Modal */}
       <CreateAgentModal open={isModalOpen} onClose={() => setIsModalOpen(false)} />
