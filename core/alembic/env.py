@@ -18,6 +18,13 @@ from core.models.organization_invite import OrganizationInvite
 from core.models.organization_access_request import OrganizationAccessRequest
 from core.models.email_verification import EmailVerification
 from core.models.password_reset import PasswordReset
+from core.models.service_provider import ServiceProvider
+from core.models.api_key import ApiKey
+from core.models.service import Service
+from core.models.agent import Agent
+from core.models.agent_config import AgentConfig
+from core.models.agent_phone_numbers import AgentPhoneNumbers
+from core.models.models import Model
 
 config = context.config
 

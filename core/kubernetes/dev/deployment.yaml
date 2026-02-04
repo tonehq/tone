@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tone-api-deployment
+  namespace: dev
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tone-api
+  template:
+    metadata:
+      labels:
+        app: tone-api
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+      containers:
+        - name: tone-api
+          image: developer390/tone:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "512Mi"
+            limits:
+              cpu: "256m"
+              memory: "1Gi"
+          env:
+            - name: ENV
+              value: "dev"
+            - name: INFISICAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: infisical-credentials
+                  key: token
+            - name: INFISICAL_PROJECT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: infisical-credentials
+                  key: project_id
+      imagePullSecrets:
+        - name: dockerhub-auth

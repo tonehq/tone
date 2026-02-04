@@ -1,24 +1,39 @@
 'use client';
 
-import { useState } from 'react';
+import Sidebar from '@/components/Shared/SidebarComponent';
+import { Box } from '@mui/material';
+import React, { useState } from 'react';
 
-import CustomLayout from '@/components/shared/CustomLayout';
-import Sidebar from '@/components/shared/SidebarComponent';
+const _DRAWER_WIDTH = 240;
+const _COLLAPSED_WIDTH = 72;
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(true);
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+}
+
+export default function DashboardLayout({ children }: DashboardLayoutProps) {
+  const [sidebarExpanded, setSidebarExpanded] = useState(true);
+
   return (
-    <CustomLayout
-      siderWidth={isSidebarExpanded ? '16%' : '6%'}
-      isSidebarExpanded={isSidebarExpanded}
-      sidebarContent={
+    <Box sx={{ display: 'flex', gap: 2, width: '100vw', minHeight: '100vh' }}>
+      <Box sx={{ width: sidebarExpanded ? 240 : 72 }}>
         <Sidebar
-          isSidebarExpanded={isSidebarExpanded}
-          setIsSidebarExpanded={setIsSidebarExpanded}
+          isExpanded={sidebarExpanded}
+          onToggle={() => setSidebarExpanded((prev) => !prev)}
         />
-      }
-    >
-      {children}
-    </CustomLayout>
+        <button onClick={() => setSidebarExpanded((prev) => !prev)}>{'<'}</button>
+      </Box>
+
+      <Box
+        sx={{
+          width: sidebarExpanded ? 'calc(100vw - 240px)' : 'calc(100vw - 72px)',
+          backgroundColor: '#f9fafb',
+          minHeight: '100vh',
+          transition: 'margin-left 0.3s ease',
+        }}
+      >
+        {children}
+      </Box>
+    </Box>
   );
 }

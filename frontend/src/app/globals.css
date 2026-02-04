@@ -1,105 +1,65 @@
-@import '../styles/variables.css';
-
 * {
   box-sizing: border-box;
-}
-
-body {
-  font-family:
-    'Roobert',
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    Helvetica,
-    Arial,
-    sans-serif,
-    'Apple Color Emoji',
-    'Segoe UI Emoji',
-    'Segoe UI Symbol' !important;
   margin: 0;
+  padding: 0;
 }
 
 html,
-body,
-div,
-span,
-applet,
-object,
-iframe,
-h1,
-h2,
-h3,
-h4,
-h5,
-h6,
-p,
-blockquote,
-pre,
-a,
-abbr,
-acronym,
-address,
-big,
-cite,
-code,
-del,
-dfn,
-em,
-img,
-ins,
-kbd,
-q,
-s,
-samp,
-small,
-strike,
-strong,
-sub,
-sup,
-time,
-var,
-b,
-u,
-i,
-center {
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
   font-family:
-    'Roobert',
+    'Inter',
     -apple-system,
     BlinkMacSystemFont,
     'Segoe UI',
-    Helvetica,
+    Roboto,
+    'Helvetica Neue',
     Arial,
-    sans-serif,
-    'Apple Color Emoji',
-    'Segoe UI Emoji',
-    'Segoe UI Symbol' !important;
+    sans-serif;
 }
 
-h2 {
-  font-size: 24px;
-  margin-bottom: 24px;
+a {
+  color: inherit;
+  text-decoration: none;
 }
 
-.ant-picker input::placeholder {
-  font-size: 14px !important;
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 
-.ant-select-selection-placeholder {
-  font-size: 14px !important;
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
 }
 
-.ant-picker-range input::placeholder {
-  font-size: 14px !important;
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
 }
 
-.custom-range .ant-picker-input input::placeholder,
-.custom-range .ant-picker-input > input::placeholder,
-.custom-range .ant-picker input::placeholder {
-  font-size: 14px !important;
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
 }
 
-/* Custom Tab Animations */
-@keyframes fade-in {
+/* MUI DataGrid custom styles */
+.MuiDataGrid-root {
+  font-family: inherit !important;
+}
+
+.MuiDataGrid-cell:focus,
+.MuiDataGrid-cell:focus-within {
+  outline: none !important;
+}
+
+.MuiDataGrid-columnHeader:focus,
+.MuiDataGrid-columnHeader:focus-within {
+  outline: none !important;
+}
+
+/* Custom animations */
+@keyframes fadeIn {
   from {
     opacity: 0;
     transform: translateY(10px);
@@ -110,71 +70,26 @@ h2 {
   }
 }
 
-.animate-fade-in {
-  animation: fade-in 0.3s ease-out forwards;
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out forwards;
 }
 
-.ant-dropdown-menu {
-  border-radius: 8px;
+/* Override MUI defaults for cleaner look */
+.MuiButton-root {
+  box-shadow: none !important;
+}
+
+.MuiPaper-elevation1 {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+.MuiPaper-elevation2 {
   box-shadow:
     0 4px 6px -1px rgba(0, 0, 0, 0.1),
-    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
 }
 
-.ant-dropdown-menu-item {
-  padding: 8px 16px;
-}
-
-.ant-dropdown-menu-item:hover {
-  background-color: #f9fafb;
-}
-
-.ant-btn-primary {
-  background-color: #4f46e5;
-  border-color: #4f46e5;
-}
-
-.ant-btn-primary:hover {
-  background-color: #4f46e5;
-  border-color: #4f46e5;
-}
-
-.ant-select-selector,
-.ant-picker,
-.ant-input,
-.ant-input-affix-wrapper,
-.ant-picker-range,
-.ant-picker-input,
-.ant-select-dropdown,
-.ant-input-group-addon {
-  border-color: #e2e8f0 !important;
-}
-
-.ant-select-selector:hover,
-.ant-picker:hover,
-.ant-input:hover,
-.ant-picker-range:hover {
-  border-color: #e2e8f0 !important;
-}
-
-.ant-select-focused .ant-select-selector,
-.ant-picker-focused,
-.ant-input-focused,
-.ant-picker-range-focused {
-  border-color: #e2e8f0 !important;
-  box-shadow: 0 0 0 2px rgba(226, 232, 240, 0.2); /* Optional */
-}
-
-.ant-input {
-  border-radius: 5px !important;
-  padding: 8px 12px !important;
-}
-.ant-input-affix-wrapper {
-  border-radius: 5px !important;
-  padding: 8px 12px !important;
-}
-
-.ant-input-affix-wrapper .ant-input {
-  border-radius: 0 !important;
-  padding: 0 !important;
+/* Tab panel transitions */
+[role='tabpanel'] {
+  animation: fadeIn 0.2s ease-out;
 }

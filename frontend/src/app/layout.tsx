@@ -1,33 +1,20 @@
-'use client';
-
-import { Box } from '@mui/material';
-import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter';
-import CssBaseline from '@mui/material/CssBaseline';
-import { ThemeProvider } from '@mui/material/styles';
-
-import '@/styles/variables.css';
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
+import ThemeRegistry from '@/components/ThemeRegistry';
 
-import { muiTheme } from '@/theme/muiTheme';
+const inter = Inter({ subsets: ['latin'] });
 
-import { ToastProvider } from '@/utils/showToast';
+export const metadata: Metadata = {
+  title: 'Voice AI Dashboard',
+  description: 'Manage your AI voice agents',
+};
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>
-        <AppRouterCacheProvider options={{ enableCssLayer: true }}>
-          <ThemeProvider theme={muiTheme}>
-            <CssBaseline />
-            <ToastProvider>
-              <Box sx={{ height: '100vh', width: '100vw' }}>{children}</Box>
-            </ToastProvider>
-          </ThemeProvider>
-        </AppRouterCacheProvider>
+      <body className={inter.className}>
+        <ThemeRegistry>{children}</ThemeRegistry>
       </body>
     </html>
   );

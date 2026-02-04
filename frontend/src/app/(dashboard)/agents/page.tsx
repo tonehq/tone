@@ -1,6 +1,5 @@
+import AgentListPage from '@/components/agents/AgentListPage';
 
-import AgentListPage from '@/components/agents';
+const AgentsPage = () => <AgentListPage />;
 
-const Agentpage = () => <AgentListPage />;
-
-export default Agentpage;
+export default AgentsPage;

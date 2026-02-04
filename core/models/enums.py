@@ -39,3 +39,9 @@ class AuthProvider(enum.Enum):
     FIREBASE = "firebase"
     GOOGLE = "google"
     GITHUB = "github"
+
+
+class AgentType(enum.Enum):
+    INBOUND = "inbound"
+    OUTBOUND = "outbound"
+    CHATBOT = "chatbot"

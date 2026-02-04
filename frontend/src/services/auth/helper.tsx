@@ -5,16 +5,6 @@ import { ACCESS_TOKEN, FIREBASE_SIGNUP, SIGNUP, TENANT_ID } from '@/constants';
 import axios from '@/utils/axios';
 import { decodeJWT } from '@/utils/jwt';
 
-export const login = async (email: string, password: string) => {
-  const { data: LogInData } = await axios.post('/api/v1/auth/login', {
-    email,
-    password,
-  });
-  setToken(LogInData);
-
-  return LogInData;
-};
-
 export const setToken = async (LogInData: any) => {
   const decoded = decodeJWT(LogInData['access_token']);
   Cookies.set(ACCESS_TOKEN, LogInData['access_token'], {
@@ -40,13 +30,23 @@ export const setToken = async (LogInData: any) => {
   return LogInData;
 };
 
+export const login = async (email: string, password: string) => {
+  const { data: LogInData } = await axios.post('/auth/login', {
+    email,
+    password,
+  });
+  setToken(LogInData);
+
+  return LogInData;
+};
+
 export const createteam = async (data: string) => {
-  const res = await axios.post(`/api/v1/org/create_tenants?name=${data}`);
+  const res = await axios.post(`/org/create_tenants?name=${data}`);
   return res;
 };
 
 export const forgotPassword = async (email: string) => {
-  const { data } = await axios.get('/api/v1/auth/forget-password', {
+  const { data } = await axios.get('/auth/forget-password', {
     params: {
       email,
     },
@@ -79,7 +79,7 @@ export const signup = async (
       .then((res) => {
         setToken(res.data);
       })
-      .catch((err) => {
+      .catch((_err) => {
         alert('something went wrong');
       });
   } else {
@@ -94,11 +94,11 @@ export const signup = async (
 };
 
 export const getOrganization = async () => {
-  const res = await axios.get('/api/v1/org/get_associated_tenants');
+  const res = await axios.get('/org/get_associated_tenants');
   return res;
 };
 
 export const createOrganization = async (data: any) => {
-  const res = await axios.post(`/api/v1/org/create_tenants?name=${data.name}`);
+  const res = await axios.post(`/org/create_tenants?name=${data.name}`);
   return res;
 };
