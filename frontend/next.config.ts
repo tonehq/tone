@@ -4,9 +4,17 @@ import path from 'path';
 const nextConfig: NextConfig = {
   /* config options here */
   turbopack: {
-    // Ensure Turbopack resolves the workspace root correctly in monorepos
-    // or when multiple lockfiles exist on the machine.
     root: path.join(__dirname),
+    resolveAlias: {
+      '@': path.join(__dirname, 'src'),
+    },
+  },
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': path.join(__dirname, 'src'),
+    };
+    return config;
   },
   eslint: {
     ignoreDuringBuilds: true,
