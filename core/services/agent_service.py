@@ -11,6 +11,7 @@ from fastapi import HTTPException, status
 from core.services.base import BaseService
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
+from core.models.agent_phone_numbers import AgentPhoneNumbers
 from core.models.service_provider import ServiceProvider
 from core.models.enums import AgentType
 from core.services.agent_config_service import AgentConfigService
@@ -157,9 +158,10 @@ class AgentService(BaseService):
         agent = self.db.query(Agent).filter(Agent.uuid == agent_uuid).first()
 
         # When id present: edit both agent and agent_config. When id absent: create agent then create agent_config.
-        if agent_data.get("system_prompt"):
-            config_data = self._build_agent_config_data(agent.id, agent_data)
-            existing_config = self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).first()
+        # Run config upsert when system_prompt is provided (create/update) or when html_prompt is provided (update).
+        existing_config = self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).first()
+        if agent_data.get("system_prompt") or agent_data.get("html_prompt") is not None:
+            config_data = self._build_agent_config_data(agent.id, agent_data, existing_config=existing_config)
             if existing_config:
                 config_data["id"] = existing_config.id
                 config_data["uuid"] = str(existing_config.uuid)
@@ -170,6 +172,12 @@ class AgentService(BaseService):
 
     def _agent_response_item(self, agent: Agent, config: Any) -> Dict[str, Any]:
         """Build response dict: agent + config as single flat object (no agent_config key)."""
+        phone_rows = (
+            self.db.query(AgentPhoneNumbers)
+            .filter(AgentPhoneNumbers.agent_id == agent.id)
+            .all()
+        )
+
         item = {
             "id": agent.id,
             "uuid": str(agent.uuid),
@@ -186,7 +194,16 @@ class AgentService(BaseService):
             "meta_data": agent.meta_data,
             "status": agent.status,
             "agent_type": agent.agent_type.value if agent.agent_type is not None else None,
+            "phone_number": phone_rows[0].phone_number if phone_rows else None,
+            "country_code": phone_rows[0].country_code if phone_rows else None,
+            
         }
+        # Phone numbers for this agent (phone_number and country_code only)
+
+        # item["phone_numbers"] = [
+        #     {"phone_number": p.phone_number, "country_code": p.country_code}
+        #     for p in phone_rows
+        # ]
         if config:
             agent_meta = config.agent_metadata if isinstance(config.agent_metadata, dict) else {}
             llm_meta = config.llm_metadata if isinstance(config.llm_metadata, dict) else {}
@@ -203,30 +220,62 @@ class AgentService(BaseService):
                 "system_prompt": config.system_prompt,
                 "end_call_message": config.end_call_message,
                 "voicemail_message": config.voicemail_message,
+                "html_prompt": config.html_prompt,
                 "config_status": config.status,
                 **{k: agent_meta.get(k) for k in AGENT_METADATA_KEYS},
             })
+        else:
+            item["html_prompt"] = None
         return item
 
-    def _build_agent_config_data(self, agent_id: int, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Build agent_config payload from combined request; agent_metadata from AGENT_METADATA_KEYS."""
-        voicemail = data.get("voice_mail_message") or data.get("voicemail_message")
+    def _build_agent_config_data(
+        self, agent_id: int, data: Dict[str, Any], existing_config: AgentConfig | None = None
+    ) -> Dict[str, Any]:
+        """Build agent_config payload from combined request; agent_metadata from AGENT_METADATA_KEYS.
+        When existing_config is set, use its values for any field not provided in data (so partial updates don't wipe fields).
+        """
+        def _get(key: str, default: Any = None) -> Any:
+            if key in data and data[key] is not None:
+                return data[key]
+            if existing_config is not None:
+                return getattr(existing_config, key, default)
+            return default
+
+        voicemail = data.get("voice_mail_message") or data.get("voicemail_message") or (existing_config.voicemail_message if existing_config else None)
         llm_model_id = data.get("llm_model_id")
+        if llm_model_id is None and existing_config and isinstance(getattr(existing_config, "llm_metadata"), dict):
+            llm_model_id = (existing_config.llm_metadata or {}).get("model_id")
         tts_model_id = data.get("tts_model_id")
+        if tts_model_id is None and existing_config and isinstance(getattr(existing_config, "tts_metadata"), dict):
+            tts_model_id = (existing_config.tts_metadata or {}).get("model_id")
         stt_model_id = data.get("stt_model_id") or data.get("stt_model_it")
+        if stt_model_id is None and existing_config and isinstance(getattr(existing_config, "stt_metadata"), dict):
+            stt_model_id = (existing_config.stt_metadata or {}).get("model_id")
+        system_prompt = data.get("system_prompt")
+        if system_prompt is None or system_prompt == "":
+            system_prompt = (existing_config.system_prompt or "") if existing_config else ""
+        html_prompt = data.get("html_prompt") if "html_prompt" in data else (existing_config.html_prompt if existing_config else None)
+        agent_metadata = {k: data[k] for k in AGENT_METADATA_KEYS if k in data}
+        if existing_config and isinstance(existing_config.agent_metadata, dict) and not agent_metadata:
+            agent_metadata = existing_config.agent_metadata
+        elif existing_config and isinstance(existing_config.agent_metadata, dict):
+            merged = dict(existing_config.agent_metadata)
+            merged.update(agent_metadata)
+            agent_metadata = merged
         config_data = {
             "agent_id": agent_id,
-            "llm_service_id": data.get("llm_service_id"),
-            "tts_service_id": data.get("tts_service_id"),
-            "stt_service_id": data.get("stt_service_id"),
-            "first_message": data.get("first_message"),
-            "system_prompt": data.get("system_prompt") or "",
-            "end_call_message": data.get("end_call_message"),
+            "llm_service_id": _get("llm_service_id"),
+            "tts_service_id": _get("tts_service_id"),
+            "stt_service_id": _get("stt_service_id"),
+            "first_message": _get("first_message"),
+            "system_prompt": system_prompt,
+            "end_call_message": _get("end_call_message"),
             "voicemail_message": voicemail,
-            "llm_metadata": {"model_id": llm_model_id} if llm_model_id is not None else {},
-            "tts_metadata": {"model_id": tts_model_id} if tts_model_id is not None else {},
-            "stt_metadata": {"model_id": stt_model_id} if stt_model_id is not None else {},
-            "agent_metadata": {k: data[k] for k in AGENT_METADATA_KEYS if k in data},
+            "html_prompt": html_prompt,
+            "llm_metadata": {"model_id": llm_model_id} if llm_model_id is not None else (existing_config.llm_metadata if existing_config else {}),
+            "tts_metadata": {"model_id": tts_model_id} if tts_model_id is not None else (existing_config.tts_metadata if existing_config else {}),
+            "stt_metadata": {"model_id": stt_model_id} if stt_model_id is not None else (existing_config.stt_metadata if existing_config else {}),
+            "agent_metadata": agent_metadata,
         }
         return config_data
 
