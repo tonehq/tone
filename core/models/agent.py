@@ -25,4 +25,5 @@ class Agent(TimestampModel):
     created_by = Column(BigInteger, ForeignKey('users.id'))
     meta_data = Column(JSONB, nullable=True, default={})
     status = Column(String, nullable=True, default='active')
-    agent_type = Column(Enum(AgentType))
+    agent_type = Column(Enum(AgentType, name="agenttype", values_callable=lambda e: [i.name for i in e]))
+
