@@ -136,7 +136,9 @@ export const constructTable = (
 
         /* AGENT TYPE COLUMN */
         if (col.value === 'agent_type') {
-          const isInbound = true;
+          const raw = params.value;
+          const isInbound =
+            raw === 'inbound' || String(raw).toLowerCase() === 'inbound' || raw === 0;
 
           return (
             <Chip

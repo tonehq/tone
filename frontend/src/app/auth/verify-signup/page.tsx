@@ -2,12 +2,12 @@
 
 import { Suspense, useState } from 'react';
 
-import CustomButton from '@/components/shared/CustomButton';
-import { Form } from '@/components/shared/FormComponent';
-import axios from '@/utils/axios';
-import { useNotification } from '@/utils/notification';
 import { Box, Stack, Typography } from '@mui/material';
 import { useRouter, useSearchParams } from 'next/navigation';
+import CustomButton from '../../../components/shared/CustomButton';
+import { Form } from '../../../components/shared/FormComponent';
+import axios from '../../../utils/axios';
+import { useNotification } from '../../../utils/notification';
 import Container from '../shared/ContainerComponent';
 
 const EmailVerificationContent = () => {

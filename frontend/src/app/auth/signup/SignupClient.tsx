@@ -2,16 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import CustomButton from '@/components/shared/CustomButton';
-import { Form } from '@/components/shared/FormComponent';
-import TextInput from '@/components/shared/TextInput';
-import { signup } from '@/services/auth/helper';
-import axios from '@/utils/axios';
-import { useNotification } from '@/utils/notification';
 import { Box, Stack, Typography, useTheme } from '@mui/material';
 import { debounce } from 'lodash';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import CustomButton from '../../../components/shared/CustomButton';
+import { Form } from '../../../components/shared/FormComponent';
+import TextInput from '../../../components/shared/TextInput';
+import { signup } from '../../../services/auth/helper';
+import axios from '../../../utils/axios';
+import { useNotification } from '../../../utils/notification';
 import Container from '../shared/ContainerComponent';
 
 interface ExistingOrg {

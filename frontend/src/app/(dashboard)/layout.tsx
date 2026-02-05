@@ -1,8 +1,8 @@
 'use client';
 
-import Sidebar from '@/components/shared/SidebarComponent';
 import { Box } from '@mui/material';
 import React, { useState } from 'react';
+import Sidebar from '../../components/shared/SidebarComponent';
 
 const _DRAWER_WIDTH = 240;
 const _COLLAPSED_WIDTH = 72;

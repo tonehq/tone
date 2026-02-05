@@ -22,6 +22,7 @@ class AgentConfig(TimestampModel):
     end_call_message = Column(Text, nullable=True)
     voicemail_message = Column(Text, nullable=True)
     status = Column(String, default="active")
+    html_prompt = Column(Text, nullable=True)
 
     llm_metadata = Column(JSON, nullable=True, default={})
     tts_metadata = Column(JSON, nullable=True, default={})  

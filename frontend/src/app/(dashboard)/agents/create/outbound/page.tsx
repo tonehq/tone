@@ -2,11 +2,16 @@
 
 import { CallConfigurationTab, GeneralTab, VoiceTab } from '@/components/agents/agent-form';
 import {
-  ArrowBack as ArrowBackIcon,
-  Phone as PhoneIcon,
-  Save as SaveIcon,
-  Settings as SettingsIcon,
-  VolumeUp as VoiceIcon,
+    defaultFormState,
+    formStateToUpsertPayload,
+    type AgentFormState,
+} from '@/components/agents/agent-form/agentFormUtils';
+import {
+    ArrowBack as ArrowBackIcon,
+    Phone as PhoneIcon,
+    Save as SaveIcon,
+    Settings as SettingsIcon,
+    VolumeUp as VoiceIcon,
 } from '@mui/icons-material';
 import { Alert, Avatar, Box, Button, Chip, Tab, Tabs, Typography, useTheme } from '@mui/material';
 import { useRouter } from 'next/navigation';
@@ -31,27 +36,8 @@ export default function CreateOutboundAgentPage() {
   const router = useRouter();
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState(0);
-  const [formData, setFormData] = useState({
-    name: 'My Inbound Assistant',
-    aiModel: 'gpt-4.1',
-    end_call_message: 'something end',
-    first_message: 'first message something',
-    customVocabulary: [] as string[],
-    filterWords: [] as string[],
-    language: 'en',
-    voiceProvider: 'elevenlabs',
-    sttProvider: 'deepgram',
-    patienceLevel: 'low',
-    speechRecognition: 'faster',
-    voiceSpeed: 50,
-    voiceVolume: 100,
-    interruptionSensitivity: 2,
-    voicePrompting: 'slowly and at good volume',
-    useRealisticFillerWords: false,
-    callRecording: false,
-    callTranscription: false,
-    description: 'Description',
-  });
+  const [formData, setFormData] = useState<AgentFormState>(() => defaultFormState('outbound'));
+  const [saving, setSaving] = useState(false);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
@@ -61,9 +47,17 @@ export default function CreateOutboundAgentPage() {
     setFormData((prev) => ({ ...prev, ...partial }));
   };
 
-  const handleSave = () => {
-    console.log('Saving agent:', formData);
-    router.push('/agents');
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const payload = formStateToUpsertPayload(formData, 'outbound');
+      await upsertAgent(payload);
+      router.push('/agents');
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDeleteAgent = () => {
@@ -179,9 +173,10 @@ export default function CreateOutboundAgentPage() {
             variant="contained"
             startIcon={<SaveIcon />}
             onClick={handleSave}
+            disabled={saving}
             sx={{ backgroundColor: '#8b5cf6', '&:hover': { backgroundColor: '#7c3aed' } }}
           >
-            Save Changes
+            {saving ? 'Saving...' : 'Save Changes'}
           </Button>
         </Box>
 

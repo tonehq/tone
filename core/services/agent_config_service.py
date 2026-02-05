@@ -37,13 +37,13 @@ class AgentConfigService(BaseService):
     CREATED_ATTRS = (
         "agent_id", "llm_service_id", "tts_service_id", "stt_service_id",
         "first_message", "system_prompt", "end_call_message", "voicemail_message",
-        "status", "llm_metadata", "tts_metadata", "stt_metadata", "agent_metadata",
+        "html_prompt", "status", "llm_metadata", "tts_metadata", "stt_metadata", "agent_metadata",
         "description",
     )
     UPDATABLE_ATTRS = (
         "llm_service_id", "tts_service_id", "stt_service_id",
         "first_message", "system_prompt", "end_call_message", "voicemail_message",
-        "status", "llm_metadata", "tts_metadata", "stt_metadata", "agent_metadata",
+        "html_prompt", "status", "llm_metadata", "tts_metadata", "stt_metadata", "agent_metadata",
         "description", "updated_at",
     )
 

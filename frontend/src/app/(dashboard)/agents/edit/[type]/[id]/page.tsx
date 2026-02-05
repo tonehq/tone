@@ -2,23 +2,24 @@
 
 import { CallConfigurationTab, GeneralTab, VoiceTab } from '@/components/agents/agent-form';
 import {
-  defaultFormState,
-  formStateToUpsertPayload,
-  type AgentFormState,
+    apiAgentToFormState,
+    defaultFormState,
+    formStateToUpsertPayload,
+    type AgentFormState,
 } from '@/components/agents/agent-form/agentFormUtils';
 import PromptPage from '@/components/agents/agent-form/promptPage';
-import { upsertAgent } from '@/services/agentsService';
+import { getAgent, upsertAgent } from '@/services/agentsService';
 import {
-  ArrowBack as ArrowBackIcon,
-  Phone as PhoneIcon,
-  Save as SaveIcon,
-  Settings as SettingsIcon,
-  VolumeUp as VoiceIcon,
+    ArrowBack as ArrowBackIcon,
+    Phone as PhoneIcon,
+    Save as SaveIcon,
+    Settings as SettingsIcon,
+    VolumeUp as VoiceIcon,
 } from '@mui/icons-material';
 import { Alert, Avatar, Box, Button, Chip, Tab, Tabs, Typography, useTheme } from '@mui/material';
 import { startCase } from 'lodash';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { useCallback, useEffect, useState } from 'react';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -35,13 +36,43 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
-export default function CreateInboundAgentPage() {
+export default function EditAgentPage() {
   const router = useRouter();
+  const params = useParams();
   const theme = useTheme();
+  const type = (params?.type as string)?.toLowerCase();
+  const id = params?.id as string;
+  const agentType = type === 'outbound' ? 'outbound' : 'inbound';
+
   const [activeTab, setActiveTab] = useState(0);
   const [currentMenu, setCurrentMenu] = useState('configure');
-  const [formData, setFormData] = useState<AgentFormState>(() => defaultFormState('inbound'));
+  const [formData, setFormData] = useState<AgentFormState>(() => defaultFormState(agentType));
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadAgent = useCallback(async () => {
+    if (!id) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const agent = await getAgent(id);
+      if (agent) {
+        setFormData(apiAgentToFormState(agent, agentType));
+      } else {
+        setError('Agent not found');
+      }
+    } catch (e) {
+      setError('Failed to load agent');
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [id, agentType]);
+
+  useEffect(() => {
+    loadAgent();
+  }, [loadAgent]);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
@@ -52,13 +83,15 @@ export default function CreateInboundAgentPage() {
   };
 
   const handleSave = async () => {
+    if (!id) return;
     setSaving(true);
     try {
-      const payload = formStateToUpsertPayload(formData, 'inbound');
+      const payload = formStateToUpsertPayload(formData, agentType, Number(id));
       await upsertAgent(payload);
       router.push('/agents');
     } catch (e) {
       console.error(e);
+      setError('Failed to save agent');
     } finally {
       setSaving(false);
     }
@@ -74,6 +107,25 @@ export default function CreateInboundAgentPage() {
       router.push('/agents');
     }
   };
+
+  if (loading) {
+    return (
+      <Box sx={{ p: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400 }}>
+        <Typography color="text.secondary">Loading agent...</Typography>
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Typography color="error" sx={{ mb: 2 }}>{error}</Typography>
+        <Button variant="outlined" onClick={() => router.push('/agents')}>
+          Back to Agents
+        </Button>
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ display: 'flex', height: '100vh' }}>
@@ -105,11 +157,12 @@ export default function CreateInboundAgentPage() {
                 {formData.name}
               </Typography>
               <Chip
-                label="Inbound"
+                label={agentType === 'inbound' ? 'Inbound' : 'Outbound'}
                 size="small"
                 sx={{
-                  backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                  color: '#10b981',
+                  backgroundColor:
+                    agentType === 'inbound' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(139, 92, 246, 0.1)',
+                  color: agentType === 'inbound' ? '#10b981' : '#8b5cf6',
                   fontWeight: 500,
                 }}
               />
@@ -161,8 +214,7 @@ export default function CreateInboundAgentPage() {
             </Button>
           }
         >
-          <strong>Important</strong> Your agent doesn&apos;t have a phone number and can&apos;t
-          receive calls.
+          <strong>Edit agent</strong> Changes are saved when you click Save.
         </Alert>
 
         <Box
@@ -196,23 +248,11 @@ export default function CreateInboundAgentPage() {
                 onChange={handleTabChange}
                 sx={{
                   borderBottom: '1px solid #e2e8f0',
-                  '& .MuiTab-root': {
-                    marginRight: '16px',
-                    minHeight: 48,
-                    textTransform: 'none',
-                  },
+                  '& .MuiTab-root': { marginRight: '16px', minHeight: 48, textTransform: 'none' },
                 }}
               >
-                <Tab
-                  icon={<SettingsIcon sx={{ fontSize: 18 }} />}
-                  iconPosition="start"
-                  label="General"
-                />
-                <Tab
-                  icon={<VoiceIcon sx={{ fontSize: 18 }} />}
-                  iconPosition="start"
-                  label="Voice"
-                />
+                <Tab icon={<SettingsIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="General" />
+                <Tab icon={<VoiceIcon sx={{ fontSize: 18 }} />} iconPosition="start" label="Voice" />
                 <Tab
                   icon={<PhoneIcon sx={{ fontSize: 18 }} />}
                   iconPosition="start"
@@ -268,9 +308,7 @@ export default function CreateInboundAgentPage() {
         {currentMenu === 'prompt' && (
           <Box>
             <PromptPage
-              formData={{
-                voicePrompting: formData.voicePrompting,
-              }}
+              formData={{ voicePrompting: formData.voicePrompting }}
               onFormChange={handleFormChange}
             />
           </Box>
