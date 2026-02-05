@@ -1,6 +1,6 @@
 {
   "framework": "nextjs",
-  "installCommand": "yarn install --frozen-lockfile",
+  "installCommand": "yarn install",
   "buildCommand": "yarn build",
   "devCommand": "yarn dev",
   "outputDirectory": ".next"
