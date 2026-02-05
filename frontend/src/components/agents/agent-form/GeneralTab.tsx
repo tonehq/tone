@@ -1,20 +1,20 @@
 'use client';
 
-import { Form } from '@/components/shared/FormComponent';
-import { aiModels } from '@/data/mockAgents';
 import {
-    Box,
-    Button,
-    Chip,
-    FormControl,
-    MenuItem,
-    Select,
-    Switch,
-    TextField,
-    Typography,
-    useTheme,
+  Box,
+  Button,
+  Chip,
+  FormControl,
+  MenuItem,
+  Select,
+  Switch,
+  TextField,
+  Typography,
+  useTheme,
 } from '@mui/material';
 import { KeyboardEvent, ReactNode, useState } from 'react';
+import { aiModels } from '../../../data/mockAgents';
+import { Form } from '../../shared/FormComponent';
 import type { AgentGeneralFormData } from './types';
 
 interface GeneralTabProps {
