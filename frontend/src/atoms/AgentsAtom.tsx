@@ -6,6 +6,8 @@ export interface Agent {
   uuid: string;
   name: string;
   description: string;
+  agent_type?: string;
+  phone_number?: string;
   is_public: boolean;
   tags: Record<string, unknown>;
   total_calls: number;

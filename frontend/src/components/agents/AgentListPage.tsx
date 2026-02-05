@@ -6,11 +6,13 @@ import { Add as AddIcon, Search as SearchIcon } from '@mui/icons-material';
 import { Box, Button, InputAdornment, Paper, TextField, Typography, useTheme } from '@mui/material';
 import { DataGrid, GridColDef, GridPaginationModel } from '@mui/x-data-grid';
 import { useAtom } from 'jotai';
+import { useRouter } from 'next/navigation';
 import React, { useEffect, useRef, useState } from 'react';
 import CreateAgentModal from './CreateAgentModal';
 
 const AgentListPage: React.FC = () => {
   const theme = useTheme();
+  const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [_paginationModel, _setPaginationModel] = useState<GridPaginationModel>({
     page: 0,
@@ -22,6 +24,13 @@ const AgentListPage: React.FC = () => {
 
   // Prevent double fetch with a ref flag
   const hasFetchedRef = useRef(false);
+
+  const handleEdit = (row: { id?: number | string; agent_type?: string }) => {
+    const type = (row.agent_type ?? 'inbound').toString().toLowerCase();
+    const id = row.id ?? 0;
+    if (!id) return;
+    router.push(`/agents/edit/${type}/${id}`);
+  };
 
   useEffect(() => {
     if (hasFetchedRef.current) return;
@@ -69,13 +78,10 @@ const AgentListPage: React.FC = () => {
     },
   ];
 
-  const columns = constructTable(
-    defaultColumns,
-    (row) => console.log('Edit row:', row),
-    (row) => console.log('Delete row:', row),
-  );
-
-  console.log(columns, 'columns', data.agentList);
+  const columns = constructTable(defaultColumns, handleEdit, (row) => {
+    console.log('Delete row:', row);
+    // TODO: wire delete API when available
+  });
 
   return (
     <Box sx={{ p: 3, height: '100%' }}>
