@@ -15,10 +15,10 @@ from sqlalchemy.orm import Session
 import boto3
 import requests
 
-from pipecatfork.src.pipecat.frames.frames import Frame
-from pipecatfork.src.pipecat.services.tts_service import TTSService
-from pipecatfork.src.pipecat.services.elevenlabs.tts import ElevenLabsTTSService
-from pipecatfork.src.pipecat.services.openai.tts import OpenAITTSService
+from pipecat.frames.frames import Frame
+from pipecat.services.tts_service import TTSService
+from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
+from pipecat.services.openai.tts import OpenAITTSService
 
 def main():
     service = ElevenLabsTTSService(api_key=os.getenv("ELEVENLABS_API_KEY"))

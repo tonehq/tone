@@ -17,7 +17,7 @@ If the llm, stt,tts are there, their id would be added in test cases else 0 will
 According to the classes available in agent_factory_service.py, the test cases are created.
 """
 
-# To fix the import error for pipecatfork
+# To fix the import error for pipecat
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -27,9 +27,9 @@ import asyncio
 from core.database.session import SessionLocal
 from core.services.agent_service import AgentService
 from core.services.agent_factory_service import AgentFactoryService
-from pipecatfork.src.pipecat.transports.websocket.fastapi import FastAPIWebsocketParams
-from pipecatfork.src.pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecatfork.src.pipecat.transports.websocket.fastapi import (
+from pipecat.transports.websocket.fastapi import FastAPIWebsocketParams
+from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketParams,
     FastAPIWebsocketTransport,
     FastAPIWebsocketClient
@@ -38,9 +38,9 @@ from fastapi import WebSocket
 from starlette.websockets import WebSocketState
 
 #small webrtc
-from pipecatfork.src.pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport, SmallWebRTCClient, SmallWebRTCConnection
-from pipecatfork.src.pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
-from pipecatfork.src.pipecat.transports.base_transport import TransportParams
+from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport, SmallWebRTCClient, SmallWebRTCConnection
+from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
+from pipecat.transports.base_transport import TransportParams
 
 
 class MockSmallWebRTCConnection(SmallWebRTCConnection):
@@ -189,7 +189,7 @@ async def test_case_1():
     try:
         result = await create_test_agent(
             db=db,
-            name="Test Agent 14",
+            name="Test Agent 18",
             llm_service_id=1,  # OpenAI
             stt_service_id=35,  # Deepgram
             tts_service_id=5,  # Cartesia

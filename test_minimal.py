@@ -21,7 +21,7 @@ async def main():
     # ========== 3. TRANSPORT (Mock) ==========
     # Pipeline expects transport.input() and transport.output() to return FrameProcessor
     # instances (they must have .link() and ._prev / ._next). Use minimal subclasses.
-    from pipecatfork.src.pipecat.processors.frame_processor import FrameProcessor
+    from pipecat.processors.frame_processor import FrameProcessor
 
     class MockPipelineInput(FrameProcessor):
         def __init__(self):
