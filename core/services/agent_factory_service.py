@@ -115,34 +115,22 @@ class AgentFactoryService(BaseService):
                 from pipecat.services.aws.llm import AWSBedrockLLMService
                 return AWSBedrockLLMService(api_key=api_key, model=model)
             if provider_name == "aws_nova_sonic": #done
-                from pipecat.services.aws.llm import AWSNovaSonicLLMService
+                from pipecat.services.aws.nova_sonic.llm import AWSNovaSonicLLMService
                 return AWSNovaSonicLLMService(api_key=api_key, model=model)
             if provider_name == "google": #Done
                 from pipecat.services.google.llm import GoogleLLMService
                 return GoogleLLMService(api_key=api_key, model=model)
-            if provider_name == "gemini_live": #done
-                from pipecat.services.google.llm import GeminiLiveLLMService
-                return GeminiLiveLLMService(api_key=api_key, model=model)
-            if provider_name == "grok_realtime": #done
-                from pipecat.services.grok.llm import GrokRealtimeLLMService
-                return GrokRealtimeLLMService(api_key=api_key, model=model)
-            if provider_name == "base_openai": #done
+            if provider_name == "ollama": #done
+                from pipecat.services.ollama.llm import OLLamaLLMService
+                return OLLamaLLMService(api_key=api_key, model=model)
+            if provider_name in ["azure","cerebras","nvidia_nim","fireworks","together","perplexity","qwen","deepseek", "mistral","sambanova","grok"]:    
                 from pipecat.services.openai.llm import BaseOpenAILLMService
-                return BaseOpenAILLMService(api_key=api_key, model=model)
-            if provider_name == "openai_realtime": #done
-                from pipecat.services.openai.llm import OpenAIRealtimeLLMService
-                return OpenAIRealtimeLLMService(api_key=api_key, model=model)
-            if provider_name == "openai_realtime_beta": #done
-                from pipecat.services.openai.llm import OpenAIRealtimeBetaLLMService
-                return OpenAIRealtimeBetaLLMService(api_key=api_key, model=model)
-            if provider_name == "ultravox_realtime": #done
-                from pipecat.services.ultravox.llm import UltravoxRealtimeLLMService
-                return UltravoxRealtimeLLMService(api_key=api_key, model=model)
-            logger.warning("Unsupported LLM provider: %s", provider.name)
+                return BaseOpenAILLMService(api_key=api_key,model=model,base_url=metadata.get("base_url"))
             return None
         except ImportError as e:
             logger.exception("LLM provider %s not available", provider_name)
             return None
+
 
     def get_stt_for_agent(self, agent: Any) -> Optional[Any]:
         """
@@ -160,7 +148,7 @@ class AgentFactoryService(BaseService):
         provider_name = (provider.name or "").strip().lower()
 
         try:
-            if provider_name == "deepgram": # done
+            if provider_name == "deepgram": # done 
                 from pipecat.services.deepgram.stt import DeepgramSTTService
                 return DeepgramSTTService(api_key=api_key)
             if provider_name == "openai": # done
@@ -170,7 +158,7 @@ class AgentFactoryService(BaseService):
                 from pipecat.services.groq.stt import GroqSTTService
                 return GroqSTTService(api_key=api_key)
             if provider_name == "segmented": #done
-                from pipecat.services.segmented.stt import SegmentedSTTService
+                from pipecat.services.stt_service import SegmentedSTTService
                 return SegmentedSTTService(api_key=api_key)
             if provider_name == "azure": #done
                 from pipecat.services.azure.stt import AzureSTTService
@@ -190,6 +178,21 @@ class AgentFactoryService(BaseService):
             if provider_name == "speechmatics": #done
                 from pipecat.services.speechmatics.stt import SpeechmaticsSTTService
                 return SpeechmaticsSTTService(api_key=api_key)
+            if provider_name == "assemblyai": #done
+                from pipecat.services.assemblyai.stt import AssemblyAISTTService
+                return AssemblyAISTTService(api_key=api_key)
+            if provider_name == "cartesia":
+                from pipecat.services.cartesia.stt import CartesiaSTTService
+                return CartesiaSTTService(api_key=api_key)
+            if provider_name == "elevenlabs":
+                from pipecat.services.elevenlabs.stt import ElevenLabsSTTService
+                return ElevenLabsSTTService(api_key=api_key)
+            if provider_name == "gladia": #done
+                from pipecat.services.gladia.stt import GladiaSTTService
+                return GladiaSTTService(api_key=api_key)
+            if provider_name == "soniox": #done
+                from pipecat.services.soniox.stt import SonioxSTTService
+                return SonioxSTTService(api_key=api_key)
             logger.warning("Unsupported STT provider: %s", provider.name)
             return None
         except ImportError as e:
@@ -229,28 +232,25 @@ class AgentFactoryService(BaseService):
                 user_id = model_meta.get("user_id") or metadata.get("user_id") or ""
                 voice_url = model_meta.get("voice_url") or metadata.get("voice_url") or ""
                 return PlayHTTTSService(api_key=api_key, user_id=user_id, voice_url=voice_url)
-            if provider_name == "word": #done
-                from pipecat.services.word.tts import WordTTSService
-                return WordTTSService(api_key=api_key, voice_id=voice_id)
             if provider_name == "asyncai_http": #done
                 from pipecat.services.asyncai.tts import AsyncAIHttpTTSService
                 return AsyncAIHttpTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "aws_polly": #done
+            if provider_name == "aws_polly": #not done
                 from pipecat.services.aws.tts import AWSPollyTTSService
                 return AWSPollyTTSService(api_key=api_key, voice_id=voice_id)
             if provider_name == "camb": #done
                 from pipecat.services.camb.tts import CambTTSService
                 return CambTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "cartesia_http": #done
+            if provider_name == "cartesia_http": #not done
                 from pipecat.services.cartesia.tts import CartesiaHttpTTSService
                 return CartesiaHttpTTSService(api_key=api_key, voice_id=voice_id)
             if provider_name == "deepgram": #done
                 from pipecat.services.deepgram.tts import DeepgramHttpTTSService
                 return DeepgramHttpTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "google_http": #done
+            if provider_name == "google_http": #not done #Original service of google
                 from pipecat.services.google.tts import GoogleHttpTTSService
                 return GoogleHttpTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "google_base": #done
+            if provider_name == "google_base": #not done
                 from pipecat.services.google.tts import GoogleBaseTTSService
                 return GoogleBaseTTSService(api_key=api_key, voice_id=voice_id)
             if provider_name == "groq": #done
@@ -262,20 +262,15 @@ class AgentFactoryService(BaseService):
             if provider_name == "minimax": #done
                 from pipecat.services.minimax.tts import MiniMaxHttpTTSService
                 return MiniMaxHttpTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "neuphonic": #done
+            if provider_name == "neuphonic": #not done
                 from pipecat.services.neuphonic.tts import NeuphonicHttpTTSService
                 return NeuphonicHttpTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "nvidia": #done
+            if provider_name == "nvidia": #not done
                 from pipecat.services.nvidia.tts import NvidiaTTSService
                 return NvidiaTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "piper": #done
+            if provider_name == "piper": #not done
                 from pipecat.services.piper.tts import PiperTTSService
                 return PiperTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "playht": #done
-                from pipecat.services.playht.tts import PlayHTHttpTTSService
-                user_id = model_meta.get("user_id") or metadata.get("user_id") or ""
-                voice_url = model_meta.get("voice_url") or metadata.get("voice_url") or ""
-                return PlayHTHttpTTSService(api_key=api_key, user_id=user_id, voice_url=voice_url)
             if provider_name == "rime": #done
                 from pipecat.services.rime.tts import RimeHttpTTSService
                 return RimeHttpTTSService(api_key=api_key, voice_id=voice_id)
@@ -285,9 +280,28 @@ class AgentFactoryService(BaseService):
             if provider_name == "speechmatics": #done
                 from pipecat.services.speechmatics.tts import SpeechmaticsTTSService
                 return SpeechmaticsTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "xtts": #done
+            if provider_name == "xtts": #not done
                 from pipecat.services.xtts.tts import XTTSService
                 return XTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "azure": #done
+                from pipecat.services.azure.tts import AzureTTSService
+                return AzureTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "fish": #done
+                from pipecat.services.fish.tts import FishTTSService
+                return FishTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "hume": #done
+                from pipecat.services.hume.tts import HumeTTSService
+                return HumeTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "inworld": #done
+                from pipecat.services.inworld.tts import InworldTTSService
+                return InworldTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "lmnt": #done
+                from pipecat.services.lmnt.tts import LMNTTTSService
+                return LMNTTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "resemble":
+                from pipecat.services.resembleai.tts import ResembleTTSService
+                return ResembleTTSService(api_key=api_key, voice_id=voice_id)
+
             logger.warning("Unsupported TTS provider: %s", provider.name)
             return None
         except ImportError as e:
