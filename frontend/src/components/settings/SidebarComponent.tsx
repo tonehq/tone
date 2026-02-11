@@ -9,7 +9,7 @@ const SidebarComponent = ({
   setActiveSidebar: (sidebar: string) => void;
   settingsSidebar: any;
 }) => (
-  <Box sx={{ width: 200, height: '95vh' }}>
+  <Box sx={{ width: 200, height: '93vh' }}>
     <Paper sx={{ borderRadius: '5px', height: '100%', overflow: 'hidden', p: 1 }}>
       <Typography variant="h4" sx={{ fontWeight: 600, mb: 2, px: 1, mt: 1 }}>
         Settings
