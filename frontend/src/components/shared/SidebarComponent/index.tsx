@@ -24,7 +24,7 @@ function SidebarItemMenu({ icon: Icon, href, active, title, isCollapsed }: Sideb
       sx={{
         display: 'flex',
         alignItems: 'center',
-        borderRadius: '8px',
+        borderRadius: '5px',
         cursor: 'pointer',
         userSelect: 'none',
         whiteSpace: 'nowrap',
@@ -93,6 +93,8 @@ interface SidebarProps {
 
 function Sidebar({ isExpanded = true, onToggle }: SidebarProps) {
   const pathname = usePathname();
+  const drawerWidth = 240;
+  const collapsedWidth = 72;
 
   const isActive = (path: string) => pathname === path || pathname?.startsWith(`${path}/`);
 
@@ -100,6 +102,7 @@ function Sidebar({ isExpanded = true, onToggle }: SidebarProps) {
     <Box
       sx={{
         flexShrink: 0,
+        width: isExpanded ? `${drawerWidth}px` : `${collapsedWidth}px`,
         height: '100vh',
         background: 'linear-gradient(180deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%)',
         display: 'flex',
@@ -126,7 +129,7 @@ function Sidebar({ isExpanded = true, onToggle }: SidebarProps) {
             width: 32,
             height: 32,
             backgroundColor: '#ffffff',
-            borderRadius: '8px',
+            borderRadius: '5px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -186,7 +189,7 @@ function Sidebar({ isExpanded = true, onToggle }: SidebarProps) {
             alignItems: 'center',
             gap: 1.5,
             p: isExpanded ? 1.5 : 0.5,
-            borderRadius: '8px',
+            borderRadius: '5px',
             backgroundColor: 'rgba(255, 255, 255, 0.1)',
             cursor: 'pointer',
             '&:hover': {

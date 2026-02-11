@@ -15,7 +15,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
 
   return (
-    <Box sx={{ display: 'flex', gap: 2, width: '100vw', minHeight: '100vh' }}>
+    <Box sx={{ display: 'flex', width: '100vw', minHeight: '100vh' }}>
       <Box sx={{ width: sidebarExpanded ? 240 : 72 }}>
         <Sidebar
           isExpanded={sidebarExpanded}

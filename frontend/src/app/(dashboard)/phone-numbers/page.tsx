@@ -1,17 +1,17 @@
 'use client';
 
+import { Add as AddIcon, Phone as PhoneIcon } from '@mui/icons-material';
 import {
-  Box,
-  Typography,
-  Button,
-  Paper,
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemText,
-  useTheme,
+    Box,
+    Button,
+    List,
+    ListItem,
+    ListItemButton,
+    ListItemText,
+    Paper,
+    Typography,
+    useTheme,
 } from '@mui/material';
-import { Phone as PhoneIcon, Add as AddIcon } from '@mui/icons-material';
 
 export default function PhoneNumbersPage() {
   const theme = useTheme();
@@ -36,7 +36,7 @@ export default function PhoneNumbersPage() {
             <ListItemButton
               selected
               sx={{
-                borderRadius: '8px',
+                borderRadius: '5px',
                 '&.Mui-selected': {
                   backgroundColor: 'rgba(139, 92, 246, 0.1)',
                   '&:hover': {
@@ -55,7 +55,7 @@ export default function PhoneNumbersPage() {
             </ListItemButton>
           </ListItem>
           <ListItem disablePadding>
-            <ListItemButton sx={{ borderRadius: '8px' }}>
+            <ListItemButton sx={{ borderRadius: '5px' }}>
               <ListItemText
                 primary="Addresses"
                 primaryTypographyProps={{
@@ -83,7 +83,7 @@ export default function PhoneNumbersPage() {
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            borderRadius: '12px',
+            borderRadius: '5px',
             border: '1px solid #e2e8f0',
             p: 4,
           }}
@@ -95,7 +95,7 @@ export default function PhoneNumbersPage() {
               width: 80,
               height: 80,
               backgroundColor: '#f3f4f6',
-              borderRadius: '16px',
+              borderRadius: '5px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',

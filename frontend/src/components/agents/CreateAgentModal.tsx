@@ -2,21 +2,21 @@
 
 import { AgentType, CreateAgentModalOption } from '@/types/agent';
 import {
-  ArrowBack as ArrowBackIcon,
-  Close as CloseIcon,
-  CallReceived as InboundIcon,
-  CallMade as OutboundIcon,
+    ArrowBack as ArrowBackIcon,
+    Close as CloseIcon,
+    CallReceived as InboundIcon,
+    CallMade as OutboundIcon,
 } from '@mui/icons-material';
 import {
-  Box,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  Grid,
-  IconButton,
-  Paper,
-  Typography,
-  useTheme,
+    Box,
+    Dialog,
+    DialogContent,
+    DialogTitle,
+    Grid,
+    IconButton,
+    Paper,
+    Typography,
+    useTheme,
 } from '@mui/material';
 import { useRouter } from 'next/navigation';
 import React from 'react';
@@ -72,7 +72,7 @@ const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ open, onClose }) =>
       fullWidth
       PaperProps={{
         sx: {
-          borderRadius: '12px',
+          borderRadius: '5px',
           maxWidth: 640,
         },
       }}
@@ -106,7 +106,7 @@ const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ open, onClose }) =>
                   p: 2.5,
                   mt: 2,
                   border: '1px solid #e2e8f0',
-                  borderRadius: '12px',
+                  borderRadius: '5px',
                   cursor: 'pointer',
                   transition: 'all 0.2s ease-in-out',
                   '&:hover': {
@@ -121,7 +121,7 @@ const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ open, onClose }) =>
                   <Box
                     sx={{
                       p: 1,
-                      borderRadius: '8px',
+                      borderRadius: '5px',
                       backgroundColor: 'rgba(139, 92, 246, 0.1)',
                       display: 'flex',
                       alignItems: 'center',

@@ -1,7 +1,7 @@
 'use client';
 
-import { Box, Card, CardContent, Typography, useTheme, Grid } from '@mui/material';
-import { Users, Settings, Bot, Phone, BarChart3, Zap } from 'lucide-react';
+import { Box, Card, CardContent, Grid, Typography, useTheme } from '@mui/material';
+import { BarChart3, Bot, Phone, Settings, Users, Zap } from 'lucide-react';
 import Link from 'next/link';
 
 export default function HomePage() {
@@ -125,7 +125,7 @@ export default function HomePage() {
                     sx={{
                       width: 48,
                       height: 48,
-                      borderRadius: '12px',
+                      borderRadius: '5px',
                       backgroundColor: `${link.color}15`,
                       display: 'flex',
                       alignItems: 'center',
