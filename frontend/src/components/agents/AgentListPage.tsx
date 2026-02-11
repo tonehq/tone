@@ -132,7 +132,7 @@ const AgentListPage: React.FC = () => {
           height: 'calc(100vh - 120px)',
           width: '100%',
           border: '1px solid #e2e8f0',
-          borderRadius: '8px',
+          borderRadius: '5px',
           overflow: 'hidden',
         }}
         elevation={0}
@@ -150,7 +150,8 @@ const AgentListPage: React.FC = () => {
           onRowClick={(params) => console.log('Row clicked:', params)}
           sx={{
             border: 'none',
-
+            borderRadius: '5px',
+            overflow: 'hidden',
             '& .MuiDataGrid-columnHeaders': {
               backgroundColor: '#e5e7eb',
             },

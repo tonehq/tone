@@ -1,16 +1,16 @@
 'use client';
 
-import React, { forwardRef, useState } from 'react';
 import {
-  Box,
-  IconButton,
-  InputAdornment,
-  Skeleton,
-  TextField,
-  Typography,
-  useTheme,
+    Box,
+    IconButton,
+    InputAdornment,
+    Skeleton,
+    TextField,
+    Typography,
+    useTheme,
 } from '@mui/material';
 import { Eye, EyeOff } from 'lucide-react';
+import React, { forwardRef, useState } from 'react';
 
 interface TextInputProps {
   name: string;
@@ -131,7 +131,7 @@ const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
             '& .MuiOutlinedInput-root': {
               height: '42px',
               backgroundColor: '#f9fafb',
-              borderRadius: '8px',
+              borderRadius: '5px',
               fontSize: theme.custom.typography.fontSize.base,
               '& fieldset': {
                 borderColor: error ? '#ef4444' : '#e2e8f0',

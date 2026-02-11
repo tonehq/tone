@@ -1,10 +1,10 @@
 'use client';
 
-import { Suspense } from 'react';
 import { Box, Typography, useTheme } from '@mui/material';
-import { useSearchParams } from 'next/navigation';
 import { Mail } from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 
 const CheckEmailContent = () => {
   const params = useSearchParams();
@@ -28,7 +28,7 @@ const CheckEmailContent = () => {
           textAlign: 'center',
           backgroundColor: '#ffffff',
           p: 6,
-          borderRadius: '12px',
+          borderRadius: '5px',
           boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
         }}
       >

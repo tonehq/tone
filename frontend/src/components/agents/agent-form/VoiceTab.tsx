@@ -178,7 +178,7 @@ export default function VoiceTab({ formData, onFormChange }: VoiceTabProps) {
                     sx={{
                       width: 105,
                       p: 2,
-                      borderRadius: 2,
+                      borderRadius: '5px',
                       border: '1px solid',
                       cursor: 'pointer',
                       borderColor: formData.patienceLevel === item.value ? '#a78bfa' : 'divider',
@@ -242,7 +242,7 @@ export default function VoiceTab({ formData, onFormChange }: VoiceTabProps) {
                     sx={{
                       width: 170,
                       p: 1.5,
-                      borderRadius: 2,
+                      borderRadius: '5px',
                       border: '1px solid',
                       cursor: 'pointer',
                       borderColor:

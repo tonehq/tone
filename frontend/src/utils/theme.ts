@@ -135,7 +135,7 @@ export const theme = createTheme({
     },
   },
   shape: {
-    borderRadius: 8,
+    borderRadius: 5,
   },
   custom: {
     typography: {
@@ -155,16 +155,16 @@ export const theme = createTheme({
     },
     borderRadius: {
       sm: '4px',
-      base: '8px',
-      md: '12px',
-      lg: '16px',
+      base: '5px',
+      md: '5px',
+      lg: '5px',
     },
   },
   components: {
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: 5,
           padding: '8px 16px',
           fontWeight: 500,
         },
@@ -179,14 +179,14 @@ export const theme = createTheme({
     MuiPaper: {
       styleOverrides: {
         root: {
-          borderRadius: 8,
+          borderRadius: 5,
         },
       },
     },
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 12,
+          borderRadius: 5,
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
         },
       },
@@ -195,7 +195,7 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiOutlinedInput-root': {
-            borderRadius: 8,
+            borderRadius: 5,
           },
         },
       },
@@ -203,7 +203,7 @@ export const theme = createTheme({
     MuiDialog: {
       styleOverrides: {
         paper: {
-          borderRadius: 12,
+          borderRadius: 5,
         },
       },
     },
@@ -232,7 +232,7 @@ export const theme = createTheme({
     MuiChip: {
       styleOverrides: {
         root: {
-          borderRadius: 6,
+          borderRadius: 5,
         },
       },
     },

@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
 import { Box, useTheme } from '@mui/material';
+import React from 'react';
 
 interface ContainerProps {
   children: React.ReactNode;
@@ -67,7 +67,7 @@ const Container: React.FC<ContainerProps> = ({ children }) => {
                 width: 32,
                 height: 32,
                 backgroundColor: '#1f2937',
-                borderRadius: '8px',
+                borderRadius: '5px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -107,7 +107,7 @@ const Container: React.FC<ContainerProps> = ({ children }) => {
                 key={index}
                 sx={{
                   backgroundColor: '#ffffff',
-                  borderRadius: '8px',
+                  borderRadius: '5px',
                   p: 1.5,
                   boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
                 }}
@@ -205,7 +205,7 @@ const Container: React.FC<ContainerProps> = ({ children }) => {
                 sx={{
                   flex: 1,
                   backgroundColor: '#ffffff',
-                  borderRadius: '12px',
+                  borderRadius: '5px',
                   p: 2,
                   fontSize: '0.75rem',
                   color: '#4b5563',

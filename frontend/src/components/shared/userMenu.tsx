@@ -129,17 +129,27 @@ export default function ProfileMenu(props: any) {
                   ? authState?.user?.email.charAt(0).toUpperCase()
                   : ''}
             </Avatar>
-            <Typography
+            <Box
               sx={{
-                color: 'rgba(255, 255, 255, 0.7)',
-                fontSize: '15px',
+                maxWidth: 140, // set as appropriate for your design
                 overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
               }}
             >
-              {getEllipsedEmail(userEmail ?? '', 18)}
-            </Typography>
+              <Typography
+                sx={{
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  fontSize: '15px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  display: 'block', // may help in some MUI versions
+                  width: '100%',
+                }}
+                noWrap
+              >
+                {userEmail}
+              </Typography>
+            </Box>
             <ChevronDown size={14} color="rgba(255, 255, 255, 0.6)" />
           </Box>
         ) : (
