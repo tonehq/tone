@@ -1,5 +1,10 @@
 """Factory to build LLM, STT, and TTS instances from an agent's config and run the bot pipeline."""
 
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
+
+
 from typing import Any, List, Optional, Tuple
 
 from loguru import logger
@@ -64,6 +69,7 @@ class AgentFactoryService(BaseService):
         return (svc, provider, api_key_value)
 
     def get_llm_for_agent(self, agent: Any) -> Optional[Any]:
+        print("get_llm_for_agent", agent)
         """
         Build and return the LLM service instance for the given agent.
         Uses agent config's llm_service_id (service_provider) and llm_metadata.
@@ -71,63 +77,60 @@ class AgentFactoryService(BaseService):
         """
         config = self._get_agent_config(agent)
 
+        print("config.llm_service_id",config.llm_service_id)
+        print("config",config)
+
         if not config or not config.llm_service_id:
             return None
         result = self._get_service_and_credentials(config.llm_service_id, "llm")
         if not result:
+            print("into not result")
             return None
+
         svc, provider, api_key = result
         metadata = (config.llm_metadata or {}) if hasattr(config, "llm_metadata") else {}
         model_meta = (svc.meta_data or {}) if isinstance(getattr(svc, "meta_data", None), dict) else {}
         model = model_meta.get("model") or metadata.get("model") or "gpt-4o"
         provider_name = (provider.name or "").strip().lower()
 
+        print("provider_name",provider_name)
+
 
         try:
-            if provider_name == "openai":
-                from pipecatfork.src.pipecat.services.openai.llm import OpenAILLMService
+            if provider_name == "openai": #done
+                print("into openai")
+                from pipecat.services.openai.llm import OpenAILLMService
+                print("after pipecat.services.openai.llm import OpenAILLMService")
                 return OpenAILLMService(api_key=f"{api_key}", model="gpt-4.1")
-            if provider_name == "anthropic":
-                from pipecatfork.src.pipecat.services.anthropic.llm import AnthropicLLMService
+            if provider_name == "anthropic": #done
+                from pipecat.services.anthropic.llm import AnthropicLLMService
                 return AnthropicLLMService(api_key=api_key, model=model)
-            if provider_name == "groq":
-                from pipecatfork.src.pipecat.services.groq.llm import GroqLLMService
+            if provider_name == "groq": #done
+                from pipecat.services.groq.llm import GroqLLMService
                 return GroqLLMService(api_key=api_key, model=model)
-            if provider_name == "openrouter":
-                from pipecatfork.src.pipecat.services.openrouter.llm import OpenRouterLLMService
+            if provider_name == "openrouter": #done
+                from pipecat.services.openrouter.llm import OpenRouterLLMService
                 return OpenRouterLLMService(api_key=api_key, model=metadata.get("model") or model)
-            if provider_name == "aws_bedrock":
-                from pipecatfork.src.pipecat.services.aws.llm import AWSBedrockLLMService
+            if provider_name == "aws_bedrock": #done
+                from pipecat.services.aws.llm import AWSBedrockLLMService
                 return AWSBedrockLLMService(api_key=api_key, model=model)
-            if provider_name == "aws_nova_sonic":
-                from pipecatfork.src.pipecat.services.aws.llm import AWSNovaSonicLLMService
+            if provider_name == "aws_nova_sonic": #done
+                from pipecat.services.aws.nova_sonic.llm import AWSNovaSonicLLMService
                 return AWSNovaSonicLLMService(api_key=api_key, model=model)
-            if provider_name == "google":
-                from pipecatfork.src.pipecat.services.google.llm import GoogleLLMService
+            if provider_name == "google": #Done
+                from pipecat.services.google.llm import GoogleLLMService
                 return GoogleLLMService(api_key=api_key, model=model)
-            if provider_name == "gemini_live":
-                from pipecatfork.src.pipecat.services.google.llm import GeminiLiveLLMService
-                return GeminiLiveLLMService(api_key=api_key, model=model)
-            if provider_name == "grok_realtime":
-                from pipecatfork.src.pipecat.services.grok.llm import GrokRealtimeLLMService
-                return GrokRealtimeLLMService(api_key=api_key, model=model)
-            if provider_name == "base_openai":
-                from pipecatfork.src.pipecat.services.openai.llm import BaseOpenAILLMService
-                return BaseOpenAILLMService(api_key=api_key, model=model)
-            if provider_name == "openai_realtime":
-                from pipecatfork.src.pipecat.services.openai.llm import OpenAIRealtimeLLMService
-                return OpenAIRealtimeLLMService(api_key=api_key, model=model)
-            if provider_name == "openai_realtime_beta":
-                from pipecatfork.src.pipecat.services.openai.llm import OpenAIRealtimeBetaLLMService
-                return OpenAIRealtimeBetaLLMService(api_key=api_key, model=model)
-            if provider_name == "ultravox_realtime":
-                from pipecatfork.src.pipecat.services.ultravox.llm import UltravoxRealtimeLLMService
-                return UltravoxRealtimeLLMService(api_key=api_key, model=model)
-            logger.warning("Unsupported LLM provider: %s", provider.name)
+            if provider_name == "ollama": #done
+                from pipecat.services.ollama.llm import OLLamaLLMService
+                return OLLamaLLMService(api_key=api_key, model=model)
+            if provider_name in ["azure","cerebras","nvidia_nim","fireworks","together","perplexity","qwen","deepseek", "mistral","sambanova","grok"]:    
+                from pipecat.services.openai.llm import BaseOpenAILLMService
+                return BaseOpenAILLMService(api_key=api_key,model=model,base_url=metadata.get("base_url"))
             return None
         except ImportError as e:
             logger.exception("LLM provider %s not available", provider_name)
             return None
+
 
     def get_stt_for_agent(self, agent: Any) -> Optional[Any]:
         """
@@ -145,36 +148,51 @@ class AgentFactoryService(BaseService):
         provider_name = (provider.name or "").strip().lower()
 
         try:
-            if provider_name == "deepgram":
-                from pipecatfork.src.pipecat.services.deepgram.stt import DeepgramSTTService
+            if provider_name == "deepgram": # done 
+                from pipecat.services.deepgram.stt import DeepgramSTTService
                 return DeepgramSTTService(api_key=api_key)
-            if provider_name == "openai":
-                from pipecatfork.src.pipecat.services.openai.stt import OpenAISTTService
+            if provider_name == "openai": # done
+                from pipecat.services.openai.stt import OpenAISTTService
                 return OpenAISTTService(api_key=api_key)
-            if provider_name == "groq":
-                from pipecatfork.src.pipecat.services.groq.stt import GroqSTTService
+            if provider_name == "groq": # Done
+                from pipecat.services.groq.stt import GroqSTTService
                 return GroqSTTService(api_key=api_key)
-            if provider_name == "segmented":
-                from pipecatfork.src.pipecat.services.segmented.stt import SegmentedSTTService
+            if provider_name == "segmented": #done
+                from pipecat.services.stt_service import SegmentedSTTService
                 return SegmentedSTTService(api_key=api_key)
-            if provider_name == "azure":
-                from pipecatfork.src.pipecat.services.azure.stt import AzureSTTService
+            if provider_name == "azure": #done
+                from pipecat.services.azure.stt import AzureSTTService
                 return AzureSTTService(api_key=api_key)
-            if provider_name == "deepgram_sagemaker":
-                from pipecatfork.src.pipecat.services.deepgram.stt import DeepgramSageMakerSTTService
+            if provider_name == "deepgram_sagemaker": #done
+                from pipecat.services.deepgram.stt import DeepgramSageMakerSTTService
                 return DeepgramSageMakerSTTService(api_key=api_key)
-            if provider_name == "google":
-                from pipecatfork.src.pipecat.services.google.stt import GoogleSTTService
+            if provider_name == "google": # done
+                from pipecat.services.google.stt import GoogleSTTService
                 return GoogleSTTService(api_key=api_key)
-            if provider_name == "nvidia":
-                from pipecatfork.src.pipecat.services.nvidia.stt import NvidiaSTTService
+            if provider_name == "nvidia": # done
+                from pipecat.services.nvidia.stt import NvidiaSTTService
                 return NvidiaSTTService(api_key=api_key)
-            if provider_name == "sarvam":
-                from pipecatfork.src.pipecat.services.sarvam.stt import SarvamSTTService
+            if provider_name == "sarvam": #done
+                from pipecat.services.sarvam.stt import SarvamSTTService
                 return SarvamSTTService(api_key=api_key)
-            if provider_name == "speechmatics":
-                from pipecatfork.src.pipecat.services.speechmatics.stt import SpeechmaticsSTTService
+            if provider_name == "speechmatics": #done
+                from pipecat.services.speechmatics.stt import SpeechmaticsSTTService
                 return SpeechmaticsSTTService(api_key=api_key)
+            if provider_name == "assemblyai": #done
+                from pipecat.services.assemblyai.stt import AssemblyAISTTService
+                return AssemblyAISTTService(api_key=api_key)
+            if provider_name == "cartesia":
+                from pipecat.services.cartesia.stt import CartesiaSTTService
+                return CartesiaSTTService(api_key=api_key)
+            if provider_name == "elevenlabs":
+                from pipecat.services.elevenlabs.stt import ElevenLabsSTTService
+                return ElevenLabsSTTService(api_key=api_key)
+            if provider_name == "gladia": #done
+                from pipecat.services.gladia.stt import GladiaSTTService
+                return GladiaSTTService(api_key=api_key)
+            if provider_name == "soniox": #done
+                from pipecat.services.soniox.stt import SonioxSTTService
+                return SonioxSTTService(api_key=api_key)
             logger.warning("Unsupported STT provider: %s", provider.name)
             return None
         except ImportError as e:
@@ -200,79 +218,90 @@ class AgentFactoryService(BaseService):
         provider_name = (provider.name or "").strip().lower()
 
         try:
-            if provider_name == "cartesia":
-                from pipecatfork.src.pipecat.services.cartesia.tts import CartesiaTTSService
+            if provider_name == "cartesia": #done
+                from pipecat.services.cartesia.tts import CartesiaTTSService
                 return CartesiaTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "openai":
-                from pipecatfork.src.pipecat.services.openai.tts import OpenAITTSService
+            if provider_name == "openai": #done
+                from pipecat.services.openai.tts import OpenAITTSService
                 return OpenAITTSService(api_key=api_key)
-            if provider_name == "elevenlabs":
-                from pipecatfork.src.pipecat.services.elevenlabs.tts import ElevenLabsTTSService
+            if provider_name == "elevenlabs": #done
+                from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
                 return ElevenLabsTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "playht":
-                from pipecatfork.src.pipecat.services.playht.tts import PlayHTTTSService
+            if provider_name == "playht": #done
+                from pipecat.services.playht.tts import PlayHTTTSService
                 user_id = model_meta.get("user_id") or metadata.get("user_id") or ""
                 voice_url = model_meta.get("voice_url") or metadata.get("voice_url") or ""
                 return PlayHTTTSService(api_key=api_key, user_id=user_id, voice_url=voice_url)
-            if provider_name == "word":
-                from pipecatfork.src.pipecat.services.word.tts import WordTTSService
-                return WordTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "asyncai_http":
-                from pipecatfork.src.pipecat.services.asyncai.tts import AsyncAIHttpTTSService
+            if provider_name == "asyncai_http": #done
+                from pipecat.services.asyncai.tts import AsyncAIHttpTTSService
                 return AsyncAIHttpTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "aws_polly":
-                from pipecatfork.src.pipecat.services.aws.tts import AWSPollyTTSService
+            if provider_name == "aws_polly": #not done
+                from pipecat.services.aws.tts import AWSPollyTTSService
                 return AWSPollyTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "camb":
-                from pipecatfork.src.pipecat.services.camb.tts import CambTTSService
+            if provider_name == "camb": #done
+                from pipecat.services.camb.tts import CambTTSService
                 return CambTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "cartesia_http":
-                from pipecatfork.src.pipecat.services.cartesia.tts import CartesiaHttpTTSService
+            if provider_name == "cartesia_http": #not done
+                from pipecat.services.cartesia.tts import CartesiaHttpTTSService
                 return CartesiaHttpTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "deepgram_http":
-                from pipecatfork.src.pipecat.services.deepgram.tts import DeepgramHttpTTSService
+            if provider_name == "deepgram": #done
+                from pipecat.services.deepgram.tts import DeepgramHttpTTSService
                 return DeepgramHttpTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "google_http":
-                from pipecatfork.src.pipecat.services.google.tts import GoogleHttpTTSService
+            if provider_name == "google_http": #not done #Original service of google
+                from pipecat.services.google.tts import GoogleHttpTTSService
                 return GoogleHttpTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "google_base":
-                from pipecatfork.src.pipecat.services.google.tts import GoogleBaseTTSService
+            if provider_name == "google_base": #not done
+                from pipecat.services.google.tts import GoogleBaseTTSService
                 return GoogleBaseTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "groq":
-                from pipecatfork.src.pipecat.services.groq.tts import GroqTTSService
+            if provider_name == "groq": #done
+                from pipecat.services.groq.tts import GroqTTSService
                 return GroqTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "hathora":
-                from pipecatfork.src.pipecat.services.hathora.tts import HathoraTTSService
+            if provider_name == "hathora": #done
+                from pipecat.services.hathora.tts import HathoraTTSService
                 return HathoraTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "minimax_http":
-                from pipecatfork.src.pipecat.services.minimax.tts import MiniMaxHttpTTSService
+            if provider_name == "minimax": #done
+                from pipecat.services.minimax.tts import MiniMaxHttpTTSService
                 return MiniMaxHttpTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "neuphonic_http":
-                from pipecatfork.src.pipecat.services.neuphonic.tts import NeuphonicHttpTTSService
+            if provider_name == "neuphonic": #not done
+                from pipecat.services.neuphonic.tts import NeuphonicHttpTTSService
                 return NeuphonicHttpTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "nvidia":
-                from pipecatfork.src.pipecat.services.nvidia.tts import NvidiaTTSService
+            if provider_name == "nvidia": #not done
+                from pipecat.services.nvidia.tts import NvidiaTTSService
                 return NvidiaTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "piper":
-                from pipecatfork.src.pipecat.services.piper.tts import PiperTTSService
+            if provider_name == "piper": #not done
+                from pipecat.services.piper.tts import PiperTTSService
                 return PiperTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "playht_http":
-                from pipecatfork.src.pipecat.services.playht.tts import PlayHTHttpTTSService
-                user_id = model_meta.get("user_id") or metadata.get("user_id") or ""
-                voice_url = model_meta.get("voice_url") or metadata.get("voice_url") or ""
-                return PlayHTHttpTTSService(api_key=api_key, user_id=user_id, voice_url=voice_url)
-            if provider_name == "rime_http":
-                from pipecatfork.src.pipecat.services.rime.tts import RimeHttpTTSService
+            if provider_name == "rime": #done
+                from pipecat.services.rime.tts import RimeHttpTTSService
                 return RimeHttpTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "sarvam_http":
-                from pipecatfork.src.pipecat.services.sarvam.tts import SarvamHttpTTSService
+            if provider_name == "sarvam": #done
+                from pipecat.services.sarvam.tts import SarvamHttpTTSService
                 return SarvamHttpTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "speechmatics":
-                from pipecatfork.src.pipecat.services.speechmatics.tts import SpeechmaticsTTSService
+            if provider_name == "speechmatics": #done
+                from pipecat.services.speechmatics.tts import SpeechmaticsTTSService
                 return SpeechmaticsTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "xtts":
-                from pipecatfork.src.pipecat.services.xtts.tts import XTTSService
+            if provider_name == "xtts": #not done
+                from pipecat.services.xtts.tts import XTTSService
                 return XTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "azure": #done
+                from pipecat.services.azure.tts import AzureTTSService
+                return AzureTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "fish": #done
+                from pipecat.services.fish.tts import FishTTSService
+                return FishTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "hume": #done
+                from pipecat.services.hume.tts import HumeTTSService
+                return HumeTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "inworld": #done
+                from pipecat.services.inworld.tts import InworldTTSService
+                return InworldTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "lmnt": #done
+                from pipecat.services.lmnt.tts import LMNTTTSService
+                return LMNTTTSService(api_key=api_key, voice_id=voice_id)
+            if provider_name == "resemble":
+                from pipecat.services.resembleai.tts import ResembleTTSService
+                return ResembleTTSService(api_key=api_key, voice_id=voice_id)
+
             logger.warning("Unsupported TTS provider: %s", provider.name)
             return None
         except ImportError as e:
@@ -317,22 +346,24 @@ class AgentFactoryService(BaseService):
         Run the voice pipeline with the given transport and services.
         Called by run_bot_for_agent or from bot.py with default components.
         """
-        from pipecatfork.src.pipecat.processors.aggregators.llm_context import NOT_GIVEN
-        from pipecatfork.src.pipecat.processors.aggregators.llm_context import LLMContext
-        from pipecatfork.src.pipecat.processors.aggregators.llm_response_universal import (
+
+        print("into run_bot_with_components")
+        from pipecat.processors.aggregators.llm_context import NOT_GIVEN
+        from pipecat.processors.aggregators.llm_context import LLMContext
+        from pipecat.processors.aggregators.llm_response_universal import (
             LLMContextAggregatorPair,
         )
-        from pipecatfork.src.pipecat.processors.aggregators.llm_text_processor import (
+        from pipecat.processors.aggregators.llm_text_processor import (
             LLMTextProcessor,
         )
-        from pipecatfork.src.pipecat.processors.frameworks.rtvi import (
+        from pipecat.processors.frameworks.rtvi import (
             RTVIConfig,
             RTVIObserver,
             RTVIProcessor,
         )
-        from pipecatfork.src.pipecat.pipeline.pipeline import Pipeline
-        from pipecatfork.src.pipecat.pipeline.runner import PipelineRunner
-        from pipecatfork.src.pipecat.pipeline.task import PipelineParams, PipelineTask
+        from pipecat.pipeline.pipeline import Pipeline
+        from pipecat.pipeline.runner import PipelineRunner
+        from pipecat.pipeline.task import PipelineParams, PipelineTask
 
 
         tools = NOT_GIVEN
@@ -340,6 +371,8 @@ class AgentFactoryService(BaseService):
         context_aggregator = LLMContextAggregatorPair(context)
         llm_text_processor = LLMTextProcessor()
         rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
+
+        print("into pipeline")
 
         pipeline = Pipeline(
             [
@@ -354,6 +387,8 @@ class AgentFactoryService(BaseService):
                 context_aggregator.assistant(),
             ]
         )
+
+        print("into task")
 
         task = PipelineTask(
             pipeline,

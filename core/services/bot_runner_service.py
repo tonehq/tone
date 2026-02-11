@@ -89,7 +89,7 @@ class BotRunnerService(BaseService):
             Tuple of (agent or None, transport_type, call_data).
             If no agent is found for the phone number, agent is None.
         """
-        from pipecatfork.src.pipecat.runner.utils import parse_telephony_websocket
+        from pipecat.runner.utils import parse_telephony_websocket
 
         transport_type, call_data = await parse_telephony_websocket(websocket)
         print("transport_type ===========", transport_type)

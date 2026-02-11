@@ -8,26 +8,26 @@ import os
 
 from dotenv import load_dotenv
 from loguru import logger
-from pipecatfork.src.pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecatfork.src.pipecat.audio.vad.vad_analyzer import VADParams
+from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.audio.vad.vad_analyzer import VADParams
 
 # Use pipecat.runner.types so we get the same classes as run.py (avoids isinstance mismatch)
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import create_transport
 
-from pipecatfork.src.pipecat.transports.base_transport import BaseTransport, TransportParams
-from pipecatfork.src.pipecat.transports.daily.transport import DailyParams, DailyTransport
-from pipecatfork.src.pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
-from pipecatfork.src.pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
+from pipecat.transports.base_transport import BaseTransport, TransportParams
+from pipecat.transports.daily.transport import DailyParams, DailyTransport
+from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
+from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
 
 #Twilio
-from pipecatfork.src.pipecat.serializers.twilio import TwilioFrameSerializer
-from pipecatfork.src.pipecat.transports.websocket.fastapi import (
+from pipecat.serializers.twilio import TwilioFrameSerializer
+from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketParams,
     FastAPIWebsocketTransport,
 )
-from pipecatfork.src.pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecatfork.src.pipecat.audio.vad.vad_analyzer import VADParams
+from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.runner.utils import parse_telephony_websocket
 import aiohttp
 from pipecat.runner.types import (
@@ -74,9 +74,9 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
 
     # Fallback when no agent (e.g. WebRTC, Daily without agent in body)
     logger.info("Running bot with default env-based services (no agent in body)")
-    from pipecatfork.src.pipecat.services.cartesia.tts import CartesiaTTSService
-    from pipecatfork.src.pipecat.services.deepgram.stt import DeepgramSTTService
-    from pipecatfork.src.pipecat.services.openai.llm import OpenAILLMService
+    from pipecat.services.cartesia.tts import CartesiaTTSService
+    from pipecat.services.deepgram.stt import DeepgramSTTService
+    from pipecat.services.openai.llm import OpenAILLMService
 
     openai_key = os.getenv("OPENAI_API_KEY")
     deepgram_key = os.getenv("DEEPGRAM_API_KEY")
@@ -285,6 +285,6 @@ async def get_call_info(call_sid: str) -> dict:
 
 
 if __name__ == "__main__":
-    from pipecatfork.src.pipecat.runner.run import main
+    from pipecat.runner.run import main
 
     main()

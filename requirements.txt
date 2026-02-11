@@ -149,7 +149,7 @@ PasteDeploy==3.0.1
 pathspec==0.11.2
 phonenumbers==8.12.48
 pillow==11.3.0
--e git+https://github.com/ThilakGunasekaran/pipecat.git@bf9b166464be1f406834f3a650c167275388eed4#egg=pipecat_ai
+-e git+https://github.com/tonehq/pipecat.git@main
 pipecat-ai-small-webrtc-prebuilt==2.0.4
 pkce==1.0.3
 plaster==1.1.2
