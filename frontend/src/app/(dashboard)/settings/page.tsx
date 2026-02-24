@@ -19,27 +19,6 @@ import {
 import { Search, Trash2, UserPlus } from 'lucide-react';
 import { useState } from 'react';
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`settings-tabpanel-${index}`}
-      aria-labelledby={`settings-tab-${index}`}
-      {...other}
-    >
-      {value === index && <Box>{children}</Box>}
-    </div>
-  );
-}
-
 export default function SettingsPage() {
   const theme = useTheme();
   const [allowAccessRequests, setAllowAccessRequests] = useState(true);
@@ -52,7 +31,7 @@ export default function SettingsPage() {
 
   console.log(activeSidebar, 'activeSidebar');
   return (
-    <Box sx={{ p: 3 }}>
+    <Box sx={{ py: 1.5, px: 2 }}>
       <Box sx={{ display: 'flex', gap: 2 }}>
         <SidebarComponent
           activeSidebar={activeSidebar}
@@ -60,9 +39,8 @@ export default function SettingsPage() {
           settingsSidebar={settingsSidebar}
         />
 
-        <Box sx={{ flex: 1, borderRadius: '5px' }}>
-          <Paper sx={{ borderRadius: '5px', overflow: 'hidden' }}>
-            {/* Only Members Table if Members is active */}
+        <Box sx={{ flex: 1, borderRadius: '5px', height: 'calc(100vh - 24px)' }}>
+          <Paper sx={{ height: '100%', borderRadius: '5px', overflow: 'hidden' }}>
             {activeSidebar === 'Members' && (
               <Box sx={{ p: 3 }}>
                 {/* Search and Invite */}
@@ -148,7 +126,6 @@ export default function SettingsPage() {
               </Box>
             )}
 
-            {/* Organization Content if Organization is active */}
             {activeSidebar === 'Organization' && (
               <Box sx={{ p: 3 }}>
                 <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
@@ -219,7 +196,6 @@ export default function SettingsPage() {
               </Box>
             )}
 
-            {/* API Key Content if API Key is active */}
             {activeSidebar === 'API Key' && <Apikeys />}
           </Paper>
         </Box>
