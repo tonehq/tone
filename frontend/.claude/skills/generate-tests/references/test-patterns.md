@@ -75,23 +75,132 @@ await page.unroute('**/auth/login');
 
 ---
 
-## Mock JWT for auth tests
+## Authentication for dashboard pages — loginViaUI (login once per worker)
 
-The app uses `decodeJWT` which does `Buffer.from(payload, 'base64').toString()` then `JSON.parse`.
-Use this pre-computed mock JWT with `exp: 9999999999` (expires year 2286):
+Dashboard pages (under `(dashboard)/`) require a `tone_access_token` cookie. Instead of
+manually injecting cookies, use the **shared auth helper** that logs in through the actual
+login page UI against the real backend. The app's `setToken()` function sets all 4 cookies naturally.
+
+**Critical rules**:
+- Login happens **once per worker** in the worker-scoped fixture, NOT in `beforeEach`
+- `beforeEach` uses **soft navigation** — skips reload if already on the target page, uses
+  sidebar links for client-side navigation when on another dashboard page, and only falls
+  back to hard `page.goto()` when outside the dashboard layout (e.g., after Auth Redirect)
+- This combination reduces test run time dramatically (e.g., 43 tests: 2.9 min → 18 sec)
+
+**Helper location**: `e2e/helpers/auth.ts`
+
+**Exports**:
+- `loginViaUI(page, options?)` — logs in via the login page against the real backend
+- `TEST_EMAIL`, `TEST_PASSWORD` — default test credentials (overridable via env vars)
+
+**Usage in dashboard spec files** (login-once pattern):
 
 ```typescript
-// Payload: {"sub":"user123","exp":9999999999}
-export const MOCK_JWT =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9' +
-  '.eyJzdWIiOiJ1c2VyMTIzIiwiZXhwIjo5OTk5OTk5OTk5fQ==' +
-  '.mock-signature';
+import { loginViaUI, TEST_EMAIL } from '../helpers/auth';
 
-export const MOCK_LOGIN_RESPONSE = {
-  access_token: MOCK_JWT,
-  user_id: 'user123',
-  organizations: [{ id: 'org123', name: 'Test Org' }],
-};
+const test = base.extend<{ page: Page }, { workerContext: BrowserContext }>({
+  workerContext: [
+    async ({ browser }, provide) => {
+      const context = await browser.newContext();
+      // Login once per worker — sets all auth cookies on the context
+      const page = await context.newPage();
+      await loginViaUI(page);
+      await provide(context);
+      await context.close();
+    },
+    { scope: 'worker' },
+  ],
+  page: async ({ workerContext }, provide) => {
+    const pages = workerContext.pages();
+    const page = pages.length > 0 ? pages[0] : await workerContext.newPage();
+    await provide(page);
+  },
+});
+
+// Soft navigation helper — avoids hard reloads between tests.
+// Skips navigation if already on the target page, uses sidebar link for
+// client-side routing when on another dashboard page, and only falls back
+// to page.goto() when outside the dashboard layout (e.g., /auth/login).
+async function ensureOnPage(page: Page, targetPath: string): Promise<void> {
+  if (page.url().includes(targetPath)) return;
+
+  const sidebarLink = page.locator(`a[href="${targetPath}"]`).first();
+  if (await sidebarLink.isVisible().catch(() => false)) {
+    await sidebarLink.click();
+    await page.waitForURL(new RegExp(targetPath.replace('/', '\\/')), { timeout: 5_000 });
+    return;
+  }
+
+  await page.goto(targetPath);
+}
+
+test.describe('Dashboard Page', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.unrouteAll({ behavior: 'wait' });
+    // Soft-navigate — skips reload if already there, uses sidebar link otherwise
+    await ensureOnPage(page, '/your-dashboard-route');
+  });
+});
+```
+
+**What loginViaUI does**:
+1. Navigates to `/auth/login`
+2. Fills email + password and clicks Continue
+3. The real backend validates credentials, returns a JWT
+4. The app's `login()` → `setToken()` runs, which:
+   - Decodes the JWT to get the `exp` claim
+   - Sets `tone_access_token` cookie (JWT)
+   - Sets `org_tenant_id` cookie (first org ID)
+   - Sets `login_data` cookie (full response JSON)
+   - Sets `user_id` cookie
+5. Waits for redirect to `/home`
+
+**Cookies set by loginViaUI** (all via the app, not manually):
+
+| Cookie | Value | Source |
+|--------|-------|--------|
+| `tone_access_token` | JWT from backend | Real backend response |
+| `org_tenant_id` | Org ID or empty | `organizations[0].id` |
+| `login_data` | JSON string | Full login response |
+| `user_id` | User ID | Backend response |
+
+**Tests that clear cookies (e.g., Auth Redirect)** must save and restore them:
+
+```typescript
+test.describe('Auth Redirect', () => {
+  let savedCookies: Awaited<ReturnType<BrowserContext['cookies']>>;
+
+  test.beforeEach(async ({ page }) => {
+    savedCookies = await page.context().cookies();
+  });
+
+  test.afterEach(async ({ page }) => {
+    await page.context().addCookies(savedCookies);
+  });
+
+  test('redirects to login when no auth cookie is set', async ({ page }) => {
+    await page.context().clearCookies();
+    await page.goto('/home');
+    await expect(page).toHaveURL(/\/auth\/login/, { timeout: 10_000 });
+  });
+});
+```
+
+> **IMPORTANT**: For dashboard pages, always use `loginViaUI` in the worker-scoped
+> fixture (login once), NOT in `beforeEach`. This exercises the real login flow,
+> ensures all cookies are set correctly, and keeps test runs fast.
+
+---
+
+## Real backend login (no mocks)
+
+Tests authenticate against the **real backend** — no mock JWT or mock API responses.
+The `loginViaUI` helper fills and submits the actual login form. Credentials default to
+env vars `PLAYWRIGHT_TEST_EMAIL` / `PLAYWRIGHT_TEST_PASSWORD` or hardcoded test account values.
+
+```typescript
+import { loginViaUI, TEST_EMAIL } from '../helpers/auth';
 ```
 
 ---
@@ -152,25 +261,29 @@ await page.getByPlaceholder('Enter your password').press('Enter');
 ## Test structure template
 
 **Browser lifecycle**: one browser window (context) per worker — stays open for the full
-suite. A **single tab is reused** across all tests in the worker. This avoids the visual
-churn of tabs opening and closing in `--headed` mode and reduces per-test overhead.
-State isolation is handled by `beforeEach` hooks (cookies, navigation, route cleanup)
-rather than by creating fresh tabs.
+suite. **Login happens once** in the worker fixture. A **single tab is reused** across all
+tests in the worker. **Soft navigation** avoids hard reloads — tests that stay on the same
+page skip navigation entirely, and tests that need to return from another page use sidebar
+links for client-side routing. This eliminates visual churn in `--headed` mode and makes
+tests blazing fast.
 
 ```typescript
 import { BrowserContext, expect, Page, test as base } from '@playwright/test';
 
+import { loginViaUI } from '../helpers/auth';
+
 // ── Browser lifecycle ─────────────────────────────────────────────────────────
 // Worker-scoped context = one browser window shared across all tests in this worker.
-// Single tab = reused across all tests; beforeEach resets state between tests.
+// Login happens ONCE during worker setup, not before every test.
+// Single tab = reused across all tests; beforeEach uses soft navigation.
 // IMPORTANT: name the Playwright fixture callback "provide", NOT "use".
-// ESLint's react-hooks/rules-of-hooks treats any call to a function named "use"
-// inside a lowercase function (e.g. "page") as an illegal React Hook call.
-// Playwright only cares about the callback's position, not its name.
 const test = base.extend<{ page: Page }, { workerContext: BrowserContext }>({
   workerContext: [
     async ({ browser }, provide) => {
       const context = await browser.newContext();
+      // Login once per worker — all auth cookies are set on the context
+      const page = await context.newPage();
+      await loginViaUI(page);
       await provide(context);
       await context.close();
     },
@@ -186,24 +299,31 @@ const test = base.extend<{ page: Page }, { workerContext: BrowserContext }>({
   },
 });
 
-// ── Mock data ────────────────────────────────────────────────────────────────
-const MOCK_JWT =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9' +
-  '.eyJzdWIiOiJ1c2VyMTIzIiwiZXhwIjo5OTk5OTk5OTk5fQ==' +
-  '.mock-signature';
+// ── Soft navigation helper ───────────────────────────────────────────────────
+// Avoids hard page reloads between tests. Three cases:
+// 1. Already on target page → skip navigation (0ms)
+// 2. On another dashboard page → click sidebar link for client-side nav (~200ms)
+// 3. Outside dashboard (e.g., /auth/login) → fall back to page.goto() (~400ms)
+async function ensureOnPage(page: Page, targetPath: string): Promise<void> {
+  if (page.url().includes(targetPath)) return;
 
-const MOCK_LOGIN_RESPONSE = {
-  access_token: MOCK_JWT,
-  user_id: 'user123',
-  organizations: [{ id: 'org123', name: 'Test Org' }],
-};
+  const sidebarLink = page.locator(`a[href="${targetPath}"]`).first();
+  if (await sidebarLink.isVisible().catch(() => false)) {
+    await sidebarLink.click();
+    await page.waitForURL(new RegExp(targetPath.replace('/', '\\/')), { timeout: 5_000 });
+    return;
+  }
+
+  await page.goto(targetPath);
+}
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 test.describe('<PageName> Page', () => {
   test.beforeEach(async ({ page }) => {
     // Clear routes from previous tests (prevents bleed between tests)
     await page.unrouteAll({ behavior: 'wait' });
-    await page.goto('/route');
+    // Soft-navigate — skips reload if already there
+    await ensureOnPage(page, '/route');
   });
 
   test.describe('Page Rendering', () => {
@@ -234,6 +354,15 @@ test.describe('<PageName> Page', () => {
 > from one test persist into the next. Always call `page.unrouteAll({ behavior: 'wait' })`
 > in `beforeEach` to clear stale routes. For test files that do NOT use `page.route()`,
 > this call can be omitted.
+
+> **Login-once rule**: Dashboard specs must login in the worker fixture, NOT in `beforeEach`.
+> Tests that need to clear cookies (e.g., Auth Redirect) must save/restore them using
+> `beforeEach`/`afterEach` within their own `test.describe` block.
+
+> **Soft navigation rule**: Use `ensureOnPage(page, '/route')` in `beforeEach` instead of
+> `page.goto()`. This skips navigation when already on the target page (most tests),
+> uses sidebar links for client-side navigation from other dashboard pages, and only
+> falls back to hard reload when outside the dashboard layout.
 
 ---
 
@@ -272,7 +401,7 @@ await expect(passwordInput).toHaveAttribute('type', 'text');
 const cookies = await page.context().cookies();
 const accessToken = cookies.find((c) => c.name === 'tone_access_token');
 expect(accessToken).toBeDefined();
-expect(accessToken?.value).toBe(MOCK_JWT);
+expect(accessToken!.value.length).toBeGreaterThan(0);
 ```
 
 ---

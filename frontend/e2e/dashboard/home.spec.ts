@@ -1,14 +1,20 @@
 import { test as base, BrowserContext, expect, Page } from '@playwright/test';
 
+import { loginViaUI, TEST_EMAIL } from '../helpers/auth';
+
 // ── Browser lifecycle ─────────────────────────────────────────────────────────
 // One browser context (window) per worker — stays open for the full suite.
+// Login happens ONCE during worker setup, not before every test.
 // A single tab is reused across all tests in the worker. State isolation is
-// handled by beforeEach hooks (cookies, navigation) rather than opening/closing
-// a new tab for every test. This eliminates tab churn visible in --headed mode.
+// handled by beforeEach hooks (navigation, route cleanup) rather than
+// re-logging in or opening/closing tabs for every test.
 const test = base.extend<{ page: Page }, { workerContext: BrowserContext }>({
   workerContext: [
     async ({ browser }, provide) => {
       const context = await browser.newContext();
+      // Login once per worker — all auth cookies are set on the context
+      const page = await context.newPage();
+      await loginViaUI(page);
       await provide(context);
       await context.close();
     },
@@ -23,13 +29,27 @@ const test = base.extend<{ page: Page }, { workerContext: BrowserContext }>({
   },
 });
 
-// ── Mock data ────────────────────────────────────────────────────────────────
-// Payload: {"sub":"user123","exp":9999999999} (expires year 2286)
-const MOCK_JWT =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9' +
-  '.eyJzdWIiOiJ1c2VyMTIzIiwiZXhwIjo5OTk5OTk5OTk5fQ==' +
-  '.mock-signature';
+// ── Soft navigation helper ───────────────────────────────────────────────────
+// Navigates to /home using client-side routing when possible, avoiding full
+// page reloads between tests. Falls back to hard goto() only when the sidebar
+// is not available (e.g., after Auth Redirect lands on /auth/login).
+async function ensureOnHomePage(page: Page): Promise<void> {
+  // Already on /home — no navigation needed
+  if (page.url().includes('/home')) return;
 
+  // On a dashboard page — click sidebar Home link for client-side navigation
+  const sidebarHomeLink = page.locator('a[href="/home"]').first();
+  if (await sidebarHomeLink.isVisible().catch(() => false)) {
+    await sidebarHomeLink.click();
+    await page.waitForURL(/\/home/, { timeout: 5_000 });
+    return;
+  }
+
+  // Outside dashboard layout (e.g., /auth/login) — hard navigation
+  await page.goto('/home');
+}
+
+// ── Mock data ────────────────────────────────────────────────────────────────
 const STATS = [
   { label: 'Total Agents', value: '6', change: '+2 this week' },
   { label: 'Active Calls', value: '0', change: 'Real-time' },
@@ -69,16 +89,11 @@ const QUICK_LINKS = [
 // ── Tests ────────────────────────────────────────────────────────────────────
 test.describe('Home Page', () => {
   test.beforeEach(async ({ page }) => {
-    // The home page is behind auth middleware — set the cookie so we can access it.
-    await page.context().addCookies([
-      {
-        name: 'tone_access_token',
-        value: MOCK_JWT,
-        domain: 'localhost',
-        path: '/',
-      },
-    ]);
-    await page.goto('/home');
+    // Clear stale routes from previous tests (prevents mock bleed)
+    await page.unrouteAll({ behavior: 'wait' });
+    // Soft-navigate to /home — skips reload if already there, uses sidebar
+    // link for client-side navigation when on another dashboard page
+    await ensureOnHomePage(page);
   });
 
   // ── 1. Page Rendering ──────────────────────────────────────────────────────
@@ -204,8 +219,19 @@ test.describe('Home Page', () => {
 
   // ── 3. Auth Redirect ───────────────────────────────────────────────────────
   test.describe('Auth Redirect', () => {
+    // These tests clear cookies to verify redirect behaviour.
+    // Save cookies before and restore after so subsequent tests stay authenticated.
+    let savedCookies: Awaited<ReturnType<BrowserContext['cookies']>>;
+
+    test.beforeEach(async ({ page }) => {
+      savedCookies = await page.context().cookies();
+    });
+
+    test.afterEach(async ({ page }) => {
+      await page.context().addCookies(savedCookies);
+    });
+
     test('redirects to login when no auth cookie is set', async ({ page }) => {
-      // Clear the auth cookie
       await page.context().clearCookies();
       await page.goto('/home');
       await expect(page).toHaveURL(/\/auth\/login/, { timeout: 10_000 });
@@ -218,7 +244,39 @@ test.describe('Home Page', () => {
     });
   });
 
-  // ── 4. Dashboard Layout ──────────────────────────────────────────────────
+  // ── 4. Auth Cookies ────────────────────────────────────────────────────────
+  test.describe('Auth Cookies', () => {
+    test('sets the tone_access_token cookie after login', async ({ page }) => {
+      const cookies = await page.context().cookies();
+      const accessToken = cookies.find((c) => c.name === 'tone_access_token');
+      expect(accessToken).toBeDefined();
+      expect(accessToken!.value.length).toBeGreaterThan(0);
+    });
+
+    test('sets the org_tenant_id cookie after login', async ({ page }) => {
+      const cookies = await page.context().cookies();
+      const tenantId = cookies.find((c) => c.name === 'org_tenant_id');
+      expect(tenantId).toBeDefined();
+    });
+
+    test('sets the login_data cookie after login', async ({ page }) => {
+      const cookies = await page.context().cookies();
+      const loginData = cookies.find((c) => c.name === 'login_data');
+      expect(loginData).toBeDefined();
+      const parsed = JSON.parse(decodeURIComponent(loginData!.value));
+      expect(parsed.email).toBe(TEST_EMAIL);
+      expect(parsed.access_token).toBeDefined();
+    });
+
+    test('sets the user_id cookie after login', async ({ page }) => {
+      const cookies = await page.context().cookies();
+      const userId = cookies.find((c) => c.name === 'user_id');
+      expect(userId).toBeDefined();
+      expect(userId!.value.length).toBeGreaterThan(0);
+    });
+  });
+
+  // ── 5. Dashboard Layout ──────────────────────────────────────────────────
   test.describe('Dashboard Layout', () => {
     test('renders the sidebar alongside the home content', async ({ page }) => {
       // The dashboard layout wraps all (dashboard) pages with a sidebar
@@ -236,7 +294,7 @@ test.describe('Home Page', () => {
     });
   });
 
-  // ── 5. Accessibility ───────────────────────────────────────────────────────
+  // ── 6. Accessibility ───────────────────────────────────────────────────────
   test.describe('Accessibility', () => {
     test('renders quick links as anchor elements', async ({ page }) => {
       // Each quick link card is a <Card component={Link}> which renders as an <a> tag.

@@ -95,7 +95,33 @@ Apply **removal-plan.md** template for any candidates found.
 
 ---
 
-## Step 4 — Output
+## Step 4 — Log critical/high issues to the error tracker
+
+If any **Critical** or **High Priority** issues were found, append them to `.claude/error-log.md` using the format defined in `.claude/rules.md` Section 1.
+
+Before logging, read the existing error log to:
+- Check if the same issue was flagged in a previous review (link as recurring pattern)
+- Avoid duplicate entries for the same issue
+
+For each critical/high issue, append an entry:
+
+```markdown
+### [YYYY-MM-DD] code-review — <short description of issue>
+
+- **Severity**: critical | high
+- **Category**: selector | timeout | assertion | auth | typescript | runtime
+- **Spec/File**: `<file>:<line>`
+- **Error**: <1-line summary of the issue>
+- **Root cause**: <1-sentence explanation>
+- **Resolution**: unresolved
+- **Pattern**: <link to previous entry if recurring, otherwise "first occurrence">
+```
+
+Do NOT log medium/low priority findings — only critical and high.
+
+---
+
+## Step 5 — Output
 
 ```markdown
 # Code Review Summary
@@ -140,7 +166,7 @@ For each issue: **file:line** — Problem — Why it matters — Suggested fix �
 
 ---
 
-## Step 5 — Confirm before fixing
+## Step 6 — Confirm before fixing
 
 After presenting findings, ask:
 

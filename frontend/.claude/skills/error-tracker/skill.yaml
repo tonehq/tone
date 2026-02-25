@@ -1,0 +1,4 @@
+name: error-tracker
+description: View, search, and manage the skill error log. Shows error history, recurring patterns, and resolution stats.
+argument-hint: '[summary | search <keyword> | clear-resolved | recent <N>]'
+allowed-tools: Bash, Read, Edit, Glob, Grep

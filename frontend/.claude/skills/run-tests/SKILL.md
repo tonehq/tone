@@ -155,7 +155,31 @@ List passing groups or notable successful flows.
 
 ---
 
-## Step 7 — Diagnose failures
+## Step 7 — Log errors to the error tracker
+
+If any tests failed, append each failure to `.claude/error-log.md` using the format defined in `.claude/rules.md` Section 1.
+
+Before logging, read the existing error log to:
+- Check if the same error was logged before (link as recurring pattern)
+- Avoid duplicate entries for the same error in the same run
+
+For each failure, append an entry:
+
+```markdown
+### [YYYY-MM-DD] run-tests — <short description of failure>
+
+- **Severity**: high | medium (based on whether it blocks the suite)
+- **Category**: selector | timeout | assertion | strict-mode | auth | api-mock | config
+- **Spec/File**: `<spec-file>:<line>`
+- **Error**: <first 2 lines of the Playwright error>
+- **Root cause**: <1-sentence diagnosis>
+- **Resolution**: unresolved
+- **Pattern**: <link to previous entry if recurring, otherwise "first occurrence">
+```
+
+---
+
+## Step 8 — Diagnose failures
 
 For each failure, apply this diagnosis checklist:
 
@@ -182,7 +206,7 @@ For each failure, apply this diagnosis checklist:
 
 ---
 
-## Step 8 — Ask how to proceed
+## Step 9 — Ask how to proceed
 
 After presenting the report, always ask:
 

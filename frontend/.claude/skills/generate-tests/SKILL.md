@@ -1,13 +1,13 @@
 ---
 name: generate-tests
 description: Generates a new Playwright e2e spec file by reading a page component's source code, then runs it. Use when a page has NO existing spec file and you need to create one from scratch. Does NOT run pre-existing tests — use /run-tests for that.
-argument-hint: '[target-page-or-component]'
+argument-hint: '[target] [--docs path/to/feature-doc.md]'
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 license: proprietary
 compatibility: Requires Node.js, yarn, and Playwright. Next.js dev server must be reachable at localhost:3000.
 metadata:
   author: tonehq
-  version: '1.0.1'
+  version: '1.1.0'
   category: testing
   tags: playwright, e2e, testing, react, nextjs, mui
 ---
@@ -17,19 +17,49 @@ Your job is to produce high-quality, maintainable Playwright e2e tests that cove
 
 ---
 
-## Step 1 — Resolve the target
+## Step 1 — Resolve the target and feature docs
 
 ```
-TARGET=$ARGUMENTS
+FULL_ARGS=$ARGUMENTS
 ```
 
-- If `$ARGUMENTS` is empty, default to `src/app/auth/login/LoginPage.tsx`
-- If `$ARGUMENTS` is a route like `/auth/login`, find the matching page file under `src/app/`
-- If `$ARGUMENTS` is a short name like `login` or `signup`, search for the component:
+### 1a. Parse `--docs` flag (optional)
+
+If `$ARGUMENTS` contains `--docs <path>`:
+- Extract the docs path and set `FEATURE_DOCS=<path>`
+- Remove `--docs <path>` from arguments, leaving the target
+
+Examples:
+```
+/generate-tests home --docs e2e/docs/home.md
+  → TARGET=home, FEATURE_DOCS=e2e/docs/home.md
+
+/generate-tests home
+  → TARGET=home, FEATURE_DOCS=<auto-discover>
+```
+
+### 1b. Resolve the target component
+
+- If target is empty, default to `src/app/auth/login/LoginPage.tsx`
+- If target is a route like `/auth/login`, find the matching page file under `src/app/`
+- If target is a short name like `login` or `signup`, search for the component:
   ```bash
-  find src/app -iname "*$ARGUMENTS*" | head -20
+  find src/app -iname "*$TARGET*" | head -20
   ```
-- If `$ARGUMENTS` is already a file path, use it directly
+- If target is already a file path, use it directly
+
+### 1c. Auto-discover feature docs (when `--docs` is not provided)
+
+If no explicit `--docs` was given, search for a matching feature doc:
+
+```bash
+# Convention: e2e/docs/<page-name>.md
+find e2e/docs -iname "*<target-name>*.md" 2>/dev/null | head -3
+```
+
+- If a matching doc is found, set `FEATURE_DOCS=<path>` and inform the user:
+  > Found feature doc: `<path>` — using it for test generation
+- If no doc is found, proceed without feature docs (component source only)
 
 ---
 
@@ -41,9 +71,22 @@ Read ALL three reference files before generating any tests. Do not skip any.
 - `.claude/skills/generate-tests/references/selectors-guide.md`
 - `.claude/skills/generate-tests/references/assertion-checklist.md`
 
+### 2a. Read feature docs (if available)
+
+If `FEATURE_DOCS` is set, read the feature doc file in full. Extract:
+1. **User stories / acceptance criteria** — what the user expects to do on this page
+2. **Edge cases** — scenarios the component code alone might not reveal
+3. **Business rules** — validation logic, permissions, conditional UI
+4. **Integration points** — API contracts, data dependencies
+
+These requirements are used **in addition to** the component analysis in Step 3.
+Tests must cover both what the code does AND what the feature doc says it should do.
+If the feature doc mentions a scenario not visible in the code, still generate a test
+for it — the test will fail, surfacing a gap between the spec and the implementation.
+
 ---
 
-## Step 3 — Analyse the component
+## Step 3 — Analyse the component (+ feature docs)
 
 Read the resolved component file(s) in full. Also read any closely related files:
 - Shared sub-components it imports (form, inputs, buttons, notifications)
@@ -58,6 +101,21 @@ From your analysis, capture:
 5. **State changes** — loading states, error states, success states
 6. **Navigation** — where does the page redirect on success/failure?
 7. **Accessibility hooks** — aria-labels, roles, placeholder text
+
+### Cross-reference with feature docs (if available)
+
+If a feature doc was loaded in Step 2a, cross-reference its requirements against the
+component analysis above. Build a **coverage matrix**:
+
+| Requirement (from feature doc) | Found in code? | Test plan |
+|-------------------------------|----------------|-----------|
+| User story / acceptance criterion | Yes / No | Test name or "GAP — generate failing test" |
+
+- **Found in code**: Generate tests that verify the implementation matches the spec
+- **NOT found in code**: Still generate the test — it will fail, surfacing the gap between
+  the feature doc and the implementation. Mark with a comment: `// GAP: feature doc requires X but component does not implement it`
+
+This ensures tests cover both what the code does AND what the feature doc says it should do.
 
 ---
 
@@ -116,12 +174,17 @@ Apply **all three reference checklists** to produce tests that cover:
 8. **Accessibility** — keyboard navigation, aria roles, focus management
 
 ### Code standards:
-- Use the worker-context + single-tab fixture from `test-patterns.md` — one browser window per worker, one tab reused across all tests. State isolation is handled by `beforeEach` hooks (cookies, navigation, `page.unrouteAll()`). This eliminates tab churn in `--headed` mode. Only create a fresh tab per test if tests have conflicting browser-level state that cannot be reset in `beforeEach`
+- Use the worker-context + single-tab fixture from `test-patterns.md` — one browser window per worker, one tab reused across all tests. State isolation is handled by `beforeEach` hooks (soft navigation, `page.unrouteAll()`). This eliminates tab churn in `--headed` mode. Only create a fresh tab per test if tests have conflicting browser-level state that cannot be reset in `beforeEach`
+- **Dashboard pages (login once per worker)**: Call `loginViaUI` from `e2e/helpers/auth.ts` inside the **worker-scoped fixture**, NOT in `beforeEach`. This logs in once through the actual login page UI against the real backend. Auth cookies persist across all tests in the worker. Do NOT manually inject cookies with `addCookies()`. See `test-patterns.md` for full usage.
+- **Soft navigation**: Use an `ensureOnPage(page, '/route')` helper in `beforeEach` instead of `page.goto()`. It skips navigation when already on the target page, uses sidebar links (`a[href="/route"]`) for client-side routing from other dashboard pages, and only falls back to hard `page.goto()` when outside the dashboard layout.
+- **Cookie save/restore**: Tests that clear cookies (e.g., Auth Redirect) must save cookies in a nested `beforeEach` and restore them in `afterEach` so subsequent tests stay authenticated.
+- **Auth pages**: Do NOT use `loginViaUI` — auth pages (login, signup, etc.) are public and test the login flow itself
 - Group tests with `test.describe()` blocks matching the groups above
-- Use `test.beforeEach(async ({ page }) => { await page.goto('/route') })` to navigate inside the fresh tab
+- Use `test.beforeEach(async ({ page }) => { await page.goto('/route') })` to navigate (no re-login)
 - Prefer semantic selectors: `getByRole`, `getByLabel`, `getByPlaceholder`, `getByText`
-- Mock all backend API calls — tests must pass without a live backend
-- Add a `MOCK_*` constant section at the top of the file for test data
+- Tests authenticate against the real backend — the dev server and backend must be running
+- Import `loginViaUI` and `TEST_EMAIL` from `e2e/helpers/auth.ts`
+- Add page-specific `MOCK_*` constants at the top of the file for non-auth test data
 - Use TypeScript throughout; no `any` unless unavoidable
 - Each test name must start with an action verb: "shows", "navigates", "submits", "displays", "allows", "prevents", "redirects"
 - Apply the **selectors-guide.md** for MUI component selectors
@@ -165,7 +228,33 @@ If the server is NOT running:
 
 ---
 
-## Step 9 — Output
+## Step 9 — Log errors to the error tracker
+
+If any tests failed after running, append each failure to `.claude/error-log.md` using the format defined in `.claude/rules.md` Section 1.
+
+Before logging, read the existing error log to:
+- Check if the same error was logged before (link as recurring pattern)
+- Avoid duplicate entries for the same error in the same run
+
+For each failure, append an entry:
+
+```markdown
+### [YYYY-MM-DD] generate-tests — <short description of failure>
+
+- **Severity**: high | medium
+- **Category**: selector | timeout | assertion | strict-mode | auth | api-mock | typescript
+- **Spec/File**: `<spec-file>:<line>`
+- **Error**: <first 2 lines of the Playwright error>
+- **Root cause**: <1-sentence diagnosis>
+- **Resolution**: unresolved
+- **Pattern**: <link to previous entry if recurring, otherwise "first occurrence">
+```
+
+Also log if the generated spec file had issues (syntax errors, duplicate test titles, etc.) as `category: typescript`.
+
+---
+
+## Step 10 — Output
 
 ```markdown
 # Playwright Test Report
@@ -208,7 +297,7 @@ Brief description of each test group and what it covers.
 
 ---
 
-## Step 10 — Confirm before fixing failures
+## Step 11 — Confirm before fixing failures
 
 After presenting findings, ask:
 

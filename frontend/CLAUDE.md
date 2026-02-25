@@ -37,7 +37,7 @@ Two skills cover the full test workflow:
 
 | Skill | Purpose | Invoke |
 |-------|---------|--------|
-| `generate-tests` | **Create** a new spec file from a page component's source code, then run it | `/generate-tests [target]` |
+| `generate-tests` | **Create** a new spec file from a page component's source code (+ optional feature docs), then run it | `/generate-tests [target] [--docs path]` |
 | `run-tests` | **Execute** existing spec files, report results, diagnose failures | `/run-tests [target\|flag]` |
 
 ### `/generate-tests` — create new spec files
@@ -45,15 +45,32 @@ Two skills cover the full test workflow:
 Use when a page has **no existing spec file** and you need to write one from scratch.
 Reads the component source, generates tests, writes the `.spec.ts` file, and runs it.
 
+Optionally accepts a **feature doc** (`--docs`) for more comprehensive test coverage.
+If no `--docs` flag is provided, the skill auto-discovers matching docs in `e2e/docs/`.
+
 ```bash
 /generate-tests                  # generate tests for the login page (default)
 /generate-tests login            # generate tests for the login page
 /generate-tests signup           # generate tests for the signup page
+/generate-tests home --docs e2e/docs/home.md  # use feature doc for extra coverage
 /generate-tests src/app/auth/login/LoginPage.tsx  # use a full path
 ```
 
 The skill lives at `.claude/skills/generate-tests/SKILL.md`.
 Reference docs are at `.claude/skills/generate-tests/references/`.
+
+### Feature docs (`e2e/docs/`)
+
+Feature docs are optional markdown files that describe a page's user stories, acceptance
+criteria, edge cases, and business rules. When provided, `/generate-tests` uses them
+alongside the component source to ensure all user cases are covered.
+
+| File | Purpose |
+|------|---------|
+| `e2e/docs/_template.md` | Template for creating new feature docs |
+| `e2e/docs/home.md` | Feature doc for the home dashboard page |
+
+To create a feature doc for a new page, copy `_template.md` and fill in the sections.
 
 ### `/run-tests` — run existing spec files
 
@@ -113,6 +130,52 @@ Use `page.getByRole('alert')` to find MUI Alert/Snackbar notifications.
 | `references/test-patterns.md` | Config template, API mocking, mock JWT, test structure |
 | `references/selectors-guide.md` | MUI TextField, Button, Checkbox, Snackbar selectors |
 | `references/assertion-checklist.md` | Required assertions per test category, anti-patterns |
+
+---
+
+## Project Rules
+
+Project-wide rules are defined in `.claude/rules.md`. This includes:
+
+- **Skill error tracking** — How skills log errors, categories, severity levels, and the log format
+- **Error resolution workflow** — How to diagnose, fix, and update the error log
+- **Skill execution rules** — Pre-execution checks, error handling, output standards
+- **Test conventions** — Tab reuse, route cleanup, auth cookies, selector disambiguation
+
+All skills must follow these rules. Read `.claude/rules.md` before modifying any skill.
+
+---
+
+## Error Tracking
+
+### How to invoke
+
+```bash
+/error-tracker              # show full summary
+/error-tracker summary      # same as above
+/error-tracker search timeout   # search for timeout-related errors
+/error-tracker recent 5     # show last 5 entries
+/error-tracker clear-resolved   # remove resolved entries
+```
+
+The skill lives at `.claude/skills/error-tracker/SKILL.md`.
+The error log is at `.claude/error-log.md`.
+
+### How it works
+
+All skills (`generate-tests`, `run-tests`, `code-review`) automatically log errors to `.claude/error-log.md` when failures occur. The `/error-tracker` skill reads this log and provides:
+
+- **Summary** — Error counts by severity, category, and skill
+- **Recurring patterns** — Same category + file appearing 2+ times
+- **Recommendations** — Preventive actions based on error history
+
+### Error flow
+
+```
+Skill runs → Failure detected → Entry appended to .claude/error-log.md
+                                              ↓
+                             /error-tracker reads log → Summary + Patterns
+```
 
 ---
 
