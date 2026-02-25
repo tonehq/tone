@@ -47,6 +47,51 @@ class AgentPhoneNumbersService(BaseService):
         "country_code", "number_type", "capabilities", "status", "updated_at",
     )
 
+    def get_agent_phone_numbers(self, agent_id: int):
+        agent = self.db.query(Agent).filter(Agent.id == agent_id).first()
+        if not agent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Agent not found",
+            )
+        return (
+            self.db.query(AgentPhoneNumbers)
+            .filter(
+                AgentPhoneNumbers.agent_id == agent_id,
+                AgentPhoneNumbers.status == "active",
+            )
+            .all()
+        )
+
+    def detach_agent_phone_number(self, data: Dict[str, Any]):
+        agent_id = int(data["agent_id"])
+        phone_number = data["phone_number"].strip()
+
+        agent = self.db.query(Agent).filter(Agent.id == agent_id).first()
+        if not agent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Agent not found",
+            )
+
+        record = (
+            self.db.query(AgentPhoneNumbers)
+            .filter(
+                AgentPhoneNumbers.agent_id == agent_id,
+                AgentPhoneNumbers.phone_number == phone_number,
+            )
+            .first()
+        )
+        if not record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Phone number not found for this agent",
+            )
+
+        self.db.delete(record)
+        self.db.commit()
+        return {"message": "Phone number detached from agent successfully"}
+
     def upsert_agent_phone_number(self, data: Dict[str, Any]):
         if data.get("agent_id") is None:
             raise HTTPException(
@@ -136,3 +181,27 @@ class AgentPhoneNumbersService(BaseService):
             ) from e
         row = self.db.query(AgentPhoneNumbers).filter(AgentPhoneNumbers.uuid == row_uuid).first()
         return row
+
+    def get_twilio_phone_numbers(self, account_sid: str, auth_token: str):
+        from twilio.rest import Client
+
+        try:
+            client = Client(account_sid, auth_token)
+            phone_numbers = client.incoming_phone_numbers.list()
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to fetch phone numbers from Twilio: {str(e)}",
+            )
+
+        return [
+            {
+                "sid": number.sid,
+                "phone_number": number.phone_number,
+                "friendly_name": number.friendly_name,
+                "voice": number.capabilities.get("voice"),
+                "sms": number.capabilities.get("sms"),
+                "status": number.status,
+            }
+            for number in phone_numbers
+        ]
