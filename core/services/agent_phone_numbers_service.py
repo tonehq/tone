@@ -10,6 +10,7 @@ from fastapi import HTTPException, status
 from core.services.base import BaseService
 from core.models.agent_phone_numbers import AgentPhoneNumbers
 from core.models.agent import Agent
+from core.models.channel import Channel
 
 
 def _agent_phone_number_unique_constraint_detail(exc: IntegrityError) -> str:
@@ -39,11 +40,11 @@ def _agent_phone_number_unique_constraint_detail(exc: IntegrityError) -> str:
 
 class AgentPhoneNumbersService(BaseService):
     CREATED_ATTRS = (
-        "agent_id", "phone_number", "phone_number_sid", "phone_number_auth_token",
+        "agent_id", "channel_id", "phone_number", "phone_number_sid", "phone_number_auth_token",
         "provider", "country_code", "number_type", "capabilities", "status",
     )
     UPDATABLE_ATTRS = (
-        "phone_number", "phone_number_sid", "phone_number_auth_token", "provider",
+        "channel_id", "phone_number", "phone_number_sid", "phone_number_auth_token", "provider",
         "country_code", "number_type", "capabilities", "status", "updated_at",
     )
 
@@ -128,6 +129,14 @@ class AgentPhoneNumbersService(BaseService):
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Agent not found",
             )
+        channel_id = data.get("channel_id")
+        if channel_id is not None:
+            channel = self.db.query(Channel).filter(Channel.id == int(channel_id)).first()
+            if not channel:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Channel not found",
+                )
         if row_id is not None:
             existing = self.db.query(AgentPhoneNumbers).filter(AgentPhoneNumbers.id == int(row_id)).first()
             if not existing:
@@ -152,6 +161,7 @@ class AgentPhoneNumbersService(BaseService):
         values = {
             "uuid": row_uuid,
             "agent_id": agent_id,
+            "channel_id": int(channel_id) if channel_id is not None else None,
             "phone_number": phone_number,
             "phone_number_sid": data["phone_number_sid"],
             "phone_number_auth_token": data["phone_number_auth_token"],

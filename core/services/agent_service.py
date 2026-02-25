@@ -15,6 +15,8 @@ from core.models.agent_phone_numbers import AgentPhoneNumbers
 from core.models.service_provider import ServiceProvider
 from core.models.enums import AgentType
 from core.services.agent_config_service import AgentConfigService
+from core.services.channel_service import ChannelService
+from core.models.agent_channel import AgentChannel
 
 # Keys from request JSON to store in agent_config.agent_metadata
 AGENT_METADATA_KEYS = (
@@ -157,6 +159,33 @@ class AgentService(BaseService):
             ) from e
         agent = self.db.query(Agent).filter(Agent.uuid == agent_uuid).first()
 
+        # Handle channel creation and agent-channel association
+        channel_data = agent_data.get("channel")
+        if channel_data and channel_data.get("type"):
+            channel_svc = ChannelService(self.db, user_id=self.user_id)
+            channel = channel_svc.get_or_create_channel_by_type(
+                channel_type=channel_data["type"],
+                meta_data=channel_data.get("meta_data"),
+                created_by=created_by,
+            )
+            # Create agent_channel link if it doesn't already exist
+            existing_link = (
+                self.db.query(AgentChannel)
+                .filter(AgentChannel.agent_id == agent.id, AgentChannel.channel_id == channel.id)
+                .first()
+            )
+            if not existing_link:
+                import uuid as _uuid
+                link = AgentChannel(
+                    uuid=_uuid.uuid4(),
+                    agent_id=agent.id,
+                    channel_id=channel.id,
+                    created_at=int(time.time()),
+                    updated_at=int(time.time()),
+                )
+                self.db.add(link)
+                self.db.commit()
+
         # When id present: edit both agent and agent_config. When id absent: create agent then create agent_config.
         # Run config upsert when system_prompt is provided (create/update) or when html_prompt is provided (update).
         existing_config = self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).first()
@@ -172,9 +201,19 @@ class AgentService(BaseService):
 
     def _agent_response_item(self, agent: Agent, config: Any) -> Dict[str, Any]:
         """Build response dict: agent + config as single flat object (no agent_config key)."""
+        from core.models.channel import Channel
+
         phone_rows = (
             self.db.query(AgentPhoneNumbers)
             .filter(AgentPhoneNumbers.agent_id == agent.id)
+            .all()
+        )
+
+        # Fetch linked channels via agent_channels
+        channel_rows = (
+            self.db.query(Channel)
+            .join(AgentChannel, AgentChannel.channel_id == Channel.id)
+            .filter(AgentChannel.agent_id == agent.id)
             .all()
         )
 
@@ -196,7 +235,14 @@ class AgentService(BaseService):
             "agent_type": agent.agent_type.value if agent.agent_type is not None else None,
             "phone_number": phone_rows[0].phone_number if phone_rows else None,
             "country_code": phone_rows[0].country_code if phone_rows else None,
-            
+            "channel": {
+                "id": channel_rows[0].id,
+                "uuid": str(channel_rows[0].uuid),
+                "name": channel_rows[0].name,
+                "type": channel_rows[0].type.value if channel_rows[0].type else None,
+                "created_by": channel_rows[0].created_by,
+                "meta_data": channel_rows[0].meta_data if isinstance(channel_rows[0].meta_data, dict) else {},
+            } if channel_rows else None,
         }
         # Phone numbers for this agent (phone_number and country_code only)
 
