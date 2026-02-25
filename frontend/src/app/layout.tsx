@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import ThemeRegistry from '@/components/ThemeRegistry';
@@ -14,7 +15,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={inter.className}>
-        <ThemeRegistry>{children}</ThemeRegistry>
+        <AppRouterCacheProvider options={{ key: 'css' }}>
+          <ThemeRegistry>{children}</ThemeRegistry>
+        </AppRouterCacheProvider>
       </body>
     </html>
   );

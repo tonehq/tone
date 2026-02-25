@@ -2,18 +2,9 @@ import {
   Delete as DeleteIcon,
   Edit as EditIcon,
   CallReceived as InboundIcon,
-  MoreVert as MoreVertIcon,
   CallMade as OutboundIcon,
 } from '@mui/icons-material';
-import {
-  Chip,
-  IconButton,
-  ListItemIcon,
-  ListItemText,
-  Menu,
-  MenuItem,
-  Typography,
-} from '@mui/material';
+import { Box, Chip, IconButton, Tooltip, Typography } from '@mui/material';
 import { GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
 import React from 'react';
 
@@ -39,56 +30,35 @@ interface ActionMenuProps {
 }
 
 const ActionMenu: React.FC<ActionMenuProps> = ({ row, onEdit, onDelete }) => {
-  const [anchorEl, setAnchorEl] = React.useState<HTMLElement | null>(null);
-  const open = Boolean(anchorEl);
-
-  const handleOpen = (e: React.MouseEvent<HTMLElement>) => {
-    e.stopPropagation(); // prevent DataGrid row selection
-    setAnchorEl(e.currentTarget);
-  };
-
-  const handleClose = () => setAnchorEl(null);
+  const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
 
   return (
-    <>
-      <IconButton size="small" onClick={handleOpen}>
-        <MoreVertIcon fontSize="small" />
-      </IconButton>
-
-      <Menu
-        anchorEl={anchorEl}
-        open={open}
-        onClose={handleClose}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        MenuListProps={{ dense: true }}
-      >
-        <MenuItem
-          onClick={() => {
-            handleClose();
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+      <Tooltip title="Edit">
+        <IconButton
+          size="small"
+          onClick={(e) => {
+            stopPropagation(e);
             onEdit?.(row);
           }}
+          sx={{ color: 'text.secondary' }}
         >
-          <ListItemIcon>
-            <EditIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Edit</ListItemText>
-        </MenuItem>
-
-        <MenuItem
-          onClick={() => {
-            handleClose();
+          <EditIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+      <Tooltip title="Delete">
+        <IconButton
+          size="small"
+          onClick={(e) => {
+            stopPropagation(e);
             onDelete?.(row);
           }}
           sx={{ color: 'error.main' }}
         >
-          <ListItemIcon sx={{ color: 'error.main' }}>
-            <DeleteIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Delete</ListItemText>
-        </MenuItem>
-      </Menu>
-    </>
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      </Tooltip>
+    </Box>
   );
 };
 

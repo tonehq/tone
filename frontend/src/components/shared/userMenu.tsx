@@ -10,6 +10,7 @@ import {
   Paper,
   Popper,
   Typography,
+  useTheme,
 } from '@mui/material';
 import * as React from 'react';
 
@@ -21,6 +22,7 @@ import { ChevronDown, User } from 'lucide-react';
 
 export default function ProfileMenu(props: any) {
   const { isExpanded } = props;
+  const theme = useTheme();
   const [open, setOpen] = React.useState(false);
   const anchorRef = React.useRef<HTMLButtonElement>(null);
 
@@ -46,24 +48,6 @@ export default function ProfileMenu(props: any) {
   };
 
   const userEmail = authState?.user?.email;
-
-  const getEllipsedEmail = (email: string, maxLength = 18) => {
-    if (email.length <= maxLength) return email;
-    const parts = email.split('@');
-    if (parts.length !== 2) return email;
-    const [name, domain] = parts;
-    const visibleChars = 6;
-    if (name.length + domain.length + 1 <= maxLength) return email;
-    if (name.length <= visibleChars) {
-      return `${name}@...${domain.slice(-(maxLength - name.length - 4))}`;
-    }
-    const ellipsed = `${name.slice(0, visibleChars)}...` + `@${domain}`;
-    if (ellipsed.length > maxLength) {
-      const domainPart = domain.length > 8 ? `...${domain.slice(-8)}` : domain;
-      return `${name.slice(0, visibleChars)}...` + `@${domainPart}`;
-    }
-    return ellipsed;
-  };
 
   const menuItemSx = {
     '&:hover': {
@@ -137,7 +121,7 @@ export default function ProfileMenu(props: any) {
             >
               <Typography
                 sx={{
-                  color: 'rgba(255, 255, 255, 0.7)',
+                  color: 'white',
                   fontSize: '15px',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -150,7 +134,7 @@ export default function ProfileMenu(props: any) {
                 {userEmail}
               </Typography>
             </Box>
-            <ChevronDown size={14} color="rgba(255, 255, 255, 0.6)" />
+            <ChevronDown size={14} color="white" />
           </Box>
         ) : (
           <Box
