@@ -1,0 +1,19 @@
+name: playwright-testing
+description: Use this skill when the user asks to write, run, or fix Playwright e2e tests for any page or component. Accepts an optional target argument — a file path, page name, or route (e.g. "login", "signup", "src/app/auth/login/LoginPage.tsx"). Defaults to the login page when no argument is given.
+
+license: proprietary
+compatibility: Requires Node.js, yarn, and a running Next.js dev server on localhost:3000.
+
+metadata:
+  author: tonehq
+  version: '1.0.1'
+  category: testing
+  tags: playwright, e2e, testing, automation, react, nextjs, mui
+
+# ── Tool permissions ─────────────────────────────────────────────────────────
+allowed-tools: Bash Read Write Edit Glob Grep
+
+# ── Claude Code extensions ───────────────────────────────────────────────────
+argument-hint: '[target-page-or-component]'
+disable-model-invocation: false
+user-invocable: true   # Available via /playwright-testing

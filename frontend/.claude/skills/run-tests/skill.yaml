@@ -1,0 +1,19 @@
+name: run-tests
+description: Use this skill when the user asks to run, re-run, or debug existing Playwright e2e tests. Accepts an optional argument — a spec file path, a short page name (e.g. "login", "signup"), a grep pattern to filter by test name, or a flag like "--headed" or "--debug". With no argument, runs the full suite.
+
+license: proprietary
+compatibility: Requires Node.js, yarn, and a running Next.js dev server on localhost:3000.
+
+metadata:
+  author: tonehq
+  version: '1.0.0'
+  category: testing
+  tags: playwright, e2e, testing, runner, react, nextjs
+
+# ── Tool permissions ─────────────────────────────────────────────────────────
+allowed-tools: Bash Read Glob
+
+# ── Claude Code extensions ───────────────────────────────────────────────────
+argument-hint: '[spec-file | page-name | --headed | --debug | --grep "pattern"]'
+disable-model-invocation: false
+user-invocable: true   # Available via /run-tests
