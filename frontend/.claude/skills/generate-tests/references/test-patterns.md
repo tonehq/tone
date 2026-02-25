@@ -152,15 +152,17 @@ await page.getByPlaceholder('Enter your password').press('Enter');
 ## Test structure template
 
 **Browser lifecycle**: one browser window (context) per worker — stays open for the full
-suite. Each test opens a new tab, runs, then closes that tab. This avoids the cold-start
-cost of launching a new browser for every test while still giving every test a clean slate.
+suite. A **single tab is reused** across all tests in the worker. This avoids the visual
+churn of tabs opening and closing in `--headed` mode and reduces per-test overhead.
+State isolation is handled by `beforeEach` hooks (cookies, navigation, route cleanup)
+rather than by creating fresh tabs.
 
 ```typescript
 import { BrowserContext, expect, Page, test as base } from '@playwright/test';
 
 // ── Browser lifecycle ─────────────────────────────────────────────────────────
 // Worker-scoped context = one browser window shared across all tests in this worker.
-// Per-test page = a fresh tab opened before each test and closed after.
+// Single tab = reused across all tests; beforeEach resets state between tests.
 // IMPORTANT: name the Playwright fixture callback "provide", NOT "use".
 // ESLint's react-hooks/rules-of-hooks treats any call to a function named "use"
 // inside a lowercase function (e.g. "page") as an illegal React Hook call.
@@ -176,9 +178,11 @@ const test = base.extend<{ page: Page }, { workerContext: BrowserContext }>({
   ],
 
   page: async ({ workerContext }, provide) => {
-    const tab = await workerContext.newPage();
-    await provide(tab);
-    await tab.close();
+    // Reuse the first existing tab, or create one if none exist yet.
+    const pages = workerContext.pages();
+    const page = pages.length > 0 ? pages[0] : await workerContext.newPage();
+    await provide(page);
+    // Do NOT close — the same tab is reused across all tests in this worker.
   },
 });
 
@@ -197,6 +201,8 @@ const MOCK_LOGIN_RESPONSE = {
 // ── Tests ────────────────────────────────────────────────────────────────────
 test.describe('<PageName> Page', () => {
   test.beforeEach(async ({ page }) => {
+    // Clear routes from previous tests (prevents bleed between tests)
+    await page.unrouteAll({ behavior: 'wait' });
     await page.goto('/route');
   });
 
@@ -224,8 +230,10 @@ test.describe('<PageName> Page', () => {
 });
 ```
 
-> **Isolation**: `page.route()` is scoped to the tab (`Page`), not to the context, so
-> routes registered in one test never bleed into the next test's fresh tab.
+> **Route isolation with single-tab reuse**: Since the tab is shared, `page.route()` mocks
+> from one test persist into the next. Always call `page.unrouteAll({ behavior: 'wait' })`
+> in `beforeEach` to clear stale routes. For test files that do NOT use `page.route()`,
+> this call can be omitted.
 
 ---
 

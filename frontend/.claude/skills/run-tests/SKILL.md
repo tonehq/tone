@@ -1,6 +1,6 @@
 ---
 name: run-tests
-description: Use this skill when the user asks to run, re-run, or debug existing Playwright e2e tests. Accepts an optional argument — a spec file path, a short page name (e.g. "login", "signup"), a grep pattern to filter by test name, or a flag like "--headed" or "--debug". With no argument, runs the full suite.
+description: Runs existing Playwright e2e spec files, reports pass/fail results, diagnoses failures, and suggests fixes. Use when spec files already exist and you want to execute them. Does NOT generate new tests — use /generate-tests for that.
 argument-hint: '[spec-file | page-name | --headed | --debug | --grep "pattern"]'
 allowed-tools: Bash, Read, Glob
 license: proprietary
@@ -39,22 +39,16 @@ Determine the run mode from `$ARGUMENTS`:
 
 ## Step 2 — Resolve the spec file (if a name or path was given)
 
-If `$ARGUMENTS` contains a short name (not a flag), find the matching spec:
+If `$ARGUMENTS` contains a short name (not a flag), dynamically find the matching spec:
 
 ```bash
 find e2e -name "*<name>*" -name "*.spec.ts" | head -5
 ```
 
-Map short names to spec files:
-
-| Short name | Spec file |
-|-----------|-----------|
-| `login` | `e2e/auth/login.spec.ts` |
-| `signup` | `e2e/auth/signup.spec.ts` |
-| `home` | `e2e/dashboard/home.spec.ts` |
-
-If no matching spec file is found, inform the user:
-> No spec file found for `<name>`. Run `/playwright-testing <name>` to generate one first.
+- If **exactly one** file matches, use it.
+- If **multiple** files match, list them and ask the user to pick one.
+- If **no** file matches, inform the user:
+  > No spec file found for `<name>`. Run `/generate-tests <name>` to generate one first.
 
 ---
 
@@ -203,10 +197,12 @@ After presenting the report, always ask:
 
 ---
 
-## Quick reference — available test files
+## Quick reference — discover test files dynamically
 
-```
-e2e/auth/login.spec.ts      → Login page (25 tests)
+Do NOT maintain a hardcoded list. Instead, run:
+
+```bash
+find e2e -name "*.spec.ts" | sort
 ```
 
-Add new entries here whenever `/playwright-testing` generates a new spec file.
+This automatically picks up any new spec file created by `/generate-tests`.

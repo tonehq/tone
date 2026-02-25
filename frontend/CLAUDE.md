@@ -37,22 +37,27 @@ Two skills cover the full test workflow:
 
 | Skill | Purpose | Invoke |
 |-------|---------|--------|
-| `playwright-testing` | **Generate + run** tests for a page component | `/playwright-testing [target]` |
-| `run-tests` | **Run existing** tests, diagnose failures, offer fix/debug options | `/run-tests [target\|flag]` |
+| `generate-tests` | **Create** a new spec file from a page component's source code, then run it | `/generate-tests [target]` |
+| `run-tests` | **Execute** existing spec files, report results, diagnose failures | `/run-tests [target\|flag]` |
 
-### `/playwright-testing` — generate and run
+### `/generate-tests` — create new spec files
+
+Use when a page has **no existing spec file** and you need to write one from scratch.
+Reads the component source, generates tests, writes the `.spec.ts` file, and runs it.
 
 ```bash
-/playwright-testing              # generate + run tests for the login page (default)
-/playwright-testing login        # generate + run tests for the login page
-/playwright-testing signup       # generate + run tests for the signup page
-/playwright-testing src/app/auth/login/LoginPage.tsx  # use a full path
+/generate-tests                  # generate tests for the login page (default)
+/generate-tests login            # generate tests for the login page
+/generate-tests signup           # generate tests for the signup page
+/generate-tests src/app/auth/login/LoginPage.tsx  # use a full path
 ```
 
-The skill lives at `.claude/skills/playwright-testing/SKILL.md`.
-Reference docs are at `.claude/skills/playwright-testing/references/`.
+The skill lives at `.claude/skills/generate-tests/SKILL.md`.
+Reference docs are at `.claude/skills/generate-tests/references/`.
 
-### `/run-tests` — run existing tests
+### `/run-tests` — run existing spec files
+
+Use when spec files **already exist** and you want to execute them, see results, or diagnose failures.
 
 ```bash
 /run-tests                       # run the full e2e suite

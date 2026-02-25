@@ -1,5 +1,5 @@
-name: playwright-testing
-description: Use this skill when the user asks to write, run, or fix Playwright e2e tests for any page or component. Accepts an optional target argument — a file path, page name, or route (e.g. "login", "signup", "src/app/auth/login/LoginPage.tsx"). Defaults to the login page when no argument is given.
+name: generate-tests
+description: Generates a new Playwright e2e spec file by reading a page component's source code, then runs it. Use when a page has NO existing spec file and you need to create one from scratch. Does NOT run pre-existing tests — use /run-tests for that.
 
 license: proprietary
 compatibility: Requires Node.js, yarn, and a running Next.js dev server on localhost:3000.
@@ -16,4 +16,4 @@ allowed-tools: Bash Read Write Edit Glob Grep
 # ── Claude Code extensions ───────────────────────────────────────────────────
 argument-hint: '[target-page-or-component]'
 disable-model-invocation: false
-user-invocable: true   # Available via /playwright-testing
+user-invocable: true   # Available via /generate-tests

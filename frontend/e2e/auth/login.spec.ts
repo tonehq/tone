@@ -2,7 +2,9 @@ import { test as base, BrowserContext, expect, Page } from '@playwright/test';
 
 // ── Browser lifecycle ─────────────────────────────────────────────────────────
 // One browser context (window) per worker — stays open for the full suite.
-// Each test gets a fresh tab (new Page) that is closed when the test finishes.
+// A single tab is reused across all tests in the worker. State isolation is
+// handled by beforeEach hooks (unrouteAll, navigation) rather than opening/closing
+// a new tab for every test. This eliminates tab churn visible in --headed mode.
 const test = base.extend<{ page: Page }, { workerContext: BrowserContext }>({
   workerContext: [
     // "provide" avoids ESLint react-hooks/rules-of-hooks — Playwright only cares about
@@ -16,9 +18,10 @@ const test = base.extend<{ page: Page }, { workerContext: BrowserContext }>({
   ],
 
   page: async ({ workerContext }, provide) => {
-    const tab = await workerContext.newPage();
-    await provide(tab);
-    await tab.close();
+    const pages = workerContext.pages();
+    const page = pages.length > 0 ? pages[0] : await workerContext.newPage();
+    await provide(page);
+    // Do NOT close — the same tab is reused across all tests in this worker.
   },
 });
 
@@ -46,6 +49,8 @@ const TEST_PASSWORD = 'Test@123';
 // ── Tests ────────────────────────────────────────────────────────────────────
 test.describe('Login Page', () => {
   test.beforeEach(async ({ page }) => {
+    // Clear routes from previous tests (prevents mock bleed between tests)
+    await page.unrouteAll({ behavior: 'wait' });
     await page.goto('/auth/login');
   });
 

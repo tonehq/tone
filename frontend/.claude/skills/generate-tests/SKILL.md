@@ -1,6 +1,6 @@
 ---
-name: playwright-testing
-description: Use this skill when the user asks to write, run, or fix Playwright e2e tests for any page or component. Accepts an optional target argument — a file path, page name, or route (e.g. "login", "signup", "src/app/auth/login/LoginPage.tsx"). Defaults to the login page when no argument is given.
+name: generate-tests
+description: Generates a new Playwright e2e spec file by reading a page component's source code, then runs it. Use when a page has NO existing spec file and you need to create one from scratch. Does NOT run pre-existing tests — use /run-tests for that.
 argument-hint: '[target-page-or-component]'
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 license: proprietary
@@ -37,9 +37,9 @@ TARGET=$ARGUMENTS
 
 Read ALL three reference files before generating any tests. Do not skip any.
 
-- `.claude/skills/playwright-testing/references/test-patterns.md`
-- `.claude/skills/playwright-testing/references/selectors-guide.md`
-- `.claude/skills/playwright-testing/references/assertion-checklist.md`
+- `.claude/skills/generate-tests/references/test-patterns.md`
+- `.claude/skills/generate-tests/references/selectors-guide.md`
+- `.claude/skills/generate-tests/references/assertion-checklist.md`
 
 ---
 
@@ -116,7 +116,7 @@ Apply **all three reference checklists** to produce tests that cover:
 8. **Accessibility** — keyboard navigation, aria roles, focus management
 
 ### Code standards:
-- Use the worker-context + per-tab fixture from `test-patterns.md` — one browser window per worker, a fresh tab opened before each test and closed after
+- Use the worker-context + single-tab fixture from `test-patterns.md` — one browser window per worker, one tab reused across all tests. State isolation is handled by `beforeEach` hooks (cookies, navigation, `page.unrouteAll()`). This eliminates tab churn in `--headed` mode. Only create a fresh tab per test if tests have conflicting browser-level state that cannot be reset in `beforeEach`
 - Group tests with `test.describe()` blocks matching the groups above
 - Use `test.beforeEach(async ({ page }) => { await page.goto('/route') })` to navigate inside the fresh tab
 - Prefer semantic selectors: `getByRole`, `getByLabel`, `getByPlaceholder`, `getByText`
@@ -160,7 +160,7 @@ yarn playwright test <test-file-path> --reporter=list
 
 If the server is NOT running:
 - Do NOT start it automatically (it takes too long to be useful here)
-- Inform the user: "Start the dev server with `yarn dev` in a separate terminal, then re-run `/playwright-testing`"
+- Inform the user: "Start the dev server with `yarn dev` in a separate terminal, then re-run `/generate-tests`"
 - Still write the test file so it is ready to run
 
 ---
