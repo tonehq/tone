@@ -76,7 +76,7 @@ const Container: React.FC<ContainerProps> = ({ children }) => {
                 fontSize: '1.25rem',
               }}
             >
-              S
+              T
             </Box>
             <Box
               component="span"
@@ -86,7 +86,7 @@ const Container: React.FC<ContainerProps> = ({ children }) => {
                 color: '#1f2937',
               }}
             >
-              Synthflow
+              Tone
             </Box>
           </Box>
         </Box>
@@ -198,7 +198,7 @@ const Container: React.FC<ContainerProps> = ({ children }) => {
           >
             {[
               '"The AI assistant has dramatically improved how we manage our schedules."',
-              '"Synthflow\'s Voice AI Agents help us book more demos faster."',
+              '"Tone\'s Voice AI Agents help us book more demos faster."',
             ].map((quote, index) => (
               <Box
                 key={index}

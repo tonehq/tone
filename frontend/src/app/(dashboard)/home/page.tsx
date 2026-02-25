@@ -57,7 +57,7 @@ export default function HomePage() {
       {/* Header */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" sx={{ fontWeight: 600, mb: 1 }}>
-          Welcome to Synthflow
+          Welcome to Tone
         </Typography>
         <Typography variant="body1" sx={{ color: theme.palette.text.secondary }}>
           Build and deploy AI voice agents in minutes. Get started with the quick links below.
