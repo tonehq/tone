@@ -4,7 +4,7 @@ from typing import Dict, Any
 import time
 import uuid as uuid_lib
 from uuid import UUID
-
+import traceback
 from fastapi import HTTPException, status
 
 from core.services.base import BaseService
@@ -101,6 +101,8 @@ class AgentConfigService(BaseService):
                 extra_update={"updated_at": now},
             )
         except IntegrityError as e:
+            print("========================")
+            print(traceback.format_exc())
             self.db.rollback()
             detail = _agent_config_unique_constraint_detail(e)
             raise HTTPException(

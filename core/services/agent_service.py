@@ -5,7 +5,7 @@ from typing import Dict, Any
 import time
 import uuid as uuid_lib
 from uuid import UUID
-
+import traceback
 from fastapi import HTTPException, status
 
 from core.services.base import BaseService
@@ -100,6 +100,8 @@ class AgentService(BaseService):
         return None
 
     def upsert_agent(self, agent_data: Dict[str, Any], created_by: int):
+        print("========================")
+        print("called")
         if not agent_data.get("name"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -151,6 +153,8 @@ class AgentService(BaseService):
                 extra_update={"updated_at": now},
             )
         except IntegrityError as e:
+            print("========================")
+            print(traceback.format_exc())
             self.db.rollback()
             detail = _agent_unique_constraint_detail(e)
             raise HTTPException(

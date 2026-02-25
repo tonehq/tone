@@ -61,7 +61,7 @@ class AgentFactoryService(BaseService):
             api_key = self.db.query(ApiKey).filter(ApiKey.id == svc.api_key_id).first()
             if api_key and api_key.api_key_encrypted:
                 try:
-                    api_key_value = decrypt(api_key.api_key_encrypted)
+                    api_key_value = api_key.api_key_encrypted
                 except Exception as e:
                     logger.warning("Failed to decrypt API key for model %s: %s", svc.id, e)
         if not api_key_value:

@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 from loguru import logger
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
+from core.models.agent import Agent
+from pipecat.transcriptions.language import Language
 
 # Use pipecat.runner.types so we get the same classes as run.py (avoids isinstance mismatch)
 from pipecat.runner.types import RunnerArguments
@@ -45,8 +47,7 @@ async def _default_messages():
     return [
         {
             "role": "system",
-            "content": "You are a polite and professional assistant. "
-            "Your output will be converted to audio so keep responses natural and conversational.",
+            "content": "Now please translate for each other in the call. You have two speakers: Thilak who speaks english and Ramamoorthy  who speaks tamil.What ever Thilak speaks translate to tamil and what ever Ramamoorthy speaks translate to english remove any speaker name like s1 and s2 or name of the speaker in the llm output Please translate what one person's says to the other person ( without any additions or modifications of your own)",
         },
     ]
 
@@ -71,27 +72,68 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         with get_db_context() as db:
             await AgentFactoryService(db).run_bot_for_agent(agent, transport, runner_args)
         return
+    # else:
+    #     with get_db_context() as db:
+    #         agent = db.query(Agent).filter(Agent.id == 46).first()
+    #         if agent:
+    #             await AgentFactoryService(db).run_bot_for_agent(agent, transport, runner_args)
+    #     return
+
+    
 
     # Fallback when no agent (e.g. WebRTC, Daily without agent in body)
     logger.info("Running bot with default env-based services (no agent in body)")
-    from pipecat.services.cartesia.tts import CartesiaTTSService
-    from pipecat.services.deepgram.stt import DeepgramSTTService
-    from pipecat.services.openai.llm import OpenAILLMService
+    # from pipecat.services.cartesia.tts import CartesiaTTSService
+    # from pipecat.services.deepgram.stt import DeepgramSTTService
+    # from pipecat.services.openai.llm import OpenAILLMService
 
-    openai_key = os.getenv("OPENAI_API_KEY")
-    deepgram_key = os.getenv("DEEPGRAM_API_KEY")
+    from pipecat.services.openai.llm import OpenAILLMService
+    from pipecat.services.speechmatics.stt import SpeechmaticsSTTService
+    from pipecat.services.cartesia.tts import CartesiaTTSService    
+
+    # openai_key = os.getenv("OPENAI_API_KEY")
+    # deepgram_key = os.getenv("SPEECHMATICS_API_KEY")
     cartesia_key = os.getenv("CARTESIA_API_KEY")
-    if not all([openai_key, deepgram_key, cartesia_key]):
-        raise ValueError(
-            "No agent in session and default services require env: "
-            "OPENAI_API_KEY, DEEPGRAM_API_KEY, CARTESIA_API_KEY"
-        )
-    llm = OpenAILLMService(api_key=openai_key, model="gpt-4o")
-    stt = DeepgramSTTService(api_key=deepgram_key)
+    # if not all([openai_key, deepgram_key, cartesia_key]):
+    #     raise ValueError(
+    #         "No agent in session and default services require env: "
+    #         "OPENAI_API_KEY, DEEPGRAM_API_KEY, CARTESIA_API_KEY"
+    #     )
+    # llm = OpenAILLMService(api_key=openai_key, model="gpt-4o")
+    # stt = SpeechmaticsSTTService(api_key=deepgram_key)
+    # tts = ElevenLabsTTSService(
+    #     api_key=cartesia_key,
+    #     voice_id="71a7ad14-091c-4e8e-a314-022ece01c121",
+    # )
+
+
+    # Configure STT for multi-language support
+    stt = SpeechmaticsSTTService(
+        api_key=os.getenv("SPEECHMATICS_API_KEY"),
+        params=SpeechmaticsSTTService.InputParams(
+            language=Language.TA,
+            enable_diarization=True,
+            speaker_active_format="{text}",
+        ),
+    )
+
     tts = CartesiaTTSService(
         api_key=cartesia_key,
         voice_id="71a7ad14-091c-4e8e-a314-022ece01c121",
     )
+
+    # Initialize TTS with default voice (will be changed dynamically)
+    # tts = ElevenLabsTTSService(
+    #     api_key=os.getenv("ELEVENLABS_API_KEY"),
+    #     voice_id="pNInz6obpgDQGcFmaJgB",  # Adam voice - reliable male voice for cloud
+    #     model="eleven_turbo_v2_5",
+    #     params=ElevenLabsTTSService.InputParams(
+    #         output_format="pcm_16000",  # Use PCM format for better cloud compatibility
+    #         optimize_streaming_latency=1,  # Optimize for streaming
+    #     ),
+    # )
+
+    llm = OpenAILLMService(api_key=os.getenv("OPENAI_API_KEY"))
     messages = await _default_messages()
     with get_db_context() as db:
         await AgentFactoryService(db).run_bot_with_components(
