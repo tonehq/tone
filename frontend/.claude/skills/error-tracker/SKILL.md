@@ -41,7 +41,7 @@ cat .claude/error-log.md 2>/dev/null || echo "No error log found."
 Read `.claude/error-log.md` in full. Also read `.claude/rules.md` to understand the error format and categories.
 
 If the log is empty or only contains the header, report:
-> No errors logged yet. Errors are recorded automatically when `/generate-tests`, `/run-tests`, or `/code-review` encounter failures.
+> No errors logged yet. Errors are recorded automatically when `/generate-tests` or `/code-review` encounter failures.
 
 ---
 
@@ -82,7 +82,6 @@ Parse all entries and produce:
 | Skill | Errors | Resolved |
 |-------|--------|----------|
 | generate-tests | N | N |
-| run-tests | N | N |
 | code-review | N | N |
 
 ---

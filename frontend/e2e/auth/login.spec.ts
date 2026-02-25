@@ -1,4 +1,5 @@
 import { test as base, BrowserContext, expect, Page } from '@playwright/test';
+import { TEST_EMAIL, TEST_PASSWORD } from '../helpers/auth';
 
 // ── Browser lifecycle ─────────────────────────────────────────────────────────
 // One browser context (window) per worker — stays open for the full suite.
@@ -30,6 +31,16 @@ const test = base.extend<{ page: Page }, { workerContext: BrowserContext }>({
 // Filter it out so getByRole('alert') only matches real MUI Snackbar/Alert elements.
 const getAlert = (p: Page) => p.getByRole('alert').filter({ hasText: /\S+/ });
 
+// ── Soft navigation helper ───────────────────────────────────────────────────
+// Auth pages have no sidebar, so soft nav = skip if already on the page.
+// Falls back to hard page.goto() when on a different URL (e.g., after a
+// successful login redirects to /home). Test groups that need a clean form
+// add their own nested beforeEach with page.goto().
+async function ensureOnLoginPage(page: Page): Promise<void> {
+  if (page.url().includes('/auth/login')) return;
+  await page.goto('/auth/login');
+}
+
 // ── Mock data ────────────────────────────────────────────────────────────────
 // Payload: {"sub":"user123","exp":9999999999} (expires year 2286)
 const MOCK_JWT =
@@ -43,15 +54,13 @@ const MOCK_LOGIN_RESPONSE = {
   organizations: [{ id: 'org123', name: 'Test Org' }],
 };
 
-const TEST_EMAIL = 'parandhama.reddy@productfusion.co';
-const TEST_PASSWORD = 'Test@123';
-
 // ── Tests ────────────────────────────────────────────────────────────────────
 test.describe('Login Page', () => {
   test.beforeEach(async ({ page }) => {
     // Clear routes from previous tests (prevents mock bleed between tests)
     await page.unrouteAll({ behavior: 'wait' });
-    await page.goto('/auth/login');
+    // Soft-navigate — skips reload if already on page, hard nav otherwise
+    await ensureOnLoginPage(page);
   });
 
   // ── 1. Page Rendering ──────────────────────────────────────────────────────
@@ -114,6 +123,11 @@ test.describe('Login Page', () => {
 
   // ── 3. Form Validation ─────────────────────────────────────────────────────
   test.describe('Form Validation', () => {
+    // Form validation tests need a clean form — hard nav to reset field values
+    test.beforeEach(async ({ page }) => {
+      await page.goto('/auth/login');
+    });
+
     test('rejects an invalid email format via browser HTML5 validation', async ({ page }) => {
       await page.getByPlaceholder('Enter your email').fill('not-an-email');
       await page.getByPlaceholder('Enter your password').fill(TEST_PASSWORD);
@@ -156,6 +170,18 @@ test.describe('Login Page', () => {
 
   // ── 5. Authentication Flow ─────────────────────────────────────────────────
   test.describe('Authentication Flow', () => {
+    // Auth flow tests navigate away (to /home) and set cookies via setToken()
+    // — hard nav ensures a clean login page for each test.
+    test.beforeEach(async ({ page }) => {
+      await page.goto('/auth/login');
+    });
+
+    // Clear cookies set by successful login mocks (via setToken)
+    // so they don't affect subsequent tests.
+    test.afterEach(async ({ page }) => {
+      await page.context().clearCookies();
+    });
+
     test('successful login shows a success notification and redirects to home', async ({
       page,
     }) => {

@@ -366,6 +366,62 @@ test.describe('<PageName> Page', () => {
 
 ---
 
+## Auth page soft navigation (login, signup, etc.)
+
+Auth pages are public — no `loginViaUI` needed. The soft navigation strategy is simpler:
+skip if already on the page, hard `page.goto()` if not. **No form clearing in the helper** —
+`fill('')` triggers React re-renders that can cause element detachment and race conditions.
+
+```typescript
+// ── Soft navigation helper ───────────────────────────────────────────────────
+// Auth pages have no sidebar, so soft nav = skip if already on the page.
+// Falls back to hard page.goto() when on a different URL.
+// Test groups that need a clean form add their own nested beforeEach with page.goto().
+async function ensureOnLoginPage(page: Page): Promise<void> {
+  if (page.url().includes('/auth/login')) return;
+  await page.goto('/auth/login');
+}
+
+test.describe('Login Page', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.unrouteAll({ behavior: 'wait' });
+    await ensureOnLoginPage(page);
+  });
+
+  // Read-only groups — soft nav skips reload (Page Rendering, Accessibility)
+  test.describe('Page Rendering', () => {
+    test('shows the heading', async ({ page }) => { ... });
+  });
+
+  // Form groups — nested beforeEach forces clean form
+  test.describe('Form Validation', () => {
+    test.beforeEach(async ({ page }) => {
+      await page.goto('/auth/login'); // needs clean form state
+    });
+    test('rejects invalid email', async ({ page }) => { ... });
+  });
+
+  // Auth flow — hard nav + clear cookies after (setToken sets cookies)
+  test.describe('Authentication Flow', () => {
+    test.beforeEach(async ({ page }) => {
+      await page.goto('/auth/login');
+    });
+    test.afterEach(async ({ page }) => {
+      await page.context().clearCookies();
+    });
+    test('successful login redirects to home', async ({ page }) => { ... });
+  });
+});
+```
+
+**Key rules for auth page soft nav**:
+- **No form clearing in the helper** — `fill('')` causes React re-renders and element detachment. Skip-or-goto only.
+- **Form Validation groups** need a nested `beforeEach` with `page.goto()` to reset field values.
+- **Auth Flow groups** (that mock login API with 200) must `clearCookies()` in `afterEach` — the mock triggers `setToken()` which sets real auth cookies that persist and can interfere with subsequent tests.
+- **Loading state mocks** should use `route.abort()` not `route.fulfill()` to prevent the success handler from navigating after the test ends.
+
+---
+
 ## CustomButton loading state
 
 `CustomButton` with `loading={true}` renders:

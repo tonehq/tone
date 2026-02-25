@@ -6,7 +6,7 @@ Rules that govern how Claude skills operate in this project. Referenced by `CLAU
 
 ## 1. Skill Error Tracking
 
-Every skill (`generate-tests`, `run-tests`, `code-review`) **must** log errors to `.claude/error-log.md` when failures occur. This builds a searchable history of issues, recurring patterns, and resolutions.
+Every skill (`generate-tests`, `code-review`) **must** log errors to `.claude/error-log.md` when failures occur. This builds a searchable history of issues, recurring patterns, and resolutions.
 
 ### When to log
 
@@ -109,13 +109,16 @@ These rules apply to ALL skills in this project:
 
 ## 4. Test Conventions
 
-Rules specific to Playwright e2e tests (enforced by `generate-tests` and `run-tests`):
+Rules specific to Playwright e2e tests (enforced by `generate-tests`):
 
 - **Tab reuse**: One browser context per worker, one tab reused across tests. State isolation via `beforeEach` hooks (`page.unrouteAll()`, soft navigation). Only create a fresh tab per test if browser-level state conflicts exist.
 - **Route cleanup**: `test.beforeEach` must call `page.unrouteAll({ behavior: 'wait' })` for specs that mock API routes, to prevent mock bleed between tests.
 - **Login once per worker**: Call `loginViaUI(page)` from `e2e/helpers/auth.ts` inside the **worker-scoped fixture**, NOT in `beforeEach`. This logs in once through the actual login page UI against the real backend. Auth cookies persist across all tests in the worker. Do NOT manually inject cookies with `addCookies()`.
-- **Soft navigation**: Use an `ensureOnPage(page, '/route')` helper in `beforeEach` instead of `page.goto()`. This skips navigation when already on the target page, uses sidebar links for client-side routing from other dashboard pages, and only falls back to a hard reload when outside the dashboard layout (e.g., after Auth Redirect tests land on `/auth/login`). Never use `page.goto()` directly in `beforeEach`.
+- **Soft navigation (dashboard pages)**: Use an `ensureOnPage(page, '/route')` helper in `beforeEach` instead of `page.goto()`. This skips navigation when already on the target page, uses sidebar links for client-side routing from other dashboard pages, and only falls back to a hard reload when outside the dashboard layout (e.g., after Auth Redirect tests land on `/auth/login`).
+- **Soft navigation (auth pages)**: Use an `ensureOnPage(page)` helper that skips navigation when already on the target auth page, and falls back to `page.goto()` when on a different URL. Auth pages have no sidebar, so soft nav is simply skip-or-goto. Test groups that need a clean form (Form Validation, Auth Flow) add their own nested `beforeEach` with `page.goto()`.
 - **Cookie save/restore**: Tests that clear cookies (e.g., Auth Redirect) must save cookies in a nested `beforeEach` and restore them in `afterEach` so subsequent tests stay authenticated.
+- **Cookie cleanup (auth pages)**: Auth flow tests that mock the login API with a 200 success response trigger `setToken()` which sets real cookies. These test groups must clear cookies in `afterEach` to prevent interference with subsequent tests.
+- **Loading state mocks**: Delayed API mocks for testing loading state should use `route.abort()` instead of `route.fulfill()` to prevent the component's success handler from triggering navigation after the test ends.
 - **Selector disambiguation**: When sidebar and main content share element names (e.g., "Agents"), use the full accessible name or scope to a parent locator.
 - **Alert helper**: Always use `const getAlert = (p: Page) => p.getByRole('alert').filter({ hasText: /\S+/ })` to avoid Next.js route announcer collisions.
 - **Unique test titles**: When generating tests in a loop, include enough context in the title to avoid duplicates (e.g., include card name, not just href).

@@ -1,6 +1,6 @@
 ---
 name: generate-tests
-description: Generates a new Playwright e2e spec file by reading a page component's source code, then runs it. Use when a page has NO existing spec file and you need to create one from scratch. Does NOT run pre-existing tests — use /run-tests for that.
+description: Generates a new Playwright e2e spec file by reading a page component's source code, then runs it. Use when a page has NO existing spec file and you need to create one from scratch.
 argument-hint: '[target] [--docs path/to/feature-doc.md]'
 allowed-tools: Bash, Read, Write, Edit, Glob, Grep
 license: proprietary
@@ -176,11 +176,13 @@ Apply **all three reference checklists** to produce tests that cover:
 ### Code standards:
 - Use the worker-context + single-tab fixture from `test-patterns.md` — one browser window per worker, one tab reused across all tests. State isolation is handled by `beforeEach` hooks (soft navigation, `page.unrouteAll()`). This eliminates tab churn in `--headed` mode. Only create a fresh tab per test if tests have conflicting browser-level state that cannot be reset in `beforeEach`
 - **Dashboard pages (login once per worker)**: Call `loginViaUI` from `e2e/helpers/auth.ts` inside the **worker-scoped fixture**, NOT in `beforeEach`. This logs in once through the actual login page UI against the real backend. Auth cookies persist across all tests in the worker. Do NOT manually inject cookies with `addCookies()`. See `test-patterns.md` for full usage.
-- **Soft navigation**: Use an `ensureOnPage(page, '/route')` helper in `beforeEach` instead of `page.goto()`. It skips navigation when already on the target page, uses sidebar links (`a[href="/route"]`) for client-side routing from other dashboard pages, and only falls back to hard `page.goto()` when outside the dashboard layout.
+- **Soft navigation (dashboard pages)**: Use an `ensureOnPage(page, '/route')` helper in `beforeEach` instead of `page.goto()`. It skips navigation when already on the target page, uses sidebar links (`a[href="/route"]`) for client-side routing from other dashboard pages, and only falls back to hard `page.goto()` when outside the dashboard layout.
+- **Soft navigation (auth pages)**: Use an `ensureOnPage(page)` helper that skips when already on the target URL, falls back to `page.goto()` otherwise. No form clearing in the helper — `fill('')` causes React re-renders and element detachment. Test groups that need clean form state (Form Validation, Auth Flow) add a nested `beforeEach` with `page.goto()`. See `test-patterns.md` for the full pattern.
 - **Cookie save/restore**: Tests that clear cookies (e.g., Auth Redirect) must save cookies in a nested `beforeEach` and restore them in `afterEach` so subsequent tests stay authenticated.
+- **Cookie cleanup (auth pages)**: Auth flow tests that mock the login API with 200 trigger `setToken()` which sets real cookies. Add `afterEach` with `clearCookies()` in these groups.
+- **Loading state mocks**: Use `route.abort()` not `route.fulfill()` for delayed mocks that test loading state. This prevents the success handler from triggering navigation after the test ends.
 - **Auth pages**: Do NOT use `loginViaUI` — auth pages (login, signup, etc.) are public and test the login flow itself
 - Group tests with `test.describe()` blocks matching the groups above
-- Use `test.beforeEach(async ({ page }) => { await page.goto('/route') })` to navigate (no re-login)
 - Prefer semantic selectors: `getByRole`, `getByLabel`, `getByPlaceholder`, `getByText`
 - Tests authenticate against the real backend — the dev server and backend must be running
 - Import `loginViaUI` and `TEST_EMAIL` from `e2e/helpers/auth.ts`

@@ -33,13 +33,6 @@ yarn playwright install chromium
 
 ## Playwright E2E Testing
 
-Two skills cover the full test workflow:
-
-| Skill | Purpose | Invoke |
-|-------|---------|--------|
-| `generate-tests` | **Create** a new spec file from a page component's source code (+ optional feature docs), then run it | `/generate-tests [target] [--docs path]` |
-| `run-tests` | **Execute** existing spec files, report results, diagnose failures | `/run-tests [target\|flag]` |
-
 ### `/generate-tests` — create new spec files
 
 Use when a page has **no existing spec file** and you need to write one from scratch.
@@ -72,20 +65,33 @@ alongside the component source to ensure all user cases are covered.
 
 To create a feature doc for a new page, copy `_template.md` and fill in the sections.
 
-### `/run-tests` — run existing spec files
+### Running tests
 
-Use when spec files **already exist** and you want to execute them, see results, or diagnose failures.
+Run existing spec files using Playwright CLI commands directly:
 
 ```bash
-/run-tests                       # run the full e2e suite
-/run-tests login                 # run e2e/auth/login.spec.ts
-/run-tests e2e/auth/login.spec.ts  # run by explicit path
-/run-tests login --headed        # run in a visible browser window
-/run-tests --debug               # open Playwright Inspector
-/run-tests --grep "shows the login heading"  # run a single test by name
+# Run the full e2e suite
+yarn playwright test --reporter=list
+
+# Run a specific spec file
+yarn playwright test e2e/auth/login.spec.ts --reporter=list
+yarn playwright test e2e/auth/signup.spec.ts --reporter=list
+yarn playwright test e2e/dashboard/home.spec.ts --reporter=list
+
+# Run in headed mode (visible browser)
+yarn playwright test e2e/auth/login.spec.ts --headed --reporter=list
+
+# Run in debug mode (Playwright Inspector)
+yarn playwright test e2e/auth/login.spec.ts --debug
+
+# Run a single test by name
+yarn playwright test --grep "shows the login heading" --reporter=list
+
+# List tests without running them
+yarn playwright test e2e/auth/login.spec.ts --list
 ```
 
-The skill lives at `.claude/skills/run-tests/SKILL.md`.
+**Prerequisites**: The dev server must be running (`yarn dev`) before executing tests.
 
 ### Configuration
 
@@ -163,7 +169,7 @@ The error log is at `.claude/error-log.md`.
 
 ### How it works
 
-All skills (`generate-tests`, `run-tests`, `code-review`) automatically log errors to `.claude/error-log.md` when failures occur. The `/error-tracker` skill reads this log and provides:
+All skills (`generate-tests`, `code-review`) automatically log errors to `.claude/error-log.md` when failures occur. The `/error-tracker` skill reads this log and provides:
 
 - **Summary** — Error counts by severity, category, and skill
 - **Recurring patterns** — Same category + file appearing 2+ times

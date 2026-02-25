@@ -1,6 +1,6 @@
 # Skill Error Log
 
-Errors are appended here automatically by skills (`generate-tests`, `run-tests`, `code-review`).
+Errors are appended here automatically by skills (`generate-tests`, `code-review`).
 Use `/error-tracker` to view summaries, search patterns, and manage entries.
 
 Format defined in `.claude/rules.md` Section 1.
@@ -28,3 +28,13 @@ Format defined in `.claude/rules.md` Section 1.
 - **Root cause**: `setToken()` stores `LogInData['organizations']?.[0]?.['id'] ?? ''` — the test user's backend response has no organizations or a falsy org ID, resulting in an empty string cookie value. The assertion `expect(tenantId!.value.length).toBeGreaterThan(0)` assumed a non-empty value.
 - **Resolution**: Relaxed assertion to only verify the cookie exists (`toBeDefined()`), since the cookie is correctly set by `setToken()` regardless of whether the org ID is populated.
 - **Pattern**: first occurrence
+
+### [2026-02-25] generate-tests — Auth page soft navigation: form clearing causes element detachment
+
+- **Severity**: high
+- **Category**: timeout
+- **Spec/File**: `e2e/auth/login.spec.ts:240`, `e2e/auth/signup.spec.ts:141`
+- **Error**: `locator.fill: Target page, context or browser has been closed` / `locator.click: element was detached from the DOM, retrying`
+- **Root cause**: Soft navigation helpers that cleared form fields via `fill('')` triggered rapid React re-renders, causing DOM elements to detach. Additionally, successful login mocks called `setToken()` which set persistent auth cookies that interfered with subsequent tests on the same page. For signup, `route.fulfill()` in loading state tests triggered navigation after the test ended.
+- **Resolution**: Changed auth page `ensureOnPage` helpers to skip-or-goto only (no form clearing). Test groups needing clean form state (Form Validation, Auth Flow) use nested `beforeEach` with `page.goto()`. Auth Flow groups clear cookies in `afterEach`. Loading state mocks use `route.abort()` instead of `route.fulfill()`. Updated `test-patterns.md`, `rules.md`, `generate-tests/SKILL.md`.
+- **Pattern**: first occurrence — established auth page soft navigation convention for all future auth page tests

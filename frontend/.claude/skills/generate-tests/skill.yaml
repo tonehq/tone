@@ -1,5 +1,5 @@
 name: generate-tests
-description: Generates a new Playwright e2e spec file by reading a page component's source code, then runs it. Use when a page has NO existing spec file and you need to create one from scratch. Does NOT run pre-existing tests — use /run-tests for that.
+description: Generates a new Playwright e2e spec file by reading a page component's source code, then runs it. Use when a page has NO existing spec file and you need to create one from scratch.
 
 license: proprietary
 compatibility: Requires Node.js, yarn, and a running Next.js dev server on localhost:3000.
