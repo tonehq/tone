@@ -4,6 +4,7 @@ import uuid
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from core.database.base import Base
 from sqlalchemy import ForeignKey, Text
+from sqlalchemy.orm import relationship
 from core.models.base import TimestampModel
 from core.models.enums import AgentType
 
@@ -26,4 +27,6 @@ class Agent(TimestampModel):
     meta_data = Column(JSONB, nullable=True, default={})
     status = Column(String, nullable=True, default='active')
     agent_type = Column(Enum(AgentType, name="agenttype", values_callable=lambda e: [i.name for i in e]))
+
+    channels = relationship("Channel", secondary="agent_channels", back_populates="agents")
 

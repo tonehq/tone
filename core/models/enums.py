@@ -45,3 +45,10 @@ class AgentType(enum.Enum):
     INBOUND = "inbound"
     OUTBOUND = "outbound"
     CHATBOT = "chatbot"
+
+
+class ChannelType(enum.Enum):
+    TWILIO = "twilio"
+    WEB = "web"
+    GOOGLE_MEET = "google_meet"
+    ZOOM = "zoom"
