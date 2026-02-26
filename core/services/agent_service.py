@@ -219,6 +219,34 @@ class AgentService(BaseService):
             .all()
         ) if channel_ids else []
 
+        # Group phone numbers by channel_id
+        phones_by_channel: Dict[int, list] = {}
+        for p in phone_rows:
+            phones_by_channel.setdefault(p.channel_id, []).append({
+                "id": p.id,
+                "uuid": str(p.uuid),
+                "phone_number": p.phone_number,
+                "phone_number_sid": p.phone_number_sid,
+                "provider": p.provider,
+                "country_code": p.country_code,
+                "number_type": p.number_type,
+                "capabilities": p.capabilities,
+                "status": p.status,
+            })
+
+        # Build channels list with nested phone_numbers
+        channels_list = []
+        for ch in channel_rows:
+            channels_list.append({
+                "id": ch.id,
+                "uuid": str(ch.uuid),
+                "name": ch.name,
+                "type": ch.type.value if ch.type else None,
+                "created_by": ch.created_by,
+                "meta_data": ch.meta_data if isinstance(ch.meta_data, dict) else {},
+                "phone_numbers": phones_by_channel.get(ch.id, []),
+            })
+
         item = {
             "id": agent.id,
             "uuid": str(agent.uuid),
@@ -237,21 +265,8 @@ class AgentService(BaseService):
             "agent_type": agent.agent_type.value if agent.agent_type is not None else None,
             "phone_number": phone_rows[0].phone_number if phone_rows else None,
             "country_code": phone_rows[0].country_code if phone_rows else None,
-            "channel": {
-                "id": channel_rows[0].id,
-                "uuid": str(channel_rows[0].uuid),
-                "name": channel_rows[0].name,
-                "type": channel_rows[0].type.value if channel_rows[0].type else None,
-                "created_by": channel_rows[0].created_by,
-                "meta_data": channel_rows[0].meta_data if isinstance(channel_rows[0].meta_data, dict) else {},
-            } if channel_rows else None,
+            "channels": channels_list,
         }
-        # Phone numbers for this agent (phone_number and country_code only)
-
-        # item["phone_numbers"] = [
-        #     {"phone_number": p.phone_number, "country_code": p.country_code}
-        #     for p in phone_rows
-        # ]
         if config:
             agent_meta = config.agent_metadata if isinstance(config.agent_metadata, dict) else {}
             llm_meta = config.llm_metadata if isinstance(config.llm_metadata, dict) else {}
@@ -326,6 +341,21 @@ class AgentService(BaseService):
             "agent_metadata": agent_metadata,
         }
         return config_data
+
+    def delete_agent(self, agent_id: int, created_by: int):
+        agent = self.db.query(Agent).filter(Agent.id == agent_id, Agent.created_by == created_by).first()
+        if not agent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Agent not found",
+            )
+        # Delete associated agent_config
+        self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).delete()
+        # Delete associated agent_channel links
+        self.db.query(AgentChannel).filter(AgentChannel.agent_id == agent.id).delete()
+        self.db.delete(agent)
+        self.db.commit()
+        return {"message": "Agent deleted successfully"}
 
     def get_all_agents(self, agent_id=None, created_by=None):
         """Return all agents with joined agent_config and service_providers (llm, tts, stt). If agent_id is given, return only that agent."""
