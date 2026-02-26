@@ -192,17 +192,18 @@ export default function GeneralTab({
             {formData.customVocabulary.map((word) => (
               <Badge key={word} variant="secondary" className="gap-1 pr-1">
                 {word}
-                <button
-                  type="button"
+                <CustomButton
+                  type="text"
+                  htmlType="button"
                   onClick={() =>
                     onFormChange({
                       customVocabulary: formData.customVocabulary.filter((w) => w !== word),
                     })
                   }
-                  className="rounded-full p-0.5 hover:bg-muted-foreground/20"
+                  className="size-5 rounded-full p-0 hover:bg-muted-foreground/20"
                 >
                   <X className="size-3" />
-                </button>
+                </CustomButton>
               </Badge>
             ))}
           </div>
@@ -229,17 +230,18 @@ export default function GeneralTab({
             {formData.filterWords.map((word) => (
               <Badge key={word} variant="secondary" className="gap-1 pr-1">
                 {word}
-                <button
-                  type="button"
+                <CustomButton
+                  type="text"
+                  htmlType="button"
                   onClick={() =>
                     onFormChange({
                       filterWords: formData.filterWords.filter((w) => w !== word),
                     })
                   }
-                  className="rounded-full p-0.5 hover:bg-muted-foreground/20"
+                  className="size-5 rounded-full p-0 hover:bg-muted-foreground/20"
                 >
                   <X className="size-3" />
-                </button>
+                </CustomButton>
               </Badge>
             ))}
           </div>

@@ -90,6 +90,12 @@ The `pipecat/` directory is a custom fork (`tonehq/pipecat`) of the Pipecat AI f
 - **DB models:** UUID primary keys alongside integer IDs; JSONB columns for flexible metadata/settings
 - **Config:** Settings loaded from Infisical (if `USE_INFISICAL=true`) or `.env` with fallback defaults
 
+### Frontend: shared components
+
+- **Buttons:** Use `CustomButton` from `@/components/shared` only. Do not use native `<button>` or `Button` from `@/components/ui/button` in app/feature code (exception: inside `CustomButton.tsx` itself).
+- **Other UI:** Prefer shared components (`CustomModal`, `CustomTable`, `TextInput`, `SelectInput`, `CustomTab`, `CustomLink`, etc.) over raw `@/components/ui/*` or native elements. Use `@/components/ui/*` only when building or composing shared components.
+- See `.cursor/rules/shared-components.mdc` for full rule and exceptions.
+
 
 ##SKILLS:
 

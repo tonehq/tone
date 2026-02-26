@@ -1,6 +1,6 @@
 'use client';
 
-import { SelectInput } from '@/components/shared';
+import { CustomButton, SelectInput } from '@/components/shared';
 import { Slider } from '@/components/ui/slider';
 import { languages } from '@/data/mockAgents';
 import { cn } from '@/utils/cn';
@@ -127,13 +127,14 @@ export default function VoiceTab({
           ].map((item) => {
             const isActive = formData.patienceLevel === item.value;
             return (
-              <button
+              <CustomButton
                 key={item.value}
-                type="button"
+                type="default"
+                htmlType="button"
                 role="radio"
                 aria-checked={isActive}
                 className={cn(
-                  'w-[105px] rounded-md border p-2 text-left transition-colors',
+                  'h-auto w-[105px] justify-start rounded-md border p-2 text-left transition-colors',
                   isActive
                     ? 'border-primary bg-primary/10'
                     : 'border-border hover:border-muted-foreground/50',
@@ -142,7 +143,7 @@ export default function VoiceTab({
               >
                 <span className="block text-sm font-semibold text-foreground">{item.label}</span>
                 <span className="block text-xs text-muted-foreground">{item.desc}</span>
-              </button>
+              </CustomButton>
             );
           })}
         </div>
@@ -168,13 +169,14 @@ export default function VoiceTab({
           ].map((item) => {
             const isActive = formData.speechRecognition === item.value;
             return (
-              <button
+              <CustomButton
                 key={item.value}
-                type="button"
+                type="default"
+                htmlType="button"
                 role="radio"
                 aria-checked={isActive}
                 className={cn(
-                  'w-[170px] rounded-md border p-3 text-left transition-colors',
+                  'h-auto w-[170px] justify-start rounded-md border p-3 text-left transition-colors',
                   isActive
                     ? 'border-primary bg-primary/10'
                     : 'border-border hover:border-muted-foreground/50',
@@ -183,7 +185,7 @@ export default function VoiceTab({
               >
                 <span className="block text-sm font-semibold text-foreground">{item.label}</span>
                 <span className="block text-xs text-muted-foreground">{item.desc}</span>
-              </button>
+              </CustomButton>
             );
           })}
         </div>

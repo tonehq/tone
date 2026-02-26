@@ -1,7 +1,6 @@
 'use client';
 
-import { CustomModal } from '@/components/shared';
-import { Button } from '@/components/ui/button';
+import { CustomButton, CustomModal } from '@/components/shared';
 import { Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -26,8 +25,8 @@ export function AgentActionMenu({ onEdit, onDelete }: AgentActionMenuProps) {
 
   return (
     <div className="flex items-center gap-1">
-      <Button
-        variant="ghost"
+      <CustomButton
+        type="text"
         size="icon-xs"
         onClick={(e) => {
           e.stopPropagation();
@@ -37,19 +36,19 @@ export function AgentActionMenu({ onEdit, onDelete }: AgentActionMenuProps) {
       >
         <Pencil className="size-4" />
         <span className="sr-only">Edit</span>
-      </Button>
-      <Button
-        variant="ghost"
+      </CustomButton>
+      <CustomButton
+        type="text"
         size="icon-xs"
         onClick={(e) => {
           e.stopPropagation();
           setConfirmOpen(true);
         }}
-        className="text-muted-foreground hover:text-destructive"
+        aria-label="delete"
+        className="text-destructive hover:text-destructive/90"
       >
         <Trash2 className="size-4" />
-        <span className="sr-only">Delete</span>
-      </Button>
+      </CustomButton>
 
       <CustomModal
         open={confirmOpen}

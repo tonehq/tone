@@ -1,5 +1,6 @@
 'use client';
 
+import { CustomButton } from '@/components/shared';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/utils/cn';
 import { ChevronDown } from 'lucide-react';
@@ -13,9 +14,11 @@ export interface SidebarOrganizationProps {
 export function SidebarOrganization({ isExpanded }: SidebarOrganizationProps) {
   if (isExpanded) {
     return (
-      <button
-        type="button"
-        className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 transition-all duration-200 hover:bg-white/[0.08]"
+      <CustomButton
+        type="text"
+        fullWidth
+        htmlType="button"
+        className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-white/90 transition-all duration-200 hover:bg-white/[0.08]"
       >
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.12] text-[13px] font-semibold text-white/90">
           M
@@ -24,22 +27,23 @@ export function SidebarOrganization({ isExpanded }: SidebarOrganizationProps) {
           {WORKSPACE_LABEL}
         </span>
         <ChevronDown size={14} className="shrink-0 text-white/40" />
-      </button>
+      </CustomButton>
     );
   }
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <button
-          type="button"
+        <CustomButton
+          type="text"
+          htmlType="button"
           className={cn(
             'mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.12]',
-            'text-[13px] font-semibold text-white/90 cursor-pointer transition-all duration-200 hover:bg-white/[0.18]',
+            'text-[13px] font-semibold text-white/90 transition-all duration-200 hover:bg-white/[0.18]',
           )}
         >
           M
-        </button>
+        </CustomButton>
       </TooltipTrigger>
       <TooltipContent side="right">{WORKSPACE_LABEL}</TooltipContent>
     </Tooltip>

@@ -1,7 +1,8 @@
 'use client';
 
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { CustomButton } from '@/components/shared';
 import { SIDEBAR_WIDTH_COLLAPSED, SIDEBAR_WIDTH_EXPANDED } from '@/constants/sidebar';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { Menu } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 import SidebarComponent from './SidebarComponent';
@@ -42,14 +43,15 @@ export default function MainLayout({ children }: MainLayoutProps) {
 
       {isMobile && (
         <header className="fixed inset-x-0 top-0 z-50 flex h-14 items-center gap-3 border-b border-border bg-background px-4 shadow-sm">
-          <button
-            type="button"
+          <CustomButton
+            type="text"
+            htmlType="button"
             aria-label="Open sidebar"
             onClick={() => setMobileOpen(true)}
             className="rounded-md p-1.5 text-foreground transition-colors hover:bg-muted"
           >
             <Menu size={24} />
-          </button>
+          </CustomButton>
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
             T
           </div>

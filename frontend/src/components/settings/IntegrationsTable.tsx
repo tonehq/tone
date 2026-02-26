@@ -1,7 +1,7 @@
 'use client';
 
+import { CustomButton } from '@/components/shared';
 import CustomTable from '@/components/shared/CustomTable';
-import { Button } from '@/components/ui/button';
 import type { CustomTableColumn } from '@/types/components';
 import type { IntegrationRow } from '@/types/integration';
 import { Loader2, Pencil, Trash2 } from 'lucide-react';
@@ -38,34 +38,36 @@ export default function IntegrationsTable({
     { key: 'createdAt', title: 'Created at', dataIndex: 'createdAt' },
     {
       key: 'actions',
-      title: 'Actions',
+      title: '',
       width: 'w-24',
       render: (_value, record) => {
         const isDeleting = deletingId === record.id;
         return (
           <div className="flex gap-1">
-            <Button
-              variant="ghost"
+            <CustomButton
+              type="text"
               size="icon-xs"
               onClick={() => onEdit(record)}
               disabled={isDeleting}
               aria-label="edit"
+              className="text-muted-foreground hover:text-foreground"
             >
-              <Pencil className="size-4 text-muted-foreground" />
-            </Button>
+              <Pencil className="size-4" />
+            </CustomButton>
             {isDeleting ? (
-              <Button variant="ghost" size="icon-xs" disabled>
+              <CustomButton type="text" size="icon-xs" disabled>
                 <Loader2 className="size-4 animate-spin text-destructive" />
-              </Button>
+              </CustomButton>
             ) : (
-              <Button
-                variant="ghost"
+              <CustomButton
+                type="text"
                 size="icon-xs"
                 onClick={() => handleDelete(record.id)}
                 aria-label="delete"
+                className="text-destructive hover:text-destructive/90"
               >
-                <Trash2 className="size-4 text-destructive" />
-              </Button>
+                <Trash2 className="size-4" />
+              </CustomButton>
             )}
           </div>
         );

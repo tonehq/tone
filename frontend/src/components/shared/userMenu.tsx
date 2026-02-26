@@ -1,6 +1,7 @@
 'use client';
 
 import { authAtom, getCurrentUserAtom, logoutAtom } from '@/atoms/AuthAtom';
+import { CustomButton } from '@/components/shared';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,15 +60,16 @@ export default function ProfileMenu({ isExpanded }: ProfileMenuProps) {
   const menu = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          type="button"
+        <CustomButton
+          type="text"
+          htmlType="button"
           className={cn(
-            'flex w-full cursor-pointer items-center rounded-lg px-2 py-2 transition-all duration-200 select-none',
+            'flex w-full items-center rounded-lg px-2 py-2 transition-all duration-200 select-none',
             'hover:bg-white/[0.08]',
           )}
         >
           {trigger}
-        </button>
+        </CustomButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="right" align="end" className="w-52">
         <DropdownMenuItem>

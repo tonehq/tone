@@ -1,5 +1,6 @@
 'use client';
 
+import { CustomButton } from '@/components/shared';
 import Logo from '@/components/shared/Logo';
 import { cn } from '@/utils/cn';
 import { PanelLeft, PanelRight } from 'lucide-react';
@@ -21,13 +22,14 @@ export function SidebarHeader({ isExpanded, onToggle, isMobile = false }: Sideba
       {isExpanded ? <Logo inverted /> : <Logo inverted iconOnly />}
 
       {!isMobile && (
-        <button
-          type="button"
+        <CustomButton
+          type="text"
+          htmlType="button"
           onClick={onToggle}
           className="rounded-lg p-1.5 text-white/50 transition-all duration-200 hover:bg-white/10 hover:text-white/90"
         >
           {isExpanded ? <PanelLeft size={18} /> : <PanelRight size={18} />}
-        </button>
+        </CustomButton>
       )}
     </div>
   );

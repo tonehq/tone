@@ -15,6 +15,7 @@ interface CustomButtonProps extends Omit<React.ComponentProps<'button'>, 'type'>
   htmlType?: 'button' | 'submit' | 'reset';
   icon?: React.ReactNode;
   fullWidth?: boolean;
+  size?: 'default' | 'xs' | 'sm' | 'lg' | 'icon' | 'icon-xs' | 'icon-sm' | 'icon-lg';
 }
 
 // ── Variant mapping ──────────────────────────────────────────────────────────

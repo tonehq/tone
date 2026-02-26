@@ -4,7 +4,6 @@ import Apikeys from '@/components/settings/Apikeys';
 import Integrations from '@/components/settings/Integrations';
 import { CustomButton, TextInput } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Search, Trash2, UserPlus } from 'lucide-react';
 import { useState } from 'react';
@@ -54,9 +53,9 @@ export default function SettingsPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge variant="secondary">{member.role}</Badge>
-                  <Button variant="ghost" size="icon-xs" disabled>
-                    <Trash2 className="size-4 text-muted-foreground" />
-                  </Button>
+                  <CustomButton type="text" size="icon-xs" disabled className="text-muted-foreground">
+                    <Trash2 className="size-4" />
+                  </CustomButton>
                 </div>
               </div>
             ))}
