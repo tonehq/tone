@@ -83,5 +83,12 @@ export default function IntegrationsTable({
     );
   }
 
-  return <CustomTable columns={columns} dataSource={rows} rowKey="id" />;
+  return (
+    <CustomTable
+      columns={columns}
+      onRowClick={(record) => onEdit(record)}
+      dataSource={rows}
+      rowKey="id"
+    />
+  );
 }

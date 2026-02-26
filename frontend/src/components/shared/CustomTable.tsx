@@ -9,8 +9,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { cn } from '@/utils/cn';
 import type { CustomTableColumn, CustomTableProps } from '@/types/components';
+import { cn } from '@/utils/cn';
 import {
   ArrowDown,
   ArrowUp,
@@ -26,7 +26,7 @@ import React, { useMemo, useState } from 'react';
 export type {
   CustomTableColumn,
   CustomTablePagination,
-  CustomTableProps,
+  CustomTableProps
 } from '@/types/components';
 
 const DEFAULT_PAGE_SIZE = 10;
@@ -237,7 +237,19 @@ function CustomTableInner<TRow>({
                     'border-b border-border/50 transition-colors hover:bg-muted/20',
                     onRowClick && 'cursor-pointer',
                   )}
-                  onClick={onRowClick ? () => onRowClick(row, index) : undefined}
+                  onClick={
+                    onRowClick
+                      ? (e) => {
+                          const target = e.target as HTMLElement;
+                          if (
+                            target.closest?.('[data-slot="dialog-portal"]') ||
+                            target.closest?.('[role="dialog"]')
+                          )
+                            return;
+                          onRowClick(row, index);
+                        }
+                      : undefined
+                  }
                 >
                   {visibleColumns.map((col) => (
                     <TableCell
