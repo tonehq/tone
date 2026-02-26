@@ -2,14 +2,14 @@
 export interface AgentFormState {
   name: string;
   description: string;
-  aiModel: string;
+  aiModel: number | null;
   end_call_message: string;
   first_message: string;
   customVocabulary: string[];
   filterWords: string[];
   language: string;
-  voiceProvider: string;
-  sttProvider: string;
+  voiceProvider: number | null;
+  sttProvider: number | null;
   patienceLevel: string;
   speechRecognition: string;
   voiceSpeed: number;
@@ -25,14 +25,14 @@ export interface AgentFormState {
 export const defaultFormState = (agentType: 'inbound' | 'outbound'): AgentFormState => ({
   name: agentType === 'inbound' ? 'My Inbound Assistant' : 'My Outbound Assistant',
   description: '',
-  aiModel: 'gpt-4.1',
+  aiModel: null,
   end_call_message: '',
   first_message: '',
   customVocabulary: [],
   filterWords: [],
   language: 'en',
-  voiceProvider: 'elevenlabs',
-  sttProvider: 'deepgram',
+  voiceProvider: null,
+  sttProvider: null,
   patienceLevel: 'low',
   speechRecognition: 'fast',
   voiceSpeed: 50,
@@ -63,6 +63,9 @@ export interface ApiAgent {
   speech_recognition?: string | null;
   call_recording?: boolean | string | null;
   call_transcription?: boolean | string | null;
+  llm_service_id?: number | null;
+  tts_service_id?: number | null;
+  stt_service_id?: number | null;
   llm_model_id?: number | string | null;
   [key: string]: unknown;
 }
@@ -112,6 +115,9 @@ export function apiAgentToFormState(
     speechRecognition: (api.speech_recognition as string) ?? defaults.speechRecognition,
     callRecording: parseBoolean(api.call_recording),
     callTranscription: parseBoolean(api.call_transcription),
+    aiModel: api.llm_service_id ?? defaults.aiModel,
+    voiceProvider: api.tts_service_id ?? defaults.voiceProvider,
+    sttProvider: api.stt_service_id ?? defaults.sttProvider,
   };
 }
 
@@ -137,6 +143,9 @@ export function formStateToUpsertPayload(
     speech_recognition: form.speechRecognition || null,
     call_recording: form.callRecording,
     call_transcription: form.callTranscription,
+    llm_service_id: form.aiModel,
+    tts_service_id: form.voiceProvider,
+    stt_service_id: form.sttProvider,
   };
   if (existingId != null) payload.id = existingId;
   return payload;

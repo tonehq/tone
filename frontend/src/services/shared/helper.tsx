@@ -1,12 +1,8 @@
-import {
-  Delete as DeleteIcon,
-  Edit as EditIcon,
-  CallReceived as InboundIcon,
-  CallMade as OutboundIcon,
-} from '@mui/icons-material';
-import { Box, Chip, IconButton, Tooltip, Typography } from '@mui/material';
+import { Box, Chip, CircularProgress, IconButton, Tooltip, Typography } from '@mui/material';
 import { GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
-import React from 'react';
+import dayjs from 'dayjs';
+import { Pencil, PhoneIncoming, PhoneOutgoing, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
 
 /* ===================== TYPES ===================== */
 
@@ -26,38 +22,50 @@ interface RowData {
 interface ActionMenuProps {
   row: RowData;
   onEdit?: (row: RowData) => void;
-  onDelete?: (row: RowData) => void;
+  onDelete?: (row: RowData) => void | Promise<void>;
 }
 
 const ActionMenu: React.FC<ActionMenuProps> = ({ row, onEdit, onDelete }) => {
+  const [deleting, setDeleting] = useState(false);
   const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    stopPropagation(e);
+    if (!onDelete) return;
+    setDeleting(true);
+    try {
+      await onDelete(row);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
       <Tooltip title="Edit">
         <IconButton
           size="small"
+          disabled={deleting}
           onClick={(e) => {
             stopPropagation(e);
             onEdit?.(row);
           }}
           sx={{ color: 'text.secondary' }}
         >
-          <EditIcon fontSize="small" />
+          <Pencil size={18} color="#475569" />
         </IconButton>
       </Tooltip>
-      <Tooltip title="Delete">
-        <IconButton
-          size="small"
-          onClick={(e) => {
-            stopPropagation(e);
-            onDelete?.(row);
-          }}
-          sx={{ color: 'error.main' }}
-        >
-          <DeleteIcon fontSize="small" />
+      {deleting ? (
+        <IconButton size="small" disabled>
+          <CircularProgress size={20} color="error" />
         </IconButton>
-      </Tooltip>
+      ) : (
+        <Tooltip title="Delete">
+          <IconButton size="small" onClick={handleDelete} sx={{ color: 'error.main' }}>
+            <Trash2 size={18} color="red" />
+          </IconButton>
+        </Tooltip>
+      )}
     </Box>
   );
 };
@@ -67,7 +75,7 @@ const ActionMenu: React.FC<ActionMenuProps> = ({ row, onEdit, onDelete }) => {
 export const constructTable = (
   columns: ColumnConfig[],
   onEdit?: (row: RowData) => void,
-  onDelete?: (row: RowData) => void,
+  onDelete?: (row: RowData) => void | Promise<void>,
 ): GridColDef<RowData>[] =>
   columns
     .filter((col) => !col.hidden)
@@ -92,13 +100,7 @@ export const constructTable = (
         /* DATE COLUMN */
         if (col.value === 'updated_at') {
           const value = params.value
-            ? new Date(params.value).toLocaleString(undefined, {
-                year: 'numeric',
-                month: 'short',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-              })
+            ? dayjs.unix(Number(params.value)).format('DD-MM-YYYY HH:mm:ss')
             : '-';
 
           return <Typography variant="body2">{value}</Typography>;
@@ -114,12 +116,18 @@ export const constructTable = (
             <Chip
               icon={
                 isInbound ? (
-                  <InboundIcon sx={{ fontSize: 16, color: '#10b981' }} />
+                  <PhoneIncoming size={15} color="#10b981" />
                 ) : (
-                  <OutboundIcon sx={{ fontSize: 16, color: '#8b5cf6' }} />
+                  <PhoneOutgoing size={15} color="#8b5cf6" />
                 )
               }
-              label={isInbound ? 'Inbound' : 'Outbound'}
+              label={
+                isInbound ? (
+                  <Box sx={{ marginLeft: 1 }}>{'Inbound'}</Box>
+                ) : (
+                  <Box sx={{ marginLeft: 1 }}>{'Outbound'}</Box>
+                )
+              }
               size="small"
               sx={{
                 backgroundColor: isInbound ? 'rgba(16, 185, 129, 0.1)' : 'rgba(139, 92, 246, 0.1)',

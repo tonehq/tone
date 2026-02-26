@@ -1,8 +1,10 @@
 'use client';
 
-import { languages, sttProviders, voiceProviders } from '@/data/mockAgents';
+import { languages } from '@/data/mockAgents';
+import type { ServiceProvider } from '@/services/providerService';
 import {
   Box,
+  CircularProgress,
   FormControl,
   FormControlLabel,
   MenuItem,
@@ -16,16 +18,62 @@ import type { AgentVoiceFormData } from './types';
 
 interface VoiceTabProps {
   formData: AgentVoiceFormData;
+  ttsProviders: ServiceProvider[];
+  sttProviders: ServiceProvider[];
+  providersLoading?: boolean;
   onFormChange: (partial: Partial<AgentVoiceFormData>) => void;
 }
 
-export default function VoiceTab({ formData, onFormChange }: VoiceTabProps) {
+export default function VoiceTab({
+  formData,
+  ttsProviders,
+  sttProviders,
+  providersLoading,
+  onFormChange,
+}: VoiceTabProps) {
   const Row = ({ left, right }: { left: React.ReactNode; right: React.ReactNode }) => (
     <Box sx={{ display: 'flex', mb: 4 }}>
       <Box sx={{ width: '60%' }}>{left}</Box>
       <Box sx={{ width: '40%', display: 'flex', justifyContent: 'flex-start' }}>{right}</Box>
     </Box>
   );
+
+  const ProviderSelect = ({
+    value,
+    providers,
+    onChange,
+  }: {
+    value: number | null;
+    providers: ServiceProvider[];
+    onChange: (id: number | null) => void;
+  }) => {
+    if (providersLoading) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+          <CircularProgress size={24} />
+        </Box>
+      );
+    }
+    return (
+      <FormControl size="small" fullWidth>
+        <Select
+          value={value ?? ''}
+          onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
+          displayEmpty
+          renderValue={(v) => {
+            if (!v) return <em>Select a provider</em>;
+            return providers.find((p) => p.id === v)?.display_name ?? v;
+          }}
+        >
+          {providers.map((p) => (
+            <MenuItem key={p.id} value={p.id}>
+              {p.display_name}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+    );
+  };
 
   return (
     <Box sx={{ py: 2 }}>
@@ -57,7 +105,7 @@ export default function VoiceTab({ formData, onFormChange }: VoiceTabProps) {
         }
       />
 
-      {/* Voice Provider */}
+      {/* Voice Provider (TTS) */}
       <Row
         left={
           <>
@@ -65,23 +113,16 @@ export default function VoiceTab({ formData, onFormChange }: VoiceTabProps) {
               Voice Provider
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Select the service used to generate your agent’s voice.
+              Select the service used to generate your agent&apos;s voice.
             </Typography>
           </>
         }
         right={
-          <FormControl size="small" fullWidth>
-            <Select
-              value={formData.voiceProvider}
-              onChange={(e) => onFormChange({ voiceProvider: e.target.value })}
-            >
-              {voiceProviders.map((v) => (
-                <MenuItem key={v.value} value={v.value}>
-                  {v.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <ProviderSelect
+            value={formData.voiceProvider}
+            providers={ttsProviders}
+            onChange={(id) => onFormChange({ voiceProvider: id })}
+          />
         }
       />
 
@@ -98,18 +139,11 @@ export default function VoiceTab({ formData, onFormChange }: VoiceTabProps) {
           </>
         }
         right={
-          <FormControl size="small" fullWidth>
-            <Select
-              value={formData.sttProvider}
-              onChange={(e) => onFormChange({ sttProvider: e.target.value })}
-            >
-              {sttProviders.map((s) => (
-                <MenuItem key={s.value} value={s.value}>
-                  {s.label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <ProviderSelect
+            value={formData.sttProvider}
+            providers={sttProviders}
+            onChange={(id) => onFormChange({ sttProvider: id })}
+          />
         }
       />
 
