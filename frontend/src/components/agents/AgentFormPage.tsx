@@ -232,24 +232,33 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         </Box>
 
         <Box sx={{ flex: 1, py: 2 }}>
-          {['configure', 'prompt', 'deployments'].map((item) => (
-            <Box
-              key={item}
-              sx={{
-                py: 1.5,
-                px: 2,
-                cursor: 'pointer',
-                backgroundColor: item === currentMenu ? 'rgba(139, 92, 246, 0.1)' : 'transparent',
-                color: item === currentMenu ? '#8b5cf6' : theme.palette.text.primary,
-                fontWeight: 600,
-              }}
-              onClick={() => setCurrentMenu(item)}
-            >
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {startCase(item)}
-              </Typography>
-            </Box>
-          ))}
+          {['configure', 'prompt', 'deployments'].map((item) => {
+            const isActive = item === currentMenu;
+            return (
+              <Box
+                key={item}
+                sx={{
+                  py: 1.5,
+                  px: 2,
+                  cursor: 'pointer',
+                  borderRadius: 1,
+                  mx: 1,
+                  backgroundColor: isActive ? '#e5e7eb' : 'transparent',
+                  color: isActive ? '#000' : theme.palette.text.secondary,
+                  transition: 'background-color 0.2s, color 0.2s',
+                  '&:hover': {
+                    backgroundColor: '#e5e7eb',
+                    color: '#000',
+                  },
+                }}
+                onClick={() => setCurrentMenu(item)}
+              >
+                <Typography variant="body2" sx={{ fontWeight: 600, color: 'inherit' }}>
+                  {startCase(item)}
+                </Typography>
+              </Box>
+            );
+          })}
         </Box>
       </Box>
 
