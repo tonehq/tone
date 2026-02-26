@@ -7,7 +7,7 @@ import React, { forwardRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-// ── Types ────────────────────────────────────────────────────────────────────
+import CustomButton from '@/components/shared/CustomButton';
 
 interface TextInputProps extends Omit<React.ComponentProps<'input'>, 'size'> {
   name: string;
@@ -17,16 +17,12 @@ interface TextInputProps extends Omit<React.ComponentProps<'input'>, 'size'> {
   loading?: boolean;
   error?: boolean;
   helperText?: string;
-  fullWidth?: boolean;
+  labelClassName?: string;
 }
 
-// ── Skeleton ─────────────────────────────────────────────────────────────────
-
 const Skeleton = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('animate-pulse rounded bg-gray-200', className)} {...props} />
+  <div className={cn('animate-pulse rounded-lg bg-muted', className)} {...props} />
 );
-
-// ── Component ────────────────────────────────────────────────────────────────
 
 const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
   (
@@ -43,8 +39,8 @@ const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
       disabled = false,
       error = false,
       helperText,
-      fullWidth = true,
       className,
+      labelClassName,
       ...props
     },
     ref,
@@ -62,11 +58,11 @@ const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
     }
 
     return (
-      <div className={cn('mb-2', !fullWidth && 'w-auto')}>
+      <>
         {label && (
-          <Label htmlFor={name} className="mb-1">
+          <Label htmlFor={name} className={cn('mb-1.5', labelClassName)}>
             {label}
-            {isRequired && <span className="ml-0.5 text-red-500">*</span>}
+            {isRequired && <span className="ml-0.5 text-destructive">*</span>}
           </Label>
         )}
 
@@ -83,7 +79,8 @@ const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
             disabled={disabled}
             aria-invalid={error || undefined}
             className={cn(
-              error && 'border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500/50',
+              error &&
+                'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50',
               isPassword && 'pr-10',
               className,
             )}
@@ -91,25 +88,25 @@ const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
           />
 
           {isPassword && (
-            <button
-              type="button"
+            <CustomButton
+              type="text"
+              htmlType="button"
               tabIndex={-1}
               aria-label="toggle password visibility"
               onClick={() => setShowPassword(!showPassword)}
               onMouseDown={(e) => e.preventDefault()}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-800 focus:outline-none"
-            >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
+              icon={showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              className="absolute right-3 top-1/2 -translate-y-1/2 h-auto p-0 min-w-0 [&>span]:mr-0 text-muted-foreground hover:text-foreground focus:outline-none"
+            />
           )}
         </div>
 
         {helperText && (
-          <p className={cn('mt-1 text-xs', error ? 'text-red-500' : 'text-gray-500')}>
+          <p className={cn('mt-1 text-xs', error ? 'text-destructive' : 'text-muted-foreground')}>
             {helperText}
           </p>
         )}
-      </div>
+      </>
     );
   },
 );

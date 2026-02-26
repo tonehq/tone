@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 // ── Types ────────────────────────────────────────────────────────────────────
 
 interface CustomButtonProps extends Omit<React.ComponentProps<'button'>, 'type'> {
-  text: string;
+  children?: React.ReactNode;
   loading?: boolean;
   type?: 'primary' | 'default' | 'text' | 'link' | 'danger';
   htmlType?: 'button' | 'submit' | 'reset';
@@ -33,7 +33,7 @@ const variantMap = {
 const CustomButton = React.forwardRef<HTMLButtonElement, CustomButtonProps>(
   (
     {
-      text,
+      children,
       loading = false,
       type = 'default',
       htmlType = 'button',
@@ -60,12 +60,11 @@ const CustomButton = React.forwardRef<HTMLButtonElement, CustomButtonProps>(
       ) : (
         icon && <span className="mr-2 inline-flex shrink-0">{icon}</span>
       )}
-      {loading ? 'Loading...' : text}
+      {children}
     </Button>
   ),
 );
 
 CustomButton.displayName = 'CustomButton';
 
-export { CustomButton };
 export default CustomButton;

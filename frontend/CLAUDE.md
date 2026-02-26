@@ -341,7 +341,7 @@ Write-only atoms (e.g., `atom(null, async (_get, set, payload) => {...})`) are t
 
 **Authentication**: Firebase is used alongside JWT. Auth state is persisted in cookies (`tone_access_token`, `org_tenant_id`, `login_data`). Constants for cookie key names are in `src/constants/index.ts`.
 
-**UI**: Material UI v6 with a custom theme defined in `src/utils/theme.ts`. Primary color is `#8b5cf6` (purple). The theme is provided via `src/components/ThemeRegistry.tsx` which handles MUI + Emotion SSR setup for Next.js. Use `useTheme()` to access theme values in components.
+**UI**: Material UI v6 with a custom theme defined in `src/utils/theme.ts`. Primary color is `#8b5cf6` (purple). The theme is provided via `src/components/ThemeRegistry.tsx` which handles MUI + Emotion SSR setup for Next.js. Use `useTheme()` to access theme values in components. **Direction**: Prefer **shadcn** (`src/components/ui/`) and **Tailwind** for new UI; use **lucide-react** or `src/components/icons/` (e.g. brand icons) instead of `@mui/icons-material`. MUI removal is planned; see `.claude/rules.md` §5.
 
 **Agent form**: The create/edit agent flow is a multi-tab form (`GeneralTab`, `VoiceTab`, `CallConfigurationTab`) plus a `PromptPage`. Form state uses `AgentFormState` from `src/components/agents/agent-form/agentFormUtils.ts`, which also exports `defaultFormState` and `formStateToUpsertPayload` for serializing to the API.
 

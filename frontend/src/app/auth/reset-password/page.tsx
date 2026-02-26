@@ -4,7 +4,7 @@ import { Box, Stack, Typography, useTheme } from '@mui/material';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import CustomButton from '../../../components/shared/CustomButton';
-import { Form } from '../../../components/shared/FormComponent';
+import { Form } from '../../../components/shared/Form';
 import TextInput from '../../../components/shared/TextInput';
 import axiosInstance from '../../../utils/axios';
 import { useNotification } from '../../../utils/notification';

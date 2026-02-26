@@ -32,7 +32,7 @@ export const Form: React.FC<FormProps> = ({
     <form
       onSubmit={handleSubmit}
       autoComplete={autoComplete}
-      className={cn('flex', layout === 'vertical' ? 'flex-col' : 'flex-row', className)}
+      className={cn('space-y-5', layout === 'vertical' ? 'flex-col' : 'flex-row', className)}
     >
       {children}
     </form>

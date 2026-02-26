@@ -14,7 +14,7 @@ import {
 } from '@mui/material';
 import { KeyboardEvent, ReactNode, useState } from 'react';
 import { aiModels } from '../../../data/mockAgents';
-import { Form } from '../../shared/FormComponent';
+import { Form } from '../../shared/Form';
 import type { AgentGeneralFormData } from './types';
 
 interface GeneralTabProps {

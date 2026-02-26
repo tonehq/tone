@@ -4,7 +4,7 @@ import { Suspense, useState } from 'react';
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import CustomButton from '../../../components/shared/CustomButton';
-import { Form } from '../../../components/shared/FormComponent';
+import { Form } from '../../../components/shared/Form';
 import axios from '../../../utils/axios';
 import { useNotification } from '../../../utils/notification';
 import Container from '../shared/ContainerComponent';
@@ -53,10 +53,10 @@ const EmailVerificationContent = () => {
     <Container>
       {contextHolder}
       <div className="w-full max-w-[400px]">
-        <h2 className="mb-4 text-3xl font-semibold text-gray-800">Email Verification</h2>
+        <h2 className="mb-4 text-3xl font-semibold text-foreground">Email Verification</h2>
         <Form onFinish={handleSubmit} layout="vertical" autoComplete="off">
           <div className="mb-6">
-            <p className="text-[15px] text-gray-800">
+            <p className="text-[15px] text-foreground">
               To complete the verification process, please click the button below:
             </p>
           </div>

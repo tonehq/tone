@@ -7,7 +7,7 @@ import { debounce } from 'lodash';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import CustomButton from '../../../components/shared/CustomButton';
-import { Form } from '../../../components/shared/FormComponent';
+import { Form } from '../../../components/shared/Form';
 import TextInput from '../../../components/shared/TextInput';
 import { signup } from '../../../services/auth/helper';
 import axios from '../../../utils/axios';

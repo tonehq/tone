@@ -7,9 +7,11 @@ interface ContainerProps {
 }
 
 const Container: React.FC<ContainerProps> = ({ children }) => (
-  <div className="flex min-h-screen bg-gray-50">
+  <div className="flex min-h-screen bg-secondary">
     {/* Left Side - Form */}
-    <div className="flex flex-1 flex-col items-center justify-center bg-white p-4">{children}</div>
+    <div className="flex flex-1 flex-col items-center justify-center bg-background p-4">
+      {children}
+    </div>
 
     {/* Right Side - Branding */}
     <div
@@ -19,10 +21,10 @@ const Container: React.FC<ContainerProps> = ({ children }) => (
       {/* Logo */}
       <div className="absolute left-8 top-8">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded bg-gray-800 text-xl font-bold text-white">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground text-xl font-bold text-background">
             T
           </div>
-          <span className="text-xl font-bold text-gray-800">Tone</span>
+          <span className="text-xl font-bold text-foreground">Tone</span>
         </div>
       </div>
 
@@ -31,7 +33,10 @@ const Container: React.FC<ContainerProps> = ({ children }) => (
         {/* Badges */}
         <div className="mb-4 flex justify-center gap-4">
           {['AI Agent Leader', 'High Performer', 'High Performer'].map((badge, index) => (
-            <div key={index} className="rounded bg-white p-3 shadow-[0_2px_8px_rgba(0,0,0,0.1)]">
+            <div
+              key={index}
+              className="rounded-lg bg-background p-3 shadow-[0_2px_8px_rgba(0,0,0,0.1)]"
+            >
               <div className="mb-1 text-[0.6rem] font-semibold text-orange-500">WINTER 2026</div>
               <div
                 className={`text-xs font-bold ${index === 0 ? 'text-orange-500' : 'text-red-500'}`}
@@ -43,14 +48,14 @@ const Container: React.FC<ContainerProps> = ({ children }) => (
         </div>
 
         {/* Headline */}
-        <div className="mb-6 text-[3.5rem] font-bold leading-[1.1] text-gray-800">
+        <div className="mb-6 text-[3.5rem] font-bold leading-[1.1] text-foreground">
           The Future
           <br />
           of Voice AI
         </div>
 
         {/* Rating */}
-        <div className="mb-4 flex items-center justify-center gap-6 text-sm text-gray-500">
+        <div className="mb-4 flex items-center justify-center gap-6 text-sm text-muted-foreground">
           <div className="flex items-center gap-1">
             <span className="text-amber-400">★</span>
             4.4★ 200+ reviews
@@ -71,7 +76,7 @@ const Container: React.FC<ContainerProps> = ({ children }) => (
           ].map((quote, index) => (
             <div
               key={index}
-              className="flex-1 rounded bg-white p-4 text-left text-xs text-gray-600 shadow-[0_2px_8px_rgba(0,0,0,0.05)]"
+              className="flex-1 rounded-lg bg-background p-4 text-left text-xs text-muted-foreground shadow-[0_2px_8px_rgba(0,0,0,0.05)]"
             >
               {quote}
             </div>

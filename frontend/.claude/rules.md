@@ -122,3 +122,11 @@ Rules specific to Playwright e2e tests (enforced by `generate-tests`):
 - **Selector disambiguation**: When sidebar and main content share element names (e.g., "Agents"), use the full accessible name or scope to a parent locator.
 - **Alert helper**: Always use `const getAlert = (p: Page) => p.getByRole('alert').filter({ hasText: /\S+/ })` to avoid Next.js route announcer collisions.
 - **Unique test titles**: When generating tests in a loop, include enough context in the title to avoid duplicates (e.g., include card name, not just href).
+
+---
+
+## 5. UI stack: shadcn + Tailwind (MUI removal planned)
+
+- **Prefer shadcn and Tailwind CSS** for new UI: use `@/components/ui/` (shadcn) and Tailwind classes. Use **lucide-react** for generic icons.
+- **Do not add new MUI dependencies.** For new features (icons, components, layouts), use shadcn components, Tailwind, or plain SVG/icons in `@/components/icons/` (e.g. brand icons like Google).
+- **MUI removal is planned.** Existing MUI usage remains for now, but when touching code that uses `@mui/icons-material` or `@mui/material`, prefer replacing with shadcn + Tailwind or `@/components/icons/` + lucide-react where practical.
