@@ -1,6 +1,6 @@
 'use client';
 
-import type { IntegrationRow } from '@/atoms/IntegrationAtom';
+import type { IntegrationRow } from '@/types/integration';
 import { Close as CloseIcon } from '@mui/icons-material';
 import {
   Box,
@@ -20,7 +20,12 @@ import { useCallback, useEffect, useState } from 'react';
 interface AddChannelModalProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: (data: { id?: number; name: string; auth_token: string; account_sid: string }) => Promise<void>;
+  onSubmit: (data: {
+    id?: number;
+    name: string;
+    auth_token: string;
+    account_sid: string;
+  }) => Promise<void>;
   editData?: IntegrationRow | null;
 }
 
@@ -30,7 +35,12 @@ const initialFormState = {
   account_sid: '',
 };
 
-export default function AddChannelModal({ open, onClose, onSubmit, editData }: AddChannelModalProps) {
+export default function AddChannelModal({
+  open,
+  onClose,
+  onSubmit,
+  editData,
+}: AddChannelModalProps) {
   const [name, setName] = useState(initialFormState.name);
   const [auth_token, setAuthToken] = useState(initialFormState.auth_token);
   const [account_sid, setAccountSid] = useState(initialFormState.account_sid);

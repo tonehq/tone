@@ -64,10 +64,7 @@ const test = base.extend<{ page: Page }, { workerContext: BrowserContext }>({
 
 const EDIT_URL = '/agents/edit/inbound/1';
 
-async function mockGetAgentAPI(
-  page: Page,
-  agent: unknown = MOCK_AGENT,
-): Promise<void> {
+async function mockGetAgentAPI(page: Page, agent: unknown = MOCK_AGENT): Promise<void> {
   await page.route('**/agent/get_all_agents**', async (route) => {
     const url = route.request().url();
     // The edit page fetches with ?agent_id=1 — return array with one item
@@ -95,9 +92,7 @@ async function ensureOnEditPage(page: Page): Promise<void> {
   await expect(page.getByText('Loading agent...')).not.toBeVisible({ timeout: 10_000 });
 }
 
-async function mockUpsertAPI(
-  page: Page,
-): Promise<Record<string, unknown>[]> {
+async function mockUpsertAPI(page: Page): Promise<Record<string, unknown>[]> {
   const captured: Record<string, unknown>[] = [];
   await page.route('**/agent/upsert_agent', async (route) => {
     const body = route.request().postDataJSON();
@@ -173,11 +168,15 @@ test.describe('Edit Agent Page', () => {
       await expect(nameInput).toBeVisible();
 
       // Description textarea
-      const descTextarea = page.locator('textarea').filter({ hasText: 'Handles inbound sales calls' });
+      const descTextarea = page
+        .locator('textarea')
+        .filter({ hasText: 'Handles inbound sales calls' });
       await expect(descTextarea).toBeVisible();
 
       // First message textarea
-      const firstMsgTextarea = page.locator('textarea').filter({ hasText: 'Hello, how can I help?' });
+      const firstMsgTextarea = page
+        .locator('textarea')
+        .filter({ hasText: 'Hello, how can I help?' });
       await expect(firstMsgTextarea).toBeVisible();
     });
 
@@ -188,7 +187,10 @@ test.describe('Edit Agent Page', () => {
       await expect(page.getByText('English')).toBeVisible();
 
       // Patience level should be "medium" (from mock)
-      const mediumCard = page.locator('label').filter({ hasText: 'Medium' }).filter({ hasText: '~3 sec' });
+      const mediumCard = page
+        .locator('label')
+        .filter({ hasText: 'Medium' })
+        .filter({ hasText: '~3 sec' });
       await expect(mediumCard).toBeVisible();
     });
 
@@ -263,7 +265,13 @@ test.describe('Edit Agent Page', () => {
       await expect(page.getByText('Loading agent...')).not.toBeVisible({ timeout: 15_000 });
 
       // If "Agent not found" then no agent with id=1 exists — skip assertion
-      if (await page.getByText('Agent not found').isVisible().catch(() => false)) return;
+      if (
+        await page
+          .getByText('Agent not found')
+          .isVisible()
+          .catch(() => false)
+      )
+        return;
 
       await page.getByRole('button', { name: /save changes/i }).click();
       await expect(page).toHaveURL(/\/agents(?:\?|$)/, { timeout: 15_000 });

@@ -17,43 +17,46 @@ or use `--docs e2e/docs/<page-name>.md` to specify explicitly.
 ## User Stories
 
 ### US-1: <Short title>
+
 **As a** <user role>, **I want to** <action>, **so that** <outcome>.
 
 **Acceptance criteria**:
+
 - [ ] <criterion 1>
 - [ ] <criterion 2>
 - [ ] <criterion 3>
 
 ### US-2: <Short title>
+
 ...
 
 ---
 
 ## UI Elements
 
-| Element | Type | Content / Label | Behavior |
-|---------|------|-----------------|----------|
-| Welcome heading | h4 | "Welcome to X" | Static text |
-| Submit button | button | "Continue" | Submits form, shows loading |
-| Email input | text input | placeholder: "Enter your email" | Required, email validation |
+| Element         | Type       | Content / Label                 | Behavior                    |
+| --------------- | ---------- | ------------------------------- | --------------------------- |
+| Welcome heading | h4         | "Welcome to X"                  | Static text                 |
+| Submit button   | button     | "Continue"                      | Submits form, shows loading |
+| Email input     | text input | placeholder: "Enter your email" | Required, email validation  |
 
 ---
 
 ## Navigation
 
-| Trigger | Destination | Condition |
-|---------|-------------|-----------|
-| Click "Continue" | `/home` | On success |
-| Click "Sign up" link | `/auth/signup` | Always |
-| No auth cookie | `/auth/login?redirect=<path>` | Middleware redirect |
+| Trigger              | Destination                   | Condition           |
+| -------------------- | ----------------------------- | ------------------- |
+| Click "Continue"     | `/home`                       | On success          |
+| Click "Sign up" link | `/auth/signup`                | Always              |
+| No auth cookie       | `/auth/login?redirect=<path>` | Middleware redirect |
 
 ---
 
 ## API Contracts
 
-| Endpoint | Method | Request | Success Response | Error Response |
-|----------|--------|---------|-----------------|----------------|
-| `/auth/login` | POST | `{ email, password }` | `{ access_token, user_id, organizations }` | `{ detail: "..." }` |
+| Endpoint      | Method | Request               | Success Response                           | Error Response      |
+| ------------- | ------ | --------------------- | ------------------------------------------ | ------------------- |
+| `/auth/login` | POST   | `{ email, password }` | `{ access_token, user_id, organizations }` | `{ detail: "..." }` |
 
 ---
 

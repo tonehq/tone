@@ -58,10 +58,10 @@ Feature docs are optional markdown files that describe a page's user stories, ac
 criteria, edge cases, and business rules. When provided, `/generate-tests` uses them
 alongside the component source to ensure all user cases are covered.
 
-| File | Purpose |
-|------|---------|
-| `e2e/docs/_template.md` | Template for creating new feature docs |
-| `e2e/docs/home.md` | Feature doc for the home dashboard page |
+| File                    | Purpose                                 |
+| ----------------------- | --------------------------------------- |
+| `e2e/docs/_template.md` | Template for creating new feature docs  |
+| `e2e/docs/home.md`      | Feature doc for the home dashboard page |
 
 To create a feature doc for a new page, copy `_template.md` and fill in the sections.
 
@@ -105,13 +105,14 @@ yarn playwright test e2e/auth/login.spec.ts --list
 
 Tests live in `e2e/<route-group>/<page-name>.spec.ts`, mirroring the `src/app/` structure:
 
-| Page | Test file |
-|------|-----------|
-| `src/app/auth/login/LoginPage.tsx` | `e2e/auth/login.spec.ts` |
-| `src/app/auth/signup/SignupClient.tsx` | `e2e/auth/signup.spec.ts` |
-| `src/app/(dashboard)/home/...` | `e2e/dashboard/home.spec.ts` |
+| Page                                   | Test file                    |
+| -------------------------------------- | ---------------------------- |
+| `src/app/auth/login/LoginPage.tsx`     | `e2e/auth/login.spec.ts`     |
+| `src/app/auth/signup/SignupClient.tsx` | `e2e/auth/signup.spec.ts`    |
+| `src/app/(dashboard)/home/...`         | `e2e/dashboard/home.spec.ts` |
 
 **Key conventions:**
+
 - Mock all backend API calls with `page.route('**/path', ...)` — tests must not depend on a live backend
 - Use `MOCK_JWT` constant from `test-patterns.md` for auth flows (valid base64 JWT with far-future expiry)
 - Prefer `getByRole`, `getByPlaceholder`, `getByText` selectors over CSS classes
@@ -122,20 +123,20 @@ Tests live in `e2e/<route-group>/<page-name>.spec.ts`, mirroring the `src/app/` 
 
 The `useNotification` hook formats Snackbar messages as `"${title}: ${message}"`:
 
-| Scenario | Expected text |
-|----------|--------------|
-| Login success | `"Login Successful: Welcome back!"` |
+| Scenario                 | Expected text                       |
+| ------------------------ | ----------------------------------- |
+| Login success            | `"Login Successful: Welcome back!"` |
 | Login error (API throws) | `"Login Failed: Please try again."` |
 
 Use `page.getByRole('alert')` to find MUI Alert/Snackbar notifications.
 
 ### Reference docs
 
-| File | Covers |
-|------|--------|
-| `references/test-patterns.md` | Config template, API mocking, mock JWT, test structure |
-| `references/selectors-guide.md` | MUI TextField, Button, Checkbox, Snackbar selectors |
-| `references/assertion-checklist.md` | Required assertions per test category, anti-patterns |
+| File                                | Covers                                                 |
+| ----------------------------------- | ------------------------------------------------------ |
+| `references/test-patterns.md`       | Config template, API mocking, mock JWT, test structure |
+| `references/selectors-guide.md`     | MUI TextField, Button, Checkbox, Snackbar selectors    |
+| `references/assertion-checklist.md` | Required assertions per test category, anti-patterns   |
 
 ---
 
@@ -204,6 +205,7 @@ Every `/code-review` run works through all nine sections below. No section is sk
 ---
 
 #### 1. Correctness
+
 - TypeScript type errors, incorrect narrowing, unsafe `as` casts, missing `interface` fields
 - Null / undefined access without guard — `user.profile.name`, `items[0].id`
 - Async functions without `try/catch`, unhandled promise rejections
@@ -211,6 +213,7 @@ Every `/code-review` run works through all nine sections below. No section is sk
 - **This project**: Jotai write atoms must always handle errors and never leave atoms in partial state
 
 #### 2. React Best Practices
+
 - Rules of hooks — conditional hooks, hooks in loops, hooks in callbacks
 - Missing or incorrect `useEffect` dependency arrays — stale closures, over-firing
 - Missing list `key` props
@@ -219,6 +222,7 @@ Every `/code-review` run works through all nine sections below. No section is sk
 - **This project**: MUI component props that accept callbacks must be stabilised with `useCallback` to avoid re-renders inside MUI's internal `shouldComponentUpdate`
 
 #### 3. Next.js Best Practices
+
 - `'use client'` placed too high — pushes entire subtree into the client bundle
 - Raw `<img>` instead of `<Image>` from `next/image`
 - Incorrect data fetching pattern for the route type (Server Component vs Client Component)
@@ -226,6 +230,7 @@ Every `/code-review` run works through all nine sections below. No section is sk
 - **This project**: `ThemeRegistry.tsx` handles MUI + Emotion SSR — do not wrap it in `'use client'` or add a second Emotion cache; all new pages under `(dashboard)/` inherit the sidebar layout automatically
 
 #### 4. SOLID + Architecture
+
 Applies **solid-checklist.md** in full — SRP, OCP, LSP, ISP, DIP, code smells, hook design, component design.
 
 - **This project**: Service functions in `src/services/` must not import Jotai atoms directly (DIP). Atoms call services; services do not know about atoms.
@@ -233,6 +238,7 @@ Applies **solid-checklist.md** in full — SRP, OCP, LSP, ISP, DIP, code smells,
 - `agentFormUtils.ts` owns `AgentFormState` shape, `defaultFormState`, and serialisation — do not duplicate this logic in components.
 
 #### 5. Security
+
 Applies **security-checklist.md** in full — XSS, injection, SSRF, AuthN/AuthZ, secrets, runtime risks, race conditions, data integrity.
 
 - **This project critical paths**:
@@ -242,20 +248,22 @@ Applies **security-checklist.md** in full — XSS, injection, SSRF, AuthN/AuthZ,
   - Firebase token must never be logged or stored outside of the `tone_access_token` cookie.
 
 #### 6. Performance
+
 Applies **performance-checklist.md** in full across all eight sub-areas:
 
-| Sub-area | Key signals for this project |
-|----------|------------------------------|
-| React Rendering | Jotai `useAtom` subscriptions — subscribe only to the atom slice needed; avoid subscribing to large atoms just to read one field |
-| Next.js & SSR | ThemeRegistry uses Emotion SSR — do not add additional style injection that conflicts; keep Server Components free of `useTheme()` |
-| Bundle & Code Splitting | MUI is tree-shaken by default — always import from `@mui/material/Button` not `@mui/material`; use `next/dynamic` for heavy form tabs |
-| Network & API | All API calls go through `src/services/` → `src/utils/axios.ts`; verify no N+1 patterns in Jotai write atoms that loop over IDs |
-| Core Web Vitals | LCP, INP, CLS — check `next/image` usage, font loading via `next/font`, and that Jotai atom loads do not cause layout shifts |
-| Memory Management | Write atoms that start polling or timers must expose a cleanup; `useEffect` in components must clean up axios calls with `AbortController` |
-| State Management | Jotai `loadable` is used for async atoms — ensure loading/error/data states are all handled in UI; do not access `.data` without checking `.state` |
-| Asset & CSS | MUI `sx` prop with object literals creates new references each render — extract static `sx` objects outside the component or use `styled()` |
+| Sub-area                | Key signals for this project                                                                                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| React Rendering         | Jotai `useAtom` subscriptions — subscribe only to the atom slice needed; avoid subscribing to large atoms just to read one field                   |
+| Next.js & SSR           | ThemeRegistry uses Emotion SSR — do not add additional style injection that conflicts; keep Server Components free of `useTheme()`                 |
+| Bundle & Code Splitting | MUI is tree-shaken by default — always import from `@mui/material/Button` not `@mui/material`; use `next/dynamic` for heavy form tabs              |
+| Network & API           | All API calls go through `src/services/` → `src/utils/axios.ts`; verify no N+1 patterns in Jotai write atoms that loop over IDs                    |
+| Core Web Vitals         | LCP, INP, CLS — check `next/image` usage, font loading via `next/font`, and that Jotai atom loads do not cause layout shifts                       |
+| Memory Management       | Write atoms that start polling or timers must expose a cleanup; `useEffect` in components must clean up axios calls with `AbortController`         |
+| State Management        | Jotai `loadable` is used for async atoms — ensure loading/error/data states are all handled in UI; do not access `.data` without checking `.state` |
+| Asset & CSS             | MUI `sx` prop with object literals creates new references each render — extract static `sx` objects outside the component or use `styled()`        |
 
 #### 7. Code Quality
+
 Applies **code-quality-checklist.md** in full — error handling, TypeScript quality, boundary conditions, performance patterns, naming, structure, dead code, async/concurrency, accessibility hooks.
 
 - **This project style rules** (enforced by ESLint + Prettier):
@@ -264,6 +272,7 @@ Applies **code-quality-checklist.md** in full — error handling, TypeScript qua
   - Unused variables prefixed with `_` are allowed
 
 #### 8. Accessibility (mandatory — never skip)
+
 - Interactive `div`/`span` with `onClick` → use `<button>` or add `role` + keyboard handler
 - `<img>` without `alt`; form inputs without `<label>` or `aria-label`
 - Heading hierarchy skipped; missing `aria-live` on toasts / alerts
@@ -271,6 +280,7 @@ Applies **code-quality-checklist.md** in full — error handling, TypeScript qua
 - **This project**: MUI components are accessible by default — flag any prop that overrides this (e.g., `disablePortal`, `disableEnforceFocus` on dialogs)
 
 #### 9. Dead Code / Removal Candidates
+
 Applies **removal-plan.md** template — safe-to-remove, defer, do-not-remove, unused deps, pre-removal checklist.
 
 - **This project**: Before marking a Jotai atom as dead, verify it is not read via `useAtomValue` in a component that is dynamically imported or conditionally rendered.
@@ -279,13 +289,13 @@ Applies **removal-plan.md** template — safe-to-remove, defer, do-not-remove, u
 
 ### Reference checklists
 
-| File | Covers |
-|------|--------|
-| `references/solid-checklist.md` | SRP, OCP, LSP, ISP, DIP, code smells, hook design, component design signals, refactor heuristics |
-| `references/security-checklist.md` | XSS/injection, AuthN/AuthZ, secrets/PII, runtime risks, race conditions, data integrity |
-| `references/performance-checklist.md` | React rendering, Next.js SSR, bundle/splitting, network/API, Core Web Vitals, memory, state, assets |
-| `references/code-quality-checklist.md` | Error handling, TypeScript quality, boundary conditions, naming, structure, dead code, async, a11y |
-| `references/removal-plan.md` | Safe-to-remove, defer, do-not-remove, unused deps, pre-removal checklist, rollback plan |
+| File                                   | Covers                                                                                              |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `references/solid-checklist.md`        | SRP, OCP, LSP, ISP, DIP, code smells, hook design, component design signals, refactor heuristics    |
+| `references/security-checklist.md`     | XSS/injection, AuthN/AuthZ, secrets/PII, runtime risks, race conditions, data integrity             |
+| `references/performance-checklist.md`  | React rendering, Next.js SSR, bundle/splitting, network/API, Core Web Vitals, memory, state, assets |
+| `references/code-quality-checklist.md` | Error handling, TypeScript quality, boundary conditions, naming, structure, dead code, async, a11y  |
+| `references/removal-plan.md`           | Safe-to-remove, defer, do-not-remove, unused deps, pre-removal checklist, rollback plan             |
 
 ---
 
@@ -321,6 +331,7 @@ The app requires `NEXT_PUBLIC_BACKEND_URL` to be set (see `src/urls.ts`). This i
 **Framework**: Next.js 15 App Router with React 19 and TypeScript. Both dev and build use Turbopack.
 
 **Routing**:
+
 - `src/app/page.tsx` — redirects `/` to `/home`
 - `src/app/(dashboard)/` — route group for all authenticated pages (agents, home, settings, phone-numbers); shares a sidebar layout via `(dashboard)/layout.tsx`
 - `src/app/auth/` — public auth pages (login, signup, forgot password, etc.)
@@ -329,6 +340,7 @@ The app requires `NEXT_PUBLIC_BACKEND_URL` to be set (see `src/urls.ts`). This i
 **Page pattern**: Pages under `(dashboard)` are thin wrappers that import and render a component from `src/components/`. All the actual UI logic lives in components.
 
 **State management**: [Jotai](https://jotai.org/). Atoms live in `src/atoms/`:
+
 - `AgentsAtom.tsx` — agent list state with a write-only `fetchAgentList` atom
 - `AuthAtom.tsx` — user auth state, logout, and `getCurrentUserAtom` that reads from the `login_data` cookie
 - `SettingsAtom.tsx` — organization members and invitations using `jotai/utils` `loadable` for async data with refresh counters
@@ -336,6 +348,7 @@ The app requires `NEXT_PUBLIC_BACKEND_URL` to be set (see `src/urls.ts`). This i
 Write-only atoms (e.g., `atom(null, async (_get, set, payload) => {...})`) are the pattern for async actions that update state.
 
 **API layer**: `src/services/` contains service functions that call `src/utils/axios.ts`. The Axios instance:
+
 - Sets base URL from `NEXT_PUBLIC_BACKEND_URL`
 - Injects `tenant_id` header (from `org_tenant_id` cookie) and `Authorization: Bearer <token>` (from `tone_access_token` cookie) on every request
 

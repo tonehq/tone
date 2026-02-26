@@ -1,4 +1,5 @@
 # Code Quality Checklist
+
 <!-- Global Frontend Standard — framework notes are marked [React] [Next.js] [Vue] etc. -->
 <!-- Severity: 🔴 CRITICAL · 🟠 HIGH · 🟡 MEDIUM · 🔵 LOW -->
 
@@ -33,7 +34,7 @@ try {
   setState(data);
 } catch (err) {
   const message = err instanceof Error ? err.message : 'Unknown error';
-  console.log(err);  // logging is fine here for debugging
+  console.log(err); // logging is fine here for debugging
   setError(message); // also surface to UI so the user sees it
 } finally {
   setLoading(false); // never put return here
@@ -64,7 +65,9 @@ user.profile!.name;
 function isUser(v: unknown): v is User {
   return typeof v === 'object' && v !== null && 'id' in v;
 }
-if (isUser(response.data)) { /* safe */ }
+if (isUser(response.data)) {
+  /* safe */
+}
 ```
 
 ---
@@ -138,7 +141,7 @@ const n = parseInt(str)          // 🟡 returns NaN — never passed directly t
 - 🟡 Generic names with no domain meaning: `data`, `info`, `temp`, `obj`, `val`, `res`
 - 🟡 Abbreviations that are not universally understood (`usrPrfl` → `userProfile`)
 - 🟡 Inconsistent case conventions in the same file (camelCase mixed with snake_case)
-- 🔵 Comments that describe *what* the code does instead of *why* it does it
+- 🔵 Comments that describe _what_ the code does instead of _why_ it does it
 - 🔵 Commented-out code committed to the repo — use version control instead
 
 ---
@@ -178,7 +181,7 @@ saveUser(data);
 
 // 🟠 Bad — sequential when independent
 const users = await fetchUsers();
-const orgs  = await fetchOrgs();   // waits for users unnecessarily
+const orgs = await fetchOrgs(); // waits for users unnecessarily
 
 // ✅ Good
 const [users, orgs] = await Promise.all([fetchUsers(), fetchOrgs()]);
@@ -201,9 +204,9 @@ const [users, orgs] = await Promise.all([fetchUsers(), fetchOrgs()]);
 
 ## Severity Reference
 
-| Severity | Action |
-|----------|--------|
-| 🔴 CRITICAL | Block merge — data loss, crash, or security risk |
-| 🟠 HIGH | Fix before merge — correctness or significant UX degradation |
-| 🟡 MEDIUM | Fix in same PR or create a tracked issue |
-| 🔵 LOW | Suggestion — address opportunistically |
+| Severity    | Action                                                       |
+| ----------- | ------------------------------------------------------------ |
+| 🔴 CRITICAL | Block merge — data loss, crash, or security risk             |
+| 🟠 HIGH     | Fix before merge — correctness or significant UX degradation |
+| 🟡 MEDIUM   | Fix in same PR or create a tracked issue                     |
+| 🔵 LOW      | Suggestion — address opportunistically                       |

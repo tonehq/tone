@@ -10,13 +10,13 @@ Every skill (`generate-tests`, `code-review`) **must** log errors to `.claude/er
 
 ### When to log
 
-| Trigger | Example |
-|---------|---------|
-| Test failure | Playwright test fails with selector/timeout/assertion error |
+| Trigger               | Example                                                                    |
+| --------------------- | -------------------------------------------------------------------------- |
+| Test failure          | Playwright test fails with selector/timeout/assertion error                |
 | Test generation error | Generated spec has syntax errors, duplicate titles, strict-mode violations |
-| Code review finding | Critical or high-priority issues found during `/code-review` |
-| Skill execution error | Skill cannot run (dev server down, missing deps, config issue) |
-| Fix applied | A previously logged error was resolved |
+| Code review finding   | Critical or high-priority issues found during `/code-review`               |
+| Skill execution error | Skill cannot run (dev server down, missing deps, config issue)             |
+| Fix applied           | A previously logged error was resolved                                     |
 
 ### What NOT to log
 
@@ -42,26 +42,26 @@ Each entry in `.claude/error-log.md` follows this format:
 
 ### Severity definitions
 
-| Severity | Meaning |
-|----------|---------|
-| **critical** | Blocks all tests or skill execution entirely |
-| **high** | Individual test fails with a bug in the test or component |
-| **medium** | Test is flaky or the error is intermittent |
-| **low** | Minor issue that doesn't block execution |
+| Severity     | Meaning                                                   |
+| ------------ | --------------------------------------------------------- |
+| **critical** | Blocks all tests or skill execution entirely              |
+| **high**     | Individual test fails with a bug in the test or component |
+| **medium**   | Test is flaky or the error is intermittent                |
+| **low**      | Minor issue that doesn't block execution                  |
 
 ### Error categories
 
-| Category | Typical cause |
-|----------|--------------|
-| `selector` | Element not found, wrong role/name, component changed |
-| `timeout` | API mock missing, async state not triggered, slow render |
-| `assertion` | Wrong expected value, element state mismatch |
+| Category      | Typical cause                                                      |
+| ------------- | ------------------------------------------------------------------ |
+| `selector`    | Element not found, wrong role/name, component changed              |
+| `timeout`     | API mock missing, async state not triggered, slow render           |
+| `assertion`   | Wrong expected value, element state mismatch                       |
 | `strict-mode` | Multiple elements matched a locator (e.g., sidebar + main content) |
-| `auth` | Missing auth cookie, middleware redirect, token expired |
-| `api-mock` | Route pattern mismatch, wrong response shape, missing mock |
-| `config` | Playwright not installed, dev server down, missing env var |
-| `typescript` | Type error in generated code, import error |
-| `runtime` | Unhandled exception in component, hydration mismatch |
+| `auth`        | Missing auth cookie, middleware redirect, token expired            |
+| `api-mock`    | Route pattern mismatch, wrong response shape, missing mock         |
+| `config`      | Playwright not installed, dev server down, missing env var         |
+| `typescript`  | Type error in generated code, import error                         |
+| `runtime`     | Unhandled exception in component, hydration mismatch               |
 
 ---
 
@@ -130,3 +130,86 @@ Rules specific to Playwright e2e tests (enforced by `generate-tests`):
 - **Prefer shadcn and Tailwind CSS** for new UI: use `@/components/ui/` (shadcn) and Tailwind classes. Use **lucide-react** for generic icons.
 - **Do not add new MUI dependencies.** For new features (icons, components, layouts), use shadcn components, Tailwind, or plain SVG/icons in `@/components/icons/` (e.g. brand icons like Google).
 - **MUI removal is planned.** Existing MUI usage remains for now, but when touching code that uses `@mui/icons-material` or `@mui/material`, prefer replacing with shadcn + Tailwind or `@/components/icons/` + lucide-react where practical.
+
+---
+
+## 6. Shared component usage (mandatory)
+
+All UI must go through `@/components/shared` where a shared component exists. This ensures consistent styling, centralized control, and easier maintenance. Read `docs/shared-components.md` for the full API reference.
+
+### Required shared components
+
+| Need                          | Use                                          | Do NOT use                                                                 |
+| ----------------------------- | -------------------------------------------- | -------------------------------------------------------------------------- |
+| Button / click action         | `CustomButton` from `@/components/shared`    | Native `<button>`, shadcn `Button` directly, MUI `Button`                  |
+| Data table                    | `CustomTable` from `@/components/shared`     | MUI `DataGrid`, Ant Design `Table`, raw `<table>`, shadcn `Table` directly |
+| Modal / dialog / confirmation | `CustomModal` from `@/components/shared`     | MUI `Dialog`, shadcn `Dialog` directly, browser `alert()`/`confirm()`      |
+| Text input                    | `TextInput` from `@/components/shared`       | MUI `TextField`, shadcn `Input` directly, native `<input>`                 |
+| Checkbox                      | `CheckboxField` from `@/components/shared`   | MUI `Checkbox`, shadcn `Checkbox` directly                                 |
+| Radio group                   | `RadioGroupField` from `@/components/shared` | MUI `RadioGroup`, shadcn `RadioGroup` directly                             |
+| Link navigation               | `CustomLink` from `@/components/shared`      | Styled `<a>` tags (plain `next/link` is fine for non-styled links)         |
+
+### Rules
+
+1. **Always check `@/components/shared` first.** Before reaching for a shadcn primitive or creating an inline solution, verify whether a shared wrapper already exists.
+2. **Import from the barrel.** Use `import { CustomButton, CustomTable } from '@/components/shared'` for consistency and tree-shaking.
+3. **Shared components wrap shadcn primitives.** The `@/components/ui/` directory contains raw shadcn primitives. Application code should use the shared wrappers, not the primitives directly. Primitives are for building new shared components only.
+4. **New shared components must be documented.** When creating or modifying a shared component, update `docs/shared-components.md` and add the export to `@/components/shared/index.tsx`.
+5. **No UI logic duplication.** If you find yourself re-implementing loading spinners, confirm/cancel dialogs, or search-enabled tables, you are likely missing a shared component feature. Extend the shared component instead of duplicating.
+
+### Why these rules exist
+
+- **Consistent UI:** All buttons, tables, and modals look and behave the same across the app.
+- **Single point of change:** Updating a shared component propagates everywhere. No hunting for 15 different button implementations.
+- **Reduced bundle size:** One well-optimized component instead of multiple ad-hoc implementations.
+- **Faster development:** Developers reach for proven, documented components instead of building from scratch.
+- **Enforced design system:** Prevents drift from the project's visual language.
+
+---
+
+## 7. Code comments policy
+
+Keep code clean and self-documenting. Comments are noise unless they explain _why_, not _what_.
+
+### Do NOT add
+
+- Section divider comments (`// ── Types ──`, `// ── Component ──`, `// ── Defaults ──`)
+- JSDoc comments on interface fields when the field name is self-explanatory
+- Inline comments that restate the code (`// filter hidden columns`, `// set page to 1`)
+- `TODO` or `FIXME` without an associated issue or ticket
+- Commented-out code blocks — delete dead code, rely on git history
+
+### Do add
+
+- Comments explaining non-obvious business logic or workarounds
+- Comments on regex patterns or complex algorithms
+- Links to external docs when using an unusual API or browser quirk
+- `// eslint-disable-next-line` with a reason when suppressing a lint rule
+
+---
+
+## 8. File organization conventions
+
+Keep code organized by responsibility. Every new file must land in the correct directory.
+
+### Directory structure
+
+| Directory                | Contents                                        | Examples                                                                                                 |
+| ------------------------ | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `src/types/`             | TypeScript interfaces and type aliases          | `agent.ts`, `provider.ts`, `components.ts`, `integration.ts`, `sidebar.ts`                               |
+| `src/constants/`         | Static values, config objects, enums            | `index.ts` (cookie keys, URLs), `sidebar.ts` (nav config, widths), `settings.ts`                         |
+| `src/utils/`             | Pure helper functions and utilities             | `helpers.ts` (generateUUID), `agentFormUtils.ts` (form state transforms), `axios.ts`, `notification.tsx` |
+| `src/services/`          | API call functions (thin wrappers around axios) | `agentsService.ts`, `channelService.ts`, `providerService.ts`                                            |
+| `src/atoms/`             | Jotai atoms (state + write actions)             | `AgentsAtom.tsx`, `AuthAtom.tsx`, `ProviderAtom.tsx`                                                     |
+| `src/components/shared/` | Reusable UI components                          | `CustomTable.tsx`, `CustomModal.tsx`, `CustomButton.tsx`                                                 |
+| `src/components/ui/`     | Raw shadcn primitives (not imported by pages)   | `button.tsx`, `dialog.tsx`, `table.tsx`                                                                  |
+
+### Rules
+
+1. **Types live in `src/types/`.** Do not define exported interfaces inside atoms, services, or components. Import types from `@/types/<domain>`.
+2. **Constants live in `src/constants/`.** Static config, magic numbers, cookie key names, URL patterns, and nav menus go here. Do not scatter constants across component files.
+3. **Utility functions live in `src/utils/`.** Pure functions (no side effects, no API calls) that are used by multiple files belong in utils. Single-use helpers may stay in their component file.
+4. **Services only do API calls.** Files in `src/services/` must not import Jotai atoms or define types. They accept parameters, call axios, and return data.
+5. **Atoms orchestrate state.** Atoms import from `@/services/` and `@/types/`. Components import atoms. Atoms must not import from components.
+6. **Re-export for backwards compatibility.** When moving a type, constant, or function to its canonical location, leave a re-export in the old file to avoid breaking existing imports. Remove the re-export in a follow-up cleanup.
+7. **One domain per file.** `src/types/agent.ts` holds all agent-related types. `src/constants/sidebar.ts` holds all sidebar constants. Do not split a domain across multiple files in the same directory.

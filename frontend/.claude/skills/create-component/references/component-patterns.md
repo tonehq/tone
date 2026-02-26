@@ -36,7 +36,7 @@ export function cn(...inputs: ClassValue[]) {
 #### Strings — static base classes
 
 ```typescript
-cn('flex items-center gap-2')
+cn('flex items-center gap-2');
 // → 'flex items-center gap-2'
 ```
 
@@ -47,29 +47,21 @@ cn('base-classes', {
   'bg-primary text-white': variant === 'primary',
   'bg-transparent border': variant === 'outline',
   'opacity-50 cursor-not-allowed': disabled,
-})
+});
 // Only truthy keys are included
 ```
 
 #### Arrays — grouped conditionals
 
 ```typescript
-cn([
-  'flex items-center',
-  isActive && 'bg-primary',
-  isDisabled && 'opacity-50',
-])
+cn(['flex items-center', isActive && 'bg-primary', isDisabled && 'opacity-50']);
 // Falsy values (false, undefined, null, 0, '') are stripped
 ```
 
 #### Inline ternaries — either/or classes
 
 ```typescript
-cn(
-  'base-classes',
-  isOpen ? 'rotate-180' : 'rotate-0',
-  size === 'lg' ? 'h-12 px-6' : 'h-9 px-3',
-)
+cn('base-classes', isOpen ? 'rotate-180' : 'rotate-0', size === 'lg' ? 'h-12 px-6' : 'h-9 px-3');
 ```
 
 #### Boolean short-circuit — add class when truthy
@@ -80,14 +72,14 @@ cn(
   loading && 'animate-pulse',
   error && 'border-destructive',
   !error && 'border-input',
-)
+);
 ```
 
 #### Consumer override — always last
 
 ```typescript
 // className prop is ALWAYS the last argument so consumers can override
-cn('bg-primary text-white rounded px-4', className)
+cn('bg-primary text-white rounded px-4', className);
 // If className='bg-red-500', tailwind-merge resolves bg-primary vs bg-red-500 → bg-red-500
 ```
 
@@ -99,12 +91,13 @@ cn(
   variantType && buttonVariants({ variantType }),
   buttonVariants({ size, shape }),
   className,
-)
+);
 ```
 
 ### Why tailwind-merge matters
 
 Without `twMerge`, conflicting classes stack:
+
 ```
 clsx('bg-primary', 'bg-red-500') → 'bg-primary bg-red-500'  // BOTH applied — unpredictable
 twMerge(clsx('bg-primary', 'bg-red-500')) → 'bg-red-500'    // Last wins — correct
@@ -227,6 +220,7 @@ DialogContent.displayName = 'DialogContent';
 ```
 
 **Key rules:**
+
 - `displayName` is REQUIRED on every forwardRef component (React DevTools)
 - For Radix wrappers, use `React.ElementRef<typeof Primitive>` as the ref type
 - For Radix wrappers, use `React.ComponentPropsWithoutRef<typeof Primitive>` as the base props type
@@ -352,6 +346,7 @@ const inputVariants = cva(
 ```
 
 **Key rules:**
+
 - Export `componentVariants` alongside the component — consumers may need it
 - `VariantProps<typeof variants>` auto-generates the correct prop types
 - `defaultVariants` ensures the component works with zero props
@@ -478,14 +473,12 @@ import {
     <DataCardTitle>Agent Overview</DataCardTitle>
     <DataCardDescription>Summary of active voice agents</DataCardDescription>
   </DataCardHeader>
-  <DataCardContent>
-    {/* Main content */}
-  </DataCardContent>
+  <DataCardContent>{/* Main content */}</DataCardContent>
   <DataCardFooter>
     <Button variant="outline">Cancel</Button>
     <Button>Save</Button>
   </DataCardFooter>
-</DataCard>
+</DataCard>;
 ```
 
 ---
@@ -594,6 +587,7 @@ SearchInput.displayName = 'SearchInput';
 ```
 
 **Key rules:**
+
 - Use `containerClassName` for outer div styling, `className` for the input itself
 - Controlled + uncontrolled support: accept `value` and `defaultValue`
 - Sync controlled value in `useEffect`
@@ -734,10 +728,10 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
 ```typescript
 // Focus ring — applied on keyboard focus only (not click)
-'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2'
+'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2';
 
 // Skip for decorative elements
-'focus:outline-none'  // Only when element is not interactive
+'focus:outline-none'; // Only when element is not interactive
 ```
 
 ### ARIA for custom controls
@@ -772,15 +766,15 @@ const srOnly = 'absolute h-px w-px overflow-hidden whitespace-nowrap border-0 p-
 
 ## 10. File Naming & Export Conventions
 
-| Item | Convention | Example |
-|------|-----------|---------|
-| Single component file | PascalCase | `StatusBadge.tsx` |
-| Compound component dir | kebab-case | `data-card/` |
-| Barrel export file | `index.ts` | `data-card/index.ts` |
-| Type file | `types.ts` | `data-card/types.ts` |
-| Component export | Named + default | `export { Badge }; export default Badge;` |
-| Variant export | Named only | `export { badgeVariants };` |
-| Component location | `src/components/shared/` | `src/components/shared/StatusBadge.tsx` |
+| Item                   | Convention               | Example                                   |
+| ---------------------- | ------------------------ | ----------------------------------------- |
+| Single component file  | PascalCase               | `StatusBadge.tsx`                         |
+| Compound component dir | kebab-case               | `data-card/`                              |
+| Barrel export file     | `index.ts`               | `data-card/index.ts`                      |
+| Type file              | `types.ts`               | `data-card/types.ts`                      |
+| Component export       | Named + default          | `export { Badge }; export default Badge;` |
+| Variant export         | Named only               | `export { badgeVariants };`               |
+| Component location     | `src/components/shared/` | `src/components/shared/StatusBadge.tsx`   |
 
 ### Import paths
 
@@ -887,12 +881,12 @@ const buttonVariants = cva(presets.button.base, {
 
 ### When to use which layer
 
-| Layer | When to use | Example |
-|-------|------------|---------|
-| `presets` | Standard UI patterns (buttons, inputs, cards, badges, text) | `cn(presets.button.base, presets.button.primary)` |
-| `semantic` | Intent-based one-off styling, dynamic classes | `bg-${semantic.primaryTint}` |
-| `colors` | Raw palette access (rarely needed) | `colors.purple[500]` → `'purple-500'` |
-| Direct Tailwind classes | When no preset/semantic exists | `'flex items-center gap-2'` |
+| Layer                   | When to use                                                 | Example                                           |
+| ----------------------- | ----------------------------------------------------------- | ------------------------------------------------- |
+| `presets`               | Standard UI patterns (buttons, inputs, cards, badges, text) | `cn(presets.button.base, presets.button.primary)` |
+| `semantic`              | Intent-based one-off styling, dynamic classes               | `bg-${semantic.primaryTint}`                      |
+| `colors`                | Raw palette access (rarely needed)                          | `colors.purple[500]` → `'purple-500'`             |
+| Direct Tailwind classes | When no preset/semantic exists                              | `'flex items-center gap-2'`                       |
 
 **Rule**: If a preset exists for your use case, use it. Presets ensure consistency and make
 global style changes trivial (change the preset, update everywhere).

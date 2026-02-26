@@ -48,28 +48,34 @@ Read ALL five files before starting any review section. Do not skip any.
 Work through every section. Do not skip any.
 
 ### 1. Correctness
+
 - Logical bugs, TypeScript typing issues, state mutation errors
 - Missing null/undefined checks → apply **Boundary Conditions** from code-quality-checklist
 - Async/await without try/catch → apply **Error Handling** from code-quality-checklist
 
 ### 2. React Best Practices
+
 - Rules of hooks, missing/incorrect dependency arrays, missing list keys
 - `useMemo` / `useCallback` / `React.memo` misuse, prop drilling, context misuse
 - For re-render and memoisation findings → cross-reference **Section 1** of performance-checklist
 
 ### 3. Next.js Best Practices
+
 - Server vs Client Component misuse (`'use client'` placement)
 - Incorrect data fetching, routing, `next/image` vs raw `<img>`
 - Missing API route validation
 - For SSR / streaming / bundle findings → cross-reference **Section 2** of performance-checklist
 
 ### 4. SOLID + Architecture
+
 Apply **solid-checklist.md** in full.
 
 ### 5. Security
+
 Apply **security-checklist.md** in full.
 
 ### 6. Performance
+
 Apply **performance-checklist.md** in full. Work through all eight sections:
 
 1. **React Rendering** — re-renders, memoisation, virtualisation, debounce
@@ -84,13 +90,16 @@ Apply **performance-checklist.md** in full. Work through all eight sections:
 Classify each finding using the performance-checklist severity scale (🔴/🟠/🟡/🔵).
 
 ### 7. Code Quality
+
 Apply **code-quality-checklist.md** in full.
 
 ### 8. Accessibility (mandatory)
+
 - Missing `alt`, `aria-*`, non-semantic HTML, `div` with click handler instead of `button`
 - Keyboard navigation, improper heading hierarchy
 
 ### 9. Dead Code / Removal Candidates
+
 Apply **removal-plan.md** template for any candidates found.
 
 ---
@@ -100,6 +109,7 @@ Apply **removal-plan.md** template for any candidates found.
 If any **Critical** or **High Priority** issues were found, append them to `.claude/error-log.md` using the format defined in `.claude/rules.md` Section 1.
 
 Before logging, read the existing error log to:
+
 - Check if the same issue was flagged in a previous review (link as recurring pattern)
 - Avoid duplicate entries for the same issue
 
@@ -126,20 +136,24 @@ Do NOT log medium/low priority findings — only critical and high.
 ```markdown
 # Code Review Summary
 
-**Base branch**: <base>   **Current branch**: <current>
+**Base branch**: <base> **Current branch**: <current>
 **Files reviewed**: X files, Y lines changed
 **Overall assessment**: APPROVE / REQUEST_CHANGES / COMMENT
 
 ---
 
 ## Critical Issues
+
 (security flaws · data loss · production crash · severe bugs · 🔴 perf regressions)
 
 ## High Priority Issues
+
 (SOLID violations · React hook misuse · SSR/CSR mistakes · 🟠 perf · major error handling gaps)
 
 ## Performance Issues
+
 (findings from performance-checklist.md — grouped by section)
+
 - React Rendering:
 - Next.js & SSR:
 - Bundle & Code Splitting:
@@ -151,12 +165,15 @@ Do NOT log medium/low priority findings — only critical and high.
 - **Performance Summary**: 🔴 Critical / 🟠 High / 🟡 Medium / 🟢 No significant issues
 
 ## Medium Priority Issues
+
 (maintainability · 🟡 perf · missing error handling · code quality)
 
 ## Low Priority Suggestions
+
 (naming · style · 🔵 minor optimisations)
 
 ## Removal / Iteration Plan
+
 (use removal-plan.md template)
 
 ## Positive Observations
@@ -171,6 +188,7 @@ For each issue: **file:line** — Problem — Why it matters — Suggested fix �
 After presenting findings, ask:
 
 **How would you like to proceed?**
+
 1. Fix all issues
 2. Fix Critical / High only
 3. Fix specific items (list numbers)

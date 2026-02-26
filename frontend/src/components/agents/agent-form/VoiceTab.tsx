@@ -1,7 +1,7 @@
 'use client';
 
 import { languages } from '@/data/mockAgents';
-import type { ServiceProvider } from '@/services/providerService';
+import type { ServiceProvider } from '@/types/provider';
 import {
   Box,
   CircularProgress,

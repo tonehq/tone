@@ -1,7 +1,8 @@
 import { atom } from 'jotai';
 import { loadable } from 'jotai/utils';
 
-import { type ServiceProvider, getServiceProviders } from '@/services/providerService';
+import { getServiceProviders } from '@/services/providerService';
+import type { ServiceProvider } from '@/types/provider';
 
 const providersRefreshAtom = atom(0);
 

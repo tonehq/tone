@@ -1,6 +1,6 @@
 'use client';
 
-import type { ServiceProvider } from '@/services/providerService';
+import type { ServiceProvider } from '@/types/provider';
 import {
   Box,
   Button,

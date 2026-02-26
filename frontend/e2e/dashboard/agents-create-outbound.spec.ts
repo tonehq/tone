@@ -29,9 +29,7 @@ async function ensureOnPage(page: Page): Promise<void> {
   await page.goto('/agents/create/outbound');
 }
 
-async function mockUpsertAPI(
-  page: Page,
-): Promise<Record<string, unknown>[]> {
+async function mockUpsertAPI(page: Page): Promise<Record<string, unknown>[]> {
   const captured: Record<string, unknown>[] = [];
   await page.route('**/agent/upsert_agent', async (route) => {
     const body = route.request().postDataJSON();

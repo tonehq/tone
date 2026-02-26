@@ -14,15 +14,12 @@ export interface Agent {
 }
 
 export interface AgentFormData {
-  // Basic Details
   name: string;
   image?: string;
   aiModel: string;
   timezone: string;
   knowledgeBase?: string;
   customVocabulary?: string[];
-
-  // Voice Configuration
   language: string;
   voice: string;
   voiceProvider: string;
@@ -35,8 +32,6 @@ export interface AgentFormData {
   voicePrompting: string;
   filterWords?: string[];
   useRealisticFillerWords: boolean;
-
-  // Call Configuration
   maxCallDuration?: number;
   greeting?: string;
   endCallPhrase?: string;
@@ -49,4 +44,68 @@ export interface CreateAgentModalOption {
   title: string;
   description: string;
   icon: React.ReactNode;
+}
+
+export interface ApiAgent {
+  id: number;
+  uuid: string;
+  name: string;
+  description: string;
+  agent_type?: string;
+  phone_number?: string;
+  is_public: boolean;
+  tags: Record<string, unknown>;
+  total_calls: number;
+  total_minutes: number;
+  average_rating: number;
+  created_by: number;
+  created_at: number;
+  updated_at: number;
+  llm_service_id: number;
+  tts_service_id: number;
+  stt_service_id: number;
+  llm_model_id: number | null;
+  tts_model_id: number | null;
+  stt_model_id: number | null;
+  first_message: string;
+  system_prompt: string;
+  end_call_message: string;
+  voicemail_message: string | null;
+  status: string;
+  custom_vocabulary: string | string[] | null;
+  filter_words: string | string[] | null;
+  realistic_filler_words: boolean | string | null;
+  language: string | null;
+  voice_speed: number | string | null;
+  patience_level: string | null;
+  speech_recognition: string | null;
+  call_recording: boolean | string | null;
+  call_transcription: boolean | string | null;
+  [key: string]: unknown;
+}
+
+export interface AgentsState {
+  agentList: ApiAgent[];
+}
+
+export interface AgentFormState {
+  name: string;
+  description: string;
+  aiModel: number | null;
+  end_call_message: string;
+  first_message: string;
+  customVocabulary: string[];
+  filterWords: string[];
+  language: string;
+  voiceProvider: number | null;
+  sttProvider: number | null;
+  patienceLevel: string;
+  speechRecognition: string;
+  voiceSpeed: number;
+  voiceVolume: number;
+  interruptionSensitivity: number;
+  voicePrompting: string;
+  useRealisticFillerWords: boolean;
+  callRecording: boolean;
+  callTranscription: boolean;
 }

@@ -18,6 +18,7 @@ interface TextInputProps extends Omit<React.ComponentProps<'input'>, 'size'> {
   error?: boolean;
   helperText?: string;
   labelClassName?: string;
+  leftIcon?: React.ReactNode;
 }
 
 const Skeleton = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
@@ -41,6 +42,7 @@ const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
       helperText,
       className,
       labelClassName,
+      leftIcon,
       ...props
     },
     ref,
@@ -67,6 +69,11 @@ const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
         )}
 
         <div className="relative">
+          {leftIcon && (
+            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground [&>svg]:size-4">
+              {leftIcon}
+            </span>
+          )}
           <Input
             ref={ref}
             id={name}
@@ -82,6 +89,7 @@ const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
               error &&
                 'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50',
               isPassword && 'pr-10',
+              leftIcon && 'pl-9',
               className,
             )}
             {...props}

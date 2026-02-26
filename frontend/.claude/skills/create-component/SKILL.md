@@ -31,10 +31,12 @@ If empty, ask the user what component they want to create.
 ### 1b. Extract `--variant` flag (optional)
 
 If `$ARGUMENTS` contains `--variant <type>`:
+
 - Extract the variant type: `button | input | dialog | card | table | form | custom`
 - This hints which shadcn primitives to use as the base
 
 Examples:
+
 ```
 /create-component StatusBadge --variant button
   → COMPONENT_NAME=StatusBadge, VARIANT=button
@@ -49,6 +51,7 @@ Examples:
 ### 1c. Auto-detect variant from name
 
 If no `--variant` is provided, infer from the component name:
+
 - Names containing `Button`, `Btn` → `button`
 - Names containing `Input`, `Field`, `Search` → `input`
 - Names containing `Dialog`, `Modal`, `Popup` → `dialog`
@@ -96,6 +99,7 @@ If any of the above checks fail, read and follow the setup guide:
 ```
 
 **IMPORTANT**: Do NOT proceed to Step 3 until setup is verified. The setup guide handles:
+
 - Installing Tailwind CSS v4 and dependencies (`tailwindcss`, `@tailwindcss/postcss`)
 - Installing className utilities (`clsx`, `tailwind-merge`, `class-variance-authority`)
 - Creating the `cn()` utility in `src/lib/utils.ts` (clsx + tailwind-merge)
@@ -116,6 +120,7 @@ Read ALL reference files before generating any component. Do not skip any.
 - `.claude/skills/create-component/references/setup-guide.md` (if not already read in Step 2)
 
 Also read the project theme files to ensure consistency:
+
 - `src/lib/theme.ts` — centralized theme constants (colors, semantic aliases, presets)
 - `src/utils/theme.ts` — MUI theme with custom tokens (source of truth for color values)
 
@@ -142,11 +147,13 @@ ls src/components/shared/ 2>/dev/null
 ```
 
 Also use Glob to search for components with similar names:
+
 ```
 src/components/**/*<ComponentName>*
 ```
 
 If a similar component exists:
+
 - Read it (or use the shared-components.md entry) to understand its API
 - Ask the user if they want to extend the existing one or create a new shadcn-based replacement
 - If replacing, note what props/features the existing component supports so the new one is feature-complete
@@ -159,15 +166,15 @@ Based on the variant and component requirements, determine which shadcn/ui primi
 
 ### Primitive mapping by variant:
 
-| Variant | Primary Primitive(s) | Supporting Primitives |
-|---------|--------------------|-----------------------|
-| `button` | `button` | `badge`, `tooltip` |
-| `input` | `input`, `label` | `form`, `popover` |
-| `dialog` | `dialog` | `button`, `input`, `label` |
-| `card` | `card` | `badge`, `separator` |
-| `table` | `table` | `badge`, `button`, `dropdown-menu` |
-| `form` | `form`, `input`, `label` | `select`, `checkbox`, `switch`, `button` |
-| `custom` | Determine from requirements | — |
+| Variant  | Primary Primitive(s)        | Supporting Primitives                    |
+| -------- | --------------------------- | ---------------------------------------- |
+| `button` | `button`                    | `badge`, `tooltip`                       |
+| `input`  | `input`, `label`            | `form`, `popover`                        |
+| `dialog` | `dialog`                    | `button`, `input`, `label`               |
+| `card`   | `card`                      | `badge`, `separator`                     |
+| `table`  | `table`                     | `badge`, `button`, `dropdown-menu`       |
+| `form`   | `form`, `input`, `label`    | `select`, `checkbox`, `switch`, `button` |
+| `custom` | Determine from requirements | —                                        |
 
 ### Install missing primitives:
 
@@ -176,6 +183,7 @@ yarn dlx shadcn@latest add <primitive-name>
 ```
 
 Check if each primitive already exists before installing:
+
 ```bash
 ls src/components/ui/<primitive-name>.tsx 2>/dev/null
 ```
@@ -187,11 +195,13 @@ ls src/components/ui/<primitive-name>.tsx 2>/dev/null
 ### 6a. Determine file location
 
 All new shared components go in:
+
 ```
 src/components/shared/<ComponentName>.tsx
 ```
 
 If the component is a compound component (multiple files), create a directory:
+
 ```
 src/components/shared/<component-name>/
   ├── index.ts                    # Barrel export
@@ -247,74 +257,79 @@ Use the **flat hex-based color palette** defined as CSS variables in `globals.cs
 Reference `theme-mapping.md` for the full token list.
 
 **Color usage — flat palette (same approach as tone-test project):**
+
 ```typescript
 // Primary (purple palette)
-className="bg-purple-500 text-white"                 // Primary action (#8b5cf6)
-className="hover:bg-purple-600"                      // Primary hover (#7c3aed)
-className="bg-purple-50"                             // Primary tint background
-className="text-purple-500"                          // Primary text/link
+className = 'bg-purple-500 text-white'; // Primary action (#8b5cf6)
+className = 'hover:bg-purple-600'; // Primary hover (#7c3aed)
+className = 'bg-purple-50'; // Primary tint background
+className = 'text-purple-500'; // Primary text/link
 
 // Secondary (indigo palette)
-className="bg-indigo-500 text-white"                 // Secondary action (#6366f1)
+className = 'bg-indigo-500 text-white'; // Secondary action (#6366f1)
 
 // Status colors
-className="bg-green-500 text-white"                  // Success (#10b981)
-className="bg-amber-500 text-white"                  // Warning (#f59e0b)
-className="bg-red-500 text-white"                    // Error/destructive (#ef4444)
+className = 'bg-green-500 text-white'; // Success (#10b981)
+className = 'bg-amber-500 text-white'; // Warning (#f59e0b)
+className = 'bg-red-500 text-white'; // Error/destructive (#ef4444)
 
 // Text (gray palette)
-className="text-gray-800"                            // Primary text (#1f2937)
-className="text-gray-500"                            // Secondary text (#6b7280)
-className="text-gray-300"                            // Disabled text (#d1d5db)
+className = 'text-gray-800'; // Primary text (#1f2937)
+className = 'text-gray-500'; // Secondary text (#6b7280)
+className = 'text-gray-300'; // Disabled text (#d1d5db)
 
 // Backgrounds
-className="bg-gray-50"                               // Page background (#f9fafb)
-className="bg-white"                                 // Card/paper background
-className="bg-gray-100"                              // Section/hover background
+className = 'bg-gray-50'; // Page background (#f9fafb)
+className = 'bg-white'; // Card/paper background
+className = 'bg-gray-100'; // Section/hover background
 
 // Borders
-className="border-slate-200"                         // Divider/border (#e2e8f0)
+className = 'border-slate-200'; // Divider/border (#e2e8f0)
 
 // Focus
-className="ring-purple-500"                          // Focus ring
+className = 'ring-purple-500'; // Focus ring
 ```
 
 **Typography:**
+
 ```typescript
-className="text-xs"    // 0.75rem  (12px)
-className="text-sm"    // 0.8125rem (13px — project custom)
-className="text-base"  // 0.875rem (14px — project custom)
-className="text-lg"    // 1rem     (16px)
-className="text-xl"    // 1.125rem (18px)
-className="font-normal"   // 400
-className="font-medium"   // 500
-className="font-semibold" // 600
-className="font-bold"     // 700
+className = 'text-xs'; // 0.75rem  (12px)
+className = 'text-sm'; // 0.8125rem (13px — project custom)
+className = 'text-base'; // 0.875rem (14px — project custom)
+className = 'text-lg'; // 1rem     (16px)
+className = 'text-xl'; // 1.125rem (18px)
+className = 'font-normal'; // 400
+className = 'font-medium'; // 500
+className = 'font-semibold'; // 600
+className = 'font-bold'; // 700
 ```
 
 **Border radius** (from CSS variables):
+
 ```typescript
-className="rounded-sm"  // 4px (--radius-sm)
-className="rounded"     // 5px (--radius-md — project default)
-className="rounded-lg"  // 8px (--radius-lg)
-className="rounded-xl"  // 10px (--radius-xl)
-className="rounded-2xl" // 12px (--radius-2xl)
+className = 'rounded-sm'; // 4px (--radius-sm)
+className = 'rounded'; // 5px (--radius-md — project default)
+className = 'rounded-lg'; // 8px (--radius-lg)
+className = 'rounded-xl'; // 10px (--radius-xl)
+className = 'rounded-2xl'; // 12px (--radius-2xl)
 ```
 
 **Shadows** (from CSS variables):
+
 ```typescript
-className="shadow-xs"   // Subtle — inputs
-className="shadow-sm"   // Cards (MUI Card default)
-className="shadow-md"   // Elevated panels
-className="shadow-lg"   // Dialogs, dropdowns
+className = 'shadow-xs'; // Subtle — inputs
+className = 'shadow-sm'; // Cards (MUI Card default)
+className = 'shadow-md'; // Elevated panels
+className = 'shadow-lg'; // Dialogs, dropdowns
 ```
 
 **Spacing follows Tailwind defaults** (4px base unit):
+
 ```typescript
-className="p-2"    // 8px  (MUI button padding)
-className="px-4"   // 16px
-className="gap-2"  // 8px
-className="h-[42px]" // 42px (project button height)
+className = 'p-2'; // 8px  (MUI button padding)
+className = 'px-4'; // 16px
+className = 'gap-2'; // 8px
+className = 'h-[42px]'; // 42px (project button height)
 ```
 
 ### 6d. Styling rules
@@ -329,6 +344,7 @@ className="h-[42px]" // 42px (project button height)
 ### 6d-1. `cn()` usage patterns (MUST follow)
 
 The `cn()` function (`src/lib/utils.ts`) chains `clsx` + `tailwind-merge`:
+
 - **clsx**: accepts strings, objects, arrays, removes falsy values
 - **tailwind-merge**: resolves Tailwind class conflicts (last class wins)
 
@@ -336,30 +352,31 @@ The `cn()` function (`src/lib/utils.ts`) chains `clsx` + `tailwind-merge`:
 import { cn } from '@/lib/utils';
 
 // ── Strings — static base classes ────────────────────────────
-cn('flex items-center gap-2')
+cn('flex items-center gap-2');
 
 // ── Objects — conditional classes ────────────────────────────
 cn('base-classes', {
   'bg-primary text-white': variant === 'primary',
   'border border-slate-200': variant === 'outline',
   'opacity-50 cursor-not-allowed': disabled,
-})
+});
 
 // ── Boolean short-circuit — truthy adds class ────────────────
-cn('rounded border', loading && 'animate-pulse', error && 'border-destructive')
+cn('rounded border', loading && 'animate-pulse', error && 'border-destructive');
 
 // ── Ternaries — either/or ────────────────────────────────────
-cn('base', isOpen ? 'rotate-180' : 'rotate-0')
+cn('base', isOpen ? 'rotate-180' : 'rotate-0');
 
 // ── CVA integration — variant classes + consumer override ────
-cn(buttonVariants({ variant, size }), className)
+cn(buttonVariants({ variant, size }), className);
 
 // ── Consumer override — className ALWAYS last ────────────────
-cn('bg-primary text-white rounded', className)
+cn('bg-primary text-white rounded', className);
 // If className='bg-red-500', twMerge resolves: bg-red-500 text-white rounded
 ```
 
 **Anti-patterns** (NEVER use):
+
 ```typescript
 // BAD: template literals — no conflict resolution
 className={`base ${isActive ? 'active' : ''} ${className}`}
@@ -406,7 +423,7 @@ const componentVariants = cva(
       variant: 'primary',
       size: 'md',
     },
-  }
+  },
 );
 
 interface ComponentProps extends VariantProps<typeof componentVariants> {
@@ -461,6 +478,7 @@ ComponentName.displayName = 'ComponentName';
 ## Step 7 — Write the component file
 
 Write the complete component file to disk. Ensure:
+
 - Valid TypeScript syntax with no `any` types
 - Correct imports (shadcn primitives from `@/components/ui/`, cn from `@/lib/utils`, theme from `@/lib/theme`)
 - `'use client'` directive at the top
@@ -498,6 +516,7 @@ After writing the component, output a usage example:
 ## Usage
 
 ### Basic
+
 \`\`\`tsx
 import { ComponentName } from '@/components/shared/ComponentName';
 
@@ -505,12 +524,14 @@ import { ComponentName } from '@/components/shared/ComponentName';
 \`\`\`
 
 ### With variants
+
 \`\`\`tsx
 <ComponentName variant="primary" size="lg" />
 <ComponentName variant="outline" size="sm" />
 \`\`\`
 
 ### With custom classes
+
 \`\`\`tsx
 <ComponentName className="mt-4 w-full" />
 \`\`\`
@@ -561,8 +582,8 @@ Confirm **Step 7b** is done: `frontend/docs/shared-components.md` has been updat
 ## Props API
 
 | Prop | Type | Default | Description |
-|------|------|---------|-------------|
-| ... | ... | ... | ... |
+| ---- | ---- | ------- | ----------- |
+| ...  | ...  | ...     | ...         |
 
 ---
 
@@ -577,10 +598,10 @@ Confirm **Step 7b** is done: `frontend/docs/shared-components.md` has been updat
 
 ## Shadcn Primitives Used
 
-| Primitive | Installed | File |
-|-----------|-----------|------|
-| button | Yes/New | `src/components/ui/button.tsx` |
-| ... | ... | ... |
+| Primitive | Installed | File                           |
+| --------- | --------- | ------------------------------ |
+| button    | Yes/New   | `src/components/ui/button.tsx` |
+| ...       | ...       | ...                            |
 
 ---
 
@@ -604,6 +625,7 @@ Confirm **Step 7b** is done: `frontend/docs/shared-components.md` has been updat
 After presenting the summary, ask:
 
 **How would you like to proceed?**
+
 1. Create another variant of this component
 2. Create a different component
 3. Modify props or behavior

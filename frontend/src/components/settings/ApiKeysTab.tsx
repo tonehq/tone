@@ -1,7 +1,12 @@
 'use client';
 
 import { generateUUID } from '@/services/shared/helper';
-import { Add as AddIcon, Close as CloseIcon, Key as KeyIcon, MoreVert as MoreVertIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  Close as CloseIcon,
+  Key as KeyIcon,
+  MoreVert as MoreVertIcon,
+} from '@mui/icons-material';
 import {
   Box,
   Button,
@@ -78,8 +83,16 @@ function AddApiKeyModal({
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: '5px' } }}>
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      maxWidth="sm"
+      fullWidth
+      PaperProps={{ sx: { borderRadius: '5px' } }}
+    >
+      <DialogTitle
+        sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}
+      >
         <Typography component="span" variant="h6" sx={{ fontWeight: 600 }}>
           Add an API Key
         </Typography>
@@ -101,7 +114,11 @@ function AddApiKeyModal({
         />
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2, pt: 0 }}>
-        <Button onClick={handleClose} variant="outlined" sx={{ borderColor: theme.palette.divider }}>
+        <Button
+          onClick={handleClose}
+          variant="outlined"
+          sx={{ borderColor: theme.palette.divider }}
+        >
           Cancel
         </Button>
         <Button
@@ -204,7 +221,11 @@ export default function ApiKeysTab() {
         initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
         sx={dataGridSx}
       />
-      <AddApiKeyModal open={addModalOpen} onClose={() => setAddModalOpen(false)} onCreate={handleCreate} />
+      <AddApiKeyModal
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        onCreate={handleCreate}
+      />
       <Menu
         anchorEl={menuAnchor?.el}
         open={Boolean(menuAnchor)}

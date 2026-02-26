@@ -1,4 +1,5 @@
 # Removal and Iteration Plan
+
 <!-- Global Frontend Standard — React + Next.js -->
 <!-- Read the Detection and Validation rules before filling any section -->
 
@@ -8,14 +9,14 @@
 
 Detect and classify candidates under one of these categories:
 
-| # | Category | Signals |
-|---|----------|---------|
-| 1 | **Dead code** | Unused exports, unreachable branches, zero call-site functions, orphan components |
-| 2 | **Stale feature flags** | Always `true`, always `false`, no environment variance, no expiration metadata |
-| 3 | **Deprecated API / component** | Old version coexisting with new, JSDoc `@deprecated` present |
-| 4 | **Duplicate logic** | Same utility repeated in 2+ files, repeated transformation logic |
-| 5 | **Commented-out code** | Large disabled blocks, disabled components |
-| 6 | **Unused dependency** | Package removed from imports and from all usage |
+| #   | Category                       | Signals                                                                           |
+| --- | ------------------------------ | --------------------------------------------------------------------------------- |
+| 1   | **Dead code**                  | Unused exports, unreachable branches, zero call-site functions, orphan components |
+| 2   | **Stale feature flags**        | Always `true`, always `false`, no environment variance, no expiration metadata    |
+| 3   | **Deprecated API / component** | Old version coexisting with new, JSDoc `@deprecated` present                      |
+| 4   | **Duplicate logic**            | Same utility repeated in 2+ files, repeated transformation logic                  |
+| 5   | **Commented-out code**         | Large disabled blocks, disabled components                                        |
+| 6   | **Unused dependency**          | Package removed from imports and from all usage                                   |
 
 ---
 
@@ -55,6 +56,7 @@ If the identifier may be consumed via any of the following, mark as ⚠️ **Do 
 Zero live consumers, not referenced dynamically, passes Next.js safety validation.
 
 ### [SHORT NAME]
+
 - **Location**: `path/to/file.tsx:line`
 - **Category**: Dead code | Stale flag | Deprecated API | Unused dep | Duplicate logic | Commented-out code
 - **Evidence**: Clear explanation — e.g. "No references found via search; flag hardcoded `false` since YYYY-MM-DD"
@@ -74,6 +76,7 @@ Zero live consumers, not referenced dynamically, passes Next.js safety validatio
 Active consumers exist, or removal requires a migration path first.
 
 ### [SHORT NAME]
+
 - **Location**: `path/to/file.tsx:line`
 - **Category**: Deprecated API | Duplicate logic | Other
 - **Why defer**: Active consumers / needs migration / cross-team dependency
@@ -94,13 +97,13 @@ Active consumers exist, or removal requires a migration path first.
 
 Items with hidden runtime consumers — flag to prevent accidental deletion.
 
-| Item | Reason |
-|------|--------|
-| `identifier` | Consumed via `obj[key]` dynamic access |
-| `EVENT_NAME` | Referenced as analytics string constant in data warehouse |
-| `flag-key` | Read from remote feature flag service |
-| `data-testid="..."` | Tied to E2E test selectors |
-| `.class-name` | Injected by CMS or third-party script |
+| Item                | Reason                                                    |
+| ------------------- | --------------------------------------------------------- |
+| `identifier`        | Consumed via `obj[key]` dynamic access                    |
+| `EVENT_NAME`        | Referenced as analytics string constant in data warehouse |
+| `flag-key`          | Read from remote feature flag service                     |
+| `data-testid="..."` | Tied to E2E test selectors                                |
+| `.class-name`       | Injected by CMS or third-party script                     |
 
 > If none found: **"No hidden-consumer risks identified."**
 
@@ -109,6 +112,7 @@ Items with hidden runtime consumers — flag to prevent accidental deletion.
 ## 4. Unused Dependency Removal
 
 ### [PACKAGE NAME]
+
 - **Package**: `package-name@version`
 - **Evidence**: No `import` or `require` in `src/`; not referenced anywhere in the repo
 - **Config check**: Not listed in `babel.config.js`, `.eslintrc`, `postcss.config.js`, or bundler config
@@ -126,18 +130,21 @@ Items with hidden runtime consumers — flag to prevent accidental deletion.
 Complete every item before merging a removal PR.
 
 ### Discovery
+
 - [ ] Searched entire codebase for the identifier (not just the file path)
 - [ ] Checked for string-based / dynamic access (`obj['key']`, template literals, `require()`)
 - [ ] Confirmed no active usage via analytics dashboard or feature-flag service
 - [ ] Checked config files — bundler, linter, test runner
 
 ### Safety
+
 - [ ] Removal is in its own focused PR — not bundled with feature work
 - [ ] Associated types and interfaces are also removed
 - [ ] Related tests, fixtures, and mocks are removed or updated
 - [ ] No parallel open PR adds a new consumer of this code
 
 ### Verification
+
 - [ ] Linter passes (`eslint` / `biome` / project linter)
 - [ ] Type-check passes (`tsc --noEmit`)
 - [ ] Build passes (`next build` / project build command)

@@ -2,12 +2,12 @@
 
 import { loadableProvidersAtom } from '@/atoms/ProviderAtom';
 import { CallConfigurationTab, GeneralTab, VoiceTab } from '@/components/agents/agent-form';
+import type { AgentFormState } from '@/types/agent';
 import {
   apiAgentToFormState,
   defaultFormState,
   formStateToUpsertPayload,
-  type AgentFormState,
-} from '@/components/agents/agent-form/agentFormUtils';
+} from '@/utils/agentFormUtils';
 import PromptPage from '@/components/agents/agent-form/promptPage';
 import { deleteAgent, getAgent, upsertAgent } from '@/services/agentsService';
 import {

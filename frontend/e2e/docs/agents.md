@@ -41,9 +41,11 @@ so that data is persisted in the DB and tests validate the full stack.
 ## User Stories
 
 ### US-1: View agent list
+
 **As a** logged-in user, **I want to** see a list of all my agents in a data grid, **so that** I can manage my voice agents.
 
 **Acceptance criteria**:
+
 - [ ] Shows "Agents" heading (h4)
 - [ ] Shows a search input with placeholder "Search..."
 - [ ] Shows a "Create Agent" button with a plus icon
@@ -57,9 +59,11 @@ so that data is persisted in the DB and tests validate the full stack.
 - [ ] Pagination controls display with page size options: 10, 20, 50
 
 ### US-2: Create a new agent (modal selection)
+
 **As a** logged-in user, **I want to** choose between Inbound and Outbound agent types, **so that** I can create the right kind of agent.
 
 **Acceptance criteria**:
+
 - [ ] Clicking "Create Agent" button opens a dialog modal
 - [ ] Modal title says "Choose type of agent"
 - [ ] Modal shows two cards: "Outbound" and "Inbound"
@@ -71,9 +75,11 @@ so that data is persisted in the DB and tests validate the full stack.
 - [ ] Widget and Chat types are commented out (not available yet)
 
 ### US-3: Create inbound agent
+
 **As a** logged-in user, **I want to** configure and save a new inbound voice agent, **so that** it can receive incoming calls.
 
 **Acceptance criteria**:
+
 - [ ] Page has a left sidebar and main content area
 - [ ] Left sidebar shows: "Back to Agents" button, agent avatar, agent name (default "My Inbound Assistant"), "Inbound" chip (green), "Test Agent" button, and menu items (Configure, Prompt, Deployments)
 - [ ] Main content shows an info Alert: "Important Your agent doesn't have a phone number and can't receive calls." with an "Assign number" button
@@ -83,6 +89,7 @@ so that data is persisted in the DB and tests validate the full stack.
 - [ ] Prompt menu shows the TipTap rich text editor for system prompt
 
 #### General Tab (9 fields):
+
 - [ ] Agent Name — text input, default "My Inbound Assistant"
 - [ ] Description — text input, optional
 - [ ] AI Model — dropdown, default "gpt-4.1"
@@ -94,6 +101,7 @@ so that data is persisted in the DB and tests validate the full stack.
 - [ ] Delete Agent — danger button at the bottom
 
 #### Voice Tab (6 fields):
+
 - [ ] Language — dropdown, default "en"
 - [ ] Voice Provider (TTS) — dropdown, default "elevenlabs"
 - [ ] STT Provider — dropdown, default "deepgram"
@@ -102,13 +110,16 @@ so that data is persisted in the DB and tests validate the full stack.
 - [ ] Speech Recognition — radio buttons (Faster vs High Accuracy), default "fast"
 
 #### Call Configuration Tab (2 fields):
+
 - [ ] Call Recording — toggle switch, default off
 - [ ] Call Transcription — toggle switch, default off
 
 ### US-4: Create outbound agent
+
 **As a** logged-in user, **I want to** configure and save a new outbound voice agent, **so that** it can make outgoing calls.
 
 **Acceptance criteria**:
+
 - [ ] Same layout as inbound creation page
 - [ ] Agent name defaults to "My Outbound Assistant"
 - [ ] Chip label says "Outbound" (purple)
@@ -119,9 +130,11 @@ so that data is persisted in the DB and tests validate the full stack.
 - [ ] Save Changes button calls upsert with `agent_type: 'outbound'`
 
 ### US-5: Edit an existing agent
+
 **As a** logged-in user, **I want to** click Edit on an agent row to modify its settings, **so that** I can update my agent's configuration.
 
 **Acceptance criteria**:
+
 - [ ] Clicking "Edit" in the action menu navigates to `/agents/edit/:type/:id`
 - [ ] Edit page loads existing agent data from the API into the form
 - [ ] Form fields are pre-populated with the agent's current values
@@ -129,9 +142,11 @@ so that data is persisted in the DB and tests validate the full stack.
 - [ ] "Back to Agents" button returns to the agent list
 
 ### US-6: Delete an agent
+
 **As a** logged-in user, **I want to** delete an agent, **so that** I can remove agents I no longer need.
 
 **Acceptance criteria**:
+
 - [ ] Action menu shows a "Delete" option in red
 - [ ] Clicking Delete on the list page logs to console (TODO: wire delete API)
 - [ ] Clicking Delete Agent button on the create/edit page shows a browser confirm dialog
@@ -140,9 +155,11 @@ so that data is persisted in the DB and tests validate the full stack.
 - [ ] Canceling the dialog stays on the current page
 
 ### US-7: Auth protection
+
 **As the** system, **I want to** redirect unauthenticated users to the login page, **so that** only logged-in users can access agent pages.
 
 **Acceptance criteria**:
+
 - [ ] Redirects to `/auth/login?redirect=<encoded-path>` when no `tone_access_token` cookie
 - [ ] All agent routes are protected: `/agents`, `/agents/create/inbound`, `/agents/create/outbound`, `/agents/edit/:type/:id`
 - [ ] After login, 4 cookies are set: `tone_access_token`, `org_tenant_id`, `login_data`, `user_id`
@@ -153,73 +170,73 @@ so that data is persisted in the DB and tests validate the full stack.
 
 ### Agent List Page (`/agents`)
 
-| Element | Type | Content / Label | Behavior |
-|---------|------|-----------------|----------|
-| Page heading | h4 | "Agents" | Static text |
-| Search input | text field | placeholder: "Search..." | Filters agent list (not yet wired) |
-| Search icon | icon | SearchIcon | Start adornment in search field |
-| Create Agent button | button | "Create Agent" (with AddIcon) | Opens CreateAgentModal |
-| DataGrid | data grid | Agent rows | 5 columns, pagination, loading overlay |
-| Agent Name column | grid column | "AGENT NAME" | Displays agent name |
-| Phone Number column | grid column | "PHONE NUMBER" | Displays phone or "-" |
-| Last Edited column | grid column | "LAST EDITED" | Formatted date or "-" |
-| Agent Type column | grid column | "AGENT TYPE" | Chip: green "Inbound" or purple "Outbound" |
-| Action column | grid column | "ACTION" | Three-dot menu (MoreVertIcon) |
-| Edit menu item | menu item | "Edit" (with EditIcon) | Navigates to edit page |
-| Delete menu item | menu item | "Delete" (with DeleteIcon, red) | Triggers delete handler |
+| Element             | Type        | Content / Label                 | Behavior                                   |
+| ------------------- | ----------- | ------------------------------- | ------------------------------------------ |
+| Page heading        | h4          | "Agents"                        | Static text                                |
+| Search input        | text field  | placeholder: "Search..."        | Filters agent list (not yet wired)         |
+| Search icon         | icon        | SearchIcon                      | Start adornment in search field            |
+| Create Agent button | button      | "Create Agent" (with AddIcon)   | Opens CreateAgentModal                     |
+| DataGrid            | data grid   | Agent rows                      | 5 columns, pagination, loading overlay     |
+| Agent Name column   | grid column | "AGENT NAME"                    | Displays agent name                        |
+| Phone Number column | grid column | "PHONE NUMBER"                  | Displays phone or "-"                      |
+| Last Edited column  | grid column | "LAST EDITED"                   | Formatted date or "-"                      |
+| Agent Type column   | grid column | "AGENT TYPE"                    | Chip: green "Inbound" or purple "Outbound" |
+| Action column       | grid column | "ACTION"                        | Three-dot menu (MoreVertIcon)              |
+| Edit menu item      | menu item   | "Edit" (with EditIcon)          | Navigates to edit page                     |
+| Delete menu item    | menu item   | "Delete" (with DeleteIcon, red) | Triggers delete handler                    |
 
 ### Create Agent Modal
 
-| Element | Type | Content / Label | Behavior |
-|---------|------|-----------------|----------|
-| Dialog title | h6 | "Choose type of agent" | Static text |
-| Back button | icon button | ArrowBackIcon | Closes modal |
-| Close button | icon button | CloseIcon | Closes modal |
+| Element       | Type              | Content / Label          | Behavior                               |
+| ------------- | ----------------- | ------------------------ | -------------------------------------- |
+| Dialog title  | h6                | "Choose type of agent"   | Static text                            |
+| Back button   | icon button       | ArrowBackIcon            | Closes modal                           |
+| Close button  | icon button       | CloseIcon                | Closes modal                           |
 | Outbound card | Paper (clickable) | "Outbound" + description | Navigates to `/agents/create/outbound` |
-| Inbound card | Paper (clickable) | "Inbound" + description | Navigates to `/agents/create/inbound` |
+| Inbound card  | Paper (clickable) | "Inbound" + description  | Navigates to `/agents/create/inbound`  |
 
 ### Agent Creation / Edit Page (common to both types)
 
-| Element | Type | Content / Label | Behavior |
-|---------|------|-----------------|----------|
-| Back to Agents button | button | "Back to Agents" (with ArrowBackIcon) | Navigates to `/agents` |
-| Agent avatar | Avatar | Empty avatar | Display only |
-| Agent name | subtitle1 | Form name value | Reflects current name field |
-| Type chip | Chip | "Inbound" (green) or "Outbound" (purple) | Display only |
-| Test Agent button | button | "Test Agent" (with PhoneIcon) | Not yet implemented |
-| Menu items | list items | Configure, Prompt, Deployments (inbound) or Configure, Prompt, Actions, Deployment, Calls (outbound) | Switches main content section |
-| Info Alert | Alert (info) | "Important Your agent doesn't have a phone number..." | Contains "Assign number" button |
-| Section heading | h5 | Dynamic: "Configure" / "Prompt" / etc. | Changes with menu selection |
-| Save Changes button | button | "Save Changes" / "Saving..." (with SaveIcon) | Calls upsert API, disabled while saving |
-| General tab | Tab | "General" (with SettingsIcon) | Shows GeneralTab form |
-| Voice tab | Tab | "Voice" (with VoiceIcon) | Shows VoiceTab form |
-| Call Configuration tab | Tab | "Call Configuration" (with PhoneIcon) | Shows CallConfigurationTab form |
+| Element                | Type         | Content / Label                                                                                      | Behavior                                |
+| ---------------------- | ------------ | ---------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| Back to Agents button  | button       | "Back to Agents" (with ArrowBackIcon)                                                                | Navigates to `/agents`                  |
+| Agent avatar           | Avatar       | Empty avatar                                                                                         | Display only                            |
+| Agent name             | subtitle1    | Form name value                                                                                      | Reflects current name field             |
+| Type chip              | Chip         | "Inbound" (green) or "Outbound" (purple)                                                             | Display only                            |
+| Test Agent button      | button       | "Test Agent" (with PhoneIcon)                                                                        | Not yet implemented                     |
+| Menu items             | list items   | Configure, Prompt, Deployments (inbound) or Configure, Prompt, Actions, Deployment, Calls (outbound) | Switches main content section           |
+| Info Alert             | Alert (info) | "Important Your agent doesn't have a phone number..."                                                | Contains "Assign number" button         |
+| Section heading        | h5           | Dynamic: "Configure" / "Prompt" / etc.                                                               | Changes with menu selection             |
+| Save Changes button    | button       | "Save Changes" / "Saving..." (with SaveIcon)                                                         | Calls upsert API, disabled while saving |
+| General tab            | Tab          | "General" (with SettingsIcon)                                                                        | Shows GeneralTab form                   |
+| Voice tab              | Tab          | "Voice" (with VoiceIcon)                                                                             | Shows VoiceTab form                     |
+| Call Configuration tab | Tab          | "Call Configuration" (with PhoneIcon)                                                                | Shows CallConfigurationTab form         |
 
 ---
 
 ## Navigation
 
-| Trigger | Destination | Condition |
-|---------|-------------|-----------|
-| Click "Create Agent" button | Opens CreateAgentModal | Always |
-| Click Outbound card (modal) | `/agents/create/outbound` | Modal closes first |
-| Click Inbound card (modal) | `/agents/create/inbound` | Modal closes first |
-| Click back/close button (modal) | Closes modal (stays on `/agents`) | Always |
-| Click "Edit" in action menu | `/agents/edit/:type/:id` | Agent has valid id |
-| Click "Back to Agents" (create page) | `/agents` | Always |
-| Save Changes (success) | `/agents` | API call succeeds |
-| Delete Agent (confirmed) | `/agents` | User confirms browser dialog |
-| No auth cookie | `/auth/login?redirect=<path>` | Middleware redirect |
+| Trigger                              | Destination                       | Condition                    |
+| ------------------------------------ | --------------------------------- | ---------------------------- |
+| Click "Create Agent" button          | Opens CreateAgentModal            | Always                       |
+| Click Outbound card (modal)          | `/agents/create/outbound`         | Modal closes first           |
+| Click Inbound card (modal)           | `/agents/create/inbound`          | Modal closes first           |
+| Click back/close button (modal)      | Closes modal (stays on `/agents`) | Always                       |
+| Click "Edit" in action menu          | `/agents/edit/:type/:id`          | Agent has valid id           |
+| Click "Back to Agents" (create page) | `/agents`                         | Always                       |
+| Save Changes (success)               | `/agents`                         | API call succeeds            |
+| Delete Agent (confirmed)             | `/agents`                         | User confirms browser dialog |
+| No auth cookie                       | `/auth/login?redirect=<path>`     | Middleware redirect          |
 
 ---
 
 ## API Contracts
 
-| Endpoint | Method | Request | Success Response | Error Response |
-|----------|--------|---------|-----------------|----------------|
-| `/agent/get_all_agents` | GET | (none) | `Agent[]` or `{ data: Agent[] }` | `{ detail: "..." }` |
-| `/agent/get_all_agents?agent_id=N` | GET | query param `agent_id` | `Agent[]` (single item) | `{ detail: "..." }` |
-| `/agent/upsert_agent` | POST | `{ name, description, agent_type, first_message, end_call_message, system_prompt, custom_vocabulary, filter_words, realistic_filler_words, language, voice_speed, patience_level, speech_recognition, call_recording, call_transcription, id? }` | `Agent` | `{ detail: "..." }` |
+| Endpoint                           | Method | Request                                                                                                                                                                                                                                          | Success Response                 | Error Response      |
+| ---------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------- | ------------------- |
+| `/agent/get_all_agents`            | GET    | (none)                                                                                                                                                                                                                                           | `Agent[]` or `{ data: Agent[] }` | `{ detail: "..." }` |
+| `/agent/get_all_agents?agent_id=N` | GET    | query param `agent_id`                                                                                                                                                                                                                           | `Agent[]` (single item)          | `{ detail: "..." }` |
+| `/agent/upsert_agent`              | POST   | `{ name, description, agent_type, first_message, end_call_message, system_prompt, custom_vocabulary, filter_words, realistic_filler_words, language, voice_speed, patience_level, speech_recognition, call_recording, call_transcription, id? }` | `Agent`                          | `{ detail: "..." }` |
 
 ### Agent response shape (from API)
 

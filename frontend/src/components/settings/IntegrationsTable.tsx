@@ -1,6 +1,6 @@
 'use client';
 
-import type { IntegrationRow } from '@/atoms/IntegrationAtom';
+import type { IntegrationRow } from '@/types/integration';
 import { Box, CircularProgress, IconButton } from '@mui/material';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
 import { Pencil, Trash2 } from 'lucide-react';

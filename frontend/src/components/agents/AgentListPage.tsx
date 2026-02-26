@@ -1,50 +1,50 @@
 'use client';
 
 import agentsAtom, { deleteAgentAtom, fetchAgentList } from '@/atoms/AgentsAtom';
-import { constructTable } from '@/services/shared/helper';
-import { Add as AddIcon, Search as SearchIcon } from '@mui/icons-material';
-import {
-  Alert,
-  Box,
-  Button,
-  InputAdornment,
-  Paper,
-  Snackbar,
-  TextField,
-  Typography,
-  useTheme,
-} from '@mui/material';
-import { DataGrid, GridColDef, GridPaginationModel } from '@mui/x-data-grid';
+import { AgentActionMenu } from '@/components/agents/AgentActionMenu';
+import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
+import CreateAgentModal from '@/components/agents/CreateAgentModal';
+import { CustomButton, CustomTable } from '@/components/shared';
+import type { ApiAgent } from '@/types/agent';
+import type { CustomTableColumn } from '@/types/components';
+import { useNotification } from '@/utils/notification';
+import dayjs from 'dayjs';
 import { useAtom } from 'jotai';
+import { Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import React, { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 const AgentListPage: React.FC = () => {
-  const theme = useTheme();
   const router = useRouter();
-  const [_paginationModel, _setPaginationModel] = useState<GridPaginationModel>({
-    page: 0,
-    pageSize: 10,
-  });
   const [data] = useAtom(agentsAtom);
   const [, fetAgentsList] = useAtom(fetchAgentList);
   const [, removeAgent] = useAtom(deleteAgentAtom);
   const [loader, setLoader] = useState(false);
-  const [snackbar, setSnackbar] = useState<{
-    open: boolean;
-    message: string;
-    severity: 'success' | 'error';
-  }>({ open: false, message: '', severity: 'success' });
+  const [modalOpen, setModalOpen] = useState(false);
+  const { notify, contextHolder } = useNotification();
 
-  // Prevent double fetch with a ref flag
   const hasFetchedRef = useRef(false);
 
-  const handleEdit = (row: { id?: number | string; agent_type?: string }) => {
-    const type = (row.agent_type ?? 'inbound').toString().toLowerCase();
-    const id = row.id ?? 0;
-    if (!id) return;
-    router.push(`/agents/edit/${type}/${id}`);
-  };
+  const handleEdit = useCallback(
+    (row: ApiAgent) => {
+      const type = (row.agent_type ?? 'inbound').toString().toLowerCase();
+      if (!row.id) return;
+      router.push(`/agents/edit/${type}/${row.id}`);
+    },
+    [router],
+  );
+
+  const handleDelete = useCallback(
+    async (agentId: number) => {
+      try {
+        await removeAgent(agentId);
+        notify.success('Agent Deleted', 'Agent deleted successfully');
+      } catch {
+        notify.error('Delete Failed', 'Failed to delete agent. Please try again.');
+      }
+    },
+    [removeAgent, notify],
+  );
 
   useEffect(() => {
     if (hasFetchedRef.current) return;
@@ -64,168 +64,76 @@ const AgentListPage: React.FC = () => {
     init();
   }, []);
 
-  const defaultColumns = [
+  const columns: CustomTableColumn<ApiAgent>[] = [
     {
-      key: 1,
-      label: 'AGENT NAME',
-      value: 'name',
+      key: 'name',
+      title: 'Agent Name',
+      dataIndex: 'name',
+      sorter: true,
     },
     {
-      key: 2,
-      label: 'PHONE NUMBER',
-      value: 'phone_number',
+      key: 'phone_number',
+      title: 'Phone Number',
+      dataIndex: 'phone_number',
+      render: (value) => (value as string) || '-',
     },
     {
-      key: 3,
-      label: 'LAST EDITED',
-      value: 'updated_at',
+      key: 'updated_at',
+      title: 'Last Edited',
+      dataIndex: 'updated_at',
+      sorter: true,
+      render: (value) => (value ? dayjs.unix(value as number).format('DD MMM YYYY, HH:mm') : '-'),
     },
     {
-      key: 4,
-      label: 'AGENT TYPE',
-      value: 'agent_type',
+      key: 'agent_type',
+      title: 'Agent Type',
+      dataIndex: 'agent_type',
+      render: (_value, record) => <AgentTypeBadge agentType={record.agent_type} />,
     },
     {
-      key: 5,
-      label: 'ACTION',
-      value: 'action',
+      key: 'actions',
+      title: '',
+      align: 'right',
+      render: (_value, record) => (
+        <AgentActionMenu
+          onEdit={() => handleEdit(record)}
+          onDelete={() => handleDelete(record.id)}
+        />
+      ),
     },
   ];
 
-  const handleDelete = async (row: { id?: number | string }) => {
-    if (!row.id) return;
-    try {
-      await removeAgent(Number(row.id));
-      setSnackbar({ open: true, message: 'Agent deleted successfully', severity: 'success' });
-    } catch {
-      setSnackbar({
-        open: true,
-        message: 'Failed to delete agent. Please try again.',
-        severity: 'error',
-      });
-    }
-  };
-
-  const columns = constructTable(defaultColumns, handleEdit, handleDelete);
-
   return (
-    <Box sx={{ p: 3, height: '100%' }}>
-      {/* Header */}
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          mb: 3,
-        }}
-      >
-        <Typography variant="h4" sx={{ fontWeight: 600 }}>
-          Agents
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <TextField
-            placeholder="Search..."
-            size="small"
-            sx={{ width: 200 }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon sx={{ color: theme.palette.text.secondary, fontSize: 20 }} />
-                </InputAdornment>
-              ),
-            }}
-          />
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => router.push('/agents/create/inbound')}
-            sx={{
-              backgroundColor: '#8b5cf6',
-              '&:hover': {
-                backgroundColor: '#7c3aed',
-              },
-            }}
-          >
-            Create Agent
-          </Button>
-        </Box>
-      </Box>
+    <div className="h-full p-6">
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-foreground">Agents</h1>
+        <CustomButton type="primary" icon={<Plus />} onClick={() => setModalOpen(true)}>
+          Create Agent
+        </CustomButton>
+      </div>
 
-      {/* Data Grid */}
-      <Paper
-        sx={{
-          height: 'calc(100vh - 120px)',
-          width: '100%',
-          border: '1px solid #e2e8f0',
-          borderRadius: '5px',
-          overflow: 'hidden',
-        }}
-        elevation={0}
-      >
-        <DataGrid
-          rows={data?.agentList}
-          columns={columns as GridColDef<any>[]}
-          loading={loader}
-          paginationModel={_paginationModel}
-          onPaginationModelChange={_setPaginationModel}
-          pageSizeOptions={[10, 20, 50]}
-          rowCount={data.agentList.length}
-          paginationMode="server"
-          disableRowSelectionOnClick
-          onRowClick={(params) => console.log('Row clicked:', params)}
-          sx={{
-            border: 'none',
-            borderRadius: '5px',
-            overflow: 'hidden',
-            '& .MuiDataGrid-columnHeaders': {
-              backgroundColor: '#e5e7eb',
-            },
-            '& .MuiDataGrid-columnHeadersInner': {
-              backgroundColor: '#e5e7eb',
-            },
-            '& .MuiDataGrid-columnHeader': {
-              backgroundColor: '#e5e7eb',
-            },
+      <CustomTable
+        columns={columns}
+        dataSource={data.agentList}
+        rowKey="id"
+        loading={loader}
+        onRowClick={handleEdit}
+        searchable
+        searchPlaceholder="Search agents..."
+        pagination={{ current: 1, pageSize: 10, pageSizeOptions: [10, 20, 50] }}
+        emptyState={
+          <div className="flex flex-col items-center gap-3">
+            <p className="text-muted-foreground">No agents yet</p>
+            <CustomButton type="primary" icon={<Plus />} onClick={() => setModalOpen(true)}>
+              Create your first agent
+            </CustomButton>
+          </div>
+        }
+      />
 
-            '& .MuiDataGrid-columnHeaderTitle': {
-              fontWeight: 600,
-              textTransform: 'uppercase',
-              fontSize: '12px',
-              color: '#475569',
-            },
-
-            '& .MuiDataGrid-columnSeparator': {
-              color: '#475569',
-            },
-
-            '& .MuiDataGrid-row': {
-              borderBottom: '1px solid #e5e7eb',
-            },
-
-            '& .MuiDataGrid-cell': {
-              display: 'flex',
-              alignItems: 'center',
-            },
-          }}
-        />
-      </Paper>
-
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={4000}
-        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert
-          onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
-          severity={snackbar.severity}
-          variant="filled"
-          sx={{ width: '100%' }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </Box>
+      <CreateAgentModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      {contextHolder}
+    </div>
   );
 };
 

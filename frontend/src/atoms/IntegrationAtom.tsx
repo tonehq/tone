@@ -1,16 +1,9 @@
+import { deleteChannel, getChannels, upsertChannel } from '@/services/channelService';
+import type { IntegrationRow } from '@/types/integration';
 import { atom } from 'jotai';
 import { loadable } from 'jotai/utils';
 
-import { deleteChannel, getChannels, upsertChannel } from '@/services/channelService';
 import dayjs from 'dayjs';
-
-export interface IntegrationRow {
-  id: number;
-  name: string;
-  auth_token: string;
-  account_sid: string;
-  createdAt: string;
-}
 
 interface TwilioMetaData {
   account_sid: string;
@@ -27,7 +20,9 @@ const channelsRowsAtom = atom<Promise<IntegrationRow[]>>(async (get) => {
     name: row.name,
     auth_token: row.meta_data.auth_token ?? '••••••••',
     account_sid: row.meta_data.account_sid ?? '',
-    createdAt: row.created_at ? dayjs.unix(Number(row.created_at)).format('DD-MM-YYYY HH:mm:ss') : '-',
+    createdAt: row.created_at
+      ? dayjs.unix(Number(row.created_at)).format('DD-MM-YYYY HH:mm:ss')
+      : '-',
   }));
 });
 

@@ -2,10 +2,10 @@
 
 import {
   deleteChannelAtom,
-  type IntegrationRow,
   loadableChannelsAtom,
   upsertChannelAtom,
 } from '@/atoms/IntegrationAtom';
+import type { IntegrationRow } from '@/types/integration';
 import { Add as AddIcon } from '@mui/icons-material';
 import { Alert, Box, Button, CircularProgress, Snackbar, Typography } from '@mui/material';
 import { useAtom } from 'jotai';

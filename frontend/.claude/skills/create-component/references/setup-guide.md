@@ -57,9 +57,9 @@ Then add the theme CSS variables. These use **hex values organized by color fami
   --purple_100: #ede9fe;
   --purple_200: #ddd6fe;
   --purple_300: #c4b5fd;
-  --purple_400: #a78bfa;          /* palette.primary.light */
-  --purple_500: #8b5cf6;          /* palette.primary.main */
-  --purple_600: #7c3aed;          /* palette.primary.dark */
+  --purple_400: #a78bfa; /* palette.primary.light */
+  --purple_500: #8b5cf6; /* palette.primary.main */
+  --purple_600: #7c3aed; /* palette.primary.dark */
   --purple_700: #6d28d9;
   --purple_800: #5b21b6;
   --purple_900: #4c1d95;
@@ -69,9 +69,9 @@ Then add the theme CSS variables. These use **hex values organized by color fami
   --indigo_100: #e0e7ff;
   --indigo_200: #c7d2fe;
   --indigo_300: #a5b4fc;
-  --indigo_400: #818cf8;          /* palette.secondary.light */
-  --indigo_500: #6366f1;          /* palette.secondary.main */
-  --indigo_600: #4f46e5;          /* palette.secondary.dark */
+  --indigo_400: #818cf8; /* palette.secondary.light */
+  --indigo_500: #6366f1; /* palette.secondary.main */
+  --indigo_600: #4f46e5; /* palette.secondary.dark */
   --indigo_700: #4338ca;
   --indigo_800: #3730a3;
   --indigo_900: #312e81;
@@ -81,9 +81,9 @@ Then add the theme CSS variables. These use **hex values organized by color fami
   --green_100: #d1fae5;
   --green_200: #a7f3d0;
   --green_300: #6ee7b7;
-  --green_400: #34d399;           /* palette.success.light */
-  --green_500: #10b981;           /* palette.success.main */
-  --green_600: #059669;           /* palette.success.dark */
+  --green_400: #34d399; /* palette.success.light */
+  --green_500: #10b981; /* palette.success.main */
+  --green_600: #059669; /* palette.success.dark */
   --green_700: #047857;
   --green_800: #065f46;
   --green_900: #064e3b;
@@ -93,9 +93,9 @@ Then add the theme CSS variables. These use **hex values organized by color fami
   --amber_100: #fef3c7;
   --amber_200: #fde68a;
   --amber_300: #fcd34d;
-  --amber_400: #fbbf24;           /* palette.warning.light */
-  --amber_500: #f59e0b;           /* palette.warning.main */
-  --amber_600: #d97706;           /* palette.warning.dark */
+  --amber_400: #fbbf24; /* palette.warning.light */
+  --amber_500: #f59e0b; /* palette.warning.main */
+  --amber_600: #d97706; /* palette.warning.dark */
   --amber_700: #b45309;
   --amber_800: #92400e;
   --amber_900: #78350f;
@@ -105,34 +105,34 @@ Then add the theme CSS variables. These use **hex values organized by color fami
   --red_100: #fee2e2;
   --red_200: #fecaca;
   --red_300: #fca5a5;
-  --red_400: #f87171;             /* palette.error.light */
-  --red_500: #ef4444;             /* palette.error.main */
-  --red_600: #dc2626;             /* palette.error.dark */
+  --red_400: #f87171; /* palette.error.light */
+  --red_500: #ef4444; /* palette.error.main */
+  --red_600: #dc2626; /* palette.error.dark */
   --red_700: #b91c1c;
   --red_800: #991b1b;
   --red_900: #7f1d1d;
 
   /* ── Gray (Text, Backgrounds) ──────────────────────────────── */
-  --gray_50: #f9fafb;             /* palette.background.default */
+  --gray_50: #f9fafb; /* palette.background.default */
   --gray_100: #f3f4f6;
   --gray_200: #e5e7eb;
-  --gray_300: #d1d5db;            /* palette.text.disabled */
+  --gray_300: #d1d5db; /* palette.text.disabled */
   --gray_400: #9ca3af;
-  --gray_500: #6b7280;            /* palette.text.secondary */
+  --gray_500: #6b7280; /* palette.text.secondary */
   --gray_600: #4b5563;
   --gray_700: #374151;
-  --gray_800: #1f2937;            /* palette.text.primary */
+  --gray_800: #1f2937; /* palette.text.primary */
   --gray_900: #111827;
 
   /* ── Slate (Borders, Dividers) ─────────────────────────────── */
   --slate_50: #f8fafc;
   --slate_100: #f1f5f9;
-  --slate_200: #e2e8f0;           /* palette.divider */
+  --slate_200: #e2e8f0; /* palette.divider */
   --slate_300: #cbd5e1;
   --slate_400: #94a3b8;
 
   /* ── White ─────────────────────────────────────────────────── */
-  --white: #ffffff;               /* palette.background.paper */
+  --white: #ffffff; /* palette.background.paper */
 
   /* ── Shadows ───────────────────────────────────────────────── */
   --shadow-xs: 0 1px 2px 0 rgba(16, 24, 40, 0.05);
@@ -143,7 +143,7 @@ Then add the theme CSS variables. These use **hex values organized by color fami
   /* ── Border Radius ─────────────────────────────────────────── */
   --radius-xs: 2px;
   --radius-sm: 4px;
-  --radius-md: 5px;               /* shape.borderRadius — project default */
+  --radius-md: 5px; /* shape.borderRadius — project default */
   --radius-lg: 8px;
   --radius-xl: 10px;
   --radius-2xl: 12px;
@@ -182,14 +182,14 @@ const config: Config = {
   theme: {
     extend: {
       fontSize: {
-        xs: '0.75rem',       // 12px
-        sm: '0.8125rem',     // 13px — project custom
-        base: '0.875rem',    // 14px — project custom
-        lg: '1rem',          // 16px
-        xl: '1.125rem',      // 18px
-        '2xl': '1.5rem',     // 24px
-        '3xl': '1.875rem',   // 30px
-        '4xl': '2.25rem',    // 36px
+        xs: '0.75rem', // 12px
+        sm: '0.8125rem', // 13px — project custom
+        base: '0.875rem', // 14px — project custom
+        lg: '1rem', // 16px
+        xl: '1.125rem', // 18px
+        '2xl': '1.5rem', // 24px
+        '3xl': '1.875rem', // 30px
+        '4xl': '2.25rem', // 36px
       },
       colors: {
         purple: {
@@ -310,20 +310,20 @@ export default config;
 
 ```typescript
 // Primary button — purple palette
-className="bg-purple-500 text-white hover:bg-purple-600"
+className = 'bg-purple-500 text-white hover:bg-purple-600';
 
 // Secondary action — indigo palette
-className="bg-indigo-500 text-white hover:bg-indigo-600"
+className = 'bg-indigo-500 text-white hover:bg-indigo-600';
 
 // Error state — red palette
-className="bg-red-500 text-white hover:bg-red-600"
+className = 'bg-red-500 text-white hover:bg-red-600';
 
 // Text colors — gray palette
-className="text-gray-800"   // primary text
-className="text-gray-500"   // secondary text
+className = 'text-gray-800'; // primary text
+className = 'text-gray-500'; // secondary text
 
 // Borders — slate palette
-className="border-slate-200" // divider
+className = 'border-slate-200'; // divider
 ```
 
 ---
@@ -337,11 +337,11 @@ yarn add class-variance-authority clsx tailwind-merge
 
 ### What each package does
 
-| Package | Purpose |
-|---------|---------|
-| `clsx` | Conditional className composition — accepts strings, objects, arrays, and strips falsy values |
-| `tailwind-merge` | Resolves Tailwind CSS class conflicts — `twMerge('px-4', 'px-2')` → `'px-2'` (last wins) |
-| `class-variance-authority` | Type-safe variant management for components with multiple visual states (CVA) |
+| Package                    | Purpose                                                                                       |
+| -------------------------- | --------------------------------------------------------------------------------------------- |
+| `clsx`                     | Conditional className composition — accepts strings, objects, arrays, and strips falsy values |
+| `tailwind-merge`           | Resolves Tailwind CSS class conflicts — `twMerge('px-4', 'px-2')` → `'px-2'` (last wins)      |
+| `class-variance-authority` | Type-safe variant management for components with multiple visual states (CVA)                 |
 
 Together, `clsx` + `tailwind-merge` form the `cn()` utility. CVA uses `cn()` internally for variant class application.
 
@@ -376,31 +376,31 @@ export function cn(...inputs: ClassValue[]) {
 
 ```typescript
 // clsx alone — falsy removal, object/array support, but NO conflict resolution
-clsx('bg-primary', 'bg-red-500')          // → 'bg-primary bg-red-500' (BOTH applied)
+clsx('bg-primary', 'bg-red-500'); // → 'bg-primary bg-red-500' (BOTH applied)
 
 // twMerge alone — conflict resolution, but NO object/array/falsy support
-twMerge('bg-primary', 'bg-red-500')       // → 'bg-red-500' (correct)
-twMerge({ 'bg-red-500': true })           // ERROR: doesn't accept objects
+twMerge('bg-primary', 'bg-red-500'); // → 'bg-red-500' (correct)
+twMerge({ 'bg-red-500': true }); // ERROR: doesn't accept objects
 
 // cn() — best of both
-cn('bg-primary', { 'bg-red-500': true })  // → 'bg-red-500' (correct)
-cn('px-4', false && 'px-2', 'mt-4')       // → 'px-4 mt-4' (correct)
+cn('bg-primary', { 'bg-red-500': true }); // → 'bg-red-500' (correct)
+cn('px-4', false && 'px-2', 'mt-4'); // → 'px-4 mt-4' (correct)
 ```
 
 ### Quick usage examples
 
 ```typescript
 // Static classes
-cn('flex items-center gap-2')
+cn('flex items-center gap-2');
 
 // Conditional via object
-cn('base', { 'bg-primary': isActive, 'opacity-50': disabled })
+cn('base', { 'bg-primary': isActive, 'opacity-50': disabled });
 
 // Conditional via short-circuit
-cn('base', isActive && 'bg-primary', disabled && 'opacity-50')
+cn('base', isActive && 'bg-primary', disabled && 'opacity-50');
 
 // Consumer override (className prop always last)
-cn('bg-primary text-white', className)
+cn('bg-primary text-white', className);
 // If className='bg-red-500', twMerge resolves → 'bg-red-500 text-white'
 ```
 
@@ -618,6 +618,7 @@ yarn dlx shadcn@latest init
 ```
 
 When prompted, select:
+
 - **Style**: New York
 - **Base color**: Neutral
 - **CSS variables**: Yes
@@ -690,11 +691,13 @@ cd frontend && yarn dlx shadcn@latest add button
 ```
 
 Check the generated file:
+
 ```bash
 cat frontend/src/components/ui/button.tsx
 ```
 
 It should:
+
 - Import from `@/lib/utils`
 - Use `cva` for variants
 - Use CSS variable palette classes (`bg-purple-500`, etc.)
@@ -706,14 +709,15 @@ It should:
 
 This setup allows MUI and shadcn/Tailwind to coexist:
 
-| Layer | Library | When to use |
-|-------|---------|-------------|
-| Existing components | MUI + `sx` prop | Maintain existing code, don't migrate unless needed |
-| New shared components | shadcn + Tailwind | All new components created via `/create-component` |
-| Theme tokens | CSS variables | Shared between both — MUI reads from `theme.ts`, Tailwind reads from CSS vars |
-| Icons | `lucide-react` | Both MUI and shadcn components use Lucide |
+| Layer                 | Library           | When to use                                                                   |
+| --------------------- | ----------------- | ----------------------------------------------------------------------------- |
+| Existing components   | MUI + `sx` prop   | Maintain existing code, don't migrate unless needed                           |
+| New shared components | shadcn + Tailwind | All new components created via `/create-component`                            |
+| Theme tokens          | CSS variables     | Shared between both — MUI reads from `theme.ts`, Tailwind reads from CSS vars |
+| Icons                 | `lucide-react`    | Both MUI and shadcn components use Lucide                                     |
 
 ### Rules for coexistence:
+
 1. **Never mix** MUI `sx` prop and Tailwind classes on the same element
 2. **New pages** can use a mix of MUI components (existing) and shadcn components (new)
 3. **Existing shared components** (`CustomButton`, `TextInput`, `FormComponent`) remain MUI-based
@@ -725,19 +729,23 @@ This setup allows MUI and shadcn/Tailwind to coexist:
 ## Troubleshooting
 
 ### Tailwind classes not applying
+
 - Ensure `@import 'tailwindcss'` is at the top of `globals.css`
 - Check that `postcss.config.mjs` uses `@tailwindcss/postcss`
 - Restart the dev server after config changes
 
 ### CSS variable conflicts
+
 - CSS variables use direct hex values (`--purple_500: #8b5cf6`) — no HSL conversion
 - Tailwind config references them as `var(--purple_500)`
 - If colors look wrong, verify hex values in the `:root` block of `globals.css`
 
 ### Type errors with cn()
+
 - Ensure `clsx` and `tailwind-merge` are installed
 - Check import path: `import { cn } from '@/lib/utils'`
 
 ### shadcn components not rendering
+
 - Ensure `'use client'` directive is present on interactive components
 - Check that `components.json` aliases match your tsconfig paths

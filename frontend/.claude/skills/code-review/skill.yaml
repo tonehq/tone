@@ -28,5 +28,5 @@ allowed-tools: Bash Read
 
 # ── Claude Code extensions ──────────────────────────────────────────────────
 argument-hint: '[base-branch]'
-disable-model-invocation: false   # Claude may invoke automatically when review is relevant
-user-invocable: true              # Available via /code-review
+disable-model-invocation: false # Claude may invoke automatically when review is relevant
+user-invocable: true # Available via /code-review

@@ -22,12 +22,12 @@ You are a Skill Diagnostics Engineer. Your job is to read the skill error log, i
 ARG=$ARGUMENTS
 ```
 
-| Argument | Action |
-|----------|--------|
-| empty or `summary` | Show a full summary of all errors |
-| `search <keyword>` | Search the error log for entries matching the keyword |
-| `clear-resolved` | Remove all entries with `Resolution` that is not "unresolved" |
-| `recent <N>` | Show the N most recent entries (default: 10) |
+| Argument           | Action                                                        |
+| ------------------ | ------------------------------------------------------------- |
+| empty or `summary` | Show a full summary of all errors                             |
+| `search <keyword>` | Search the error log for entries matching the keyword         |
+| `clear-resolved`   | Remove all entries with `Resolution` that is not "unresolved" |
+| `recent <N>`       | Show the N most recent entries (default: 10)                  |
 
 ---
 
@@ -41,6 +41,7 @@ cat .claude/error-log.md 2>/dev/null || echo "No error log found."
 Read `.claude/error-log.md` in full. Also read `.claude/rules.md` to understand the error format and categories.
 
 If the log is empty or only contains the header, report:
+
 > No errors logged yet. Errors are recorded automatically when `/generate-tests` or `/code-review` encounter failures.
 
 ---
@@ -63,26 +64,26 @@ Parse all entries and produce:
 ## By Severity
 
 | Severity | Count |
-|----------|-------|
-| Critical | N |
-| High | N |
-| Medium | N |
-| Low | N |
+| -------- | ----- |
+| Critical | N     |
+| High     | N     |
+| Medium   | N     |
+| Low      | N     |
 
 ## By Category
 
-| Category | Count | Top file |
-|----------|-------|----------|
-| selector | N | `path/to/file.ts` |
-| timeout | N | `path/to/file.ts` |
-| ... | | |
+| Category | Count | Top file          |
+| -------- | ----- | ----------------- |
+| selector | N     | `path/to/file.ts` |
+| timeout  | N     | `path/to/file.ts` |
+| ...      |       |                   |
 
 ## By Skill
 
-| Skill | Errors | Resolved |
-|-------|--------|----------|
-| generate-tests | N | N |
-| code-review | N | N |
+| Skill          | Errors | Resolved |
+| -------------- | ------ | -------- |
+| generate-tests | N      | N        |
+| code-review    | N      | N        |
 
 ---
 
@@ -90,16 +91,17 @@ Parse all entries and produce:
 
 Flag any combination of (category + file) that appears 2+ times:
 
-| Pattern | Occurrences | Status |
-|---------|-------------|--------|
-| `strict-mode` in `e2e/dashboard/home.spec.ts` | 3 | resolved |
-| `timeout` in `e2e/auth/login.spec.ts` | 2 | 1 unresolved |
+| Pattern                                       | Occurrences | Status       |
+| --------------------------------------------- | ----------- | ------------ |
+| `strict-mode` in `e2e/dashboard/home.spec.ts` | 3           | resolved     |
+| `timeout` in `e2e/auth/login.spec.ts`         | 2           | 1 unresolved |
 
 ---
 
 ## Recommendations
 
 Based on the patterns above, suggest preventive actions:
+
 1. ...
 2. ...
 ```
@@ -114,9 +116,11 @@ Grep the error log for the keyword (case-insensitive). Show matching entries wit
 **Matches**: N entries
 
 ### [date] skill — title
+
 (full entry)
 
 ### [date] skill — title
+
 (full entry)
 ```
 
@@ -126,6 +130,7 @@ Remove all entries where `Resolution` is NOT "unresolved". Keep the header intac
 Show how many entries were removed vs retained.
 
 **Ask for confirmation before deleting:**
+
 > This will remove N resolved entries and keep M unresolved. Proceed?
 
 ### Mode: `recent <N>`
@@ -139,6 +144,7 @@ Show the last N entries (most recent first, based on date).
 Always end with:
 
 **How would you like to proceed?**
+
 1. View full error log (raw)
 2. Search for a specific error pattern
 3. Clear resolved entries

@@ -105,8 +105,16 @@ function AddPublicKeyModal({
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: '5px' } }}>
-      <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      maxWidth="sm"
+      fullWidth
+      PaperProps={{ sx: { borderRadius: '5px' } }}
+    >
+      <DialogTitle
+        sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}
+      >
         <Typography component="span" variant="h6" sx={{ fontWeight: 600 }}>
           Add Public Key
         </Typography>
@@ -147,7 +155,12 @@ function AddPublicKeyModal({
           {domains.length > 0 && (
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
               {domains.map((d) => (
-                <Chip key={d} label={d} size="small" onDelete={() => setDomains(domains.filter((x) => x !== d))} />
+                <Chip
+                  key={d}
+                  label={d}
+                  size="small"
+                  onDelete={() => setDomains(domains.filter((x) => x !== d))}
+                />
               ))}
             </Box>
           )}
@@ -157,28 +170,47 @@ function AddPublicKeyModal({
             Abuse Prevention (Google reCAPTCHA)
           </Typography>
           <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mb: 1 }}>
-            Utilize Google reCAPTCHA to prevent abuse on your applications (forms, widgets, etc.). The public key will
-            require reCAPTCHA token to authenticate, so you must also add it on frontend. (
-            <Typography component="a" href="#" variant="body2" color="primary" sx={{ textDecoration: 'underline' }}>
+            Utilize Google reCAPTCHA to prevent abuse on your applications (forms, widgets, etc.).
+            The public key will require reCAPTCHA token to authenticate, so you must also add it on
+            frontend. (
+            <Typography
+              component="a"
+              href="#"
+              variant="body2"
+              color="primary"
+              sx={{ textDecoration: 'underline' }}
+            >
               See Docs
             </Typography>
             )
           </Typography>
-          <Switch checked={abusePrevention} onChange={(e) => setAbusePrevention(e.target.checked)} color="primary" />
+          <Switch
+            checked={abusePrevention}
+            onChange={(e) => setAbusePrevention(e.target.checked)}
+            color="primary"
+          />
         </Box>
         <Box>
           <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
             Fraud Protection
           </Typography>
           <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mb: 1 }}>
-            Once enabled, the system will automatically detect and limit suspicious requests based on IP address and
-            destination number.
+            Once enabled, the system will automatically detect and limit suspicious requests based
+            on IP address and destination number.
           </Typography>
-          <Switch checked={fraudProtection} onChange={(e) => setFraudProtection(e.target.checked)} color="primary" />
+          <Switch
+            checked={fraudProtection}
+            onChange={(e) => setFraudProtection(e.target.checked)}
+            color="primary"
+          />
         </Box>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2, pt: 0 }}>
-        <Button onClick={handleClose} variant="outlined" sx={{ borderColor: theme.palette.divider }}>
+        <Button
+          onClick={handleClose}
+          variant="outlined"
+          sx={{ borderColor: theme.palette.divider }}
+        >
           Cancel
         </Button>
         <Button
@@ -282,7 +314,11 @@ export default function PublicKeysTab() {
         initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
         sx={dataGridSx}
       />
-      <AddPublicKeyModal open={addModalOpen} onClose={() => setAddModalOpen(false)} onSave={handleSave} />
+      <AddPublicKeyModal
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        onSave={handleSave}
+      />
       <Menu
         anchorEl={menuAnchor?.el}
         open={Boolean(menuAnchor)}

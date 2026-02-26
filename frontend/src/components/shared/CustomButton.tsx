@@ -56,9 +56,9 @@ const CustomButton = React.forwardRef<HTMLButtonElement, CustomButtonProps>(
       {...props}
     >
       {loading ? (
-        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        <Loader2 className="h-4 w-4 animate-spin" />
       ) : (
-        icon && <span className="mr-2 inline-flex shrink-0">{icon}</span>
+        icon && <span className="inline-flex shrink-0">{icon}</span>
       )}
       {children}
     </Button>

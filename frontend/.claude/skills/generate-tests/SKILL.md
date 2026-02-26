@@ -26,10 +26,12 @@ FULL_ARGS=$ARGUMENTS
 ### 1a. Parse `--docs` flag (optional)
 
 If `$ARGUMENTS` contains `--docs <path>`:
+
 - Extract the docs path and set `FEATURE_DOCS=<path>`
 - Remove `--docs <path>` from arguments, leaving the target
 
 Examples:
+
 ```
 /generate-tests home --docs e2e/docs/home.md
   → TARGET=home, FEATURE_DOCS=e2e/docs/home.md
@@ -74,6 +76,7 @@ Read ALL three reference files before generating any tests. Do not skip any.
 ### 2a. Read feature docs (if available)
 
 If `FEATURE_DOCS` is set, read the feature doc file in full. Extract:
+
 1. **User stories / acceptance criteria** — what the user expects to do on this page
 2. **Edge cases** — scenarios the component code alone might not reveal
 3. **Business rules** — validation logic, permissions, conditional UI
@@ -89,11 +92,13 @@ for it — the test will fail, surfacing a gap between the spec and the implemen
 ## Step 3 — Analyse the component (+ feature docs)
 
 Read the resolved component file(s) in full. Also read any closely related files:
+
 - Shared sub-components it imports (form, inputs, buttons, notifications)
 - The auth/API service it calls
 - Related utility files (notification hooks, form helpers)
 
 From your analysis, capture:
+
 1. **Route** — what URL does this page live at?
 2. **Elements** — every interactive or visible element (inputs, buttons, links, checkboxes, text)
 3. **User flows** — what can a user DO on this page (submit form, click link, toggle visibility)?
@@ -107,9 +112,9 @@ From your analysis, capture:
 If a feature doc was loaded in Step 2a, cross-reference its requirements against the
 component analysis above. Build a **coverage matrix**:
 
-| Requirement (from feature doc) | Found in code? | Test plan |
-|-------------------------------|----------------|-----------|
-| User story / acceptance criterion | Yes / No | Test name or "GAP — generate failing test" |
+| Requirement (from feature doc)    | Found in code? | Test plan                                  |
+| --------------------------------- | -------------- | ------------------------------------------ |
+| User story / acceptance criterion | Yes / No       | Test name or "GAP — generate failing test" |
 
 - **Found in code**: Generate tests that verify the implementation matches the spec
 - **NOT found in code**: Still generate the test — it will fail, surfacing the gap between
@@ -127,6 +132,7 @@ cat package.json | grep playwright
 ```
 
 If `@playwright/test` is **not** in devDependencies:
+
 1. Add it to `package.json` devDependencies: `"@playwright/test": "^1.50.0"`
 2. Add test scripts to `package.json` scripts:
    ```json
@@ -145,12 +151,12 @@ If `playwright.config.ts` does **not** exist, create it using the template in `t
 
 Map the target page to its test file location:
 
-| Page file | Test file |
-|-----------|-----------|
-| `src/app/auth/login/LoginPage.tsx` | `e2e/auth/login.spec.ts` |
-| `src/app/auth/signup/SignupClient.tsx` | `e2e/auth/signup.spec.ts` |
-| `src/app/(dashboard)/home/...` | `e2e/dashboard/home.spec.ts` |
-| `src/app/auth/forgotpassword/...` | `e2e/auth/forgot-password.spec.ts` |
+| Page file                              | Test file                          |
+| -------------------------------------- | ---------------------------------- |
+| `src/app/auth/login/LoginPage.tsx`     | `e2e/auth/login.spec.ts`           |
+| `src/app/auth/signup/SignupClient.tsx` | `e2e/auth/signup.spec.ts`          |
+| `src/app/(dashboard)/home/...`         | `e2e/dashboard/home.spec.ts`       |
+| `src/app/auth/forgotpassword/...`      | `e2e/auth/forgot-password.spec.ts` |
 
 General rule: strip `src/app/` prefix, replace inner path with kebab-case, append `.spec.ts`.
 
@@ -174,6 +180,7 @@ Apply **all three reference checklists** to produce tests that cover:
 8. **Accessibility** — keyboard navigation, aria roles, focus management
 
 ### Code standards:
+
 - Use the worker-context + single-tab fixture from `test-patterns.md` — one browser window per worker, one tab reused across all tests. State isolation is handled by `beforeEach` hooks (soft navigation, `page.unrouteAll()`). This eliminates tab churn in `--headed` mode. Only create a fresh tab per test if tests have conflicting browser-level state that cannot be reset in `beforeEach`
 - **Dashboard pages (login once per worker)**: Call `loginViaUI` from `e2e/helpers/auth.ts` inside the **worker-scoped fixture**, NOT in `beforeEach`. This logs in once through the actual login page UI against the real backend. Auth cookies persist across all tests in the worker. Do NOT manually inject cookies with `addCookies()`. See `test-patterns.md` for full usage.
 - **Soft navigation (dashboard pages)**: Use an `ensureOnPage(page, '/route')` helper in `beforeEach` instead of `page.goto()`. It skips navigation when already on the target page, uses sidebar links (`a[href="/route"]`) for client-side routing from other dashboard pages, and only falls back to hard `page.goto()` when outside the dashboard layout.
@@ -193,6 +200,7 @@ Apply **all three reference checklists** to produce tests that cover:
 - Apply the **assertion-checklist.md** to ensure each test has the right assertion type
 
 ### Selector priority order (most preferred first):
+
 1. `getByRole` with accessible name
 2. `getByLabel`
 3. `getByPlaceholder`
@@ -204,6 +212,7 @@ Apply **all three reference checklists** to produce tests that cover:
 ## Step 7 — Write the test file
 
 Write the complete test file to disk. Ensure:
+
 - Valid TypeScript syntax
 - No import errors (correct `@playwright/test` import)
 - Correct file path (matches Step 5)
@@ -219,11 +228,13 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/auth/login
 ```
 
 If the server responds with 200:
+
 ```bash
 yarn playwright test <test-file-path> --reporter=list
 ```
 
 If the server is NOT running:
+
 - Do NOT start it automatically (it takes too long to be useful here)
 - Inform the user: "Start the dev server with `yarn dev` in a separate terminal, then re-run `/generate-tests`"
 - Still write the test file so it is ready to run
@@ -235,6 +246,7 @@ If the server is NOT running:
 If any tests failed after running, append each failure to `.claude/error-log.md` using the format defined in `.claude/rules.md` Section 1.
 
 Before logging, read the existing error log to:
+
 - Check if the same error was logged before (link as recurring pattern)
 - Avoid duplicate entries for the same error in the same run
 
@@ -270,15 +282,15 @@ Also log if the generated spec file had issues (syntax errors, duplicate test ti
 
 ## Test Suite Summary
 
-| Group | Tests | Result |
-|-------|-------|--------|
-| Page Rendering | N | ✅ / ❌ |
-| Navigation | N | ✅ / ❌ |
-| Form Validation | N | ✅ / ❌ |
-| User Flows | N | ✅ / ❌ |
-| Loading State | N | ✅ / ❌ |
-| Error States | N | ✅ / ❌ |
-| Accessibility | N | ✅ / ❌ |
+| Group           | Tests | Result  |
+| --------------- | ----- | ------- |
+| Page Rendering  | N     | ✅ / ❌ |
+| Navigation      | N     | ✅ / ❌ |
+| Form Validation | N     | ✅ / ❌ |
+| User Flows      | N     | ✅ / ❌ |
+| Loading State   | N     | ✅ / ❌ |
+| Error States    | N     | ✅ / ❌ |
+| Accessibility   | N     | ✅ / ❌ |
 
 ---
 
@@ -304,6 +316,7 @@ Brief description of each test group and what it covers.
 After presenting findings, ask:
 
 **How would you like to proceed?**
+
 1. Fix all failing tests
 2. Re-run after starting the dev server
 3. Add more test cases (specify which scenario)

@@ -131,21 +131,6 @@ body {
   background: #a1a1a1;
 }
 
-/* MUI DataGrid custom styles */
-.MuiDataGrid-root {
-  font-family: inherit !important;
-}
-
-.MuiDataGrid-cell:focus,
-.MuiDataGrid-cell:focus-within {
-  outline: none !important;
-}
-
-.MuiDataGrid-columnHeader:focus,
-.MuiDataGrid-columnHeader:focus-within {
-  outline: none !important;
-}
-
 /* Custom animations */
 @keyframes fadeIn {
   from {

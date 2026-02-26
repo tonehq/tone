@@ -83,7 +83,7 @@ test.describe('Create Inbound Agent Page', () => {
     });
 
     test('shows info alert about receiving calls', async ({ page }) => {
-      await expect(page.locator('.MuiAlert-root')).toContainText('can\'t receive calls');
+      await expect(page.locator('.MuiAlert-root')).toContainText("can't receive calls");
     });
 
     test('shows Configure heading', async ({ page }) => {

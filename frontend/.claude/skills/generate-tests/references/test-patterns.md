@@ -97,6 +97,7 @@ manually injecting cookies, use the **shared auth helper** that logs in through 
 login page UI against the real backend. The app's `setToken()` function sets all 4 cookies naturally.
 
 **Critical rules**:
+
 - Login happens **once per worker** in the worker-scoped fixture, NOT in `beforeEach`
 - `beforeEach` uses **soft navigation** — skips reload if already on the target page, uses
   sidebar links for client-side navigation when on another dashboard page, and only falls
@@ -106,6 +107,7 @@ login page UI against the real backend. The app's `setToken()` function sets all
 **Helper location**: `e2e/helpers/auth.ts`
 
 **Exports**:
+
 - `loginViaUI(page, options?)` — logs in via the login page against the real backend
 - `TEST_EMAIL`, `TEST_PASSWORD` — default test credentials (overridable via env vars)
 
@@ -160,6 +162,7 @@ test.describe('Dashboard Page', () => {
 ```
 
 **What loginViaUI does**:
+
 1. Navigates to `/auth/login`
 2. Fills email + password and clicks Continue
 3. The real backend validates credentials, returns a JWT
@@ -173,12 +176,12 @@ test.describe('Dashboard Page', () => {
 
 **Cookies set by loginViaUI** (all via the app, not manually):
 
-| Cookie | Value | Source |
-|--------|-------|--------|
+| Cookie              | Value            | Source                |
+| ------------------- | ---------------- | --------------------- |
 | `tone_access_token` | JWT from backend | Real backend response |
-| `org_tenant_id` | Org ID or empty | `organizations[0].id` |
-| `login_data` | JSON string | Full login response |
-| `user_id` | User ID | Backend response |
+| `org_tenant_id`     | Org ID or empty  | `organizations[0].id` |
+| `login_data`        | JSON string      | Full login response   |
+| `user_id`           | User ID          | Backend response      |
 
 **Tests that clear cookies (e.g., Auth Redirect)** must save and restore them:
 
@@ -430,6 +433,7 @@ test.describe('Login Page', () => {
 ```
 
 **Key rules for auth page soft nav**:
+
 - **No form clearing in the helper** — `fill('')` causes React re-renders and element detachment. Skip-or-goto only.
 - **Form Validation groups** need a nested `beforeEach` with `page.goto()` to reset field values.
 - **Auth Flow groups** (that mock login API with 200) must `clearCookies()` in `afterEach` — the mock triggers `setToken()` which sets real auth cookies that persist and can interfere with subsequent tests.
@@ -440,6 +444,7 @@ test.describe('Login Page', () => {
 ## CustomButton loading state
 
 `CustomButton` with `loading={true}` renders:
+
 - Button text changes from `text` prop to `"Loading..."`
 - Button gets `disabled` attribute
 - `CircularProgress` spinner appears as start icon
@@ -480,8 +485,8 @@ expect(accessToken!.value.length).toBeGreaterThan(0);
 ## Keyboard navigation
 
 ```typescript
-await page.keyboard.press('Tab');        // move focus
-await page.keyboard.press('Enter');      // activate focused element
-await page.keyboard.press('Escape');     // close dialog/menu
-await page.keyboard.press('Space');      // check checkbox
+await page.keyboard.press('Tab'); // move focus
+await page.keyboard.press('Enter'); // activate focused element
+await page.keyboard.press('Escape'); // close dialog/menu
+await page.keyboard.press('Space'); // check checkbox
 ```

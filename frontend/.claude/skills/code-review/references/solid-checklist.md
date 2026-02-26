@@ -1,4 +1,5 @@
 # SOLID Checklist
+
 <!-- Global Frontend Standard — framework notes are marked [React] [Next.js] -->
 <!-- Severity: 🔴 CRITICAL · 🟠 HIGH · 🟡 MEDIUM · 🔵 LOW -->
 
@@ -26,14 +27,16 @@ function UserCard({ id }: { id: string }) {
   const [user, setUser] = useState(null);
   useEffect(() => {
     fetch(`/api/users/${id}`)
-      .then(r => r.json())
-      .then(data => setUser({ ...data, fullName: `${data.first} ${data.last}` }));
+      .then((r) => r.json())
+      .then((data) => setUser({ ...data, fullName: `${data.first} ${data.last}` }));
   }, [id]);
   return <div>{user?.fullName}</div>;
 }
 
 // ✅ Good — fetch and transform in a hook; component only renders
-function useUser(id: string) { /* fetch + transform */ }
+function useUser(id: string) {
+  /* fetch + transform */
+}
 
 function UserCard({ id }: { id: string }) {
   const { user } = useUser(id);
@@ -62,7 +65,7 @@ function UserCard({ id }: { id: string }) {
 // ❌ Bad — every new type requires editing Button
 function Button({ type }: { type: 'primary' | 'danger' | 'ghost' }) {
   if (type === 'primary') return <button className="btn-primary" />;
-  if (type === 'danger')  return <button className="btn-danger" />;
+  if (type === 'danger') return <button className="btn-danger" />;
 }
 
 // ✅ Good — compose without modifying
@@ -98,8 +101,12 @@ function render(repo: GitHubRepo | BitbucketRepo) {
 }
 
 // ✅ Good — shared interface; caller is unaware of the concrete type
-interface Repo { popularityCount: number }
-function render(repo: Repo) { return repo.popularityCount; }
+interface Repo {
+  popularityCount: number;
+}
+function render(repo: Repo) {
+  return repo.popularityCount;
+}
 ```
 
 ---
@@ -122,13 +129,22 @@ function render(repo: Repo) { return repo.popularityCount; }
 ```tsx
 // ❌ Bad — callers only ever need name and avatar
 interface User {
-  id: string; name: string; avatar: string;
-  billingAddress: string; subscriptionTier: string; // never used in UI
+  id: string;
+  name: string;
+  avatar: string;
+  billingAddress: string;
+  subscriptionTier: string; // never used in UI
 }
 
 // ✅ Good — split by consumer need
-interface UserProfile { name: string; avatar: string; }
-interface UserBilling { billingAddress: string; subscriptionTier: string; }
+interface UserProfile {
+  name: string;
+  avatar: string;
+}
+interface UserBilling {
+  billingAddress: string;
+  subscriptionTier: string;
+}
 ```
 
 ---
@@ -152,7 +168,7 @@ interface UserBilling { billingAddress: string; subscriptionTier: string; }
 ```tsx
 // ❌ Bad — business logic coupled to axios directly
 function useUser(id: string) {
-  return useQuery(['user', id], () => axios.get(`/users/${id}`).then(r => r.data));
+  return useQuery(['user', id], () => axios.get(`/users/${id}`).then((r) => r.data));
 }
 
 // ✅ Good — depends on an abstraction; implementation is injected or centralised
@@ -165,17 +181,17 @@ function useUser(id: string, fetcher = userService.getById) {
 
 ## Common Code Smells
 
-| Smell | Severity | Signals | [React] Example |
-|-------|----------|---------|-----------------|
-| Long method | 🟠 | Function > 30 lines, multiple nesting levels | `useEffect` with 50+ lines of mixed logic |
-| Feature envy | 🟡 | Module uses far more data from another module than from its own state | Component reaches into sibling store slice instead of receiving props |
-| Primitive obsession | 🟡 | Raw `string`/`number` where a named type or enum would prevent invalid states | `status: string` instead of `status: 'idle' \| 'loading' \| 'error' \| 'success'` |
-| Shotgun surgery | 🟠 | One business change requires edits across many unrelated files | Adding a field requires touching API type + atom + component + form + validator |
-| Dead code | 🟡 | Unreachable branches, exported symbols with zero consumers | Flag always `false`, unused `variant` prop arm |
-| Magic values | 🟡 | Hardcoded numbers/strings with no named constant | `setTimeout(fn, 3000)` — what is 3000? |
-| Speculative generality | 🔵 | Abstractions built for hypothetical future use cases | `PluginManager` used by exactly one plugin |
-| God component | 🟠 | [React] One component manages global layout, data, auth, and business rules | Dashboard page with 400+ lines |
-| Prop drilling | 🟡 | [React] Prop passed through 3+ component layers unused in intermediaries | `userId` tunnelled through 4 components to reach a deeply nested avatar |
+| Smell                  | Severity | Signals                                                                       | [React] Example                                                                   |
+| ---------------------- | -------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Long method            | 🟠       | Function > 30 lines, multiple nesting levels                                  | `useEffect` with 50+ lines of mixed logic                                         |
+| Feature envy           | 🟡       | Module uses far more data from another module than from its own state         | Component reaches into sibling store slice instead of receiving props             |
+| Primitive obsession    | 🟡       | Raw `string`/`number` where a named type or enum would prevent invalid states | `status: string` instead of `status: 'idle' \| 'loading' \| 'error' \| 'success'` |
+| Shotgun surgery        | 🟠       | One business change requires edits across many unrelated files                | Adding a field requires touching API type + atom + component + form + validator   |
+| Dead code              | 🟡       | Unreachable branches, exported symbols with zero consumers                    | Flag always `false`, unused `variant` prop arm                                    |
+| Magic values           | 🟡       | Hardcoded numbers/strings with no named constant                              | `setTimeout(fn, 3000)` — what is 3000?                                            |
+| Speculative generality | 🔵       | Abstractions built for hypothetical future use cases                          | `PluginManager` used by exactly one plugin                                        |
+| God component          | 🟠       | [React] One component manages global layout, data, auth, and business rules   | Dashboard page with 400+ lines                                                    |
+| Prop drilling          | 🟡       | [React] Prop passed through 3+ component layers unused in intermediaries      | `userId` tunnelled through 4 components to reach a deeply nested avatar           |
 
 ---
 
@@ -201,13 +217,13 @@ function useUser(id: string, fetcher = userService.getById) {
 
 ## Refactor Heuristics
 
-| # | Heuristic | Principle addressed |
-|---|-----------|-------------------|
-| 1 | Split by **responsibility**, not by size | SRP |
-| 2 | Introduce abstraction only at the **second use case** — resist the urge to generalise early | OCP, YAGNI |
-| 3 | Keep refactors **incremental** — isolate behaviour before moving it | All |
-| 4 | Prefer **composition over inheritance** — wrap, don't extend | LSP, OCP |
-| 5 | Make **illegal states unrepresentable** via TypeScript union types | ISP, SRP |
-| 6 | [React] Extract logic to a **custom hook** before extracting to a new component | SRP |
-| 7 | [React] Pass **data and callbacks as props** rather than importing global state inside a component | DIP |
-| 8 | Depend on **interfaces / abstract types**, not on concrete implementations | DIP |
+| #   | Heuristic                                                                                          | Principle addressed |
+| --- | -------------------------------------------------------------------------------------------------- | ------------------- |
+| 1   | Split by **responsibility**, not by size                                                           | SRP                 |
+| 2   | Introduce abstraction only at the **second use case** — resist the urge to generalise early        | OCP, YAGNI          |
+| 3   | Keep refactors **incremental** — isolate behaviour before moving it                                | All                 |
+| 4   | Prefer **composition over inheritance** — wrap, don't extend                                       | LSP, OCP            |
+| 5   | Make **illegal states unrepresentable** via TypeScript union types                                 | ISP, SRP            |
+| 6   | [React] Extract logic to a **custom hook** before extracting to a new component                    | SRP                 |
+| 7   | [React] Pass **data and callbacks as props** rather than importing global state inside a component | DIP                 |
+| 8   | Depend on **interfaces / abstract types**, not on concrete implementations                         | DIP                 |

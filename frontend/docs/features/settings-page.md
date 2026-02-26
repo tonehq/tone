@@ -14,19 +14,19 @@ The Settings page (`/settings`) is the centralized configuration hub for managin
 
 The Settings page uses a two-panel layout:
 
-| Panel | Description |
-|-------|-------------|
+| Panel                          | Description                                                |
+| ------------------------------ | ---------------------------------------------------------- |
 | **Left Sidebar** (200px fixed) | Vertical navigation with icon+label items for each section |
-| **Main Content** (flexible) | Renders the active section's content |
+| **Main Content** (flexible)    | Renders the active section's content                       |
 
 **Sidebar Navigation Items:**
 
-| Section | Icon | Path |
-|---------|------|------|
-| API Key | Key | `/settings/api-key` |
-| Members | User | `/settings/members` |
+| Section      | Icon     | Path                     |
+| ------------ | -------- | ------------------------ |
+| API Key      | Key      | `/settings/api-key`      |
+| Members      | User     | `/settings/members`      |
 | Organization | Building | `/settings/organization` |
-| Web Hook | Network | `/settings/web-hook` |
+| Web Hook     | Network  | `/settings/web-hook`     |
 
 **Component:** `src/components/settings/SidebarComponent.tsx`
 **Config:** `src/components/settings/constants.tsx`
@@ -47,24 +47,26 @@ Manages private API keys used for server-to-server authentication.
 
 #### Data Model
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | string (UUID) | Unique identifier |
-| `name` | string | Human-readable key name |
-| `keyValue` | string | The API key value (masked by default) |
-| `masked` | boolean | Whether the key is currently masked |
-| `createdAt` | string | ISO timestamp of creation |
-| `tag` | string (optional) | Optional label/tag for the key |
+| Field       | Type              | Description                           |
+| ----------- | ----------------- | ------------------------------------- |
+| `id`        | string (UUID)     | Unique identifier                     |
+| `name`      | string            | Human-readable key name               |
+| `keyValue`  | string            | The API key value (masked by default) |
+| `masked`    | boolean           | Whether the key is currently masked   |
+| `createdAt` | string            | ISO timestamp of creation             |
+| `tag`       | string (optional) | Optional label/tag for the key        |
 
 #### Features
 
 **1.1.1 List API Keys**
+
 - Displays all API keys in a DataGrid table
 - Columns: Name (with icon + optional tag), Key Value, Created At, Actions
 - Keys are masked by default (displayed as `"..........."`
 - Sortable and responsive column layout
 
 **1.1.2 Create API Key**
+
 - Trigger: "Add Key" button (top-right of table)
 - Opens a modal dialog with:
   - **Key Name** (text input, required)
@@ -72,6 +74,7 @@ Manages private API keys used for server-to-server authentication.
 - On submit: Generates a UUID-based key, adds to list in masked state
 
 **1.1.3 Row Actions (per key)**
+
 - Accessed via three-dot menu icon on each row
 - Available actions:
   - **Reveal Key** - Unmasks the key value for viewing
@@ -79,13 +82,14 @@ Manages private API keys used for server-to-server authentication.
 
 #### API Endpoints
 
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| GET | `/api/v1/generated-api-keys/list` | List all API keys | `require_authenticated` |
-| POST | `/api/v1/generated-api-keys/upsert` | Create or update an API key | `require_admin_or_owner` |
-| DELETE | `/api/v1/generated-api-keys/delete` | Delete an API key | `require_admin_or_owner` |
+| Method | Endpoint                            | Description                 | Auth                     |
+| ------ | ----------------------------------- | --------------------------- | ------------------------ |
+| GET    | `/api/v1/generated-api-keys/list`   | List all API keys           | `require_authenticated`  |
+| POST   | `/api/v1/generated-api-keys/upsert` | Create or update an API key | `require_admin_or_owner` |
+| DELETE | `/api/v1/generated-api-keys/delete` | Delete an API key           | `require_admin_or_owner` |
 
 #### Integration Status
+
 - Fetch on mount: Partial (calls list endpoint)
 - Create: Local state only (backend not wired)
 - Reveal: Local state only
@@ -101,24 +105,26 @@ Manages client-side public keys with domain restrictions and security features.
 
 #### Data Model
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | string (UUID) | Unique identifier |
-| `name` | string | Human-readable key name |
-| `keyValue` | string | The public key value |
-| `domains` | string | Comma-separated allowed domains |
-| `abusePrevention` | boolean | Google reCAPTCHA integration flag |
-| `fraudProtection` | boolean | IP & destination number fraud detection flag |
-| `createdAt` | string | ISO timestamp of creation |
+| Field             | Type          | Description                                  |
+| ----------------- | ------------- | -------------------------------------------- |
+| `id`              | string (UUID) | Unique identifier                            |
+| `name`            | string        | Human-readable key name                      |
+| `keyValue`        | string        | The public key value                         |
+| `domains`         | string        | Comma-separated allowed domains              |
+| `abusePrevention` | boolean       | Google reCAPTCHA integration flag            |
+| `fraudProtection` | boolean       | IP & destination number fraud detection flag |
+| `createdAt`       | string        | ISO timestamp of creation                    |
 
 #### Features
 
 **1.2.1 List Public Keys**
+
 - Displays all public keys in a DataGrid table
 - Columns: Name, Key Value, Domains, Abuse Prevention (On/Off), Fraud Protection (On/Off), Created At, Actions
 - Status toggles displayed as text labels ("On" / "Off")
 
 **1.2.2 Create Public Key**
+
 - Trigger: "Add Key" button (top-right of table)
 - Opens a modal dialog with:
   - **Key Name** (text input, required)
@@ -134,12 +140,14 @@ Manages client-side public keys with domain restrictions and security features.
 - Validation: Key name must be non-empty
 
 **1.2.3 Row Actions (per key)**
+
 - Accessed via three-dot menu icon on each row
 - Available actions:
   - **Reveal Key** - Unmasks the key value for viewing
   - **Delete Key** - Removes the key
 
 #### Integration Status
+
 - All operations are local state only (no backend wired)
 
 ---
@@ -153,12 +161,14 @@ The Members section manages organization team members, their roles, and invitati
 ### Features
 
 **2.1 Search Members**
+
 - Search bar at the top of the section
 - Placeholder: "Search members..."
 - Icon: Search (magnifying glass)
 - Fixed width: 300px
 
 **2.2 Invite User**
+
 - Trigger: "Invite user" button with UserPlus icon
 - Opens invite workflow (to be implemented)
 - Expected fields:
@@ -167,6 +177,7 @@ The Members section manages organization team members, their roles, and invitati
   - Role (string, required - e.g., "admin", "member")
 
 **2.3 Members List**
+
 - Displays organization members in a vertical list
 - Each member row shows:
   - **Avatar** - Circular avatar with initial letter
@@ -177,10 +188,12 @@ The Members section manages organization team members, their roles, and invitati
 - Row hover effect for visual feedback
 
 **2.4 Update Member Role**
+
 - Change a member's role within the organization
 - Restricted to Admin/Owner users
 
 **2.5 View Invitations**
+
 - List pending invitations sent to users
 - Invitation data includes: name, email, role, invited date, status
 
@@ -188,50 +201,51 @@ The Members section manages organization team members, their roles, and invitati
 
 **OrganizationMemberApi:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | number | Member record ID |
-| `user_id` | number | Associated user ID |
-| `name` | string | Member name |
-| `email` | string | Member email |
-| `role` | string | Role in organization |
-| `joined_date` | string | Date joined |
-| `avatar` | string \| null | Avatar URL |
+| Field         | Type           | Description          |
+| ------------- | -------------- | -------------------- |
+| `id`          | number         | Member record ID     |
+| `user_id`     | number         | Associated user ID   |
+| `name`        | string         | Member name          |
+| `email`       | string         | Member email         |
+| `role`        | string         | Role in organization |
+| `joined_date` | string         | Date joined          |
+| `avatar`      | string \| null | Avatar URL           |
 
 **OrganizationInviteApi:**
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | number | Invitation record ID |
-| `name` | string | Invitee name |
-| `email` | string | Invitee email |
-| `role` | string | Assigned role |
+| Field          | Type   | Description          |
+| -------------- | ------ | -------------------- |
+| `id`           | number | Invitation record ID |
+| `name`         | string | Invitee name         |
+| `email`        | string | Invitee email        |
+| `role`         | string | Assigned role        |
 | `invited_date` | string | Date invitation sent |
-| `status` | string | Invitation status |
+| `status`       | string | Invitation status    |
 
 ### API Endpoints
 
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| GET | `/api/v1/organizations/members` | List all members | `require_org_member` |
-| GET | `/api/v1/organizations/invitations` | List pending invitations | `require_org_member` |
-| POST | `/api/v1/organizations/invite` | Invite a user to the org | `require_admin_or_owner` |
-| PATCH | `/api/v1/organizations/members/{memberId}` | Update a member's role | `require_admin_or_owner` |
+| Method | Endpoint                                   | Description              | Auth                     |
+| ------ | ------------------------------------------ | ------------------------ | ------------------------ |
+| GET    | `/api/v1/organizations/members`            | List all members         | `require_org_member`     |
+| GET    | `/api/v1/organizations/invitations`        | List pending invitations | `require_org_member`     |
+| POST   | `/api/v1/organizations/invite`             | Invite a user to the org | `require_admin_or_owner` |
+| PATCH  | `/api/v1/organizations/members/{memberId}` | Update a member's role   | `require_admin_or_owner` |
 
 ### State Management (Jotai)
 
 **Defined in:** `src/atoms/SettingsAtom.tsx`
 
-| Atom | Type | Description |
-|------|------|-------------|
-| `loadableMembersRowsAtom` | Read (async/loadable) | Fetches members list with loading/error states |
-| `loadableInvitationsRowsAtom` | Read (async/loadable) | Fetches invitations list with loading/error states |
-| `inviteUserToOrganizationAtom` | Write | Dispatches invite API call, triggers refetch |
-| `updateMemberRoleAtom` | Write | Dispatches role update API call, triggers refetch |
-| `refetchMembersAtom` | Write | Manually triggers members list refetch |
-| `refetchInvitationsAtom` | Write | Manually triggers invitations list refetch |
+| Atom                           | Type                  | Description                                        |
+| ------------------------------ | --------------------- | -------------------------------------------------- |
+| `loadableMembersRowsAtom`      | Read (async/loadable) | Fetches members list with loading/error states     |
+| `loadableInvitationsRowsAtom`  | Read (async/loadable) | Fetches invitations list with loading/error states |
+| `inviteUserToOrganizationAtom` | Write                 | Dispatches invite API call, triggers refetch       |
+| `updateMemberRoleAtom`         | Write                 | Dispatches role update API call, triggers refetch  |
+| `refetchMembersAtom`           | Write                 | Manually triggers members list refetch             |
+| `refetchInvitationsAtom`       | Write                 | Manually triggers invitations list refetch         |
 
 ### Integration Status
+
 - UI: Static mockup with hardcoded data
 - State atoms: Defined but not connected to UI
 - API service functions: Defined in `src/services/userService.ts` but not called
@@ -248,12 +262,14 @@ The Organization section manages access control settings for the organization.
 ### Features
 
 **3.1 Allow Users to Request Access (Toggle)**
+
 - Toggle switch to enable/disable access requests during signup
 - Label: "Allow users to request access"
 - Description: "When enabled, users can request to join your organization during signup"
 - Default: Enabled (true)
 
 **3.2 Auto-Approve Same Email Domain (Nested Toggle)**
+
 - Only visible when "Allow users to request access" is enabled
 - Indented with a left border visual indicator
 - Label: "Auto-approve users with same email domain"
@@ -261,22 +277,25 @@ The Organization section manages access control settings for the organization.
 - Default: Disabled (false)
 
 **3.3 Handle Access Requests**
+
 - Process incoming access requests (approve/deny)
 - Expected payload: `{ request_id, action }`
 
 **3.4 View Access Requests**
+
 - List all pending access requests for the organization
 
 ### API Endpoints
 
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| GET | `/api/v1/organizations/settings` | Fetch organization settings | `require_org_member` |
-| PUT | `/api/v1/organizations/settings` | Update organization settings | `require_admin_or_owner` |
-| GET | `/api/v1/organizations/access_requests` | List access requests | `require_org_member` |
-| POST | `/api/v1/organizations/handle_access_request` | Approve/deny a request | `require_admin_or_owner` |
+| Method | Endpoint                                      | Description                  | Auth                     |
+| ------ | --------------------------------------------- | ---------------------------- | ------------------------ |
+| GET    | `/api/v1/organizations/settings`              | Fetch organization settings  | `require_org_member`     |
+| PUT    | `/api/v1/organizations/settings`              | Update organization settings | `require_admin_or_owner` |
+| GET    | `/api/v1/organizations/access_requests`       | List access requests         | `require_org_member`     |
+| POST   | `/api/v1/organizations/handle_access_request` | Approve/deny a request       | `require_admin_or_owner` |
 
 ### Integration Status
+
 - UI: Functional toggle switches with local state only
 - No persistence to backend
 - No loading of current settings from API on mount
@@ -289,12 +308,14 @@ The Organization section manages access control settings for the organization.
 The Web Hook section is planned for configuring webhook endpoints for event notifications.
 
 ### Planned Features
+
 - Configure webhook URLs for event callbacks
 - Select which events trigger webhook notifications
 - View webhook delivery history/logs
 - Test webhook endpoints
 
 ### Integration Status
+
 - Defined in sidebar navigation
 - No UI component implemented
 - No API endpoints defined
@@ -304,25 +325,27 @@ The Web Hook section is planned for configuring webhook endpoints for event noti
 ## Authentication & Authorization
 
 ### Route Protection
+
 All settings routes are protected by middleware that requires a valid `tone_access_token` cookie.
 
 ### Role-Based Access Control
 
-| Role | Can View | Can Edit | Can Invite | Can Manage Keys |
-|------|----------|----------|------------|-----------------|
-| **Owner** | All sections | All settings | Yes | Yes |
-| **Admin** | All sections | All settings | Yes | Yes |
-| **Member** | All sections | No | No | No |
+| Role       | Can View     | Can Edit     | Can Invite | Can Manage Keys |
+| ---------- | ------------ | ------------ | ---------- | --------------- |
+| **Owner**  | All sections | All settings | Yes        | Yes             |
+| **Admin**  | All sections | All settings | Yes        | Yes             |
+| **Member** | All sections | No           | No         | No              |
 
 ### Backend Auth Guards
 
-| Guard | Description |
-|-------|-------------|
-| `require_authenticated` | Must be logged in |
-| `require_org_member` | Must be a member of the organization |
-| `require_admin_or_owner` | Must have Admin or Owner role |
+| Guard                    | Description                          |
+| ------------------------ | ------------------------------------ |
+| `require_authenticated`  | Must be logged in                    |
+| `require_org_member`     | Must be a member of the organization |
+| `require_admin_or_owner` | Must have Admin or Owner role        |
 
 ### Frontend Role-Based UI
+
 - Currently not implemented - all authenticated users see the same UI regardless of role
 - **Needed:** Conditional rendering to hide action buttons (invite, delete, create key) for non-admin users
 
@@ -364,19 +387,20 @@ core/api/v1/
 
 ### Technology Stack
 
-| Layer | Technology |
-|-------|-----------|
-| UI Framework | React 19 + Next.js 15 (App Router) |
-| Component Library | MUI 6 (Material-UI) |
-| Data Grid | MUI DataGrid |
-| State Management | Jotai (with loadable utils) |
-| HTTP Client | Axios (with auth interceptors) |
-| Icons | Lucide React |
-| Forms | Controlled components (useState) |
+| Layer             | Technology                         |
+| ----------------- | ---------------------------------- |
+| UI Framework      | React 19 + Next.js 15 (App Router) |
+| Component Library | MUI 6 (Material-UI)                |
+| Data Grid         | MUI DataGrid                       |
+| State Management  | Jotai (with loadable utils)        |
+| HTTP Client       | Axios (with auth interceptors)     |
+| Icons             | Lucide React                       |
+| Forms             | Controlled components (useState)   |
 
 ### Shared UI Patterns
 
 **DataGrid Styling:**
+
 - Gray column headers (`#e5e7eb` background)
 - Uppercase, bold, 12px column titles
 - Hidden column separators
@@ -384,6 +408,7 @@ core/api/v1/
 - Centered cell content
 
 **Modal Dialogs:**
+
 - MUI Dialog with custom padding (24px)
 - Fixed width (450px)
 - Title with close button (X icon)
@@ -391,6 +416,7 @@ core/api/v1/
 - Submit button: Black background, white text
 
 **Color Scheme:**
+
 - Primary accent: Purple (`#8b5cf6`)
 - Neutral backgrounds: `#f9fafb`, `#f3f4f6`, `#e5e7eb`
 - Button colors: Black (`#000`) with hover (`#333`)
@@ -400,14 +426,14 @@ core/api/v1/
 
 ## Validation Rules
 
-| Section | Field | Rule |
-|---------|-------|------|
-| API Keys | Key Name | Required, non-empty after trim |
-| Public Keys | Key Name | Required, non-empty |
-| Public Keys | Domains | No duplicates allowed |
-| Members | Invite Name | Required |
-| Members | Invite Email | Required, valid email format |
-| Members | Invite Role | Required |
+| Section     | Field        | Rule                           |
+| ----------- | ------------ | ------------------------------ |
+| API Keys    | Key Name     | Required, non-empty after trim |
+| Public Keys | Key Name     | Required, non-empty            |
+| Public Keys | Domains      | No duplicates allowed          |
+| Members     | Invite Name  | Required                       |
+| Members     | Invite Email | Required, valid email format   |
+| Members     | Invite Role  | Required                       |
 
 ---
 
@@ -415,41 +441,42 @@ core/api/v1/
 
 ### High Priority
 
-| Item | Section | Description |
-|------|---------|-------------|
-| Wire API Keys CRUD | API Keys | Connect create/reveal/delete to backend endpoints |
-| Wire Members list | Members | Connect to `loadableMembersRowsAtom` for live data |
-| Invite user modal | Members | Build invite form and connect to `inviteUserToOrganizationAtom` |
-| Persist org settings | Organization | Load settings on mount, save on toggle change |
-| Role-based UI guards | All | Hide admin actions for non-admin users |
+| Item                 | Section      | Description                                                     |
+| -------------------- | ------------ | --------------------------------------------------------------- |
+| Wire API Keys CRUD   | API Keys     | Connect create/reveal/delete to backend endpoints               |
+| Wire Members list    | Members      | Connect to `loadableMembersRowsAtom` for live data              |
+| Invite user modal    | Members      | Build invite form and connect to `inviteUserToOrganizationAtom` |
+| Persist org settings | Organization | Load settings on mount, save on toggle change                   |
+| Role-based UI guards | All          | Hide admin actions for non-admin users                          |
 
 ### Medium Priority
 
-| Item | Section | Description |
-|------|---------|-------------|
-| Delete member | Members | Implement member removal with confirmation |
-| Role change dropdown | Members | Inline role editing for admin/owner |
-| Invitations list | Members | Show pending invitations with status |
-| Loading states | All | Add spinners/skeletons during API calls |
-| Error handling | All | Toast notifications for failed operations |
-| Empty states | All | Show placeholder UI when no data exists |
+| Item                 | Section | Description                                |
+| -------------------- | ------- | ------------------------------------------ |
+| Delete member        | Members | Implement member removal with confirmation |
+| Role change dropdown | Members | Inline role editing for admin/owner        |
+| Invitations list     | Members | Show pending invitations with status       |
+| Loading states       | All     | Add spinners/skeletons during API calls    |
+| Error handling       | All     | Toast notifications for failed operations  |
+| Empty states         | All     | Show placeholder UI when no data exists    |
 
 ### Low Priority
 
-| Item | Section | Description |
-|------|---------|-------------|
-| Web Hook UI | Web Hook | Build complete webhook configuration section |
-| Search members | Members | Wire search input to filter functionality |
-| Pagination | Members/Keys | Handle large lists with server-side pagination |
-| Audit log | All | Track changes to settings for compliance |
-| Key expiration | API Keys | Set TTL on API keys with auto-rotation |
-| Webhook retry config | Web Hook | Configure retry policies for failed deliveries |
+| Item                 | Section      | Description                                    |
+| -------------------- | ------------ | ---------------------------------------------- |
+| Web Hook UI          | Web Hook     | Build complete webhook configuration section   |
+| Search members       | Members      | Wire search input to filter functionality      |
+| Pagination           | Members/Keys | Handle large lists with server-side pagination |
+| Audit log            | All          | Track changes to settings for compliance       |
+| Key expiration       | API Keys     | Set TTL on API keys with auto-rotation         |
+| Webhook retry config | Web Hook     | Configure retry policies for failed deliveries |
 
 ---
 
 ## User Flows
 
 ### Flow 1: Create an API Key
+
 ```
 1. Navigate to /settings
 2. "API Key" section is active by default
@@ -461,6 +488,7 @@ core/api/v1/
 ```
 
 ### Flow 2: Invite a Team Member
+
 ```
 1. Navigate to /settings
 2. Click "Members" in the sidebar
@@ -473,6 +501,7 @@ core/api/v1/
 ```
 
 ### Flow 3: Configure Organization Access
+
 ```
 1. Navigate to /settings
 2. Click "Organization" in the sidebar
@@ -482,6 +511,7 @@ core/api/v1/
 ```
 
 ### Flow 4: Create a Public Key with Domain Restrictions
+
 ```
 1. Navigate to /settings
 2. "API Key" section is active by default
@@ -500,6 +530,7 @@ core/api/v1/
 ## API Request/Response Examples
 
 ### List Organization Members
+
 ```
 GET /api/v1/organizations/members
 Headers:
@@ -521,6 +552,7 @@ Response 200:
 ```
 
 ### Invite User to Organization
+
 ```
 POST /api/v1/organizations/invite
 Headers:
@@ -537,6 +569,7 @@ Response 200: (success)
 ```
 
 ### Update Organization Settings
+
 ```
 PUT /api/v1/organizations/settings
 Headers:
@@ -552,6 +585,7 @@ Response 200: (success)
 ```
 
 ### Handle Access Request
+
 ```
 POST /api/v1/organizations/handle_access_request
 Headers:
