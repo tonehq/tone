@@ -74,7 +74,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
     severity: 'success' | 'error';
   }>({ open: false, message: '', severity: 'success' });
   const [assignModalOpen, setAssignModalOpen] = useState(false);
-  const [assigning, setAssigning] = useState(false);
+  const [_assigning, setAssigning] = useState(false);
 
   const providers = providersLoadable.state === 'hasData' ? providersLoadable.data : [];
   const providersLoading = providersLoadable.state === 'loading';
@@ -112,9 +112,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
   const handleFormChange = async (partial: any) => {
     setAssigning(true);
     try {
-      console.log(formData, 'formData');
       const channel = formData?.channels?.find((channel: any) => channel.type === 'twilio');
-      console.log(channel, 'channel');
       await axiosInstance.post('/channel_phone_number/upsert_channel_phone_number', {
         phone_number: partial.phoneNumber,
         phone_number_sid: channel?.meta_data?.account_sid,
@@ -316,14 +314,16 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
           severity={formData.phoneNumber ? 'success' : 'info'}
           sx={{ borderRadius: 0, backgroundColor: '#f3f4f6', border: 'none' }}
           action={
-            <Button
-              variant="outlined"
-              size="small"
-              sx={{ borderColor: '#e2e8f0' }}
-              onClick={() => setAssignModalOpen(true)}
-            >
-              {formData.phoneNumber ? 'Change number' : 'Assign number'}
-            </Button>
+            isEditMode ? (
+              <Button
+                variant="outlined"
+                size="small"
+                sx={{ borderColor: '#e2e8f0' }}
+                onClick={() => setAssignModalOpen(true)}
+              >
+                {formData.phoneNumber ? 'Change number' : 'Assign number'}
+              </Button>
+            ) : undefined
           }
         >
           {formData.phoneNumber ? (
