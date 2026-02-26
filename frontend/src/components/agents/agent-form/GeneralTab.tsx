@@ -182,7 +182,7 @@ export default function GeneralTab({
               onChange={(e) => onFormChange({ aiModel: e.target.value ? Number(e.target.value) : null })}
               displayEmpty
               renderValue={(v) => {
-                if (!v) return <em>Select a provider</em>;
+                if (!v) return <span>Select a provider</span>;
                 return llmProviders.find((p) => p.id === v)?.display_name ?? v;
               }}
             >
