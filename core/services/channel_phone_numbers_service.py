@@ -193,8 +193,41 @@ class ChannelPhoneNumbersService(BaseService):
         row = self.db.query(ChannelPhoneNumbers).filter(ChannelPhoneNumbers.uuid == row_uuid).first()
         return row
 
-    def get_twilio_phone_numbers(self, account_sid: str, auth_token: str):
+    def get_twilio_phone_numbers(self, channel_type: str):
         from twilio.rest import Client
+        from core.models.enums import ChannelType
+
+        type_name = channel_type.strip().upper()
+        channel_enum = None
+        for ct in ChannelType:
+            if ct.name == type_name:
+                channel_enum = ct
+                break
+        if channel_enum is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid channel type: {channel_type}",
+            )
+
+        channel = (
+            self.db.query(Channel)
+            .filter(Channel.type == channel_enum)
+            .first()
+        )
+        if not channel:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No channel found with type: {channel_type}",
+            )
+
+        meta_data = channel.meta_data if isinstance(channel.meta_data, dict) else {}
+        account_sid = meta_data.get("account_sid")
+        auth_token = meta_data.get("auth_token")
+        if not account_sid or not auth_token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Channel meta_data is missing account_sid or auth_token",
+            )
 
         try:
             client = Client(account_sid, auth_token)
