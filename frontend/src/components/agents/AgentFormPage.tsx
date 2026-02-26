@@ -7,7 +7,7 @@ import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 import AssignPhoneNumberModal from '@/components/agents/AssignPhoneNumberModal';
 import type { TabItem } from '@/components/shared';
 import { CustomButton, CustomTab } from '@/components/shared';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { deleteAgent, getAgent, upsertAgent } from '@/services/agentsService';
 import type { AgentFormState } from '@/types/agent';
 import {
@@ -258,14 +258,16 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         </div>
 
         <div className="flex-1 space-y-1 px-3 py-2">
-          {['configure', 'prompt', 'deployments'].map((item) => {
+          {['configure', 'prompt'].map((item) => {
             const isActive = item === currentMenu;
             return (
-              <button
+              <CustomButton
                 key={item}
-                type="button"
+                type="text"
+                htmlType="button"
+                fullWidth
                 className={cn(
-                  'w-full cursor-pointer rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors',
+                  'justify-start rounded-md px-3 py-2.5 text-sm font-medium transition-colors',
                   isActive
                     ? 'bg-accent text-foreground'
                     : 'text-muted-foreground hover:bg-accent hover:text-foreground',
@@ -273,7 +275,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
                 onClick={() => setCurrentMenu(item)}
               >
                 {startCase(item)}
-              </button>
+              </CustomButton>
             );
           })}
         </div>

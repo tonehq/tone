@@ -1,6 +1,6 @@
 'use client';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import React, { forwardRef } from 'react';
 
 import { Label } from '@/components/ui/label';

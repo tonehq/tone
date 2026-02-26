@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { PhoneIncoming, PhoneOutgoing } from 'lucide-react';
 
 const AGENT_TYPE_CONFIG = {

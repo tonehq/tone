@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 
 interface GoogleIconProps extends React.SVGAttributes<SVGSVGElement> {
   className?: string;

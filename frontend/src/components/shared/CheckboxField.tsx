@@ -1,6 +1,6 @@
 'use client';
 
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import React, { memo } from 'react';
 
 import { Checkbox } from '@/components/ui/checkbox';

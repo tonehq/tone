@@ -1,7 +1,7 @@
 'use client';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { ChevronDown } from 'lucide-react';
 
 const WORKSPACE_LABEL = 'My Workspace';

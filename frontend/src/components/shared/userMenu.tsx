@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import { useAtom, useSetAtom } from 'jotai';
 import { startCase } from 'lodash';
 import { ChevronDown, LogOut, User } from 'lucide-react';

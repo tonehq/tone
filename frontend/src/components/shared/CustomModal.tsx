@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import type { CustomModalProps } from '@/types/components';
 import { X } from 'lucide-react';
 import React from 'react';

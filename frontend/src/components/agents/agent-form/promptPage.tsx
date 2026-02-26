@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { cn } from '@/lib/utils';
+import { cn } from '@/utils/cn';
 import Heading from '@tiptap/extension-heading';
 import Link from '@tiptap/extension-link';
 import Paragraph from '@tiptap/extension-paragraph';
