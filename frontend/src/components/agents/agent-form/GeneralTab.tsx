@@ -184,7 +184,7 @@ export default function GeneralTab({
               }
               displayEmpty
               renderValue={(v) => {
-                if (!v) return <em>Select a provider</em>;
+                if (!v) return <span>Select a provider</span>;
                 return llmProviders.find((p) => p.id === v)?.display_name ?? v;
               }}
             >
