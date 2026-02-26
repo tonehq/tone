@@ -552,7 +552,7 @@ export const presets = {
     outline: 'border border-slate-200 bg-white text-gray-800 hover:bg-gray-100',
     ghost: 'text-gray-800 hover:bg-gray-100',
     destructive: 'bg-red-500 text-white hover:bg-red-600',
-    link: 'text-purple-500 underline-offset-4 hover:underline',
+    link: 'text-purple-500 underline-offset-2 hover:underline',
     size: {
       sm: 'h-8 px-3 text-sm',
       md: 'h-[42px] px-4 text-base',
