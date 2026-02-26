@@ -66,23 +66,11 @@ def detach_channel_phone_number(
     return ChannelPhoneNumbersService(db).detach_channel_phone_number(data)
 
 
-@router.post("/get_twilio_phone_numbers", status_code=status.HTTP_200_OK)
+@router.get("/get_twilio_phone_numbers", status_code=status.HTTP_200_OK)
 def get_twilio_phone_numbers(
-    data: Dict[str, Any] = Body(...),
-    claims: JWTClaims = Depends(require_org_member),
+    type: str = Query(..., description="The channel type (e.g. twilio)"),
     db: Session = Depends(get_db),
 ):
-    if not data.get("account_sid"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="account_sid is required",
-        )
-    if not data.get("auth_token"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="auth_token is required",
-        )
     return ChannelPhoneNumbersService(db).get_twilio_phone_numbers(
-        account_sid=data["account_sid"],
-        auth_token=data["auth_token"],
+        channel_type=type
     )

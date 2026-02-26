@@ -40,7 +40,7 @@ def delete_agent(
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    return AgentService(db).delete_agent(agent_id, created_by=claims.user_id)
+    return AgentService(db).delete_agent(agent_id)
 
 
 @router.post("/upsert_agent", status_code=status.HTTP_200_OK)

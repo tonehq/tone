@@ -20,6 +20,8 @@ export const defaultFormState = (agentType: 'inbound' | 'outbound'): AgentFormSt
   useRealisticFillerWords: false,
   callRecording: false,
   callTranscription: false,
+  phoneNumber: '',
+  channels: [],
 });
 
 function parseStringArray(val: string | string[] | null | undefined): string[] {

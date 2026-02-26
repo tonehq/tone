@@ -22,7 +22,7 @@ export default function SettingsPage() {
   const theme = useTheme();
   const [allowAccessRequests, setAllowAccessRequests] = useState(true);
   const [autoVerifySameDomain, setAutoVerifySameDomain] = useState(false);
-  const [activeSidebar, setActiveSidebar] = useState('Integrations');
+  const [activeSidebar] = useState('Integrations');
 
   const members = [
     { id: 1, name: 'Karthik', email: 'karthik@productfusion.co', role: 'Owner', avatar: 'K' },

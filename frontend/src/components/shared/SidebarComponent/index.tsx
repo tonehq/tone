@@ -3,7 +3,7 @@
 import React from 'react';
 import { Box, Drawer, useMediaQuery, useTheme } from '@mui/material';
 import { SidebarContent } from './SidebarContent';
-import { SIDEBAR_WIDTH_COLLAPSED, SIDEBAR_WIDTH_EXPANDED } from './constant';
+import { SIDEBAR_WIDTH_COLLAPSED, SIDEBAR_WIDTH_EXPANDED } from '@/constants/sidebar';
 
 interface SidebarComponentProps {
   isExpanded: boolean;

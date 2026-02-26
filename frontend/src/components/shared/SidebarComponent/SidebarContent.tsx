@@ -2,7 +2,7 @@
 
 import ProfileMenu from '@/components/shared/userMenu';
 import { Box, Divider } from '@mui/material';
-import { SIDEBAR_WIDTH_COLLAPSED, SIDEBAR_WIDTH_EXPANDED } from './constant';
+import { SIDEBAR_WIDTH_COLLAPSED, SIDEBAR_WIDTH_EXPANDED } from '@/constants/sidebar';
 import { SidebarHeader } from './SidebarHeader';
 import { SidebarNav } from './SidebarNav';
 import { SidebarOrganization } from './SidebarOrganization';

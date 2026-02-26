@@ -3,7 +3,8 @@
 import { Box, Typography } from '@mui/material';
 import { usePathname } from 'next/navigation';
 import { SidebarItemMenu } from './SidebarItemMenu';
-import { sidebarSections, type SidebarMenuItem } from './constant';
+import { sidebarSections } from '@/constants/sidebar';
+import type { SidebarMenuItem } from '@/types/sidebar';
 
 export interface SidebarNavProps {
   isExpanded: boolean;

@@ -81,6 +81,7 @@ export interface ApiAgent {
   speech_recognition: string | null;
   call_recording: boolean | string | null;
   call_transcription: boolean | string | null;
+  channels?: any[] | null;
   [key: string]: unknown;
 }
 
@@ -108,4 +109,6 @@ export interface AgentFormState {
   useRealisticFillerWords: boolean;
   callRecording: boolean;
   callTranscription: boolean;
+  phoneNumber: string;
+  channels: any[];
 }

@@ -2,7 +2,7 @@
 
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { Avatar, Box, Tooltip, Typography } from '@mui/material';
-import { SIDEBAR_HOVER_ACTIVE } from './constant';
+import { SIDEBAR_HOVER_ACTIVE } from '@/constants/sidebar';
 
 const WORKSPACE_LABEL = 'My Workspace';
 

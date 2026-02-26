@@ -342,8 +342,8 @@ class AgentService(BaseService):
         }
         return config_data
 
-    def delete_agent(self, agent_id: int, created_by: int):
-        agent = self.db.query(Agent).filter(Agent.id == agent_id, Agent.created_by == created_by).first()
+    def delete_agent(self, agent_id: int):
+        agent = self.db.query(Agent).filter(Agent.id == agent_id).first()
         if not agent:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

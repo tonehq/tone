@@ -2,7 +2,8 @@
 
 import { Box, Tooltip, Typography } from '@mui/material';
 import Link from 'next/link';
-import { SIDEBAR_HOVER_ACTIVE, type SidebarMenuItem } from './constant';
+import { SIDEBAR_HOVER_ACTIVE } from '@/constants/sidebar';
+import type { SidebarMenuItem } from '@/types/sidebar';
 
 export interface SidebarItemMenuProps {
   item: SidebarMenuItem;

@@ -1,6 +1,6 @@
 'use client';
 
-import { generateUUID } from '@/services/shared/helper';
+import { generateUUID } from '@/utils/helpers';
 import { Add as AddIcon, Close as CloseIcon, MoreVert as MoreVertIcon } from '@mui/icons-material';
 import {
   Box,
