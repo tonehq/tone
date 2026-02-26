@@ -21,7 +21,7 @@ interface ProfileMenuProps {
 
 function UserAvatar({ initial }: { initial: string }) {
   return (
-    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-400 text-xs font-semibold text-white">
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-400/90 text-xs font-bold text-white">
       {initial}
     </div>
   );
@@ -47,15 +47,13 @@ export default function ProfileMenu({ isExpanded }: ProfileMenuProps) {
       : '';
 
   const trigger = isExpanded ? (
-    <div className="mt-2 flex w-full items-center gap-2 px-2">
+    <div className="flex w-full items-center gap-2.5">
       <UserAvatar initial={initial} />
-      <span className="max-w-[140px] truncate text-[15px] text-white">{userEmail}</span>
-      <ChevronDown size={14} className="shrink-0 text-white/60" />
+      <span className="max-w-[120px] truncate text-[13px] text-white/80">{userEmail}</span>
+      <ChevronDown size={14} className="ml-auto shrink-0 text-white/40" />
     </div>
   ) : (
-    <div className="mt-2 flex items-center px-2">
-      <UserAvatar initial={initial} />
-    </div>
+    <UserAvatar initial={initial} />
   );
 
   const menu = (
@@ -64,8 +62,8 @@ export default function ProfileMenu({ isExpanded }: ProfileMenuProps) {
         <button
           type="button"
           className={cn(
-            'flex cursor-pointer items-center rounded-md px-1.5 py-1.5 transition-colors select-none',
-            'hover:bg-white/10',
+            'flex w-full cursor-pointer items-center rounded-lg px-2 py-2 transition-all duration-200 select-none',
+            'hover:bg-white/[0.08]',
           )}
         >
           {trigger}

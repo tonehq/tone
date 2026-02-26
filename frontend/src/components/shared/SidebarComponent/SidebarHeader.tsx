@@ -1,5 +1,6 @@
 'use client';
 
+import Logo from '@/components/shared/Logo';
 import { cn } from '@/lib/utils';
 import { PanelLeft, PanelRight } from 'lucide-react';
 
@@ -13,26 +14,19 @@ export function SidebarHeader({ isExpanded, onToggle, isMobile = false }: Sideba
   return (
     <div
       className={cn(
-        'flex min-h-14 items-center p-4',
+        'flex min-h-[60px] items-center px-4 py-3',
         isExpanded ? 'justify-between' : 'justify-center',
       )}
     >
-      {isExpanded && (
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
-            T
-          </div>
-          <span className="text-base font-bold text-white">Tone</span>
-        </div>
-      )}
+      {isExpanded ? <Logo inverted /> : <Logo inverted iconOnly />}
 
       {!isMobile && (
         <button
           type="button"
           onClick={onToggle}
-          className="rounded-md p-1.5 text-white/70 transition-colors hover:bg-white/15 hover:text-white"
+          className="rounded-lg p-1.5 text-white/50 transition-all duration-200 hover:bg-white/10 hover:text-white/90"
         >
-          {isExpanded ? <PanelLeft size={20} /> : <PanelRight size={20} />}
+          {isExpanded ? <PanelLeft size={18} /> : <PanelRight size={18} />}
         </button>
       )}
     </div>

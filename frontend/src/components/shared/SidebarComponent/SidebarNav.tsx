@@ -16,16 +16,16 @@ export function SidebarNav({ isExpanded, onMenuClick }: SidebarNavProps) {
   const isActive = (path: string) => pathname === path || pathname?.startsWith(`${path}/`);
 
   return (
-    <div className={cn('flex-1 overflow-y-auto py-4', isExpanded ? 'px-3' : 'px-2')}>
+    <div className={cn('flex-1 overflow-y-auto py-3', isExpanded ? 'px-2.5' : 'px-2')}>
       {sidebarSections.map((section) => (
-        <div key={section.heading} className="mb-4">
+        <div key={section.heading} className="mb-5">
           {isExpanded && (
-            <span className="px-1 text-[11px] font-semibold uppercase tracking-widest text-white/50">
+            <span className="mb-1.5 block px-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-white/40">
               {section.heading}
             </span>
           )}
 
-          <div className={cn('mt-1.5 flex flex-col gap-1', !isExpanded && 'items-center')}>
+          <div className={cn('flex flex-col gap-0.5', !isExpanded && 'items-center')}>
             {section.items.map((item: SidebarMenuItem) => (
               <SidebarItemMenu
                 key={item.key}

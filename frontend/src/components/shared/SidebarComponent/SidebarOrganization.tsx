@@ -15,15 +15,15 @@ export function SidebarOrganization({ isExpanded }: SidebarOrganizationProps) {
     return (
       <button
         type="button"
-        className="flex w-full items-center gap-2.5 rounded-md p-2 transition-colors hover:bg-white/15"
+        className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 transition-all duration-200 hover:bg-white/[0.08]"
       >
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-semibold text-white">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.12] text-[13px] font-semibold text-white/90">
           M
         </div>
-        <span className="flex-1 truncate text-left text-sm font-semibold text-white">
+        <span className="flex-1 truncate text-left text-[13px] font-medium text-white/90">
           {WORKSPACE_LABEL}
         </span>
-        <ChevronDown size={16} className="shrink-0 text-white/60" />
+        <ChevronDown size={14} className="shrink-0 text-white/40" />
       </button>
     );
   }
@@ -34,8 +34,8 @@ export function SidebarOrganization({ isExpanded }: SidebarOrganizationProps) {
         <button
           type="button"
           className={cn(
-            'mx-auto flex h-8 w-8 items-center justify-center rounded-full bg-white/20',
-            'text-sm font-semibold text-white cursor-pointer',
+            'mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-white/[0.12]',
+            'text-[13px] font-semibold text-white/90 cursor-pointer transition-all duration-200 hover:bg-white/[0.18]',
           )}
         >
           M
