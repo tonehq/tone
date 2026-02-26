@@ -198,7 +198,7 @@
 - `id` (BigInt, primary_key, autoincrement)
 - `uuid` (UUID, unique, default=uuid4)
 - `agent_id` (BigInt, ForeignKey → agents.id)
-- `phone_number` (String, unique, not null)
+- `phone_number` (String, not null) — ~~unique~~ constraint removed; same number can be shared across multiple channels
 - `phone_number_sid` (String, not null) — Twilio SID
 - `phone_number_auth_token` (String, not null)
 - `provider` (String, not null) — e.g. "twilio"
@@ -210,7 +210,7 @@
 - `updated_at` (BigInt)
 
 **Constraints:**
-- UniqueConstraint on `(agent_id, phone_number)`
+- ~~UniqueConstraint on `(agent_id, phone_number)`~~ — removed; same phone number may now appear across multiple channels
 
 ---
 
@@ -1137,6 +1137,22 @@ FUNCTION upsert_service(service_provider_id, name, service_type, config, ...):
 
 **Response:** `200 OK` — Array of flattened agent objects (agent + config + provider info)
 
+**Response Shape (relevant fields):**
+```json
+{
+  "id": 1,
+  "name": "Sales Bot",
+  "phone_number": [
+    { "type": "twilio", "no": "+12025551234" },
+    { "type": "twilio", "no": "+14155550100" }
+  ]
+}
+```
+
+> ⚠️ **Breaking change (as of `ea9b495`):** `phone_number` is now an **array** of `{ type, no }` objects.
+> It was previously a plain string (`"+12025551234"`). The `country_code` top-level field was also removed —
+> country code is no longer returned in the agent response.
+
 **Code Trace (Pseudo-code):**
 ```
 FUNCTION get_all_agents(agent_id, created_by):
@@ -1146,8 +1162,10 @@ FUNCTION get_all_agents(agent_id, created_by):
   3. LEFT JOIN service_providers AS llm_provider ON config.llm_service_id
   4. LEFT JOIN service_providers AS tts_provider ON config.tts_service_id
   5. LEFT JOIN service_providers AS stt_provider ON config.stt_service_id
-  6. FLATTEN result: merge agent fields + config fields into single dict
-  7. RETURN list
+  6. QUERY channel_phone_numbers WHERE channel_id = agent's channel id
+  7. FLATTEN result: merge agent fields + config fields into single dict
+     - phone_number: [{ "type": p.provider, "no": p.phone_number } for p in phone_rows]
+  8. RETURN list
 ```
 
 **Service Dependencies:** `AgentService.get_all_agents()`
@@ -1260,7 +1278,6 @@ FUNCTION upsert_agent_config(data):
 
 **Error Responses:**
 - `400` — agent_id, phone_number, phone_number_sid, phone_number_auth_token, provider are all required
-- `409` — Phone number already assigned to another agent
 
 **Code Trace (Pseudo-code):**
 ```
@@ -1269,9 +1286,8 @@ FUNCTION upsert_agent_phone_number(data):
   2. IF uuid provided:
      a. FIND AgentPhoneNumbers by uuid → UPDATE fields
   3. ELSE:
-     a. CHECK phone_number is not already in use
-        → IF duplicate: RAISE 409 "Phone number already assigned"
-     b. CREATE new AgentPhoneNumbers record
+     a. CREATE new AgentPhoneNumbers record
+        (same phone number may be reused across channels — uniqueness constraint removed)
   4. SAVE and RETURN
 ```
 
