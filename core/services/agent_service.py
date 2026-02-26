@@ -263,8 +263,7 @@ class AgentService(BaseService):
             "meta_data": agent.meta_data,
             "status": agent.status,
             "agent_type": agent.agent_type.value if agent.agent_type is not None else None,
-            "phone_number": phone_rows[0].phone_number if phone_rows else None,
-            "country_code": phone_rows[0].country_code if phone_rows else None,
+            "phone_number": [{"type": p.provider, "no": p.phone_number} for p in phone_rows],
             "channels": channels_list,
         }
         if config:

@@ -20,7 +20,7 @@ export const defaultFormState = (agentType: 'inbound' | 'outbound'): AgentFormSt
   useRealisticFillerWords: false,
   callRecording: false,
   callTranscription: false,
-  phoneNumber: '',
+  phoneNumbers: [],
   channels: [],
 });
 
@@ -71,6 +71,8 @@ export function apiAgentToFormState(
     aiModel: api.llm_service_id ?? defaults.aiModel,
     voiceProvider: api.tts_service_id ?? defaults.voiceProvider,
     sttProvider: api.stt_service_id ?? defaults.sttProvider,
+    phoneNumbers: api.phone_number ?? [],
+    channels: api.channels ?? [],
   };
 }
 

@@ -1,26 +1,32 @@
 'use client';
 
 import { CustomModal, SelectInput } from '@/components/shared';
+import { Checkbox } from '@/components/ui/checkbox';
 import { type TwilioPhoneNumber, getTwilioPhoneNumbers } from '@/services/phoneNumberService';
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
+interface PhoneNumberEntry {
+  type: string;
+  no: string;
+}
+
 interface AssignPhoneNumberModalProps {
   open: boolean;
   onClose: () => void;
-  onAssign: (phoneNumber: string) => void;
-  currentPhoneNumber?: string;
+  onAssign: (phoneNumbers: PhoneNumberEntry[]) => void;
+  currentPhoneNumbers?: PhoneNumberEntry[];
 }
 
 export default function AssignPhoneNumberModal({
   open,
   onClose,
   onAssign,
-  currentPhoneNumber,
+  currentPhoneNumbers = [],
 }: AssignPhoneNumberModalProps) {
   const [provider, setProvider] = useState('twilio');
   const [phoneNumbers, setPhoneNumbers] = useState<TwilioPhoneNumber[]>([]);
-  const [selectedNumber, setSelectedNumber] = useState('');
+  const [selectedNos, setSelectedNos] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fetchNumbers = useCallback(async () => {
@@ -38,24 +44,29 @@ export default function AssignPhoneNumberModal({
   useEffect(() => {
     if (open) {
       fetchNumbers();
-      setSelectedNumber(currentPhoneNumber ?? '');
+      setSelectedNos(currentPhoneNumbers.map((p) => p.no));
     }
-  }, [open, fetchNumbers, currentPhoneNumber]);
+  }, [open, fetchNumbers, currentPhoneNumbers]);
+
+  const toggleNumber = (no: string) => {
+    setSelectedNos((prev) =>
+      prev.includes(no) ? prev.filter((n) => n !== no) : [...prev, no],
+    );
+  };
 
   const handleAssign = () => {
-    if (selectedNumber) {
-      onAssign(selectedNumber);
-      onClose();
-    }
+    const entries: PhoneNumberEntry[] = selectedNos.map((no) => ({ type: provider, no }));
+    onAssign(entries);
+    onClose();
   };
 
   return (
     <CustomModal
       open={open}
       onClose={onClose}
-      title="Assign Phone Number"
+      title="Assign Phone Numbers"
       confirmText="Assign"
-      confirmDisabled={!selectedNumber || loading}
+      confirmDisabled={selectedNos.length === 0 || loading}
       onConfirm={handleAssign}
     >
       <div className="space-y-4">
@@ -68,7 +79,7 @@ export default function AssignPhoneNumberModal({
         />
 
         <div>
-          <label className="mb-1 block text-sm font-semibold text-foreground">Phone Number</label>
+          <label className="mb-1 block text-sm font-semibold text-foreground">Phone Numbers</label>
           {loading ? (
             <div className="flex justify-center py-2">
               <Loader2 className="size-6 animate-spin text-muted-foreground" />
@@ -78,16 +89,25 @@ export default function AssignPhoneNumberModal({
               No phone numbers found. Please configure your Twilio integration first.
             </p>
           ) : (
-            <SelectInput
-              name="phoneNumber"
-              value={selectedNumber}
-              onValueChange={setSelectedNumber}
-              placeholder="Select a phone number"
-              options={phoneNumbers.map((pn) => ({
-                value: pn.phone_number,
-                label: pn.phone_number,
-              }))}
-            />
+            <div className="max-h-48 space-y-2 overflow-y-auto rounded-md border border-border p-2">
+              {phoneNumbers.map((pn) => (
+                <label
+                  key={pn.phone_number}
+                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent"
+                >
+                  <Checkbox
+                    checked={selectedNos.includes(pn.phone_number)}
+                    onCheckedChange={() => toggleNumber(pn.phone_number)}
+                  />
+                  {pn.phone_number}
+                </label>
+              ))}
+            </div>
+          )}
+          {selectedNos.length > 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {selectedNos.length} number{selectedNos.length > 1 ? 's' : ''} selected
+            </p>
           )}
         </div>
       </div>

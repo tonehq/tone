@@ -52,7 +52,7 @@ export interface ApiAgent {
   name: string;
   description: string;
   agent_type?: string;
-  phone_number?: string;
+  phone_number?: { type: string; no: string }[];
   is_public: boolean;
   tags: Record<string, unknown>;
   total_calls: number;
@@ -109,6 +109,6 @@ export interface AgentFormState {
   useRealisticFillerWords: boolean;
   callRecording: boolean;
   callTranscription: boolean;
-  phoneNumber: string;
+  phoneNumbers: { type: string; no: string }[];
   channels: any[];
 }

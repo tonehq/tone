@@ -14,7 +14,7 @@ class ChannelPhoneNumbers(TimestampModel):
 
     uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
     channel_id = Column(BigInteger, ForeignKey('channels.id'), nullable=True)
-    phone_number = Column(String, nullable=False, unique=True)
+    phone_number = Column(String, nullable=False)
     phone_number_sid = Column(String, nullable=False)
     phone_number_auth_token = Column(String, nullable=False)
     provider = Column(String, nullable=False)

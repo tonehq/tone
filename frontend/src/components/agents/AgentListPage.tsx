@@ -75,7 +75,11 @@ const AgentListPage: React.FC = () => {
       key: 'phone_number',
       title: 'Phone Number',
       dataIndex: 'phone_number',
-      render: (value) => (value as string) || '-',
+      render: (value) => {
+        const phones = value as { type: string; no: string }[] | null | undefined;
+        if (!phones || phones.length === 0) return '-';
+        return phones.map((p) => p.no).join(', ');
+      },
     },
     {
       key: 'updated_at',

@@ -7,7 +7,6 @@ import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 import AssignPhoneNumberModal from '@/components/agents/AssignPhoneNumberModal';
 import type { TabItem } from '@/components/shared';
 import { CustomButton, CustomTab } from '@/components/shared';
-import { cn } from '@/utils/cn';
 import { deleteAgent, getAgent, upsertAgent } from '@/services/agentsService';
 import type { AgentFormState } from '@/types/agent';
 import {
@@ -16,6 +15,7 @@ import {
   formStateToUpsertPayload,
 } from '@/utils/agentFormUtils';
 import axiosInstance from '@/utils/axios';
+import { cn } from '@/utils/cn';
 import { useNotification } from '@/utils/notification';
 import { useAtom } from 'jotai';
 import { startCase } from 'lodash';
@@ -71,31 +71,37 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
     }
   }, [isEditMode, loadAgentData]);
 
-  const handleFormChange = async (partial: any) => {
+  const handleFormChange = (partial: any) => {
+    setFormData((prev) => ({ ...prev, ...partial }));
+  };
+
+  const handleAssignPhoneNumbers = async (phoneNumbers: { type: string; no: string }[]) => {
     setAssigning(true);
     try {
       const channel = formData?.channels?.find((channel: any) => channel.type === 'twilio');
-      await axiosInstance.post('/channel_phone_number/upsert_channel_phone_number', {
-        phone_number: partial.phoneNumber,
-        phone_number_sid: channel?.meta_data?.account_sid,
-        phone_number_auth_token: channel.meta_data?.auth_token,
-        provider: channel.type,
-        country_code: '+1',
-        number_type: 'international',
-        channel_id: channel?.id,
-        capabilities: {
-          voice: true,
-          sms: false,
-          mms: true,
-        },
-        status: 'active',
-      });
+      for (const pn of phoneNumbers) {
+        await axiosInstance.post('/channel_phone_number/upsert_channel_phone_number', {
+          phone_number: pn.no,
+          phone_number_sid: channel?.meta_data?.account_sid,
+          phone_number_auth_token: channel?.meta_data?.auth_token,
+          provider: pn.type,
+          country_code: '+1',
+          number_type: 'international',
+          channel_id: channel?.id,
+          capabilities: {
+            voice: true,
+            sms: false,
+            mms: true,
+          },
+          status: 'active',
+        });
+      }
+      setFormData((prev) => ({ ...prev, phoneNumbers }));
+      notify.success('Success', 'Phone number(s) assigned successfully');
     } catch {
-      notify.error('Error', 'Failed to save agent. Please try again.');
+      notify.error('Error', 'Failed to assign phone number(s). Please try again.');
     } finally {
       setAssigning(false);
-      setFormData((prev) => ({ ...prev, ...partial }));
-      notify.success('Success', 'Phone number assigned successfully');
     }
   };
 
@@ -241,11 +247,18 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
             <div className="min-w-0 space-y-1">
               <h3 className="truncate text-sm font-semibold text-foreground">{formData.name}</h3>
               <AgentTypeBadge agentType={agentType} />
-              {formData.phoneNumber && (
-                <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
-                  <Phone size={12} />
-                  {formData.phoneNumber}
-                </p>
+              {formData.phoneNumbers?.length > 0 && (
+                <div className="mt-1 space-y-0.5">
+                  {formData.phoneNumbers.map((pn) => (
+                    <p
+                      key={pn.no}
+                      className="flex items-center gap-1 text-xs text-muted-foreground"
+                    >
+                      <Phone size={12} />
+                      {pn.no}
+                    </p>
+                  ))}
+                </div>
               )}
             </div>
           </div>
@@ -286,13 +299,14 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         <div
           className={cn(
             'flex items-center border-b border-border px-6 py-2.5',
-            formData.phoneNumber ? 'bg-emerald-50' : 'bg-muted',
+            formData.phoneNumbers?.length > 0 ? 'bg-emerald-50' : 'bg-muted',
           )}
         >
           <div className="flex-1 text-[13px]">
-            {formData.phoneNumber ? (
+            {formData.phoneNumbers?.length > 0 ? (
               <>
-                <strong>Phone assigned:</strong> {formData.phoneNumber}
+                <strong>Phone assigned:</strong>{' '}
+                {formData.phoneNumbers.map((pn) => pn.no).join(', ')}
               </>
             ) : (
               <>
@@ -303,7 +317,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
           </div>
           {isEditMode && (
             <CustomButton type="default" onClick={() => setAssignModalOpen(true)}>
-              {formData.phoneNumber ? 'Change number' : 'Assign number'}
+              {formData.phoneNumbers?.length > 0 ? 'Change numbers' : 'Assign numbers'}
             </CustomButton>
           )}
         </div>
@@ -343,8 +357,8 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       <AssignPhoneNumberModal
         open={assignModalOpen}
         onClose={() => setAssignModalOpen(false)}
-        currentPhoneNumber={formData.phoneNumber}
-        onAssign={(phoneNumber) => handleFormChange({ phoneNumber })}
+        currentPhoneNumbers={formData.phoneNumbers}
+        onAssign={handleAssignPhoneNumbers}
       />
 
       {contextHolder}
