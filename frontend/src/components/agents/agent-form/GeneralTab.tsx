@@ -1,21 +1,12 @@
 'use client';
 
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { CustomButton, SelectInput, TextAreaField, TextInput } from '@/components/shared';
+import { Form } from '@/components/shared/Form';
 import type { ServiceProvider } from '@/types/provider';
-import {
-  Box,
-  Button,
-  Chip,
-  CircularProgress,
-  FormControl,
-  MenuItem,
-  Select,
-  Switch,
-  TextField,
-  Typography,
-  useTheme,
-} from '@mui/material';
+import { X } from 'lucide-react';
 import { KeyboardEvent, ReactNode, useState } from 'react';
-import { Form } from '../../shared/Form';
 import type { AgentGeneralFormData } from './types';
 
 interface GeneralTabProps {
@@ -27,9 +18,6 @@ interface GeneralTabProps {
   onFormSubmit?: (values: AgentGeneralFormData) => void;
 }
 
-/* ------------------------------------------------------------------ */
-/* Reusable 60% / 40% Form Row */
-/* ------------------------------------------------------------------ */
 function FormRow({
   label,
   description,
@@ -40,29 +28,15 @@ function FormRow({
   children: ReactNode;
 }) {
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        alignItems: 'flex-start',
-        justifyContent: 'space-between',
-        mb: 4,
-      }}
-    >
-      {/* Left - 60% */}
-      <Box sx={{ flex: '0 0 60%' }}>
-        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-          {label}
-        </Typography>
+    <div className="mb-6 flex items-start justify-between gap-6">
+      <div className="flex-[0_0_55%]">
+        <h3 className="text-sm font-semibold text-foreground">{label}</h3>
         {description && (
-          <Typography variant="body2" color="text.secondary">
-            {description}
-          </Typography>
+          <p className="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">{description}</p>
         )}
-      </Box>
-
-      {/* Right - 40% */}
-      <Box sx={{ flex: '0 0 40%' }}>{children}</Box>
-    </Box>
+      </div>
+      <div className="flex-[0_0_40%]">{children}</div>
+    </div>
   );
 }
 
@@ -84,7 +58,6 @@ export default function GeneralTab({
   onDeleteAgent,
   onFormSubmit,
 }: GeneralTabProps) {
-  const _theme = useTheme();
   const [vocabularyInput, setVocabularyInput] = useState('');
   const [filterWordsInput, setFilterWordsInput] = useState('');
 
@@ -148,11 +121,10 @@ export default function GeneralTab({
       />
 
       <FormRow label="Agent Name" description="What name will your agent go by.">
-        <TextField
+        <TextInput
+          name="name"
           value={formData.name}
           onChange={(e) => onFormChange({ name: e.target.value })}
-          size="small"
-          fullWidth
         />
       </FormRow>
 
@@ -160,135 +132,118 @@ export default function GeneralTab({
         label="Agent Description"
         description="Provide a brief summary explaining your agent's purpose."
       >
-        <TextField
+        <TextAreaField
+          name="description"
           value={formData.description}
           onChange={(e) => onFormChange({ description: e.target.value })}
-          size="small"
-          multiline
-          minRows={3}
-          fullWidth
+          rows={3}
         />
       </FormRow>
 
       <FormRow label="AI Model" description="Opt for speed or depth to suit your agent's role.">
-        <FormControl size="small" fullWidth>
-          {providersLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
-              <CircularProgress size={24} />
-            </Box>
-          ) : (
-            <Select
-              value={formData.aiModel ?? ''}
-              onChange={(e) =>
-                onFormChange({ aiModel: e.target.value ? Number(e.target.value) : null })
-              }
-              displayEmpty
-              renderValue={(v) => {
-                if (!v) return <span>Select a provider</span>;
-                return llmProviders.find((p) => p.id === v)?.display_name ?? v;
-              }}
-            >
-              {llmProviders.map((provider) => (
-                <MenuItem key={provider.id} value={provider.id}>
-                  {provider.display_name}
-                </MenuItem>
-              ))}
-            </Select>
-          )}
-        </FormControl>
+        <SelectInput
+          name="aiModel"
+          value={formData.aiModel != null ? String(formData.aiModel) : ''}
+          onValueChange={(v) => onFormChange({ aiModel: v ? Number(v) : null })}
+          placeholder="Select a provider"
+          options={llmProviders.map((p) => ({ value: String(p.id), label: p.display_name }))}
+          loading={providersLoading}
+        />
       </FormRow>
 
       <FormRow
         label="First Message"
         description="Initial message sent when the conversation starts."
       >
-        <TextField
+        <TextAreaField
+          name="first_message"
           value={formData.first_message}
           onChange={(e) => onFormChange({ first_message: e.target.value })}
-          size="small"
-          multiline
-          minRows={3}
-          fullWidth
+          rows={3}
         />
       </FormRow>
 
       <FormRow label="End Call Message" description="Message sent at the end of a conversation.">
-        <TextField
+        <TextAreaField
+          name="end_call_message"
           value={formData.end_call_message}
           onChange={(e) => onFormChange({ end_call_message: e.target.value })}
-          size="small"
-          multiline
-          minRows={3}
-          fullWidth
+          rows={3}
         />
       </FormRow>
 
       <FormRow label="Custom Vocabulary" description="Add business terms to improve accuracy.">
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <TextField
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            <TextInput
+              name="vocabularyInput"
               value={vocabularyInput}
               onChange={(e) => setVocabularyInput(e.target.value)}
               onKeyDown={(e: KeyboardEvent<HTMLInputElement>) =>
                 e.key === 'Enter' && (e.preventDefault(), addVocabulary())
               }
-              size="small"
-              fullWidth
             />
-            <Button variant="outlined" onClick={addVocabulary}>
+            <CustomButton type="default" onClick={addVocabulary}>
               Enter
-            </Button>
-          </Box>
+            </CustomButton>
+          </div>
 
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+          <div className="flex flex-wrap gap-1">
             {formData.customVocabulary.map((word) => (
-              <Chip
-                key={word}
-                label={word}
-                size="small"
-                onDelete={() =>
-                  onFormChange({
-                    customVocabulary: formData.customVocabulary.filter((w) => w !== word),
-                  })
-                }
-              />
+              <Badge key={word} variant="secondary" className="gap-1 pr-1">
+                {word}
+                <button
+                  type="button"
+                  onClick={() =>
+                    onFormChange({
+                      customVocabulary: formData.customVocabulary.filter((w) => w !== word),
+                    })
+                  }
+                  className="rounded-full p-0.5 hover:bg-muted-foreground/20"
+                >
+                  <X className="size-3" />
+                </button>
+              </Badge>
             ))}
-          </Box>
-        </Box>
+          </div>
+        </div>
       </FormRow>
 
       <FormRow label="Filter Words" description="Words the agent should not speak.">
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <TextField
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            <TextInput
+              name="filterWordsInput"
               value={filterWordsInput}
               onChange={(e) => setFilterWordsInput(e.target.value)}
               onKeyDown={(e: KeyboardEvent<HTMLInputElement>) =>
                 e.key === 'Enter' && (e.preventDefault(), addFilterWord())
               }
-              size="small"
-              fullWidth
             />
-            <Button variant="outlined" onClick={addFilterWord}>
+            <CustomButton type="default" onClick={addFilterWord}>
               Enter
-            </Button>
-          </Box>
+            </CustomButton>
+          </div>
 
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+          <div className="flex flex-wrap gap-1">
             {formData.filterWords.map((word) => (
-              <Chip
-                key={word}
-                label={word}
-                size="small"
-                onDelete={() =>
-                  onFormChange({
-                    filterWords: formData.filterWords.filter((w) => w !== word),
-                  })
-                }
-              />
+              <Badge key={word} variant="secondary" className="gap-1 pr-1">
+                {word}
+                <button
+                  type="button"
+                  onClick={() =>
+                    onFormChange({
+                      filterWords: formData.filterWords.filter((w) => w !== word),
+                    })
+                  }
+                  className="rounded-full p-0.5 hover:bg-muted-foreground/20"
+                >
+                  <X className="size-3" />
+                </button>
+              </Badge>
             ))}
-          </Box>
-        </Box>
+          </div>
+        </div>
       </FormRow>
 
       <FormRow
@@ -297,14 +252,14 @@ export default function GeneralTab({
       >
         <Switch
           checked={formData.useRealisticFillerWords}
-          onChange={(e) => onFormChange({ useRealisticFillerWords: e.target.checked })}
+          onCheckedChange={(checked) => onFormChange({ useRealisticFillerWords: checked })}
         />
       </FormRow>
 
       <FormRow label="Delete Agent" description="Deleting an agent removes all associated data.">
-        <Button variant="contained" color="error" onClick={onDeleteAgent}>
+        <CustomButton type="danger" onClick={onDeleteAgent}>
           Delete Agent
-        </Button>
+        </CustomButton>
       </FormRow>
     </Form>
   );

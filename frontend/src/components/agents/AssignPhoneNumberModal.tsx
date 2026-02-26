@@ -1,21 +1,8 @@
 'use client';
 
+import { CustomModal, SelectInput } from '@/components/shared';
 import { type TwilioPhoneNumber, getTwilioPhoneNumbers } from '@/services/phoneNumberService';
-import {
-  Box,
-  Button,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControl,
-  IconButton,
-  MenuItem,
-  Select,
-  Typography,
-} from '@mui/material';
-import { X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 interface AssignPhoneNumberModalProps {
@@ -62,93 +49,48 @@ export default function AssignPhoneNumberModal({
     }
   };
 
-  console.log(phoneNumbers, 'phoneNumbers');
   return (
-    <Dialog
+    <CustomModal
       open={open}
       onClose={onClose}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{ sx: { borderRadius: '8px', maxWidth: '500px' } }}
+      title="Assign Phone Number"
+      confirmText="Assign"
+      confirmDisabled={!selectedNumber || loading}
+      onConfirm={handleAssign}
     >
-      <DialogTitle
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          pb: 1,
-        }}
-      >
-        <Typography component="span" variant="h6" sx={{ fontWeight: 600 }}>
-          Assign Phone Number
-        </Typography>
-        <IconButton onClick={onClose} size="small">
-          <X size={20} />
-        </IconButton>
-      </DialogTitle>
+      <div className="space-y-4">
+        <SelectInput
+          name="provider"
+          label="Service Provider"
+          value={provider}
+          onValueChange={setProvider}
+          options={[{ value: 'twilio', label: 'Twilio' }]}
+        />
 
-      <DialogContent sx={{ pt: 2 }}>
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-            Service Provider
-          </Typography>
-          <FormControl size="small" fullWidth>
-            <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
-              <MenuItem value="twilio">Twilio</MenuItem>
-            </Select>
-          </FormControl>
-        </Box>
-
-        <Box>
-          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-            Phone Number
-          </Typography>
+        <div>
+          <label className="mb-1 block text-sm font-semibold text-foreground">Phone Number</label>
           {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-              <CircularProgress size={24} />
-            </Box>
+            <div className="flex justify-center py-2">
+              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            </div>
           ) : phoneNumbers.length === 0 ? (
-            <Typography variant="body2" color="text.secondary">
+            <p className="text-sm text-muted-foreground">
               No phone numbers found. Please configure your Twilio integration first.
-            </Typography>
+            </p>
           ) : (
-            <FormControl size="small" fullWidth>
-              <Select
-                value={selectedNumber}
-                onChange={(e) => setSelectedNumber(e.target.value)}
-                displayEmpty
-                renderValue={(v) => {
-                  if (!v) return <span>Select a phone number</span>;
-                  return v;
-                }}
-              >
-                {phoneNumbers.map((pn) => (
-                  <MenuItem key={pn.phone_number} value={pn.phone_number}>
-                    {pn.phone_number}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <SelectInput
+              name="phoneNumber"
+              value={selectedNumber}
+              onValueChange={setSelectedNumber}
+              placeholder="Select a phone number"
+              options={phoneNumbers.map((pn) => ({
+                value: pn.phone_number,
+                label: pn.phone_number,
+              }))}
+            />
           )}
-        </Box>
-      </DialogContent>
-
-      <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose} variant="outlined" sx={{ borderColor: '#e2e8f0' }}>
-          Cancel
-        </Button>
-        <Button
-          onClick={handleAssign}
-          variant="contained"
-          disabled={!selectedNumber || loading}
-          sx={{
-            backgroundColor: '#8b5cf6',
-            '&:hover': { backgroundColor: '#7c3aed' },
-          }}
-        >
-          Assign
-        </Button>
-      </DialogActions>
-    </Dialog>
+        </div>
+      </div>
+    </CustomModal>
   );
 }

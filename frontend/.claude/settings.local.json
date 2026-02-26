@@ -11,7 +11,8 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(grep:*)",
       "Bash(yarn tsc:*)",
-      "Bash(npx prettier:*)"
+      "Bash(npx prettier:*)",
+      "Bash(tail:*)"
     ]
   }
 }

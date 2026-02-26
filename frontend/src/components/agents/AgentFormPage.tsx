@@ -2,55 +2,26 @@
 
 import { loadableProvidersAtom } from '@/atoms/ProviderAtom';
 import { CallConfigurationTab, GeneralTab, VoiceTab } from '@/components/agents/agent-form';
+import PromptPage from '@/components/agents/agent-form/promptPage';
+import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
+import AssignPhoneNumberModal from '@/components/agents/AssignPhoneNumberModal';
+import type { TabItem } from '@/components/shared';
+import { CustomButton, CustomTab } from '@/components/shared';
+import { cn } from '@/lib/utils';
+import { deleteAgent, getAgent, upsertAgent } from '@/services/agentsService';
 import type { AgentFormState } from '@/types/agent';
 import {
   apiAgentToFormState,
   defaultFormState,
   formStateToUpsertPayload,
 } from '@/utils/agentFormUtils';
-import PromptPage from '@/components/agents/agent-form/promptPage';
-import AssignPhoneNumberModal from '@/components/agents/AssignPhoneNumberModal';
-import { deleteAgent, getAgent, upsertAgent } from '@/services/agentsService';
 import axiosInstance from '@/utils/axios';
-import {
-  ArrowBack as ArrowBackIcon,
-  Phone as PhoneIcon,
-  Save as SaveIcon,
-  Settings as SettingsIcon,
-  VolumeUp as VoiceIcon,
-} from '@mui/icons-material';
-import {
-  Alert,
-  Avatar,
-  Box,
-  Button,
-  Chip,
-  CircularProgress,
-  Snackbar,
-  Tab,
-  Tabs,
-  Typography,
-  useTheme,
-} from '@mui/material';
+import { useNotification } from '@/utils/notification';
 import { useAtom } from 'jotai';
 import { startCase } from 'lodash';
+import { ArrowLeft, Loader2, Phone, Save, Settings, Volume2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
-
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-  return (
-    <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box>{children}</Box>}
-    </div>
-  );
-}
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface AgentFormPageProps {
   agentType: 'inbound' | 'outbound';
@@ -59,20 +30,15 @@ interface AgentFormPageProps {
 
 export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps) {
   const router = useRouter();
-  const theme = useTheme();
   const isEditMode = !!agentId;
+  const { notify, contextHolder } = useNotification();
 
   const [providersLoadable] = useAtom(loadableProvidersAtom);
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState('general');
   const [currentMenu, setCurrentMenu] = useState('configure');
   const [formData, setFormData] = useState<AgentFormState>(() => defaultFormState(agentType));
   const [loading, setLoading] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
-  const [snackbar, setSnackbar] = useState<{
-    open: boolean;
-    message: string;
-    severity: 'success' | 'error';
-  }>({ open: false, message: '', severity: 'success' });
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [_assigning, setAssigning] = useState(false);
 
@@ -90,10 +56,10 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       if (agent) {
         setFormData(apiAgentToFormState(agent, agentType));
       } else {
-        setSnackbar({ open: true, message: 'Agent not found', severity: 'error' });
+        notify.error('Error', 'Agent not found');
       }
     } catch {
-      setSnackbar({ open: true, message: 'Failed to load agent', severity: 'error' });
+      notify.error('Error', 'Failed to load agent');
     } finally {
       setLoading(false);
     }
@@ -104,10 +70,6 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       loadAgentData();
     }
   }, [isEditMode, loadAgentData]);
-
-  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
-    setActiveTab(newValue);
-  };
 
   const handleFormChange = async (partial: any) => {
     setAssigning(true);
@@ -129,19 +91,11 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         status: 'active',
       });
     } catch {
-      setSnackbar({
-        open: true,
-        message: 'Failed to save agent. Please try again.',
-        severity: 'error',
-      });
+      notify.error('Error', 'Failed to save agent. Please try again.');
     } finally {
       setAssigning(false);
       setFormData((prev) => ({ ...prev, ...partial }));
-      setSnackbar({
-        open: true,
-        message: 'Phone number assigned successfully',
-        severity: 'success',
-      });
+      notify.success('Success', 'Phone number assigned successfully');
     }
   };
 
@@ -154,22 +108,20 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         isEditMode ? Number(agentId) : undefined,
       );
       await upsertAgent(payload);
-      setSnackbar({
-        open: true,
-        message: isEditMode ? 'Agent saved successfully' : 'Agent created successfully',
-        severity: 'success',
-      });
+      notify.success(
+        'Success',
+        isEditMode ? 'Agent saved successfully' : 'Agent created successfully',
+      );
       if (!isEditMode) {
         router.push('/agents');
       }
     } catch {
-      setSnackbar({
-        open: true,
-        message: isEditMode
+      notify.error(
+        'Error',
+        isEditMode
           ? 'Failed to save agent. Please try again.'
           : 'Failed to create agent. Please try again.',
-        severity: 'error',
-      });
+      );
     } finally {
       setSaving(false);
     }
@@ -187,7 +139,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
           await deleteAgent(Number(agentId));
           router.push('/agents');
         } catch {
-          setSnackbar({ open: true, message: 'Failed to delete agent', severity: 'error' });
+          notify.error('Error', 'Failed to delete agent');
         }
       } else {
         router.push('/agents');
@@ -195,263 +147,196 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
     }
   };
 
-  const chipColor = agentType === 'inbound' ? '#10b981' : '#8b5cf6';
-  const chipBg = agentType === 'inbound' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(139, 92, 246, 0.1)';
+  const configTabItems: TabItem[] = useMemo(
+    () => [
+      {
+        key: 'general',
+        label: 'General',
+        icon: <Settings size={16} />,
+        children: (
+          <GeneralTab
+            formData={{
+              name: formData.name,
+              description: formData.description,
+              aiModel: formData.aiModel,
+              end_call_message: formData.end_call_message,
+              first_message: formData.first_message,
+              customVocabulary: formData.customVocabulary,
+              filterWords: formData.filterWords,
+              useRealisticFillerWords: formData.useRealisticFillerWords,
+            }}
+            llmProviders={llmProviders}
+            providersLoading={providersLoading}
+            onFormChange={handleFormChange}
+            onDeleteAgent={handleDeleteAgent}
+          />
+        ),
+      },
+      {
+        key: 'voice',
+        label: 'Voice',
+        icon: <Volume2 size={16} />,
+        children: (
+          <VoiceTab
+            formData={{
+              language: formData.language,
+              voiceSpeed: formData.voiceSpeed,
+              voiceProvider: formData.voiceProvider,
+              sttProvider: formData.sttProvider,
+              patienceLevel: formData.patienceLevel as 'low' | 'medium' | 'high',
+              speechRecognition: formData.speechRecognition as 'fast' | 'accurate',
+            }}
+            ttsProviders={ttsProviders}
+            sttProviders={sttProviders}
+            providersLoading={providersLoading}
+            onFormChange={handleFormChange}
+          />
+        ),
+      },
+      {
+        key: 'call-config',
+        label: 'Call Configuration',
+        icon: <Phone size={16} />,
+        children: (
+          <CallConfigurationTab
+            formData={{
+              callRecording: formData.callRecording,
+              callTranscription: formData.callTranscription,
+            }}
+            onFormChange={handleFormChange}
+          />
+        ),
+      },
+    ],
+    [formData, llmProviders, ttsProviders, sttProviders, providersLoading],
+  );
 
   if (loading) {
     return (
-      <Box
-        sx={{
-          p: 3,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '100vh',
-        }}
-      >
-        <CircularProgress size={40} />
-      </Box>
+      <div className="flex min-h-screen items-center justify-center p-3">
+        <Loader2 className="size-10 animate-spin text-muted-foreground" />
+      </div>
     );
   }
 
   return (
-    <Box sx={{ display: 'flex', height: '100vh' }}>
+    <div className="flex h-screen">
       {/* Left Sidebar */}
-      <Box
-        sx={{
-          width: 280,
-          backgroundColor: '#ffffff',
-          borderRight: '1px solid #e2e8f0',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        <Box sx={{ p: 2 }}>
-          <Button
-            startIcon={<ArrowBackIcon />}
+      <div className="flex w-[280px] flex-col border-r border-border bg-background">
+        <div className="px-3 py-2">
+          <CustomButton
+            type="text"
+            icon={<ArrowLeft size={16} />}
             onClick={() => router.push('/agents')}
-            sx={{ color: theme.palette.text.secondary }}
           >
             Back to Agents
-          </Button>
-        </Box>
+          </CustomButton>
+        </div>
 
-        <Box sx={{ p: 2, borderBottom: '1px solid #e2e8f0' }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-            <Avatar sx={{ width: 48, height: 48, backgroundColor: '#f3f4f6' }} />
-            <Box>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                {formData.name}
-              </Typography>
-              <Chip
-                label={agentType === 'inbound' ? 'Inbound' : 'Outbound'}
-                size="small"
-                sx={{
-                  backgroundColor: chipBg,
-                  color: chipColor,
-                  fontWeight: 500,
-                }}
-              />
+        <div className="border-b border-border px-4 py-4">
+          <div className="flex items-center gap-3">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground">
+              {formData.name?.charAt(0)?.toUpperCase() || 'A'}
+            </div>
+            <div className="min-w-0 space-y-1">
+              <h3 className="truncate text-sm font-semibold text-foreground">{formData.name}</h3>
+              <AgentTypeBadge agentType={agentType} />
               {formData.phoneNumber && (
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ mt: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}
-                >
-                  <PhoneIcon sx={{ fontSize: 14 }} />
+                <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                  <Phone size={12} />
                   {formData.phoneNumber}
-                </Typography>
+                </p>
               )}
-            </Box>
-          </Box>
-        </Box>
+            </div>
+          </div>
+        </div>
 
-        <Box sx={{ p: 2 }}>
-          <Button
-            variant="contained"
-            fullWidth
-            startIcon={<PhoneIcon />}
-            sx={{ backgroundColor: '#8b5cf6', '&:hover': { backgroundColor: '#7c3aed' } }}
-          >
+        <div className="px-3 py-3">
+          <CustomButton type="primary" fullWidth icon={<Phone size={16} />}>
             Test Agent
-          </Button>
-        </Box>
+          </CustomButton>
+        </div>
 
-        <Box sx={{ flex: 1, py: 2 }}>
+        <div className="flex-1 space-y-0.5 px-2 py-1">
           {['configure', 'prompt', 'deployments'].map((item) => {
             const isActive = item === currentMenu;
             return (
-              <Box
+              <button
                 key={item}
-                sx={{
-                  py: 1.5,
-                  px: 2,
-                  cursor: 'pointer',
-                  borderRadius: 1,
-                  mx: 1,
-                  backgroundColor: isActive ? '#e5e7eb' : 'transparent',
-                  color: isActive ? '#000' : theme.palette.text.secondary,
-                  transition: 'background-color 0.2s, color 0.2s',
-                  '&:hover': {
-                    backgroundColor: '#e5e7eb',
-                    color: '#000',
-                  },
-                }}
+                type="button"
+                className={cn(
+                  'w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors',
+                  isActive
+                    ? 'bg-accent text-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                )}
                 onClick={() => setCurrentMenu(item)}
               >
-                <Typography variant="body2" sx={{ fontWeight: 600, color: 'inherit' }}>
-                  {startCase(item)}
-                </Typography>
-              </Box>
+                {startCase(item)}
+              </button>
             );
           })}
-        </Box>
-      </Box>
+        </div>
+      </div>
 
       {/* Main Content */}
-      <Box sx={{ flex: 1 }}>
-        <Alert
-          severity={formData.phoneNumber ? 'success' : 'info'}
-          sx={{ borderRadius: 0, backgroundColor: '#f3f4f6', border: 'none' }}
-          action={
-            isEditMode ? (
-              <Button
-                variant="outlined"
-                size="small"
-                sx={{ borderColor: '#e2e8f0' }}
-                onClick={() => setAssignModalOpen(true)}
-              >
-                {formData.phoneNumber ? 'Change number' : 'Assign number'}
-              </Button>
-            ) : undefined
-          }
-        >
-          {formData.phoneNumber ? (
-            <>
-              <strong>Phone assigned:</strong> {formData.phoneNumber}
-            </>
-          ) : (
-            <>
-              <strong>Important</strong> Your agent doesn&apos;t have a phone number and can&apos;t{' '}
-              {agentType === 'inbound' ? 'receive' : 'make'} calls.
-            </>
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div
+          className={cn(
+            'flex items-center border-b border-border px-6 py-2.5',
+            formData.phoneNumber ? 'bg-emerald-50' : 'bg-muted',
           )}
-        </Alert>
-
-        <Box
-          sx={{
-            p: 3,
-            background: '#fff',
-            borderBottom: '1px solid #e2e8f0',
-            display: 'flex',
-            justifyContent: 'space-between',
-          }}
         >
-          <Typography variant="h5" sx={{ fontWeight: 600 }}>
-            {startCase(currentMenu)}
-          </Typography>
-          <Button
-            variant="contained"
-            startIcon={saving ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
+          <div className="flex-1 text-[13px]">
+            {formData.phoneNumber ? (
+              <>
+                <strong>Phone assigned:</strong> {formData.phoneNumber}
+              </>
+            ) : (
+              <>
+                <strong>Important</strong> Your agent doesn&apos;t have a phone number and
+                can&apos;t {agentType === 'inbound' ? 'receive' : 'make'} calls.
+              </>
+            )}
+          </div>
+          {isEditMode && (
+            <CustomButton type="default" onClick={() => setAssignModalOpen(true)}>
+              {formData.phoneNumber ? 'Change number' : 'Assign number'}
+            </CustomButton>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between border-b border-border bg-background px-6 py-4">
+          <h2 className="text-lg font-semibold text-foreground">{startCase(currentMenu)}</h2>
+          <CustomButton
+            type="primary"
+            icon={saving ? <Loader2 className="size-4 animate-spin" /> : <Save size={16} />}
             onClick={handleSave}
-            disabled={saving}
-            sx={{ backgroundColor: '#8b5cf6', '&:hover': { backgroundColor: '#7c3aed' } }}
+            loading={saving}
           >
             {saving ? 'Saving...' : 'Save Changes'}
-          </Button>
-        </Box>
+          </CustomButton>
+        </div>
 
         {currentMenu === 'configure' && (
-          <Box>
-            <Box sx={{ px: 3 }}>
-              <Tabs
-                value={activeTab}
-                onChange={handleTabChange}
-                sx={{
-                  borderBottom: '1px solid #e2e8f0',
-                  '& .MuiTab-root': {
-                    marginRight: '16px',
-                    minHeight: 48,
-                    textTransform: 'none',
-                  },
-                }}
-              >
-                <Tab
-                  icon={<SettingsIcon sx={{ fontSize: 18 }} />}
-                  iconPosition="start"
-                  label="General"
-                />
-                <Tab
-                  icon={<VoiceIcon sx={{ fontSize: 18 }} />}
-                  iconPosition="start"
-                  label="Voice"
-                />
-                <Tab
-                  icon={<PhoneIcon sx={{ fontSize: 18 }} />}
-                  iconPosition="start"
-                  label="Call Configuration"
-                />
-              </Tabs>
-            </Box>
-
-            <Box sx={{ p: 3, background: 'white', height: '73vh', overflow: 'auto' }}>
-              <TabPanel value={activeTab} index={0}>
-                <GeneralTab
-                  formData={{
-                    name: formData.name,
-                    description: formData.description,
-                    aiModel: formData.aiModel,
-                    end_call_message: formData.end_call_message,
-                    first_message: formData.first_message,
-                    customVocabulary: formData.customVocabulary,
-                    filterWords: formData.filterWords,
-                    useRealisticFillerWords: formData.useRealisticFillerWords,
-                  }}
-                  llmProviders={llmProviders}
-                  providersLoading={providersLoading}
-                  onFormChange={handleFormChange}
-                  onDeleteAgent={handleDeleteAgent}
-                />
-              </TabPanel>
-
-              <TabPanel value={activeTab} index={1}>
-                <VoiceTab
-                  formData={{
-                    language: formData.language,
-                    voiceSpeed: formData.voiceSpeed,
-                    voiceProvider: formData.voiceProvider,
-                    sttProvider: formData.sttProvider,
-                    patienceLevel: formData.patienceLevel as 'low' | 'medium' | 'high',
-                    speechRecognition: formData.speechRecognition as 'fast' | 'accurate',
-                  }}
-                  ttsProviders={ttsProviders}
-                  sttProviders={sttProviders}
-                  providersLoading={providersLoading}
-                  onFormChange={handleFormChange}
-                />
-              </TabPanel>
-
-              <TabPanel value={activeTab} index={2}>
-                <CallConfigurationTab
-                  formData={{
-                    callRecording: formData.callRecording,
-                    callTranscription: formData.callTranscription,
-                  }}
-                  onFormChange={handleFormChange}
-                />
-              </TabPanel>
-            </Box>
-          </Box>
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <CustomTab
+              activeKey={activeTab}
+              onTabChange={setActiveTab}
+              className="flex flex-1 flex-col overflow-hidden"
+              tabBarClassName="px-6 border-b border-border"
+              contentClassName="flex-1 overflow-auto bg-background px-8 py-6"
+              items={configTabItems}
+            />
+          </div>
         )}
         {currentMenu === 'prompt' && (
-          <Box>
-            <PromptPage
-              formData={{ voicePrompting: formData.voicePrompting }}
-              onFormChange={handleFormChange}
-            />
-          </Box>
+          <PromptPage
+            formData={{ voicePrompting: formData.voicePrompting }}
+            onFormChange={handleFormChange}
+          />
         )}
-      </Box>
+      </div>
 
       <AssignPhoneNumberModal
         open={assignModalOpen}
@@ -460,21 +345,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         onAssign={(phoneNumber) => handleFormChange({ phoneNumber })}
       />
 
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={4000}
-        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert
-          onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
-          severity={snackbar.severity}
-          variant="filled"
-          sx={{ width: '100%' }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </Box>
+      {contextHolder}
+    </div>
   );
 }

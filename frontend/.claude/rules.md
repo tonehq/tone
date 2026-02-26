@@ -146,6 +146,9 @@ All UI must go through `@/components/shared` where a shared component exists. Th
 | Data table                    | `CustomTable` from `@/components/shared`     | MUI `DataGrid`, Ant Design `Table`, raw `<table>`, shadcn `Table` directly |
 | Modal / dialog / confirmation | `CustomModal` from `@/components/shared`     | MUI `Dialog`, shadcn `Dialog` directly, browser `alert()`/`confirm()`      |
 | Text input                    | `TextInput` from `@/components/shared`       | MUI `TextField`, shadcn `Input` directly, native `<input>`                 |
+| Select / dropdown             | `SelectInput` from `@/components/shared`     | MUI `Select`, shadcn `Select` directly (except toolbar/compact contexts)   |
+| Textarea / multiline input    | `TextAreaField` from `@/components/shared`   | MUI `TextField multiline`, shadcn `Textarea` directly                      |
+| Tabs                          | `CustomTab` from `@/components/shared`       | MUI `Tabs`, shadcn `Tabs` directly                                         |
 | Checkbox                      | `CheckboxField` from `@/components/shared`   | MUI `Checkbox`, shadcn `Checkbox` directly                                 |
 | Radio group                   | `RadioGroupField` from `@/components/shared` | MUI `RadioGroup`, shadcn `RadioGroup` directly                             |
 | Link navigation               | `CustomLink` from `@/components/shared`      | Styled `<a>` tags (plain `next/link` is fine for non-styled links)         |
@@ -214,3 +217,60 @@ Keep code organized by responsibility. Every new file must land in the correct d
 5. **Atoms orchestrate state.** Atoms import from `@/services/` and `@/types/`. Components import atoms. Atoms must not import from components.
 6. **Re-export for backwards compatibility.** When moving a type, constant, or function to its canonical location, leave a re-export in the old file to avoid breaking existing imports. Remove the re-export in a follow-up cleanup.
 7. **One domain per file.** `src/types/agent.ts` holds all agent-related types. `src/constants/sidebar.ts` holds all sidebar constants. Do not split a domain across multiple files in the same directory.
+
+---
+
+## 9. Reusable domain components (mandatory)
+
+Certain UI elements have canonical component implementations. Always use these instead of re-implementing with inline styles or ad-hoc Badge/Chip usage.
+
+### Required domain components
+
+| Need | Use | Do NOT use |
+| --- | --- | --- |
+| Inbound/Outbound agent type badge | `AgentTypeBadge` from `@/components/agents/AgentTypeBadge` | Inline `Badge` with custom emerald/violet colors, MUI `Chip` |
+
+### Rules
+
+1. **Always use `AgentTypeBadge`** when displaying inbound or outbound agent type labels anywhere in the app. It renders a consistent `Badge variant="outline"` with the correct icon (`PhoneIncoming`/`PhoneOutgoing`) and color scheme (`emerald` for inbound, `violet` for outbound).
+2. **Do not duplicate the color logic.** The component owns the `AGENT_TYPE_CONFIG` mapping. If the design changes, update the component once.
+
+---
+
+## 10. Form layout and spacing standards
+
+All form pages (agent form, settings, etc.) follow consistent spacing rules for visual breathing room and alignment.
+
+### Form row pattern
+
+Use a **55% / 40%** left-right split with a gap between label and control:
+
+```
+<div className="mb-6 flex items-start justify-between gap-6">
+  <div className="flex-[0_0_55%]">
+    <h3 className="text-sm font-semibold text-foreground">{label}</h3>
+    <p className="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">{description}</p>
+  </div>
+  <div className="flex-[0_0_40%]">{control}</div>
+</div>
+```
+
+### Spacing tokens
+
+| Element | Class | Value |
+| --- | --- | --- |
+| Between form rows | `mb-6` | 1.5rem vertical |
+| Section container padding | `py-4` | 1rem vertical |
+| Tab content area | `px-8 py-6` | 2rem / 1.5rem |
+| Sidebar nav item spacing | `space-y-0.5` | 0.125rem between items |
+| Description text below labels | `mt-0.5 text-[13px] leading-relaxed` | Tighter to label, readable |
+| Alert/banner bar | `px-6 py-2.5` | Compact horizontal bar |
+
+### Typography in forms
+
+| Element | Classes |
+| --- | --- |
+| Form row label | `text-sm font-semibold text-foreground` |
+| Form row description | `text-[13px] leading-relaxed text-muted-foreground` |
+| Page heading | `text-lg font-semibold text-foreground` |
+| Banner/alert text | `text-[13px]` |

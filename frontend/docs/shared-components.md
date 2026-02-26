@@ -377,10 +377,122 @@ Single-choice group. Uses shadcn `RadioGroup` + `RadioGroupItem` + `Label` per o
 
 ---
 
+## SelectInput
+
+Wraps shadcn `Select` + `Label`. Provides loading skeleton, error state, and helper text.
+
+| Prop             | Type                      | Default               | Description                                                      |
+| ---------------- | ------------------------- | --------------------- | ---------------------------------------------------------------- |
+| name             | string                    | —                     | **Required.** Select name and id.                                |
+| options          | `SelectOption[]`          | —                     | **Required.** `{ value, label, disabled? }[]`.                   |
+| value            | string                    | —                     | Controlled value.                                                |
+| defaultValue     | string                    | —                     | Uncontrolled default.                                            |
+| onValueChange    | `(value: string) => void` | —                     | Called when selection changes.                                    |
+| placeholder      | string                    | `'Select an option'`  | Placeholder text when no value selected.                         |
+| label            | string                    | —                     | Label text above select.                                         |
+| isRequired       | boolean                   | `false`               | Shows asterisk on label.                                         |
+| loading          | boolean                   | `false`               | Shows skeleton instead of select.                                |
+| disabled         | boolean                   | `false`               | Disables the select.                                             |
+| error            | boolean                   | `false`               | Destructive border + ring.                                       |
+| helperText       | string                    | —                     | Small text below select.                                         |
+| size             | `'sm' \| 'default'`       | `'default'`           | Size variant passed to SelectTrigger.                            |
+| labelClassName   | string                    | —                     | Class for the label.                                             |
+| className        | string                    | —                     | Class for the outer wrapper div.                                 |
+| triggerClassName  | string                    | —                     | Class for the SelectTrigger.                                     |
+
+**SelectOption:** `{ value: string; label: string; disabled?: boolean }`
+
+**Example:**
+
+```tsx
+<SelectInput
+  name="provider"
+  label="AI Model"
+  value={selectedProvider}
+  onValueChange={setSelectedProvider}
+  placeholder="Select a provider"
+  options={providers.map((p) => ({ value: String(p.id), label: p.display_name }))}
+  loading={isLoading}
+/>
+```
+
+---
+
+## TextAreaField
+
+Wraps shadcn `Textarea` + `Label`. Supports loading skeleton, error state, and helper text.
+
+| Prop                        | Type    | Default | Description                          |
+| --------------------------- | ------- | ------- | ------------------------------------ |
+| name                        | string  | —       | **Required.** Textarea name and id.  |
+| label                       | string  | —       | Label text above textarea.           |
+| isRequired                  | boolean | `false` | Shows asterisk on label.             |
+| loading                     | boolean | `false` | Shows skeleton instead of textarea.  |
+| error                       | boolean | `false` | Destructive border + ring.           |
+| helperText                  | string  | —       | Small text below textarea.           |
+| rows                        | number  | `3`     | Number of visible text rows.         |
+| labelClassName              | string  | —       | Class for the label.                 |
+| className                   | string  | —       | Class for the textarea.              |
+| + all native textarea props |         |         | placeholder, value, onChange, etc.   |
+
+**Example:**
+
+```tsx
+<TextAreaField
+  name="description"
+  label="Description"
+  value={description}
+  onChange={(e) => setDescription(e.target.value)}
+  rows={4}
+  isRequired
+/>
+```
+
+---
+
+## CustomTab
+
+Ant Design-style line tabs built on Radix Tab primitives. Items-based API with `TabItem[]`.
+
+| Prop             | Type        | Default          | Description                                       |
+| ---------------- | ----------- | ---------------- | ------------------------------------------------- |
+| items            | `TabItem[]` | —                | **Required.** Tab definitions (see below).        |
+| defaultActiveKey | string      | first item's key | Default active tab (uncontrolled).                |
+| activeKey        | string      | —                | Controlled active tab key.                        |
+| onTabChange      | `(key: string) => void` | —     | Called when the active tab changes.               |
+| className        | string      | —                | Class for the root container.                     |
+| tabBarClassName  | string      | —                | Class for the tab bar (trigger list).             |
+| contentClassName | string      | —                | Class for each tab content panel.                 |
+
+**TabItem:**
+
+| Field    | Type      | Description                             |
+| -------- | --------- | --------------------------------------- |
+| key      | string    | **Required.** Unique tab identifier.    |
+| label    | ReactNode | **Required.** Tab trigger label.        |
+| icon     | ReactNode | Optional icon before label.             |
+| disabled | boolean   | Disables the tab trigger.               |
+| children | ReactNode | **Required.** Tab panel content.        |
+
+**Example:**
+
+```tsx
+<CustomTab
+  activeKey={activeTab}
+  onTabChange={setActiveTab}
+  items={[
+    { key: 'general', label: 'General', icon: <Settings size={16} />, children: <GeneralTab /> },
+    { key: 'voice', label: 'Voice', icon: <Volume2 size={16} />, children: <VoiceTab /> },
+  ]}
+/>
+```
+
+---
+
 ## Exports from `@/components/shared`
 
-- **Components:** `CheckboxField`, `CustomButton`, `CustomLink`, `CustomModal`, `CustomTable`, `Form`, `Logo`, `RadioGroupField`, `TextInput`
-- **Types:** `CustomModalProps`, `CustomTableColumn`, `CustomTablePagination`, `CustomTableProps`, `RadioGroupOption`
+- **Components:** `CheckboxField`, `CustomButton`, `CustomLink`, `CustomModal`, `CustomTab`, `CustomTable`, `Form`, `Logo`, `RadioGroupField`, `SelectInput`, `TextAreaField`, `TextInput`
+- **Types:** `CustomModalProps`, `CustomTableColumn`, `CustomTablePagination`, `CustomTableProps`, `RadioGroupOption`, `SelectOption`, `TabItem`
 
 ---
 

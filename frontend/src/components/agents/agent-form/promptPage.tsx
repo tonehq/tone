@@ -1,3 +1,16 @@
+'use client';
+
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 import Heading from '@tiptap/extension-heading';
 import Link from '@tiptap/extension-link';
 import Paragraph from '@tiptap/extension-paragraph';
@@ -5,20 +18,6 @@ import TextAlign from '@tiptap/extension-text-align';
 import Underline from '@tiptap/extension-underline';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { useEffect, useState } from 'react';
-
-import {
-  Box,
-  Divider,
-  FormControl,
-  IconButton,
-  MenuItem,
-  Paper,
-  Select,
-  Stack,
-  Typography,
-} from '@mui/material';
-
 import {
   AlignCenter,
   AlignLeft,
@@ -28,6 +27,7 @@ import {
   List,
   Underline as Under,
 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 interface StepThreeProps {
   formData: {
@@ -70,17 +70,14 @@ export default function StepThree({ formData, onFormChange }: StepThreeProps) {
       },
     },
 
-    // ✅ Load initial value from parent
     content: formData.voicePrompting || '',
 
-    // ✅ STORE VALUE IN PARENT
     onUpdate({ editor }) {
       const html = editor.getHTML();
       onFormChange({ voicePrompting: html });
     },
   });
 
-  /* 🔁 Sync toolbar state */
   useEffect(() => {
     if (!editor) return;
 
@@ -141,10 +138,9 @@ export default function StepThree({ formData, onFormChange }: StepThreeProps) {
     }
   };
 
-  const handleHeadingChange = (e: any) => {
+  const handleHeadingChange = (value: string) => {
     if (!editor) return;
-    const value = e.target.value;
-    setHeadingType(value);
+    setHeadingType(value as typeof headingType);
 
     const chain = editor.chain().focus();
 
@@ -161,111 +157,116 @@ export default function StepThree({ formData, onFormChange }: StepThreeProps) {
   };
 
   return (
-    <Box sx={{ p: 2 }}>
-      <Typography fontSize={14} color="text.secondary" mb={2}>
+    <div className="p-6">
+      <p className="mb-3 text-[13px] leading-relaxed text-muted-foreground">
         Below is an AI-generated job description. You can edit it or clear it.
-      </Typography>
+      </p>
 
-      <Paper variant="outlined" sx={{ borderRadius: 1, overflow: 'hidden' }}>
+      <Card className="gap-0 overflow-hidden rounded-lg border py-0 shadow-none">
         {/* Toolbar */}
-        <Stack direction="row" alignItems="center" spacing={1} px={2} py={1}>
-          <FormControl size="small">
-            <Select value={headingType} onChange={handleHeadingChange} sx={{ minWidth: 130 }}>
-              <MenuItem value="normal">Normal</MenuItem>
-              <MenuItem value="heading1">Heading 1</MenuItem>
-              <MenuItem value="heading2">Heading 2</MenuItem>
-              <MenuItem value="heading3">Heading 3</MenuItem>
-            </Select>
-          </FormControl>
+        <div className="flex items-center gap-1 px-2 py-1">
+          <Select value={headingType} onValueChange={handleHeadingChange}>
+            <SelectTrigger size="sm" className="min-w-[130px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="normal">Normal</SelectItem>
+              <SelectItem value="heading1">Heading 1</SelectItem>
+              <SelectItem value="heading2">Heading 2</SelectItem>
+              <SelectItem value="heading3">Heading 3</SelectItem>
+            </SelectContent>
+          </Select>
 
-          <Divider orientation="vertical" flexItem />
+          <Separator orientation="vertical" className="mx-1 h-6" />
 
-          <IconButton
-            color={active.bold ? 'primary' : 'default'}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={cn(active.bold && 'bg-accent')}
             onClick={() => toggleStyle('bold')}
           >
             <Bold size={18} />
-          </IconButton>
+          </Button>
 
-          <IconButton
-            color={active.italic ? 'primary' : 'default'}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={cn(active.italic && 'bg-accent')}
             onClick={() => toggleStyle('italic')}
           >
             <Italic size={18} />
-          </IconButton>
+          </Button>
 
-          <IconButton
-            color={active.underline ? 'primary' : 'default'}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={cn(active.underline && 'bg-accent')}
             onClick={() => toggleStyle('underline')}
           >
             <Under size={18} />
-          </IconButton>
+          </Button>
 
-          <Divider orientation="vertical" flexItem />
+          <Separator orientation="vertical" className="mx-1 h-6" />
 
-          <IconButton
-            color={active.bulletList ? 'primary' : 'default'}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={cn(active.bulletList && 'bg-accent')}
             onClick={() => toggleStyle('bulletList')}
           >
             <List size={18} />
-          </IconButton>
+          </Button>
 
-          <Divider orientation="vertical" flexItem />
+          <Separator orientation="vertical" className="mx-1 h-6" />
 
-          <IconButton
-            color={active.align === 'left' ? 'primary' : 'default'}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={cn(active.align === 'left' && 'bg-accent')}
             onClick={() => toggleStyle('left')}
           >
             <AlignLeft size={18} />
-          </IconButton>
+          </Button>
 
-          <IconButton
-            color={active.align === 'center' ? 'primary' : 'default'}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={cn(active.align === 'center' && 'bg-accent')}
             onClick={() => toggleStyle('center')}
           >
             <AlignCenter size={18} />
-          </IconButton>
+          </Button>
 
-          <IconButton
-            color={active.align === 'right' ? 'primary' : 'default'}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={cn(active.align === 'right' && 'bg-accent')}
             onClick={() => toggleStyle('right')}
           >
             <AlignRight size={18} />
-          </IconButton>
+          </Button>
 
-          <Box flexGrow={1} />
+          <div className="flex-1" />
 
-          <Typography
-            fontSize={14}
-            color="error.main"
-            sx={{ cursor: 'pointer' }}
+          <button
+            type="button"
+            className="text-sm text-destructive hover:text-destructive/80"
             onClick={clearContent}
           >
             Clear all
-          </Typography>
-        </Stack>
+          </button>
+        </div>
 
-        <Divider />
+        <Separator />
 
         {/* Editor */}
-        <Box
-          px={2}
-          py={2}
-          minHeight={460}
+        <div
+          className="min-h-[460px] cursor-text px-4 py-4 [&_.ProseMirror]:min-h-[180px] [&_.ProseMirror]:text-sm [&_.ProseMirror]:leading-relaxed [&_.ProseMirror]:outline-none"
           onClick={() => editor?.commands.focus()}
-          sx={{
-            cursor: 'text',
-            '& .ProseMirror': {
-              outline: 'none',
-              minHeight: 180,
-              fontSize: 14,
-              lineHeight: 1.6,
-            },
-          }}
         >
           <EditorContent editor={editor} />
-        </Box>
-      </Paper>
-    </Box>
+        </div>
+      </Card>
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, Switch, Typography, useTheme } from '@mui/material';
+import { Switch } from '@/components/ui/switch';
 import type { AgentCallConfigFormData } from './types';
 
 interface CallConfigurationTabProps {
@@ -8,50 +8,37 @@ interface CallConfigurationTabProps {
   onFormChange: (partial: Partial<AgentCallConfigFormData>) => void;
 }
 
-const switchSx = {
-  '& .MuiSwitch-switchBase.Mui-checked': { color: '#8b5cf6' },
-  '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': { backgroundColor: '#8b5cf6' },
-};
-
 export default function CallConfigurationTab({
   formData,
   onFormChange,
 }: CallConfigurationTabProps) {
-  const theme = useTheme();
-
   return (
-    <Box sx={{ py: 2 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-        <Box>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-            Call Recording
-          </Typography>
-          <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
+    <div className="space-y-6 py-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Call Recording</h3>
+          <p className="mt-0.5 text-[13px] text-muted-foreground">
             Enable recording of all calls for review.
-          </Typography>
-        </Box>
+          </p>
+        </div>
         <Switch
           checked={formData.callRecording}
-          onChange={(e) => onFormChange({ callRecording: e.target.checked })}
-          sx={switchSx}
+          onCheckedChange={(checked) => onFormChange({ callRecording: checked })}
         />
-      </Box>
+      </div>
 
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-        <Box>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-            Call Transcription
-          </Typography>
-          <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Call Transcription</h3>
+          <p className="mt-0.5 text-[13px] text-muted-foreground">
             Automatically transcribe all calls to text.
-          </Typography>
-        </Box>
+          </p>
+        </div>
         <Switch
           checked={formData.callTranscription}
-          onChange={(e) => onFormChange({ callTranscription: e.target.checked })}
-          sx={switchSx}
+          onCheckedChange={(checked) => onFormChange({ callTranscription: checked })}
         />
-      </Box>
-    </Box>
+      </div>
+    </div>
   );
 }
