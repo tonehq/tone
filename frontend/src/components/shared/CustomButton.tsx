@@ -1,125 +1,71 @@
 'use client';
 
+import { cn } from '@/lib/utils';
+import { Loader2 } from 'lucide-react';
 import React from 'react';
 
-import { Button, CircularProgress, SxProps, Theme, useTheme } from '@mui/material';
+import { Button } from '@/components/ui/button';
 
-interface CustomButtonProps {
+// ── Types ────────────────────────────────────────────────────────────────────
+
+interface CustomButtonProps extends Omit<React.ComponentProps<'button'>, 'type'> {
   text: string;
-
   loading?: boolean;
-
   type?: 'primary' | 'default' | 'text' | 'link' | 'danger';
-
   htmlType?: 'button' | 'submit' | 'reset';
-
-  onClick?: () => void;
-
-  disabled?: boolean;
-
   icon?: React.ReactNode;
-
-  sx?: SxProps<Theme>;
-
   fullWidth?: boolean;
 }
 
-const CustomButton: React.FC<CustomButtonProps> = ({
-  text,
+// ── Variant mapping ──────────────────────────────────────────────────────────
+// Maps CustomButton `type` prop to shadcn Button `variant` prop.
 
-  loading = false,
+const variantMap = {
+  primary: 'default',
+  default: 'outline',
+  text: 'ghost',
+  link: 'link',
+  danger: 'destructive',
+} as const;
 
-  type = 'default',
+// ── Component ────────────────────────────────────────────────────────────────
 
-  htmlType = 'button',
-
-  onClick,
-
-  disabled = false,
-
-  icon,
-
-  sx,
-
-  fullWidth = false,
-}) => {
-  const theme = useTheme();
-
-  const getVariant = () => {
-    if (type === 'primary' || type === 'danger') return 'contained';
-
-    if (type === 'text' || type === 'link') return 'text';
-
-    return 'outlined';
-  };
-
-  const getColor = () => {
-    if (type === 'danger') return 'error';
-
-    if (type === 'primary') return 'primary';
-
-    return 'inherit';
-  };
-
-  const getStyles = (): SxProps<Theme> => {
-    const baseStyles: SxProps<Theme> = {
-      textTransform: 'none',
-
-      fontWeight: theme.custom.typography.fontWeight.medium,
-
-      fontSize: theme.custom.typography.fontSize.base,
-
-      borderRadius: theme.custom.borderRadius.base,
-
-      height: 42,
-
-      ...(fullWidth && { width: '100%' }),
-    };
-
-    if (type === 'primary') {
-      return {
-        ...baseStyles,
-
-        backgroundColor: theme.palette.primary.main,
-
-        '&:hover': {
-          backgroundColor: theme.palette.primary.dark,
-        },
-      };
-    }
-
-    if (type === 'default') {
-      return {
-        ...baseStyles,
-
-        borderColor: '#e2e8f0',
-
-        color: theme.palette.text.primary,
-
-        '&:hover': {
-          borderColor: '#d1d5db',
-
-          backgroundColor: '#f9fafb',
-        },
-      };
-    }
-
-    return baseStyles;
-  };
-
-  return (
+const CustomButton = React.forwardRef<HTMLButtonElement, CustomButtonProps>(
+  (
+    {
+      text,
+      loading = false,
+      type = 'default',
+      htmlType = 'button',
+      onClick,
+      disabled = false,
+      icon,
+      fullWidth = false,
+      className,
+      ...props
+    },
+    ref,
+  ) => (
     <Button
-      variant={getVariant()}
-      color={getColor()}
+      ref={ref}
       type={htmlType}
+      variant={variantMap[type]}
       onClick={onClick}
       disabled={disabled || loading}
-      startIcon={loading ? <CircularProgress size={18} color="inherit" /> : icon}
-      sx={{ ...getStyles(), ...(sx ?? {}) } as SxProps<Theme>}
+      className={cn(fullWidth && 'w-full', className)}
+      {...props}
     >
+      {loading ? (
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      ) : (
+        icon && <span className="mr-2 inline-flex shrink-0">{icon}</span>
+      )}
       {loading ? 'Loading...' : text}
     </Button>
-  );
-};
+  ),
+);
 
+CustomButton.displayName = 'CustomButton';
+
+export { CustomButton };
 export default CustomButton;

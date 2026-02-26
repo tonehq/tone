@@ -168,9 +168,9 @@ Apply **all three reference checklists** to produce tests that cover:
 2. **Navigation** — all links navigate to the correct route
 3. **Form Validation** — browser HTML5 constraints, client-side rules, required fields
 4. **User Flows** — the main happy path (success scenario) and key failure paths
-5. **API Mocking** — intercept backend calls with `page.route()`, never depend on a live backend
+5. **CRUD: use real API** — for create, read, update, delete flows do **not** mock the corresponding API; use the real backend so data is persisted and the full stack is validated. See `test-patterns.md` (CRUD operations). Use `page.route()` only for error paths, loading states, or edge cases (empty list, 4xx/5xx).
 6. **Loading / Async State** — loading indicators, disabled buttons during async ops
-7. **Error States** — network errors, API errors (4xx, 5xx), empty/invalid responses
+7. **Error States** — network errors, API errors (4xx, 5xx), empty/invalid responses (mock these with `page.route()`)
 8. **Accessibility** — keyboard navigation, aria roles, focus management
 
 ### Code standards:

@@ -39,7 +39,7 @@ const eslintConfig = [
       'react/no-unescaped-entities': 'off',
       indent: 'off',
       'linebreak-style': 'off',
-      quotes: ['error', 'single'],
+      quotes: ['error', 'single', { avoidEscape: true }],
       'arrow-body-style': ['error', 'as-needed'],
       'lines-between-class-members': ['error', 'always'],
       'comma-dangle': [

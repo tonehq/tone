@@ -1,9 +1,11 @@
 'use client';
 
-import { Box, Checkbox, FormControlLabel, Stack, Typography, useTheme } from '@mui/material';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
+
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import CustomButton from '../../../components/shared/CustomButton';
 import { Form } from '../../../components/shared/FormComponent';
 import TextInput from '../../../components/shared/TextInput';
@@ -16,13 +18,11 @@ const LoginPage = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { notify, contextHolder } = useNotification();
-  const theme = useTheme();
   const _redirectTo = searchParams.get('redirect') ?? '/home';
 
   const handleSubmit = async (values: any) => {
     setLoader(true);
     try {
-      // Simulate API call
       const res: any = await login(values['email'], values['password']);
 
       if (res) {
@@ -42,13 +42,11 @@ const LoginPage = () => {
   return (
     <Container>
       {contextHolder}
-      <Box sx={{ width: '100%', maxWidth: 400 }}>
-        <Typography variant="h4" sx={{ mb: 1, fontWeight: 600 }}>
-          Log in to your account
-        </Typography>
-        <Typography variant="body1" sx={{ mb: 4, color: theme.palette.text.secondary }}>
+      <div className="w-full max-w-[400px]">
+        <h2 className="mb-1 text-xl font-semibold text-gray-800">Log in to your account</h2>
+        <p className="mb-4 text-[15px] text-gray-500">
           Welcome back! Enter your credentials to access your account
-        </Typography>
+        </p>
 
         <Form onFinish={handleSubmit} layout="vertical" autoComplete="off">
           <TextInput
@@ -66,28 +64,22 @@ const LoginPage = () => {
             isRequired
           />
 
-          <Box
-            sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}
-          >
-            <FormControlLabel
-              control={<Checkbox size="small" defaultChecked />}
-              label={<Typography variant="body2">Remember me</Typography>}
-            />
-            <Typography
-              component={Link}
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Checkbox id="remember" defaultChecked />
+              <Label htmlFor="remember" className="text-sm font-normal text-gray-800">
+                Remember me
+              </Label>
+            </div>
+            <Link
               href="/auth/forgotpassword"
-              sx={{
-                fontSize: theme.custom.typography.fontSize.sm,
-                color: theme.palette.primary.main,
-                textDecoration: 'none',
-                '&:hover': { textDecoration: 'underline' },
-              }}
+              className="text-sm text-purple-500 no-underline hover:underline"
             >
               Forgot password?
-            </Typography>
-          </Box>
+            </Link>
+          </div>
 
-          <Stack spacing={2}>
+          <div className="flex flex-col gap-2">
             <CustomButton
               text="Continue"
               loading={loader}
@@ -108,33 +100,19 @@ const LoginPage = () => {
                 />
               }
             />
-          </Stack>
+          </div>
 
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              mt: 3,
-              gap: 0.5,
-            }}
-          >
-            <Typography variant="body2">Don&apos;t have an account?</Typography>
-            <Typography
-              component={Link}
+          <div className="mt-3 flex items-center justify-center gap-1">
+            <span className="text-sm text-gray-800">Don&apos;t have an account?</span>
+            <Link
               href="/auth/signup"
-              sx={{
-                fontWeight: theme.custom.typography.fontWeight.medium,
-                color: theme.palette.primary.main,
-                textDecoration: 'none',
-                '&:hover': { textDecoration: 'underline' },
-              }}
+              className="font-medium text-purple-500 no-underline hover:underline"
             >
               Sign up
-            </Typography>
-          </Box>
+            </Link>
+          </div>
         </Form>
-      </Box>
+      </div>
     </Container>
   );
 };

@@ -35,9 +35,24 @@ export default defineConfig({
 
 ---
 
+## CRUD operations: use real API
+
+For **create, read, update, and delete** flows (e.g. agents, settings, any resource that persists to the DB), use the **original/real backend API** — do not mock the corresponding endpoints. This ensures data is actually persisted and tests validate the full stack.
+
+- **Create**: No mock for the create/upsert endpoint; click submit, then assert redirect and that the new item appears in the list (real list API).
+- **Read (list/detail)**: At least one test per page should load data from the real API (no mock) and assert the UI shows the response (e.g. grid visible, or specific content if test data exists).
+- **Update**: No mock for the load or upsert endpoints; load real resource, edit, save, assert redirect or updated content from real API.
+- **Delete**: When testing delete, use the real delete API; do not mock.
+
+**When to keep mocking**: Use `page.route()` only for **negative or edge-case** scenarios (e.g. loading state with delay, error response 4xx/5xx, empty list, or tests that assert payload shape without persisting). For the main happy-path CRUD flows, omit mocks so the real backend and DB are used.
+
+**Prerequisites**: Running backend and DB; `NEXT_PUBLIC_BACKEND_URL` (or equivalent) set. Document this in the feature doc (e.g. `e2e/docs/agents.md`).
+
+---
+
 ## API Mocking with page.route()
 
-Always use `**/path` pattern so tests are backend-URL-agnostic:
+Use mocks for **error paths, loading states, and edge cases** — not for happy-path CRUD. Always use `**/path` pattern so tests are backend-URL-agnostic:
 
 ```typescript
 // Successful API response

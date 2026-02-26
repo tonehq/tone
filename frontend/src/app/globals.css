@@ -1,7 +1,122 @@
+@import 'tailwindcss';
+
+/* ── Theme CSS Variables (flat hex-based palette) ──────────────────────────── */
+:root {
+  /* ── Purple (Primary) ──────────────────────────────────────── */
+  --purple_50: #f5f3ff;
+  --purple_100: #ede9fe;
+  --purple_200: #ddd6fe;
+  --purple_300: #c4b5fd;
+  --purple_400: #a78bfa;
+  --purple_500: #8b5cf6;
+  --purple_600: #7c3aed;
+  --purple_700: #6d28d9;
+  --purple_800: #5b21b6;
+  --purple_900: #4c1d95;
+
+  /* ── Indigo (Secondary) ────────────────────────────────────── */
+  --indigo_50: #eef2ff;
+  --indigo_100: #e0e7ff;
+  --indigo_200: #c7d2fe;
+  --indigo_300: #a5b4fc;
+  --indigo_400: #818cf8;
+  --indigo_500: #6366f1;
+  --indigo_600: #4f46e5;
+  --indigo_700: #4338ca;
+  --indigo_800: #3730a3;
+  --indigo_900: #312e81;
+
+  /* ── Green (Success) ───────────────────────────────────────── */
+  --green_50: #ecfdf5;
+  --green_100: #d1fae5;
+  --green_200: #a7f3d0;
+  --green_300: #6ee7b7;
+  --green_400: #34d399;
+  --green_500: #10b981;
+  --green_600: #059669;
+  --green_700: #047857;
+  --green_800: #065f46;
+  --green_900: #064e3b;
+
+  /* ── Amber (Warning) ───────────────────────────────────────── */
+  --amber_50: #fffbeb;
+  --amber_100: #fef3c7;
+  --amber_200: #fde68a;
+  --amber_300: #fcd34d;
+  --amber_400: #fbbf24;
+  --amber_500: #f59e0b;
+  --amber_600: #d97706;
+  --amber_700: #b45309;
+  --amber_800: #92400e;
+  --amber_900: #78350f;
+
+  /* ── Red (Error / Destructive) ─────────────────────────────── */
+  --red_50: #fef2f2;
+  --red_100: #fee2e2;
+  --red_200: #fecaca;
+  --red_300: #fca5a5;
+  --red_400: #f87171;
+  --red_500: #ef4444;
+  --red_600: #dc2626;
+  --red_700: #b91c1c;
+  --red_800: #991b1b;
+  --red_900: #7f1d1d;
+
+  /* ── Gray (Text, Backgrounds) ──────────────────────────────── */
+  --gray_50: #f9fafb;
+  --gray_100: #f3f4f6;
+  --gray_200: #e5e7eb;
+  --gray_300: #d1d5db;
+  --gray_400: #9ca3af;
+  --gray_500: #6b7280;
+  --gray_600: #4b5563;
+  --gray_700: #374151;
+  --gray_800: #1f2937;
+  --gray_900: #111827;
+
+  /* ── Slate (Borders, Dividers) ─────────────────────────────── */
+  --slate_50: #f8fafc;
+  --slate_100: #f1f5f9;
+  --slate_200: #e2e8f0;
+  --slate_300: #cbd5e1;
+  --slate_400: #94a3b8;
+
+  /* ── White ─────────────────────────────────────────────────── */
+  --white: #ffffff;
+
+  /* ── Shadows ───────────────────────────────────────────────── */
+  --shadow-xs: 0 1px 2px 0 rgba(16, 24, 40, 0.05);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+  /* ── Border Radius ─────────────────────────────────────────── */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 5px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 12px;
+
+  /* ── Spacing ───────────────────────────────────────────────── */
+  --space-xs: 2px;
+  --space-sm: 4px;
+  --space-md: 6px;
+  --space-lg: 8px;
+  --space-xl: 10px;
+  --space-2xl: 12px;
+  --space-3xl: 14px;
+  --space-4xl: 16px;
+  --space-5xl: 18px;
+  --space-6xl: 20px;
+  --space-7xl: 24px;
+  --space-8xl: 32px;
+}
+
+/* ── Existing global styles ────────────────────────────────────────────────── */
+
 * {
   box-sizing: border-box;
-  margin: 0;
-  padding: 0;
 }
 
 html,

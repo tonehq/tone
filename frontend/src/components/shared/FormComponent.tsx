@@ -1,22 +1,22 @@
 'use client';
 
+import { cn } from '@/lib/utils';
 import React from 'react';
-import { Box, SxProps, Theme } from '@mui/material';
 
 interface FormProps {
   children: React.ReactNode;
   onFinish: (values: any) => void;
-  sx?: SxProps<Theme>;
   layout?: 'horizontal' | 'vertical';
   autoComplete?: string;
+  className?: string;
 }
 
 export const Form: React.FC<FormProps> = ({
   children,
   onFinish,
-  sx,
   layout = 'vertical',
   autoComplete = 'off',
+  className,
 }) => {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -29,18 +29,13 @@ export const Form: React.FC<FormProps> = ({
   };
 
   return (
-    <Box
-      component="form"
+    <form
       onSubmit={handleSubmit}
       autoComplete={autoComplete}
-      sx={{
-        display: 'flex',
-        flexDirection: layout === 'vertical' ? 'column' : 'row',
-        ...sx,
-      }}
+      className={cn('flex', layout === 'vertical' ? 'flex-col' : 'flex-row', className)}
     >
       {children}
-    </Box>
+    </form>
   );
 };
 

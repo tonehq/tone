@@ -6,6 +6,21 @@ source analysis.
 
 ---
 
+## Test approach: Real API for CRUD
+
+Agent e2e tests use the **original/real backend API** for every CRUD operation. Do not mock
+`/agent/get_all_agents` or `/agent/upsert_agent` for create, read (list), update, or delete flows —
+so that data is persisted in the DB and tests validate the full stack.
+
+- **Create (inbound/outbound)**: Save triggers real POST `upsert_agent`; redirect to `/agents` then real GET `get_all_agents`; assert created agent appears in list.
+- **Read (list)**: At least one test loads the list from the real API (no mock) and asserts the grid is visible.
+- **Update (edit)**: At least one test loads agent from real API, clicks Save (real POST `upsert_agent`), asserts redirect to `/agents`.
+- **Delete**: When implemented, use real delete API; do not mock.
+
+**Prerequisites**: Running backend and DB; `NEXT_PUBLIC_BACKEND_URL` set. Tests that need deterministic data (e.g. empty state, loading state, error state) may still mock the API only for those scenarios.
+
+---
+
 ## Page
 
 - **Route (list)**: `/agents`

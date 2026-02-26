@@ -2,7 +2,6 @@
 
 import { Suspense, useState } from 'react';
 
-import { Box, Stack, Typography } from '@mui/material';
 import { useRouter, useSearchParams } from 'next/navigation';
 import CustomButton from '../../../components/shared/CustomButton';
 import { Form } from '../../../components/shared/FormComponent';
@@ -53,32 +52,25 @@ const EmailVerificationContent = () => {
   return (
     <Container>
       {contextHolder}
-      <Box>
-        <Typography variant="h2" sx={{ mb: 4 }}>
-          Email Verification
-        </Typography>
-        <Form
-          onFinish={handleSubmit}
-          sx={{ width: 400, fontSize: (theme) => theme.custom.typography.fontSize.base }}
-          layout="vertical"
-          autoComplete="off"
-        >
-          <Box sx={{ marginBottom: 3 }}>
-            <Typography variant="body1">
+      <div className="w-full max-w-[400px]">
+        <h2 className="mb-4 text-3xl font-semibold text-gray-800">Email Verification</h2>
+        <Form onFinish={handleSubmit} layout="vertical" autoComplete="off">
+          <div className="mb-6">
+            <p className="text-[15px] text-gray-800">
               To complete the verification process, please click the button below:
-            </Typography>
-          </Box>
-          <Stack spacing={2} sx={{ mt: 2 }}>
+            </p>
+          </div>
+          <div className="mt-2 flex flex-col gap-2">
             <CustomButton
               text="Accept"
               loading={loader}
               type="primary"
               htmlType="submit"
-              sx={{ width: '100%' }}
+              fullWidth
             />
-          </Stack>
+          </div>
         </Form>
-      </Box>
+      </div>
     </Container>
   );
 };

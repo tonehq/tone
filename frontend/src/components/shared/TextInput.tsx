@@ -1,36 +1,32 @@
 'use client';
 
-import {
-    Box,
-    IconButton,
-    InputAdornment,
-    Skeleton,
-    TextField,
-    Typography,
-    useTheme,
-} from '@mui/material';
+import { cn } from '@/lib/utils';
 import { Eye, EyeOff } from 'lucide-react';
 import React, { forwardRef, useState } from 'react';
 
-interface TextInputProps {
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+interface TextInputProps extends Omit<React.ComponentProps<'input'>, 'size'> {
   name: string;
   type?: string;
   label?: string;
-  placeholder?: string;
-  value?: string;
-  defaultValue?: string;
-  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   isRequired?: boolean;
-  rules?: any[];
   loading?: boolean;
-  disabled?: boolean;
   error?: boolean;
   helperText?: string;
   fullWidth?: boolean;
-  withFormItem?: boolean;
-  className?: string;
-  InputProps?: any;
 }
+
+// ── Skeleton ─────────────────────────────────────────────────────────────────
+
+const Skeleton = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div className={cn('animate-pulse rounded bg-gray-200', className)} {...props} />
+);
+
+// ── Component ────────────────────────────────────────────────────────────────
 
 const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
   (
@@ -48,119 +44,73 @@ const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
       error = false,
       helperText,
       fullWidth = true,
-      InputProps,
+      className,
+      ...props
     },
     ref,
   ) => {
-    const theme = useTheme();
     const [showPassword, setShowPassword] = useState(false);
-    const showPasswordToggle = type === 'password';
+    const isPassword = type === 'password';
 
-    const handleClickShowPassword = () => setShowPassword(!showPassword);
-    const handleMouseDownPassword = (event: React.MouseEvent<HTMLButtonElement>) => {
-      event.preventDefault();
-    };
+    if (loading) {
+      return (
+        <div className="mb-2">
+          <Skeleton className="mb-1 h-4 w-20" />
+          <Skeleton className="h-[42px] w-full" />
+        </div>
+      );
+    }
 
-    const skeleton = (
-      <Box>
-        <Skeleton variant="text" width={80} height={20} sx={{ mb: 1 }} />
-        <Skeleton variant="rectangular" height={42} sx={{ borderRadius: 1 }} />
-      </Box>
-    );
-
-    const inputField = (
-      <Box sx={{ mb: 2 }}>
+    return (
+      <div className={cn('mb-2', !fullWidth && 'w-auto')}>
         {label && (
-          <Typography
-            component="label"
-            sx={{
-              display: 'block',
-              mb: 0.5,
-              fontSize: theme.custom.typography.fontSize.sm,
-              fontWeight: theme.custom.typography.fontWeight.medium,
-              color: theme.palette.text.primary,
-            }}
-          >
+          <Label htmlFor={name} className="mb-1">
             {label}
-            {isRequired && (
-              <Typography component="span" sx={{ color: theme.palette.error.main, ml: 0.5 }}>
-                *
-              </Typography>
-            )}
-          </Typography>
+            {isRequired && <span className="ml-0.5 text-red-500">*</span>}
+          </Label>
         )}
-        <TextField
-          inputRef={ref}
-          name={name}
-          type={showPasswordToggle ? (showPassword ? 'text' : 'password') : type}
-          placeholder={placeholder}
-          value={value}
-          defaultValue={defaultValue}
-          onChange={onChange}
-          disabled={disabled}
-          error={error}
-          helperText={helperText}
-          fullWidth={fullWidth}
-          size="small"
-          InputProps={{
-            ...InputProps,
-            ...(showPasswordToggle
-              ? {
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        aria-label="toggle password visibility"
-                        onClick={handleClickShowPassword}
-                        onMouseDown={handleMouseDownPassword}
-                        edge="end"
-                        sx={{
-                          color: '#6b7280',
-                          '&:hover': {
-                            backgroundColor: 'rgba(0, 0, 0, 0.04)',
-                          },
-                        }}
-                      >
-                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }
-              : {}),
-          }}
-          sx={{
-            '& .MuiOutlinedInput-root': {
-              height: '42px',
-              backgroundColor: '#f9fafb',
-              borderRadius: '5px',
-              fontSize: theme.custom.typography.fontSize.base,
-              '& fieldset': {
-                borderColor: error ? '#ef4444' : '#e2e8f0',
-                borderWidth: '1px',
-              },
-              '&:hover fieldset': {
-                borderColor: error ? '#ef4444' : '#60a5fa',
-              },
-              '&.Mui-focused fieldset': {
-                borderColor: error ? '#ef4444' : '#8b5cf6',
-                borderWidth: '1px',
-              },
-              '&.Mui-disabled': {
-                backgroundColor: '#f3f4f6',
-              },
-            },
-            '& .MuiInputBase-input': {
-              paddingRight: showPasswordToggle ? '40px' : '14px',
-            },
-            '& .MuiFormHelperText-root': {
-              marginTop: '4px',
-              fontSize: theme.custom.typography.fontSize.xs,
-            },
-          }}
-        />
-      </Box>
-    );
 
-    return loading ? skeleton : inputField;
+        <div className="relative">
+          <Input
+            ref={ref}
+            id={name}
+            name={name}
+            type={isPassword ? (showPassword ? 'text' : 'password') : type}
+            placeholder={placeholder}
+            value={value}
+            defaultValue={defaultValue}
+            onChange={onChange}
+            disabled={disabled}
+            aria-invalid={error || undefined}
+            className={cn(
+              error && 'border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500/50',
+              isPassword && 'pr-10',
+              className,
+            )}
+            {...props}
+          />
+
+          {isPassword && (
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-label="toggle password visibility"
+              onClick={() => setShowPassword(!showPassword)}
+              onMouseDown={(e) => e.preventDefault()}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-800 focus:outline-none"
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          )}
+        </div>
+
+        {helperText && (
+          <p className={cn('mt-1 text-xs', error ? 'text-red-500' : 'text-gray-500')}>
+            {helperText}
+          </p>
+        )}
+      </div>
+    );
   },
 );
 
