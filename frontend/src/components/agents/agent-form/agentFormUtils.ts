@@ -19,6 +19,8 @@ export interface AgentFormState {
   useRealisticFillerWords: boolean;
   callRecording: boolean;
   callTranscription: boolean;
+  phoneNumber: string;
+  channels: any[];
 }
 
 /** Default form state for create (no existing agent). */
@@ -42,6 +44,8 @@ export const defaultFormState = (agentType: 'inbound' | 'outbound'): AgentFormSt
   useRealisticFillerWords: false,
   callRecording: false,
   callTranscription: false,
+  phoneNumber: '',
+  channels: [],
 });
 
 /** API agent response (snake_case from backend). */
@@ -67,6 +71,7 @@ export interface ApiAgent {
   tts_service_id?: number | null;
   stt_service_id?: number | null;
   llm_model_id?: number | string | null;
+  phone_number?: string | null;
   [key: string]: unknown;
 }
 
@@ -118,6 +123,8 @@ export function apiAgentToFormState(
     aiModel: api.llm_service_id ?? defaults.aiModel,
     voiceProvider: api.tts_service_id ?? defaults.voiceProvider,
     sttProvider: api.stt_service_id ?? defaults.sttProvider,
+    phoneNumber: (api.phone_number as string) ?? defaults.phoneNumber,
+    channels: (api.channels as any[]) ?? defaults.channels,
   };
 }
 
@@ -146,6 +153,10 @@ export function formStateToUpsertPayload(
     llm_service_id: form.aiModel,
     tts_service_id: form.voiceProvider,
     stt_service_id: form.sttProvider,
+    phone_number: form.phoneNumber || null,
+    channel: {
+      type: 'TWILIO',
+    },
   };
   if (existingId != null) payload.id = existingId;
   return payload;

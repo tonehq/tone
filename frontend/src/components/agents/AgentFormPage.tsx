@@ -9,7 +9,9 @@ import {
   type AgentFormState,
 } from '@/components/agents/agent-form/agentFormUtils';
 import PromptPage from '@/components/agents/agent-form/promptPage';
+import AssignPhoneNumberModal from '@/components/agents/AssignPhoneNumberModal';
 import { deleteAgent, getAgent, upsertAgent } from '@/services/agentsService';
+import axiosInstance from '@/utils/axios';
 import {
   ArrowBack as ArrowBackIcon,
   Phone as PhoneIcon,
@@ -71,6 +73,8 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
     message: string;
     severity: 'success' | 'error';
   }>({ open: false, message: '', severity: 'success' });
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [assigning, setAssigning] = useState(false);
 
   const providers = providersLoadable.state === 'hasData' ? providersLoadable.data : [];
   const providersLoading = providersLoadable.state === 'loading';
@@ -105,8 +109,42 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
     setActiveTab(newValue);
   };
 
-  const handleFormChange = <T extends object>(partial: T) => {
-    setFormData((prev) => ({ ...prev, ...partial }));
+  const handleFormChange = async (partial: any) => {
+    setAssigning(true);
+    try {
+      console.log(formData, 'formData');
+      const channel = formData?.channels?.find((channel: any) => channel.type === 'twilio');
+      console.log(channel, 'channel');
+      await axiosInstance.post('/channel_phone_number/upsert_channel_phone_number', {
+        phone_number: partial.phoneNumber,
+        phone_number_sid: channel?.meta_data?.account_sid,
+        phone_number_auth_token: channel.meta_data?.auth_token,
+        provider: channel.type,
+        country_code: '+1',
+        number_type: 'international',
+        channel_id: channel?.id,
+        capabilities: {
+          voice: true,
+          sms: false,
+          mms: true,
+        },
+        status: 'active',
+      });
+    } catch {
+      setSnackbar({
+        open: true,
+        message: 'Failed to save agent. Please try again.',
+        severity: 'error',
+      });
+    } finally {
+      setAssigning(false);
+      setFormData((prev) => ({ ...prev, ...partial }));
+      setSnackbar({
+        open: true,
+        message: 'Phone number assigned successfully',
+        severity: 'success',
+      });
+    }
   };
 
   const handleSave = async () => {
@@ -216,6 +254,16 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
                   fontWeight: 500,
                 }}
               />
+              {formData.phoneNumber && (
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 0.5, display: 'flex', alignItems: 'center', gap: 0.5 }}
+                >
+                  <PhoneIcon sx={{ fontSize: 14 }} />
+                  {formData.phoneNumber}
+                </Typography>
+              )}
             </Box>
           </Box>
         </Box>
@@ -265,19 +313,22 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       {/* Main Content */}
       <Box sx={{ flex: 1 }}>
         <Alert
-          severity="info"
+          severity={formData.phoneNumber ? 'success' : 'info'}
           sx={{ borderRadius: 0, backgroundColor: '#f3f4f6', border: 'none' }}
           action={
-            !isEditMode ? (
-              <Button variant="outlined" size="small" sx={{ borderColor: '#e2e8f0' }}>
-                Assign number
-              </Button>
-            ) : undefined
+            <Button
+              variant="outlined"
+              size="small"
+              sx={{ borderColor: '#e2e8f0' }}
+              onClick={() => setAssignModalOpen(true)}
+            >
+              {formData.phoneNumber ? 'Change number' : 'Assign number'}
+            </Button>
           }
         >
-          {isEditMode ? (
+          {formData.phoneNumber ? (
             <>
-              <strong>Edit agent</strong> Changes are saved when you click Save.
+              <strong>Phone assigned:</strong> {formData.phoneNumber}
             </>
           ) : (
             <>
@@ -401,6 +452,13 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
           </Box>
         )}
       </Box>
+
+      <AssignPhoneNumberModal
+        open={assignModalOpen}
+        onClose={() => setAssignModalOpen(false)}
+        currentPhoneNumber={formData.phoneNumber}
+        onAssign={(phoneNumber) => handleFormChange({ phoneNumber })}
+      />
 
       <Snackbar
         open={snackbar.open}

@@ -27,7 +27,9 @@ const channelsRowsAtom = atom<Promise<IntegrationRow[]>>(async (get) => {
     name: row.name,
     auth_token: row.meta_data.auth_token ?? '••••••••',
     account_sid: row.meta_data.account_sid ?? '',
-    createdAt: row.created_at ? dayjs.unix(Number(row.created_at)).format('DD-MM-YYYY HH:mm:ss') : '-',
+    createdAt: row.created_at
+      ? dayjs.unix(Number(row.created_at)).format('DD-MM-YYYY HH:mm:ss')
+      : '-',
   }));
 });
 
