@@ -1,11 +1,11 @@
 'use client';
 
-import { Box } from '@mui/material';
 import React, { useState } from 'react';
+
 import Sidebar from '../../components/shared/SidebarComponent';
 
-const _DRAWER_WIDTH = 240;
-const _COLLAPSED_WIDTH = 72;
+const DRAWER_WIDTH = 240;
+const COLLAPSED_WIDTH = 72;
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -14,26 +14,23 @@ interface DashboardLayoutProps {
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
 
+  const width = sidebarExpanded ? DRAWER_WIDTH : COLLAPSED_WIDTH;
+
   return (
-    <Box sx={{ display: 'flex', width: '100vw', minHeight: '100vh' }}>
-      <Box sx={{ width: sidebarExpanded ? 240 : 72 }}>
+    <div className="flex min-h-screen w-screen">
+      <div className="shrink-0 transition-[width] duration-300 ease-in-out" style={{ width }}>
         <Sidebar
           isExpanded={sidebarExpanded}
           onToggle={() => setSidebarExpanded((prev) => !prev)}
         />
-        <button onClick={() => setSidebarExpanded((prev) => !prev)}>{'<'}</button>
-      </Box>
+      </div>
 
-      <Box
-        sx={{
-          width: sidebarExpanded ? 'calc(100vw - 240px)' : 'calc(100vw - 72px)',
-          backgroundColor: '#f9fafb',
-          minHeight: '100vh',
-          transition: 'margin-left 0.3s ease',
-        }}
+      <main
+        className="min-h-screen bg-background transition-[width] duration-300 ease-in-out"
+        style={{ width: `calc(100vw - ${width}px)` }}
       >
         {children}
-      </Box>
-    </Box>
+      </main>
+    </div>
   );
 }

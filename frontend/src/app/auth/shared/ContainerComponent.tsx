@@ -1,6 +1,8 @@
 import { Mic, Shield, Zap } from 'lucide-react';
 import React, { memo } from 'react';
 
+import Logo from '@/components/shared/Logo';
+
 interface ContainerProps {
   children: React.ReactNode;
 }
@@ -18,12 +20,7 @@ const Container = memo(({ children }: ContainerProps) => (
     {/* ── Left Side — Form ───────────────────────────────────────── */}
     <div className="relative flex flex-1 flex-col bg-background">
       <header className="absolute left-6 top-6 z-10 md:left-8 md:top-8">
-        <div className="flex items-center gap-2.5">
-          <div className="flex size-8 items-center justify-center rounded-lg bg-foreground text-sm font-bold text-background">
-            T
-          </div>
-          <span className="text-lg font-semibold tracking-tight text-foreground">Tone</span>
-        </div>
+        <Logo className="h-12" showTagline />
       </header>
 
       <div className="flex flex-1 items-center justify-center px-6">{children}</div>
