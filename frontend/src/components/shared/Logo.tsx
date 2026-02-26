@@ -1,8 +1,7 @@
 'use client';
 
-import React from 'react';
-
 import { cn } from '@/lib/utils';
+import { memo } from 'react';
 
 interface LogoProps {
   className?: string;
@@ -11,9 +10,6 @@ interface LogoProps {
   iconOnly?: boolean;
 }
 
-/**
- * Inline logo: stylized "T" + "Tone" wordmark. No image — unique SVG + text for fast load.
- */
 const Logo = ({
   className = '',
   showTagline = false,
@@ -67,4 +63,4 @@ const Logo = ({
   </div>
 );
 
-export default Logo;
+export default memo(Logo);
