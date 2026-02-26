@@ -123,7 +123,15 @@ Also read the project theme files to ensure consistency:
 
 ## Step 4 — Check for existing components
 
-Before creating a new component, check if a similar one already exists:
+**Read the shared components reference first** (reduces token usage vs reading all files):
+
+```
+frontend/docs/shared-components.md
+```
+
+This file lists all `@/components/shared` components with props and usage. Use it to avoid duplicating or overlapping with existing components.
+
+Then check on disk:
 
 ```bash
 # Check shadcn ui components
@@ -139,7 +147,7 @@ src/components/**/*<ComponentName>*
 ```
 
 If a similar component exists:
-- Read it to understand its API
+- Read it (or use the shared-components.md entry) to understand its API
 - Ask the user if they want to extend the existing one or create a new shadcn-based replacement
 - If replacing, note what props/features the existing component supports so the new one is feature-complete
 
@@ -465,6 +473,23 @@ Write the complete component file to disk. Ensure:
 
 ---
 
+## Step 7b — Update shared components docs
+
+After writing the component file, **update the shared components reference** so future reads (and this skill) can rely on one doc instead of many files.
+
+1. Open `frontend/docs/shared-components.md`.
+2. Add a new section for the new component (same format as existing sections):
+   - Component name as `## <ComponentName>`
+   - One-line description.
+   - Props table: Prop | Type | Default | Description.
+   - Short **Example** code block (basic + one with variants if applicable).
+3. Add the component to the **Exports from `@/components/shared`** list at the bottom (and any new types).
+4. If the component is added to `src/components/shared/index.tsx`, the exports list in the doc should match.
+
+This keeps `shared-components.md` as the single source of truth and reduces token usage when understanding or creating shared UI.
+
+---
+
 ## Step 8 — Create usage examples
 
 After writing the component, output a usage example:
@@ -520,11 +545,14 @@ ls src/lib/theme.ts 2>/dev/null
 
 ## Step 10 — Output summary
 
+Confirm **Step 7b** is done: `frontend/docs/shared-components.md` has been updated with the new component’s section and exports list.
+
 ```markdown
 # Component Created
 
 **Component**: <ComponentName>
 **File**: `src/components/shared/<ComponentName>.tsx`
+**Docs updated**: `frontend/docs/shared-components.md`
 **Base primitives**: <list of shadcn primitives used>
 **Variant**: <variant type>
 
@@ -588,6 +616,7 @@ After presenting the summary, ask:
 ## Important conventions
 
 - **File naming**: PascalCase for component files (`StatusBadge.tsx`), kebab-case for directories
+- **Shared components docs**: After creating or changing any shared component, update `frontend/docs/shared-components.md` (props table + example + exports list). This doc is the single reference for shared UI and reduces token usage.
 - **Exports**: Both named and default export on every component
 - **TypeScript**: Use `interface` over `type` for props. Use `React.FC<Props>` pattern
 - **No MUI mixing**: New shared components use shadcn/Tailwind exclusively. Do not import from `@mui/material`

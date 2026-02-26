@@ -83,13 +83,9 @@ const ResetPasswordContent = () => {
           />
 
           <Stack spacing={2} sx={{ mt: 2 }}>
-            <CustomButton
-              text="Reset Password"
-              loading={loader}
-              type="primary"
-              htmlType="submit"
-              fullWidth
-            />
+            <CustomButton loading={loader} type="primary" htmlType="submit" fullWidth>
+              Reset Password
+            </CustomButton>
           </Stack>
         </Form>
       </Box>

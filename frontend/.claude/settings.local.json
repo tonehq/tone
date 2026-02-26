@@ -9,7 +9,8 @@
       "WebFetch(domain:ui.shadcn.com)",
       "Bash(yarn lint:*)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(yarn tsc:*)"
     ]
   }
 }

@@ -36,10 +36,10 @@ const LoginPage = () => {
   return (
     <Container>
       {contextHolder}
-      <div className="w-full max-w-[400px]">
-        <h2 className="mb-1 text-xl font-semibold text-foreground">Log in to your account</h2>
-        <p className="mb-4 text-[15px] text-muted-foreground">
-          Welcome back! Enter your credentials to access your account
+      <div className="w-full max-w-[400px] animate-page">
+        <h2 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">Welcome back</h2>
+        <p className="mb-8 text-sm text-muted-foreground">
+          Enter your credentials to access your account
         </p>
 
         <Form onFinish={handleSubmit} layout="vertical" autoComplete="off">
@@ -67,12 +67,20 @@ const LoginPage = () => {
             <CustomButton loading={loader} type="primary" htmlType="submit" fullWidth>
               Continue
             </CustomButton>
+
+            <div className="relative flex items-center">
+              <div className="flex-1 border-t" />
+              <span className="px-3 text-xs text-muted-foreground">or</span>
+              <div className="flex-1 border-t" />
+            </div>
+
             <CustomButton type="default" fullWidth icon={<GoogleIcon className="size-4" />}>
               Continue with Google
             </CustomButton>
           </div>
+
           <div className="flex items-center justify-center gap-1">
-            <span className="text-sm text-foreground">Don't have an account?</span>
+            <span className="text-sm text-muted-foreground">Don&apos;t have an account?</span>
             <CustomLink href="/auth/signup">Sign up</CustomLink>
           </div>
         </Form>

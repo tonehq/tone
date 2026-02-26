@@ -1,90 +1,143 @@
-'use client';
-
-import React from 'react';
+import { Mic, Shield, Zap } from 'lucide-react';
+import React, { memo } from 'react';
 
 interface ContainerProps {
   children: React.ReactNode;
 }
 
-const Container: React.FC<ContainerProps> = ({ children }) => (
-  <div className="flex min-h-screen bg-secondary">
-    {/* Left Side - Form */}
-    <div className="flex flex-1 flex-col items-center justify-center bg-background p-4">
-      {children}
-    </div>
+const AUDIO_BAR_COUNT = 12;
 
-    {/* Right Side - Branding */}
-    <div
-      className="relative hidden flex-1 flex-col items-center justify-center overflow-hidden p-4 md:flex"
-      style={{ background: 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 50%, #ddd6fe 100%)' }}
-    >
-      {/* Logo */}
-      <div className="absolute left-8 top-8">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-foreground text-xl font-bold text-background">
+const FEATURES = [
+  { icon: Mic, value: '50+', label: 'Voice Models' },
+  { icon: Zap, value: '<500ms', label: 'Latency' },
+  { icon: Shield, value: '99.9%', label: 'Uptime' },
+] as const;
+
+const Container = memo(({ children }: ContainerProps) => (
+  <div className="flex min-h-screen">
+    {/* ── Left Side — Form ───────────────────────────────────────── */}
+    <div className="relative flex flex-1 flex-col bg-background">
+      <header className="absolute left-6 top-6 z-10 md:left-8 md:top-8">
+        <div className="flex items-center gap-2.5">
+          <div className="flex size-8 items-center justify-center rounded-lg bg-foreground text-sm font-bold text-background">
             T
           </div>
-          <span className="text-xl font-bold text-foreground">Tone</span>
+          <span className="text-lg font-semibold tracking-tight text-foreground">Tone</span>
         </div>
-      </div>
+      </header>
 
-      {/* Main Content */}
-      <div className="max-w-[500px] px-4 text-center">
-        {/* Badges */}
-        <div className="mb-4 flex justify-center gap-4">
-          {['AI Agent Leader', 'High Performer', 'High Performer'].map((badge, index) => (
+      <div className="flex flex-1 items-center justify-center px-6">{children}</div>
+    </div>
+
+    {/* ── Right Side — Branding ──────────────────────────────────── */}
+    <div
+      className="relative hidden flex-1 overflow-hidden md:flex"
+      style={{
+        background: 'linear-gradient(145deg, #1e1b4b 0%, #312e81 35%, #4338ca 65%, #6d28d9 100%)',
+      }}
+    >
+      {/* Dot grid overlay */}
+      <div
+        className="absolute inset-0"
+        aria-hidden="true"
+        style={{
+          backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
+        }}
+      />
+
+      {/* Floating orbs */}
+      <div
+        className="absolute -left-24 -top-24 size-[400px] rounded-full"
+        aria-hidden="true"
+        style={{
+          background: 'radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%)',
+          animation: 'auth-float-1 18s ease-in-out infinite',
+        }}
+      />
+      <div
+        className="absolute -bottom-32 -right-24 size-[500px] rounded-full"
+        aria-hidden="true"
+        style={{
+          background: 'radial-gradient(circle, rgba(139,92,246,0.2) 0%, transparent 70%)',
+          animation: 'auth-float-2 22s ease-in-out infinite',
+        }}
+      />
+      <div
+        className="absolute left-[30%] top-[20%] size-[300px] rounded-full"
+        aria-hidden="true"
+        style={{
+          background: 'radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)',
+          animation: 'auth-float-3 15s ease-in-out infinite',
+        }}
+      />
+
+      {/* Centered content */}
+      <div className="relative z-10 flex flex-1 flex-col items-center justify-center p-12">
+        {/* Voice waveform visualization */}
+        <div className="mb-10 flex items-end gap-[3px]" aria-hidden="true">
+          {Array.from({ length: AUDIO_BAR_COUNT }).map((_, i) => (
             <div
-              key={index}
-              className="rounded-lg bg-background p-3 shadow-[0_2px_8px_rgba(0,0,0,0.1)]"
-            >
-              <div className="mb-1 text-[0.6rem] font-semibold text-orange-500">WINTER 2026</div>
-              <div
-                className={`text-xs font-bold ${index === 0 ? 'text-orange-500' : 'text-red-500'}`}
-              >
-                {badge}
-              </div>
-            </div>
+              key={i}
+              className="w-[3px] origin-bottom rounded-full"
+              style={{
+                height: '28px',
+                backgroundColor: 'rgba(255, 255, 255, 0.5)',
+                animation: `audio-bar 1.4s ease-in-out ${i * 0.1}s infinite`,
+              }}
+            />
           ))}
         </div>
 
         {/* Headline */}
-        <div className="mb-6 text-[3.5rem] font-bold leading-[1.1] text-foreground">
-          The Future
+        <h1 className="mb-4 text-center text-[2.75rem] font-bold leading-[1.1] tracking-tight text-white">
+          Build Voice AI Agents
           <br />
-          of Voice AI
-        </div>
+          That Sound Human
+        </h1>
 
-        {/* Rating */}
-        <div className="mb-4 flex items-center justify-center gap-6 text-sm text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <span className="text-amber-400">★</span>
-            4.4★ 200+ reviews
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="flex h-4 w-4 items-center justify-center rounded-full bg-green-500 text-[0.6rem] text-white">
-              G
-            </div>
-            4.5★ 1000+ reviews
-          </div>
-        </div>
+        {/* Subtitle */}
+        <p className="mb-12 max-w-sm text-center text-[15px] leading-relaxed text-white/60">
+          Create, deploy, and manage intelligent voice agents in minutes — not months.
+        </p>
 
-        {/* Testimonials */}
-        <div className="mt-4 flex gap-4">
-          {[
-            '"The AI assistant has dramatically improved how we manage our schedules."',
-            '"Tone\'s Voice AI Agents help us book more demos faster."',
-          ].map((quote, index) => (
+        {/* Feature stats — glassmorphism cards */}
+        <div className="flex gap-4">
+          {FEATURES.map((feature) => (
             <div
-              key={index}
-              className="flex-1 rounded-lg bg-background p-4 text-left text-xs text-muted-foreground shadow-[0_2px_8px_rgba(0,0,0,0.05)]"
+              key={feature.label}
+              className="flex-1 rounded-xl border border-white/[0.08] p-5 text-center"
+              style={{
+                background: 'rgba(255, 255, 255, 0.06)',
+                backdropFilter: 'blur(16px)',
+              }}
             >
-              {quote}
+              <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-lg bg-white/[0.1]">
+                <feature.icon className="size-5 text-white/80" />
+              </div>
+              <div className="text-2xl font-bold text-white">{feature.value}</div>
+              <div className="mt-1 text-xs text-white/50">{feature.label}</div>
             </div>
           ))}
         </div>
       </div>
+
+      {/* Trust indicators — pinned to bottom */}
+      <div className="absolute inset-x-0 bottom-0 z-10 flex items-center justify-center gap-3 p-6 text-[11px] font-medium tracking-wider text-white/30 uppercase">
+        <span>Trusted by 1,000+ teams</span>
+        <span aria-hidden="true" className="text-white/15">
+          &middot;
+        </span>
+        <span>SOC 2 Compliant</span>
+        <span aria-hidden="true" className="text-white/15">
+          &middot;
+        </span>
+        <span>99.9% Uptime</span>
+      </div>
     </div>
   </div>
-);
+));
 
-export default Container;
+Container.displayName = 'Container';
+
+export default memo(Container);

@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 
+/* Tailwind v4 theme (built-in CSS linter may warn "Unknown at rule" — set "css.lint.unknownAtRules": "ignore" in .vscode/settings.json) */
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -82,10 +83,11 @@
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: hsl(var(--border));
   }
   body {
-    @apply bg-background text-foreground;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
   }
 }
 
@@ -173,6 +175,53 @@ body {
 
 .animate-page {
   animation: slideUp 0.3s ease-out;
+}
+
+/* Auth page decorative animations */
+@keyframes auth-float-1 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(15px, -25px) scale(1.05);
+  }
+  66% {
+    transform: translate(-10px, 15px) scale(0.95);
+  }
+}
+
+@keyframes auth-float-2 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-20px, 25px) scale(1.1);
+  }
+}
+
+@keyframes auth-float-3 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  33% {
+    transform: translate(25px, 12px);
+  }
+  66% {
+    transform: translate(-15px, -18px);
+  }
+}
+
+@keyframes audio-bar {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
 }
 
 /* Override MUI defaults for cleaner look */

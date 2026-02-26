@@ -65,19 +65,12 @@ const ForgotPasswordPage = () => {
           />
 
           <Stack spacing={2} sx={{ mt: 2 }}>
-            <CustomButton
-              text="Reset Password"
-              loading={loader}
-              type="primary"
-              htmlType="submit"
-              fullWidth
-            />
-            <CustomButton
-              text="Cancel"
-              type="default"
-              fullWidth
-              onClick={() => window.history.back()}
-            />
+            <CustomButton loading={loader} type="primary" htmlType="submit" fullWidth>
+              Reset Password
+            </CustomButton>
+            <CustomButton type="default" fullWidth onClick={() => window.history.back()}>
+              Cancel
+            </CustomButton>
           </Stack>
         </Form>
       </Box>

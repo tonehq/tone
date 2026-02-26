@@ -61,13 +61,9 @@ const EmailVerificationContent = () => {
             </p>
           </div>
           <div className="mt-2 flex flex-col gap-2">
-            <CustomButton
-              text="Accept"
-              loading={loader}
-              type="primary"
-              htmlType="submit"
-              fullWidth
-            />
+            <CustomButton loading={loader} type="primary" htmlType="submit" fullWidth>
+              Accept
+            </CustomButton>
           </div>
         </Form>
       </div>
