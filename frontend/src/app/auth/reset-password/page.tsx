@@ -1,35 +1,21 @@
 'use client';
 
-import { Suspense, useEffect, useRef, useState } from 'react';
-
-import { Box, Stack, Typography } from '@mui/material';
+import { Box, Stack, Typography, useTheme } from '@mui/material';
 import { useRouter, useSearchParams } from 'next/navigation';
-
-import CustomButton from '@/components/shared/CustomButton';
-import { TextInput } from '@/components/shared/CustomFormFields';
-import { Form } from '@/components/shared/FormComponent';
-
-import axios from '@/utils/axios';
-import { useNotification } from '@/utils/shared/notification';
-
+import { Suspense, useState } from 'react';
+import CustomButton from '../../../components/shared/CustomButton';
+import { Form } from '../../../components/shared/Form';
+import TextInput from '../../../components/shared/TextInput';
+import axiosInstance from '../../../utils/axios';
+import { useNotification } from '../../../utils/notification';
 import Container from '../shared/ContainerComponent';
 
-const ResetPasswordContent: React.FC = () => {
-  const [isLoading, setIsLoading] = useState(true);
-  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const router = useRouter();
+const ResetPasswordContent = () => {
   const [loader, setLoader] = useState(false);
+  const router = useRouter();
   const params = useSearchParams();
   const { notify, contextHolder } = useNotification();
-
-  useEffect(() => {
-    loadingTimeoutRef.current = setTimeout(() => {
-      setIsLoading(false);
-    }, 2000);
-
-    return () => clearTimeout(loadingTimeoutRef.current);
-  }, []);
-
+  const theme = useTheme();
   const handleSubmit = async (value: any) => {
     setLoader(true);
     if (
@@ -38,16 +24,11 @@ const ResetPasswordContent: React.FC = () => {
       value['password'] === value['confirm_password']
     ) {
       try {
-        const res = await axios.get(
+        const res = await axiosInstance.get(
           `api/v1/auth/acceptForgotPassword?email=${params?.get('email')}&password=${value['password'].trim()}&token=${params?.get('token')}`,
         );
         if (res) {
-          notify.success(
-            'Password Reset',
-            'Your password has been updated successfully',
-            4,
-            'bottomRight',
-          );
+          notify.success('Password Reset', 'Your password has been updated successfully', 4);
           setTimeout(() => {
             router.push('/auth/login');
           }, 2000);
@@ -65,7 +46,7 @@ const ResetPasswordContent: React.FC = () => {
         ) {
           errorMessage = (error as any).response.data.detail;
         }
-        notify.error('Reset Failed', errorMessage || 'Something went wrong', 5, 'bottomRight');
+        notify.error('Reset Failed', errorMessage || 'Something went wrong', 5);
 
         setLoader(false);
       }
@@ -77,42 +58,34 @@ const ResetPasswordContent: React.FC = () => {
   return (
     <Container>
       {contextHolder}
-      <Box>
-        <Typography variant="h2" sx={{ mb: 4 }}>
+      <Box sx={{ width: '100%', maxWidth: 400 }}>
+        <Typography variant="h4" sx={{ mb: 1, fontWeight: 600 }}>
           Reset password
         </Typography>
-        <Form
-          onFinish={handleSubmit}
-          sx={{ width: 400, fontSize: (theme) => theme.custom.typography.fontSize.base }}
-          layout="vertical"
-          autoComplete="off"
-        >
+        <Typography variant="body1" sx={{ mb: 4, color: theme.palette.text.secondary }}>
+          Enter your new password below
+        </Typography>
+
+        <Form onFinish={handleSubmit} layout="vertical" autoComplete="off">
           <TextInput
             name="password"
             type="password"
-            label="Password"
-            placeholder="Enter your password"
+            label="New Password"
+            placeholder="Enter new password"
             isRequired
-            rules={[{ required: true }]}
-            loading={isLoading}
           />
           <TextInput
             name="confirm_password"
             type="password"
             label="Confirm Password"
-            placeholder="Enter your confirm password"
+            placeholder="Confirm new password"
             isRequired
-            rules={[{ required: true }]}
-            loading={isLoading}
           />
+
           <Stack spacing={2} sx={{ mt: 2 }}>
-            <CustomButton
-              text="Update New Password"
-              loading={loader}
-              type="primary"
-              htmlType="submit"
-              sx={{ width: '100%' }}
-            />
+            <CustomButton loading={loader} type="primary" htmlType="submit" fullWidth>
+              Reset Password
+            </CustomButton>
           </Stack>
         </Form>
       </Box>
@@ -120,10 +93,10 @@ const ResetPasswordContent: React.FC = () => {
   );
 };
 
-const ResetPassword: React.FC = () => (
+const ResetPasswordPage = () => (
   <Suspense fallback={null}>
     <ResetPasswordContent />
   </Suspense>
 );
 
-export default ResetPassword;
+export default ResetPasswordPage;

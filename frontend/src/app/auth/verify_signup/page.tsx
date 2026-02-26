@@ -2,15 +2,11 @@
 
 import { Suspense, useState } from 'react';
 
-import { Box, Stack, Typography } from '@mui/material';
 import { useRouter, useSearchParams } from 'next/navigation';
-
-import CustomButton from '@/components/shared/CustomButton';
-import { Form } from '@/components/shared/FormComponent';
-
-import axios from '@/utils/axios';
-import { useNotification } from '@/utils/shared/notification';
-
+import CustomButton from '../../../components/shared/CustomButton';
+import { Form } from '../../../components/shared/Form';
+import axios from '../../../utils/axios';
+import { useNotification } from '../../../utils/notification';
 import Container from '../shared/ContainerComponent';
 
 const EmailVerificationContent = () => {
@@ -23,16 +19,11 @@ const EmailVerificationContent = () => {
     try {
       setLoader(true);
       const res = await axios.get(
-        `/api/v1/auth/verify_user_email?email=${params.get('email')}&code=${params.get('code')}&user_id=${params.get('user_id')}`,
+        `/auth/verify_user_email?email=${params.get('email')}&code=${params.get('code')}&user_id=${params.get('user_id')}`,
       );
       setLoader(false);
       if (res) {
-        notify.success(
-          'Email Verified',
-          'Your email has been verified successfully',
-          4,
-          'bottomRight',
-        );
+        notify.success('Email Verified', 'Your email has been verified successfully', 4);
         const inviteRedirect = localStorage.getItem('invite_redirect');
         if (inviteRedirect) {
           localStorage.removeItem('invite_redirect');
@@ -53,12 +44,7 @@ const EmailVerificationContent = () => {
       ) {
         errorMessage = (error as any).response.data.detail;
       }
-      notify.error(
-        'Verification Failed',
-        errorMessage || 'Invalid verification link',
-        5,
-        'bottomRight',
-      );
+      notify.error('Verification Failed', errorMessage || 'Invalid verification link', 5);
       setLoader(false);
     }
   };
@@ -66,32 +52,21 @@ const EmailVerificationContent = () => {
   return (
     <Container>
       {contextHolder}
-      <Box>
-        <Typography variant="h2" sx={{ mb: 4 }}>
-          Email Verification
-        </Typography>
-        <Form
-          onFinish={handleSubmit}
-          sx={{ width: 400, fontSize: (theme) => theme.custom.typography.fontSize.base }}
-          layout="vertical"
-          autoComplete="off"
-        >
-          <Box sx={{ marginBottom: 3 }}>
-            <Typography variant="body1">
+      <div className="w-full max-w-[400px]">
+        <h2 className="mb-4 text-3xl font-semibold text-foreground">Email Verification</h2>
+        <Form onFinish={handleSubmit} layout="vertical" autoComplete="off">
+          <div className="mb-6">
+            <p className="text-[15px] text-foreground">
               To complete the verification process, please click the button below:
-            </Typography>
-          </Box>
-          <Stack spacing={2} sx={{ mt: 2 }}>
-            <CustomButton
-              text="Accept"
-              loading={loader}
-              type="primary"
-              htmlType="submit"
-              sx={{ width: '100%' }}
-            />
-          </Stack>
+            </p>
+          </div>
+          <div className="mt-2 flex flex-col gap-2">
+            <CustomButton loading={loader} type="primary" htmlType="submit" fullWidth>
+              Accept
+            </CustomButton>
+          </div>
         </Form>
-      </Box>
+      </div>
     </Container>
   );
 };

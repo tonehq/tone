@@ -1,105 +1,138 @@
-@import '../styles/variables.css';
+@import 'tailwindcss';
+
+/* Tailwind v4 theme (built-in CSS linter may warn "Unknown at rule" — set "css.lint.unknownAtRules": "ignore" in .vscode/settings.json) */
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-sidebar: hsl(var(--sidebar));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 240 10% 3.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 3.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 3.9%;
+  --primary: 239 84% 67%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 240 4.8% 95.9%;
+  --secondary-foreground: 240 5.9% 10%;
+  --muted: 240 4.8% 95.9%;
+  --muted-foreground: 240 3.8% 46.1%;
+  --accent: 240 4.8% 95.9%;
+  --accent-foreground: 240 5.9% 10%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 240 5.9% 90%;
+  --input: 240 5.9% 90%;
+  --ring: 239 84% 67%;
+  --sidebar: 0 0% 98%;
+  --sidebar-foreground: 240 5.3% 26.1%;
+  --sidebar-accent: 240 4.8% 95.9%;
+  --radius: 0.625rem;
+}
+
+.dark {
+  --background: 240 10% 3.9%;
+  --foreground: 0 0% 98%;
+  --card: 240 10% 3.9%;
+  --card-foreground: 0 0% 98%;
+  --popover: 240 10% 3.9%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 239 84% 67%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 240 3.7% 15.9%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 240 3.7% 15.9%;
+  --muted-foreground: 240 5% 64.9%;
+  --accent: 240 3.7% 15.9%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 240 3.7% 15.9%;
+  --input: 240 3.7% 15.9%;
+  --ring: 239 84% 67%;
+  --sidebar: 240 5.9% 10%;
+  --sidebar-foreground: 240 4.8% 95.9%;
+  --sidebar-accent: 240 3.7% 15.9%;
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+}
+
+/* ── Existing global styles ────────────────────────────────────────────────── */
 
 * {
   box-sizing: border-box;
 }
 
-body {
-  font-family:
-    'Roobert',
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    Helvetica,
-    Arial,
-    sans-serif,
-    'Apple Color Emoji',
-    'Segoe UI Emoji',
-    'Segoe UI Symbol' !important;
-  margin: 0;
-}
-
 html,
-body,
-div,
-span,
-applet,
-object,
-iframe,
-h1,
-h2,
-h3,
-h4,
-h5,
-h6,
-p,
-blockquote,
-pre,
-a,
-abbr,
-acronym,
-address,
-big,
-cite,
-code,
-del,
-dfn,
-em,
-img,
-ins,
-kbd,
-q,
-s,
-samp,
-small,
-strike,
-strong,
-sub,
-sup,
-time,
-var,
-b,
-u,
-i,
-center {
+body {
+  max-width: 100vw;
+  overflow-x: hidden;
   font-family:
-    'Roobert',
+    'Inter',
     -apple-system,
     BlinkMacSystemFont,
     'Segoe UI',
-    Helvetica,
+    Roboto,
+    'Helvetica Neue',
     Arial,
-    sans-serif,
-    'Apple Color Emoji',
-    'Segoe UI Emoji',
-    'Segoe UI Symbol' !important;
+    sans-serif;
 }
 
-h2 {
-  font-size: 24px;
-  margin-bottom: 24px;
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
 }
 
-.ant-picker input::placeholder {
-  font-size: 14px !important;
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
 }
 
-.ant-select-selection-placeholder {
-  font-size: 14px !important;
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
 }
 
-.ant-picker-range input::placeholder {
-  font-size: 14px !important;
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
 }
 
-.custom-range .ant-picker-input input::placeholder,
-.custom-range .ant-picker-input > input::placeholder,
-.custom-range .ant-picker input::placeholder {
-  font-size: 14px !important;
-}
-
-/* Custom Tab Animations */
-@keyframes fade-in {
+/* Custom animations */
+@keyframes fadeIn {
   from {
     opacity: 0;
     transform: translateY(10px);
@@ -110,71 +143,88 @@ h2 {
   }
 }
 
-.animate-fade-in {
-  animation: fade-in 0.3s ease-out forwards;
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out forwards;
 }
 
-.ant-dropdown-menu {
-  border-radius: 8px;
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-page {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* Auth page decorative animations */
+@keyframes auth-float-1 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(15px, -25px) scale(1.05);
+  }
+  66% {
+    transform: translate(-10px, 15px) scale(0.95);
+  }
+}
+
+@keyframes auth-float-2 {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-20px, 25px) scale(1.1);
+  }
+}
+
+@keyframes auth-float-3 {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  33% {
+    transform: translate(25px, 12px);
+  }
+  66% {
+    transform: translate(-15px, -18px);
+  }
+}
+
+@keyframes audio-bar {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+/* Override MUI defaults for cleaner look */
+.MuiButton-root {
+  box-shadow: none !important;
+}
+
+.MuiPaper-elevation1 {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+.MuiPaper-elevation2 {
   box-shadow:
     0 4px 6px -1px rgba(0, 0, 0, 0.1),
-    0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
 }
 
-.ant-dropdown-menu-item {
-  padding: 8px 16px;
-}
-
-.ant-dropdown-menu-item:hover {
-  background-color: #f9fafb;
-}
-
-.ant-btn-primary {
-  background-color: #4f46e5;
-  border-color: #4f46e5;
-}
-
-.ant-btn-primary:hover {
-  background-color: #4f46e5;
-  border-color: #4f46e5;
-}
-
-.ant-select-selector,
-.ant-picker,
-.ant-input,
-.ant-input-affix-wrapper,
-.ant-picker-range,
-.ant-picker-input,
-.ant-select-dropdown,
-.ant-input-group-addon {
-  border-color: #e2e8f0 !important;
-}
-
-.ant-select-selector:hover,
-.ant-picker:hover,
-.ant-input:hover,
-.ant-picker-range:hover {
-  border-color: #e2e8f0 !important;
-}
-
-.ant-select-focused .ant-select-selector,
-.ant-picker-focused,
-.ant-input-focused,
-.ant-picker-range-focused {
-  border-color: #e2e8f0 !important;
-  box-shadow: 0 0 0 2px rgba(226, 232, 240, 0.2); /* Optional */
-}
-
-.ant-input {
-  border-radius: 5px !important;
-  padding: 8px 12px !important;
-}
-.ant-input-affix-wrapper {
-  border-radius: 5px !important;
-  padding: 8px 12px !important;
-}
-
-.ant-input-affix-wrapper .ant-input {
-  border-radius: 0 !important;
-  padding: 0 !important;
+/* Tab panel transitions */
+[role='tabpanel'] {
+  animation: fadeIn 0.2s ease-out;
 }

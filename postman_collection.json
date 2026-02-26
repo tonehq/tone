@@ -1,0 +1,297 @@
+{
+  "info": {
+    "name": "Tone Auth API",
+    "description": "Authentication and B2B User Management API",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8001/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Signup",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\",\n  \"username\": \"testuser\",\n  \"profile\": {\n    \"first_name\": \"Test\",\n    \"last_name\": \"User\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/auth/signup"
+          }
+        },
+        {
+          "name": "Firebase Signup",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{firebaseToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"profile\": {\n    \"first_name\": \"Test\",\n    \"last_name\": \"User\"\n  }\n}"
+            },
+            "url": "{{baseUrl}}/auth/signup_with_firebase"
+          }
+        },
+        {
+          "name": "Resend Verification Email",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/auth/resend_verification_email?email=user@example.com"
+          }
+        },
+        {
+          "name": "Verify User Email",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/auth/verify_user_email?email=user@example.com&code=123456&user_id=1"
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": "{{baseUrl}}/auth/login",
+            "event": [
+              {
+                "listen": "test",
+                "script": {
+                  "exec": [
+                    "if (pm.response.code === 200) {",
+                    "    const response = pm.response.json();",
+                    "    pm.collectionVariables.set('authToken', response.access_token);",
+                    "}"
+                  ],
+                  "type": "text/javascript"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/auth/forget-password?email=user@example.com"
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/auth/acceptForgotPassword?email=user@example.com&password=newpassword123&token=reset_token_here"
+          }
+        },
+        {
+          "name": "Switch Organization",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organization_id\": 1\n}"
+            },
+            "url": "{{baseUrl}}/auth/switch_organization"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Organizations",
+      "item": [
+        {
+          "name": "Get Associated Organizations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/org/get_associated_tenants"
+          }
+        },
+        {
+          "name": "Create Organization",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/org/create_tenants?name=My Organization"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get Organization Members",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/user/get_all_users_for_organization"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Organization Management",
+      "item": [
+        {
+          "name": "Invite User to Organization",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"role\": \"member\"\n}"
+            },
+            "url": "{{baseUrl}}/organization/invite_user_to_organization"
+          }
+        },
+        {
+          "name": "Remove User from Organization",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/organization/remove_user_from_organization?user_id=2"
+          }
+        },
+        {
+          "name": "Update Member Role",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/organization/update_member_role?member_id=1&role=admin"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Permissions",
+      "item": [
+        {
+          "name": "Get Roles by Scope",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/permissions/get_roles_by_scope"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health & Debug",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8001/health"
+          }
+        },
+        {
+          "name": "Environment Info",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8001/environment"
+          }
+        },
+        {
+          "name": "Debug Info",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8001/debug"
+          }
+        },
+        {
+          "name": "List Endpoints",
+          "request": {
+            "method": "GET",
+            "url": "http://localhost:8001/api/endpoints"
+          }
+        }
+      ]
+    }
+  ]
+}

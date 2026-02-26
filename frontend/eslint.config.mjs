@@ -18,14 +18,7 @@ const eslintConfig = [
   ...compat.extends('next/core-web-vitals', 'next/typescript'),
 
   {
-    ignores: [
-      'node_modules/**',
-      '.next/**',
-      'out/**',
-      'build/**',
-      'next-env.d.ts',
-      '*.config.js',
-    ],
+    ignores: ['node_modules/**', '.next/**', 'out/**', 'build/**', 'next-env.d.ts', '*.config.js'],
   },
 
   {
@@ -45,20 +38,11 @@ const eslintConfig = [
       'template-curly-spacing': 'off',
       'react/no-unescaped-entities': 'off',
       indent: 'off',
-      'linebreak-style': ['error', process.platform === 'win32' ? 'windows' : 'unix'],
-      quotes: ['error', 'single'],
+      'linebreak-style': 'off',
+      quotes: ['error', 'single', { avoidEscape: true }],
       'arrow-body-style': ['error', 'as-needed'],
       'lines-between-class-members': ['error', 'always'],
-      'comma-dangle': [
-        'error',
-        {
-          arrays: 'ignore',
-          objects: 'ignore',
-          imports: 'ignore',
-          exports: 'never',
-          functions: 'ignore',
-        },
-      ],
+      'comma-dangle': 'off',
       'object-curly-spacing': ['error', 'always'],
       'comma-spacing': [
         'error',

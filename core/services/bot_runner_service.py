@@ -8,7 +8,8 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from core.models.agent import Agent
-from core.models.agent_phone_numbers import AgentPhoneNumbers
+from core.models.agent_channel import AgentChannel
+from core.models.channel_phone_numbers import ChannelPhoneNumbers
 from core.services.base import BaseService
 
 
@@ -33,14 +34,19 @@ class BotRunnerService(BaseService):
         normalized = self._normalize_phone_number(phone_number)
         if not normalized:
             return None
-        agent_phone = (
-            self.db.query(AgentPhoneNumbers)
-            .filter(AgentPhoneNumbers.phone_number == normalized)
+        channel_phone = (
+            self.db.query(ChannelPhoneNumbers)
+            .filter(ChannelPhoneNumbers.phone_number == normalized)
             .first()
         )
-        if not agent_phone:
+        if not channel_phone or not channel_phone.channel_id:
             return None
-        agent = self.db.query(Agent).filter(Agent.id == agent_phone.agent_id).first()
+        agent = (
+            self.db.query(Agent)
+            .join(AgentChannel, AgentChannel.agent_id == Agent.id)
+            .filter(AgentChannel.channel_id == channel_phone.channel_id)
+            .first()
+        )
         return agent
 
     async def _fetch_twilio_to_number(self, call_sid: str) -> Optional[str]:
@@ -89,7 +95,7 @@ class BotRunnerService(BaseService):
             Tuple of (agent or None, transport_type, call_data).
             If no agent is found for the phone number, agent is None.
         """
-        from pipecatfork.src.pipecat.runner.utils import parse_telephony_websocket
+        from pipecat.runner.utils import parse_telephony_websocket
 
         transport_type, call_data = await parse_telephony_websocket(websocket)
         print("transport_type ===========", transport_type)

@@ -1,34 +1,18 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-
 import { Box, Stack, Typography, useTheme } from '@mui/material';
-import Link from 'next/link';
-
-import CustomButton from '@/components/shared/CustomButton';
-import { TextInput } from '@/components/shared/CustomFormFields';
-import { Form } from '@/components/shared/FormComponent';
-
-import { forgotPassword } from '@/services/auth/helper';
-
-import { useNotification } from '@/utils/shared/notification';
-
+import { useState } from 'react';
+import CustomButton from '../../../components/shared/CustomButton';
+import { Form } from '../../../components/shared/Form';
+import TextInput from '../../../components/shared/TextInput';
+import { forgotPassword } from '../../../services/auth/helper';
+import { useNotification } from '../../../utils/notification';
 import Container from '../shared/ContainerComponent';
 
-export default function ForgotPassword() {
-  const [isLoading, setIsLoading] = useState(true);
-  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+const ForgotPasswordPage = () => {
   const [loader, setLoader] = useState(false);
   const { notify, contextHolder } = useNotification();
   const theme = useTheme();
-
-  useEffect(() => {
-    loadingTimeoutRef.current = setTimeout(() => {
-      setIsLoading(false);
-    }, 2000);
-
-    return () => clearTimeout(loadingTimeoutRef.current);
-  }, []);
 
   const handleSubmit = async (value: any) => {
     setLoader(true);
@@ -36,12 +20,7 @@ export default function ForgotPassword() {
       try {
         const res: any = await forgotPassword(value['email']);
         if (res) {
-          notify.success(
-            'Email Sent',
-            'Password reset instructions sent to your email',
-            4,
-            'bottomRight',
-          );
+          notify.success('Email Sent', 'Password reset instructions sent to your email', 4);
           setLoader(false);
         }
       } catch (error) {
@@ -56,7 +35,7 @@ export default function ForgotPassword() {
         ) {
           errorMessage = (error as any).response.data.detail;
         }
-        notify.error('Request Failed', errorMessage || 'Something went wrong', 5, 'bottomRight');
+        notify.error('Request Failed', errorMessage || 'Something went wrong', 5);
         setLoader(false);
       }
     } else {
@@ -67,57 +46,36 @@ export default function ForgotPassword() {
   return (
     <Container>
       {contextHolder}
-      <Box>
-        <Typography variant="h2" sx={{ mb: 4 }}>
-          Password Reset Request
+      <Box sx={{ width: '100%', maxWidth: 400 }}>
+        <Typography variant="h4" sx={{ mb: 1, fontWeight: 600 }}>
+          Reset password
         </Typography>
-        <Typography variant="body1" sx={{ color: 'text.secondary', mb: 3 }}>
-          Enter your email to reset your password.
+        <Typography variant="body1" sx={{ mb: 4, color: theme.palette.text.secondary }}>
+          If there&apos;s an account associated with this email, we will send you a link to reset
+          your password.
         </Typography>
-        <Form
-          onFinish={handleSubmit}
-          sx={{ width: 400, fontSize: (theme) => theme.custom.typography.fontSize.base }}
-          layout="vertical"
-          autoComplete="off"
-        >
+
+        <Form onFinish={handleSubmit} layout="vertical" autoComplete="off">
           <TextInput
             name="email"
             type="email"
             label="Email"
-            placeholder="Enter Your Email"
+            placeholder="Enter your email"
             isRequired
-            rules={[{ required: true }]}
-            loading={isLoading}
           />
+
           <Stack spacing={2} sx={{ mt: 2 }}>
-            <CustomButton
-              text="Request"
-              loading={loader}
-              type="primary"
-              htmlType="submit"
-              sx={{ width: '100%' }}
-            />
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-              <Typography
-                component={Link}
-                href="/auth/login"
-                sx={{
-                  fontWeight: theme.custom.typography.fontWeight.medium,
-                  fontSize: theme.custom.typography.fontSize.base,
-                  color: theme.palette.primary.main,
-                  cursor: 'pointer',
-                  textDecoration: 'none',
-                  '&:hover': {
-                    textDecoration: 'underline',
-                  },
-                }}
-              >
-                Back to Login
-              </Typography>
-            </Box>
+            <CustomButton loading={loader} type="primary" htmlType="submit" fullWidth>
+              Reset Password
+            </CustomButton>
+            <CustomButton type="default" fullWidth onClick={() => window.history.back()}>
+              Cancel
+            </CustomButton>
           </Stack>
         </Form>
       </Box>
     </Container>
   );
-}
+};
+
+export default ForgotPasswordPage;

@@ -1,24 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import React from 'react';
+import MainLayout from '../../components/shared/MainLayout';
 
-import CustomLayout from '@/components/shared/CustomLayout';
-import Sidebar from '@/components/shared/SidebarComponent';
+interface DashboardLayoutProps {
+  children: React.ReactNode;
+}
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(true);
-  return (
-    <CustomLayout
-      siderWidth={isSidebarExpanded ? '16%' : '6%'}
-      isSidebarExpanded={isSidebarExpanded}
-      sidebarContent={
-        <Sidebar
-          isSidebarExpanded={isSidebarExpanded}
-          setIsSidebarExpanded={setIsSidebarExpanded}
-        />
-      }
-    >
-      {children}
-    </CustomLayout>
-  );
+export default function DashboardLayout({ children }: DashboardLayoutProps) {
+  return <MainLayout>{children}</MainLayout>;
 }

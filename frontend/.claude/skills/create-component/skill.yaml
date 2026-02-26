@@ -1,0 +1,19 @@
+name: create-component
+description: Creates a new shared UI component using shadcn/ui with the project's theme. Handles shadcn setup verification, theme token mapping, and generates production-ready components following project conventions.
+
+license: proprietary
+compatibility: Requires Node.js, yarn, and a Next.js project with shadcn/ui and Tailwind CSS configured.
+
+metadata:
+  author: tonehq
+  version: '1.1.0'
+  category: components
+  tags: shadcn, tailwind, ui, components, react, nextjs, theme, clsx, cva
+
+# ── Tool permissions ─────────────────────────────────────────────────────────
+allowed-tools: Bash Read Write Edit Glob Grep
+
+# ── Claude Code extensions ───────────────────────────────────────────────────
+argument-hint: '[ComponentName] [--variant button|input|dialog|card|table|form|custom]'
+disable-model-invocation: false
+user-invocable: true # Available via /create-component

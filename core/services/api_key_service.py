@@ -9,6 +9,7 @@ from fastapi import HTTPException, status
 from core.services.base import BaseService
 from core.models.api_key import ApiKey
 from core.models.service_provider import ServiceProvider
+from core.utils.encryption import encrypt, decrypt
 
 
 class ApiKeyService(BaseService):
@@ -41,7 +42,7 @@ class ApiKeyService(BaseService):
             "service_provider_id": service_provider_id,
             "name": name,
             "description": description,
-            "api_key_encrypted": api_key_value,
+            "api_key_encrypted": encrypt(api_key_value),
             "api_key_hint": hint,
             "additional_credentials": additional_credentials,
             "rate_limit_config": rate_limit_config,
@@ -129,6 +130,7 @@ class ApiKeyService(BaseService):
             "uuid": str(key.uuid),
             "name": key.name,
             "description": key.description,
+            "api_key": decrypt(key.api_key_encrypted),
             "api_key_hint": key.api_key_hint,
             "service_provider_id": key.service_provider_id,
             "service_provider_name": provider.display_name,
