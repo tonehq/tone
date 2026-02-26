@@ -1,9 +1,10 @@
 'use client';
 
+import CustomTable from '@/components/shared/CustomTable';
+import { Button } from '@/components/ui/button';
+import type { CustomTableColumn } from '@/types/components';
 import type { IntegrationRow } from '@/types/integration';
-import { Box, CircularProgress, IconButton } from '@mui/material';
-import { DataGrid, type GridColDef } from '@mui/x-data-grid';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Loader2, Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 interface IntegrationsTableProps {
@@ -12,28 +13,6 @@ interface IntegrationsTableProps {
   onEdit: (row: IntegrationRow) => void;
   onDelete: (id: number) => Promise<void>;
 }
-
-const dataGridSx = {
-  borderRadius: '5px',
-  overflow: 'hidden',
-  '& .MuiDataGrid-columnHeaders': {
-    backgroundColor: '#e5e7eb',
-    borderTopLeftRadius: '5px',
-    borderTopRightRadius: '5px',
-  },
-  '& .MuiDataGrid-columnHeadersInner': { backgroundColor: '#e5e7eb' },
-  '& .MuiDataGrid-columnHeader': { backgroundColor: '#e5e7eb' },
-  '& .MuiDataGrid-columnHeaderTitle': {
-    fontWeight: 600,
-    textTransform: 'uppercase',
-    fontSize: '12px',
-    color: '#475569',
-  },
-  '& .MuiDataGrid-columnSeparator': { color: '#475569' },
-  '& .MuiDataGrid-menuIcon': { display: 'none' },
-  '& .MuiDataGrid-row': { borderBottom: '1px solid #e5e7eb' },
-  '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center' },
-};
 
 export default function IntegrationsTable({
   rows,
@@ -52,76 +31,43 @@ export default function IntegrationsTable({
     }
   };
 
-  const columns: GridColDef<IntegrationRow>[] = [
+  const columns: CustomTableColumn<IntegrationRow>[] = [
+    { key: 'name', title: 'Name', dataIndex: 'name' },
+    { key: 'account_sid', title: 'Account SID', dataIndex: 'account_sid' },
+    { key: 'auth_token', title: 'Auth Token', dataIndex: 'auth_token' },
+    { key: 'createdAt', title: 'Created at', dataIndex: 'createdAt' },
     {
-      field: 'name',
-      headerName: 'Name',
-      flex: 1,
-      minWidth: 180,
-      sortable: false,
-      filterable: false,
-      disableColumnMenu: true,
-    },
-    {
-      field: 'account_sid',
-      headerName: 'Account SID',
-      flex: 1,
-      minWidth: 180,
-      sortable: false,
-      filterable: false,
-      disableColumnMenu: true,
-    },
-    {
-      field: 'auth_token',
-      headerName: 'Auth Token',
-      flex: 1,
-      minWidth: 120,
-      sortable: false,
-      filterable: false,
-      disableColumnMenu: true,
-    },
-    {
-      field: 'createdAt',
-      headerName: 'Created at',
-      flex: 1,
-      minWidth: 100,
-      sortable: false,
-      filterable: false,
-      disableColumnMenu: true,
-    },
-    {
-      field: 'actions',
-      headerName: 'Actions',
-      minWidth: 100,
-      sortable: false,
-      filterable: false,
-      disableColumnMenu: true,
-      renderCell: (params) => {
-        const isDeleting = deletingId === params.row.id;
+      key: 'actions',
+      title: 'Actions',
+      width: 'w-24',
+      render: (_value, record) => {
+        const isDeleting = deletingId === record.id;
         return (
-          <Box sx={{ display: 'flex', gap: 0.5 }}>
-            <IconButton
-              size="small"
-              onClick={() => onEdit(params.row)}
+          <div className="flex gap-1">
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => onEdit(record)}
               disabled={isDeleting}
               aria-label="edit"
             >
-              <Pencil size={18} color="#475569" />
-            </IconButton>
+              <Pencil className="size-4 text-muted-foreground" />
+            </Button>
             {isDeleting ? (
-              <IconButton size="small" disabled>
-                <CircularProgress size={18} color="error" />
-              </IconButton>
+              <Button variant="ghost" size="icon-xs" disabled>
+                <Loader2 className="size-4 animate-spin text-destructive" />
+              </Button>
             ) : (
-              <IconButton
-                size="small"
-                onClick={() => handleDelete(params.row.id)}
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => handleDelete(record.id)}
                 aria-label="delete"
               >
-                <Trash2 size={18} color="red" />
-              </IconButton>
+                <Trash2 className="size-4 text-destructive" />
+              </Button>
             )}
-          </Box>
+          </div>
         );
       },
     },
@@ -129,28 +75,11 @@ export default function IntegrationsTable({
 
   if (loading) {
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          py: 8,
-        }}
-      >
-        <CircularProgress size={36} />
-      </Box>
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="size-9 animate-spin text-muted-foreground" />
+      </div>
     );
   }
 
-  return (
-    <DataGrid
-      rows={rows}
-      columns={columns}
-      disableRowSelectionOnClick
-      autoHeight
-      pageSizeOptions={[5, 10, 25]}
-      initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
-      sx={dataGridSx}
-    />
-  );
+  return <CustomTable columns={columns} dataSource={rows} rowKey="id" />;
 }

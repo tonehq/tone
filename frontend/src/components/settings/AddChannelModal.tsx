@@ -1,20 +1,7 @@
 'use client';
 
+import { CustomModal, TextInput } from '@/components/shared';
 import type { IntegrationRow } from '@/types/integration';
-import { Close as CloseIcon } from '@mui/icons-material';
-import {
-  Box,
-  Button,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  TextField,
-  Typography,
-  useTheme,
-} from '@mui/material';
 import { useCallback, useEffect, useState } from 'react';
 
 interface AddChannelModalProps {
@@ -45,7 +32,6 @@ export default function AddChannelModal({
   const [auth_token, setAuthToken] = useState(initialFormState.auth_token);
   const [account_sid, setAccountSid] = useState(initialFormState.account_sid);
   const [saving, setSaving] = useState(false);
-  const theme = useTheme();
 
   const isEdit = Boolean(editData);
 
@@ -90,89 +76,48 @@ export default function AddChannelModal({
   };
 
   return (
-    <Dialog
+    <CustomModal
       open={open}
       onClose={handleCancel}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{ sx: { borderRadius: '5px', width: '500px' } }}
+      title={isEdit ? 'Edit API key' : 'Add new API key'}
+      confirmText={saving ? 'Saving...' : 'Save'}
+      onConfirm={handleSubmit}
+      confirmLoading={saving}
+      confirmDisabled={!name.trim() || !auth_token.trim() || !account_sid.trim()}
     >
-      <DialogTitle
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          pb: 1,
-        }}
-      >
-        <Typography component="span" variant="h6" sx={{ fontWeight: 600 }}>
-          {isEdit ? 'Edit API key' : 'Add new API key'}
-        </Typography>
-        <IconButton size="small" onClick={handleCancel} aria-label="close">
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ mt: 1, mb: 2 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 500, mb: 0.5 }}>
-            Name
-          </Typography>
-          <TextField
-            fullWidth
-            size="small"
+      <div className="space-y-4">
+        <div>
+          <TextInput
+            name="channel-name"
+            label="Name"
             placeholder="e.g. Twilio Production"
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={saving}
           />
-        </Box>
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 500, mb: 0.5 }}>
-            Auth Token
-          </Typography>
-          <TextField
-            fullWidth
-            size="small"
-            placeholder="Enter auth token"
+        </div>
+        <div>
+          <TextInput
+            name="channel-auth-token"
+            label="Auth Token"
             type="password"
+            placeholder="Enter auth token"
             value={auth_token}
             onChange={(e) => setAuthToken(e.target.value)}
             disabled={saving}
           />
-        </Box>
-        <Box sx={{ mb: 1 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 500, mb: 0.5 }}>
-            Account SID
-          </Typography>
-          <TextField
-            fullWidth
-            size="small"
+        </div>
+        <div>
+          <TextInput
+            name="channel-account-sid"
+            label="Account SID"
             placeholder="Enter account SID"
             value={account_sid}
             onChange={(e) => setAccountSid(e.target.value)}
             disabled={saving}
           />
-        </Box>
-      </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2, pt: 0 }}>
-        <Button
-          onClick={handleCancel}
-          variant="outlined"
-          disabled={saving}
-          sx={{ borderColor: theme.palette.divider }}
-        >
-          Cancel
-        </Button>
-        <Button
-          variant="contained"
-          onClick={handleSubmit}
-          disabled={!name.trim() || !auth_token.trim() || !account_sid.trim() || saving}
-          startIcon={saving ? <CircularProgress size={18} color="inherit" /> : undefined}
-          sx={{ bgcolor: 'primary.main', '&:hover': { bgcolor: 'primary.dark' } }}
-        >
-          {saving ? 'Saving...' : 'Save'}
-        </Button>
-      </DialogActions>
-    </Dialog>
+        </div>
+      </div>
+    </CustomModal>
   );
 }

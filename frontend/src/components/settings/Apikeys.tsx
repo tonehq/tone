@@ -1,29 +1,12 @@
 'use client';
 
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import axiosInstance from '@/utils/axios';
-import { Box, Tab, Tabs, Typography } from '@mui/material';
 import { useEffect, useState } from 'react';
 import ApiKeysTab from './ApiKeysTab';
 import PublicKeysTab from './PublicKeysTab';
 
-function TabPanel({
-  children,
-  value,
-  index,
-}: {
-  children: React.ReactNode;
-  value: number;
-  index: number;
-}) {
-  return (
-    <div role="tabpanel" hidden={value !== index}>
-      {value === index && <Box sx={{ py: 2 }}>{children}</Box>}
-    </div>
-  );
-}
-
 export default function Apikeys() {
-  const [tabValue, setTabValue] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -44,34 +27,25 @@ export default function Apikeys() {
   console.log(isLoading, 'isLoading');
 
   return (
-    <Box sx={{ p: 2 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>
-          API Keys
-        </Typography>
-      </Box>
+    <div className="p-4">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-foreground">API Keys</h2>
+      </div>
 
-      <Tabs
-        value={tabValue}
-        onChange={(_, v: number) => setTabValue(v)}
-        sx={{
-          borderBottom: 1,
-          borderColor: 'divider',
-          '& .MuiTab-root': { textTransform: 'none', fontWeight: 600 },
-          '& .Mui-selected': { color: 'primary.main' },
-        }}
-      >
-        <Tab label="API Keys" />
-        <Tab label="Public Keys" />
+      <Tabs defaultValue="api-keys">
+        <TabsList variant="line">
+          <TabsTrigger value="api-keys">API Keys</TabsTrigger>
+          <TabsTrigger value="public-keys">Public Keys</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="api-keys" className="pt-4">
+          <ApiKeysTab />
+        </TabsContent>
+
+        <TabsContent value="public-keys" className="pt-4">
+          <PublicKeysTab />
+        </TabsContent>
       </Tabs>
-
-      <TabPanel value={tabValue} index={0}>
-        <ApiKeysTab />
-      </TabPanel>
-
-      <TabPanel value={tabValue} index={1}>
-        <PublicKeysTab />
-      </TabPanel>
-    </Box>
+    </div>
   );
 }

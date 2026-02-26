@@ -6,7 +6,7 @@ Rules that govern how Claude skills operate in this project. Referenced by `CLAU
 
 ## 1. Skill Error Tracking
 
-Every skill (`generate-tests`, `code-review`) **must** log errors to `.claude/error-log.md` when failures occur. This builds a searchable history of issues, recurring patterns, and resolutions.
+Every skill (`generate-tests`, `code-review`, `generate-feature-docs`) **must** log errors to `.claude/error-log.md` when failures occur. This builds a searchable history of issues, recurring patterns, and resolutions.
 
 ### When to log
 
@@ -14,6 +14,7 @@ Every skill (`generate-tests`, `code-review`) **must** log errors to `.claude/er
 | --------------------- | -------------------------------------------------------------------------- |
 | Test failure          | Playwright test fails with selector/timeout/assertion error                |
 | Test generation error | Generated spec has syntax errors, duplicate titles, strict-mode violations |
+| Doc generation error  | Feature doc missing sections, unresolvable imports, file not found          |
 | Code review finding   | Critical or high-priority issues found during `/code-review`               |
 | Skill execution error | Skill cannot run (dev server down, missing deps, config issue)             |
 | Fix applied           | A previously logged error was resolved                                     |
@@ -85,7 +86,7 @@ When the user runs `/error-tracker`:
 
 ## 3. Skill Execution Rules
 
-These rules apply to ALL skills in this project:
+These rules apply to ALL skills in this project (`generate-tests`, `code-review`, `generate-feature-docs`):
 
 ### Pre-execution checks
 

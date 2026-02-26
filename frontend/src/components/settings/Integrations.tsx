@@ -5,20 +5,15 @@ import {
   loadableChannelsAtom,
   upsertChannelAtom,
 } from '@/atoms/IntegrationAtom';
+import { CustomButton } from '@/components/shared';
 import type { IntegrationRow } from '@/types/integration';
-import { Add as AddIcon } from '@mui/icons-material';
-import { Alert, Box, Button, CircularProgress, Snackbar, Typography } from '@mui/material';
+import { useNotification } from '@/utils/notification';
 import { useAtom } from 'jotai';
+import { Loader2, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import AddChannelModal from './AddChannelModal';
 import IntegrationsTable from './IntegrationsTable';
-
-interface SnackbarState {
-  open: boolean;
-  message: string;
-  severity: 'success' | 'error';
-}
 
 export default function Integrations() {
   const [mounted, setMounted] = useState(false);
@@ -27,23 +22,11 @@ export default function Integrations() {
   const [, removeChannel] = useAtom(deleteChannelAtom);
   const [modalOpen, setModalOpen] = useState(false);
   const [editRow, setEditRow] = useState<IntegrationRow | null>(null);
-  const [snackbar, setSnackbar] = useState<SnackbarState>({
-    open: false,
-    message: '',
-    severity: 'success',
-  });
+  const { notify, contextHolder } = useNotification();
 
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  const showSnackbar = (message: string, severity: 'success' | 'error') => {
-    setSnackbar({ open: true, message, severity });
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbar((prev) => ({ ...prev, open: false }));
-  };
 
   const handleAdd = () => {
     setEditRow(null);
@@ -78,12 +61,12 @@ export default function Integrations() {
 
     try {
       await upsertChannel(payload as any);
-      showSnackbar(
+      notify.success(
+        'Success',
         data.id ? 'Integration updated successfully' : 'Integration created successfully',
-        'success',
       );
     } catch {
-      showSnackbar('Failed to save integration. Please try again.', 'error');
+      notify.error('Error', 'Failed to save integration. Please try again.');
       throw new Error('API call failed');
     }
   };
@@ -91,26 +74,17 @@ export default function Integrations() {
   const handleDelete = async (id: number) => {
     try {
       await removeChannel(id);
-      showSnackbar('Integration deleted successfully', 'success');
+      notify.success('Success', 'Integration deleted successfully');
     } catch {
-      showSnackbar('Failed to delete integration. Please try again.', 'error');
+      notify.error('Error', 'Failed to delete integration. Please try again.');
     }
   };
 
   if (!mounted) {
     return (
-      <Box
-        sx={{
-          p: 2,
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
-        <CircularProgress variant="indeterminate" size={40} />
-      </Box>
+      <div className="flex h-full w-full items-center justify-center p-4">
+        <Loader2 className="size-10 animate-spin text-muted-foreground" />
+      </div>
     );
   }
 
@@ -118,20 +92,13 @@ export default function Integrations() {
   const rows = channelsLoadable.state === 'hasData' ? channelsLoadable.data : [];
 
   return (
-    <Box sx={{ p: 2 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h5" sx={{ fontWeight: 600 }}>
-          Integrations
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={handleAdd}
-          sx={{ bgcolor: 'primary.main', '&:hover': { bgcolor: 'primary.dark' } }}
-        >
+    <div className="w-full">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-xl font-semibold text-foreground">Integrations</h2>
+        <CustomButton type="primary" icon={<Plus size={18} />} onClick={handleAdd}>
           Add new API key
-        </Button>
-      </Box>
+        </CustomButton>
+      </div>
       <IntegrationsTable
         rows={rows}
         loading={isTableLoading}
@@ -144,21 +111,7 @@ export default function Integrations() {
         onSubmit={handleSubmit}
         editData={editRow}
       />
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={4000}
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert
-          onClose={handleCloseSnackbar}
-          severity={snackbar.severity}
-          variant="filled"
-          sx={{ width: '100%' }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
-    </Box>
+      {contextHolder}
+    </div>
   );
 }

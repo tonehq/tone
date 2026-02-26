@@ -27,7 +27,7 @@ import React, { useMemo, useState } from 'react';
 export type {
   CustomTableColumn,
   CustomTablePagination,
-  CustomTableProps,
+  CustomTableProps
 } from '@/types/components';
 
 const DEFAULT_PAGE_SIZE = 10;
@@ -172,7 +172,7 @@ function CustomTableInner<TRow>({
         </div>
       )}
 
-      <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+      <div className="rounded-md border border-border bg-card shadow-sm overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="border-b border-border bg-muted/40 hover:bg-muted/40">

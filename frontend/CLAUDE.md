@@ -52,18 +52,36 @@ If no `--docs` flag is provided, the skill auto-discovers matching docs in `e2e/
 The skill lives at `.claude/skills/generate-tests/SKILL.md`.
 Reference docs are at `.claude/skills/generate-tests/references/`.
 
+### `/generate-feature-docs` — create feature documentation
+
+Use when a page has **no existing feature doc** and you need to create one for test generation.
+Reads the component source, traces imports (services, atoms, types), and generates a comprehensive
+feature doc following the `_template.md` structure.
+
+```bash
+/generate-feature-docs settings
+/generate-feature-docs agents
+/generate-feature-docs login
+/generate-feature-docs settings --routes /settings,/settings/members
+```
+
+The skill lives at `.claude/skills/generate-feature-docs/SKILL.md`.
+Reference docs are at `.claude/skills/generate-feature-docs/references/`.
+
 ### Feature docs (`e2e/docs/`)
 
-Feature docs are optional markdown files that describe a page's user stories, acceptance
+Feature docs are markdown files that describe a page's user stories, acceptance
 criteria, edge cases, and business rules. When provided, `/generate-tests` uses them
 alongside the component source to ensure all user cases are covered.
+
+Use `/generate-feature-docs <page-name>` to generate a new feature doc automatically,
+or copy `_template.md` and fill in the sections manually.
 
 | File                    | Purpose                                 |
 | ----------------------- | --------------------------------------- |
 | `e2e/docs/_template.md` | Template for creating new feature docs  |
 | `e2e/docs/home.md`      | Feature doc for the home dashboard page |
-
-To create a feature doc for a new page, copy `_template.md` and fill in the sections.
+| `e2e/docs/agents.md`    | Feature doc for the agents pages (CRUD) |
 
 ### Running tests
 
@@ -170,7 +188,7 @@ The error log is at `.claude/error-log.md`.
 
 ### How it works
 
-All skills (`generate-tests`, `code-review`) automatically log errors to `.claude/error-log.md` when failures occur. The `/error-tracker` skill reads this log and provides:
+All skills (`generate-tests`, `code-review`, `generate-feature-docs`) automatically log errors to `.claude/error-log.md` when failures occur. The `/error-tracker` skill reads this log and provides:
 
 - **Summary** — Error counts by severity, category, and skill
 - **Recurring patterns** — Same category + file appearing 2+ times

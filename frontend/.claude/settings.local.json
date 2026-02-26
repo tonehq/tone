@@ -10,7 +10,8 @@
       "Bash(yarn lint:*)",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(grep:*)",
-      "Bash(yarn tsc:*)"
+      "Bash(yarn tsc:*)",
+      "Bash(npx prettier:*)"
     ]
   }
 }

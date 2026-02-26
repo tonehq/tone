@@ -1,26 +1,18 @@
 'use client';
 
-import { generateUUID } from '@/utils/helpers';
-import { Add as AddIcon, Close as CloseIcon, MoreVert as MoreVertIcon } from '@mui/icons-material';
+import { CustomButton, CustomModal, TextInput } from '@/components/shared';
+import CustomTable from '@/components/shared/CustomTable';
+import { Badge } from '@/components/ui/badge';
 import {
-  Box,
-  Button,
-  Chip,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  ListItemIcon,
-  ListItemText,
-  Menu,
-  MenuItem,
-  Switch,
-  TextField,
-  Typography,
-  useTheme,
-} from '@mui/material';
-import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Switch } from '@/components/ui/switch';
+import type { CustomTableColumn } from '@/types/components';
+import { generateUUID } from '@/utils/helpers';
+import { Eye, MoreVertical, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 
 export interface PublicKeyRow {
@@ -32,28 +24,6 @@ export interface PublicKeyRow {
   fraudProtection: boolean;
   createdAt: string;
 }
-
-const dataGridSx = {
-  borderRadius: '5px',
-  overflow: 'hidden',
-  border: 'none',
-  '& .MuiDataGrid-columnHeaders': {
-    backgroundColor: '#e5e7eb',
-    borderTopLeftRadius: '5px',
-    borderTopRightRadius: '5px',
-  },
-  '& .MuiDataGrid-columnHeadersInner': { backgroundColor: '#e5e7eb' },
-  '& .MuiDataGrid-columnHeader': { backgroundColor: '#e5e7eb' },
-  '& .MuiDataGrid-columnHeaderTitle': {
-    fontWeight: 600,
-    textTransform: 'uppercase',
-    fontSize: '12px',
-    color: '#475569',
-  },
-  '& .MuiDataGrid-columnSeparator': { display: 'none' },
-  '& .MuiDataGrid-row': { borderBottom: '1px solid #e5e7eb' },
-  '& .MuiDataGrid-cell': { display: 'flex', alignItems: 'center' },
-};
 
 function AddPublicKeyModal({
   open,
@@ -69,12 +39,19 @@ function AddPublicKeyModal({
     fraudProtection: boolean;
   }) => void;
 }) {
-  const theme = useTheme();
   const [keyName, setKeyName] = useState('');
   const [domainInput, setDomainInput] = useState('');
   const [domains, setDomains] = useState<string[]>([]);
   const [abusePrevention, setAbusePrevention] = useState(false);
   const [fraudProtection, setFraudProtection] = useState(false);
+
+  const resetForm = () => {
+    setKeyName('');
+    setDomainInput('');
+    setDomains([]);
+    setAbusePrevention(false);
+    setFraudProtection(false);
+  };
 
   const handleAddDomain = () => {
     const d = domainInput.trim();
@@ -87,149 +64,105 @@ function AddPublicKeyModal({
   const handleSave = () => {
     if (keyName.trim()) {
       onSave({ keyName: keyName.trim(), domains, abusePrevention, fraudProtection });
-      setKeyName('');
-      setDomains([]);
-      setAbusePrevention(false);
-      setFraudProtection(false);
+      resetForm();
       onClose();
     }
   };
 
   const handleClose = () => {
-    setKeyName('');
-    setDomainInput('');
-    setDomains([]);
-    setAbusePrevention(false);
-    setFraudProtection(false);
+    resetForm();
     onClose();
   };
 
   return (
-    <Dialog
+    <CustomModal
       open={open}
       onClose={handleClose}
-      maxWidth="sm"
-      fullWidth
-      PaperProps={{ sx: { borderRadius: '5px' } }}
+      title="Add Public Key"
+      confirmText="Save"
+      onConfirm={handleSave}
+      confirmDisabled={!keyName.trim()}
     >
-      <DialogTitle
-        sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}
-      >
-        <Typography component="span" variant="h6" sx={{ fontWeight: 600 }}>
-          Add Public Key
-        </Typography>
-        <IconButton size="small" onClick={handleClose} aria-label="close">
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
-      <DialogContent>
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
-            Key Name
-          </Typography>
-          <TextField
-            fullWidth
-            size="small"
+      <div className="space-y-4">
+        <div>
+          <TextInput
+            name="public-key-name"
+            label="Key Name"
             placeholder="e.g. Staging-Frontend-PubKey (staging frontend public key)"
             value={keyName}
             onChange={(e) => setKeyName(e.target.value)}
           />
-        </Box>
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="body2" sx={{ fontWeight: 500, mb: 1 }}>
-            Allowed Domains
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-            <TextField
-              fullWidth
-              size="small"
-              placeholder="e.g. example.com"
-              value={domainInput}
-              onChange={(e) => setDomainInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddDomain())}
-            />
-            <Button variant="outlined" size="small" onClick={handleAddDomain}>
+        </div>
+
+        <div>
+          <p className="mb-1.5 text-sm font-medium">Allowed Domains</p>
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <TextInput
+                name="domain-input"
+                placeholder="e.g. example.com"
+                value={domainInput}
+                onChange={(e) => setDomainInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddDomain();
+                  }
+                }}
+              />
+            </div>
+            <CustomButton type="default" onClick={handleAddDomain}>
               + Add
-            </Button>
-          </Box>
+            </CustomButton>
+          </div>
           {domains.length > 0 && (
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 1 }}>
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {domains.map((d) => (
-                <Chip
-                  key={d}
-                  label={d}
-                  size="small"
-                  onDelete={() => setDomains(domains.filter((x) => x !== d))}
-                />
+                <Badge key={d} variant="secondary" className="gap-1 pr-1">
+                  {d}
+                  <button
+                    type="button"
+                    onClick={() => setDomains(domains.filter((x) => x !== d))}
+                    className="rounded-full p-0.5 transition-colors hover:bg-muted-foreground/20"
+                  >
+                    <X className="size-3" />
+                  </button>
+                </Badge>
               ))}
-            </Box>
+            </div>
           )}
-        </Box>
-        <Box sx={{ mb: 2 }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-            Abuse Prevention (Google reCAPTCHA)
-          </Typography>
-          <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mb: 1 }}>
+        </div>
+
+        <div>
+          <p className="text-sm font-semibold">Abuse Prevention (Google reCAPTCHA)</p>
+          <p className="mb-2 text-sm text-muted-foreground">
             Utilize Google reCAPTCHA to prevent abuse on your applications (forms, widgets, etc.).
             The public key will require reCAPTCHA token to authenticate, so you must also add it on
             frontend. (
-            <Typography
-              component="a"
-              href="#"
-              variant="body2"
-              color="primary"
-              sx={{ textDecoration: 'underline' }}
-            >
+            <a href="#" className="text-primary underline">
               See Docs
-            </Typography>
+            </a>
             )
-          </Typography>
-          <Switch
-            checked={abusePrevention}
-            onChange={(e) => setAbusePrevention(e.target.checked)}
-            color="primary"
-          />
-        </Box>
-        <Box>
-          <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 0.5 }}>
-            Fraud Protection
-          </Typography>
-          <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mb: 1 }}>
+          </p>
+          <Switch checked={abusePrevention} onCheckedChange={setAbusePrevention} />
+        </div>
+
+        <div>
+          <p className="text-sm font-semibold">Fraud Protection</p>
+          <p className="mb-2 text-sm text-muted-foreground">
             Once enabled, the system will automatically detect and limit suspicious requests based
             on IP address and destination number.
-          </Typography>
-          <Switch
-            checked={fraudProtection}
-            onChange={(e) => setFraudProtection(e.target.checked)}
-            color="primary"
-          />
-        </Box>
-      </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2, pt: 0 }}>
-        <Button
-          onClick={handleClose}
-          variant="outlined"
-          sx={{ borderColor: theme.palette.divider }}
-        >
-          Cancel
-        </Button>
-        <Button
-          variant="contained"
-          onClick={handleSave}
-          disabled={!keyName.trim()}
-          sx={{ bgcolor: '#000', '&:hover': { bgcolor: '#333' } }}
-        >
-          Save
-        </Button>
-      </DialogActions>
-    </Dialog>
+          </p>
+          <Switch checked={fraudProtection} onCheckedChange={setFraudProtection} />
+        </div>
+      </div>
+    </CustomModal>
   );
 }
 
 export default function PublicKeysTab() {
   const [publicKeys, setPublicKeys] = useState<PublicKeyRow[]>([]);
   const [addModalOpen, setAddModalOpen] = useState(false);
-  const [menuAnchor, setMenuAnchor] = useState<{ el: HTMLElement; row: PublicKeyRow } | null>(null);
 
   const handleSave = (data: {
     keyName: string;
@@ -251,90 +184,71 @@ export default function PublicKeysTab() {
     ]);
   };
 
-  const handleMenuClose = () => setMenuAnchor(null);
-
-  const columns: GridColDef<PublicKeyRow>[] = [
-    { field: 'name', headerName: 'Name', flex: 1, minWidth: 160 },
-    { field: 'keyValue', headerName: 'Key Value', flex: 1, minWidth: 140 },
-    { field: 'domains', headerName: 'Domains', flex: 1, minWidth: 120 },
+  const columns: CustomTableColumn<PublicKeyRow>[] = [
+    { key: 'name', title: 'Name', dataIndex: 'name' },
+    { key: 'keyValue', title: 'Key Value', dataIndex: 'keyValue' },
+    { key: 'domains', title: 'Domains', dataIndex: 'domains' },
     {
-      field: 'abusePrevention',
-      headerName: 'Abuse Prevention',
-      flex: 1,
-      minWidth: 140,
-      renderCell: (params) => (params.value ? 'On' : 'Off'),
+      key: 'abusePrevention',
+      title: 'Abuse Prevention',
+      dataIndex: 'abusePrevention',
+      render: (value) => <span className="text-sm">{value ? 'On' : 'Off'}</span>,
     },
     {
-      field: 'fraudProtection',
-      headerName: 'Fraud Protection',
-      flex: 1,
-      minWidth: 130,
-      renderCell: (params) => (params.value ? 'On' : 'Off'),
+      key: 'fraudProtection',
+      title: 'Fraud Protection',
+      dataIndex: 'fraudProtection',
+      render: (value) => <span className="text-sm">{value ? 'On' : 'Off'}</span>,
     },
-    { field: 'createdAt', headerName: 'Created at', flex: 1, minWidth: 120 },
+    { key: 'createdAt', title: 'Created at', dataIndex: 'createdAt' },
     {
-      field: 'actions',
-      headerName: '',
-      width: 56,
-      sortable: false,
-      filterable: false,
-      disableColumnMenu: true,
-      renderCell: (params: GridRenderCellParams<PublicKeyRow>) => (
-        <IconButton
-          size="small"
-          onClick={(e) => {
-            e.stopPropagation();
-            setMenuAnchor({ el: e.currentTarget, row: params.row });
-          }}
-        >
-          <MoreVertIcon fontSize="small" />
-        </IconButton>
+      key: 'actions',
+      title: '',
+      width: 'w-14',
+      render: () => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <MoreVertical className="size-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem>
+              <Eye className="size-4" />
+              Reveal key
+            </DropdownMenuItem>
+            <DropdownMenuItem variant="destructive">
+              <Trash2 className="size-4" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       ),
     },
   ];
 
   return (
-    <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
+    <div>
+      <div className="mb-4 flex justify-end">
+        <CustomButton
+          type="primary"
+          icon={<Plus size={18} />}
           onClick={() => setAddModalOpen(true)}
-          sx={{ bgcolor: '#000', '&:hover': { bgcolor: '#333' } }}
         >
           Add Public Key
-        </Button>
-      </Box>
-      <DataGrid
-        rows={publicKeys}
-        columns={columns}
-        disableRowSelectionOnClick
-        autoHeight
-        pageSizeOptions={[5, 10, 25]}
-        initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
-        sx={dataGridSx}
-      />
+        </CustomButton>
+      </div>
+
+      <CustomTable columns={columns} dataSource={publicKeys} rowKey="id" />
+
       <AddPublicKeyModal
         open={addModalOpen}
         onClose={() => setAddModalOpen(false)}
         onSave={handleSave}
       />
-      <Menu
-        anchorEl={menuAnchor?.el}
-        open={Boolean(menuAnchor)}
-        onClose={handleMenuClose}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-      >
-        <MenuItem onClick={handleMenuClose}>
-          <ListItemIcon>👁</ListItemIcon>
-          <ListItemText>Reveal key</ListItemText>
-        </MenuItem>
-        <MenuItem onClick={handleMenuClose} sx={{ color: 'error.main' }}>
-          <ListItemIcon sx={{ color: 'error.main' }}>🗑</ListItemIcon>
-          <ListItemText>Delete</ListItemText>
-        </MenuItem>
-      </Menu>
-    </Box>
+    </div>
   );
 }
