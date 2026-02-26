@@ -1,9 +1,9 @@
 'use client';
 
-import { Box, Tooltip, Typography } from '@mui/material';
-import Link from 'next/link';
-import { SIDEBAR_HOVER_ACTIVE } from '@/constants/sidebar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 import type { SidebarMenuItem } from '@/types/sidebar';
+import Link from 'next/link';
 
 export interface SidebarItemMenuProps {
   item: SidebarMenuItem;
@@ -18,63 +18,32 @@ export function SidebarItemMenu({ item, active, isCollapsed, onClick }: SidebarI
   const { icon: Icon, path, title } = item;
 
   const content = (
-    <Box
-      component={Link}
+    <Link
       href={path}
       onClick={onClick}
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        borderRadius: 1,
-        textDecoration: 'none',
-        color: 'white',
-        cursor: 'pointer',
-        transition: 'background-color 0.2s',
-        ...(isCollapsed
-          ? {
-              justifyContent: 'center',
-              width: 40,
-              height: 40,
-              mx: 'auto',
-            }
-          : {
-              px: 2,
-              py: 1.25,
-              gap: 1.5,
-            }),
-        ...(active && {
-          backgroundColor: SIDEBAR_HOVER_ACTIVE,
-        }),
-        '&:hover': {
-          backgroundColor: SIDEBAR_HOVER_ACTIVE,
-          color: 'black',
-        },
-      }}
-    >
-      <Icon size={ICON_SIZE} color={active ? 'black' : 'white'} />
-      {!isCollapsed && (
-        <Typography
-          variant="body2"
-          sx={{
-            fontWeight: 400,
-            color: active ? 'text.primary' : 'white',
-            '&:hover': {
-              color: 'black',
-              fontWeight: 400,
-            },
-          }}
-        >
-          {title}
-        </Typography>
+      className={cn(
+        'flex items-center rounded-md no-underline transition-colors duration-200',
+        isCollapsed ? 'mx-auto h-10 w-10 justify-center' : 'gap-2.5 px-3 py-2',
+        active ? 'bg-white/90 text-gray-900' : 'text-white/80 hover:bg-white/15 hover:text-white',
       )}
-    </Box>
+    >
+      <Icon size={ICON_SIZE} className={cn(active ? 'text-gray-900' : 'text-current')} />
+      {!isCollapsed && (
+        <span className={cn('text-sm', active ? 'font-medium text-gray-900' : 'text-current')}>
+          {title}
+        </span>
+      )}
+    </Link>
   );
 
-  return isCollapsed ? (
-    <Tooltip title={title} placement="right" arrow>
-      {content}
-    </Tooltip>
-  ) : (
-    content
-  );
+  if (isCollapsed) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{content}</TooltipTrigger>
+        <TooltipContent side="right">{title}</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return content;
 }

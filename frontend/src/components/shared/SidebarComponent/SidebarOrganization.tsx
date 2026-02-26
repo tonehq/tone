@@ -1,8 +1,8 @@
 'use client';
 
-import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
-import { Avatar, Box, Tooltip, Typography } from '@mui/material';
-import { SIDEBAR_HOVER_ACTIVE } from '@/constants/sidebar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
+import { ChevronDown } from 'lucide-react';
 
 const WORKSPACE_LABEL = 'My Workspace';
 
@@ -13,46 +13,35 @@ export interface SidebarOrganizationProps {
 export function SidebarOrganization({ isExpanded }: SidebarOrganizationProps) {
   if (isExpanded) {
     return (
-      <Box
-        sx={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 1.5,
-          p: 1,
-          borderRadius: '5px',
-          cursor: 'pointer',
-          '&:hover': { backgroundColor: SIDEBAR_HOVER_ACTIVE },
-        }}
+      <button
+        type="button"
+        className="flex w-full items-center gap-2.5 rounded-md p-2 transition-colors hover:bg-white/15"
       >
-        <Avatar sx={{ width: 36, height: 36 }}>M</Avatar>
-        <Typography
-          variant="body2"
-          sx={{
-            fontWeight: 600,
-            flex: 1,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/20 text-sm font-semibold text-white">
+          M
+        </div>
+        <span className="flex-1 truncate text-left text-sm font-semibold text-white">
           {WORKSPACE_LABEL}
-        </Typography>
-        <KeyboardArrowDownIcon fontSize="small" />
-      </Box>
+        </span>
+        <ChevronDown size={16} className="shrink-0 text-white/60" />
+      </button>
     );
   }
 
   return (
-    <Tooltip title={WORKSPACE_LABEL} placement="right" arrow>
-      <Avatar
-        sx={{
-          width: 32,
-          height: 32,
-          mx: 'auto',
-          cursor: 'pointer',
-        }}
-      >
-        M
-      </Avatar>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'mx-auto flex h-8 w-8 items-center justify-center rounded-full bg-white/20',
+            'text-sm font-semibold text-white cursor-pointer',
+          )}
+        >
+          M
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="right">{WORKSPACE_LABEL}</TooltipContent>
     </Tooltip>
   );
 }

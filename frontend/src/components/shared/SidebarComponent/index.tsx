@@ -1,9 +1,9 @@
 'use client';
 
-import React from 'react';
-import { Box, Drawer, useMediaQuery, useTheme } from '@mui/material';
-import { SidebarContent } from './SidebarContent';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { SIDEBAR_WIDTH_COLLAPSED, SIDEBAR_WIDTH_EXPANDED } from '@/constants/sidebar';
+import { SidebarContent } from './SidebarContent';
 
 interface SidebarComponentProps {
   isExpanded: boolean;
@@ -18,49 +18,32 @@ const SidebarComponent = ({
   mobileOpen,
   onMobileClose,
 }: SidebarComponentProps) => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useMediaQuery('(max-width: 767px)');
 
   if (isMobile) {
     return (
-      <Drawer
-        variant="temporary"
-        open={mobileOpen}
-        onClose={onMobileClose}
-        ModalProps={{ keepMounted: true }}
-        sx={{
-          '& .MuiDrawer-paper': {
-            width: SIDEBAR_WIDTH_EXPANDED,
-            boxSizing: 'border-box',
-          },
-        }}
-      >
-        <SidebarContent
-          isExpanded={true}
-          onToggle={onToggle}
-          isMobile={true}
-          onMenuClick={onMobileClose}
-        />
-      </Drawer>
+      <Sheet open={mobileOpen} onOpenChange={(open) => !open && onMobileClose()}>
+        <SheetContent side="left" className="w-[240px] p-0" showCloseButton={false}>
+          <SidebarContent
+            isExpanded={true}
+            onToggle={onToggle}
+            isMobile={true}
+            onMenuClick={onMobileClose}
+          />
+        </SheetContent>
+      </Sheet>
     );
   }
 
-  const boxSx = {
-    width: isExpanded ? SIDEBAR_WIDTH_EXPANDED : SIDEBAR_WIDTH_COLLAPSED,
-    height: '100vh',
-    position: 'fixed' as const,
-    left: 0,
-    top: 0,
-    borderRight: '1px solid',
-    borderColor: 'divider',
-    transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-    overflow: 'hidden',
-  };
-
   return (
-    <Box sx={boxSx}>
+    <div
+      className="fixed left-0 top-0 h-screen overflow-hidden border-r border-border transition-[width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+      style={{
+        width: isExpanded ? SIDEBAR_WIDTH_EXPANDED : SIDEBAR_WIDTH_COLLAPSED,
+      }}
+    >
       <SidebarContent isExpanded={isExpanded} onToggle={onToggle} isMobile={false} />
-    </Box>
+    </div>
   );
 };
 

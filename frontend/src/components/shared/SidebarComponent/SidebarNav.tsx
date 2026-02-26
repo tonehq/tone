@@ -1,10 +1,10 @@
 'use client';
 
-import { Box, Typography } from '@mui/material';
-import { usePathname } from 'next/navigation';
-import { SidebarItemMenu } from './SidebarItemMenu';
+import { cn } from '@/lib/utils';
 import { sidebarSections } from '@/constants/sidebar';
 import type { SidebarMenuItem } from '@/types/sidebar';
+import { usePathname } from 'next/navigation';
+import { SidebarItemMenu } from './SidebarItemMenu';
 
 export interface SidebarNavProps {
   isExpanded: boolean;
@@ -16,40 +16,16 @@ export function SidebarNav({ isExpanded, onMenuClick }: SidebarNavProps) {
   const isActive = (path: string) => pathname === path || pathname?.startsWith(`${path}/`);
 
   return (
-    <Box
-      sx={{
-        flex: 1,
-        overflowY: 'auto',
-        py: 2,
-        color: 'white',
-        px: isExpanded ? 1.5 : 1,
-      }}
-    >
+    <div className={cn('flex-1 overflow-y-auto py-4', isExpanded ? 'px-3' : 'px-2')}>
       {sidebarSections.map((section) => (
-        <Box key={section.heading} sx={{ mb: 2 }}>
+        <div key={section.heading} className="mb-4">
           {isExpanded && (
-            <Typography
-              variant="caption"
-              sx={{
-                px: 0.5,
-                color: 'white',
-                fontWeight: 600,
-                letterSpacing: 1,
-              }}
-            >
+            <span className="px-1 text-[11px] font-semibold uppercase tracking-widest text-white/50">
               {section.heading}
-            </Typography>
+            </span>
           )}
 
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 0.5,
-              mt: 1,
-              ...(isExpanded ? {} : { alignItems: 'center' }),
-            }}
-          >
+          <div className={cn('mt-1.5 flex flex-col gap-1', !isExpanded && 'items-center')}>
             {section.items.map((item: SidebarMenuItem) => (
               <SidebarItemMenu
                 key={item.key}
@@ -59,9 +35,9 @@ export function SidebarNav({ isExpanded, onMenuClick }: SidebarNavProps) {
                 onClick={onMenuClick}
               />
             ))}
-          </Box>
-        </Box>
+          </div>
+        </div>
       ))}
-    </Box>
+    </div>
   );
 }

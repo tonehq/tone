@@ -1,6 +1,6 @@
 'use client';
 
-import { Box, IconButton, Typography } from '@mui/material';
+import { cn } from '@/lib/utils';
 import { PanelLeft, PanelRight } from 'lucide-react';
 
 export interface SidebarHeaderProps {
@@ -11,45 +11,30 @@ export interface SidebarHeaderProps {
 
 export function SidebarHeader({ isExpanded, onToggle, isMobile = false }: SidebarHeaderProps) {
   return (
-    <Box
-      sx={{
-        p: 2,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: isExpanded ? 'space-between' : 'center',
-        minHeight: 56,
-      }}
+    <div
+      className={cn(
+        'flex min-h-14 items-center p-4',
+        isExpanded ? 'justify-between' : 'justify-center',
+      )}
     >
       {isExpanded && (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Box
-            sx={{
-              width: 32,
-              height: 32,
-              bgcolor: 'primary.main',
-              borderRadius: 2,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 700,
-              color: 'white',
-            }}
-          >
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-white">
             T
-          </Box>
-          <Typography fontWeight={700}>Tone</Typography>
-        </Box>
+          </div>
+          <span className="text-base font-bold text-white">Tone</span>
+        </div>
       )}
 
       {!isMobile && (
-        <IconButton size="small" onClick={onToggle}>
-          {!isExpanded ? (
-            <PanelRight color="white" size={20} />
-          ) : (
-            <PanelLeft color="white" size={20} />
-          )}
-        </IconButton>
+        <button
+          type="button"
+          onClick={onToggle}
+          className="rounded-md p-1.5 text-white/70 transition-colors hover:bg-white/15 hover:text-white"
+        >
+          {isExpanded ? <PanelLeft size={20} /> : <PanelRight size={20} />}
+        </button>
       )}
-    </Box>
+    </div>
   );
 }
