@@ -257,7 +257,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
           </CustomButton>
         </div>
 
-        <div className="flex-1 space-y-0.5 px-2 py-1">
+        <div className="flex-1 space-y-1 px-3 py-2">
           {['configure', 'prompt', 'deployments'].map((item) => {
             const isActive = item === currentMenu;
             return (
@@ -265,7 +265,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
                 key={item}
                 type="button"
                 className={cn(
-                  'w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors',
+                  'w-full cursor-pointer rounded-md px-3 py-2.5 text-left text-sm font-medium transition-colors',
                   isActive
                     ? 'bg-accent text-foreground'
                     : 'text-muted-foreground hover:bg-accent hover:text-foreground',
