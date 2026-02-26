@@ -97,6 +97,30 @@ class ChannelService(BaseService):
         rows = self.db.query(Channel).order_by(Channel.id).all()
         return [self._response_item(row) for row in rows]
 
+    def get_channel_by_type(self, channel_type: str) -> Dict[str, Any]:
+        from core.models.enums import ChannelType
+
+        type_name = channel_type.strip().upper()
+        channel_enum = None
+        for ct in ChannelType:
+            if ct.name == type_name:
+                channel_enum = ct
+                break
+        if channel_enum is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid channel type: {channel_type}",
+            )
+
+        record = self.db.query(Channel).filter(Channel.type == channel_enum).first()
+        if not record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No channel found with type: {channel_type}",
+            )
+
+        return self._response_item(record)
+
     def delete_channel(self, channel_id: int) -> Dict[str, str]:
         record = self.db.query(Channel).filter(Channel.id == channel_id).first()
 

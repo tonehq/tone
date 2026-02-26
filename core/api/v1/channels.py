@@ -43,6 +43,14 @@ def get_channel(
     return ChannelService(db, user_id=claims.user_id).get_channel(channel_id)
 
 
+@router.get("/get_by_type")
+def get_channel_by_type(
+    type: str = Query(..., description="The channel type (e.g. twilio, web, google_meet, zoom)"),
+    db: Session = Depends(get_db),
+):
+    return ChannelService(db).get_channel_by_type(type)
+
+
 @router.delete("/delete")
 def delete_channel(
     channel_id: int = Query(...),

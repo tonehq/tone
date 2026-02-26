@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
-from core.api.v1 import auth, users, organizations, api_keys, services, service_providers, agents, agent_configs, agent_phone_numbers, models as models_router, generated_api_keys, channels
+from core.api.v1 import auth, users, organizations, api_keys, services, service_providers, agents, agent_configs, channel_phone_numbers, models as models_router, generated_api_keys, channels
 import core.models
 
 app = FastAPI(title="Tone API - Core", version="1.0.0")
@@ -24,7 +24,7 @@ api_v1.include_router(api_keys.router, prefix="/api-keys", tags=["api-keys"])
 api_v1.include_router(services.router, prefix="/services", tags=["services"])
 api_v1.include_router(agents.router, prefix="/agent", tags=["agent"])
 api_v1.include_router(agent_configs.router, prefix="/agent_config", tags=["agent_config"])
-api_v1.include_router(agent_phone_numbers.router, prefix="/agent_phone_number", tags=["agent_phone_number"])
+api_v1.include_router(channel_phone_numbers.router, prefix="/channel_phone_number", tags=["channel_phone_number"])
 api_v1.include_router(models_router.router, prefix="/model", tags=["model"])
 api_v1.include_router(generated_api_keys.router, prefix="/generated-api-keys", tags=["generated-api-keys"])
 api_v1.include_router(channels.router, prefix="/channel", tags=["channel"])

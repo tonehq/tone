@@ -8,13 +8,12 @@ from uuid import UUID
 from fastapi import HTTPException, status
 
 from core.services.base import BaseService
-from core.models.agent_phone_numbers import AgentPhoneNumbers
-from core.models.agent import Agent
+from core.models.channel_phone_numbers import ChannelPhoneNumbers
 from core.models.channel import Channel
 
 
-def _agent_phone_number_unique_constraint_detail(exc: IntegrityError) -> str:
-    """Return a user-friendly message for AgentPhoneNumbers unique constraint violations."""
+def _channel_phone_number_unique_constraint_detail(exc: IntegrityError) -> str:
+    """Return a user-friendly message for ChannelPhoneNumbers unique constraint violations."""
     msg = str(exc).lower()
     orig = getattr(exc, "orig", None)
     constraint_name = None
@@ -23,24 +22,24 @@ def _agent_phone_number_unique_constraint_detail(exc: IntegrityError) -> str:
         if pgcode == "23505":
             if hasattr(orig, "diag") and orig.diag is not None:
                 constraint_name = getattr(orig.diag, "constraint_name", None)
-    if constraint_name is None and "agent_phone_numbers_agent_phone_unique" in msg:
-        constraint_name = "agent_phone_numbers_agent_phone_unique"
+    if constraint_name is None and "channel_phone_numbers_channel_phone_unique" in msg:
+        constraint_name = "channel_phone_numbers_channel_phone_unique"
     if constraint_name is None and "phone_number" in msg and "unique" in msg:
         return "Phone number already in use."
-    if constraint_name == "agent_phone_numbers_agent_phone_unique":
-        return "This agent already has this phone number."
+    if constraint_name == "channel_phone_numbers_channel_phone_unique":
+        return "This channel already has this phone number."
     if constraint_name and "phone_number" in (constraint_name or "").lower():
         return "Phone number already in use."
     if constraint_name and "uuid" in (constraint_name or "").lower():
-        return "Duplicate agent phone number identifier (uuid)."
+        return "Duplicate channel phone number identifier (uuid)."
     if "unique" in msg or (orig and getattr(orig, "pgcode", None) == "23505"):
         return "A record with this value already exists. Please use a unique phone number."
     return "Unique constraint violated."
 
 
-class AgentPhoneNumbersService(BaseService):
+class ChannelPhoneNumbersService(BaseService):
     CREATED_ATTRS = (
-        "agent_id", "channel_id", "phone_number", "phone_number_sid", "phone_number_auth_token",
+        "channel_id", "phone_number", "phone_number_sid", "phone_number_auth_token",
         "provider", "country_code", "number_type", "capabilities", "status",
     )
     UPDATABLE_ATTRS = (
@@ -48,57 +47,52 @@ class AgentPhoneNumbersService(BaseService):
         "country_code", "number_type", "capabilities", "status", "updated_at",
     )
 
-    def get_agent_phone_numbers(self, agent_id: int):
-        agent = self.db.query(Agent).filter(Agent.id == agent_id).first()
-        if not agent:
+    def get_channel_phone_numbers(self, channel_id: int):
+        channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
+        if not channel:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Agent not found",
+                detail="Channel not found",
             )
         return (
-            self.db.query(AgentPhoneNumbers)
+            self.db.query(ChannelPhoneNumbers)
             .filter(
-                AgentPhoneNumbers.agent_id == agent_id,
-                AgentPhoneNumbers.status == "active",
+                ChannelPhoneNumbers.channel_id == channel_id,
+                ChannelPhoneNumbers.status == "active",
             )
             .all()
         )
 
-    def detach_agent_phone_number(self, data: Dict[str, Any]):
-        agent_id = int(data["agent_id"])
+    def detach_channel_phone_number(self, data: Dict[str, Any]):
+        channel_id = int(data["channel_id"])
         phone_number = data["phone_number"].strip()
 
-        agent = self.db.query(Agent).filter(Agent.id == agent_id).first()
-        if not agent:
+        channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
+        if not channel:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Agent not found",
+                detail="Channel not found",
             )
 
         record = (
-            self.db.query(AgentPhoneNumbers)
+            self.db.query(ChannelPhoneNumbers)
             .filter(
-                AgentPhoneNumbers.agent_id == agent_id,
-                AgentPhoneNumbers.phone_number == phone_number,
+                ChannelPhoneNumbers.channel_id == channel_id,
+                ChannelPhoneNumbers.phone_number == phone_number,
             )
             .first()
         )
         if not record:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Phone number not found for this agent",
+                detail="Phone number not found for this channel",
             )
 
         self.db.delete(record)
         self.db.commit()
-        return {"message": "Phone number detached from agent successfully"}
+        return {"message": "Phone number detached from channel successfully"}
 
-    def upsert_agent_phone_number(self, data: Dict[str, Any]):
-        if data.get("agent_id") is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="agent_id is required",
-            )
+    def upsert_channel_phone_number(self, data: Dict[str, Any]):
         if not data.get("phone_number"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -121,14 +115,7 @@ class AgentPhoneNumbersService(BaseService):
             )
         row_id = data.get("id")
         row_uuid_raw = data.get("uuid")
-        agent_id = int(data["agent_id"])
         phone_number = data["phone_number"].strip()
-        agent = self.db.query(Agent).filter(Agent.id == agent_id).first()
-        if not agent:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Agent not found",
-            )
         channel_id = data.get("channel_id")
         if channel_id is not None:
             channel = self.db.query(Channel).filter(Channel.id == int(channel_id)).first()
@@ -137,19 +124,34 @@ class AgentPhoneNumbersService(BaseService):
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Channel not found",
                 )
+        # If both created_by and provider (type) are provided, find existing record to update
+        created_by = data.get("created_by")
+        provider = data.get("provider")
+        if created_by is not None and provider and row_id is None and row_uuid_raw is None:
+            existing_by_creator = (
+                self.db.query(ChannelPhoneNumbers)
+                .join(Channel, ChannelPhoneNumbers.channel_id == Channel.id)
+                .filter(
+                    Channel.created_by == int(created_by),
+                    ChannelPhoneNumbers.provider == provider,
+                )
+                .first()
+            )
+            if existing_by_creator:
+                row_id = existing_by_creator.id
         if row_id is not None:
-            existing = self.db.query(AgentPhoneNumbers).filter(AgentPhoneNumbers.id == int(row_id)).first()
+            existing = self.db.query(ChannelPhoneNumbers).filter(ChannelPhoneNumbers.id == int(row_id)).first()
             if not existing:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Agent phone number not found",
+                    detail="Channel phone number not found",
                 )
             row_uuid = existing.uuid
         elif row_uuid_raw is not None:
             row_uuid = UUID(str(row_uuid_raw)) if isinstance(row_uuid_raw, str) else row_uuid_raw
         else:
-            existing = self.db.query(AgentPhoneNumbers).filter(
-                AgentPhoneNumbers.phone_number == phone_number
+            existing = self.db.query(ChannelPhoneNumbers).filter(
+                ChannelPhoneNumbers.phone_number == phone_number
             ).first()
             if existing:
                 raise HTTPException(
@@ -160,7 +162,6 @@ class AgentPhoneNumbersService(BaseService):
         now = int(time.time())
         values = {
             "uuid": row_uuid,
-            "agent_id": agent_id,
             "channel_id": int(channel_id) if channel_id is not None else None,
             "phone_number": phone_number,
             "phone_number_sid": data["phone_number_sid"],
@@ -176,7 +177,7 @@ class AgentPhoneNumbersService(BaseService):
                 values[key] = data[key]
         try:
             self.upsert(
-                model=AgentPhoneNumbers,
+                model=ChannelPhoneNumbers,
                 values=values,
                 conflict_fields=["uuid"],
                 update_fields=list(self.UPDATABLE_ATTRS),
@@ -184,12 +185,12 @@ class AgentPhoneNumbersService(BaseService):
             )
         except IntegrityError as e:
             self.db.rollback()
-            detail = _agent_phone_number_unique_constraint_detail(e)
+            detail = _channel_phone_number_unique_constraint_detail(e)
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=detail,
             ) from e
-        row = self.db.query(AgentPhoneNumbers).filter(AgentPhoneNumbers.uuid == row_uuid).first()
+        row = self.db.query(ChannelPhoneNumbers).filter(ChannelPhoneNumbers.uuid == row_uuid).first()
         return row
 
     def get_twilio_phone_numbers(self, account_sid: str, auth_token: str):
