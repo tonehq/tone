@@ -3,18 +3,16 @@ from sqlalchemy import Column, BigInteger, String, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
-from core.database.base import Base
 from core.models.base import TimestampModel
 
 
-class AgentPhoneNumbers(TimestampModel):
-    __tablename__ = 'agent_phone_numbers'
+class ChannelPhoneNumbers(TimestampModel):
+    __tablename__ = 'channel_phone_numbers'
     __table_args__ = (
-        UniqueConstraint('agent_id', 'phone_number', name='agent_phone_numbers_agent_phone_unique'),
+        UniqueConstraint('channel_id', 'phone_number', name='channel_phone_numbers_channel_phone_unique'),
     )
 
     uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
-    agent_id = Column(BigInteger, ForeignKey('agents.id'), nullable=False)
     channel_id = Column(BigInteger, ForeignKey('channels.id'), nullable=True)
     phone_number = Column(String, nullable=False, unique=True)
     phone_number_sid = Column(String, nullable=False)
@@ -24,5 +22,6 @@ class AgentPhoneNumbers(TimestampModel):
     number_type = Column(String, nullable=True)
     capabilities = Column(JSONB, nullable=True)
     status = Column(String, default='active', nullable=True)
+
 
     channel = relationship("Channel", back_populates="phone_numbers")

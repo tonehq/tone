@@ -11,7 +11,7 @@ from fastapi import HTTPException, status
 from core.services.base import BaseService
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
-from core.models.agent_phone_numbers import AgentPhoneNumbers
+from core.models.channel_phone_numbers import ChannelPhoneNumbers
 from core.models.service_provider import ServiceProvider
 from core.models.enums import AgentType
 from core.services.agent_config_service import AgentConfigService
@@ -203,12 +203,6 @@ class AgentService(BaseService):
         """Build response dict: agent + config as single flat object (no agent_config key)."""
         from core.models.channel import Channel
 
-        phone_rows = (
-            self.db.query(AgentPhoneNumbers)
-            .filter(AgentPhoneNumbers.agent_id == agent.id)
-            .all()
-        )
-
         # Fetch linked channels via agent_channels
         channel_rows = (
             self.db.query(Channel)
@@ -216,6 +210,14 @@ class AgentService(BaseService):
             .filter(AgentChannel.agent_id == agent.id)
             .all()
         )
+
+        # Fetch phone numbers linked through the agent's channels
+        channel_ids = [c.id for c in channel_rows]
+        phone_rows = (
+            self.db.query(ChannelPhoneNumbers)
+            .filter(ChannelPhoneNumbers.channel_id.in_(channel_ids))
+            .all()
+        ) if channel_ids else []
 
         item = {
             "id": agent.id,
