@@ -19,3 +19,7 @@ export const upsertAgent = async (payload: Record<string, unknown>) => {
   const res = await axiosInstance.post('/agent/upsert_agent', payload);
   return res.data;
 };
+
+export const deleteAgent = async (agentId: number): Promise<void> => {
+  await axiosInstance.delete('/agent/delete_agent', { params: { agent_id: agentId } });
+};

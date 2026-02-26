@@ -1,9 +1,11 @@
 'use client';
 
+import type { ServiceProvider } from '@/services/providerService';
 import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   FormControl,
   MenuItem,
   Select,
@@ -13,12 +15,13 @@ import {
   useTheme,
 } from '@mui/material';
 import { KeyboardEvent, ReactNode, useState } from 'react';
-import { aiModels } from '../../../data/mockAgents';
 import { Form } from '../../shared/Form';
 import type { AgentGeneralFormData } from './types';
 
 interface GeneralTabProps {
   formData: AgentGeneralFormData;
+  llmProviders: ServiceProvider[];
+  providersLoading?: boolean;
   onFormChange: (partial: Partial<AgentGeneralFormData>) => void;
   onDeleteAgent: () => void;
   onFormSubmit?: (values: AgentGeneralFormData) => void;
@@ -75,6 +78,8 @@ function parseJsonArray(str?: string): string[] | undefined {
 
 export default function GeneralTab({
   formData,
+  llmProviders,
+  providersLoading,
   onFormChange,
   onDeleteAgent,
   onFormSubmit,
@@ -90,7 +95,7 @@ export default function GeneralTab({
 
     const next: Partial<AgentGeneralFormData> = {
       name: values.name ?? formData.name,
-      aiModel: values.aiModel ?? formData.aiModel,
+      aiModel: values.aiModel ? Number(values.aiModel) : formData.aiModel,
       customVocabulary: customVocabulary ?? formData.customVocabulary,
       filterWords: filterWords ?? formData.filterWords,
       useRealisticFillerWords: useRealisticFillerWords ?? formData.useRealisticFillerWords,
@@ -153,7 +158,7 @@ export default function GeneralTab({
 
       <FormRow
         label="Agent Description"
-        description="Provide a brief summary explaining your agent’s purpose."
+        description="Provide a brief summary explaining your agent's purpose."
       >
         <TextField
           value={formData.description}
@@ -167,17 +172,29 @@ export default function GeneralTab({
 
       <FormRow label="AI Model" description="Opt for speed or depth to suit your agent's role.">
         <FormControl size="small" fullWidth>
-          <Select
-            value={formData.aiModel}
-            onChange={(e) => onFormChange({ aiModel: e.target.value })}
-            renderValue={(v) => aiModels.find((m) => m.value === v)?.label ?? v}
-          >
-            {aiModels.map((model) => (
-              <MenuItem key={model.value} value={model.value}>
-                {model.label}
-              </MenuItem>
-            ))}
-          </Select>
+          {providersLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 1 }}>
+              <CircularProgress size={24} />
+            </Box>
+          ) : (
+            <Select
+              value={formData.aiModel ?? ''}
+              onChange={(e) =>
+                onFormChange({ aiModel: e.target.value ? Number(e.target.value) : null })
+              }
+              displayEmpty
+              renderValue={(v) => {
+                if (!v) return <em>Select a provider</em>;
+                return llmProviders.find((p) => p.id === v)?.display_name ?? v;
+              }}
+            >
+              {llmProviders.map((provider) => (
+                <MenuItem key={provider.id} value={provider.id}>
+                  {provider.display_name}
+                </MenuItem>
+              ))}
+            </Select>
+          )}
         </FormControl>
       </FormRow>
 
@@ -276,7 +293,7 @@ export default function GeneralTab({
 
       <FormRow
         label="Use Realistic Filler Words"
-        description="Include natural filler words like ‘uh’ and ‘um’."
+        description="Include natural filler words like 'uh' and 'um'."
       >
         <Switch
           checked={formData.useRealisticFillerWords}

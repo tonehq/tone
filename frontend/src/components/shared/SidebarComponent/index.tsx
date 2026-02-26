@@ -1,278 +1,67 @@
 'use client';
 
-import { Avatar, Box, Divider, IconButton, Tooltip, Typography } from '@mui/material';
-import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 import React from 'react';
-import ProfileMenu from '../userMenu';
-import { sidemenu } from './constant';
+import { Box, Drawer, useMediaQuery, useTheme } from '@mui/material';
+import { SidebarContent } from './SidebarContent';
+import { SIDEBAR_WIDTH_COLLAPSED, SIDEBAR_WIDTH_EXPANDED } from './constant';
 
-interface SidebarItemProps {
-  icon: React.ElementType;
-  href: string;
-  active?: boolean;
-  title?: string;
-  isCollapsed: boolean;
+interface SidebarComponentProps {
+  isExpanded: boolean;
+  onToggle: () => void;
+  mobileOpen: boolean;
+  onMobileClose: () => void;
 }
 
-function SidebarItemMenu({ icon: Icon, href, active, title, isCollapsed }: SidebarItemProps) {
-  const content = (
-    <Box
-      component={Link}
-      href={href}
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        borderRadius: '5px',
-        cursor: 'pointer',
-        userSelect: 'none',
-        whiteSpace: 'nowrap',
-        transition: 'all 0.2s',
-        textDecoration: 'none',
-        ...(isCollapsed
-          ? {
-              justifyContent: 'center',
-              width: 40,
-              height: 40,
-              mx: 'auto',
-              '&:hover': {
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              },
-            }
-          : {
-              width: '100%',
-              py: 1.5,
-              px: 2,
-              '&:hover': {
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-              },
-            }),
-        ...(active && {
-          backgroundColor: 'rgba(255, 255, 255, 0.15)',
-        }),
-      }}
-    >
-      <Icon
-        size={20}
-        style={{
-          color: active ? '#ffffff' : 'rgba(255, 255, 255, 0.7)',
-          ...(!isCollapsed && { marginRight: '12px' }),
+const SidebarComponent = ({
+  isExpanded,
+  onToggle,
+  mobileOpen,
+  onMobileClose,
+}: SidebarComponentProps) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
+  if (isMobile) {
+    return (
+      <Drawer
+        variant="temporary"
+        open={mobileOpen}
+        onClose={onMobileClose}
+        ModalProps={{ keepMounted: true }}
+        sx={{
+          '& .MuiDrawer-paper': {
+            width: SIDEBAR_WIDTH_EXPANDED,
+            boxSizing: 'border-box',
+          },
         }}
-      />
-      {!isCollapsed && (
-        <Typography
-          variant="body2"
-          sx={{
-            color: active ? '#ffffff' : 'rgba(255, 255, 255, 0.7)',
-            fontWeight: active ? 600 : 500,
-            fontSize: '0.875rem',
-          }}
-        >
-          {title}
-        </Typography>
-      )}
-    </Box>
-  );
+      >
+        <SidebarContent
+          isExpanded={true}
+          onToggle={onToggle}
+          isMobile={true}
+          onMenuClick={onMobileClose}
+        />
+      </Drawer>
+    );
+  }
 
-  return isCollapsed ? (
-    <Tooltip title={title} placement="right">
-      {content}
-    </Tooltip>
-  ) : (
-    content
-  );
-}
-
-interface SidebarProps {
-  drawerWidth?: number;
-  collapsedWidth?: number;
-  isExpanded?: boolean;
-  onToggle?: () => void;
-}
-
-function Sidebar({ isExpanded = true, onToggle }: SidebarProps) {
-  const pathname = usePathname();
-  const drawerWidth = 240;
-  const collapsedWidth = 72;
-
-  const isActive = (path: string) => pathname === path || pathname?.startsWith(`${path}/`);
+  const boxSx = {
+    width: isExpanded ? SIDEBAR_WIDTH_EXPANDED : SIDEBAR_WIDTH_COLLAPSED,
+    height: '100vh',
+    position: 'fixed' as const,
+    left: 0,
+    top: 0,
+    borderRight: '1px solid',
+    borderColor: 'divider',
+    transition: 'width 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    overflow: 'hidden',
+  };
 
   return (
-    <Box
-      sx={{
-        flexShrink: 0,
-        width: isExpanded ? `${drawerWidth}px` : `${collapsedWidth}px`,
-        height: '100vh',
-        background: 'linear-gradient(180deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%)',
-        display: 'flex',
-        flexDirection: 'column',
-        transition: 'width 0.3s ease',
-        position: 'fixed',
-        left: 0,
-        top: 0,
-        zIndex: 1200,
-      }}
-    >
-      {/* Logo */}
-      <Box
-        sx={{
-          p: 2,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: isExpanded ? 'flex-start' : 'center',
-          gap: 1,
-        }}
-      >
-        <Box
-          sx={{
-            width: 32,
-            height: 32,
-            backgroundColor: '#ffffff',
-            borderRadius: '5px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 700,
-            fontSize: '1.25rem',
-            color: '#1e1b4b',
-          }}
-        >
-          T
-        </Box>
-        {isExpanded && (
-          <Typography
-            sx={{
-              fontWeight: 700,
-              fontSize: '1.125rem',
-              color: '#ffffff',
-            }}
-          >
-            ToneHq
-          </Typography>
-        )}
-      </Box>
-
-      <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.1)', mx: 2 }} />
-
-      {/* Expand/Collapse button - floating on right edge */}
-      {onToggle && (
-        <Tooltip title={isExpanded ? 'Collapse sidebar' : 'Expand sidebar'} placement="right">
-          <IconButton
-            onClick={onToggle}
-            sx={{
-              position: 'absolute',
-              right: -14,
-              top: 48,
-              width: 32,
-              height: 32,
-              borderRadius: '50%',
-              backgroundColor: 'white',
-              color: '#4b5563',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
-              zIndex: 1300,
-              '&:hover': {
-                backgroundColor: '#e5e7eb',
-              },
-            }}
-          >
-            {isExpanded ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
-          </IconButton>
-        </Tooltip>
-      )}
-
-      {/* Organization Selector */}
-      <Box sx={{ p: 2 }}>
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1.5,
-            p: isExpanded ? 1.5 : 0.5,
-            borderRadius: '5px',
-            backgroundColor: 'rgba(255, 255, 255, 0.1)',
-            cursor: 'pointer',
-            '&:hover': {
-              backgroundColor: 'rgba(255, 255, 255, 0.15)',
-            },
-          }}
-        >
-          <Avatar
-            sx={{
-              width: 32,
-              height: 32,
-              backgroundColor: '#8b5cf6',
-              fontSize: '0.875rem',
-              fontWeight: 600,
-            }}
-          >
-            M
-          </Avatar>
-          {isExpanded && (
-            <>
-              <Box sx={{ flex: 1 }}>
-                <Typography
-                  sx={{
-                    color: '#ffffff',
-                    fontWeight: 600,
-                    fontSize: '0.875rem',
-                    lineHeight: 1.2,
-                  }}
-                >
-                  My Workspace
-                </Typography>
-                <Typography
-                  sx={{
-                    color: 'rgba(255, 255, 255, 0.6)',
-                    fontSize: '0.75rem',
-                  }}
-                >
-                  1 Member
-                </Typography>
-              </Box>
-              <ChevronDown size={16} color="rgba(255, 255, 255, 0.6)" />
-            </>
-          )}
-        </Box>
-      </Box>
-
-      <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.1)', mx: 2 }} />
-
-      {/* Navigation Menu */}
-      <Box
-        sx={{
-          flex: 1,
-          overflowY: 'auto',
-          py: 2,
-          px: isExpanded ? 2 : 1,
-        }}
-      >
-        <Box
-          component="nav"
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 0.5,
-            ...(!isExpanded && { alignItems: 'center' }),
-          }}
-        >
-          {sidemenu.map((item) => (
-            <SidebarItemMenu
-              key={item.key}
-              icon={item.icon}
-              title={item.title}
-              href={item.path}
-              active={isActive(item.path)}
-              isCollapsed={!isExpanded}
-            />
-          ))}
-        </Box>
-      </Box>
-
-      {/* Bottom Section */}
-      <ProfileMenu isExpanded={isExpanded} />
+    <Box sx={boxSx}>
+      <SidebarContent isExpanded={isExpanded} onToggle={onToggle} isMobile={false} />
     </Box>
   );
-}
+};
 
-export default Sidebar;
+export { SidebarComponent as default };

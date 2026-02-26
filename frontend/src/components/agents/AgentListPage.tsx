@@ -1,26 +1,40 @@
 'use client';
 
-import agentsAtom, { fetchAgentList } from '@/atoms/AgentsAtom';
+import agentsAtom, { deleteAgentAtom, fetchAgentList } from '@/atoms/AgentsAtom';
 import { constructTable } from '@/services/shared/helper';
 import { Add as AddIcon, Search as SearchIcon } from '@mui/icons-material';
-import { Box, Button, InputAdornment, Paper, TextField, Typography, useTheme } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Button,
+  InputAdornment,
+  Paper,
+  Snackbar,
+  TextField,
+  Typography,
+  useTheme,
+} from '@mui/material';
 import { DataGrid, GridColDef, GridPaginationModel } from '@mui/x-data-grid';
 import { useAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 import React, { useEffect, useRef, useState } from 'react';
-import CreateAgentModal from './CreateAgentModal';
 
 const AgentListPage: React.FC = () => {
   const theme = useTheme();
   const router = useRouter();
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [_paginationModel, _setPaginationModel] = useState<GridPaginationModel>({
     page: 0,
     pageSize: 10,
   });
   const [data] = useAtom(agentsAtom);
   const [, fetAgentsList] = useAtom(fetchAgentList);
+  const [, removeAgent] = useAtom(deleteAgentAtom);
   const [loader, setLoader] = useState(false);
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error';
+  }>({ open: false, message: '', severity: 'success' });
 
   // Prevent double fetch with a ref flag
   const hasFetchedRef = useRef(false);
@@ -78,10 +92,21 @@ const AgentListPage: React.FC = () => {
     },
   ];
 
-  const columns = constructTable(defaultColumns, handleEdit, (row) => {
-    console.log('Delete row:', row);
-    // TODO: wire delete API when available
-  });
+  const handleDelete = async (row: { id?: number | string }) => {
+    if (!row.id) return;
+    try {
+      await removeAgent(Number(row.id));
+      setSnackbar({ open: true, message: 'Agent deleted successfully', severity: 'success' });
+    } catch {
+      setSnackbar({
+        open: true,
+        message: 'Failed to delete agent. Please try again.',
+        severity: 'error',
+      });
+    }
+  };
+
+  const columns = constructTable(defaultColumns, handleEdit, handleDelete);
 
   return (
     <Box sx={{ p: 3, height: '100%' }}>
@@ -113,7 +138,7 @@ const AgentListPage: React.FC = () => {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => router.push('/agents/create/inbound')}
             sx={{
               backgroundColor: '#8b5cf6',
               '&:hover': {
@@ -170,7 +195,7 @@ const AgentListPage: React.FC = () => {
             },
 
             '& .MuiDataGrid-columnSeparator': {
-              display: 'none',
+              color: '#475569',
             },
 
             '& .MuiDataGrid-row': {
@@ -185,8 +210,21 @@ const AgentListPage: React.FC = () => {
         />
       </Paper>
 
-      {/* Create Agent Modal */}
-      <CreateAgentModal open={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setSnackbar((prev) => ({ ...prev, open: false }))}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

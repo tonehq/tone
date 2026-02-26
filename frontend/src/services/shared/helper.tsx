@@ -1,21 +1,8 @@
-import {
-  Delete as DeleteIcon,
-  Edit as EditIcon,
-  CallReceived as InboundIcon,
-  MoreVert as MoreVertIcon,
-  CallMade as OutboundIcon,
-} from '@mui/icons-material';
-import {
-  Chip,
-  IconButton,
-  ListItemIcon,
-  ListItemText,
-  Menu,
-  MenuItem,
-  Typography,
-} from '@mui/material';
+import { Box, Chip, CircularProgress, IconButton, Tooltip, Typography } from '@mui/material';
 import { GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
-import React from 'react';
+import dayjs from 'dayjs';
+import { Pencil, PhoneIncoming, PhoneOutgoing, Trash2 } from 'lucide-react';
+import React, { useState } from 'react';
 
 /* ===================== TYPES ===================== */
 
@@ -35,60 +22,51 @@ interface RowData {
 interface ActionMenuProps {
   row: RowData;
   onEdit?: (row: RowData) => void;
-  onDelete?: (row: RowData) => void;
+  onDelete?: (row: RowData) => void | Promise<void>;
 }
 
 const ActionMenu: React.FC<ActionMenuProps> = ({ row, onEdit, onDelete }) => {
-  const [anchorEl, setAnchorEl] = React.useState<HTMLElement | null>(null);
-  const open = Boolean(anchorEl);
+  const [deleting, setDeleting] = useState(false);
+  const stopPropagation = (e: React.MouseEvent) => e.stopPropagation();
 
-  const handleOpen = (e: React.MouseEvent<HTMLElement>) => {
-    e.stopPropagation(); // prevent DataGrid row selection
-    setAnchorEl(e.currentTarget);
+  const handleDelete = async (e: React.MouseEvent) => {
+    stopPropagation(e);
+    if (!onDelete) return;
+    setDeleting(true);
+    try {
+      await onDelete(row);
+    } finally {
+      setDeleting(false);
+    }
   };
 
-  const handleClose = () => setAnchorEl(null);
-
   return (
-    <>
-      <IconButton size="small" onClick={handleOpen}>
-        <MoreVertIcon fontSize="small" />
-      </IconButton>
-
-      <Menu
-        anchorEl={anchorEl}
-        open={open}
-        onClose={handleClose}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        MenuListProps={{ dense: true }}
-      >
-        <MenuItem
-          onClick={() => {
-            handleClose();
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+      <Tooltip title="Edit">
+        <IconButton
+          size="small"
+          disabled={deleting}
+          onClick={(e) => {
+            stopPropagation(e);
             onEdit?.(row);
           }}
+          sx={{ color: 'text.secondary' }}
         >
-          <ListItemIcon>
-            <EditIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Edit</ListItemText>
-        </MenuItem>
-
-        <MenuItem
-          onClick={() => {
-            handleClose();
-            onDelete?.(row);
-          }}
-          sx={{ color: 'error.main' }}
-        >
-          <ListItemIcon sx={{ color: 'error.main' }}>
-            <DeleteIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Delete</ListItemText>
-        </MenuItem>
-      </Menu>
-    </>
+          <Pencil size={18} color="#475569" />
+        </IconButton>
+      </Tooltip>
+      {deleting ? (
+        <IconButton size="small" disabled>
+          <CircularProgress size={20} color="error" />
+        </IconButton>
+      ) : (
+        <Tooltip title="Delete">
+          <IconButton size="small" onClick={handleDelete} sx={{ color: 'error.main' }}>
+            <Trash2 size={18} color="red" />
+          </IconButton>
+        </Tooltip>
+      )}
+    </Box>
   );
 };
 
@@ -97,7 +75,7 @@ const ActionMenu: React.FC<ActionMenuProps> = ({ row, onEdit, onDelete }) => {
 export const constructTable = (
   columns: ColumnConfig[],
   onEdit?: (row: RowData) => void,
-  onDelete?: (row: RowData) => void,
+  onDelete?: (row: RowData) => void | Promise<void>,
 ): GridColDef<RowData>[] =>
   columns
     .filter((col) => !col.hidden)
@@ -122,13 +100,7 @@ export const constructTable = (
         /* DATE COLUMN */
         if (col.value === 'updated_at') {
           const value = params.value
-            ? new Date(params.value).toLocaleString(undefined, {
-                year: 'numeric',
-                month: 'short',
-                day: '2-digit',
-                hour: '2-digit',
-                minute: '2-digit',
-              })
+            ? dayjs.unix(Number(params.value)).format('DD-MM-YYYY HH:mm:ss')
             : '-';
 
           return <Typography variant="body2">{value}</Typography>;
@@ -144,12 +116,18 @@ export const constructTable = (
             <Chip
               icon={
                 isInbound ? (
-                  <InboundIcon sx={{ fontSize: 16, color: '#10b981' }} />
+                  <PhoneIncoming size={15} color="#10b981" />
                 ) : (
-                  <OutboundIcon sx={{ fontSize: 16, color: '#8b5cf6' }} />
+                  <PhoneOutgoing size={15} color="#8b5cf6" />
                 )
               }
-              label={isInbound ? 'Inbound' : 'Outbound'}
+              label={
+                isInbound ? (
+                  <Box sx={{ marginLeft: 1 }}>{'Inbound'}</Box>
+                ) : (
+                  <Box sx={{ marginLeft: 1 }}>{'Outbound'}</Box>
+                )
+              }
               size="small"
               sx={{
                 backgroundColor: isInbound ? 'rgba(16, 185, 129, 0.1)' : 'rgba(139, 92, 246, 0.1)',

@@ -1,4 +1,4 @@
-import { getAgents } from '@/services/agentsService';
+import { deleteAgent, getAgents } from '@/services/agentsService';
 import { atom } from 'jotai';
 
 export interface Agent {
@@ -58,6 +58,18 @@ export const fetchAgentList = atom(null, async (_get, set) => {
       ...prev,
       agentList: res.data as Agent[],
     }));
+  } else {
+    set(agentsAtom, (prev) => ({ ...prev, agentList: [] }));
+  }
+});
+
+export const deleteAgentAtom = atom(null, async (_get, set, agentId: number) => {
+  await deleteAgent(agentId);
+  const res = await getAgents();
+  if (Array.isArray(res)) {
+    set(agentsAtom, (prev) => ({ ...prev, agentList: res as Agent[] }));
+  } else if (res && Array.isArray(res.data)) {
+    set(agentsAtom, (prev) => ({ ...prev, agentList: res.data as Agent[] }));
   } else {
     set(agentsAtom, (prev) => ({ ...prev, agentList: [] }));
   }
