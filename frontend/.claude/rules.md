@@ -160,6 +160,7 @@ All UI must go through `@/components/shared` where a shared component exists. Th
 3. **Shared components wrap shadcn primitives.** The `@/components/ui/` directory contains raw shadcn primitives. Application code should use the shared wrappers, not the primitives directly. Primitives are for building new shared components only.
 4. **New shared components must be documented.** When creating or modifying a shared component, update `docs/shared-components.md` and add the export to `@/components/shared/index.tsx`.
 5. **No UI logic duplication.** If you find yourself re-implementing loading spinners, confirm/cancel dialogs, or search-enabled tables, you are likely missing a shared component feature. Extend the shared component instead of duplicating.
+6. **No raw `<button>` elements.** Every clickable button in application code must use `CustomButton`. Raw `<button>` and direct shadcn `Button` are prohibited outside of `@/components/shared/` and `@/components/ui/`. When touching existing code that has raw buttons, replace them with `CustomButton`.
 
 ### Why these rules exist
 

@@ -1,10 +1,10 @@
 'use client';
 
+import { ActionMenu, CustomButton } from '@/components/shared';
 import CustomTable from '@/components/shared/CustomTable';
-import { Button } from '@/components/ui/button';
 import type { CustomTableColumn } from '@/types/components';
 import type { IntegrationRow } from '@/types/integration';
-import { Check, Copy, Eye, EyeOff, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { Check, Copy, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 
 interface IntegrationsTableProps {
@@ -26,33 +26,40 @@ function AuthTokenCell({ token }: { token: string }) {
 
   return (
     <div className="flex items-center gap-1.5">
-      <span className="font-mono text-sm">
+      <span
+        className="inline-block w-[160px] overflow-hidden text-ellipsis whitespace-nowrap font-mono text-sm"
+        title={token}
+      >
         {visible ? token : '••••••••••••'}
       </span>
-      <Button
-        variant="ghost"
+      <CustomButton
+        type="text"
         size="icon-xs"
+        htmlType="button"
         onClick={() => setVisible((v) => !v)}
         aria-label={visible ? 'hide token' : 'show token'}
+        className="p-0"
       >
         {visible ? (
           <EyeOff className="size-3.5 text-muted-foreground" />
         ) : (
           <Eye className="size-3.5 text-muted-foreground" />
         )}
-      </Button>
-      <Button
-        variant="ghost"
+      </CustomButton>
+      <CustomButton
+        type="text"
         size="icon-xs"
+        htmlType="button"
         onClick={handleCopy}
         aria-label="copy token"
+        className="p-0"
       >
         {copied ? (
           <Check className="size-3.5 text-emerald-500" />
         ) : (
           <Copy className="size-3.5 text-muted-foreground" />
         )}
-      </Button>
+      </CustomButton>
     </div>
   );
 }
@@ -63,17 +70,6 @@ export default function IntegrationsTable({
   onEdit,
   onDelete,
 }: IntegrationsTableProps) {
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-
-  const handleDelete = async (id: number) => {
-    setDeletingId(id);
-    try {
-      await onDelete(id);
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
   const columns: CustomTableColumn<IntegrationRow>[] = [
     { key: 'name', title: 'Name', dataIndex: 'name' },
     { key: 'account_sid', title: 'Account SID', dataIndex: 'account_sid' },
@@ -85,38 +81,17 @@ export default function IntegrationsTable({
     { key: 'createdAt', title: 'Created at', dataIndex: 'createdAt' },
     {
       key: 'actions',
-      title: 'Actions',
+      title: '',
       width: 'w-24',
-      render: (_value, record) => {
-        const isDeleting = deletingId === record.id;
-        return (
-          <div className="flex gap-1">
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => onEdit(record)}
-              disabled={isDeleting}
-              aria-label="edit"
-            >
-              <Pencil className="size-4 text-muted-foreground" />
-            </Button>
-            {isDeleting ? (
-              <Button variant="ghost" size="icon-xs" disabled>
-                <Loader2 className="size-4 animate-spin text-destructive" />
-              </Button>
-            ) : (
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => handleDelete(record.id)}
-                aria-label="delete"
-              >
-                <Trash2 className="size-4 text-destructive" />
-              </Button>
-            )}
-          </div>
-        );
-      },
+      render: (_value, record) => (
+        <ActionMenu
+          onEdit={() => onEdit(record)}
+          onDelete={() => onDelete(record.id)}
+          deleteTitle="Delete Integration"
+          deleteDescription="Are you sure you want to delete this integration? This action cannot be undone."
+          confirmText="Delete"
+        />
+      ),
     },
   ];
 
@@ -128,5 +103,12 @@ export default function IntegrationsTable({
     );
   }
 
-  return <CustomTable columns={columns} dataSource={rows} rowKey="id" />;
+  return (
+    <CustomTable
+      columns={columns}
+      onRowClick={(record) => onEdit(record)}
+      dataSource={rows}
+      rowKey="id"
+    />
+  );
 }
