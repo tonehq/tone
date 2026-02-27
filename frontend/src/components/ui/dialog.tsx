@@ -4,7 +4,7 @@ import { XIcon } from 'lucide-react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 import * as React from 'react';
 
-import { Button } from '@/components/ui/button';
+import { CustomButton } from '@/components/shared';
 import { cn } from '@/utils/cn';
 
 function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -100,7 +100,7 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close asChild>
-          <Button variant="outline">Close</Button>
+          <CustomButton type="default">Close</CustomButton>
         </DialogPrimitive.Close>
       )}
     </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { Button } from '@/components/ui/button';
+import { CustomButton } from '@/components/shared';
 import { Card } from '@/components/ui/card';
 import {
   Select,
@@ -179,82 +179,82 @@ export default function StepThree({ formData, onFormChange }: StepThreeProps) {
 
           <Separator orientation="vertical" className="mx-1 h-6" />
 
-          <Button
-            variant="ghost"
+          <CustomButton
+            type="text"
             size="icon-sm"
             className={cn(active.bold && 'bg-accent')}
             onClick={() => toggleStyle('bold')}
           >
             <Bold size={18} />
-          </Button>
+          </CustomButton>
 
-          <Button
-            variant="ghost"
+          <CustomButton
+            type="text"
             size="icon-sm"
             className={cn(active.italic && 'bg-accent')}
             onClick={() => toggleStyle('italic')}
           >
             <Italic size={18} />
-          </Button>
+          </CustomButton>
 
-          <Button
-            variant="ghost"
+          <CustomButton
+            type="text"
             size="icon-sm"
             className={cn(active.underline && 'bg-accent')}
             onClick={() => toggleStyle('underline')}
           >
             <Under size={18} />
-          </Button>
+          </CustomButton>
 
           <Separator orientation="vertical" className="mx-1 h-6" />
 
-          <Button
-            variant="ghost"
+          <CustomButton
+            type="text"
             size="icon-sm"
             className={cn(active.bulletList && 'bg-accent')}
             onClick={() => toggleStyle('bulletList')}
           >
             <List size={18} />
-          </Button>
+          </CustomButton>
 
           <Separator orientation="vertical" className="mx-1 h-6" />
 
-          <Button
-            variant="ghost"
+          <CustomButton
+            type="text"
             size="icon-sm"
             className={cn(active.align === 'left' && 'bg-accent')}
             onClick={() => toggleStyle('left')}
           >
             <AlignLeft size={18} />
-          </Button>
+          </CustomButton>
 
-          <Button
-            variant="ghost"
+          <CustomButton
+            type="text"
             size="icon-sm"
             className={cn(active.align === 'center' && 'bg-accent')}
             onClick={() => toggleStyle('center')}
           >
             <AlignCenter size={18} />
-          </Button>
+          </CustomButton>
 
-          <Button
-            variant="ghost"
+          <CustomButton
+            type="text"
             size="icon-sm"
             className={cn(active.align === 'right' && 'bg-accent')}
             onClick={() => toggleStyle('right')}
           >
             <AlignRight size={18} />
-          </Button>
+          </CustomButton>
 
           <div className="flex-1" />
 
-          <button
-            type="button"
+          <CustomButton
+            type="text"
             className="text-sm text-destructive hover:text-destructive/80"
             onClick={clearContent}
           >
             Clear all
-          </button>
+          </CustomButton>
         </div>
 
         <Separator />
