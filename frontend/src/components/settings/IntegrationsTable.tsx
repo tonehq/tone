@@ -26,7 +26,12 @@ function AuthTokenCell({ token }: { token: string }) {
 
   return (
     <div className="flex items-center gap-1.5">
-      <span className="font-mono text-sm">{visible ? token : '••••••••••••'}</span>
+      <span
+        className="inline-block w-[160px] overflow-hidden text-ellipsis whitespace-nowrap font-mono text-sm"
+        title={token}
+      >
+        {visible ? token : '••••••••••••'}
+      </span>
       <CustomButton
         type="text"
         size="icon-xs"
