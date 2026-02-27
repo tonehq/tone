@@ -1,7 +1,6 @@
 from sqlalchemy import Column, BigInteger, String, Boolean, Text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
-from sqlalchemy.orm import relationship
 
 from core.models.base import TimestampModel
 
@@ -24,5 +23,4 @@ class ServiceProvider(TimestampModel):
     status = Column(String, default='active')
     is_system = Column(Boolean, default=False)
 
-    voices = relationship("Voice", back_populates="service_provider")
 
