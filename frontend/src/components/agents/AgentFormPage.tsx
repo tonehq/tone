@@ -43,6 +43,8 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
   const [_assigning, setAssigning] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deletingAgent, setDeletingAgent] = useState(false);
+  const [unassignTarget, setUnassignTarget] = useState<{ no: string; type: string } | null>(null);
+  const [unassigning, setUnassigning] = useState(false);
 
   const providers = providersLoadable.state === 'hasData' ? providersLoadable.data : [];
   const providersLoading = providersLoadable.state === 'loading';
@@ -81,29 +83,51 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
     setAssigning(true);
     try {
       const channel = formData?.channels?.find((channel: any) => channel.type === 'twilio');
-      for (const pn of phoneNumbers) {
-        await axiosInstance.post('/channel_phone_number/upsert_channel_phone_number', {
-          phone_number: pn.no,
-          phone_number_sid: channel?.meta_data?.account_sid,
-          phone_number_auth_token: channel?.meta_data?.auth_token,
-          provider: pn.type,
-          country_code: '+1',
-          number_type: 'international',
-          channel_id: channel?.id,
-          capabilities: {
-            voice: true,
-            sms: false,
-            mms: true,
-          },
-          status: 'active',
-        });
-      }
+      const payload = {
+        phone_number: phoneNumbers,
+        phone_number_sid: channel?.meta_data?.account_sid,
+        phone_number_auth_token: channel?.meta_data?.auth_token,
+        provider: 'twilio',
+        channel_id: channel?.id,
+        country_code: '+1',
+        number_type: 'international',
+        capabilities: {
+          voice: true,
+          sms: false,
+          mms: true,
+        },
+        status: 'active',
+      };
+      await axiosInstance.post('/channel_phone_number/upsert_channel_phone_number', payload);
+
       setFormData((prev) => ({ ...prev, phoneNumbers }));
       notify.success('Success', 'Phone number(s) assigned successfully');
     } catch {
       notify.error('Error', 'Failed to assign phone number(s). Please try again.');
     } finally {
       setAssigning(false);
+    }
+  };
+
+  const handleConfirmUnassign = async () => {
+    if (!unassignTarget) return;
+    const channel = formData?.channels?.find((c: any) => c.type === unassignTarget.type);
+    setUnassigning(true);
+    try {
+      await axiosInstance.post('/channel_phone_number/detach_channel_phone_number', {
+        channel_id: channel?.id,
+        phone_number: unassignTarget.no,
+      });
+      setFormData((prev) => ({
+        ...prev,
+        phoneNumbers: prev.phoneNumbers.filter((pn) => pn.no !== unassignTarget.no),
+      }));
+      setUnassignTarget(null);
+      notify.success('Success', 'Phone number unassigned successfully');
+    } catch {
+      notify.error('Error', 'Failed to unassign phone number. Please try again.');
+    } finally {
+      setUnassigning(false);
     }
   };
 
@@ -214,7 +238,57 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
           />
         ),
       },
+      {
+        key: 'assign-number',
+        label: 'Assign Number',
+        icon: <Phone size={16} />,
+        children: (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold text-foreground">Assign Number</h3>
+              {isEditMode && (
+                <CustomButton
+                  type="primary"
+                  icon={<Phone size={16} />}
+                  onClick={() => setAssignModalOpen(true)}
+                >
+                  Assign New Number
+                </CustomButton>
+              )}
+            </div>
+
+            {!formData.phoneNumbers?.length ? (
+              <p className="text-sm text-muted-foreground">
+                {isEditMode
+                  ? 'No phone numbers assigned yet. Click "Assign New Number" to add one.'
+                  : 'Save the agent first to assign phone numbers.'}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {formData.phoneNumbers.map((pn) => (
+                  <div
+                    key={pn.no}
+                    className="flex items-center gap-3 rounded-md border border-border bg-background px-4 py-3"
+                  >
+                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">
+                      <Phone size={15} className="text-muted-foreground" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground">{pn.no}</p>
+                      <p className="text-xs capitalize text-muted-foreground">{pn.type}</p>
+                    </div>
+                    <CustomButton type="default" onClick={() => setUnassignTarget(pn)}>
+                      Unassign
+                    </CustomButton>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ),
+      },
     ],
+
     [formData, llmProviders, ttsProviders, sttProviders, providersLoading],
   );
 
@@ -327,11 +401,6 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
               </>
             )}
           </div>
-          {isEditMode && (
-            <CustomButton type="default" onClick={() => setAssignModalOpen(true)}>
-              {formData.phoneNumbers?.length > 0 ? 'Change numbers' : 'Assign numbers'}
-            </CustomButton>
-          )}
         </div>
 
         <div className="flex items-center justify-between border-b border-border bg-background px-6 py-4">
@@ -383,6 +452,21 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         confirmLoading={deletingAgent}
         onConfirm={handleConfirmDeleteAgent}
       />
+
+      <CustomModal
+        open={!!unassignTarget}
+        onClose={() => setUnassignTarget(null)}
+        title="Unassign Phone Number"
+        confirmText="Unassign"
+        confirmType="danger"
+        confirmLoading={unassigning}
+        onConfirm={handleConfirmUnassign}
+      >
+        <p className="text-sm text-foreground">
+          Are you sure you want to unassign <strong>{unassignTarget?.no}</strong>? This will remove
+          it from the agent.
+        </p>
+      </CustomModal>
 
       {contextHolder}
     </div>

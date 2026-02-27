@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Body, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from core.database.session import get_db
 from core.services.channel_phone_numbers_service import ChannelPhoneNumbersService
@@ -44,7 +44,7 @@ def upsert_channel_phone_number(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="provider is required",
         )
-    return ChannelPhoneNumbersService(db).upsert_channel_phone_number(data)
+    return ChannelPhoneNumbersService(db).upsert_channel_phone_numbers(data)
 
 
 @router.post("/detach_channel_phone_number", status_code=status.HTTP_200_OK)
@@ -69,8 +69,10 @@ def detach_channel_phone_number(
 @router.get("/get_twilio_phone_numbers", status_code=status.HTTP_200_OK)
 def get_twilio_phone_numbers(
     type: str = Query(..., description="The channel type (e.g. twilio)"),
+    channel_id: Optional[int] = Query(None, description="The channel ID to use for credentials"),
     db: Session = Depends(get_db),
 ):
     return ChannelPhoneNumbersService(db).get_twilio_phone_numbers(
-        channel_type=type
+        channel_type=type,
+        channel_id=channel_id,
     )
