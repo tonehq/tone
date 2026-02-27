@@ -103,7 +103,7 @@ const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
               aria-label="toggle password visibility"
               onClick={() => setShowPassword(!showPassword)}
               onMouseDown={(e) => e.preventDefault()}
-              icon={showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              icon={!showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               className="absolute right-3 top-1/2 -translate-y-1/2 h-auto p-0 min-w-0 [&>span]:mr-0 text-muted-foreground hover:text-foreground focus:outline-none"
             />
           )}

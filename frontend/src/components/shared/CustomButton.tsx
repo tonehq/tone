@@ -50,7 +50,6 @@ const CustomButton = React.forwardRef<HTMLButtonElement, CustomButtonProps>(
     const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
       if (loading || disabled) return;
       e?.stopPropagation();
-      e?.preventDefault();
       onClick?.(e);
     };
     return (

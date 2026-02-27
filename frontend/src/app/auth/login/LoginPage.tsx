@@ -15,6 +15,7 @@ const LoginPage = () => {
   const { notify, contextHolder } = useNotification();
 
   const handleSubmit = async (values: any) => {
+    console.log('values', values);
     setLoader(true);
     try {
       const res: any = await login(values['email'], values['password']);
