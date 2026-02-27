@@ -1,7 +1,6 @@
 'use client';
 
-import { TextInput } from '@/components/shared';
-import { Button } from '@/components/ui/button';
+import { CustomButton, TextInput } from '@/components/shared';
 import {
   Table,
   TableBody,
@@ -10,8 +9,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { cn } from '@/utils/cn';
 import type { CustomTableColumn, CustomTableProps } from '@/types/components';
+import { cn } from '@/utils/cn';
 import {
   ArrowDown,
   ArrowUp,
@@ -238,7 +237,19 @@ function CustomTableInner<TRow>({
                     'border-b border-border/50 transition-colors hover:bg-muted/20',
                     onRowClick && 'cursor-pointer',
                   )}
-                  onClick={onRowClick ? () => onRowClick(row, index) : undefined}
+                  onClick={
+                    onRowClick
+                      ? (e) => {
+                          const target = e.target as HTMLElement;
+                          if (
+                            target.closest?.('[data-slot="dialog-portal"]') ||
+                            target.closest?.('[role="dialog"]')
+                          )
+                            return;
+                          onRowClick(row, index);
+                        }
+                      : undefined
+                  }
                 >
                   {visibleColumns.map((col) => (
                     <TableCell
@@ -287,45 +298,45 @@ function CustomTableInner<TRow>({
                 <span className="font-medium text-foreground">{totalItems}</span>
               </span>
               <div className="flex items-center gap-1.5">
-                <Button
-                  variant="ghost"
+                <CustomButton
+                  type="text"
                   size="icon-xs"
                   onClick={() => setPage(1)}
                   disabled={currentPage <= 1}
                   className="rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-30"
                 >
                   <ChevronsLeft className="size-4" />
-                </Button>
-                <Button
-                  variant="ghost"
+                </CustomButton>
+                <CustomButton
+                  type="text"
                   size="icon-xs"
                   onClick={() => setPage(currentPage - 1)}
                   disabled={currentPage <= 1}
                   className="rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-30"
                 >
                   <ChevronLeft className="size-4" />
-                </Button>
+                </CustomButton>
                 <span className="flex h-7 min-w-7 items-center justify-center rounded-lg bg-primary/10 px-2 text-xs font-medium text-primary">
                   {currentPage}
                 </span>
-                <Button
-                  variant="ghost"
+                <CustomButton
+                  type="text"
                   size="icon-xs"
                   onClick={() => setPage(currentPage + 1)}
                   disabled={currentPage >= totalPages}
                   className="rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-30"
                 >
                   <ChevronRight className="size-4" />
-                </Button>
-                <Button
-                  variant="ghost"
+                </CustomButton>
+                <CustomButton
+                  type="text"
                   size="icon-xs"
                   onClick={() => setPage(totalPages)}
                   disabled={currentPage >= totalPages}
                   className="rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-30"
                 >
                   <ChevronsRight className="size-4" />
-                </Button>
+                </CustomButton>
               </div>
             </div>
           </div>

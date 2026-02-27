@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Body, Query, Header
-from sqlalchemy.orm import Session
-from typing import Dict, Any
+from typing import Any, Dict
 from uuid import UUID
 
+from fastapi import (APIRouter, Body, Depends, Header, HTTPException, Query,
+                     status)
+from sqlalchemy.orm import Session
+
 from ee.database.session import get_ee_db
+from ee.middleware.auth import EEJWTClaims, get_ee_jwt_claims
 from ee.services.auth_service import EEAuthService
-from ee.middleware.auth import get_ee_jwt_claims, EEJWTClaims
 
 router = APIRouter()
 
@@ -24,11 +26,12 @@ def signup(user_data: Dict[str, Any] = Body(...), db: Session = Depends(get_ee_d
             detail="Email and password are required"
         )
 
-    return EEAuthService(db).signup(email, password, username, profile, org_name)
+    return EEAuthService(db).signup(email, password, username or None, profile, org_name)
 
 
 @router.get("/check_organization_exists")
 def check_organization_exists(name: str = Query(...), db: Session = Depends(get_ee_db)):
+    print(name)
     return EEAuthService(db).check_organization_exists(name)
 
 

@@ -48,6 +48,8 @@ const CustomModal: React.FC<CustomModalProps> = ({
       <DialogContent
         className={cn('gap-0 p-0', width ?? 'sm:max-w-lg', className)}
         showCloseButton={false}
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
       >
         {title && (
           <DialogHeader className="px-6 pt-4 pb-2">

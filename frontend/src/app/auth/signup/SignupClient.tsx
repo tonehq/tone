@@ -93,9 +93,8 @@ const SignupClient = () => {
     try {
       const res: any = await signup(
         value['email'],
-        value['username'],
         value['password'],
-        { name: value['username'] },
+        {},
         params.get('firebase_uid'),
         value['org_name'],
       );
@@ -108,7 +107,7 @@ const SignupClient = () => {
           localStorage.setItem('invite_redirect', redirect);
         }
         router.push(
-          `/auth/check-email?username=${encodeURIComponent(value['username'])}&email=${encodeURIComponent(value['email'])}`,
+          `/auth/check-email?email=${encodeURIComponent(value['email'])}`,
         );
       }
       if (res.status === 200) {
@@ -144,13 +143,6 @@ const SignupClient = () => {
         </Typography>
 
         <Form onFinish={handleSubmit} layout="vertical" autoComplete="off">
-          <TextInput
-            name="username"
-            type="text"
-            label="Username"
-            placeholder="Enter your username"
-            isRequired
-          />
           <TextInput
             name="email"
             type="email"

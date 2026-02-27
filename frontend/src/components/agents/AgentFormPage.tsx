@@ -41,6 +41,8 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
   const [saving, setSaving] = useState(false);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [_assigning, setAssigning] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingAgent, setDeletingAgent] = useState(false);
   const [unassignTarget, setUnassignTarget] = useState<{ no: string; type: string } | null>(null);
   const [unassigning, setUnassigning] = useState(false);
 
@@ -157,23 +159,22 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
     }
   };
 
-  const handleDeleteAgent = async () => {
-    if (
-      typeof window !== 'undefined' &&
-      window.confirm(
-        'Deleting an agent will erase personalized data, voice profiles, and integrations. Are you sure?',
-      )
-    ) {
+  const openDeleteConfirm = () => setDeleteConfirmOpen(true);
+
+  const handleConfirmDeleteAgent = async () => {
+    setDeletingAgent(true);
+    try {
       if (isEditMode) {
-        try {
-          await deleteAgent(Number(agentId));
-          router.push('/agents');
-        } catch {
-          notify.error('Error', 'Failed to delete agent');
-        }
+        await deleteAgent(Number(agentId));
+        router.push('/agents');
       } else {
         router.push('/agents');
       }
+    } catch {
+      notify.error('Error', 'Failed to delete agent');
+    } finally {
+      setDeletingAgent(false);
+      setDeleteConfirmOpen(false);
     }
   };
 
@@ -198,7 +199,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
             llmProviders={llmProviders}
             providersLoading={providersLoading}
             onFormChange={handleFormChange}
-            onDeleteAgent={handleDeleteAgent}
+            onDeleteAgent={openDeleteConfirm}
           />
         ),
       },
@@ -276,10 +277,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
                       <p className="text-sm font-medium text-foreground">{pn.no}</p>
                       <p className="text-xs capitalize text-muted-foreground">{pn.type}</p>
                     </div>
-                    <CustomButton
-                      type="default"
-                      onClick={() => setUnassignTarget(pn)}
-                    >
+                    <CustomButton type="default" onClick={() => setUnassignTarget(pn)}>
                       Unassign
                     </CustomButton>
                   </div>
@@ -290,7 +288,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         ),
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
     [formData, llmProviders, ttsProviders, sttProviders, providersLoading],
   );
 
@@ -305,27 +303,31 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
   return (
     <div className="flex h-screen">
       {/* Left Sidebar */}
-      <div className="flex w-[280px] flex-col border-r border-border bg-background">
-        <div className="px-3 py-2">
+      <aside className="flex w-64 flex-col border-r bg-sidebar">
+        {/* Header: back + agent info */}
+        <div className="flex h-16 items-center border-b px-4">
           <CustomButton
             type="text"
-            icon={<ArrowLeft size={16} />}
+            htmlType="button"
+            icon={<ArrowLeft className="h-4 w-4" />}
+            className="rounded-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"
             onClick={() => router.push('/agents')}
           >
             Back to Agents
           </CustomButton>
         </div>
 
-        <div className="border-b border-border px-4 py-4">
+        {/* Agent info */}
+        <div className="border-b px-4 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-primary text-sm font-bold text-primary-foreground">
               {formData.name?.charAt(0)?.toUpperCase() || 'A'}
             </div>
             <div className="min-w-0 space-y-1">
               <h3 className="truncate text-sm font-semibold text-foreground">{formData.name}</h3>
               <AgentTypeBadge agentType={agentType} />
               {formData.phoneNumbers?.length > 0 && (
-                <div className="mt-1 space-y-0.5">
+                <div className="mt-1.5 space-y-0.5">
                   {formData.phoneNumbers.map((pn) => (
                     <p
                       key={pn.no}
@@ -341,35 +343,42 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
           </div>
         </div>
 
+        {/* Test agent button */}
         <div className="px-3 py-3">
           <CustomButton type="primary" fullWidth icon={<Phone size={16} />}>
             Test Agent
           </CustomButton>
         </div>
 
-        <div className="flex-1 space-y-1 px-3 py-2">
-          {['configure', 'prompt'].map((item) => {
-            const isActive = item === currentMenu;
+        {/* Navigation */}
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+          {[
+            { key: 'configure', label: 'Configure', icon: Settings },
+            { key: 'prompt', label: 'Prompt', icon: Volume2 },
+          ].map((item) => {
+            const isActive = item.key === currentMenu;
+            const Icon = item.icon;
             return (
               <CustomButton
-                key={item}
+                key={item.key}
                 type="text"
                 htmlType="button"
                 fullWidth
+                icon={<Icon className="h-4 w-4" />}
                 className={cn(
-                  'justify-start rounded-md px-3 py-2.5 text-sm font-medium transition-colors',
+                  'justify-start gap-3 rounded-sm px-3 py-2 text-sm font-medium',
                   isActive
-                    ? 'bg-accent text-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                    ? 'bg-sidebar-accent text-foreground'
+                    : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground',
                 )}
-                onClick={() => setCurrentMenu(item)}
+                onClick={() => setCurrentMenu(item.key)}
               >
-                {startCase(item)}
+                {item.label}
               </CustomButton>
             );
           })}
-        </div>
-      </div>
+        </nav>
+      </aside>
 
       {/* Main Content */}
       <div className="flex flex-1 flex-col overflow-hidden">
@@ -434,6 +443,17 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       />
 
       <CustomModal
+        open={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        title="Delete Agent"
+        description="Deleting an agent will erase personalized data, voice profiles, and integrations. Are you sure?"
+        confirmText="Delete"
+        confirmType="danger"
+        confirmLoading={deletingAgent}
+        onConfirm={handleConfirmDeleteAgent}
+      />
+
+      <CustomModal
         open={!!unassignTarget}
         onClose={() => setUnassignTarget(null)}
         title="Unassign Phone Number"
@@ -443,8 +463,8 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         onConfirm={handleConfirmUnassign}
       >
         <p className="text-sm text-foreground">
-          Are you sure you want to unassign{' '}
-          <strong>{unassignTarget?.no}</strong>? This will remove it from the agent.
+          Are you sure you want to unassign <strong>{unassignTarget?.no}</strong>? This will remove
+          it from the agent.
         </p>
       </CustomModal>
 

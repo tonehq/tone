@@ -56,7 +56,6 @@ export const forgotPassword = async (email: string) => {
 
 export const signup = async (
   email: string,
-  username: string,
   password: string,
   profile: any = {},
   firebase_token: string | null = null,
@@ -86,7 +85,6 @@ export const signup = async (
     return await axios.post(SIGNUP, {
       email,
       password,
-      username,
       profile,
       org_name,
     });

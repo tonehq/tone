@@ -15,6 +15,7 @@ interface CustomButtonProps extends Omit<React.ComponentProps<'button'>, 'type'>
   htmlType?: 'button' | 'submit' | 'reset';
   icon?: React.ReactNode;
   fullWidth?: boolean;
+  size?: 'default' | 'xs' | 'sm' | 'lg' | 'icon' | 'icon-xs' | 'icon-sm' | 'icon-lg';
 }
 
 // ── Variant mapping ──────────────────────────────────────────────────────────
@@ -45,24 +46,31 @@ const CustomButton = React.forwardRef<HTMLButtonElement, CustomButtonProps>(
       ...props
     },
     ref,
-  ) => (
-    <Button
-      ref={ref}
-      type={htmlType}
-      variant={variantMap[type]}
-      onClick={onClick}
-      disabled={disabled || loading}
-      className={cn(fullWidth && 'w-full', className)}
-      {...props}
-    >
-      {loading ? (
-        <Loader2 className="h-4 w-4 animate-spin" />
-      ) : (
-        icon && <span className="inline-flex shrink-0">{icon}</span>
-      )}
-      {children}
-    </Button>
-  ),
+  ) => {
+    const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+      if (loading || disabled) return;
+      e?.stopPropagation();
+      onClick?.(e);
+    };
+    return (
+      <Button
+        ref={ref}
+        type={htmlType}
+        variant={variantMap[type]}
+        onClick={handleClick}
+        disabled={disabled || loading}
+        className={cn(fullWidth && 'w-full', className)}
+        {...props}
+      >
+        {loading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          icon && <span className="inline-flex shrink-0">{icon}</span>
+        )}
+        {children}
+      </Button>
+    );
+  },
 );
 
 CustomButton.displayName = 'CustomButton';

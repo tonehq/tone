@@ -70,13 +70,6 @@ const quickActions = [
     icon: Plus,
     color: 'bg-primary text-primary-foreground hover:bg-primary/90',
   },
-  {
-    label: 'Add Phone Number',
-    href: '/phone-numbers',
-    icon: Phone,
-    color:
-      'bg-transparent text-sidebar-foreground border border-border hover:bg-accent hover:text-accent-foreground',
-  },
 ];
 
 const quickLinks = [

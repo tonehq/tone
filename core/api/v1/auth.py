@@ -22,7 +22,7 @@ def signup(user_data: Dict[str, Any] = Body(...), db: Session = Depends(get_db))
             detail="Email and password are required"
         )
 
-    return AuthService(db).signup(email, password, username, profile)
+    return AuthService(db).signup(email, password, username or None, profile)
 
 
 @router.post("/signup_with_firebase", status_code=status.HTTP_201_CREATED)

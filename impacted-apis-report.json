@@ -1,0 +1,68 @@
+{
+  "metadata": {
+    "generated_at": "2026-02-26",
+    "commit1": "ea9b495",
+    "commit2": "5e49c7c",
+    "branch": "dev",
+    "project_path": "/Users/karthikeyans/Documents/Projects/tonehq/tone",
+    "commits_in_range": ["339568f", "8331bf5", "ec91933", "0f9bc43", "44ad9e5", "5e49c7c"]
+  },
+  "summary": {
+    "endpoints": { "added": 0, "modified": 0, "deleted": 0 },
+    "services": { "added": 0, "modified": 0, "deleted": 0 },
+    "models": { "added": 0, "modified": 0, "deleted": 0 },
+    "config": { "added": 0, "modified": 1, "deleted": 0 }
+  },
+  "impacted_endpoints": [],
+  "impacted_services": [],
+  "impacted_models": [],
+  "config_changes": [
+    {
+      "file": "core/config.py",
+      "change_type": "modified",
+      "description": "Removed USE_INFISICAL environment variable guard and debug print statements",
+      "breaking": false,
+      "risk": "Infisical is now always attempted at startup; startup may fail if Infisical SDK is misconfigured and the outer try/except does not catch all failure modes"
+    }
+  ],
+  "baseline_context": {
+    "note": "The baseline commit ea9b495 introduced the following changes that are now part of the 'before' state",
+    "changes": [
+      {
+        "file": "core/models/channel_phone_numbers.py",
+        "model": "ChannelPhoneNumbers",
+        "change_type": "modified",
+        "description": "Removed unique=True constraint on phone_number column",
+        "migration": "c7d8e9f0a1b2_allow_phone_number_in_multiple_channels.py"
+      },
+      {
+        "file": "core/services/agent_service.py",
+        "service": "AgentService",
+        "method": "_build_agent_response",
+        "change_type": "modified",
+        "breaking": true,
+        "description": "phone_number field changed from single string to array of {type, no} objects",
+        "affected_endpoint": "GET /api/v1/agent/get_all_agents",
+        "before": "\"phone_number\": phone_rows[0].phone_number if phone_rows else None",
+        "after": "\"phone_number\": [{\"type\": p.provider, \"no\": p.phone_number} for p in phone_rows]"
+      }
+    ]
+  },
+  "files_changed": [
+    {
+      "file": "core/config.py",
+      "status": "modified",
+      "lines_added": 0,
+      "lines_removed": 5
+    }
+  ],
+  "dependency_chains": [
+    {
+      "root": "core/config.py#get_infisical_secrets",
+      "root_type": "config_function",
+      "impacts": [
+        { "type": "startup", "name": "Settings.__init__()", "risk": "Infisical always attempted; may fail on misconfigured environments" }
+      ]
+    }
+  ]
+}
