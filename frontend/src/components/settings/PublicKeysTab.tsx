@@ -120,13 +120,14 @@ function AddPublicKeyModal({
               {domains.map((d) => (
                 <Badge key={d} variant="secondary" className="gap-1 pr-1">
                   {d}
-                  <button
-                    type="button"
+                  <CustomButton
+                    type="text"
+                    htmlType="button"
                     onClick={() => setDomains(domains.filter((x) => x !== d))}
-                    className="rounded-full p-0.5 transition-colors hover:bg-muted-foreground/20"
+                    className="size-5 rounded-full p-0 transition-colors hover:bg-muted-foreground/20"
                   >
                     <X className="size-3" />
-                  </button>
+                  </CustomButton>
                 </Badge>
               ))}
             </div>
@@ -208,12 +209,13 @@ export default function PublicKeysTab() {
       render: () => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button
-              type="button"
+            <CustomButton
+              type="text"
+              size="icon-xs"
               className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <MoreVertical className="size-4" />
-            </button>
+            </CustomButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem>

@@ -48,6 +48,21 @@ class ChannelService(BaseService):
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found")
             channel_uuid = existing.uuid
         else:
+            # For new channels, enforce one channel per type
+            from core.models.enums import ChannelType
+            type_str = data.get("type", "").strip().upper()
+            channel_enum = None
+            for ct in ChannelType:
+                if ct.name == type_str:
+                    channel_enum = ct
+                    break
+            if channel_enum is not None:
+                duplicate = self.db.query(Channel).filter(Channel.type == channel_enum).first()
+                if duplicate:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"A {channel_enum.value.capitalize()} channel already exists. Only one channel per type is allowed.",
+                    )
             channel_uuid = uuid_lib.uuid4()
 
         now = int(time.time())

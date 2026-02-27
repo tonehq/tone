@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from typing import Dict, Any
+from typing import Dict, Any, List, Optional
 import time
 import uuid as uuid_lib
 from uuid import UUID
@@ -92,31 +92,65 @@ class ChannelPhoneNumbersService(BaseService):
         self.db.commit()
         return {"message": "Phone number detached from channel successfully"}
 
-    def upsert_channel_phone_number(self, data: Dict[str, Any]):
-        if not data.get("phone_number"):
+    def upsert_channel_phone_numbers(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Accepts phone_number as either:
+          - a list of objects: [{"type": "twilio", "no": "+1..."}, ...]
+          - a plain string: "+1..." (legacy, single entry)
+
+        Shared fields (phone_number_sid, phone_number_auth_token, provider,
+        country_code, number_type, capabilities, status, channel_id) apply to
+        every entry in the list.
+        """
+        phone_number_raw = data.get("phone_number")
+
+        # Normalise to list of {"no": str, "type": str} entries
+        if isinstance(phone_number_raw, list):
+            entries = phone_number_raw
+        else:
+            # Legacy string path
+            provider_fallback = data.get("provider", "")
+            entries = [{"no": str(phone_number_raw), "type": provider_fallback}]
+
+        if not entries:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="phone_number is required",
             )
-        if not data.get("phone_number_sid"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="phone_number_sid is required",
-            )
-        if not data.get("phone_number_auth_token"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="phone_number_auth_token is required",
-            )
-        if not data.get("provider"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="provider is required",
-            )
-        row_id = data.get("id")
-        row_uuid_raw = data.get("uuid")
+
+        results = []
+        for entry in entries:
+            number_str = entry.get("no", "").strip()
+            if not number_str:
+                continue
+            # Per-entry provider falls back to the top-level provider field
+            provider = entry.get("type") or data.get("provider", "")
+            row_data = {
+                **data,
+                "phone_number": number_str,
+                "provider": provider,
+            }
+            row = self._upsert_single(row_data)
+            results.append({
+                "id": row.id,
+                "uuid": str(row.uuid),
+                "phone_number": row.phone_number,
+                "provider": row.provider,
+                "channel_id": row.channel_id,
+                "status": row.status,
+            })
+
+        return results
+
+    # Keep old name as alias so any other callers don't break
+    def upsert_channel_phone_number(self, data: Dict[str, Any]):
+        return self.upsert_channel_phone_numbers(data)
+
+    def _upsert_single(self, data: Dict[str, Any]) -> ChannelPhoneNumbers:
+        """Upsert a single phone number row. phone_number must be a plain string here."""
         phone_number = data["phone_number"].strip()
         channel_id = data.get("channel_id")
+
         if channel_id is not None:
             channel = self.db.query(Channel).filter(Channel.id == int(channel_id)).first()
             if not channel:
@@ -124,7 +158,11 @@ class ChannelPhoneNumbersService(BaseService):
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Channel not found",
                 )
-        # If both created_by and provider (type) are provided, find existing record to update
+
+        row_id = data.get("id")
+        row_uuid_raw = data.get("uuid")
+
+        # If created_by + provider given, try to find existing record
         created_by = data.get("created_by")
         provider = data.get("provider")
         if created_by is not None and provider and row_id is None and row_uuid_raw is None:
@@ -134,13 +172,17 @@ class ChannelPhoneNumbersService(BaseService):
                 .filter(
                     Channel.created_by == int(created_by),
                     ChannelPhoneNumbers.provider == provider,
+                    ChannelPhoneNumbers.phone_number == phone_number,
                 )
                 .first()
             )
             if existing_by_creator:
                 row_id = existing_by_creator.id
+
         if row_id is not None:
-            existing = self.db.query(ChannelPhoneNumbers).filter(ChannelPhoneNumbers.id == int(row_id)).first()
+            existing = self.db.query(ChannelPhoneNumbers).filter(
+                ChannelPhoneNumbers.id == int(row_id)
+            ).first()
             if not existing:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -154,19 +196,18 @@ class ChannelPhoneNumbersService(BaseService):
                 ChannelPhoneNumbers.phone_number == phone_number
             ).first()
             if existing:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Phone number already in use",
-                )
-            row_uuid = uuid_lib.uuid4()
+                row_uuid = existing.uuid
+            else:
+                row_uuid = uuid_lib.uuid4()
+
         now = int(time.time())
         values = {
             "uuid": row_uuid,
             "channel_id": int(channel_id) if channel_id is not None else None,
             "phone_number": phone_number,
-            "phone_number_sid": data["phone_number_sid"],
-            "phone_number_auth_token": data["phone_number_auth_token"],
-            "provider": data["provider"],
+            "phone_number_sid": data.get("phone_number_sid", ""),
+            "phone_number_auth_token": data.get("phone_number_auth_token", ""),
+            "provider": data.get("provider", ""),
             "created_at": now,
             "updated_at": now,
         }
@@ -190,35 +231,45 @@ class ChannelPhoneNumbersService(BaseService):
                 status_code=status.HTTP_409_CONFLICT,
                 detail=detail,
             ) from e
-        row = self.db.query(ChannelPhoneNumbers).filter(ChannelPhoneNumbers.uuid == row_uuid).first()
-        return row
 
-    def get_twilio_phone_numbers(self, channel_type: str):
+        return self.db.query(ChannelPhoneNumbers).filter(
+            ChannelPhoneNumbers.uuid == row_uuid
+        ).first()
+
+    def get_twilio_phone_numbers(self, channel_type: str, channel_id: Optional[int] = None):
         from twilio.rest import Client
         from core.models.enums import ChannelType
 
-        type_name = channel_type.strip().upper()
-        channel_enum = None
-        for ct in ChannelType:
-            if ct.name == type_name:
-                channel_enum = ct
-                break
-        if channel_enum is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid channel type: {channel_type}",
-            )
+        if channel_id is not None:
+            channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
+            if not channel:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"No channel found with id: {channel_id}",
+                )
+        else:
+            type_name = channel_type.strip().upper()
+            channel_enum = None
+            for ct in ChannelType:
+                if ct.name == type_name:
+                    channel_enum = ct
+                    break
+            if channel_enum is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid channel type: {channel_type}",
+                )
 
-        channel = (
-            self.db.query(Channel)
-            .filter(Channel.type == channel_enum)
-            .first()
-        )
-        if not channel:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No channel found with type: {channel_type}",
+            channel = (
+                self.db.query(Channel)
+                .filter(Channel.type == channel_enum)
+                .first()
             )
+            if not channel:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"No channel found with type: {channel_type}",
+                )
 
         meta_data = channel.meta_data if isinstance(channel.meta_data, dict) else {}
         account_sid = meta_data.get("account_sid")

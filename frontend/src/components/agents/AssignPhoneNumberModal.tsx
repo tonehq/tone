@@ -3,6 +3,7 @@
 import { CustomModal, SelectInput } from '@/components/shared';
 import { Checkbox } from '@/components/ui/checkbox';
 import { type TwilioPhoneNumber, getTwilioPhoneNumbers } from '@/services/phoneNumberService';
+import { cn } from '@/utils/cn';
 import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -29,6 +30,8 @@ export default function AssignPhoneNumberModal({
   const [selectedNos, setSelectedNos] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const assignedNos = currentPhoneNumbers.map((p) => p.no);
+
   const fetchNumbers = useCallback(async () => {
     setLoading(true);
     try {
@@ -49,16 +52,19 @@ export default function AssignPhoneNumberModal({
   }, [open, fetchNumbers, currentPhoneNumbers]);
 
   const toggleNumber = (no: string) => {
-    setSelectedNos((prev) =>
-      prev.includes(no) ? prev.filter((n) => n !== no) : [...prev, no],
-    );
+    if (assignedNos.includes(no)) return;
+    setSelectedNos((prev) => (prev.includes(no) ? prev.filter((n) => n !== no) : [...prev, no]));
   };
 
   const handleAssign = () => {
-    const entries: PhoneNumberEntry[] = selectedNos.map((no) => ({ type: provider, no }));
+    const entries: PhoneNumberEntry[] = selectedNos
+      .filter((no) => !assignedNos.includes(no))
+      .map((no) => ({ type: provider, no }));
     onAssign(entries);
     onClose();
   };
+
+  const newSelections = selectedNos.filter((no) => !assignedNos.includes(no));
 
   return (
     <CustomModal
@@ -66,7 +72,7 @@ export default function AssignPhoneNumberModal({
       onClose={onClose}
       title="Assign Phone Numbers"
       confirmText="Assign"
-      confirmDisabled={selectedNos.length === 0 || loading}
+      confirmDisabled={newSelections.length === 0 || loading}
       onConfirm={handleAssign}
     >
       <div className="space-y-4">
@@ -90,23 +96,37 @@ export default function AssignPhoneNumberModal({
             </p>
           ) : (
             <div className="max-h-48 space-y-2 overflow-y-auto rounded-md border border-border p-2">
-              {phoneNumbers.map((pn) => (
-                <label
-                  key={pn.phone_number}
-                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent"
-                >
-                  <Checkbox
-                    checked={selectedNos.includes(pn.phone_number)}
-                    onCheckedChange={() => toggleNumber(pn.phone_number)}
-                  />
-                  {pn.phone_number}
-                </label>
-              ))}
+              {phoneNumbers.map((pn) => {
+                const isAssigned = assignedNos.includes(pn.phone_number);
+                return (
+                  <label
+                    key={pn.phone_number}
+                    className={cn(
+                      'flex items-center gap-2 rounded px-2 py-1.5 text-sm',
+                      isAssigned
+                        ? 'cursor-not-allowed opacity-60'
+                        : 'cursor-pointer hover:bg-accent',
+                    )}
+                  >
+                    <Checkbox
+                      checked={selectedNos.includes(pn.phone_number)}
+                      onCheckedChange={() => toggleNumber(pn.phone_number)}
+                      disabled={isAssigned}
+                    />
+                    <span className="flex-1">{pn.phone_number}</span>
+                    {isAssigned && (
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                        Assigned
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
             </div>
           )}
-          {selectedNos.length > 0 && (
+          {newSelections.length > 0 && (
             <p className="mt-1 text-xs text-muted-foreground">
-              {selectedNos.length} number{selectedNos.length > 1 ? 's' : ''} selected
+              {newSelections.length} new number{newSelections.length > 1 ? 's' : ''} selected
             </p>
           )}
         </div>

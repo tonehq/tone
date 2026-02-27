@@ -1,7 +1,9 @@
 'use client';
 
+import { Divider } from '@/components/shared';
 import ProfileMenu from '@/components/shared/userMenu';
 import { SIDEBAR_WIDTH_COLLAPSED, SIDEBAR_WIDTH_EXPANDED } from '@/constants/sidebar';
+import { cn } from '@/utils/cn';
 import { SidebarHeader } from './SidebarHeader';
 import { SidebarNav } from './SidebarNav';
 import { SidebarOrganization } from './SidebarOrganization';
@@ -21,27 +23,24 @@ export function SidebarContent({
 }: SidebarContentProps) {
   return (
     <div
-      className="flex h-full flex-col overflow-hidden text-white transition-[width] duration-300"
+      className="flex h-full flex-col overflow-hidden bg-sidebar transition-[width] duration-300"
       style={{
         width: isExpanded ? SIDEBAR_WIDTH_EXPANDED : SIDEBAR_WIDTH_COLLAPSED,
-        background: 'linear-gradient(180deg, #1a1642 0%, #251f5e 40%, #2d1b69 100%)',
       }}
     >
       <SidebarHeader isExpanded={isExpanded} onToggle={onToggle} isMobile={isMobile} />
 
-      <div className="mx-3 border-t border-white/[0.08]" />
-
-      <div className="px-2.5 py-2.5">
+      <div className={cn('py-2', isExpanded ? 'px-2.5' : 'flex justify-center px-2')}>
         <SidebarOrganization isExpanded={isExpanded} />
       </div>
 
-      <div className="mx-3 border-t border-white/[0.08]" />
+      <Divider className="mx-3" />
 
       <SidebarNav isExpanded={isExpanded} onMenuClick={isMobile ? onMenuClick : undefined} />
 
-      <div className="mt-auto mx-3 border-t border-white/[0.08]" />
+      <Divider className="mx-3 mt-auto" />
 
-      <div className="px-2.5 py-3">
+      <div className={cn('py-3', isExpanded ? 'px-2.5' : 'flex justify-center px-2')}>
         <ProfileMenu isExpanded={isExpanded} />
       </div>
     </div>

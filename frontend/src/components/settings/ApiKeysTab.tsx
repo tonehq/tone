@@ -87,12 +87,13 @@ export default function ApiKeysTab() {
       render: (_value, _record) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button
-              type="button"
+            <CustomButton
+              type="text"
+              size="icon-xs"
               className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <MoreVertical className="size-4" />
-            </button>
+            </CustomButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem>
