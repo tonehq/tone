@@ -28,46 +28,77 @@ The user provides:
       - **Response structure** — infer from the service method return if readable
    c. Generate a Postman collection JSON (v2.1 schema) for that controller.
 3. Write each collection as `{controller_name}.postman_collection.json` in the output directory.
-4. Write a timestamp file at `postman/.last_run` containing the current ISO 8601 timestamp and the git commit SHA (`git rev-parse HEAD`).
 
 ## Subsequent Run Workflow (Incremental Update)
 
-On subsequent runs, detect changes from **two sources** and merge them into a single update, avoiding duplicates.
+On subsequent runs, use the **`find-impacted-apis` skill** (`.claude/skills/find-impacted-apis/`)
+to detect which endpoints have changed. Do NOT implement custom git diff logic — delegate
+change detection entirely to that skill.
 
-### Step 1: Detect changed router files
+### Step 1: Run find-impacted-apis to Detect Changes
 
-Collect changed files from both sources into a single deduplicated set:
+Use the `analyze_diff.py` script from `.claude/skills/find-impacted-apis/`:
 
-**a) Local (uncommitted) changes:**
-- Run `git diff --name-only -- {source_path}` (staged + unstaged working tree changes vs HEAD).
-- Run `git diff --name-only --cached -- {source_path}` (staged changes only).
-- Union the results — these are files with local modifications not yet committed.
+```bash
+python .claude/skills/find-impacted-apis/analyze_diff.py \
+  --project-path . \
+  --auto \
+  --output postman/
+```
 
-**b) Committed changes since last run:**
-- Read `postman/.last_run` to get the previous commit SHA.
-- Run `git diff --name-only {previous_sha} HEAD -- {source_path}` to find files changed in commits since the last run.
+This produces:
+- `postman/impacted-apis-report.json` — structured data with all changed endpoints, services, and models
+- `postman/impacted-apis-report.md` — human-readable summary
 
-**c) Merge both sets:**
-- Combine local and committed changed files into a single deduplicated set (union). A file appearing in both lists is processed only once.
-- If the combined set is empty, report "No API changes detected" and stop.
+If this is the first run of `find-impacted-apis` (no state file at
+`~/.claude-skills/find-impacted-apis/last_run.json`), you can either:
+- Ask the user for a commit range, OR
+- Fall back to a full run (regenerate all collections from scratch)
 
-### Step 2: Update collections
+**If the report shows zero impacted endpoints → report "No API changes detected" and stop.**
 
-For each changed router file in the deduplicated set:
-1. Read the **current file contents on disk** (this captures both committed and uncommitted state).
+### Step 2: Parse the Impact Report
+
+Read `postman/impacted-apis-report.json` and extract:
+
+```
+1. impacted_endpoints[] — list of {method, path, function, file, change_type}
+   - change_type is "added", "modified", or "deleted"
+
+2. files_changed[] — list of {file, status, lines_added, lines_removed}
+   - Use this to identify which controller files need collection updates
+
+3. Group the impacted endpoints by their controller file
+   - e.g., all endpoints from core/api/v1/agents.py → agents.postman_collection.json
+```
+
+### Step 3: Update collections
+
+For each controller file that has impacted endpoints:
+
+1. Read the **current file contents on disk** (captures both committed and uncommitted state).
 2. Re-parse the file using the same extraction logic from the First Run Workflow.
 3. Load the existing collection JSON for that controller.
 4. Compare endpoints in the parsed file against those in the existing collection:
-   - **New endpoints** (route path + method not in collection) → add them.
-   - **Modified endpoints** (same route path + method but different parameters, body, or description) → update them.
-   - **Removed endpoints** (in collection but no longer in the parsed file) → remove them.
+   - **New endpoints** (from impact report with `change_type: "added"`) → add them to the collection.
+   - **Modified endpoints** (`change_type: "modified"`) → update their parameters, body, and description.
+   - **Removed endpoints** (`change_type: "deleted"`) → remove them from the collection.
 5. Write the updated collection file.
 
-### Step 3: Update `.last_run`
+> **Note:** The `find-impacted-apis` skill handles both committed AND uncommitted changes,
+> state tracking, and dependency chain analysis. Its state is stored at
+> `~/.claude-skills/find-impacted-apis/last_run.json`. There is no need for a separate
+> `postman/.last_run` file.
 
-Update `postman/.last_run` with the current ISO 8601 timestamp and commit SHA (`git rev-parse HEAD`).
+---
 
-> **Note:** The `.last_run` SHA tracks committed state. Local uncommitted changes are always re-detected on each run via `git diff` against HEAD, so they are never missed even if the SHA hasn't changed.
+## Cross-Referencing Other Skills
+
+### find-impacted-apis (`.claude/skills/find-impacted-apis/`)
+- **Change detection engine.** On subsequent runs, identifies exactly which endpoints changed.
+- Uses `analyze_diff.py` and maintains its own state at `~/.claude-skills/find-impacted-apis/last_run.json`.
+- Produces `impacted-apis-report.json` which this skill consumes to know which collections to update.
+- **Do NOT reimplement change detection.** Always delegate to this skill.
 
 ## Collection Structure (Postman v2.1 Format)
 

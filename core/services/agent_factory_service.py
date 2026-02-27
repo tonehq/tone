@@ -114,9 +114,6 @@ class AgentFactoryService(BaseService):
             if provider_name == "aws_bedrock": #done
                 from pipecat.services.aws.llm import AWSBedrockLLMService
                 return AWSBedrockLLMService(api_key=api_key, model=model)
-            if provider_name == "aws_nova_sonic": #done
-                from pipecat.services.aws.nova_sonic.llm import AWSNovaSonicLLMService
-                return AWSNovaSonicLLMService(api_key=api_key, model=model)
             if provider_name == "google": #Done
                 from pipecat.services.google.llm import GoogleLLMService
                 return GoogleLLMService(api_key=api_key, model=model)
@@ -157,15 +154,9 @@ class AgentFactoryService(BaseService):
             if provider_name == "groq": # Done
                 from pipecat.services.groq.stt import GroqSTTService
                 return GroqSTTService(api_key=api_key)
-            if provider_name == "segmented": #done
-                from pipecat.services.stt_service import SegmentedSTTService
-                return SegmentedSTTService(api_key=api_key)
             if provider_name == "azure": #done
                 from pipecat.services.azure.stt import AzureSTTService
                 return AzureSTTService(api_key=api_key)
-            if provider_name == "deepgram_sagemaker": #done
-                from pipecat.services.deepgram.stt import DeepgramSageMakerSTTService
-                return DeepgramSageMakerSTTService(api_key=api_key)
             if provider_name == "google": # done
                 from pipecat.services.google.stt import GoogleSTTService
                 return GoogleSTTService(api_key=api_key)
@@ -193,6 +184,12 @@ class AgentFactoryService(BaseService):
             if provider_name == "soniox": #done
                 from pipecat.services.soniox.stt import SonioxSTTService
                 return SonioxSTTService(api_key=api_key)
+            if provider_name == "hathora": #done
+                from pipecat.services.hathora.stt import HathoraSTTService
+                return HathoraSTTService(api_key=api_key)
+            if provider_name == "sambanova":
+                from pipecat.services.sambanova.stt import SambaNovaSTTService
+                return SambaNovaSTTService(api_key=api_key)
             logger.warning("Unsupported STT provider: %s", provider.name)
             return None
         except ImportError as e:
@@ -241,15 +238,9 @@ class AgentFactoryService(BaseService):
             if provider_name == "camb": #done
                 from pipecat.services.camb.tts import CambTTSService
                 return CambTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "cartesia_http": #not done
-                from pipecat.services.cartesia.tts import CartesiaHttpTTSService
-                return CartesiaHttpTTSService(api_key=api_key, voice_id=voice_id)
             if provider_name == "deepgram": #done
                 from pipecat.services.deepgram.tts import DeepgramHttpTTSService
                 return DeepgramHttpTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "google_http": #not done #Original service of google
-                from pipecat.services.google.tts import GoogleHttpTTSService
-                return GoogleHttpTTSService(api_key=api_key, voice_id=voice_id)
             if provider_name == "google_base": #not done
                 from pipecat.services.google.tts import GoogleBaseTTSService
                 return GoogleBaseTTSService(api_key=api_key, voice_id=voice_id)
@@ -268,9 +259,6 @@ class AgentFactoryService(BaseService):
             if provider_name == "nvidia": #not done
                 from pipecat.services.nvidia.tts import NvidiaTTSService
                 return NvidiaTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "piper": #not done
-                from pipecat.services.piper.tts import PiperTTSService
-                return PiperTTSService(api_key=api_key, voice_id=voice_id)
             if provider_name == "rime": #done
                 from pipecat.services.rime.tts import RimeHttpTTSService
                 return RimeHttpTTSService(api_key=api_key, voice_id=voice_id)
@@ -280,15 +268,12 @@ class AgentFactoryService(BaseService):
             if provider_name == "speechmatics": #done
                 from pipecat.services.speechmatics.tts import SpeechmaticsTTSService
                 return SpeechmaticsTTSService(api_key=api_key, voice_id=voice_id)
-            if provider_name == "xtts": #not done
-                from pipecat.services.xtts.tts import XTTSService
-                return XTTSService(api_key=api_key, voice_id=voice_id)
             if provider_name == "azure": #done
                 from pipecat.services.azure.tts import AzureTTSService
                 return AzureTTSService(api_key=api_key, voice_id=voice_id)
             if provider_name == "fish": #done
-                from pipecat.services.fish.tts import FishTTSService
-                return FishTTSService(api_key=api_key, voice_id=voice_id)
+                from pipecat.services.fish.tts import FishAudioTTSService
+                return FishAudioTTSService(api_key=api_key, voice_id=voice_id)
             if provider_name == "hume": #done
                 from pipecat.services.hume.tts import HumeTTSService
                 return HumeTTSService(api_key=api_key, voice_id=voice_id)
@@ -296,11 +281,11 @@ class AgentFactoryService(BaseService):
                 from pipecat.services.inworld.tts import InworldTTSService
                 return InworldTTSService(api_key=api_key, voice_id=voice_id)
             if provider_name == "lmnt": #done
-                from pipecat.services.lmnt.tts import LMNTTTSService
-                return LMNTTTSService(api_key=api_key, voice_id=voice_id)
+                from pipecat.services.lmnt.tts import LmntTTSService
+                return LmntTTSService(api_key=api_key, voice_id=voice_id)
             if provider_name == "resemble":
-                from pipecat.services.resembleai.tts import ResembleTTSService
-                return ResembleTTSService(api_key=api_key, voice_id=voice_id)
+                from pipecat.services.resembleai.tts import ResembleAITTSService
+                return ResembleAITTSService(api_key=api_key, voice_id=voice_id)
 
             logger.warning("Unsupported TTS provider: %s", provider.name)
             return None

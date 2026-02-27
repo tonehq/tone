@@ -1,7 +1,6 @@
 from sqlalchemy import Column, BigInteger, String, Boolean, Text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
-from sqlalchemy.orm import relationship
 
 from core.models.base import TimestampModel
 
@@ -25,5 +24,4 @@ class ServiceProvider(TimestampModel):
     is_system = Column(Boolean, default=False)
     meta_data_schema = Column(JSONB, nullable=True)
 
-    voices = relationship("Voice", back_populates="service_provider")
 
