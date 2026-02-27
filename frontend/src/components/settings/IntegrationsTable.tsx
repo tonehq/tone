@@ -1,16 +1,62 @@
 'use client';
 
-import { ActionMenu } from '@/components/shared';
+import { ActionMenu, CustomButton } from '@/components/shared';
 import CustomTable from '@/components/shared/CustomTable';
 import type { CustomTableColumn } from '@/types/components';
 import type { IntegrationRow } from '@/types/integration';
-import { Loader2 } from 'lucide-react';
+import { Check, Copy, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { useState } from 'react';
 
 interface IntegrationsTableProps {
   rows: IntegrationRow[];
   loading?: boolean;
   onEdit: (row: IntegrationRow) => void;
   onDelete: (id: number) => Promise<void>;
+}
+
+function AuthTokenCell({ token }: { token: string }) {
+  const [visible, setVisible] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(token);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="font-mono text-sm">{visible ? token : '••••••••••••'}</span>
+      <CustomButton
+        type="text"
+        size="icon-xs"
+        htmlType="button"
+        onClick={() => setVisible((v) => !v)}
+        aria-label={visible ? 'hide token' : 'show token'}
+        className="p-0"
+      >
+        {visible ? (
+          <EyeOff className="size-3.5 text-muted-foreground" />
+        ) : (
+          <Eye className="size-3.5 text-muted-foreground" />
+        )}
+      </CustomButton>
+      <CustomButton
+        type="text"
+        size="icon-xs"
+        htmlType="button"
+        onClick={handleCopy}
+        aria-label="copy token"
+        className="p-0"
+      >
+        {copied ? (
+          <Check className="size-3.5 text-emerald-500" />
+        ) : (
+          <Copy className="size-3.5 text-muted-foreground" />
+        )}
+      </CustomButton>
+    </div>
+  );
 }
 
 export default function IntegrationsTable({
@@ -22,7 +68,11 @@ export default function IntegrationsTable({
   const columns: CustomTableColumn<IntegrationRow>[] = [
     { key: 'name', title: 'Name', dataIndex: 'name' },
     { key: 'account_sid', title: 'Account SID', dataIndex: 'account_sid' },
-    { key: 'auth_token', title: 'Auth Token', dataIndex: 'auth_token' },
+    {
+      key: 'auth_token',
+      title: 'Auth Token',
+      render: (_value, record) => <AuthTokenCell token={record.auth_token} />,
+    },
     { key: 'createdAt', title: 'Created at', dataIndex: 'createdAt' },
     {
       key: 'actions',
