@@ -1,0 +1,488 @@
+[
+  {
+    "voice_id": "af_heart",
+    "name": "Heart",
+    "language": "en-US",
+    "description": "American English Female - Grade A",
+    "accent": "American",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "af_bella",
+    "name": "Bella",
+    "language": "en-US",
+    "description": "American English Female - Grade A-, High quality training data",
+    "accent": "American",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "af_nicole",
+    "name": "Nicole",
+    "language": "en-US",
+    "description": "American English Female - Grade B-",
+    "accent": "American",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "af_aoede",
+    "name": "Aoede",
+    "language": "en-US",
+    "description": "American English Female - Grade C+",
+    "accent": "American",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "af_kore",
+    "name": "Kore",
+    "language": "en-US",
+    "description": "American English Female - Grade C+",
+    "accent": "American",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "af_sarah",
+    "name": "Sarah",
+    "language": "en-US",
+    "description": "American English Female - Grade C+",
+    "accent": "American",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "af_alloy",
+    "name": "Alloy",
+    "language": "en-US",
+    "description": "American English Female - Grade C",
+    "accent": "American",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "af_nova",
+    "name": "Nova",
+    "language": "en-US",
+    "description": "American English Female - Grade C",
+    "accent": "American",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "af_sky",
+    "name": "Sky",
+    "language": "en-US",
+    "description": "American English Female - Grade C-",
+    "accent": "American",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "af_jessica",
+    "name": "Jessica",
+    "language": "en-US",
+    "description": "American English Female - Grade D",
+    "accent": "American",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "af_river",
+    "name": "River",
+    "language": "en-US",
+    "description": "American English Female - Grade D",
+    "accent": "American",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "am_fenrir",
+    "name": "Fenrir",
+    "language": "en-US",
+    "description": "American English Male - Grade C+",
+    "accent": "American",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "am_michael",
+    "name": "Michael",
+    "language": "en-US",
+    "description": "American English Male - Grade C+",
+    "accent": "American",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "am_puck",
+    "name": "Puck",
+    "language": "en-US",
+    "description": "American English Male - Grade C+",
+    "accent": "American",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "am_echo",
+    "name": "Echo",
+    "language": "en-US",
+    "description": "American English Male - Grade D",
+    "accent": "American",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "am_eric",
+    "name": "Eric",
+    "language": "en-US",
+    "description": "American English Male - Grade D",
+    "accent": "American",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "am_liam",
+    "name": "Liam",
+    "language": "en-US",
+    "description": "American English Male - Grade D",
+    "accent": "American",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "am_onyx",
+    "name": "Onyx",
+    "language": "en-US",
+    "description": "American English Male - Grade D",
+    "accent": "American",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "am_santa",
+    "name": "Santa",
+    "language": "en-US",
+    "description": "American English Male - Grade D-",
+    "accent": "American",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "am_adam",
+    "name": "Adam",
+    "language": "en-US",
+    "description": "American English Male - Grade F+",
+    "accent": "American",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "bf_emma",
+    "name": "Emma",
+    "language": "en-GB",
+    "description": "British English Female - Grade B-, High quality training data",
+    "accent": "British",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "bf_isabella",
+    "name": "Isabella",
+    "language": "en-GB",
+    "description": "British English Female - Grade C",
+    "accent": "British",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "bf_alice",
+    "name": "Alice",
+    "language": "en-GB",
+    "description": "British English Female - Grade D",
+    "accent": "British",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "bf_lily",
+    "name": "Lily",
+    "language": "en-GB",
+    "description": "British English Female - Grade D",
+    "accent": "British",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "bm_fable",
+    "name": "Fable",
+    "language": "en-GB",
+    "description": "British English Male - Grade C",
+    "accent": "British",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "bm_george",
+    "name": "George",
+    "language": "en-GB",
+    "description": "British English Male - Grade C",
+    "accent": "British",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "bm_lewis",
+    "name": "Lewis",
+    "language": "en-GB",
+    "description": "British English Male - Grade D+",
+    "accent": "British",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "bm_daniel",
+    "name": "Daniel",
+    "language": "en-GB",
+    "description": "British English Male - Grade D",
+    "accent": "British",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "jf_alpha",
+    "name": "Alpha",
+    "language": "ja-JP",
+    "description": "Japanese Female - Grade C+",
+    "accent": "Japan",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "jf_gongitsune",
+    "name": "Gongitsune",
+    "language": "ja-JP",
+    "description": "Japanese Female - Grade C",
+    "accent": "Japan",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "jf_tebukuro",
+    "name": "Tebukuro",
+    "language": "ja-JP",
+    "description": "Japanese Female - Grade C",
+    "accent": "Japan",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "jf_nezumi",
+    "name": "Nezumi",
+    "language": "ja-JP",
+    "description": "Japanese Female - Grade C-",
+    "accent": "Japan",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "jm_kumo",
+    "name": "Kumo",
+    "language": "ja-JP",
+    "description": "Japanese Male - Grade C-",
+    "accent": "Japan",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "zf_xiaobei",
+    "name": "Xiaobei",
+    "language": "zh-CN",
+    "description": "Mandarin Chinese Female - Grade D",
+    "accent": "China",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "zf_xiaoni",
+    "name": "Xiaoni",
+    "language": "zh-CN",
+    "description": "Mandarin Chinese Female - Grade D",
+    "accent": "China",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "zf_xiaoxiao",
+    "name": "Xiaoxiao",
+    "language": "zh-CN",
+    "description": "Mandarin Chinese Female - Grade D",
+    "accent": "China",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "zf_xiaoyi",
+    "name": "Xiaoyi",
+    "language": "zh-CN",
+    "description": "Mandarin Chinese Female - Grade D",
+    "accent": "China",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "zm_yunjian",
+    "name": "Yunjian",
+    "language": "zh-CN",
+    "description": "Mandarin Chinese Male - Grade D",
+    "accent": "China",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "zm_yunxi",
+    "name": "Yunxi",
+    "language": "zh-CN",
+    "description": "Mandarin Chinese Male - Grade D",
+    "accent": "China",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "zm_yunxia",
+    "name": "Yunxia",
+    "language": "zh-CN",
+    "description": "Mandarin Chinese Male - Grade D",
+    "accent": "China",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "zm_yunyang",
+    "name": "Yunyang",
+    "language": "zh-CN",
+    "description": "Mandarin Chinese Male - Grade D",
+    "accent": "China",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "ef_dora",
+    "name": "Dora",
+    "language": "es",
+    "description": "Spanish Female",
+    "accent": "Spain",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "em_alex",
+    "name": "Alex",
+    "language": "es",
+    "description": "Spanish Male",
+    "accent": "Spain",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "em_santa",
+    "name": "Santa",
+    "language": "es",
+    "description": "Spanish Male",
+    "accent": "Spain",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "ff_siwis",
+    "name": "Siwis",
+    "language": "fr-FR",
+    "description": "French Female - Grade B-",
+    "accent": "France",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "hf_alpha",
+    "name": "Alpha",
+    "language": "hi-IN",
+    "description": "Hindi Female - Grade C",
+    "accent": "India",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "hf_beta",
+    "name": "Beta",
+    "language": "hi-IN",
+    "description": "Hindi Female - Grade C",
+    "accent": "India",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "hm_omega",
+    "name": "Omega",
+    "language": "hi-IN",
+    "description": "Hindi Male - Grade C",
+    "accent": "India",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "hm_psi",
+    "name": "Psi",
+    "language": "hi-IN",
+    "description": "Hindi Male - Grade C",
+    "accent": "India",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "if_sara",
+    "name": "Sara",
+    "language": "it-IT",
+    "description": "Italian Female - Grade C",
+    "accent": "Italy",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "im_nicola",
+    "name": "Nicola",
+    "language": "it-IT",
+    "description": "Italian Male - Grade C",
+    "accent": "Italy",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "pf_dora",
+    "name": "Dora",
+    "language": "pt-BR",
+    "description": "Brazilian Portuguese Female",
+    "accent": "Brazil",
+    "gender": "Female",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "pm_alex",
+    "name": "Alex",
+    "language": "pt-BR",
+    "description": "Brazilian Portuguese Male",
+    "accent": "Brazil",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  },
+  {
+    "voice_id": "pm_santa",
+    "name": "Santa",
+    "language": "pt-BR",
+    "description": "Brazilian Portuguese Male",
+    "accent": "Brazil",
+    "gender": "Male",
+    "preview_url": "https://huggingface.co/spaces/hexgrad/Kokoro-TTS"
+  }
+]

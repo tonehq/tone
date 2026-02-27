@@ -1,0 +1,1073 @@
+[
+  {
+    "voice_id": "en_US-amy-low",
+    "name": "Amy",
+    "language": "en-US",
+    "description": "English (United States) - Low Quality",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-amy-medium",
+    "name": "Amy",
+    "language": "en-US",
+    "description": "English (United States) - Medium Quality",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-arctic-medium",
+    "name": "Arctic",
+    "language": "en-US",
+    "description": "English (United States) - Medium Quality",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-bryce-medium",
+    "name": "Bryce",
+    "language": "en-US",
+    "description": "English (United States) - Medium Quality",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-danny-low",
+    "name": "Danny",
+    "language": "en-US",
+    "description": "English (United States) - Low Quality",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-hfc_female-medium",
+    "name": "HFC Female",
+    "language": "en-US",
+    "description": "English (United States) - Medium Quality",
+    "accent": "United States",
+    "gender": "Female",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-hfc_male-medium",
+    "name": "HFC Male",
+    "language": "en-US",
+    "description": "English (United States) - Medium Quality",
+    "accent": "United States",
+    "gender": "Male",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-joe-medium",
+    "name": "Joe",
+    "language": "en-US",
+    "description": "English (United States) - Medium Quality",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-john-medium",
+    "name": "John",
+    "language": "en-US",
+    "description": "English (United States) - Medium Quality",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-kathleen-low",
+    "name": "Kathleen",
+    "language": "en-US",
+    "description": "English (United States) - Low Quality",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-kristin-medium",
+    "name": "Kristin",
+    "language": "en-US",
+    "description": "English (United States) - Medium Quality",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-kusal-medium",
+    "name": "Kusal",
+    "language": "en-US",
+    "description": "English (United States) - Medium Quality",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-l2arctic-medium",
+    "name": "L2arctic",
+    "language": "en-US",
+    "description": "English (United States) - Medium Quality, Multi-speaker",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-lessac-low",
+    "name": "Lessac",
+    "language": "en-US",
+    "description": "English (United States) - Low Quality",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-lessac-medium",
+    "name": "Lessac",
+    "language": "en-US",
+    "description": "English (United States) - Medium Quality",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-lessac-high",
+    "name": "Lessac",
+    "language": "en-US",
+    "description": "English (United States) - High Quality",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-libritts-high",
+    "name": "Libritts",
+    "language": "en-US",
+    "description": "English (United States) - High Quality, Multi-speaker",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-libritts_r-medium",
+    "name": "Libritts R",
+    "language": "en-US",
+    "description": "English (United States) - Medium Quality, Multi-speaker",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-ljspeech-medium",
+    "name": "LJSpeech",
+    "language": "en-US",
+    "description": "English (United States) - Medium Quality",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-ljspeech-high",
+    "name": "LJSpeech",
+    "language": "en-US",
+    "description": "English (United States) - High Quality",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-norman-medium",
+    "name": "Norman",
+    "language": "en-US",
+    "description": "English (United States) - Medium Quality",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-ryan-low",
+    "name": "Ryan",
+    "language": "en-US",
+    "description": "English (United States) - Low Quality",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-ryan-medium",
+    "name": "Ryan",
+    "language": "en-US",
+    "description": "English (United States) - Medium Quality",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_US-ryan-high",
+    "name": "Ryan",
+    "language": "en-US",
+    "description": "English (United States) - High Quality",
+    "accent": "United States",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_GB-alan-low",
+    "name": "Alan",
+    "language": "en-GB",
+    "description": "English (British) - Low Quality",
+    "accent": "British",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_GB-alan-medium",
+    "name": "Alan",
+    "language": "en-GB",
+    "description": "English (British) - Medium Quality",
+    "accent": "British",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_GB-alba-medium",
+    "name": "Alba",
+    "language": "en-GB",
+    "description": "English (British) - Medium Quality",
+    "accent": "British",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_GB-aru-medium",
+    "name": "Aru",
+    "language": "en-GB",
+    "description": "English (British) - Medium Quality",
+    "accent": "British",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_GB-cori-medium",
+    "name": "Cori",
+    "language": "en-GB",
+    "description": "English (British) - Medium Quality",
+    "accent": "British",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_GB-cori-high",
+    "name": "Cori",
+    "language": "en-GB",
+    "description": "English (British) - High Quality",
+    "accent": "British",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_GB-jenny_dioco-medium",
+    "name": "Jenny Dioco",
+    "language": "en-GB",
+    "description": "English (British) - Medium Quality",
+    "accent": "British",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_GB-northern_english_male-medium",
+    "name": "Northern English Male",
+    "language": "en-GB",
+    "description": "English (British) - Medium Quality, Northern accent",
+    "accent": "Northern England",
+    "gender": "Male",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_GB-semaine-medium",
+    "name": "Semaine",
+    "language": "en-GB",
+    "description": "English (British) - Medium Quality, Multi-speaker",
+    "accent": "British",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_GB-southern_english_female-low",
+    "name": "Southern English Female",
+    "language": "en-GB",
+    "description": "English (British) - Low Quality, Southern accent",
+    "accent": "Southern England",
+    "gender": "Female",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "en_GB-vctk-medium",
+    "name": "VCTK",
+    "language": "en-GB",
+    "description": "English (British) - Medium Quality, Multi-speaker",
+    "accent": "British",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "es_MX-ald-medium",
+    "name": "Ald",
+    "language": "es-MX",
+    "description": "Spanish (Mexico) - Medium Quality",
+    "accent": "Mexico",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "es_MX-claude-high",
+    "name": "Claude",
+    "language": "es-MX",
+    "description": "Spanish (Mexico) - High Quality",
+    "accent": "Mexico",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "es_ES-carlfm-x_low",
+    "name": "Carlfm",
+    "language": "es-ES",
+    "description": "Spanish (Spain) - Extra Low Quality",
+    "accent": "Spain",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "es_ES-davefx-medium",
+    "name": "Davefx",
+    "language": "es-ES",
+    "description": "Spanish (Spain) - Medium Quality",
+    "accent": "Spain",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "es_ES-mls_10246-low",
+    "name": "MLS 10246",
+    "language": "es-ES",
+    "description": "Spanish (Spain) - Low Quality",
+    "accent": "Spain",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "es_ES-mls_9972-low",
+    "name": "MLS 9972",
+    "language": "es-ES",
+    "description": "Spanish (Spain) - Low Quality",
+    "accent": "Spain",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "es_ES-sharvard-medium",
+    "name": "Sharvard",
+    "language": "es-ES",
+    "description": "Spanish (Spain) - Medium Quality",
+    "accent": "Spain",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "ru_RU-denis-medium",
+    "name": "Denis",
+    "language": "ru-RU",
+    "description": "Russian (Russia) - Medium Quality",
+    "accent": "Russia",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "ru_RU-dmitri-medium",
+    "name": "Dmitri",
+    "language": "ru-RU",
+    "description": "Russian (Russia) - Medium Quality",
+    "accent": "Russia",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "ru_RU-irina-medium",
+    "name": "Irina",
+    "language": "ru-RU",
+    "description": "Russian (Russia) - Medium Quality",
+    "accent": "Russia",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "ru_RU-ruslan-medium",
+    "name": "Ruslan",
+    "language": "ru-RU",
+    "description": "Russian (Russia) - Medium Quality",
+    "accent": "Russia",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "pt_BR-edresson-low",
+    "name": "Edresson",
+    "language": "pt-BR",
+    "description": "Portuguese (Brazil) - Low Quality",
+    "accent": "Brazil",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "pt_BR-faber-medium",
+    "name": "Faber",
+    "language": "pt-BR",
+    "description": "Portuguese (Brazil) - Medium Quality",
+    "accent": "Brazil",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "pt_PT-tugao-medium",
+    "name": "Tugao",
+    "language": "pt-PT",
+    "description": "Portuguese (Portugal) - Medium Quality",
+    "accent": "Portugal",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "de_DE-eva_k-x_low",
+    "name": "Eva K",
+    "language": "de-DE",
+    "description": "German (Germany) - Extra Low Quality",
+    "accent": "Germany",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "de_DE-karlsson-low",
+    "name": "Karlsson",
+    "language": "de-DE",
+    "description": "German (Germany) - Low Quality",
+    "accent": "Germany",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "de_DE-kerstin-low",
+    "name": "Kerstin",
+    "language": "de-DE",
+    "description": "German (Germany) - Low Quality",
+    "accent": "Germany",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "de_DE-mls-medium",
+    "name": "MLS",
+    "language": "de-DE",
+    "description": "German (Germany) - Medium Quality, Multi-speaker",
+    "accent": "Germany",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "de_DE-pavoque-low",
+    "name": "Pavoque",
+    "language": "de-DE",
+    "description": "German (Germany) - Low Quality",
+    "accent": "Germany",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "de_DE-ramona-low",
+    "name": "Ramona",
+    "language": "de-DE",
+    "description": "German (Germany) - Low Quality",
+    "accent": "Germany",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "de_DE-thorsten-low",
+    "name": "Thorsten",
+    "language": "de-DE",
+    "description": "German (Germany) - Low Quality",
+    "accent": "Germany",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "de_DE-thorsten-medium",
+    "name": "Thorsten",
+    "language": "de-DE",
+    "description": "German (Germany) - Medium Quality",
+    "accent": "Germany",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "de_DE-thorsten-high",
+    "name": "Thorsten",
+    "language": "de-DE",
+    "description": "German (Germany) - High Quality",
+    "accent": "Germany",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "de_DE-thorsten_emotional-medium",
+    "name": "Thorsten Emotional",
+    "language": "de-DE",
+    "description": "German (Germany) - Medium Quality, Emotional",
+    "accent": "Germany",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "fr_FR-gilles-low",
+    "name": "Gilles",
+    "language": "fr-FR",
+    "description": "French (France) - Low Quality",
+    "accent": "France",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "fr_FR-mls-medium",
+    "name": "MLS",
+    "language": "fr-FR",
+    "description": "French (France) - Medium Quality, Multi-speaker",
+    "accent": "France",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "fr_FR-mls_1840-low",
+    "name": "MLS 1840",
+    "language": "fr-FR",
+    "description": "French (France) - Low Quality",
+    "accent": "France",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "fr_FR-siwis-low",
+    "name": "Siwis",
+    "language": "fr-FR",
+    "description": "French (France) - Low Quality",
+    "accent": "France",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "fr_FR-siwis-medium",
+    "name": "Siwis",
+    "language": "fr-FR",
+    "description": "French (France) - Medium Quality",
+    "accent": "France",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "fr_FR-tom-medium",
+    "name": "Tom",
+    "language": "fr-FR",
+    "description": "French (France) - Medium Quality",
+    "accent": "France",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "fr_FR-upmc-medium",
+    "name": "UPMC",
+    "language": "fr-FR",
+    "description": "French (France) - Medium Quality, Multi-speaker",
+    "accent": "France",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "tr_TR-dfki-medium",
+    "name": "DFKI",
+    "language": "tr-TR",
+    "description": "Turkish (Turkey) - Medium Quality",
+    "accent": "Turkey",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "tr_TR-fahrettin-medium",
+    "name": "Fahrettin",
+    "language": "tr-TR",
+    "description": "Turkish (Turkey) - Medium Quality",
+    "accent": "Turkey",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "tr_TR-fettah-medium",
+    "name": "Fettah",
+    "language": "tr-TR",
+    "description": "Turkish (Turkey) - Medium Quality",
+    "accent": "Turkey",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "pl_PL-darkman-medium",
+    "name": "Darkman",
+    "language": "pl-PL",
+    "description": "Polish (Poland) - Medium Quality",
+    "accent": "Poland",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "pl_PL-gosia-medium",
+    "name": "Gosia",
+    "language": "pl-PL",
+    "description": "Polish (Poland) - Medium Quality",
+    "accent": "Poland",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "pl_PL-mc_speech-medium",
+    "name": "McSpeech",
+    "language": "pl-PL",
+    "description": "Polish (Poland) - Medium Quality",
+    "accent": "Poland",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "pl_PL-mls_6892-low",
+    "name": "MLS 6892",
+    "language": "pl-PL",
+    "description": "Polish (Poland) - Low Quality",
+    "accent": "Poland",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "it_IT-paola-medium",
+    "name": "Paola",
+    "language": "it-IT",
+    "description": "Italian (Italy) - Medium Quality",
+    "accent": "Italy",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "it_IT-riccardo-x_low",
+    "name": "Riccardo",
+    "language": "it-IT",
+    "description": "Italian (Italy) - Extra Low Quality",
+    "accent": "Italy",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "uk_UA-lada-x_low",
+    "name": "Lada",
+    "language": "uk-UA",
+    "description": "Ukrainian (Ukraine) - Extra Low Quality",
+    "accent": "Ukraine",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "uk_UA-ukrainian_tts-medium",
+    "name": "Ukrainian TTS",
+    "language": "uk-UA",
+    "description": "Ukrainian (Ukraine) - Medium Quality",
+    "accent": "Ukraine",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "ca_ES-upc_ona-x_low",
+    "name": "UPC Ona",
+    "language": "ca-ES",
+    "description": "Catalan (Spain) - Extra Low Quality",
+    "accent": "Spain",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "ca_ES-upc_ona-medium",
+    "name": "UPC Ona",
+    "language": "ca-ES",
+    "description": "Catalan (Spain) - Medium Quality",
+    "accent": "Spain",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "ca_ES-upc_pau-x_low",
+    "name": "UPC Pau",
+    "language": "ca-ES",
+    "description": "Catalan (Spain) - Extra Low Quality",
+    "accent": "Spain",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "cs_CZ-jirka-low",
+    "name": "Jirka",
+    "language": "cs-CZ",
+    "description": "Czech (Czech Republic) - Low Quality",
+    "accent": "Czech Republic",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "cs_CZ-jirka-medium",
+    "name": "Jirka",
+    "language": "cs-CZ",
+    "description": "Czech (Czech Republic) - Medium Quality",
+    "accent": "Czech Republic",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "cy_GB-gwryw_gogleddol-medium",
+    "name": "Gwryw Gogleddol",
+    "language": "cy-GB",
+    "description": "Welsh (United Kingdom) - Medium Quality",
+    "accent": "Wales",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "da_DK-talesyntese-medium",
+    "name": "Talesyntese",
+    "language": "da-DK",
+    "description": "Danish (Denmark) - Medium Quality",
+    "accent": "Denmark",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "el_GR-rapunzelina-low",
+    "name": "Rapunzelina",
+    "language": "el-GR",
+    "description": "Greek (Greece) - Low Quality",
+    "accent": "Greece",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "fa_IR-amir-medium",
+    "name": "Amir",
+    "language": "fa-IR",
+    "description": "Persian (Iran) - Medium Quality",
+    "accent": "Iran",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "fa_IR-gyro-medium",
+    "name": "Gyro",
+    "language": "fa-IR",
+    "description": "Persian (Iran) - Medium Quality",
+    "accent": "Iran",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "fi_FI-harri-low",
+    "name": "Harri",
+    "language": "fi-FI",
+    "description": "Finnish (Finland) - Low Quality",
+    "accent": "Finland",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "hu_HU-anna-medium",
+    "name": "Anna",
+    "language": "hu-HU",
+    "description": "Hungarian (Hungary) - Medium Quality",
+    "accent": "Hungary",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "hu_HU-berta-medium",
+    "name": "Berta",
+    "language": "hu-HU",
+    "description": "Hungarian (Hungary) - Medium Quality",
+    "accent": "Hungary",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "hu_HU-imre-medium",
+    "name": "Imre",
+    "language": "hu-HU",
+    "description": "Hungarian (Hungary) - Medium Quality",
+    "accent": "Hungary",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "is_IS-bui-medium",
+    "name": "Bui",
+    "language": "is-IS",
+    "description": "Icelandic (Iceland) - Medium Quality",
+    "accent": "Iceland",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "is_IS-salka-medium",
+    "name": "Salka",
+    "language": "is-IS",
+    "description": "Icelandic (Iceland) - Medium Quality",
+    "accent": "Iceland",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "is_IS-steinn-medium",
+    "name": "Steinn",
+    "language": "is-IS",
+    "description": "Icelandic (Iceland) - Medium Quality",
+    "accent": "Iceland",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "is_IS-ugla-medium",
+    "name": "Ugla",
+    "language": "is-IS",
+    "description": "Icelandic (Iceland) - Medium Quality",
+    "accent": "Iceland",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "ka_GE-natia-medium",
+    "name": "Natia",
+    "language": "ka-GE",
+    "description": "Georgian (Georgia) - Medium Quality",
+    "accent": "Georgia",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "kk_KZ-iseke-x_low",
+    "name": "Iseke",
+    "language": "kk-KZ",
+    "description": "Kazakh (Kazakhstan) - Extra Low Quality",
+    "accent": "Kazakhstan",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "kk_KZ-issai-high",
+    "name": "Issai",
+    "language": "kk-KZ",
+    "description": "Kazakh (Kazakhstan) - High Quality",
+    "accent": "Kazakhstan",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "kk_KZ-raya-x_low",
+    "name": "Raya",
+    "language": "kk-KZ",
+    "description": "Kazakh (Kazakhstan) - Extra Low Quality",
+    "accent": "Kazakhstan",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "lb_LU-marylux-medium",
+    "name": "Marylux",
+    "language": "lb-LU",
+    "description": "Luxembourgish (Luxembourg) - Medium Quality",
+    "accent": "Luxembourg",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "lv_LV-aivars-medium",
+    "name": "Aivars",
+    "language": "lv-LV",
+    "description": "Latvian (Latvia) - Medium Quality",
+    "accent": "Latvia",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "ne_NP-google-x_low",
+    "name": "Google",
+    "language": "ne-NP",
+    "description": "Nepali (Nepal) - Extra Low Quality",
+    "accent": "Nepal",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "ne_NP-google-medium",
+    "name": "Google",
+    "language": "ne-NP",
+    "description": "Nepali (Nepal) - Medium Quality",
+    "accent": "Nepal",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "nl_BE-nathalie-medium",
+    "name": "Nathalie",
+    "language": "nl-BE",
+    "description": "Dutch (Belgium) - Medium Quality",
+    "accent": "Belgium",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "nl_BE-rdh-x_low",
+    "name": "RDH",
+    "language": "nl-BE",
+    "description": "Dutch (Belgium) - Extra Low Quality",
+    "accent": "Belgium",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "nl_BE-rdh-medium",
+    "name": "RDH",
+    "language": "nl-BE",
+    "description": "Dutch (Belgium) - Medium Quality",
+    "accent": "Belgium",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "nl_NL-mls-medium",
+    "name": "MLS",
+    "language": "nl-NL",
+    "description": "Dutch (Netherlands) - Medium Quality, Multi-speaker",
+    "accent": "Netherlands",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "nl_NL-mls_5809-low",
+    "name": "MLS 5809",
+    "language": "nl-NL",
+    "description": "Dutch (Netherlands) - Low Quality",
+    "accent": "Netherlands",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "nl_NL-mls_7432-low",
+    "name": "MLS 7432",
+    "language": "nl-NL",
+    "description": "Dutch (Netherlands) - Low Quality",
+    "accent": "Netherlands",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "no_NO-talesyntese-medium",
+    "name": "Talesyntese",
+    "language": "no-NO",
+    "description": "Norwegian (Norway) - Medium Quality",
+    "accent": "Norway",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "ro_RO-mihai-medium",
+    "name": "Mihai",
+    "language": "ro-RO",
+    "description": "Romanian (Romania) - Medium Quality",
+    "accent": "Romania",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "sk_SK-lili-medium",
+    "name": "Lili",
+    "language": "sk-SK",
+    "description": "Slovak (Slovakia) - Medium Quality",
+    "accent": "Slovakia",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "sl_SI-artur-medium",
+    "name": "Artur",
+    "language": "sl-SI",
+    "description": "Slovenian (Slovenia) - Medium Quality",
+    "accent": "Slovenia",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "sr_RS-serbski_institut-medium",
+    "name": "Serbski Institut",
+    "language": "sr-RS",
+    "description": "Serbian (Serbia) - Medium Quality",
+    "accent": "Serbia",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "sv_SE-nst-medium",
+    "name": "NST",
+    "language": "sv-SE",
+    "description": "Swedish (Sweden) - Medium Quality, Multi-speaker",
+    "accent": "Sweden",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "sw_CD-lanfrica-medium",
+    "name": "Lanfrica",
+    "language": "sw-CD",
+    "description": "Swahili (DR Congo) - Medium Quality",
+    "accent": "DR Congo",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "vi_VN-25hours_single-low",
+    "name": "25hours Single",
+    "language": "vi-VN",
+    "description": "Vietnamese (Vietnam) - Low Quality",
+    "accent": "Vietnam",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "vi_VN-vais1000-medium",
+    "name": "Vais1000",
+    "language": "vi-VN",
+    "description": "Vietnamese (Vietnam) - Medium Quality",
+    "accent": "Vietnam",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  },
+  {
+    "voice_id": "vi_VN-vivos-x_low",
+    "name": "Vivos",
+    "language": "vi-VN",
+    "description": "Vietnamese (Vietnam) - Extra Low Quality",
+    "accent": "Vietnam",
+    "gender": "",
+    "preview_url": "https://rhasspy.github.io/piper-samples/"
+  }
+]

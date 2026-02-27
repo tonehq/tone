@@ -1,0 +1,3057 @@
+//  To fetch the voices list of azure - https://eastus.tts.speech.microsoft.com/cognitiveservices/voices/list
+
+// List of all voices from azure TTS
+
+[
+    {
+      "voice_id": "af-ZA-AdriNeural",
+      "name": "Adri",
+      "language": "af-ZA",
+      "description": "Afrikaans (South Africa)",
+      "accent": "South Africa",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "af-ZA-WillemNeural",
+      "name": "Willem",
+      "language": "af-ZA",
+      "description": "Afrikaans (South Africa)",
+      "accent": "South Africa",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "am-ET-MekdesNeural",
+      "name": "Mekdes",
+      "language": "am-ET",
+      "description": "Amharic (Ethiopia)",
+      "accent": "Ethiopia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "am-ET-AmehaNeural",
+      "name": "Ameha",
+      "language": "am-ET",
+      "description": "Amharic (Ethiopia)",
+      "accent": "Ethiopia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-AE-FatimaNeural",
+      "name": "Fatima",
+      "language": "ar-AE",
+      "description": "Arabic (United Arab Emirates)",
+      "accent": "UAE",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-AE-HamdanNeural",
+      "name": "Hamdan",
+      "language": "ar-AE",
+      "description": "Arabic (United Arab Emirates)",
+      "accent": "UAE",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-BH-LailaNeural",
+      "name": "Laila",
+      "language": "ar-BH",
+      "description": "Arabic (Bahrain)",
+      "accent": "Bahrain",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-BH-AliNeural",
+      "name": "Ali",
+      "language": "ar-BH",
+      "description": "Arabic (Bahrain)",
+      "accent": "Bahrain",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-DZ-AminaNeural",
+      "name": "Amina",
+      "language": "ar-DZ",
+      "description": "Arabic (Algeria)",
+      "accent": "Algeria",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-DZ-IsmaelNeural",
+      "name": "Ismael",
+      "language": "ar-DZ",
+      "description": "Arabic (Algeria)",
+      "accent": "Algeria",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-EG-SalmaNeural",
+      "name": "Salma",
+      "language": "ar-EG",
+      "description": "Arabic (Egypt)",
+      "accent": "Egypt",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-EG-ShakirNeural",
+      "name": "Shakir",
+      "language": "ar-EG",
+      "description": "Arabic (Egypt)",
+      "accent": "Egypt",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-IQ-RanaNeural",
+      "name": "Rana",
+      "language": "ar-IQ",
+      "description": "Arabic (Iraq)",
+      "accent": "Iraq",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-IQ-BasselNeural",
+      "name": "Bassel",
+      "language": "ar-IQ",
+      "description": "Arabic (Iraq)",
+      "accent": "Iraq",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-JO-SanaNeural",
+      "name": "Sana",
+      "language": "ar-JO",
+      "description": "Arabic (Jordan)",
+      "accent": "Jordan",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-JO-TaimNeural",
+      "name": "Taim",
+      "language": "ar-JO",
+      "description": "Arabic (Jordan)",
+      "accent": "Jordan",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-KW-NouraNeural",
+      "name": "Noura",
+      "language": "ar-KW",
+      "description": "Arabic (Kuwait)",
+      "accent": "Kuwait",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-KW-FahedNeural",
+      "name": "Fahed",
+      "language": "ar-KW",
+      "description": "Arabic (Kuwait)",
+      "accent": "Kuwait",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-LB-LaylaNeural",
+      "name": "Layla",
+      "language": "ar-LB",
+      "description": "Arabic (Lebanon)",
+      "accent": "Lebanon",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-LB-RamiNeural",
+      "name": "Rami",
+      "language": "ar-LB",
+      "description": "Arabic (Lebanon)",
+      "accent": "Lebanon",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-LY-ImanNeural",
+      "name": "Iman",
+      "language": "ar-LY",
+      "description": "Arabic (Libya)",
+      "accent": "Libya",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-LY-OmarNeural",
+      "name": "Omar",
+      "language": "ar-LY",
+      "description": "Arabic (Libya)",
+      "accent": "Libya",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-MA-MounaNeural",
+      "name": "Mouna",
+      "language": "ar-MA",
+      "description": "Arabic (Morocco)",
+      "accent": "Morocco",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-MA-JamalNeural",
+      "name": "Jamal",
+      "language": "ar-MA",
+      "description": "Arabic (Morocco)",
+      "accent": "Morocco",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-OM-AyshaNeural",
+      "name": "Aysha",
+      "language": "ar-OM",
+      "description": "Arabic (Oman)",
+      "accent": "Oman",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-OM-AbdullahNeural",
+      "name": "Abdullah",
+      "language": "ar-OM",
+      "description": "Arabic (Oman)",
+      "accent": "Oman",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-QA-AmalNeural",
+      "name": "Amal",
+      "language": "ar-QA",
+      "description": "Arabic (Qatar)",
+      "accent": "Qatar",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-QA-MoazNeural",
+      "name": "Moaz",
+      "language": "ar-QA",
+      "description": "Arabic (Qatar)",
+      "accent": "Qatar",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-SA-ZariyahNeural",
+      "name": "Zariyah",
+      "language": "ar-SA",
+      "description": "Arabic (Saudi Arabia)",
+      "accent": "Saudi Arabia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-SA-HamedNeural",
+      "name": "Hamed",
+      "language": "ar-SA",
+      "description": "Arabic (Saudi Arabia)",
+      "accent": "Saudi Arabia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-SY-AmanyNeural",
+      "name": "Amany",
+      "language": "ar-SY",
+      "description": "Arabic (Syria)",
+      "accent": "Syria",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-SY-LaithNeural",
+      "name": "Laith",
+      "language": "ar-SY",
+      "description": "Arabic (Syria)",
+      "accent": "Syria",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-TN-ReemNeural",
+      "name": "Reem",
+      "language": "ar-TN",
+      "description": "Arabic (Tunisia)",
+      "accent": "Tunisia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-TN-HediNeural",
+      "name": "Hedi",
+      "language": "ar-TN",
+      "description": "Arabic (Tunisia)",
+      "accent": "Tunisia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-YE-MaryamNeural",
+      "name": "Maryam",
+      "language": "ar-YE",
+      "description": "Arabic (Yemen)",
+      "accent": "Yemen",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ar-YE-SalehNeural",
+      "name": "Saleh",
+      "language": "ar-YE",
+      "description": "Arabic (Yemen)",
+      "accent": "Yemen",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "as-IN-YashicaNeural",
+      "name": "Yashica",
+      "language": "as-IN",
+      "description": "Assamese (India)",
+      "accent": "India",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "as-IN-PriyomNeural",
+      "name": "Priyom",
+      "language": "as-IN",
+      "description": "Assamese (India)",
+      "accent": "India",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "az-AZ-BanuNeural",
+      "name": "Banu",
+      "language": "az-AZ",
+      "description": "Azerbaijani (Azerbaijan)",
+      "accent": "Azerbaijan",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "az-AZ-BabekNeural",
+      "name": "Babek",
+      "language": "az-AZ",
+      "description": "Azerbaijani (Azerbaijan)",
+      "accent": "Azerbaijan",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "bg-BG-KalinaNeural",
+      "name": "Kalina",
+      "language": "bg-BG",
+      "description": "Bulgarian (Bulgaria)",
+      "accent": "Bulgaria",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "bg-BG-BorislavNeural",
+      "name": "Borislav",
+      "language": "bg-BG",
+      "description": "Bulgarian (Bulgaria)",
+      "accent": "Bulgaria",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "bn-BD-NabanitaNeural",
+      "name": "Nabanita",
+      "language": "bn-BD",
+      "description": "Bangla (Bangladesh)",
+      "accent": "Bangladesh",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "bn-BD-PradeepNeural",
+      "name": "Pradeep",
+      "language": "bn-BD",
+      "description": "Bangla (Bangladesh)",
+      "accent": "Bangladesh",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "bn-IN-TanishaaNeural",
+      "name": "Tanishaa",
+      "language": "bn-IN",
+      "description": "Bengali (India)",
+      "accent": "India",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "bn-IN-BashkarNeural",
+      "name": "Bashkar",
+      "language": "bn-IN",
+      "description": "Bengali (India)",
+      "accent": "India",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "bs-BA-VesnaNeural",
+      "name": "Vesna",
+      "language": "bs-BA",
+      "description": "Bosnian (Bosnia and Herzegovina)",
+      "accent": "Bosnia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "bs-BA-GoranNeural",
+      "name": "Goran",
+      "language": "bs-BA",
+      "description": "Bosnian (Bosnia and Herzegovina)",
+      "accent": "Bosnia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ca-ES-JoanaNeural",
+      "name": "Joana",
+      "language": "ca-ES",
+      "description": "Catalan",
+      "accent": "Spain",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ca-ES-EnricNeural",
+      "name": "Enric",
+      "language": "ca-ES",
+      "description": "Catalan",
+      "accent": "Spain",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ca-ES-AlbaNeural",
+      "name": "Alba",
+      "language": "ca-ES",
+      "description": "Catalan",
+      "accent": "Spain",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "cs-CZ-VlastaNeural",
+      "name": "Vlasta",
+      "language": "cs-CZ",
+      "description": "Czech (Czechia)",
+      "accent": "Czech Republic",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "cs-CZ-AntoninNeural",
+      "name": "Antonin",
+      "language": "cs-CZ",
+      "description": "Czech (Czechia)",
+      "accent": "Czech Republic",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "cy-GB-NiaNeural",
+      "name": "Nia",
+      "language": "cy-GB",
+      "description": "Welsh (United Kingdom)",
+      "accent": "Wales",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "cy-GB-AledNeural",
+      "name": "Aled",
+      "language": "cy-GB",
+      "description": "Welsh (United Kingdom)",
+      "accent": "Wales",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "da-DK-ChristelNeural",
+      "name": "Christel",
+      "language": "da-DK",
+      "description": "Danish (Denmark)",
+      "accent": "Denmark",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "da-DK-JeppeNeural",
+      "name": "Jeppe",
+      "language": "da-DK",
+      "description": "Danish (Denmark)",
+      "accent": "Denmark",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "de-AT-IngridNeural",
+      "name": "Ingrid",
+      "language": "de-AT",
+      "description": "German (Austria)",
+      "accent": "Austria",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "de-AT-JonasNeural",
+      "name": "Jonas",
+      "language": "de-AT",
+      "description": "German (Austria)",
+      "accent": "Austria",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "de-CH-LeniNeural",
+      "name": "Leni",
+      "language": "de-CH",
+      "description": "German (Switzerland)",
+      "accent": "Switzerland",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "de-CH-JanNeural",
+      "name": "Jan",
+      "language": "de-CH",
+      "description": "German (Switzerland)",
+      "accent": "Switzerland",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "de-DE-KatjaNeural",
+      "name": "Katja",
+      "language": "de-DE",
+      "description": "German (Germany)",
+      "accent": "Germany",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "de-DE-ConradNeural",
+      "name": "Conrad",
+      "language": "de-DE",
+      "description": "German (Germany)",
+      "accent": "Germany",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "el-GR-AthinaNeural",
+      "name": "Athina",
+      "language": "el-GR",
+      "description": "Greek (Greece)",
+      "accent": "Greece",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "el-GR-NestorasNeural",
+      "name": "Nestoras",
+      "language": "el-GR",
+      "description": "Greek (Greece)",
+      "accent": "Greece",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-AU-NatashaNeural",
+      "name": "Natasha",
+      "language": "en-AU",
+      "description": "English (Australia)",
+      "accent": "Australia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-AU-WilliamNeural",
+      "name": "William",
+      "language": "en-AU",
+      "description": "English (Australia)",
+      "accent": "Australia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-CA-ClaraNeural",
+      "name": "Clara",
+      "language": "en-CA",
+      "description": "English (Canada)",
+      "accent": "Canada",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-CA-LiamNeural",
+      "name": "Liam",
+      "language": "en-CA",
+      "description": "English (Canada)",
+      "accent": "Canada",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-GB-SoniaNeural",
+      "name": "Sonia",
+      "language": "en-GB",
+      "description": "English (United Kingdom)",
+      "accent": "UK",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-GB-RyanNeural",
+      "name": "Ryan",
+      "language": "en-GB",
+      "description": "English (United Kingdom)",
+      "accent": "UK",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-GB-LibbyNeural",
+      "name": "Libby",
+      "language": "en-GB",
+      "description": "English (United Kingdom)",
+      "accent": "UK",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-HK-YanNeural",
+      "name": "Yan",
+      "language": "en-HK",
+      "description": "English (Hong Kong SAR)",
+      "accent": "Hong Kong",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-HK-SamNeural",
+      "name": "Sam",
+      "language": "en-HK",
+      "description": "English (Hong Kong SAR)",
+      "accent": "Hong Kong",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-IE-EmilyNeural",
+      "name": "Emily",
+      "language": "en-IE",
+      "description": "English (Ireland)",
+      "accent": "Ireland",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-IE-ConnorNeural",
+      "name": "Connor",
+      "language": "en-IE",
+      "description": "English (Ireland)",
+      "accent": "Ireland",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-IN-NeerjaNeural",
+      "name": "Neerja",
+      "language": "en-IN",
+      "description": "English (India)",
+      "accent": "India",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-IN-PrabhatNeural",
+      "name": "Prabhat",
+      "language": "en-IN",
+      "description": "English (India)",
+      "accent": "India",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-KE-AsiliaNeural",
+      "name": "Asilia",
+      "language": "en-KE",
+      "description": "English (Kenya)",
+      "accent": "Kenya",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-KE-ChilembaNeural",
+      "name": "Chilemba",
+      "language": "en-KE",
+      "description": "English (Kenya)",
+      "accent": "Kenya",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-NG-EzinneNeural",
+      "name": "Ezinne",
+      "language": "en-NG",
+      "description": "English (Nigeria)",
+      "accent": "Nigeria",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-NG-AbeoNeural",
+      "name": "Abeo",
+      "language": "en-NG",
+      "description": "English (Nigeria)",
+      "accent": "Nigeria",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-NZ-MollyNeural",
+      "name": "Molly",
+      "language": "en-NZ",
+      "description": "English (New Zealand)",
+      "accent": "New Zealand",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-NZ-MitchellNeural",
+      "name": "Mitchell",
+      "language": "en-NZ",
+      "description": "English (New Zealand)",
+      "accent": "New Zealand",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-PH-RosaNeural",
+      "name": "Rosa",
+      "language": "en-PH",
+      "description": "English (Philippines)",
+      "accent": "Philippines",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-PH-JamesNeural",
+      "name": "James",
+      "language": "en-PH",
+      "description": "English (Philippines)",
+      "accent": "Philippines",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-SG-LunaNeural",
+      "name": "Luna",
+      "language": "en-SG",
+      "description": "English (Singapore)",
+      "accent": "Singapore",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-SG-WayneNeural",
+      "name": "Wayne",
+      "language": "en-SG",
+      "description": "English (Singapore)",
+      "accent": "Singapore",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-TZ-ImaniNeural",
+      "name": "Imani",
+      "language": "en-TZ",
+      "description": "English (Tanzania)",
+      "accent": "Tanzania",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-TZ-ElimuNeural",
+      "name": "Elimu",
+      "language": "en-TZ",
+      "description": "English (Tanzania)",
+      "accent": "Tanzania",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-AvaNeural",
+      "name": "Ava",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-AndrewNeural",
+      "name": "Andrew",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-EmmaNeural",
+      "name": "Emma",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-BrianNeural",
+      "name": "Brian",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-JennyNeural",
+      "name": "Jenny",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-GuyNeural",
+      "name": "Guy",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-AriaNeural",
+      "name": "Aria",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-DavisNeural",
+      "name": "Davis",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-JaneNeural",
+      "name": "Jane",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-JasonNeural",
+      "name": "Jason",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-SaraNeural",
+      "name": "Sara",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-TonyNeural",
+      "name": "Tony",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-NancyNeural",
+      "name": "Nancy",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-AmberNeural",
+      "name": "Amber",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-AshleyNeural",
+      "name": "Ashley",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-CoraNeural",
+      "name": "Cora",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-ElizabethNeural",
+      "name": "Elizabeth",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-MichelleNeural",
+      "name": "Michelle",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-MonicaNeural",
+      "name": "Monica",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-BrandonNeural",
+      "name": "Brandon",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-ChristopherNeural",
+      "name": "Christopher",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-EricNeural",
+      "name": "Eric",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-JacobNeural",
+      "name": "Jacob",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-RogerNeural",
+      "name": "Roger",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-US-SteffanNeural",
+      "name": "Steffan",
+      "language": "en-US",
+      "description": "English (United States)",
+      "accent": "US",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-ZA-LeahNeural",
+      "name": "Leah",
+      "language": "en-ZA",
+      "description": "English (South Africa)",
+      "accent": "South Africa",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "en-ZA-LukeNeural",
+      "name": "Luke",
+      "language": "en-ZA",
+      "description": "English (South Africa)",
+      "accent": "South Africa",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-AR-ElenaNeural",
+      "name": "Elena",
+      "language": "es-AR",
+      "description": "Spanish (Argentina)",
+      "accent": "Argentina",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-AR-TomasNeural",
+      "name": "Tomas",
+      "language": "es-AR",
+      "description": "Spanish (Argentina)",
+      "accent": "Argentina",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-BO-SofiaNeural",
+      "name": "Sofia",
+      "language": "es-BO",
+      "description": "Spanish (Bolivia)",
+      "accent": "Bolivia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-BO-MarceloNeural",
+      "name": "Marcelo",
+      "language": "es-BO",
+      "description": "Spanish (Bolivia)",
+      "accent": "Bolivia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-CL-CatalinaNeural",
+      "name": "Catalina",
+      "language": "es-CL",
+      "description": "Spanish (Chile)",
+      "accent": "Chile",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-CL-LorenzoNeural",
+      "name": "Lorenzo",
+      "language": "es-CL",
+      "description": "Spanish (Chile)",
+      "accent": "Chile",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-CO-SalomeNeural",
+      "name": "Salome",
+      "language": "es-CO",
+      "description": "Spanish (Colombia)",
+      "accent": "Colombia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-CO-GonzaloNeural",
+      "name": "Gonzalo",
+      "language": "es-CO",
+      "description": "Spanish (Colombia)",
+      "accent": "Colombia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-CR-MariaNeural",
+      "name": "Maria",
+      "language": "es-CR",
+      "description": "Spanish (Costa Rica)",
+      "accent": "Costa Rica",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-CR-JuanNeural",
+      "name": "Juan",
+      "language": "es-CR",
+      "description": "Spanish (Costa Rica)",
+      "accent": "Costa Rica",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-CU-BelkysNeural",
+      "name": "Belkys",
+      "language": "es-CU",
+      "description": "Spanish (Cuba)",
+      "accent": "Cuba",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-CU-ManuelNeural",
+      "name": "Manuel",
+      "language": "es-CU",
+      "description": "Spanish (Cuba)",
+      "accent": "Cuba",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-DO-RamonaNeural",
+      "name": "Ramona",
+      "language": "es-DO",
+      "description": "Spanish (Dominican Republic)",
+      "accent": "Dominican Republic",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-DO-EmilioNeural",
+      "name": "Emilio",
+      "language": "es-DO",
+      "description": "Spanish (Dominican Republic)",
+      "accent": "Dominican Republic",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-EC-AndreaNeural",
+      "name": "Andrea",
+      "language": "es-EC",
+      "description": "Spanish (Ecuador)",
+      "accent": "Ecuador",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-EC-LuisNeural",
+      "name": "Luis",
+      "language": "es-EC",
+      "description": "Spanish (Ecuador)",
+      "accent": "Ecuador",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-ES-ElviraNeural",
+      "name": "Elvira",
+      "language": "es-ES",
+      "description": "Spanish (Spain)",
+      "accent": "Spain",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-ES-AlvaroNeural",
+      "name": "Alvaro",
+      "language": "es-ES",
+      "description": "Spanish (Spain)",
+      "accent": "Spain",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-GQ-TeresaNeural",
+      "name": "Teresa",
+      "language": "es-GQ",
+      "description": "Spanish (Equatorial Guinea)",
+      "accent": "Equatorial Guinea",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-GQ-JavierNeural",
+      "name": "Javier",
+      "language": "es-GQ",
+      "description": "Spanish (Equatorial Guinea)",
+      "accent": "Equatorial Guinea",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-GT-MartaNeural",
+      "name": "Marta",
+      "language": "es-GT",
+      "description": "Spanish (Guatemala)",
+      "accent": "Guatemala",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-GT-AndresNeural",
+      "name": "Andres",
+      "language": "es-GT",
+      "description": "Spanish (Guatemala)",
+      "accent": "Guatemala",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-HN-KarlaNeural",
+      "name": "Karla",
+      "language": "es-HN",
+      "description": "Spanish (Honduras)",
+      "accent": "Honduras",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-HN-CarlosNeural",
+      "name": "Carlos",
+      "language": "es-HN",
+      "description": "Spanish (Honduras)",
+      "accent": "Honduras",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-MX-DaliaNeural",
+      "name": "Dalia",
+      "language": "es-MX",
+      "description": "Spanish (Mexico)",
+      "accent": "Mexico",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-MX-JorgeNeural",
+      "name": "Jorge",
+      "language": "es-MX",
+      "description": "Spanish (Mexico)",
+      "accent": "Mexico",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-NI-YolandaNeural",
+      "name": "Yolanda",
+      "language": "es-NI",
+      "description": "Spanish (Nicaragua)",
+      "accent": "Nicaragua",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-NI-FedericoNeural",
+      "name": "Federico",
+      "language": "es-NI",
+      "description": "Spanish (Nicaragua)",
+      "accent": "Nicaragua",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-PA-MargaritaNeural",
+      "name": "Margarita",
+      "language": "es-PA",
+      "description": "Spanish (Panama)",
+      "accent": "Panama",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-PA-RobertoNeural",
+      "name": "Roberto",
+      "language": "es-PA",
+      "description": "Spanish (Panama)",
+      "accent": "Panama",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-PE-CamilaNeural",
+      "name": "Camila",
+      "language": "es-PE",
+      "description": "Spanish (Peru)",
+      "accent": "Peru",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-PE-AlexNeural",
+      "name": "Alex",
+      "language": "es-PE",
+      "description": "Spanish (Peru)",
+      "accent": "Peru",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-PR-KarinaNeural",
+      "name": "Karina",
+      "language": "es-PR",
+      "description": "Spanish (Puerto Rico)",
+      "accent": "Puerto Rico",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-PR-VictorNeural",
+      "name": "Victor",
+      "language": "es-PR",
+      "description": "Spanish (Puerto Rico)",
+      "accent": "Puerto Rico",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-PY-TaniaNeural",
+      "name": "Tania",
+      "language": "es-PY",
+      "description": "Spanish (Paraguay)",
+      "accent": "Paraguay",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-PY-MarioNeural",
+      "name": "Mario",
+      "language": "es-PY",
+      "description": "Spanish (Paraguay)",
+      "accent": "Paraguay",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-SV-LorenaNeural",
+      "name": "Lorena",
+      "language": "es-SV",
+      "description": "Spanish (El Salvador)",
+      "accent": "El Salvador",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-SV-RodrigoNeural",
+      "name": "Rodrigo",
+      "language": "es-SV",
+      "description": "Spanish (El Salvador)",
+      "accent": "El Salvador",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-US-PalomaNeural",
+      "name": "Paloma",
+      "language": "es-US",
+      "description": "Spanish (United States)",
+      "accent": "US",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-US-AlonsoNeural",
+      "name": "Alonso",
+      "language": "es-US",
+      "description": "Spanish (United States)",
+      "accent": "US",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-UY-ValentinaNeural",
+      "name": "Valentina",
+      "language": "es-UY",
+      "description": "Spanish (Uruguay)",
+      "accent": "Uruguay",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-UY-MateoNeural",
+      "name": "Mateo",
+      "language": "es-UY",
+      "description": "Spanish (Uruguay)",
+      "accent": "Uruguay",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-VE-PaolaNeural",
+      "name": "Paola",
+      "language": "es-VE",
+      "description": "Spanish (Venezuela)",
+      "accent": "Venezuela",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "es-VE-SebastianNeural",
+      "name": "Sebastian",
+      "language": "es-VE",
+      "description": "Spanish (Venezuela)",
+      "accent": "Venezuela",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "et-EE-AnuNeural",
+      "name": "Anu",
+      "language": "et-EE",
+      "description": "Estonian (Estonia)",
+      "accent": "Estonia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "et-EE-KertNeural",
+      "name": "Kert",
+      "language": "et-EE",
+      "description": "Estonian (Estonia)",
+      "accent": "Estonia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "eu-ES-AinhoaNeural",
+      "name": "Ainhoa",
+      "language": "eu-ES",
+      "description": "Basque",
+      "accent": "Spain",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "eu-ES-AnderNeural",
+      "name": "Ander",
+      "language": "eu-ES",
+      "description": "Basque",
+      "accent": "Spain",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "fa-IR-DilaraNeural",
+      "name": "Dilara",
+      "language": "fa-IR",
+      "description": "Persian (Iran)",
+      "accent": "Iran",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "fa-IR-FaridNeural",
+      "name": "Farid",
+      "language": "fa-IR",
+      "description": "Persian (Iran)",
+      "accent": "Iran",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "fi-FI-SelmaNeural",
+      "name": "Selma",
+      "language": "fi-FI",
+      "description": "Finnish (Finland)",
+      "accent": "Finland",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "fi-FI-HarriNeural",
+      "name": "Harri",
+      "language": "fi-FI",
+      "description": "Finnish (Finland)",
+      "accent": "Finland",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "fi-FI-NooraNeural",
+      "name": "Noora",
+      "language": "fi-FI",
+      "description": "Finnish (Finland)",
+      "accent": "Finland",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "fil-PH-BlessicaNeural",
+      "name": "Blessica",
+      "language": "fil-PH",
+      "description": "Filipino (Philippines)",
+      "accent": "Philippines",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "fil-PH-AngeloNeural",
+      "name": "Angelo",
+      "language": "fil-PH",
+      "description": "Filipino (Philippines)",
+      "accent": "Philippines",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "fr-BE-CharlineNeural",
+      "name": "Charline",
+      "language": "fr-BE",
+      "description": "French (Belgium)",
+      "accent": "Belgium",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "fr-BE-GerardNeural",
+      "name": "Gerard",
+      "language": "fr-BE",
+      "description": "French (Belgium)",
+      "accent": "Belgium",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "fr-CA-SylvieNeural",
+      "name": "Sylvie",
+      "language": "fr-CA",
+      "description": "French (Canada)",
+      "accent": "Canada",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "fr-CA-JeanNeural",
+      "name": "Jean",
+      "language": "fr-CA",
+      "description": "French (Canada)",
+      "accent": "Canada",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "fr-CA-AntoineNeural",
+      "name": "Antoine",
+      "language": "fr-CA",
+      "description": "French (Canada)",
+      "accent": "Canada",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "fr-CA-ThierryNeural",
+      "name": "Thierry",
+      "language": "fr-CA",
+      "description": "French (Canada)",
+      "accent": "Canada",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "fr-CH-ArianeNeural",
+      "name": "Ariane",
+      "language": "fr-CH",
+      "description": "French (Switzerland)",
+      "accent": "Switzerland",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "fr-CH-FabriceNeural",
+      "name": "Fabrice",
+      "language": "fr-CH",
+      "description": "French (Switzerland)",
+      "accent": "Switzerland",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "fr-FR-DeniseNeural",
+      "name": "Denise",
+      "language": "fr-FR",
+      "description": "French (France)",
+      "accent": "France",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "fr-FR-HenriNeural",
+      "name": "Henri",
+      "language": "fr-FR",
+      "description": "French (France)",
+      "accent": "France",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ga-IE-OrlaNeural",
+      "name": "Orla",
+      "language": "ga-IE",
+      "description": "Irish (Ireland)",
+      "accent": "Ireland",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ga-IE-ColmNeural",
+      "name": "Colm",
+      "language": "ga-IE",
+      "description": "Irish (Ireland)",
+      "accent": "Ireland",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "gl-ES-SabelaNeural",
+      "name": "Sabela",
+      "language": "gl-ES",
+      "description": "Galician",
+      "accent": "Spain",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "gl-ES-RoiNeural",
+      "name": "Roi",
+      "language": "gl-ES",
+      "description": "Galician",
+      "accent": "Spain",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "gu-IN-DhwaniNeural",
+      "name": "Dhwani",
+      "language": "gu-IN",
+      "description": "Gujarati (India)",
+      "accent": "India",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "gu-IN-NiranjanNeural",
+      "name": "Niranjan",
+      "language": "gu-IN",
+      "description": "Gujarati (India)",
+      "accent": "India",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "he-IL-HilaNeural",
+      "name": "Hila",
+      "language": "he-IL",
+      "description": "Hebrew (Israel)",
+      "accent": "Israel",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "he-IL-AvriNeural",
+      "name": "Avri",
+      "language": "he-IL",
+      "description": "Hebrew (Israel)",
+      "accent": "Israel",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "hi-IN-SwaraNeural",
+      "name": "Swara",
+      "language": "hi-IN",
+      "description": "Hindi (India)",
+      "accent": "India",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "hi-IN-MadhurNeural",
+      "name": "Madhur",
+      "language": "hi-IN",
+      "description": "Hindi (India)",
+      "accent": "India",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "hr-HR-GabrijelaNeural",
+      "name": "Gabrijela",
+      "language": "hr-HR",
+      "description": "Croatian (Croatia)",
+      "accent": "Croatia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "hr-HR-SreckoNeural",
+      "name": "Srecko",
+      "language": "hr-HR",
+      "description": "Croatian (Croatia)",
+      "accent": "Croatia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "hu-HU-NoemiNeural",
+      "name": "Noemi",
+      "language": "hu-HU",
+      "description": "Hungarian (Hungary)",
+      "accent": "Hungary",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "hu-HU-TamasNeural",
+      "name": "Tamas",
+      "language": "hu-HU",
+      "description": "Hungarian (Hungary)",
+      "accent": "Hungary",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "hy-AM-AnahitNeural",
+      "name": "Anahit",
+      "language": "hy-AM",
+      "description": "Armenian (Armenia)",
+      "accent": "Armenia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "hy-AM-HaykNeural",
+      "name": "Hayk",
+      "language": "hy-AM",
+      "description": "Armenian (Armenia)",
+      "accent": "Armenia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "id-ID-GadisNeural",
+      "name": "Gadis",
+      "language": "id-ID",
+      "description": "Indonesian (Indonesia)",
+      "accent": "Indonesia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "id-ID-ArdiNeural",
+      "name": "Ardi",
+      "language": "id-ID",
+      "description": "Indonesian (Indonesia)",
+      "accent": "Indonesia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "is-IS-GudrunNeural",
+      "name": "Gudrun",
+      "language": "is-IS",
+      "description": "Icelandic (Iceland)",
+      "accent": "Iceland",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "is-IS-GunnarNeural",
+      "name": "Gunnar",
+      "language": "is-IS",
+      "description": "Icelandic (Iceland)",
+      "accent": "Iceland",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "it-IT-ElsaNeural",
+      "name": "Elsa",
+      "language": "it-IT",
+      "description": "Italian (Italy)",
+      "accent": "Italy",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "it-IT-IsabellaNeural",
+      "name": "Isabella",
+      "language": "it-IT",
+      "description": "Italian (Italy)",
+      "accent": "Italy",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "it-IT-DiegoNeural",
+      "name": "Diego",
+      "language": "it-IT",
+      "description": "Italian (Italy)",
+      "accent": "Italy",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "it-IT-GiuseppeNeural",
+      "name": "Giuseppe",
+      "language": "it-IT",
+      "description": "Italian (Italy)",
+      "accent": "Italy",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ja-JP-NanamiNeural",
+      "name": "Nanami",
+      "language": "ja-JP",
+      "description": "Japanese (Japan)",
+      "accent": "Japan",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ja-JP-KeitaNeural",
+      "name": "Keita",
+      "language": "ja-JP",
+      "description": "Japanese (Japan)",
+      "accent": "Japan",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ja-JP-AoiNeural",
+      "name": "Aoi",
+      "language": "ja-JP",
+      "description": "Japanese (Japan)",
+      "accent": "Japan",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ja-JP-DaichiNeural",
+      "name": "Daichi",
+      "language": "ja-JP",
+      "description": "Japanese (Japan)",
+      "accent": "Japan",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ja-JP-MayuNeural",
+      "name": "Mayu",
+      "language": "ja-JP",
+      "description": "Japanese (Japan)",
+      "accent": "Japan",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ja-JP-NaokiNeural",
+      "name": "Naoki",
+      "language": "ja-JP",
+      "description": "Japanese (Japan)",
+      "accent": "Japan",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ja-JP-ShioriNeural",
+      "name": "Shiori",
+      "language": "ja-JP",
+      "description": "Japanese (Japan)",
+      "accent": "Japan",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "jv-ID-SitiNeural",
+      "name": "Siti",
+      "language": "jv-ID",
+      "description": "Javanese (Indonesia)",
+      "accent": "Indonesia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "jv-ID-DimasNeural",
+      "name": "Dimas",
+      "language": "jv-ID",
+      "description": "Javanese (Indonesia)",
+      "accent": "Indonesia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ka-GE-EkaNeural",
+      "name": "Eka",
+      "language": "ka-GE",
+      "description": "Georgian (Georgia)",
+      "accent": "Georgia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ka-GE-GiorgiNeural",
+      "name": "Giorgi",
+      "language": "ka-GE",
+      "description": "Georgian (Georgia)",
+      "accent": "Georgia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "kk-KZ-AigulNeural",
+      "name": "Aigul",
+      "language": "kk-KZ",
+      "description": "Kazakh (Kazakhstan)",
+      "accent": "Kazakhstan",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "kk-KZ-DauletNeural",
+      "name": "Daulet",
+      "language": "kk-KZ",
+      "description": "Kazakh (Kazakhstan)",
+      "accent": "Kazakhstan",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "km-KH-SreymomNeural",
+      "name": "Sreymom",
+      "language": "km-KH",
+      "description": "Khmer (Cambodia)",
+      "accent": "Cambodia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "km-KH-PisethNeural",
+      "name": "Piseth",
+      "language": "km-KH",
+      "description": "Khmer (Cambodia)",
+      "accent": "Cambodia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "kn-IN-SapnaNeural",
+      "name": "Sapna",
+      "language": "kn-IN",
+      "description": "Kannada (India)",
+      "accent": "India",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "kn-IN-GaganNeural",
+      "name": "Gagan",
+      "language": "kn-IN",
+      "description": "Kannada (India)",
+      "accent": "India",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ko-KR-SunHiNeural",
+      "name": "SunHi",
+      "language": "ko-KR",
+      "description": "Korean (Korea)",
+      "accent": "Korea",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ko-KR-InJoonNeural",
+      "name": "InJoon",
+      "language": "ko-KR",
+      "description": "Korean (Korea)",
+      "accent": "Korea",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ko-KR-BongJinNeural",
+      "name": "BongJin",
+      "language": "ko-KR",
+      "description": "Korean (Korea)",
+      "accent": "Korea",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ko-KR-GookMinNeural",
+      "name": "GookMin",
+      "language": "ko-KR",
+      "description": "Korean (Korea)",
+      "accent": "Korea",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ko-KR-JiMinNeural",
+      "name": "JiMin",
+      "language": "ko-KR",
+      "description": "Korean (Korea)",
+      "accent": "Korea",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ko-KR-SeoHyeonNeural",
+      "name": "SeoHyeon",
+      "language": "ko-KR",
+      "description": "Korean (Korea)",
+      "accent": "Korea",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ko-KR-SoonBokNeural",
+      "name": "SoonBok",
+      "language": "ko-KR",
+      "description": "Korean (Korea)",
+      "accent": "Korea",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ko-KR-YuJinNeural",
+      "name": "YuJin",
+      "language": "ko-KR",
+      "description": "Korean (Korea)",
+      "accent": "Korea",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "lo-LA-KeomanyNeural",
+      "name": "Keomany",
+      "language": "lo-LA",
+      "description": "Lao (Laos)",
+      "accent": "Laos",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "lo-LA-ChanthavongNeural",
+      "name": "Chanthavong",
+      "language": "lo-LA",
+      "description": "Lao (Laos)",
+      "accent": "Laos",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "lt-LT-OnaNeural",
+      "name": "Ona",
+      "language": "lt-LT",
+      "description": "Lithuanian (Lithuania)",
+      "accent": "Lithuania",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "lt-LT-LeonasNeural",
+      "name": "Leonas",
+      "language": "lt-LT",
+      "description": "Lithuanian (Lithuania)",
+      "accent": "Lithuania",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "lv-LV-EveritaNeural",
+      "name": "Everita",
+      "language": "lv-LV",
+      "description": "Latvian (Latvia)",
+      "accent": "Latvia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "lv-LV-NilsNeural",
+      "name": "Nils",
+      "language": "lv-LV",
+      "description": "Latvian (Latvia)",
+      "accent": "Latvia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "mk-MK-MarijaNeural",
+      "name": "Marija",
+      "language": "mk-MK",
+      "description": "Macedonian (North Macedonia)",
+      "accent": "North Macedonia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "mk-MK-AleksandarNeural",
+      "name": "Aleksandar",
+      "language": "mk-MK",
+      "description": "Macedonian (North Macedonia)",
+      "accent": "North Macedonia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ml-IN-SobhanaNeural",
+      "name": "Sobhana",
+      "language": "ml-IN",
+      "description": "Malayalam (India)",
+      "accent": "India",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ml-IN-MidhunNeural",
+      "name": "Midhun",
+      "language": "ml-IN",
+      "description": "Malayalam (India)",
+      "accent": "India",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "mn-MN-YesuiNeural",
+      "name": "Yesui",
+      "language": "mn-MN",
+      "description": "Mongolian (Mongolia)",
+      "accent": "Mongolia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "mn-MN-BataaNeural",
+      "name": "Bataa",
+      "language": "mn-MN",
+      "description": "Mongolian (Mongolia)",
+      "accent": "Mongolia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "mr-IN-AarohiNeural",
+      "name": "Aarohi",
+      "language": "mr-IN",
+      "description": "Marathi (India)",
+      "accent": "India",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "mr-IN-ManoharNeural",
+      "name": "Manohar",
+      "language": "mr-IN",
+      "description": "Marathi (India)",
+      "accent": "India",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ms-MY-YasminNeural",
+      "name": "Yasmin",
+      "language": "ms-MY",
+      "description": "Malay (Malaysia)",
+      "accent": "Malaysia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ms-MY-OsmanNeural",
+      "name": "Osman",
+      "language": "ms-MY",
+      "description": "Malay (Malaysia)",
+      "accent": "Malaysia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "mt-MT-GraceNeural",
+      "name": "Grace",
+      "language": "mt-MT",
+      "description": "Maltese (Malta)",
+      "accent": "Malta",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "mt-MT-JosephNeural",
+      "name": "Joseph",
+      "language": "mt-MT",
+      "description": "Maltese (Malta)",
+      "accent": "Malta",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "my-MM-NilarNeural",
+      "name": "Nilar",
+      "language": "my-MM",
+      "description": "Burmese (Myanmar)",
+      "accent": "Myanmar",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "my-MM-ThihaNeural",
+      "name": "Thiha",
+      "language": "my-MM",
+      "description": "Burmese (Myanmar)",
+      "accent": "Myanmar",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "nb-NO-PernilleNeural",
+      "name": "Pernille",
+      "language": "nb-NO",
+      "description": "Norwegian Bokmål (Norway)",
+      "accent": "Norway",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "nb-NO-FinnNeural",
+      "name": "Finn",
+      "language": "nb-NO",
+      "description": "Norwegian Bokmål (Norway)",
+      "accent": "Norway",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "nb-NO-IselinNeural",
+      "name": "Iselin",
+      "language": "nb-NO",
+      "description": "Norwegian Bokmål (Norway)",
+      "accent": "Norway",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ne-NP-HemkalaNeural",
+      "name": "Hemkala",
+      "language": "ne-NP",
+      "description": "Nepali (Nepal)",
+      "accent": "Nepal",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ne-NP-SagarNeural",
+      "name": "Sagar",
+      "language": "ne-NP",
+      "description": "Nepali (Nepal)",
+      "accent": "Nepal",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "nl-BE-DenaNeural",
+      "name": "Dena",
+      "language": "nl-BE",
+      "description": "Dutch (Belgium)",
+      "accent": "Belgium",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "nl-BE-ArnaudNeural",
+      "name": "Arnaud",
+      "language": "nl-BE",
+      "description": "Dutch (Belgium)",
+      "accent": "Belgium",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "nl-NL-FennaNeural",
+      "name": "Fenna",
+      "language": "nl-NL",
+      "description": "Dutch (Netherlands)",
+      "accent": "Netherlands",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "nl-NL-MaartenNeural",
+      "name": "Maarten",
+      "language": "nl-NL",
+      "description": "Dutch (Netherlands)",
+      "accent": "Netherlands",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "nl-NL-ColetteNeural",
+      "name": "Colette",
+      "language": "nl-NL",
+      "description": "Dutch (Netherlands)",
+      "accent": "Netherlands",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "pl-PL-AgnieszkaNeural",
+      "name": "Agnieszka",
+      "language": "pl-PL",
+      "description": "Polish (Poland)",
+      "accent": "Poland",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "pl-PL-MarekNeural",
+      "name": "Marek",
+      "language": "pl-PL",
+      "description": "Polish (Poland)",
+      "accent": "Poland",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "pl-PL-ZofiaNeural",
+      "name": "Zofia",
+      "language": "pl-PL",
+      "description": "Polish (Poland)",
+      "accent": "Poland",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ps-AF-LatifaNeural",
+      "name": "Latifa",
+      "language": "ps-AF",
+      "description": "Pashto (Afghanistan)",
+      "accent": "Afghanistan",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ps-AF-GulNawazNeural",
+      "name": "GulNawaz",
+      "language": "ps-AF",
+      "description": "Pashto (Afghanistan)",
+      "accent": "Afghanistan",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "pt-BR-FranciscaNeural",
+      "name": "Francisca",
+      "language": "pt-BR",
+      "description": "Portuguese (Brazil)",
+      "accent": "Brazil",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "pt-BR-AntonioNeural",
+      "name": "Antonio",
+      "language": "pt-BR",
+      "description": "Portuguese (Brazil)",
+      "accent": "Brazil",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "pt-PT-RaquelNeural",
+      "name": "Raquel",
+      "language": "pt-PT",
+      "description": "Portuguese (Portugal)",
+      "accent": "Portugal",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "pt-PT-DuarteNeural",
+      "name": "Duarte",
+      "language": "pt-PT",
+      "description": "Portuguese (Portugal)",
+      "accent": "Portugal",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "pt-PT-FernandaNeural",
+      "name": "Fernanda",
+      "language": "pt-PT",
+      "description": "Portuguese (Portugal)",
+      "accent": "Portugal",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ro-RO-AlinaNeural",
+      "name": "Alina",
+      "language": "ro-RO",
+      "description": "Romanian (Romania)",
+      "accent": "Romania",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ro-RO-EmilNeural",
+      "name": "Emil",
+      "language": "ro-RO",
+      "description": "Romanian (Romania)",
+      "accent": "Romania",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ru-RU-SvetlanaNeural",
+      "name": "Svetlana",
+      "language": "ru-RU",
+      "description": "Russian (Russia)",
+      "accent": "Russia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ru-RU-DmitryNeural",
+      "name": "Dmitry",
+      "language": "ru-RU",
+      "description": "Russian (Russia)",
+      "accent": "Russia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ru-RU-DariyaNeural",
+      "name": "Dariya",
+      "language": "ru-RU",
+      "description": "Russian (Russia)",
+      "accent": "Russia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "si-LK-ThiliniNeural",
+      "name": "Thilini",
+      "language": "si-LK",
+      "description": "Sinhala (Sri Lanka)",
+      "accent": "Sri Lanka",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "si-LK-SameeraNeural",
+      "name": "Sameera",
+      "language": "si-LK",
+      "description": "Sinhala (Sri Lanka)",
+      "accent": "Sri Lanka",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "sk-SK-ViktoriaNeural",
+      "name": "Viktoria",
+      "language": "sk-SK",
+      "description": "Slovak (Slovakia)",
+      "accent": "Slovakia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "sk-SK-LukasNeural",
+      "name": "Lukas",
+      "language": "sk-SK",
+      "description": "Slovak (Slovakia)",
+      "accent": "Slovakia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "sl-SI-PetraNeural",
+      "name": "Petra",
+      "language": "sl-SI",
+      "description": "Slovenian (Slovenia)",
+      "accent": "Slovenia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "sl-SI-RokNeural",
+      "name": "Rok",
+      "language": "sl-SI",
+      "description": "Slovenian (Slovenia)",
+      "accent": "Slovenia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "so-SO-UbaxNeural",
+      "name": "Ubax",
+      "language": "so-SO",
+      "description": "Somali (Somalia)",
+      "accent": "Somalia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "so-SO-MuuseNeural",
+      "name": "Muuse",
+      "language": "so-SO",
+      "description": "Somali (Somalia)",
+      "accent": "Somalia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "sq-AL-AnilaNeural",
+      "name": "Anila",
+      "language": "sq-AL",
+      "description": "Albanian (Albania)",
+      "accent": "Albania",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "sq-AL-IlirNeural",
+      "name": "Ilir",
+      "language": "sq-AL",
+      "description": "Albanian (Albania)",
+      "accent": "Albania",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "sr-RS-SophieNeural",
+      "name": "Sophie",
+      "language": "sr-RS",
+      "description": "Serbian (Serbia)",
+      "accent": "Serbia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "sr-RS-NicholasNeural",
+      "name": "Nicholas",
+      "language": "sr-RS",
+      "description": "Serbian (Serbia)",
+      "accent": "Serbia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "su-ID-TutiNeural",
+      "name": "Tuti",
+      "language": "su-ID",
+      "description": "Sundanese (Indonesia)",
+      "accent": "Indonesia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "su-ID-JajangNeural",
+      "name": "Jajang",
+      "language": "su-ID",
+      "description": "Sundanese (Indonesia)",
+      "accent": "Indonesia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "sv-SE-SofieNeural",
+      "name": "Sofie",
+      "language": "sv-SE",
+      "description": "Swedish (Sweden)",
+      "accent": "Sweden",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "sv-SE-MattiasNeural",
+      "name": "Mattias",
+      "language": "sv-SE",
+      "description": "Swedish (Sweden)",
+      "accent": "Sweden",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "sv-SE-HilleviNeural",
+      "name": "Hillevi",
+      "language": "sv-SE",
+      "description": "Swedish (Sweden)",
+      "accent": "Sweden",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "sw-KE-ZuriNeural",
+      "name": "Zuri",
+      "language": "sw-KE",
+      "description": "Kiswahili (Kenya)",
+      "accent": "Kenya",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "sw-KE-RafikiNeural",
+      "name": "Rafiki",
+      "language": "sw-KE",
+      "description": "Kiswahili (Kenya)",
+      "accent": "Kenya",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "sw-TZ-RehemaNeural",
+      "name": "Rehema",
+      "language": "sw-TZ",
+      "description": "Kiswahili (Tanzania)",
+      "accent": "Tanzania",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "sw-TZ-DaudiNeural",
+      "name": "Daudi",
+      "language": "sw-TZ",
+      "description": "Kiswahili (Tanzania)",
+      "accent": "Tanzania",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ta-IN-PallaviNeural",
+      "name": "Pallavi",
+      "language": "ta-IN",
+      "description": "Tamil (India)",
+      "accent": "India",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ta-IN-ValluvarNeural",
+      "name": "Valluvar",
+      "language": "ta-IN",
+      "description": "Tamil (India)",
+      "accent": "India",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ta-LK-SaranyaNeural",
+      "name": "Saranya",
+      "language": "ta-LK",
+      "description": "Tamil (Sri Lanka)",
+      "accent": "Sri Lanka",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ta-LK-KumarNeural",
+      "name": "Kumar",
+      "language": "ta-LK",
+      "description": "Tamil (Sri Lanka)",
+      "accent": "Sri Lanka",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ta-MY-KaniNeural",
+      "name": "Kani",
+      "language": "ta-MY",
+      "description": "Tamil (Malaysia)",
+      "accent": "Malaysia",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ta-MY-SuryaNeural",
+      "name": "Surya",
+      "language": "ta-MY",
+      "description": "Tamil (Malaysia)",
+      "accent": "Malaysia",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ta-SG-VenbaNeural",
+      "name": "Venba",
+      "language": "ta-SG",
+      "description": "Tamil (Singapore)",
+      "accent": "Singapore",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ta-SG-AnbuNeural",
+      "name": "Anbu",
+      "language": "ta-SG",
+      "description": "Tamil (Singapore)",
+      "accent": "Singapore",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "te-IN-ShrutiNeural",
+      "name": "Shruti",
+      "language": "te-IN",
+      "description": "Telugu (India)",
+      "accent": "India",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "te-IN-MohanNeural",
+      "name": "Mohan",
+      "language": "te-IN",
+      "description": "Telugu (India)",
+      "accent": "India",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "th-TH-PremwadeeNeural",
+      "name": "Premwadee",
+      "language": "th-TH",
+      "description": "Thai (Thailand)",
+      "accent": "Thailand",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "th-TH-NiwatNeural",
+      "name": "Niwat",
+      "language": "th-TH",
+      "description": "Thai (Thailand)",
+      "accent": "Thailand",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "th-TH-AcharaNeural",
+      "name": "Achara",
+      "language": "th-TH",
+      "description": "Thai (Thailand)",
+      "accent": "Thailand",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "tr-TR-EmelNeural",
+      "name": "Emel",
+      "language": "tr-TR",
+      "description": "Turkish (Türkiye)",
+      "accent": "Turkey",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "tr-TR-AhmetNeural",
+      "name": "Ahmet",
+      "language": "tr-TR",
+      "description": "Turkish (Türkiye)",
+      "accent": "Turkey",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "uk-UA-PolinaNeural",
+      "name": "Polina",
+      "language": "uk-UA",
+      "description": "Ukrainian (Ukraine)",
+      "accent": "Ukraine",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "uk-UA-OstapNeural",
+      "name": "Ostap",
+      "language": "uk-UA",
+      "description": "Ukrainian (Ukraine)",
+      "accent": "Ukraine",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ur-IN-GulNeural",
+      "name": "Gul",
+      "language": "ur-IN",
+      "description": "Urdu (India)",
+      "accent": "India",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ur-IN-SalmanNeural",
+      "name": "Salman",
+      "language": "ur-IN",
+      "description": "Urdu (India)",
+      "accent": "India",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ur-PK-UzmaNeural",
+      "name": "Uzma",
+      "language": "ur-PK",
+      "description": "Urdu (Pakistan)",
+      "accent": "Pakistan",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "ur-PK-AsadNeural",
+      "name": "Asad",
+      "language": "ur-PK",
+      "description": "Urdu (Pakistan)",
+      "accent": "Pakistan",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "uz-UZ-MadinaNeural",
+      "name": "Madina",
+      "language": "uz-UZ",
+      "description": "Uzbek (Uzbekistan)",
+      "accent": "Uzbekistan",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "uz-UZ-SardorNeural",
+      "name": "Sardor",
+      "language": "uz-UZ",
+      "description": "Uzbek (Uzbekistan)",
+      "accent": "Uzbekistan",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "vi-VN-HoaiMyNeural",
+      "name": "HoaiMy",
+      "language": "vi-VN",
+      "description": "Vietnamese (Vietnam)",
+      "accent": "Vietnam",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "vi-VN-NamMinhNeural",
+      "name": "NamMinh",
+      "language": "vi-VN",
+      "description": "Vietnamese (Vietnam)",
+      "accent": "Vietnam",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "wuu-CN-XiaotongNeural",
+      "name": "Xiaotong",
+      "language": "wuu-CN",
+      "description": "Chinese (Wu, Simplified)",
+      "accent": "China",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "wuu-CN-YunzheNeural",
+      "name": "Yunzhe",
+      "language": "wuu-CN",
+      "description": "Chinese (Wu, Simplified)",
+      "accent": "China",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "yue-CN-XiaoMinNeural",
+      "name": "XiaoMin",
+      "language": "yue-CN",
+      "description": "Chinese (Cantonese, Simplified)",
+      "accent": "China",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "yue-CN-YunSongNeural",
+      "name": "YunSong",
+      "language": "yue-CN",
+      "description": "Chinese (Cantonese, Simplified)",
+      "accent": "China",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "zh-CN-XiaoxiaoNeural",
+      "name": "Xiaoxiao",
+      "language": "zh-CN",
+      "description": "Chinese (Mandarin, Simplified)",
+      "accent": "China",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "zh-CN-YunxiNeural",
+      "name": "Yunxi",
+      "language": "zh-CN",
+      "description": "Chinese (Mandarin, Simplified)",
+      "accent": "China",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "zh-CN-YunjianNeural",
+      "name": "Yunjian",
+      "language": "zh-CN",
+      "description": "Chinese (Mandarin, Simplified)",
+      "accent": "China",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "zh-CN-XiaoyiNeural",
+      "name": "Xiaoyi",
+      "language": "zh-CN",
+      "description": "Chinese (Mandarin, Simplified)",
+      "accent": "China",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "zh-CN-YunyangNeural",
+      "name": "Yunyang",
+      "language": "zh-CN",
+      "description": "Chinese (Mandarin, Simplified)",
+      "accent": "China",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "zh-HK-HiuMaanNeural",
+      "name": "HiuMaan",
+      "language": "zh-HK",
+      "description": "Chinese (Cantonese, Traditional)",
+      "accent": "Hong Kong",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "zh-HK-WanLungNeural",
+      "name": "WanLung",
+      "language": "zh-HK",
+      "description": "Chinese (Cantonese, Traditional)",
+      "accent": "Hong Kong",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "zh-HK-HiuGaaiNeural",
+      "name": "HiuGaai",
+      "language": "zh-HK",
+      "description": "Chinese (Cantonese, Traditional)",
+      "accent": "Hong Kong",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "zh-TW-HsiaoChenNeural",
+      "name": "HsiaoChen",
+      "language": "zh-TW",
+      "description": "Chinese (Taiwanese Mandarin, Traditional)",
+      "accent": "Taiwan",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "zh-TW-YunJheNeural",
+      "name": "YunJhe",
+      "language": "zh-TW",
+      "description": "Chinese (Taiwanese Mandarin, Traditional)",
+      "accent": "Taiwan",
+      "gender": "Male",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "zh-TW-HsiaoYuNeural",
+      "name": "HsiaoYu",
+      "language": "zh-TW",
+      "description": "Chinese (Taiwanese Mandarin, Traditional)",
+      "accent": "Taiwan",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "zu-ZA-ThandoNeural",
+      "name": "Thando",
+      "language": "zu-ZA",
+      "description": "isiZulu (South Africa)",
+      "accent": "South Africa",
+      "gender": "Female",
+      "preview_url": ""
+    },
+    {
+      "voice_id": "zu-ZA-ThembaNeural",
+      "name": "Themba",
+      "language": "zu-ZA",
+      "description": "isiZulu (South Africa)",
+      "accent": "South Africa",
+      "gender": "Male",
+      "preview_url": ""
+    }
+  ]
