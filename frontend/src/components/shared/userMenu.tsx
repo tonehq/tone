@@ -50,8 +50,8 @@ export default function ProfileMenu({ isExpanded }: ProfileMenuProps) {
   const trigger = isExpanded ? (
     <div className="flex w-full items-center gap-2.5">
       <UserAvatar initial={initial} />
-      <span className="max-w-[120px] truncate text-[13px] text-white/80">{userEmail}</span>
-      <ChevronDown size={14} className="ml-auto shrink-0 text-white/40" />
+      <span className="max-w-[120px] truncate text-[13px] text-muted-foreground">{userEmail}</span>
+      <ChevronDown size={14} className="ml-auto shrink-0 text-muted-foreground" />
     </div>
   ) : (
     <UserAvatar initial={initial} />
@@ -64,8 +64,8 @@ export default function ProfileMenu({ isExpanded }: ProfileMenuProps) {
           type="text"
           htmlType="button"
           className={cn(
-            'flex w-full items-center rounded-lg px-2 py-2 transition-all duration-200 select-none',
-            'hover:bg-white/[0.08]',
+            'flex w-full items-center rounded-sm px-2 py-2 transition-colors select-none',
+            'hover:bg-sidebar-accent/50',
           )}
         >
           {trigger}

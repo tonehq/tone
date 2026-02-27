@@ -5,6 +5,7 @@ import CustomLink from './CustomLink';
 import CustomModal from './CustomModal';
 import CustomTab from './CustomTab';
 import CustomTable from './CustomTable';
+import Divider from './Divider';
 import Form from './Form';
 import Logo from './Logo';
 import RadioGroupField from './RadioGroupField';
@@ -32,6 +33,7 @@ export {
   CustomModal,
   CustomTab,
   CustomTable,
+  Divider,
   Form,
   Logo,
   RadioGroupField,

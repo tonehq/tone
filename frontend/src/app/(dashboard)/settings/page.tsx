@@ -53,7 +53,12 @@ export default function SettingsPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge variant="secondary">{member.role}</Badge>
-                  <CustomButton type="text" size="icon-xs" disabled className="text-muted-foreground">
+                  <CustomButton
+                    type="text"
+                    size="icon-xs"
+                    disabled
+                    className="text-muted-foreground"
+                  >
                     <Trash2 className="size-4" />
                   </CustomButton>
                 </div>

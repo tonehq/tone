@@ -49,9 +49,7 @@ export default function AssignPhoneNumberModal({
   }, [open, fetchNumbers, currentPhoneNumbers]);
 
   const toggleNumber = (no: string) => {
-    setSelectedNos((prev) =>
-      prev.includes(no) ? prev.filter((n) => n !== no) : [...prev, no],
-    );
+    setSelectedNos((prev) => (prev.includes(no) ? prev.filter((n) => n !== no) : [...prev, no]));
   };
 
   const handleAssign = () => {

@@ -26,7 +26,7 @@ import React, { useMemo, useState } from 'react';
 export type {
   CustomTableColumn,
   CustomTablePagination,
-  CustomTableProps
+  CustomTableProps,
 } from '@/types/components';
 
 const DEFAULT_PAGE_SIZE = 10;

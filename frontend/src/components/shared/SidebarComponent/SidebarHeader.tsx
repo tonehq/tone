@@ -15,21 +15,41 @@ export function SidebarHeader({ isExpanded, onToggle, isMobile = false }: Sideba
   return (
     <div
       className={cn(
-        'flex min-h-[60px] items-center px-4 py-3',
-        isExpanded ? 'justify-between' : 'justify-center',
+        'border-b',
+        isExpanded
+          ? 'flex h-14 items-center justify-between px-5'
+          : 'flex flex-col items-center justify-start px-2 py-3',
       )}
     >
-      {isExpanded ? <Logo inverted /> : <Logo inverted iconOnly />}
-
-      {!isMobile && (
-        <CustomButton
-          type="text"
-          htmlType="button"
-          onClick={onToggle}
-          className="rounded-lg p-1.5 text-white/50 transition-all duration-200 hover:bg-white/10 hover:text-white/90"
-        >
-          {isExpanded ? <PanelLeft size={18} /> : <PanelRight size={18} />}
-        </CustomButton>
+      {isExpanded ? (
+        <>
+          <Logo />
+          {!isMobile && (
+            <CustomButton
+              type="text"
+              htmlType="button"
+              onClick={onToggle}
+              className="h-7 w-7 rounded-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+            >
+              <PanelLeft size={16} />
+            </CustomButton>
+          )}
+        </>
+      ) : (
+        <div className="flex flex-col items-center gap-2">
+          <Logo iconOnly />
+          <div className="h-px w-6 bg-white/10" />
+          {!isMobile && (
+            <CustomButton
+              type="text"
+              htmlType="button"
+              onClick={onToggle}
+              className="h-7 w-7 rounded-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+            >
+              <PanelRight className="h-4 w-4" />
+            </CustomButton>
+          )}
+        </div>
       )}
     </div>
   );

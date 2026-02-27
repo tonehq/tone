@@ -229,27 +229,31 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
   return (
     <div className="flex h-screen">
       {/* Left Sidebar */}
-      <div className="flex w-[280px] flex-col border-r border-border bg-background">
-        <div className="px-3 py-2">
+      <aside className="flex w-64 flex-col border-r bg-sidebar">
+        {/* Header: back + agent info */}
+        <div className="flex h-16 items-center border-b px-4">
           <CustomButton
             type="text"
-            icon={<ArrowLeft size={16} />}
+            htmlType="button"
+            icon={<ArrowLeft className="h-4 w-4" />}
+            className="rounded-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"
             onClick={() => router.push('/agents')}
           >
             Back to Agents
           </CustomButton>
         </div>
 
-        <div className="border-b border-border px-4 py-4">
+        {/* Agent info */}
+        <div className="border-b px-4 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-primary text-sm font-bold text-primary-foreground">
               {formData.name?.charAt(0)?.toUpperCase() || 'A'}
             </div>
-            <div className="min-w-0 space-y-1">
+            <div className="min-w-0">
               <h3 className="truncate text-sm font-semibold text-foreground">{formData.name}</h3>
               <AgentTypeBadge agentType={agentType} />
               {formData.phoneNumbers?.length > 0 && (
-                <div className="mt-1 space-y-0.5">
+                <div className="mt-1.5 space-y-0.5">
                   {formData.phoneNumbers.map((pn) => (
                     <p
                       key={pn.no}
@@ -265,35 +269,42 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
           </div>
         </div>
 
+        {/* Test agent button */}
         <div className="px-3 py-3">
           <CustomButton type="primary" fullWidth icon={<Phone size={16} />}>
             Test Agent
           </CustomButton>
         </div>
 
-        <div className="flex-1 space-y-1 px-3 py-2">
-          {['configure', 'prompt'].map((item) => {
-            const isActive = item === currentMenu;
+        {/* Navigation */}
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+          {[
+            { key: 'configure', label: 'Configure', icon: Settings },
+            { key: 'prompt', label: 'Prompt', icon: Volume2 },
+          ].map((item) => {
+            const isActive = item.key === currentMenu;
+            const Icon = item.icon;
             return (
               <CustomButton
-                key={item}
+                key={item.key}
                 type="text"
                 htmlType="button"
                 fullWidth
+                icon={<Icon className="h-4 w-4" />}
                 className={cn(
-                  'justify-start rounded-md px-3 py-2.5 text-sm font-medium transition-colors',
+                  'justify-start gap-3 rounded-sm px-3 py-2 text-sm font-medium',
                   isActive
-                    ? 'bg-accent text-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                    ? 'bg-sidebar-accent text-foreground'
+                    : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground',
                 )}
-                onClick={() => setCurrentMenu(item)}
+                onClick={() => setCurrentMenu(item.key)}
               >
-                {startCase(item)}
+                {item.label}
               </CustomButton>
             );
           })}
-        </div>
-      </div>
+        </nav>
+      </aside>
 
       {/* Main Content */}
       <div className="flex flex-1 flex-col overflow-hidden">
