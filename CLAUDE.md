@@ -101,3 +101,6 @@ The `pipecat/` directory is a custom fork (`tonehq/pipecat`) of the Pipecat AI f
 
 -For generating code for crud operations, use skills from:
 .claude/skills/generate-code/crud-operations-skills.md
+
+-For generating postman collection
+.claude/skills/postman/SKILL.md

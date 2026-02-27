@@ -9,10 +9,7 @@ load_dotenv()
 
 def get_infisical_secrets() -> dict:
     """Fetch secrets from Infisical using token auth"""
-    use_infisical = os.getenv("USE_INFISICAL", "false").lower() == "true"
     
-    if not use_infisical:
-        return {}
     try:
         from infisical_sdk import InfisicalSDKClient
         
@@ -51,8 +48,6 @@ class Settings:
         
         # Helper to get value from Infisical first, then env, then default
         def get_secret(key: str, default: str = "") -> str:
-            print(f"Fetching secret for key: {key}")
-            print(f"Infisical secrets available: {list(infisical_secrets.keys())}")
             return infisical_secrets.get(key) or os.getenv(key, default)
         
         self.DATABASE_URL: str = get_secret("CE_DATABASE_URL", get_secret("DATABASE_URL", ""))
