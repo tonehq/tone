@@ -39,15 +39,28 @@ class BotRunnerService(BaseService):
             .filter(ChannelPhoneNumbers.phone_number == normalized)
             .first()
         )
-        if not channel_phone or not channel_phone.channel_id:
+
+        if not channel_phone:
             return None
-        agent = (
-            self.db.query(Agent)
-            .join(AgentChannel, AgentChannel.agent_id == Agent.id)
-            .filter(AgentChannel.channel_id == channel_phone.channel_id)
-            .first()
-        )
-        return agent
+
+        # Prefer direct agent_id lookup
+        try:
+            if channel_phone.agent_id:
+                return self.db.query(Agent).filter(Agent.id == channel_phone.agent_id).first()
+        except Exception:
+            self.db.rollback()
+
+        # Fallback to channel-based lookup for legacy records without agent_id
+        if channel_phone.channel_id:
+            agent = (
+                self.db.query(Agent)
+                .join(AgentChannel, AgentChannel.agent_id == Agent.id)
+                .filter(AgentChannel.channel_id == channel_phone.channel_id)
+                .first()
+            )
+            return agent
+
+        return None
 
     async def _fetch_twilio_to_number(self, call_sid: str) -> Optional[str]:
         """Fetch the 'to' number for a Twilio call from Twilio REST API."""

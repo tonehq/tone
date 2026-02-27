@@ -187,9 +187,16 @@ class AgentService(BaseService):
                 self.db.commit()
 
         # When id present: edit both agent and agent_config. When id absent: create agent then create agent_config.
-        # Run config upsert when system_prompt is provided (create/update) or when html_prompt is provided (update).
+        # Create/update config whenever any config-related field is present.
+        CONFIG_TRIGGER_KEYS = (
+            "system_prompt", "html_prompt", "first_message", "end_call_message",
+            "voicemail_message", "llm_service_id", "tts_service_id", "stt_service_id",
+            "llm_model_id", "tts_model_id", "stt_model_id",
+            *AGENT_METADATA_KEYS,
+        )
         existing_config = self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).first()
-        if agent_data.get("system_prompt") or agent_data.get("html_prompt") is not None:
+        has_config_field = any(k in agent_data for k in CONFIG_TRIGGER_KEYS)
+        if has_config_field or existing_config:
             config_data = self._build_agent_config_data(agent.id, agent_data, existing_config=existing_config)
             if existing_config:
                 config_data["id"] = existing_config.id
@@ -211,13 +218,22 @@ class AgentService(BaseService):
             .all()
         )
 
-        # Fetch phone numbers linked through the agent's channels
+        # Fetch phone numbers assigned to this specific agent
         channel_ids = [c.id for c in channel_rows]
-        phone_rows = (
-            self.db.query(ChannelPhoneNumbers)
-            .filter(ChannelPhoneNumbers.channel_id.in_(channel_ids))
-            .all()
-        ) if channel_ids else []
+        try:
+            phone_rows = (
+                self.db.query(ChannelPhoneNumbers)
+                .filter(ChannelPhoneNumbers.agent_id == agent.id)
+                .all()
+            )
+        except Exception:
+            self.db.rollback()
+            # Fallback for when agent_id column doesn't exist yet
+            phone_rows = (
+                self.db.query(ChannelPhoneNumbers)
+                .filter(ChannelPhoneNumbers.channel_id.in_(channel_ids))
+                .all()
+            ) if channel_ids else []
 
         # Group phone numbers by channel_id
         phones_by_channel: Dict[int, list] = {}
@@ -348,6 +364,8 @@ class AgentService(BaseService):
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Agent not found",
             )
+        # Delete associated phone number assignments
+        self.db.query(ChannelPhoneNumbers).filter(ChannelPhoneNumbers.agent_id == agent.id).delete()
         # Delete associated agent_config
         self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).delete()
         # Delete associated agent_channel links

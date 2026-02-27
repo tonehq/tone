@@ -53,11 +53,6 @@ class AgentConfigService(BaseService):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="agent_id is required",
             )
-        if not config_data.get("system_prompt"):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="system_prompt is required",
-            )
         config_id = config_data.get("id")
         config_uuid_raw = config_data.get("uuid")
         agent_id = int(config_data["agent_id"])
@@ -83,7 +78,7 @@ class AgentConfigService(BaseService):
         values = {
             "uuid": config_uuid,
             "agent_id": agent_id,
-            "system_prompt": config_data["system_prompt"],
+            "system_prompt": config_data.get("system_prompt") or "",
             "created_at": now,
             "updated_at": now,
         }
