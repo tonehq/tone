@@ -104,3 +104,6 @@ The `pipecat/` directory is a custom fork (`tonehq/pipecat`) of the Pipecat AI f
 
 -For generating postman collection
 .claude/skills/postman/SKILL.md
+
+-For generating test cases
+.claude/skills/test-cases/SKILL.md
