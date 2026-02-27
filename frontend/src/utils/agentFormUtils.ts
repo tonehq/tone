@@ -100,6 +100,9 @@ export function formStateToUpsertPayload(
     llm_service_id: form.aiModel,
     tts_service_id: form.voiceProvider,
     stt_service_id: form.sttProvider,
+    channel: {
+      type: 'TWILIO',
+    },
   };
   if (existingId != null) payload.id = existingId;
   return payload;
