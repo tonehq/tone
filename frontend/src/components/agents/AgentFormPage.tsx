@@ -323,7 +323,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-primary text-sm font-bold text-primary-foreground">
               {formData.name?.charAt(0)?.toUpperCase() || 'A'}
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 space-y-1">
               <h3 className="truncate text-sm font-semibold text-foreground">{formData.name}</h3>
               <AgentTypeBadge agentType={agentType} />
               {formData.phoneNumbers?.length > 0 && (
