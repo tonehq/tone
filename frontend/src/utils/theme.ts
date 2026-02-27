@@ -59,9 +59,9 @@ export const theme = createTheme({
   palette: {
     mode: 'light',
     primary: {
-      main: '#8b5cf6',
-      dark: '#7c3aed',
-      light: '#a78bfa',
+      main: '#6366f1',
+      dark: '#4f46e5',
+      light: '#818cf8',
       contrastText: '#ffffff',
     },
     secondary: {
@@ -135,7 +135,7 @@ export const theme = createTheme({
     },
   },
   shape: {
-    borderRadius: 5,
+    borderRadius: 10,
   },
   custom: {
     typography: {
@@ -154,17 +154,17 @@ export const theme = createTheme({
       },
     },
     borderRadius: {
-      sm: '4px',
-      base: '5px',
-      md: '5px',
-      lg: '5px',
+      sm: '6px',
+      base: '10px',
+      md: '10px',
+      lg: '10px',
     },
   },
   components: {
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 5,
+          borderRadius: 10,
           padding: '8px 16px',
           fontWeight: 500,
         },
@@ -179,14 +179,14 @@ export const theme = createTheme({
     MuiPaper: {
       styleOverrides: {
         root: {
-          borderRadius: 5,
+          borderRadius: 10,
         },
       },
     },
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 5,
+          borderRadius: 10,
           boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
         },
       },
@@ -195,7 +195,7 @@ export const theme = createTheme({
       styleOverrides: {
         root: {
           '& .MuiOutlinedInput-root': {
-            borderRadius: 5,
+            borderRadius: 10,
           },
         },
       },
@@ -203,7 +203,7 @@ export const theme = createTheme({
     MuiDialog: {
       styleOverrides: {
         paper: {
-          borderRadius: 5,
+          borderRadius: 10,
         },
       },
     },
@@ -213,7 +213,7 @@ export const theme = createTheme({
           minHeight: 44,
         },
         indicator: {
-          backgroundColor: '#8b5cf6',
+          backgroundColor: '#6366f1',
         },
       },
     },
@@ -224,7 +224,7 @@ export const theme = createTheme({
           textTransform: 'none',
           fontWeight: 500,
           '&.Mui-selected': {
-            color: '#8b5cf6',
+            color: '#6366f1',
           },
         },
       },
@@ -232,7 +232,7 @@ export const theme = createTheme({
     MuiChip: {
       styleOverrides: {
         root: {
-          borderRadius: 5,
+          borderRadius: 10,
         },
       },
     },

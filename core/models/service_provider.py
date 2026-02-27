@@ -22,5 +22,6 @@ class ServiceProvider(TimestampModel):
     config_schema = Column(JSONB)
     status = Column(String, default='active')
     is_system = Column(Boolean, default=False)
+    meta_data_schema = Column(JSONB, nullable=True)
 
 

@@ -19,6 +19,30 @@ def get_all_agents(
     return AgentService(db).get_all_agents(agent_id=agent_id, created_by=claims.user_id)
 
 
+@router.get("/get_agent", response_model=Dict[str, Any])
+def get_agent(
+    agent_id: int = Query(..., description="The agent ID to fetch"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    results = AgentService(db).get_all_agents(agent_id=agent_id, created_by=claims.user_id)
+    if not results:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent not found",
+        )
+    return results[0]
+
+
+@router.delete("/delete_agent", status_code=status.HTTP_200_OK)
+def delete_agent(
+    agent_id: int = Query(..., description="The agent ID to delete"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    return AgentService(db).delete_agent(agent_id)
+
+
 @router.post("/upsert_agent", status_code=status.HTTP_200_OK)
 def upsert_agent(
     data: Dict[str, Any] = Body(...),

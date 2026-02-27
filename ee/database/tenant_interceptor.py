@@ -7,7 +7,7 @@ from core.database.base import Base
 
 TENANT_MODELS = [
     'agents', 'api_keys', 'models', 'voices', 'transcribers',
-    'agent_phone_numbers', 'agent_knowledge', 'members',
+    'channel_phone_numbers', 'agent_knowledge', 'members',
     'organization_invites', 'organization_access_requests'
 ]
 

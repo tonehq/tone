@@ -13,6 +13,26 @@ class ModelService(BaseService):
     CREATED_ATTRS = ("service_provider_id", "name", "meta_data", "api_key_id", "status", "service_type")
     UPDATABLE_ATTRS = ("service_provider_id", "name", "meta_data", "api_key_id", "status", "service_type", "updated_at")
 
+    def get_models_by_provider(self, service_provider_id: int):
+        _ensure_service_provider_exists(self.db, service_provider_id)
+        return (
+            self.db.query(Model)
+            .filter(Model.service_provider_id == service_provider_id)
+            .order_by(Model.id)
+            .all()
+        )
+
+    def delete_model(self, model_id: int):
+        model = self.db.query(Model).filter(Model.id == model_id).first()
+        if not model:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Model not found",
+            )
+        self.db.delete(model)
+        self.db.commit()
+        return {"message": "Model deleted successfully"}
+
     def upsert_model(self, data: Dict[str, Any]):
         if data.get("service_provider_id") is None and data.get("id") is None:
             raise HTTPException(

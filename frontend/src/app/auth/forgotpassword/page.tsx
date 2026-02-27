@@ -3,7 +3,7 @@
 import { Box, Stack, Typography, useTheme } from '@mui/material';
 import { useState } from 'react';
 import CustomButton from '../../../components/shared/CustomButton';
-import { Form } from '../../../components/shared/FormComponent';
+import { Form } from '../../../components/shared/Form';
 import TextInput from '../../../components/shared/TextInput';
 import { forgotPassword } from '../../../services/auth/helper';
 import { useNotification } from '../../../utils/notification';
@@ -65,19 +65,12 @@ const ForgotPasswordPage = () => {
           />
 
           <Stack spacing={2} sx={{ mt: 2 }}>
-            <CustomButton
-              text="Reset Password"
-              loading={loader}
-              type="primary"
-              htmlType="submit"
-              fullWidth
-            />
-            <CustomButton
-              text="Cancel"
-              type="default"
-              fullWidth
-              onClick={() => window.history.back()}
-            />
+            <CustomButton loading={loader} type="primary" htmlType="submit" fullWidth>
+              Reset Password
+            </CustomButton>
+            <CustomButton type="default" fullWidth onClick={() => window.history.back()}>
+              Cancel
+            </CustomButton>
           </Stack>
         </Form>
       </Box>

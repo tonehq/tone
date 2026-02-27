@@ -1,16 +1,15 @@
 import os
-from typing import Optional
-from dotenv import load_dotenv
 import traceback
+from typing import Optional
+
+from dotenv import load_dotenv
+
 load_dotenv()
 
 
 def get_infisical_secrets() -> dict:
     """Fetch secrets from Infisical using token auth"""
-    use_infisical = os.getenv("USE_INFISICAL", "false").lower() == "true"
     
-    if not use_infisical:
-        return {}
     try:
         from infisical_sdk import InfisicalSDKClient
         
@@ -49,8 +48,6 @@ class Settings:
         
         # Helper to get value from Infisical first, then env, then default
         def get_secret(key: str, default: str = "") -> str:
-            print(f"Fetching secret for key: {key}")
-            print(f"Infisical secrets available: {list(infisical_secrets.keys())}")
             return infisical_secrets.get(key) or os.getenv(key, default)
         
         self.DATABASE_URL: str = get_secret("CE_DATABASE_URL", get_secret("DATABASE_URL", ""))
@@ -62,7 +59,7 @@ class Settings:
         self.FIREBASE_PROJECT_ID: Optional[str] = get_secret("FIREBASE_PROJECT_ID") or None
         
         self.APPLICATION_URL: str = get_secret("APPLICATION_URL", "http://localhost:3000")
-        self.RESEND_API_KEY: str = get_secret("RESEND_API_KEY", "")
+        self.RESEND_API_KEY: str = get_secret("RESEND_API_KEY", "re_BTrdB1B7_FvWePWnrC68tZ8hp9uoXfP9F")
         
         self.IS_MULTI_TENANT: bool = False
         self.DEFAULT_ORG_ID: str = get_secret("DEFAULT_ORG_ID", "00000000-0000-0000-0000-000000000001")

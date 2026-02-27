@@ -1,28 +1,22 @@
 'use client';
 
-import { Box, Checkbox, FormControlLabel, Stack, Typography, useTheme } from '@mui/material';
-import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import CustomButton from '../../../components/shared/CustomButton';
-import { Form } from '../../../components/shared/FormComponent';
-import TextInput from '../../../components/shared/TextInput';
-import { login } from '../../../services/auth/helper';
-import { useNotification } from '../../../utils/notification';
-import Container from '../shared/ContainerComponent';
+
+import Container from '@/app/auth/shared/ContainerComponent';
+import { GoogleIcon } from '@/components/icons/google';
+import { CheckboxField, CustomButton, CustomLink, Form, TextInput } from '@/components/shared';
+import { login } from '@/services/auth/helper';
+import { useNotification } from '@/utils/notification';
 
 const LoginPage = () => {
   const [loader, setLoader] = useState(false);
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { notify, contextHolder } = useNotification();
-  const theme = useTheme();
-  const _redirectTo = searchParams.get('redirect') ?? '/home';
 
   const handleSubmit = async (values: any) => {
     setLoader(true);
     try {
-      // Simulate API call
       const res: any = await login(values['email'], values['password']);
 
       if (res) {
@@ -42,13 +36,11 @@ const LoginPage = () => {
   return (
     <Container>
       {contextHolder}
-      <Box sx={{ width: '100%', maxWidth: 400 }}>
-        <Typography variant="h4" sx={{ mb: 1, fontWeight: 600 }}>
-          Log in to your account
-        </Typography>
-        <Typography variant="body1" sx={{ mb: 4, color: theme.palette.text.secondary }}>
-          Welcome back! Enter your credentials to access your account
-        </Typography>
+      <div className="w-full max-w-[400px] animate-page">
+        <h2 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">Welcome back</h2>
+        <p className="mb-8 text-sm text-muted-foreground">
+          Enter your credentials to access your account
+        </p>
 
         <Form onFinish={handleSubmit} layout="vertical" autoComplete="off">
           <TextInput
@@ -66,75 +58,33 @@ const LoginPage = () => {
             isRequired
           />
 
-          <Box
-            sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}
-          >
-            <FormControlLabel
-              control={<Checkbox size="small" defaultChecked />}
-              label={<Typography variant="body2">Remember me</Typography>}
-            />
-            <Typography
-              component={Link}
-              href="/auth/forgotpassword"
-              sx={{
-                fontSize: theme.custom.typography.fontSize.sm,
-                color: theme.palette.primary.main,
-                textDecoration: 'none',
-                '&:hover': { textDecoration: 'underline' },
-              }}
-            >
-              Forgot password?
-            </Typography>
-          </Box>
+          <div className="flex items-center justify-between">
+            <CheckboxField id="remember" label="Remember me" defaultChecked />
+            <CustomLink href="/auth/forgotpassword">Forgot password?</CustomLink>
+          </div>
 
-          <Stack spacing={2}>
-            <CustomButton
-              text="Continue"
-              loading={loader}
-              type="primary"
-              htmlType="submit"
-              fullWidth
-            />
-            <CustomButton
-              text="Continue with Google"
-              type="default"
-              fullWidth
-              icon={
-                <img
-                  src="https://developers.google.com/identity/images/g-logo.png"
-                  alt="Google"
-                  width={16}
-                  height={16}
-                />
-              }
-            />
-          </Stack>
+          <div className="space-y-3">
+            <CustomButton loading={loader} type="primary" htmlType="submit" fullWidth>
+              Continue
+            </CustomButton>
 
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              mt: 3,
-              gap: 0.5,
-            }}
-          >
-            <Typography variant="body2">Don&apos;t have an account?</Typography>
-            <Typography
-              component={Link}
-              href="/auth/signup"
-              sx={{
-                fontWeight: theme.custom.typography.fontWeight.medium,
-                color: theme.palette.primary.main,
-                textDecoration: 'none',
-                '&:hover': { textDecoration: 'underline' },
-              }}
-            >
-              Sign up
-            </Typography>
-          </Box>
+            <div className="relative flex items-center">
+              <div className="flex-1 border-t" />
+              <span className="px-3 text-xs text-muted-foreground">or</span>
+              <div className="flex-1 border-t" />
+            </div>
+
+            <CustomButton type="default" fullWidth icon={<GoogleIcon className="size-4" />}>
+              Continue with Google
+            </CustomButton>
+          </div>
+
+          <div className="flex items-center justify-center gap-1">
+            <span className="text-sm text-muted-foreground">Don&apos;t have an account?</span>
+            <CustomLink href="/auth/signup">Sign up</CustomLink>
+          </div>
         </Form>
-      </Box>
+      </div>
     </Container>
   );
 };

@@ -11,10 +11,12 @@ from fastapi import HTTPException, status
 from core.services.base import BaseService
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
-from core.models.agent_phone_numbers import AgentPhoneNumbers
+from core.models.channel_phone_numbers import ChannelPhoneNumbers
 from core.models.service_provider import ServiceProvider
 from core.models.enums import AgentType
 from core.services.agent_config_service import AgentConfigService
+from core.services.channel_service import ChannelService
+from core.models.agent_channel import AgentChannel
 
 # Keys from request JSON to store in agent_config.agent_metadata
 AGENT_METADATA_KEYS = (
@@ -157,6 +159,33 @@ class AgentService(BaseService):
             ) from e
         agent = self.db.query(Agent).filter(Agent.uuid == agent_uuid).first()
 
+        # Handle channel creation and agent-channel association
+        channel_data = agent_data.get("channel")
+        if channel_data and channel_data.get("type"):
+            channel_svc = ChannelService(self.db, user_id=self.user_id)
+            channel = channel_svc.get_or_create_channel_by_type(
+                channel_type=channel_data["type"],
+                meta_data=channel_data.get("meta_data"),
+                created_by=created_by,
+            )
+            # Create agent_channel link if it doesn't already exist
+            existing_link = (
+                self.db.query(AgentChannel)
+                .filter(AgentChannel.agent_id == agent.id, AgentChannel.channel_id == channel.id)
+                .first()
+            )
+            if not existing_link:
+                import uuid as _uuid
+                link = AgentChannel(
+                    uuid=_uuid.uuid4(),
+                    agent_id=agent.id,
+                    channel_id=channel.id,
+                    created_at=int(time.time()),
+                    updated_at=int(time.time()),
+                )
+                self.db.add(link)
+                self.db.commit()
+
         # When id present: edit both agent and agent_config. When id absent: create agent then create agent_config.
         # Run config upsert when system_prompt is provided (create/update) or when html_prompt is provided (update).
         existing_config = self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).first()
@@ -172,11 +201,51 @@ class AgentService(BaseService):
 
     def _agent_response_item(self, agent: Agent, config: Any) -> Dict[str, Any]:
         """Build response dict: agent + config as single flat object (no agent_config key)."""
-        phone_rows = (
-            self.db.query(AgentPhoneNumbers)
-            .filter(AgentPhoneNumbers.agent_id == agent.id)
+        from core.models.channel import Channel
+
+        # Fetch linked channels via agent_channels
+        channel_rows = (
+            self.db.query(Channel)
+            .join(AgentChannel, AgentChannel.channel_id == Channel.id)
+            .filter(AgentChannel.agent_id == agent.id)
             .all()
         )
+
+        # Fetch phone numbers linked through the agent's channels
+        channel_ids = [c.id for c in channel_rows]
+        phone_rows = (
+            self.db.query(ChannelPhoneNumbers)
+            .filter(ChannelPhoneNumbers.channel_id.in_(channel_ids))
+            .all()
+        ) if channel_ids else []
+
+        # Group phone numbers by channel_id
+        phones_by_channel: Dict[int, list] = {}
+        for p in phone_rows:
+            phones_by_channel.setdefault(p.channel_id, []).append({
+                "id": p.id,
+                "uuid": str(p.uuid),
+                "phone_number": p.phone_number,
+                "phone_number_sid": p.phone_number_sid,
+                "provider": p.provider,
+                "country_code": p.country_code,
+                "number_type": p.number_type,
+                "capabilities": p.capabilities,
+                "status": p.status,
+            })
+
+        # Build channels list with nested phone_numbers
+        channels_list = []
+        for ch in channel_rows:
+            channels_list.append({
+                "id": ch.id,
+                "uuid": str(ch.uuid),
+                "name": ch.name,
+                "type": ch.type.value if ch.type else None,
+                "created_by": ch.created_by,
+                "meta_data": ch.meta_data if isinstance(ch.meta_data, dict) else {},
+                "phone_numbers": phones_by_channel.get(ch.id, []),
+            })
 
         item = {
             "id": agent.id,
@@ -194,16 +263,9 @@ class AgentService(BaseService):
             "meta_data": agent.meta_data,
             "status": agent.status,
             "agent_type": agent.agent_type.value if agent.agent_type is not None else None,
-            "phone_number": phone_rows[0].phone_number if phone_rows else None,
-            "country_code": phone_rows[0].country_code if phone_rows else None,
-            
+            "phone_number": [{"type": p.provider, "no": p.phone_number} for p in phone_rows],
+            "channels": channels_list,
         }
-        # Phone numbers for this agent (phone_number and country_code only)
-
-        # item["phone_numbers"] = [
-        #     {"phone_number": p.phone_number, "country_code": p.country_code}
-        #     for p in phone_rows
-        # ]
         if config:
             agent_meta = config.agent_metadata if isinstance(config.agent_metadata, dict) else {}
             llm_meta = config.llm_metadata if isinstance(config.llm_metadata, dict) else {}
@@ -278,6 +340,21 @@ class AgentService(BaseService):
             "agent_metadata": agent_metadata,
         }
         return config_data
+
+    def delete_agent(self, agent_id: int):
+        agent = self.db.query(Agent).filter(Agent.id == agent_id).first()
+        if not agent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Agent not found",
+            )
+        # Delete associated agent_config
+        self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).delete()
+        # Delete associated agent_channel links
+        self.db.query(AgentChannel).filter(AgentChannel.agent_id == agent.id).delete()
+        self.db.delete(agent)
+        self.db.commit()
+        return {"message": "Agent deleted successfully"}
 
     def get_all_agents(self, agent_id=None, created_by=None):
         """Return all agents with joined agent_config and service_providers (llm, tts, stt). If agent_id is given, return only that agent."""

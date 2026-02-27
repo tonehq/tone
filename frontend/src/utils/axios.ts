@@ -1,7 +1,7 @@
 import Axios from 'axios';
 import Cookies from 'js-cookie';
 
-import { BACKEND_URL } from '@/urls';
+import { BACKEND_URL } from '@/constants';
 
 const axiosInstance = Axios.create({
   baseURL: BACKEND_URL,

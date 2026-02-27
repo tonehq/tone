@@ -39,19 +39,10 @@ const eslintConfig = [
       'react/no-unescaped-entities': 'off',
       indent: 'off',
       'linebreak-style': 'off',
-      quotes: ['error', 'single'],
+      quotes: ['error', 'single', { avoidEscape: true }],
       'arrow-body-style': ['error', 'as-needed'],
       'lines-between-class-members': ['error', 'always'],
-      'comma-dangle': [
-        'error',
-        {
-          arrays: 'always-multiline',
-          objects: 'always-multiline',
-          imports: 'always-multiline',
-          exports: 'always-multiline',
-          functions: 'always-multiline',
-        },
-      ],
+      'comma-dangle': 'off',
       'object-curly-spacing': ['error', 'always'],
       'comma-spacing': [
         'error',

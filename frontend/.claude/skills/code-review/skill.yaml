@@ -1,0 +1,32 @@
+name: code-review
+description: >
+  Performs a structured code review against SOLID principles, security,
+  performance (React rendering, Next.js SSR, bundle, network, Core Web Vitals,
+  memory, state, assets), React/Next.js best practices, accessibility, and
+  code quality checklists.
+  Use when the user asks to review changes, wants a pre-commit check, or
+  requests SOLID / security / performance analysis on current git changes.
+  Accepts an optional base-branch argument (defaults to main).
+
+license: proprietary
+compatibility: Requires git. Designed for Claude Code in a Next.js (App Router) project.
+
+metadata:
+  author: tonehq
+  version: '1.1.0'
+  category: code-quality
+  tags: code-review, solid, security, performance, react, nextjs, accessibility, core-web-vitals
+  references: >
+    references/solid-checklist.md,
+    references/security-checklist.md,
+    references/performance-checklist.md,
+    references/code-quality-checklist.md,
+    references/removal-plan.md
+
+# ── Tool permissions (agentskills experimental + Claude Code) ───────────────
+allowed-tools: Bash Read
+
+# ── Claude Code extensions ──────────────────────────────────────────────────
+argument-hint: '[base-branch]'
+disable-model-invocation: false # Claude may invoke automatically when review is relevant
+user-invocable: true # Available via /code-review

@@ -7,7 +7,7 @@ import { debounce } from 'lodash';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import CustomButton from '../../../components/shared/CustomButton';
-import { Form } from '../../../components/shared/FormComponent';
+import { Form } from '../../../components/shared/Form';
 import TextInput from '../../../components/shared/TextInput';
 import { signup } from '../../../services/auth/helper';
 import axios from '../../../utils/axios';
@@ -174,15 +174,10 @@ const SignupClient = () => {
           />
 
           <Stack spacing={2} sx={{ mt: 2 }}>
+            <CustomButton loading={loader} type="primary" htmlType="submit" fullWidth>
+              Create account
+            </CustomButton>
             <CustomButton
-              text="Create account"
-              loading={loader}
-              type="primary"
-              htmlType="submit"
-              fullWidth
-            />
-            <CustomButton
-              text="Sign up with Google"
               type="default"
               fullWidth
               icon={
@@ -193,7 +188,9 @@ const SignupClient = () => {
                   height={16}
                 />
               }
-            />
+            >
+              Sign up with Google
+            </CustomButton>
           </Stack>
 
           <Box
