@@ -3,8 +3,8 @@
 import { CustomButton, SelectInput } from '@/components/shared';
 import { Slider } from '@/components/ui/slider';
 import { languages } from '@/data/mockAgents';
-import { cn } from '@/utils/cn';
 import type { ServiceProvider } from '@/types/provider';
+import { cn } from '@/utils/cn';
 import type { ReactNode } from 'react';
 import type { AgentVoiceFormData } from './types';
 
@@ -134,7 +134,7 @@ export default function VoiceTab({
                 role="radio"
                 aria-checked={isActive}
                 className={cn(
-                  'h-auto w-[105px] justify-start rounded-md border p-2 text-left transition-colors',
+                  'flex !flex-col h-auto w-[105px] !items-start rounded-md border p-2 text-left transition-colors',
                   isActive
                     ? 'border-primary bg-primary/10'
                     : 'border-border hover:border-muted-foreground/50',
@@ -176,7 +176,7 @@ export default function VoiceTab({
                 role="radio"
                 aria-checked={isActive}
                 className={cn(
-                  'h-auto w-[170px] justify-start rounded-md border p-3 text-left transition-colors',
+                  '!flex-col !h-auto !w-[170px] !items-start rounded-md border p-3 text-left transition-colors',
                   isActive
                     ? 'border-primary bg-primary/10'
                     : 'border-border hover:border-muted-foreground/50',
@@ -184,7 +184,7 @@ export default function VoiceTab({
                 onClick={() => onFormChange({ speechRecognition: item.value })}
               >
                 <span className="block text-sm font-semibold text-foreground">{item.label}</span>
-                <span className="block text-xs text-muted-foreground">{item.desc}</span>
+                <span className="block text-xs text-muted-foreground text-wrap">{item.desc}</span>
               </CustomButton>
             );
           })}

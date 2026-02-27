@@ -1,3 +1,4 @@
+import ActionMenu from './ActionMenu';
 import CheckboxField from './CheckboxField';
 import CustomButton from './CustomButton';
 import CustomLink from './CustomLink';
@@ -21,7 +22,10 @@ export type { RadioGroupOption } from './RadioGroupField';
 export type { SelectOption } from './SelectInput';
 export type { TabItem } from './CustomTab';
 
+export type { ActionMenuProps } from './ActionMenu';
+
 export {
+  ActionMenu,
   CheckboxField,
   CustomButton,
   CustomLink,

@@ -1,11 +1,10 @@
 'use client';
 
-import { CustomButton } from '@/components/shared';
+import { ActionMenu } from '@/components/shared';
 import CustomTable from '@/components/shared/CustomTable';
 import type { CustomTableColumn } from '@/types/components';
 import type { IntegrationRow } from '@/types/integration';
-import { Loader2, Pencil, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { Loader2 } from 'lucide-react';
 
 interface IntegrationsTableProps {
   rows: IntegrationRow[];
@@ -20,17 +19,6 @@ export default function IntegrationsTable({
   onEdit,
   onDelete,
 }: IntegrationsTableProps) {
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-
-  const handleDelete = async (id: number) => {
-    setDeletingId(id);
-    try {
-      await onDelete(id);
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
   const columns: CustomTableColumn<IntegrationRow>[] = [
     { key: 'name', title: 'Name', dataIndex: 'name' },
     { key: 'account_sid', title: 'Account SID', dataIndex: 'account_sid' },
@@ -40,38 +28,15 @@ export default function IntegrationsTable({
       key: 'actions',
       title: '',
       width: 'w-24',
-      render: (_value, record) => {
-        const isDeleting = deletingId === record.id;
-        return (
-          <div className="flex gap-1">
-            <CustomButton
-              type="text"
-              size="icon-xs"
-              onClick={() => onEdit(record)}
-              disabled={isDeleting}
-              aria-label="edit"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <Pencil className="size-4" />
-            </CustomButton>
-            {isDeleting ? (
-              <CustomButton type="text" size="icon-xs" disabled>
-                <Loader2 className="size-4 animate-spin text-destructive" />
-              </CustomButton>
-            ) : (
-              <CustomButton
-                type="text"
-                size="icon-xs"
-                onClick={() => handleDelete(record.id)}
-                aria-label="delete"
-                className="text-destructive hover:text-destructive/90"
-              >
-                <Trash2 className="size-4" />
-              </CustomButton>
-            )}
-          </div>
-        );
-      },
+      render: (_value, record) => (
+        <ActionMenu
+          onEdit={() => onEdit(record)}
+          onDelete={() => onDelete(record.id)}
+          deleteTitle="Delete Integration"
+          deleteDescription="Are you sure you want to delete this integration? This action cannot be undone."
+          confirmText="Delete"
+        />
+      ),
     },
   ];
 

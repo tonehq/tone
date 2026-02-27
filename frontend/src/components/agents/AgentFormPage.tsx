@@ -6,7 +6,7 @@ import PromptPage from '@/components/agents/agent-form/promptPage';
 import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 import AssignPhoneNumberModal from '@/components/agents/AssignPhoneNumberModal';
 import type { TabItem } from '@/components/shared';
-import { CustomButton, CustomTab } from '@/components/shared';
+import { CustomButton, CustomModal, CustomTab } from '@/components/shared';
 import { deleteAgent, getAgent, upsertAgent } from '@/services/agentsService';
 import type { AgentFormState } from '@/types/agent';
 import {
@@ -41,6 +41,8 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
   const [saving, setSaving] = useState(false);
   const [assignModalOpen, setAssignModalOpen] = useState(false);
   const [_assigning, setAssigning] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingAgent, setDeletingAgent] = useState(false);
 
   const providers = providersLoadable.state === 'hasData' ? providersLoadable.data : [];
   const providersLoading = providersLoadable.state === 'loading';
@@ -133,23 +135,22 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
     }
   };
 
-  const handleDeleteAgent = async () => {
-    if (
-      typeof window !== 'undefined' &&
-      window.confirm(
-        'Deleting an agent will erase personalized data, voice profiles, and integrations. Are you sure?',
-      )
-    ) {
+  const openDeleteConfirm = () => setDeleteConfirmOpen(true);
+
+  const handleConfirmDeleteAgent = async () => {
+    setDeletingAgent(true);
+    try {
       if (isEditMode) {
-        try {
-          await deleteAgent(Number(agentId));
-          router.push('/agents');
-        } catch {
-          notify.error('Error', 'Failed to delete agent');
-        }
+        await deleteAgent(Number(agentId));
+        router.push('/agents');
       } else {
         router.push('/agents');
       }
+    } catch {
+      notify.error('Error', 'Failed to delete agent');
+    } finally {
+      setDeletingAgent(false);
+      setDeleteConfirmOpen(false);
     }
   };
 
@@ -174,7 +175,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
             llmProviders={llmProviders}
             providersLoading={providersLoading}
             onFormChange={handleFormChange}
-            onDeleteAgent={handleDeleteAgent}
+            onDeleteAgent={openDeleteConfirm}
           />
         ),
       },
@@ -359,6 +360,17 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         onClose={() => setAssignModalOpen(false)}
         currentPhoneNumbers={formData.phoneNumbers}
         onAssign={handleAssignPhoneNumbers}
+      />
+
+      <CustomModal
+        open={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        title="Delete Agent"
+        description="Deleting an agent will erase personalized data, voice profiles, and integrations. Are you sure?"
+        confirmText="Delete"
+        confirmType="danger"
+        confirmLoading={deletingAgent}
+        onConfirm={handleConfirmDeleteAgent}
       />
 
       {contextHolder}
