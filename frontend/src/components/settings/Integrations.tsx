@@ -65,8 +65,10 @@ export default function Integrations() {
         'Success',
         data.id ? 'Integration updated successfully' : 'Integration created successfully',
       );
-    } catch {
-      notify.error('Error', 'Failed to save integration. Please try again.');
+    } catch (err: any) {
+      const detail: string =
+        err?.response?.data?.detail ?? err?.message ?? 'Failed to save integration. Please try again.';
+      notify.error('Error', detail);
       throw new Error('API call failed');
     }
   };
