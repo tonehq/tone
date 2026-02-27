@@ -39,11 +39,11 @@ def _channel_phone_number_unique_constraint_detail(exc: IntegrityError) -> str:
 
 class ChannelPhoneNumbersService(BaseService):
     CREATED_ATTRS = (
-        "channel_id", "phone_number", "phone_number_sid", "phone_number_auth_token",
+        "channel_id", "agent_id", "phone_number", "phone_number_sid", "phone_number_auth_token",
         "provider", "country_code", "number_type", "capabilities", "status",
     )
     UPDATABLE_ATTRS = (
-        "channel_id", "phone_number", "phone_number_sid", "phone_number_auth_token", "provider",
+        "channel_id", "agent_id", "phone_number", "phone_number_sid", "phone_number_auth_token", "provider",
         "country_code", "number_type", "capabilities", "status", "updated_at",
     )
 
@@ -63,9 +63,34 @@ class ChannelPhoneNumbersService(BaseService):
             .all()
         )
 
+    def get_assigned_phone_numbers(self) -> List[Dict[str, Any]]:
+        """Return all phone numbers that are assigned to an agent."""
+        from core.models.agent import Agent
+
+        try:
+            rows = (
+                self.db.query(ChannelPhoneNumbers, Agent.name)
+                .join(Agent, ChannelPhoneNumbers.agent_id == Agent.id)
+                .filter(ChannelPhoneNumbers.agent_id.isnot(None))
+                .all()
+            )
+            return [
+                {
+                    "phone_number": cpn.phone_number,
+                    "agent_id": cpn.agent_id,
+                    "agent_name": agent_name,
+                    "provider": cpn.provider,
+                }
+                for cpn, agent_name in rows
+            ]
+        except Exception:
+            self.db.rollback()
+            return []
+
     def detach_channel_phone_number(self, data: Dict[str, Any]):
         channel_id = int(data["channel_id"])
         phone_number = data["phone_number"].strip()
+        agent_id = data.get("agent_id")
 
         channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
         if not channel:
@@ -74,14 +99,14 @@ class ChannelPhoneNumbersService(BaseService):
                 detail="Channel not found",
             )
 
-        record = (
-            self.db.query(ChannelPhoneNumbers)
-            .filter(
-                ChannelPhoneNumbers.channel_id == channel_id,
-                ChannelPhoneNumbers.phone_number == phone_number,
-            )
-            .first()
+        q = self.db.query(ChannelPhoneNumbers).filter(
+            ChannelPhoneNumbers.channel_id == channel_id,
+            ChannelPhoneNumbers.phone_number == phone_number,
         )
+        if agent_id is not None:
+            q = q.filter(ChannelPhoneNumbers.agent_id == int(agent_id))
+
+        record = q.first()
         if not record:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -150,6 +175,7 @@ class ChannelPhoneNumbersService(BaseService):
         """Upsert a single phone number row. phone_number must be a plain string here."""
         phone_number = data["phone_number"].strip()
         channel_id = data.get("channel_id")
+        agent_id = data.get("agent_id")
 
         if channel_id is not None:
             channel = self.db.query(Channel).filter(Channel.id == int(channel_id)).first()
@@ -158,6 +184,28 @@ class ChannelPhoneNumbersService(BaseService):
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Channel not found",
                 )
+
+        # Check if this phone number is already assigned to a different agent
+        if agent_id is not None:
+            try:
+                existing_assignment = (
+                    self.db.query(ChannelPhoneNumbers)
+                    .filter(
+                        ChannelPhoneNumbers.phone_number == phone_number,
+                        ChannelPhoneNumbers.agent_id.isnot(None),
+                        ChannelPhoneNumbers.agent_id != int(agent_id),
+                    )
+                    .first()
+                )
+                if existing_assignment:
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=f"Phone number {phone_number} is already assigned to another agent.",
+                    )
+            except HTTPException:
+                raise
+            except Exception:
+                self.db.rollback()
 
         row_id = data.get("id")
         row_uuid_raw = data.get("uuid")
@@ -204,6 +252,7 @@ class ChannelPhoneNumbersService(BaseService):
         values = {
             "uuid": row_uuid,
             "channel_id": int(channel_id) if channel_id is not None else None,
+            "agent_id": int(agent_id) if agent_id is not None else None,
             "phone_number": phone_number,
             "phone_number_sid": data.get("phone_number_sid", ""),
             "phone_number_auth_token": data.get("phone_number_auth_token", ""),
@@ -236,7 +285,7 @@ class ChannelPhoneNumbersService(BaseService):
             ChannelPhoneNumbers.uuid == row_uuid
         ).first()
 
-    def get_twilio_phone_numbers(self, channel_type: str, channel_id: Optional[int] = None):
+    def get_twilio_phone_numbers(self, channel_type: str, channel_id: Optional[int] = None, agent_id: Optional[int] = None):
         from twilio.rest import Client
         from core.models.enums import ChannelType
 
@@ -289,6 +338,18 @@ class ChannelPhoneNumbersService(BaseService):
                 detail=f"Failed to fetch phone numbers from Twilio: {str(e)}",
             )
 
+        # Build a set of phone numbers assigned to OTHER agents (exclude current agent)
+        try:
+            q = self.db.query(ChannelPhoneNumbers.phone_number).filter(
+                ChannelPhoneNumbers.agent_id.isnot(None),
+            )
+            if agent_id is not None:
+                q = q.filter(ChannelPhoneNumbers.agent_id != agent_id)
+            taken_numbers = {row[0] for row in q.all()}
+        except Exception:
+            self.db.rollback()
+            taken_numbers = set()
+
         return [
             {
                 "sid": number.sid,
@@ -299,4 +360,5 @@ class ChannelPhoneNumbersService(BaseService):
                 "status": number.status,
             }
             for number in phone_numbers
+            if number.phone_number not in taken_numbers
         ]

@@ -14,6 +14,7 @@ class ChannelPhoneNumbers(TimestampModel):
 
     uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
     channel_id = Column(BigInteger, ForeignKey('channels.id'), nullable=True)
+    agent_id = Column(BigInteger, ForeignKey('agents.id'), nullable=True)
     phone_number = Column(String, nullable=False)
     phone_number_sid = Column(String, nullable=False)
     phone_number_auth_token = Column(String, nullable=False)
@@ -22,6 +23,5 @@ class ChannelPhoneNumbers(TimestampModel):
     number_type = Column(String, nullable=True)
     capabilities = Column(JSONB, nullable=True)
     status = Column(String, default='active', nullable=True)
-
 
     channel = relationship("Channel", back_populates="phone_numbers")

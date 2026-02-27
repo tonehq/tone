@@ -66,13 +66,23 @@ def detach_channel_phone_number(
     return ChannelPhoneNumbersService(db).detach_channel_phone_number(data)
 
 
+@router.get("/get_assigned_phone_numbers", status_code=status.HTTP_200_OK)
+def get_assigned_phone_numbers(
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    return ChannelPhoneNumbersService(db).get_assigned_phone_numbers()
+
+
 @router.get("/get_twilio_phone_numbers", status_code=status.HTTP_200_OK)
 def get_twilio_phone_numbers(
     type: str = Query(..., description="The channel type (e.g. twilio)"),
     channel_id: Optional[int] = Query(None, description="The channel ID to use for credentials"),
+    agent_id: Optional[int] = Query(None, description="Current agent ID — numbers assigned to other agents are excluded"),
     db: Session = Depends(get_db),
 ):
     return ChannelPhoneNumbersService(db).get_twilio_phone_numbers(
         channel_type=type,
         channel_id=channel_id,
+        agent_id=agent_id,
     )

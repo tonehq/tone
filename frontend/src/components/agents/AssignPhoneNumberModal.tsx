@@ -15,8 +15,9 @@ interface PhoneNumberEntry {
 interface AssignPhoneNumberModalProps {
   open: boolean;
   onClose: () => void;
-  onAssign: (phoneNumbers: PhoneNumberEntry[]) => void;
+  onAssign: (phoneNumbers: PhoneNumberEntry[]) => Promise<void>;
   currentPhoneNumbers?: PhoneNumberEntry[];
+  agentId?: number;
 }
 
 export default function AssignPhoneNumberModal({
@@ -24,25 +25,27 @@ export default function AssignPhoneNumberModal({
   onClose,
   onAssign,
   currentPhoneNumbers = [],
+  agentId,
 }: AssignPhoneNumberModalProps) {
   const [provider, setProvider] = useState('twilio');
   const [phoneNumbers, setPhoneNumbers] = useState<TwilioPhoneNumber[]>([]);
   const [selectedNos, setSelectedNos] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [assigning, setAssigning] = useState(false);
 
-  const assignedNos = currentPhoneNumbers.map((p) => p.no);
+  const myAssignedNos = currentPhoneNumbers.map((p) => p.no);
 
   const fetchNumbers = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getTwilioPhoneNumbers(provider);
-      setPhoneNumbers(data);
+      const twilioData = await getTwilioPhoneNumbers(provider, agentId);
+      setPhoneNumbers(twilioData);
     } catch {
       setPhoneNumbers([]);
     } finally {
       setLoading(false);
     }
-  }, [provider]);
+  }, [provider, agentId]);
 
   useEffect(() => {
     if (open) {
@@ -52,19 +55,24 @@ export default function AssignPhoneNumberModal({
   }, [open, fetchNumbers, currentPhoneNumbers]);
 
   const toggleNumber = (no: string) => {
-    if (assignedNos.includes(no)) return;
+    if (myAssignedNos.includes(no)) return;
     setSelectedNos((prev) => (prev.includes(no) ? prev.filter((n) => n !== no) : [...prev, no]));
   };
 
-  const handleAssign = () => {
+  const handleAssign = async () => {
     const entries: PhoneNumberEntry[] = selectedNos
-      .filter((no) => !assignedNos.includes(no))
+      .filter((no) => !myAssignedNos.includes(no))
       .map((no) => ({ type: provider, no }));
-    onAssign(entries);
-    onClose();
+    setAssigning(true);
+    try {
+      await onAssign(entries);
+      onClose();
+    } finally {
+      setAssigning(false);
+    }
   };
 
-  const newSelections = selectedNos.filter((no) => !assignedNos.includes(no));
+  const newSelections = selectedNos.filter((no) => !myAssignedNos.includes(no));
 
   return (
     <CustomModal
@@ -73,6 +81,7 @@ export default function AssignPhoneNumberModal({
       title="Assign Phone Numbers"
       confirmText="Assign"
       confirmDisabled={newSelections.length === 0 || loading}
+      confirmLoading={assigning}
       onConfirm={handleAssign}
     >
       <div className="space-y-4">
@@ -97,7 +106,7 @@ export default function AssignPhoneNumberModal({
           ) : (
             <div className="max-h-48 space-y-2 overflow-y-auto rounded-md border border-border p-2">
               {phoneNumbers.map((pn) => {
-                const isAssigned = assignedNos.includes(pn.phone_number);
+                const isAssigned = myAssignedNos.includes(pn.phone_number);
                 return (
                   <label
                     key={pn.phone_number}

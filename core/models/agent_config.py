@@ -18,7 +18,7 @@ class AgentConfig(TimestampModel):
     tts_service_id = Column(BigInteger, ForeignKey('service_providers.id'))
     stt_service_id = Column(BigInteger, ForeignKey('service_providers.id'))
     first_message = Column(Text, nullable=True)
-    system_prompt = Column(Text, nullable=False)
+    system_prompt = Column(Text, nullable=True, default="")
     end_call_message = Column(Text, nullable=True)
     voicemail_message = Column(Text, nullable=True)
     status = Column(String, default="active")

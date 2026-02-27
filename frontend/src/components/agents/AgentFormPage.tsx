@@ -89,6 +89,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         phone_number_auth_token: channel?.meta_data?.auth_token,
         provider: 'twilio',
         channel_id: channel?.id,
+        agent_id: agentId ? Number(agentId) : undefined,
         country_code: '+1',
         number_type: 'international',
         capabilities: {
@@ -100,10 +101,14 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       };
       await axiosInstance.post('/channel_phone_number/upsert_channel_phone_number', payload);
 
-      setFormData((prev) => ({ ...prev, phoneNumbers }));
+      setFormData((prev) => ({
+        ...prev,
+        phoneNumbers: [...prev.phoneNumbers, ...phoneNumbers],
+      }));
       notify.success('Success', 'Phone number(s) assigned successfully');
-    } catch {
+    } catch (error) {
       notify.error('Error', 'Failed to assign phone number(s). Please try again.');
+      throw error;
     } finally {
       setAssigning(false);
     }
@@ -117,6 +122,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       await axiosInstance.post('/channel_phone_number/detach_channel_phone_number', {
         channel_id: channel?.id,
         phone_number: unassignTarget.no,
+        agent_id: agentId ? Number(agentId) : undefined,
       });
       setFormData((prev) => ({
         ...prev,
@@ -440,6 +446,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         onClose={() => setAssignModalOpen(false)}
         currentPhoneNumbers={formData.phoneNumbers}
         onAssign={handleAssignPhoneNumbers}
+        agentId={agentId ? Number(agentId) : undefined}
       />
 
       <CustomModal
