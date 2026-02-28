@@ -32,6 +32,7 @@ class BotRunnerService(BaseService):
             The Agent for that phone number, or None if not found.
         """
         normalized = self._normalize_phone_number(phone_number)
+        print("normalized in bot_runner_service.py file ===========", normalized)
         if not normalized:
             return None
         channel_phone = (
@@ -39,6 +40,7 @@ class BotRunnerService(BaseService):
             .filter(ChannelPhoneNumbers.phone_number == normalized)
             .first()
         )
+        
 
         if not channel_phone:
             return None
@@ -111,13 +113,15 @@ class BotRunnerService(BaseService):
         from pipecat.runner.utils import parse_telephony_websocket
 
         transport_type, call_data = await parse_telephony_websocket(websocket)
-        print("transport_type ===========", transport_type)
-        print("call_data ===========", call_data)
         to_number = await self.get_to_number_from_call_data_async(transport_type, call_data)
+        # print("to_number in bot_runner_service.py file ===========", to_number)
+        # print("transport_type in bot_runner_service.py file ===========", transport_type)
+        # print("call_data in bot_runner_service.py file ===========", call_data)
         if not to_number:
             logger.warning("Could not determine 'to' phone number from call data")
             return None, transport_type, call_data
         agent = self.get_bot_for_phone_number(to_number)
+        # print("agent ===========", agent)
         if agent:
             logger.info(
                 "Resolved bot for to_number=%s -> agent_id=%s name=%s",
@@ -127,4 +131,8 @@ class BotRunnerService(BaseService):
             )
         else:
             logger.warning("No agent found for phone number: %s", to_number)
+        
+        print("agent in bot_runner_service.py file before return ===========", agent.id)
+        print("transport_type in bot_runner_service.py file before return ===========", transport_type)
+        print("call_data in bot_runner_service.py file before return ===========", call_data)
         return agent, transport_type, call_data

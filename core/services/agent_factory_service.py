@@ -62,6 +62,7 @@ class AgentFactoryService(BaseService):
             if api_key and api_key.api_key_encrypted:
                 try:
                     api_key_value = decrypt(api_key.api_key_encrypted)
+                    print("api_key_value in agent_factory_service.py file ===========", api_key_value)
                 except Exception as e:
                     logger.warning("Failed to decrypt API key for model %s: %s", svc.id, e)
         if not api_key_value:
@@ -135,10 +136,14 @@ class AgentFactoryService(BaseService):
         Uses agent config's stt_service_id and stt_metadata.
         Returns None if config or credentials are missing or provider is unsupported.
         """
+        print("inside get_stt_for_agent ")
         config = self._get_agent_config(agent)
+        print("config",config)
+        print("config.stt_service_id",config.stt_service_id)
         if not config or not config.stt_service_id:
             return None
         result = self._get_service_and_credentials(config.stt_service_id, "stt")
+        print("result in stt",result)
         if not result:
             return None
         svc, provider, api_key = result
@@ -303,6 +308,7 @@ class AgentFactoryService(BaseService):
         if not config or not config.system_prompt:
             return None
         llm = self.get_llm_for_agent(agent)
+        print("before get_stt_for_agent")
         stt = self.get_stt_for_agent(agent)
         tts = self.get_tts_for_agent(agent)
         if not llm or not stt or not tts:
