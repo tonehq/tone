@@ -149,6 +149,7 @@ class ServiceProviderService(BaseService):
                     "is_system": sp.is_system,
                     "status": sp.status,
                     "created_at": sp.created_at,
+                    "meta_data_schema": sp.meta_data_schema,
                     "models": [],
                 }
             if m is not None:
