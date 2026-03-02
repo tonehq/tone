@@ -105,7 +105,7 @@ class AgentFactoryService(BaseService):
                 return OpenAILLMService(api_key=f"{api_key}", model="gpt-4.1")
             if provider_name == "anthropic": #done
                 from pipecat.services.anthropic.llm import AnthropicLLMService
-                return AnthropicLLMService(api_key=api_key, model=model)
+                return AnthropicLLMService(api_key=api_key, model="claude-sonnet-4-5-20250929")
             if provider_name == "groq": #done
                 from pipecat.services.groq.llm import GroqLLMService
                 return GroqLLMService(api_key=api_key, model=model)
@@ -120,10 +120,40 @@ class AgentFactoryService(BaseService):
                 return GoogleLLMService(api_key=api_key, model=model)
             if provider_name == "ollama": #done
                 from pipecat.services.ollama.llm import OLLamaLLMService
-                return OLLamaLLMService()
-            if provider_name in ["azure","cerebras","nvidia_nim","fireworks","together","perplexity","qwen","deepseek", "mistral","sambanova","grok"]:    
+                base_url = api_key if api_key else "http://localhost:11434/v1"
+                return OLLamaLLMService(model="llama3", base_url=base_url)
+            if provider_name in ["azure", "cerebras", "nvidia_nim", "fireworks", "together", "perplexity", "qwen", "deepseek", "mistral", "sambanova", "grok"]:
                 from pipecat.services.openai.llm import BaseOpenAILLMService
-                return BaseOpenAILLMService(api_key="sk-e6cc0cf46d814c1baad1cee197474190",model="deepseek-chat")
+                base_url = model_meta.get("base_url") or metadata.get("base_url")
+                default_models = {
+                    "azure": "gpt-4o",
+                    "cerebras": "llama-4-scout-17b-16e-instruct",
+                    "nvidia_nim": "meta/llama-3.1-8b-instruct",
+                    "fireworks": "llama-v3p1-8b-instruct",
+                    "together": "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
+                    "perplexity": "sonar",
+                    "qwen": "qwen-turbo",
+                    "deepseek": "deepseek-chat",
+                    "mistral": "mistral-small-latest",
+                    "sambanova": "Meta-Llama-3.1-8B-Instruct",
+                    "grok": "grok-3",
+                }
+                default_base_urls = {
+                    "cerebras": "https://api.cerebras.ai/v1",
+                    "nvidia_nim": "https://integrate.api.nvidia.com/v1",
+                    "fireworks": "https://api.fireworks.ai/inference/v1",
+                    "together": "https://api.together.xyz/v1",
+                    "perplexity": "https://api.perplexity.ai",
+                    "qwen": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+                    "deepseek": "https://api.deepseek.com/v1",
+                    "mistral": "https://api.mistral.ai/v1",
+                    "sambanova": "https://api.sambanova.ai/v1",
+                    "grok": "https://api.x.ai/v1",
+                }
+                if not base_url:
+                    base_url = default_base_urls.get(provider_name)
+                default_model = default_models.get(provider_name, "gpt-4o")
+                return BaseOpenAILLMService(api_key=api_key, model=model or default_model, base_url=base_url)
             return None
         except ImportError as e:
             logger.exception("LLM provider %s not available", provider_name)
@@ -225,6 +255,9 @@ class AgentFactoryService(BaseService):
 
         model = model_meta.get("model") or metadata.get("model")
 
+        import aiohttp
+        session = aiohttp.ClientSession()
+
         try:
             if provider_name == "cartesia":
                 from pipecat.services.cartesia.tts import CartesiaTTSService
@@ -243,7 +276,7 @@ class AgentFactoryService(BaseService):
                 return PlayHTTTSService(api_key=api_key, user_id=user_id, voice_url=voice_url)
             if provider_name == "asyncai_http":
                 from pipecat.services.asyncai.tts import AsyncAIHttpTTSService
-                return AsyncAIHttpTTSService(api_key=api_key, voice_id=voice_id)
+                return AsyncAIHttpTTSService(api_key=api_key, voice_id=voice_id, aiohttp_session=session, model=model or "asyncflow_multilingual_v1.0")
             if provider_name == "aws_polly":
                 from pipecat.services.aws.tts import AWSPollyTTSService
                 aws_access_key_id = model_meta.get("aws_access_key_id") or metadata.get("aws_access_key_id") or ""
@@ -254,8 +287,8 @@ class AgentFactoryService(BaseService):
                 return CambTTSService(api_key=api_key, voice_id=voice_id, model=model or "accented-british-english-male")
             if provider_name == "deepgram":
                 from pipecat.services.deepgram.tts import DeepgramHttpTTSService
-                voice = model_meta.get("voice") or metadata.get("voice") or "aura-asteria-en"
-                return DeepgramHttpTTSService(api_key=api_key, voice=voice)
+                voice = model_meta.get("voice") or metadata.get("voice") or "aura-2-helena-en"
+                return DeepgramHttpTTSService(api_key=api_key, voice=voice, aiohttp_session=session)
             if provider_name == "google_base":
                 from pipecat.services.google.tts import GoogleBaseTTSService
                 return GoogleBaseTTSService(credentials=api_key, voice_id=voice_id)
@@ -267,26 +300,25 @@ class AgentFactoryService(BaseService):
                 return HathoraTTSService(api_key=api_key, voice_id=voice_id, model=model or "sonic-2025-04-16")
             if provider_name == "minimax":
                 from pipecat.services.minimax.tts import MiniMaxHttpTTSService
-                import aiohttp
                 group_id = model_meta.get("group_id") or metadata.get("group_id") or ""
-                session = aiohttp.ClientSession()
                 return MiniMaxHttpTTSService(api_key=api_key, voice_id=voice_id, group_id=group_id, model=model or "speech-02-turbo", aiohttp_session=session)
             if provider_name == "neuphonic":
                 from pipecat.services.neuphonic.tts import NeuphonicHttpTTSService
-                return NeuphonicHttpTTSService(api_key=api_key, voice_id=voice_id)
+                return NeuphonicHttpTTSService(api_key=api_key, voice_id=voice_id, aiohttp_session=session)
             if provider_name == "nvidia":
                 from pipecat.services.nvidia.tts import NvidiaTTSService
                 server = model_meta.get("server") or metadata.get("server") or "grpc.nvcf.nvidia.com:443"
                 return NvidiaTTSService(api_key=api_key, voice_id=voice_id, server=server)
             if provider_name == "rime":
                 from pipecat.services.rime.tts import RimeHttpTTSService
-                return RimeHttpTTSService(api_key=api_key, voice_id=voice_id, model=model or "mist")
+                return RimeHttpTTSService(api_key=api_key, voice_id=voice_id, aiohttp_session=session, model=model or "mistv2")
             if provider_name == "sarvam":
                 from pipecat.services.sarvam.tts import SarvamHttpTTSService
-                return SarvamHttpTTSService(api_key=api_key, voice_id=voice_id, model=model or "meera")
+                return SarvamHttpTTSService(api_key=api_key, voice_id=voice_id, aiohttp_session=session, model=model or "bulbul:v2")
             if provider_name == "speechmatics":
+                print("into speechmatics TTS")
                 from pipecat.services.speechmatics.tts import SpeechmaticsTTSService
-                return SpeechmaticsTTSService(api_key=api_key, voice_id=voice_id)
+                return SpeechmaticsTTSService(api_key=api_key, voice_id=voice_id, aiohttp_session=session)
             if provider_name == "azure":
                 from pipecat.services.azure.tts import AzureTTSService
                 region = model_meta.get("region") or metadata.get("region") or "eastus"
@@ -300,7 +332,7 @@ class AgentFactoryService(BaseService):
                 return HumeTTSService(api_key=api_key, voice_id=voice_id)
             if provider_name == "inworld":
                 from pipecat.services.inworld.tts import InworldTTSService
-                return InworldTTSService(api_key=api_key, voice_id="Ashley", model=model or "inworld-tts-1.5-max")
+                return InworldTTSService(api_key=api_key, voice_id="Ashley")
             if provider_name == "lmnt":
                 from pipecat.services.lmnt.tts import LmntTTSService
                 return LmntTTSService(api_key=api_key, voice_id="ava")

@@ -1,6 +1,5 @@
 """Service to resolve the bot (agent) for incoming telephony calls by phone number."""
 
-import os
 from typing import Optional, Tuple, Any, Dict
 
 import aiohttp
@@ -64,12 +63,41 @@ class BotRunnerService(BaseService):
 
         return None
 
+    def _get_twilio_credentials(self) -> dict:
+        """Fetch Twilio account_sid and auth_token from the DB (api_keys table)."""
+        from core.models.service_provider import ServiceProvider
+        from core.models.api_key import ApiKey
+        from core.utils.encryption import decrypt
+
+        provider = self.db.query(ServiceProvider).filter(ServiceProvider.name == "twilio").first()
+        if not provider:
+            logger.warning("Twilio service provider not found in DB")
+            return {}
+
+        api_keys = (
+            self.db.query(ApiKey)
+            .filter(ApiKey.service_provider_id == provider.id)
+            .all()
+        )
+
+        creds = {}
+        for ak in api_keys:
+            additional = ak.additional_credentials or {}
+            key_type = additional.get("key_type")
+            if key_type == "sid":
+                creds["account_sid"] = decrypt(ak.api_key_encrypted)
+            elif key_type == "auth_token":
+                creds["auth_token"] = decrypt(ak.api_key_encrypted)
+
+        return creds
+
     async def _fetch_twilio_to_number(self, call_sid: str) -> Optional[str]:
         """Fetch the 'to' number for a Twilio call from Twilio REST API."""
-        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+        twilio_creds = self._get_twilio_credentials()
+        account_sid = twilio_creds.get("account_sid")
+        auth_token = twilio_creds.get("auth_token")
         if not account_sid or not auth_token:
-            logger.warning("Missing Twilio credentials, cannot resolve to_number")
+            logger.warning("Missing Twilio credentials in DB, cannot resolve to_number")
             return None
         url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Calls/{call_sid}.json"
         try:
