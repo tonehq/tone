@@ -228,9 +228,6 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
 async def bot(runner_args: RunnerArguments, call_type: str = None):
     """Main bot entry point compatible with Pipecat Cloud."""
     logger.info(f"Starting the bot, received body: 0.3 {runner_args.body}")
-    print("call_typee", call_type)
-    print("runner_args type:", type(runner_args))
-
     
     #if runner_args:
     if isinstance(runner_args, WebSocketRunnerArguments):

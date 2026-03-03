@@ -129,7 +129,7 @@ class AgentFactoryService(BaseService):
                     "azure": "gpt-4o",
                     "cerebras": "llama-4-scout-17b-16e-instruct",
                     "nvidia_nim": "meta/llama-3.1-8b-instruct",
-                    "fireworks": "llama-v3p1-8b-instruct",
+                    "fireworks": "accounts/fireworks/models/deepseek-v3p1",
                     "together": "meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo",
                     "perplexity": "sonar",
                     "qwen": "qwen-turbo",
@@ -268,7 +268,7 @@ class AgentFactoryService(BaseService):
                 return OpenAITTSService(api_key=api_key, voice=voice, model=model or "tts-1")
             if provider_name == "elevenlabs":
                 from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
-                return ElevenLabsTTSService(api_key=api_key, voice_id=voice_id, model=model or "eleven_turbo_v2_5")
+                return ElevenLabsTTSService(api_key=api_key, voice_id="CwhRBWXzGAHq8TQ4Fs17")
             if provider_name == "playht":
                 from pipecat.services.playht.tts import PlayHTTTSService
                 user_id = model_meta.get("user_id") or metadata.get("user_id") or ""
@@ -276,15 +276,16 @@ class AgentFactoryService(BaseService):
                 return PlayHTTTSService(api_key=api_key, user_id=user_id, voice_url=voice_url)
             if provider_name == "asyncai_http":
                 from pipecat.services.asyncai.tts import AsyncAIHttpTTSService
-                return AsyncAIHttpTTSService(api_key=api_key, voice_id=voice_id, aiohttp_session=session, model=model or "asyncflow_multilingual_v1.0")
+                return AsyncAIHttpTTSService(api_key=api_key, voice_id="13616e5f-6fda-4247-b548-8821cb71fb54", aiohttp_session=session)
             if provider_name == "aws_polly":
                 from pipecat.services.aws.tts import AWSPollyTTSService
                 aws_access_key_id = model_meta.get("aws_access_key_id") or metadata.get("aws_access_key_id") or ""
                 region = model_meta.get("region") or metadata.get("region") or "us-east-1"
                 return AWSPollyTTSService(api_key=api_key, aws_access_key_id=aws_access_key_id, voice_id=voice_id, region=region)
             if provider_name == "camb":
+                print("into camb TTS provider") 
                 from pipecat.services.camb.tts import CambTTSService
-                return CambTTSService(api_key=api_key, voice_id=voice_id, model=model or "accented-british-english-male")
+                return CambTTSService(api_key=api_key)
             if provider_name == "deepgram":
                 from pipecat.services.deepgram.tts import DeepgramHttpTTSService
                 voice = model_meta.get("voice") or metadata.get("voice") or "aura-2-helena-en"
@@ -301,20 +302,20 @@ class AgentFactoryService(BaseService):
             if provider_name == "minimax":
                 from pipecat.services.minimax.tts import MiniMaxHttpTTSService
                 group_id = model_meta.get("group_id") or metadata.get("group_id") or ""
-                return MiniMaxHttpTTSService(api_key=api_key, voice_id=voice_id, group_id=group_id, model=model or "speech-02-turbo", aiohttp_session=session)
+                return MiniMaxHttpTTSService(api_key=api_key, group_id=group_id, aiohttp_session=session)
             if provider_name == "neuphonic":
                 from pipecat.services.neuphonic.tts import NeuphonicHttpTTSService
-                return NeuphonicHttpTTSService(api_key=api_key, voice_id=voice_id, aiohttp_session=session)
+                return NeuphonicHttpTTSService(api_key=api_key, aiohttp_session=session)
             if provider_name == "nvidia":
                 from pipecat.services.nvidia.tts import NvidiaTTSService
                 server = model_meta.get("server") or metadata.get("server") or "grpc.nvcf.nvidia.com:443"
                 return NvidiaTTSService(api_key=api_key, voice_id=voice_id, server=server)
             if provider_name == "rime":
                 from pipecat.services.rime.tts import RimeHttpTTSService
-                return RimeHttpTTSService(api_key=api_key, voice_id=voice_id, aiohttp_session=session, model=model or "mistv2")
+                return RimeHttpTTSService(api_key=api_key, voice_id="eva", aiohttp_session=session)
             if provider_name == "sarvam":
                 from pipecat.services.sarvam.tts import SarvamHttpTTSService
-                return SarvamHttpTTSService(api_key=api_key, voice_id=voice_id, aiohttp_session=session, model=model or "bulbul:v2")
+                return SarvamHttpTTSService(api_key=api_key, aiohttp_session=session)
             if provider_name == "speechmatics":
                 print("into speechmatics TTS")
                 from pipecat.services.speechmatics.tts import SpeechmaticsTTSService
