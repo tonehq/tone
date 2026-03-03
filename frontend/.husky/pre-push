@@ -1,6 +1,7 @@
 FRONTEND_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 REPO_ROOT="$(cd "$FRONTEND_DIR/.." && pwd)"
 ANALYZE_SCRIPT="$FRONTEND_DIR/.claude/skills/find-impacted-routes/analyze_diff.py"
+SYNC_SCRIPT="$FRONTEND_DIR/scripts/sync_test_strings.py"
 REPORT_JSON="$FRONTEND_DIR/impacted-routes-report.json"
 REPORT_MD="$FRONTEND_DIR/impacted-routes-report.md"
 
@@ -25,7 +26,7 @@ while read local_ref local_sha remote_ref remote_sha; do
   fi
 
   echo ""
-  echo "Step 1/3: Running impacted routes analysis..."
+  echo "Step 1/4: Running impacted routes analysis..."
 
   python3 "$ANALYZE_SCRIPT" \
     --project-path "$FRONTEND_DIR" \
@@ -34,7 +35,20 @@ while read local_ref local_sha remote_ref remote_sha; do
     --output "$FRONTEND_DIR"
 
   echo ""
-  echo "Step 2/3: Mapping impacted routes to test files..."
+  echo "Step 2/4: Syncing test strings..."
+
+  if [ -f "$SYNC_SCRIPT" ] && [ -f "$REPORT_JSON" ]; then
+    python3 "$SYNC_SCRIPT" \
+      --project-path "$FRONTEND_DIR" \
+      --commit1 "$commit1" \
+      --commit2 "$local_sha" \
+      --report-json "impacted-routes-report.json"
+  else
+    echo "  Skipped — sync script or report not found."
+  fi
+
+  echo ""
+  echo "Step 3/4: Mapping impacted routes to test files..."
 
   TEST_FILES=""
   if [ -f "$REPORT_JSON" ]; then
@@ -89,25 +103,29 @@ while read local_ref local_sha remote_ref remote_sha; do
   fi
 
   echo ""
-  echo "Step 3/3: Checking report..."
+  echo "Step 4/4: Checking report and test files..."
 
-  REPORT_CHANGED=false
+  FILES_CHANGED=false
   if ! git -C "$REPO_ROOT" diff --quiet -- "$REPORT_JSON" "$REPORT_MD" 2>/dev/null; then
-    REPORT_CHANGED=true
+    FILES_CHANGED=true
   fi
   if git -C "$REPO_ROOT" ls-files --others --exclude-standard -- "$REPORT_JSON" "$REPORT_MD" 2>/dev/null | grep -q .; then
-    REPORT_CHANGED=true
+    FILES_CHANGED=true
+  fi
+  if ! git -C "$REPO_ROOT" diff --quiet -- "$FRONTEND_DIR/e2e/" 2>/dev/null; then
+    FILES_CHANGED=true
   fi
 
-  if [ "$REPORT_CHANGED" = true ]; then
+  if [ "$FILES_CHANGED" = true ]; then
     git -C "$REPO_ROOT" add "$REPORT_JSON" "$REPORT_MD"
+    git -C "$REPO_ROOT" add "$FRONTEND_DIR/e2e/"
     git -C "$REPO_ROOT" commit -m "Update impacted routes report"
     echo ""
-    echo "  Report updated and committed. Run 'git push' again to include the report."
+    echo "  Report/tests updated and committed. Run 'git push' again to include the changes."
     exit 1
   fi
 
-  echo "  Report up to date."
+  echo "  Report and tests up to date."
 done
 
 exit 0
