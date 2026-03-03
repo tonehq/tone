@@ -1,7 +1,7 @@
 # Impacted Routes Report
 
-> Generated: 2026-03-03T12:27:16.479627+00:00
-> Comparing: `de22d2b3` → `3c461694`
+> Generated: 2026-03-03T12:32:07.712847+00:00
+> Comparing: `9f3e8418` → `2646e421`
 > Branch: `claude/shadcn-migration`
 
 ## Summary
@@ -31,7 +31,7 @@ Routes affected via shared components, atoms, or services.
 
 | File | Category | Status | +Lines | -Lines |
 |------|----------|--------|--------|--------|
-| `src/app/auth/login/LoginPage.tsx` | app-config | modified | +3 | -1 |
+| `src/app/auth/login/LoginPage.tsx` | app-config | modified | +1 | -3 |
 
 ---
 
