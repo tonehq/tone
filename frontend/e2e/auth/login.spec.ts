@@ -1,4 +1,4 @@
-import { BrowserContext, expect, Page, test as base } from '@playwright/test';
+import { test as base, BrowserContext, expect, Page } from '@playwright/test';
 
 import { TEST_EMAIL, TEST_PASSWORD } from '../helpers/auth';
 
@@ -47,13 +47,11 @@ test.describe('Login Page', () => {
   // ── 1. Page Rendering ──────────────────────────────────────────────────────
   test.describe('Page Rendering', () => {
     test('shows the "Welcome back" heading', async ({ page }) => {
-      await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Welcome back 123456123456' })).toBeVisible();
     });
 
     test('shows the subtitle text', async ({ page }) => {
-      await expect(
-        page.getByText('Enter your credentials to access your account'),
-      ).toBeVisible();
+      await expect(page.getByText('Enter your credentials to access your account')).toBeVisible();
     });
 
     test('shows the email input', async ({ page }) => {
@@ -378,7 +376,9 @@ test.describe('Login Page', () => {
     });
 
     test('renders the heading at the correct level', async ({ page }) => {
-      await expect(page.getByRole('heading', { level: 2, name: 'Welcome back' })).toBeVisible();
+      await expect(
+        page.getByRole('heading', { level: 2, name: 'Welcome back 123456123456' }),
+      ).toBeVisible();
     });
   });
 });

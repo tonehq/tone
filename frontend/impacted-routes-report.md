@@ -1,7 +1,7 @@
 # Impacted Routes Report
 
-> Generated: 2026-03-03T11:17:11.155923+00:00
-> Comparing: `f28ec20d` → `91005755`
+> Generated: 2026-03-03T11:19:43.384624+00:00
+> Comparing: `f28ec20d` → `9de7d085`
 > Branch: `claude/shadcn-migration`
 
 ## Summary
