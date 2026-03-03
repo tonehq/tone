@@ -20,7 +20,8 @@ class Voice(TimestampModel):
     gender = Column(String, nullable=True)
     accent = Column(String, nullable=True)
     description = Column(String, nullable=True)
-    service_provider_id = Column(BigInteger, ForeignKey("service_providers.id"), nullable=False)
+    service_provider_id = Column(BigInteger, ForeignKey("service_providers.id"), nullable=True)
+    model_id = Column(BigInteger, ForeignKey("models.id"), nullable=False)
     is_active = Column(Boolean, default=True)
     sample_url = Column(String, nullable=True)
 
