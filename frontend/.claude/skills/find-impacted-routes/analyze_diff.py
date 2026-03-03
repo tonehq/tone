@@ -561,7 +561,7 @@ def analyze(project_path: str, git_root: str, commit1: str, commit2: str, branch
     middleware_changed = any(fc.category == 'middleware' for fc in file_changes)
     traceable_changes = [
         fc for fc in file_changes
-        if fc.category in ('component', 'atom', 'service', 'util', 'hook', 'config')
+        if fc.category in ('component', 'atom', 'service', 'util', 'hook', 'config', 'app-config')
     ]
 
     impacted_routes: list = []     # final deduplicated list

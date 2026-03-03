@@ -102,17 +102,8 @@ while read local_ref local_sha remote_ref remote_sha; do
   if [ "$REPORT_CHANGED" = true ]; then
     git -C "$REPO_ROOT" add "$REPORT_JSON" "$REPORT_MD"
     git -C "$REPO_ROOT" commit -m "Update impacted routes report"
-    BRANCH=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)
-    echo "  Report auto-committed. Pushing with report..."
-    if HUSKY=0 git -C "$REPO_ROOT" push origin "$BRANCH"; then
-      echo ""
-      echo "  Push completed successfully (includes report update)."
-    else
-      echo ""
-      echo "  Push failed."
-    fi
-    # Exit 1 to prevent the original push from also trying to push
-    # (the internal push already handled everything).
+    echo ""
+    echo "  Report updated and committed. Run 'git push' again to include the report."
     exit 1
   fi
 
