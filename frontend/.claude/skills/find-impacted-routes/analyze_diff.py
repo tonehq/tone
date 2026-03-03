@@ -329,14 +329,20 @@ IMPORT_PATTERN = re.compile(
 )
 
 
-def resolve_import_to_filepath(import_path: str, project_path: str) -> Optional[str]:
+def resolve_import_to_filepath(import_path: str, project_path: str, importer_filepath: str = "") -> Optional[str]:
     """
     Resolve an import path to a relative filepath within the project.
 
     Handles:
       @/components/agents/AgentListPage  →  src/components/agents/AgentListPage.tsx
       @/atoms/AgentsAtom                 →  src/atoms/AgentsAtom.tsx
+      ./LoginPage  (from src/app/auth/login/page.tsx)  →  src/app/auth/login/LoginPage.tsx
     Returns None for external packages.
+
+    Args:
+        import_path: The import specifier (e.g., '@/atoms/AgentsAtom' or './LoginPage')
+        project_path: Absolute path to the project root
+        importer_filepath: Relative path of the file containing the import (needed for ./ and ../ resolution)
     """
     if not import_path.startswith('@/') and not import_path.startswith('./') and not import_path.startswith('../'):
         return None  # External package
@@ -344,8 +350,12 @@ def resolve_import_to_filepath(import_path: str, project_path: str) -> Optional[
     if import_path.startswith('@/'):
         # @/ maps to src/
         rel = 'src/' + import_path[2:]
+    elif importer_filepath:
+        # Resolve ./ and ../ relative to the importing file's directory
+        importer_dir = os.path.dirname(importer_filepath)
+        rel = os.path.normpath(os.path.join(importer_dir, import_path)).replace("\\", "/")
     else:
-        rel = import_path  # relative — harder to resolve without context; skip
+        return None  # Relative import but no importer context — cannot resolve
 
     # Try common extensions
     for ext in ['', '.tsx', '.ts', '.jsx', '.js']:
@@ -374,7 +384,7 @@ def get_imports_from_file(filepath: str, project_path: str) -> list:
 
     imports = []
     for match in IMPORT_PATTERN.finditer(content):
-        resolved = resolve_import_to_filepath(match.group(1), project_path)
+        resolved = resolve_import_to_filepath(match.group(1), project_path, importer_filepath=filepath)
         if resolved:
             imports.append(resolved)
     return imports

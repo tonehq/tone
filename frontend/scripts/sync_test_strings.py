@@ -84,6 +84,11 @@ RE_JSX_EXPR = re.compile(r"\{['\"]([^'\"]{3,})['\"]}")
 
 SOURCE_PATTERNS = [RE_JSX_TEXT, RE_PROP_VALUE, RE_TOAST, RE_COMPONENT_CHILDREN, RE_JSX_EXPR]
 
+# Lines that are just bare JSX text content (indented, no tags/code on the line itself).
+# Common in formatted JSX where text is on its own line between opening/closing tags.
+# e.g., "          Welcome back" (with -U0 diff, surrounding tags are on other lines)
+RE_BARE_TEXT_LINE = re.compile(r"^\s{2,}([A-Z][^<>{}'\"=;()\[\]]*\S)\s*$")
+
 
 # ============================================================================
 # Test File Replacement Patterns
@@ -192,6 +197,17 @@ def extract_strings_from_lines(lines: list[str]) -> list[str]:
                 # Decode common HTML entities
                 s = decode_html_entities(s)
                 strings.append(s)
+
+    # Fallback: with -U0 diffs, bare text content lines (no surrounding tags)
+    # are common. Try matching each line individually as bare JSX text.
+    if not strings:
+        for line in lines:
+            m = RE_BARE_TEXT_LINE.match(line)
+            if m:
+                s = m.group(1).strip()
+                if len(s) >= 3:
+                    s = decode_html_entities(s)
+                    strings.append(s)
 
     return strings
 
@@ -318,6 +334,22 @@ def apply_string_change(content: str, change: StringChange) -> str:
     return "\n".join(modified_lines)
 
 
+def is_word_prefix(short: str, long: str) -> bool:
+    """
+    Check if `short` is a word-level prefix of `long`.
+
+    Example: "Welcome back" is a word-prefix of "Welcome back 123456"
+    but "Welcome ba" is NOT (partial word).
+    """
+    if len(short) >= len(long):
+        return False
+    if not long.startswith(short):
+        return False
+    # Ensure the match ends at a word boundary (next char is space or end)
+    next_char = long[len(short)]
+    return next_char == " "
+
+
 def replace_in_context(line: str, pattern: re.Pattern, old: str, new: str) -> str:
     """Replace old string with new string only within a specific test context pattern."""
     def replacer(match: re.Match) -> str:
@@ -325,9 +357,17 @@ def replace_in_context(line: str, pattern: re.Pattern, old: str, new: str) -> st
         captured = match.group(2)
         suffix = match.group(3)
 
-        # Only replace exact matches of the old string
+        # Exact match of the old string
         if captured == old:
             return f"{prefix}{new}{suffix}"
+
+        # Fallback: test string is a word-prefix of the old diff string.
+        # This handles cases where the test is stale from a previous change
+        # (e.g., test has "Welcome back" but source changed from
+        # "Welcome back 123456" to "Welcome back 789").
+        if is_word_prefix(captured, old):
+            return f"{prefix}{new}{suffix}"
+
         return match.group(0)
 
     return pattern.sub(replacer, line)
@@ -337,15 +377,51 @@ def replace_in_context(line: str, pattern: re.Pattern, old: str, new: str) -> st
 # Route Resolution
 # ============================================================================
 
-def get_impacted_routes(report_path: str) -> list[str]:
-    """Read impacted routes from the analysis report JSON."""
+# Map source file path patterns to routes for fallback when impacted_routes is empty.
+# Matches any file under a route's app directory or its corresponding component directory.
+SOURCE_PATH_TO_ROUTE: list[tuple[re.Pattern, str]] = [
+    (re.compile(r"src/app/auth/login/"), "/auth/login"),
+    (re.compile(r"src/components/auth/.*[Ll]ogin"), "/auth/login"),
+    (re.compile(r"src/app/auth/signup/"), "/auth/signup"),
+    (re.compile(r"src/components/auth/.*[Ss]ignup"), "/auth/signup"),
+    (re.compile(r"src/app/\(dashboard\)/home/"), "/home"),
+    (re.compile(r"src/components/home/"), "/home"),
+    (re.compile(r"src/app/\(dashboard\)/agents/create/"), "/agents/create/inbound"),
+    (re.compile(r"src/components/agents/create/"), "/agents/create/inbound"),
+    (re.compile(r"src/app/\(dashboard\)/agents/edit/"), "/agents/edit"),
+    (re.compile(r"src/components/agents/edit/"), "/agents/edit"),
+    (re.compile(r"src/app/\(dashboard\)/agents/"), "/agents"),
+    (re.compile(r"src/components/agents/"), "/agents"),
+]
+
+
+def load_report(report_path: str) -> dict:
+    """Load the impacted routes report JSON."""
     if not os.path.exists(report_path):
-        return []
-
+        return {}
     with open(report_path, "r") as f:
-        report = json.load(f)
+        return json.load(f)
 
+
+def get_impacted_routes(report: dict) -> list[str]:
+    """Read impacted routes from the analysis report."""
     return [r["route"] for r in report.get("impacted_routes", [])]
+
+
+def get_changed_files(report: dict) -> list[str]:
+    """Read changed file paths from the analysis report."""
+    return [f["file"] for f in report.get("files_changed", [])]
+
+
+def routes_from_changed_files(changed_files: list[str]) -> list[str]:
+    """Infer routes from changed source file paths (fallback when impacted_routes is empty)."""
+    routes: set[str] = set()
+    for filepath in changed_files:
+        for pattern, route in SOURCE_PATH_TO_ROUTE:
+            if pattern.search(filepath):
+                routes.add(route)
+                break
+    return sorted(routes)
 
 
 def resolve_test_files(routes: list[str], project_path: str) -> list[str]:
@@ -354,8 +430,6 @@ def resolve_test_files(routes: list[str], project_path: str) -> list[str]:
     login_impacted = False
 
     for route in routes:
-        # Normalize route for matching (handle parameterized routes)
-        normalized = route
         for prefix, specs in ROUTE_TO_TEST.items():
             if route == prefix or route.startswith(prefix + "/"):
                 for spec in specs:
@@ -391,8 +465,18 @@ def main() -> int:
     project_path = os.path.abspath(args.project_path)
     report_path = os.path.join(project_path, args.report_json)
 
-    # 1. Get impacted routes from the analysis report
-    routes = get_impacted_routes(report_path)
+    # 1. Load report and determine routes
+    report = load_report(report_path)
+    routes = get_impacted_routes(report)
+
+    # Fallback: if no impacted routes, infer from changed file paths
+    if not routes:
+        changed_files = get_changed_files(report)
+        if changed_files:
+            routes = routes_from_changed_files(changed_files)
+            if routes:
+                print(f"  No impacted routes in report — inferred from changed files: {', '.join(routes)}")
+
     if not routes:
         print("  No impacted routes — nothing to sync.")
         return 0
@@ -403,7 +487,7 @@ def main() -> int:
         print("  No test files found for impacted routes.")
         return 0
 
-    print(f"  Impacted routes: {', '.join(routes)}")
+    print(f"  Routes: {', '.join(routes)}")
     print(f"  Test files to check: {', '.join(test_files)}")
 
     # 3. Get diff and extract string changes
