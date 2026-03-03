@@ -1,209 +1,22 @@
 {
   "metadata": {
-    "generated_at": "2026-03-03T09:39:06.863980+00:00",
-    "commit1": "ebcbc81bef07be410b70f92ca4036da87c3308ce",
-    "commit2": "c0233e42fa27a4c3a450ddde867b78df9ddeb2e6",
+    "generated_at": "2026-03-03T10:14:09.873758+00:00",
+    "commit1": "283ae07902f8a3726e735decc9a0dda36cee3faa",
+    "commit2": "d2bda8712d0d4d4edc47d13bbd7cad2d16c2bbd8",
     "branch": "claude/shadcn-migration",
     "project_path": "/Users/kishokkumara/Projects/tonehq/frontend"
   },
   "summary": {
-    "direct_route_changes": 4,
-    "transitive_impacts": 5,
+    "direct_route_changes": 0,
+    "transitive_impacts": 0,
     "layout_impacts": 0,
     "middleware_modified": false,
-    "total_unique_routes": 9,
-    "files_changed_total": 13
+    "total_unique_routes": 0,
+    "files_changed_total": 0
   },
-  "impacted_routes": [
-    {
-      "route": "/home",
-      "page_file": "src/app/(dashboard)/home/page.tsx",
-      "impact_type": "direct",
-      "trigger_file": null,
-      "chain": []
-    },
-    {
-      "route": "/auth/forgotpassword",
-      "page_file": "src/app/auth/forgotpassword/page.tsx",
-      "impact_type": "direct",
-      "trigger_file": null,
-      "chain": []
-    },
-    {
-      "route": "/auth/reset-password",
-      "page_file": "src/app/auth/reset-password/page.tsx",
-      "impact_type": "direct",
-      "trigger_file": null,
-      "chain": []
-    },
-    {
-      "route": "/auth/verify_signup",
-      "page_file": "src/app/auth/verify_signup/page.tsx",
-      "impact_type": "direct",
-      "trigger_file": null,
-      "chain": []
-    },
-    {
-      "route": "/agents/create/inbound",
-      "page_file": "src/app/(dashboard)/agents/create/inbound/page.tsx",
-      "impact_type": "transitive",
-      "trigger_file": "src/components/agents/AgentFormPage.tsx",
-      "chain": [
-        "AgentFormPage.tsx",
-        "page.tsx"
-      ]
-    },
-    {
-      "route": "/agents/create/outbound",
-      "page_file": "src/app/(dashboard)/agents/create/outbound/page.tsx",
-      "impact_type": "transitive",
-      "trigger_file": "src/components/agents/AgentFormPage.tsx",
-      "chain": [
-        "AgentFormPage.tsx",
-        "page.tsx"
-      ]
-    },
-    {
-      "route": "/agents/edit/[type]/[id]",
-      "page_file": "src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx",
-      "impact_type": "transitive",
-      "trigger_file": "src/components/agents/AgentFormPage.tsx",
-      "chain": [
-        "AgentFormPage.tsx",
-        "page.tsx"
-      ]
-    },
-    {
-      "route": "/agents",
-      "page_file": "src/app/(dashboard)/agents/page.tsx",
-      "impact_type": "transitive",
-      "trigger_file": "src/components/agents/AgentListPage.tsx",
-      "chain": [
-        "AgentListPage.tsx",
-        "page.tsx"
-      ]
-    },
-    {
-      "route": "/settings",
-      "page_file": "src/app/(dashboard)/settings/page.tsx",
-      "impact_type": "transitive",
-      "trigger_file": "src/components/settings/Integrations.tsx",
-      "chain": [
-        "Integrations.tsx",
-        "page.tsx"
-      ]
-    }
-  ],
+  "impacted_routes": [],
   "layout_impacts": [],
   "middleware_modified": false,
-  "files_changed": [
-    {
-      "file": "src/app/(dashboard)/home/page.tsx",
-      "category": "page",
-      "status": "modified",
-      "lines_added": 1,
-      "lines_removed": 1
-    },
-    {
-      "file": "src/app/auth/forgotpassword/page.tsx",
-      "category": "page",
-      "status": "modified",
-      "lines_added": 2,
-      "lines_removed": 12
-    },
-    {
-      "file": "src/app/auth/login/LoginPage.tsx",
-      "category": "app-config",
-      "status": "modified",
-      "lines_added": 2,
-      "lines_removed": 2
-    },
-    {
-      "file": "src/app/auth/reset-password/page.tsx",
-      "category": "page",
-      "status": "modified",
-      "lines_added": 2,
-      "lines_removed": 13
-    },
-    {
-      "file": "src/app/auth/signup/SignupClient.tsx",
-      "category": "app-config",
-      "status": "modified",
-      "lines_added": 2,
-      "lines_removed": 12
-    },
-    {
-      "file": "src/app/auth/verify_signup/page.tsx",
-      "category": "page",
-      "status": "modified",
-      "lines_added": 2,
-      "lines_removed": 12
-    },
-    {
-      "file": "src/components/agents/AgentFormPage.tsx",
-      "category": "component",
-      "status": "modified",
-      "lines_added": 10,
-      "lines_removed": 14
-    },
-    {
-      "file": "src/components/agents/AgentListPage.tsx",
-      "category": "component",
-      "status": "modified",
-      "lines_added": 3,
-      "lines_removed": 2
-    },
-    {
-      "file": "src/components/settings/Integrations.tsx",
-      "category": "component",
-      "status": "modified",
-      "lines_added": 6,
-      "lines_removed": 7
-    },
-    {
-      "file": "src/components/ui/sonner.tsx",
-      "category": "component",
-      "status": "modified",
-      "lines_added": 30,
-      "lines_removed": 36
-    },
-    {
-      "file": "src/services/auth/helper.tsx",
-      "category": "service",
-      "status": "modified",
-      "lines_added": 3,
-      "lines_removed": 2
-    },
-    {
-      "file": "src/utils/helpers.ts",
-      "category": "util",
-      "status": "modified",
-      "lines_added": 13,
-      "lines_removed": 0
-    },
-    {
-      "file": "src/utils/toast.tsx",
-      "category": "util",
-      "status": "modified",
-      "lines_added": 8,
-      "lines_removed": 16
-    }
-  ],
-  "dependency_chains": [
-    "src/components/agents/AgentFormPage.tsx (component, modified)\n  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
-    "src/components/agents/AgentFormPage.tsx (component, modified)\n  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
-    "src/components/agents/AgentFormPage.tsx (component, modified)\n  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
-    "src/components/agents/AgentListPage.tsx (component, modified)\n  \u2192 AgentListPage.tsx  \u2192 page.tsx\n  \u2192 /agents  [src/app/(dashboard)/agents/page.tsx]",
-    "src/components/settings/Integrations.tsx (component, modified)\n  \u2192 Integrations.tsx  \u2192 page.tsx\n  \u2192 /settings  [src/app/(dashboard)/settings/page.tsx]",
-    "src/utils/helpers.ts (util, modified)\n  \u2192 helpers.ts  \u2192 AgentListPage.tsx  \u2192 page.tsx\n  \u2192 /agents  [src/app/(dashboard)/agents/page.tsx]",
-    "src/utils/helpers.ts (util, modified)\n  \u2192 helpers.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
-    "src/utils/helpers.ts (util, modified)\n  \u2192 helpers.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
-    "src/utils/helpers.ts (util, modified)\n  \u2192 helpers.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
-    "src/utils/helpers.ts (util, modified)\n  \u2192 helpers.ts  \u2192 Integrations.tsx  \u2192 page.tsx\n  \u2192 /settings  [src/app/(dashboard)/settings/page.tsx]",
-    "src/utils/toast.tsx (util, modified)\n  \u2192 toast.tsx  \u2192 AgentListPage.tsx  \u2192 page.tsx\n  \u2192 /agents  [src/app/(dashboard)/agents/page.tsx]",
-    "src/utils/toast.tsx (util, modified)\n  \u2192 toast.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
-    "src/utils/toast.tsx (util, modified)\n  \u2192 toast.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
-    "src/utils/toast.tsx (util, modified)\n  \u2192 toast.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
-    "src/utils/toast.tsx (util, modified)\n  \u2192 toast.tsx  \u2192 Integrations.tsx  \u2192 page.tsx\n  \u2192 /settings  [src/app/(dashboard)/settings/page.tsx]"
-  ]
+  "files_changed": [],
+  "dependency_chains": []
 }
