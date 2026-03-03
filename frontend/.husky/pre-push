@@ -8,7 +8,6 @@ if [ ! -f "$ANALYZE_SCRIPT" ]; then
   exit 0
 fi
 
-# Skip if last commit was the auto-committed report (prevents loop)
 LAST_MSG=$(git -C "$REPO_ROOT" log -1 --pretty=%s 2>/dev/null)
 if [ "$LAST_MSG" = "Update impacted routes report" ]; then
   exit 0
@@ -25,9 +24,8 @@ while read local_ref local_sha remote_ref remote_sha; do
     commit1="$remote_sha"
   fi
 
-  # ── Step 1: Impacted routes analysis ──
   echo ""
-  echo "Step 1/3: Running impacted routes analysis ($commit1...$local_sha)"
+  echo "Step 1/3: Running impacted routes analysis..."
 
   python3 "$ANALYZE_SCRIPT" \
     --project-path "$FRONTEND_DIR" \
@@ -35,7 +33,6 @@ while read local_ref local_sha remote_ref remote_sha; do
     --commit2 "$local_sha" \
     --output "$FRONTEND_DIR"
 
-  # ── Step 2: Map routes to test files and run tests ──
   echo ""
   echo "Step 2/3: Mapping impacted routes to test files..."
 
@@ -80,18 +77,17 @@ while read local_ref local_sha remote_ref remote_sha; do
       cd "$FRONTEND_DIR"
       if ! npx playwright test $TEST_FILES --reporter=list; then
         echo ""
-        echo "  Tests failed. Push aborted. Fix tests and try again."
+        echo "  Tests failed. Push aborted."
         exit 1
       fi
       echo "  All impacted tests passed."
     else
-      echo "  Dev server not running — skipping test execution."
+      echo "  Dev server not running — skipping tests."
     fi
   else
     echo "  No impacted test files."
   fi
 
-  # ── Step 3: Auto-commit report if changed ──
   echo ""
   echo "Step 3/3: Checking report..."
 
@@ -106,8 +102,10 @@ while read local_ref local_sha remote_ref remote_sha; do
   if [ "$REPORT_CHANGED" = true ]; then
     git -C "$REPO_ROOT" add "$REPORT_JSON" "$REPORT_MD"
     git -C "$REPO_ROOT" commit -m "Update impacted routes report"
-    echo "  Report auto-committed. Run 'git push' once more to include it."
-    exit 1
+    BRANCH=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)
+    echo "  Report auto-committed. Pushing with report..."
+    HUSKY=0 git -C "$REPO_ROOT" push origin "$BRANCH"
+    exit $?
   fi
 
   echo "  Report up to date."
