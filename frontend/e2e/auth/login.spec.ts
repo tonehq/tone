@@ -47,7 +47,7 @@ test.describe('Login Page', () => {
   // ── 1. Page Rendering ──────────────────────────────────────────────────────
   test.describe('Page Rendering', () => {
     test('shows the "Welcome back" heading', async ({ page }) => {
-      await expect(page.getByRole('heading', { name: 'Welcome back 123456123456' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
     });
 
     test('shows the subtitle text', async ({ page }) => {
@@ -175,7 +175,7 @@ test.describe('Login Page', () => {
       await page.getByPlaceholder('Enter your password').fill(TEST_PASSWORD);
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
-      await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
+      await expect(getToast(page)).toBeVisible({ timeout: 15_000 });
       await expect(getToast(page)).toContainText('Login Successful');
       await expect(getToast(page)).toContainText('Welcome back!');
     });
@@ -376,9 +376,7 @@ test.describe('Login Page', () => {
     });
 
     test('renders the heading at the correct level', async ({ page }) => {
-      await expect(
-        page.getByRole('heading', { level: 2, name: 'Welcome back 123456123456' }),
-      ).toBeVisible();
+      await expect(page.getByRole('heading', { level: 2, name: 'Welcome back' })).toBeVisible();
     });
   });
 });

@@ -333,7 +333,7 @@ test.describe('Create Outbound Agent Page', () => {
       await expect(page.getByText('Call Recording')).toBeVisible();
 
       await page.getByRole('tab', { name: /assign number/i }).click();
-      await expect(page.getByText('Assign Number')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Assign Number' })).toBeVisible();
     });
 
     test('switches between Configure and Prompt menus via sidebar', async ({ page }) => {
@@ -473,14 +473,15 @@ test.describe('Create Outbound Agent Page', () => {
 
       await page.getByRole('button', { name: /save changes/i }).click();
 
-      await expect(
-        page.locator('[data-sonner-toast]', { hasText: 'Server error' }),
-      ).toBeVisible({ timeout: 5_000 });
+      await expect(page.locator('[data-sonner-toast]', { hasText: 'Server error' })).toBeVisible({
+        timeout: 5_000,
+      });
       expect(page.url()).toContain('/agents/create/outbound');
     });
 
     test('saves outbound agent to DB and shows in list (real API)', async ({ page }) => {
-      const agentName = 'My Outbound Assistant';
+      const agentName = `E2E Outbound ${Date.now()}`;
+      await page.locator('input[name="name"]').fill(agentName);
 
       await page.getByRole('button', { name: /save changes/i }).click();
       await expect(page).toHaveURL(/\/agents(?:\?|$)/, { timeout: 15_000 });
@@ -493,7 +494,7 @@ test.describe('Create Outbound Agent Page', () => {
   // ── 9. Delete Agent Confirmation ──────────────────────────────────────────
   test.describe('Delete Agent Confirmation', () => {
     test('opens confirmation modal when clicking Delete Agent', async ({ page }) => {
-      await page.getByText('Delete Agent').scrollIntoViewIfNeeded();
+      await page.getByRole('button', { name: 'Delete Agent' }).scrollIntoViewIfNeeded();
       await page.getByRole('button', { name: 'Delete Agent' }).click();
 
       const dialog = page.getByRole('dialog');
@@ -502,10 +503,14 @@ test.describe('Create Outbound Agent Page', () => {
       await expect(
         dialog.getByText(/Deleting an agent will erase personalized data/),
       ).toBeVisible();
+
+      // Close dialog to prevent state leakage to next test
+      await page.keyboard.press('Escape');
+      await expect(dialog).not.toBeVisible();
     });
 
     test('closes delete modal when cancelled', async ({ page }) => {
-      await page.getByText('Delete Agent').scrollIntoViewIfNeeded();
+      await page.getByRole('button', { name: 'Delete Agent' }).scrollIntoViewIfNeeded();
       await page.getByRole('button', { name: 'Delete Agent' }).click();
       await expect(page.getByRole('dialog')).toBeVisible();
 

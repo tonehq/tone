@@ -320,11 +320,16 @@ test.describe('Edit Agent Page', () => {
   // ── 7. Pre-populated Data — Assign Number Tab (edit mode) ──────────────────
   test.describe('Assign Number Tab — Edit Mode', () => {
     test('shows Assign New Number button in edit mode', async ({ page }) => {
-      await page.getByRole('tab', { name: /assign number/i }).click();
+      // Ensure we're on Configure view (previous test may leave page on Prompt view)
+      await page.getByRole('button', { name: 'Configure' }).click();
+      const tab = page.getByRole('tab', { name: /assign number/i });
+      await expect(tab).toBeVisible({ timeout: 10_000 });
+      await tab.click();
       await expect(page.getByRole('button', { name: /assign new number/i })).toBeVisible();
     });
 
     test('shows no-numbers message when no phone assigned', async ({ page }) => {
+      await page.getByRole('button', { name: 'Configure' }).click();
       await page.getByRole('tab', { name: /assign number/i }).click();
       await expect(page.getByText('No phone numbers assigned yet.')).toBeVisible();
     });
@@ -340,9 +345,10 @@ test.describe('Edit Agent Page', () => {
     });
 
     test('shows phone assigned status bar', async ({ page }) => {
-      await expect(page.getByText('Phone assigned:')).toBeVisible();
-      await expect(page.getByText('+1 (555) 123-4567')).toBeVisible();
-      await expect(page.getByText('+1 (555) 987-6543')).toBeVisible();
+      const statusBar = page.getByText('Phone assigned:');
+      await expect(statusBar).toBeVisible();
+      await expect(page.locator('aside').getByText('+1 (555) 123-4567')).toBeVisible();
+      await expect(page.locator('aside').getByText('+1 (555) 987-6543')).toBeVisible();
     });
 
     test('shows phone numbers in sidebar', async ({ page }) => {
@@ -352,8 +358,9 @@ test.describe('Edit Agent Page', () => {
 
     test('shows assigned phone numbers in Assign Number tab', async ({ page }) => {
       await page.getByRole('tab', { name: /assign number/i }).click();
-      await expect(page.getByText('+1 (555) 123-4567')).toBeVisible();
-      await expect(page.getByText('+1 (555) 987-6543')).toBeVisible();
+      const tabPanel = page.locator('[role="tabpanel"]');
+      await expect(tabPanel.getByText('+1 (555) 123-4567')).toBeVisible();
+      await expect(tabPanel.getByText('+1 (555) 987-6543')).toBeVisible();
     });
 
     test('shows Unassign button for each phone number', async ({ page }) => {
@@ -630,9 +637,9 @@ test.describe('Edit Agent Page', () => {
 
       await page.getByRole('button', { name: /save changes/i }).click();
 
-      await expect(page.locator('[data-sonner-toast]', { hasText: 'Server error' })).toBeVisible(
-        { timeout: 5_000 },
-      );
+      await expect(page.locator('[data-sonner-toast]', { hasText: 'Server error' })).toBeVisible({
+        timeout: 5_000,
+      });
       expect(page.url()).toContain(EDIT_URL);
     });
 
@@ -659,7 +666,7 @@ test.describe('Edit Agent Page', () => {
   // ── 11. Delete Agent ───────────────────────────────────────────────────────
   test.describe('Delete Agent', () => {
     test('opens delete confirmation modal from General tab', async ({ page }) => {
-      await page.getByText('Delete Agent').scrollIntoViewIfNeeded();
+      await page.getByRole('button', { name: 'Delete Agent' }).scrollIntoViewIfNeeded();
       await page.getByRole('button', { name: 'Delete Agent' }).click();
 
       const dialog = page.getByRole('dialog');
@@ -668,10 +675,14 @@ test.describe('Edit Agent Page', () => {
       await expect(
         dialog.getByText(/Deleting an agent will erase personalized data/),
       ).toBeVisible();
+
+      // Close dialog to prevent state leakage to next test
+      await page.keyboard.press('Escape');
+      await expect(dialog).not.toBeVisible();
     });
 
     test('closes delete modal when cancelled', async ({ page }) => {
-      await page.getByText('Delete Agent').scrollIntoViewIfNeeded();
+      await page.getByRole('button', { name: 'Delete Agent' }).scrollIntoViewIfNeeded();
       await page.getByRole('button', { name: 'Delete Agent' }).click();
       await expect(page.getByRole('dialog')).toBeVisible();
 
@@ -694,9 +705,9 @@ test.describe('Edit Agent Page', () => {
       });
 
       await page.goto(EDIT_URL);
-      await expect(
-        page.locator('[data-sonner-toast]', { hasText: 'Agent not found' }),
-      ).toBeVisible({ timeout: 10_000 });
+      await expect(page.locator('[data-sonner-toast]', { hasText: 'Agent not found' })).toBeVisible(
+        { timeout: 10_000 },
+      );
     });
 
     test('shows error notification when API errors', async ({ page }) => {
@@ -711,9 +722,9 @@ test.describe('Edit Agent Page', () => {
       });
 
       await page.goto(EDIT_URL);
-      await expect(
-        page.locator('[data-sonner-toast]', { hasText: 'Server error' }),
-      ).toBeVisible({ timeout: 10_000 });
+      await expect(page.locator('[data-sonner-toast]', { hasText: 'Server error' })).toBeVisible({
+        timeout: 10_000,
+      });
     });
   });
 

@@ -159,7 +159,7 @@ test.describe('Create Inbound Agent Page', () => {
     });
 
     test('shows Delete Agent button', async ({ page }) => {
-      await page.getByText('Delete Agent').scrollIntoViewIfNeeded();
+      await page.getByRole('button', { name: 'Delete Agent' }).scrollIntoViewIfNeeded();
       await expect(page.getByRole('button', { name: 'Delete Agent' })).toBeVisible();
     });
 
@@ -321,9 +321,9 @@ test.describe('Create Inbound Agent Page', () => {
 
     test('shows voice speed slider with labels', async ({ page }) => {
       await expect(page.getByRole('slider')).toBeVisible();
-      await expect(page.getByText('Slow')).toBeVisible();
-      await expect(page.getByText('Normal')).toBeVisible();
-      await expect(page.getByText('Fast')).toBeVisible();
+      await expect(page.getByText('Slow', { exact: true })).toBeVisible();
+      await expect(page.getByText('Normal', { exact: true })).toBeVisible();
+      await expect(page.getByText('Fast', { exact: true })).toBeVisible();
     });
 
     test('defaults voice speed slider to 50', async ({ page }) => {
@@ -654,15 +654,16 @@ test.describe('Create Inbound Agent Page', () => {
 
       await page.getByRole('button', { name: /save changes/i }).click();
 
-      await expect(
-        page.locator('[data-sonner-toast]', { hasText: 'Server error' }),
-      ).toBeVisible({ timeout: 5_000 });
+      await expect(page.locator('[data-sonner-toast]', { hasText: 'Server error' })).toBeVisible({
+        timeout: 5_000,
+      });
       expect(page.url()).toContain('/agents/create/inbound');
     });
 
     test('saves agent to DB and shows in list (real API)', async ({ page }) => {
       // No mocks: triggers actual save to backend/DB. Requires running backend.
-      const agentName = 'My Inbound Assistant';
+      const agentName = `E2E Inbound ${Date.now()}`;
+      await page.locator('input[name="name"]').fill(agentName);
 
       await page.getByRole('button', { name: /save changes/i }).click();
       await expect(page).toHaveURL(/\/agents(?:\?|$)/, { timeout: 15_000 });
@@ -676,7 +677,7 @@ test.describe('Create Inbound Agent Page', () => {
   // ── 9. Delete Agent Confirmation ──────────────────────────────────────────
   test.describe('Delete Agent Confirmation', () => {
     test('opens confirmation modal when clicking Delete Agent', async ({ page }) => {
-      await page.getByText('Delete Agent').scrollIntoViewIfNeeded();
+      await page.getByRole('button', { name: 'Delete Agent' }).scrollIntoViewIfNeeded();
       await page.getByRole('button', { name: 'Delete Agent' }).click();
 
       const dialog = page.getByRole('dialog');
@@ -685,10 +686,14 @@ test.describe('Create Inbound Agent Page', () => {
       await expect(
         dialog.getByText(/Deleting an agent will erase personalized data/),
       ).toBeVisible();
+
+      // Close dialog to prevent state leakage to next test
+      await page.keyboard.press('Escape');
+      await expect(dialog).not.toBeVisible();
     });
 
     test('closes delete modal when cancelled', async ({ page }) => {
-      await page.getByText('Delete Agent').scrollIntoViewIfNeeded();
+      await page.getByRole('button', { name: 'Delete Agent' }).scrollIntoViewIfNeeded();
       await page.getByRole('button', { name: 'Delete Agent' }).click();
       await expect(page.getByRole('dialog')).toBeVisible();
 
