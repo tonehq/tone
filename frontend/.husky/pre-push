@@ -1,6 +1,3 @@
-#!/bin/sh
-. "$(dirname "$0")/_/husky.sh"
-
 FRONTEND_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SCRIPT="$FRONTEND_DIR/.claude/skills/find-impacted-routes/analyze_diff.py"
 
@@ -35,13 +32,6 @@ while read local_ref local_sha remote_ref remote_sha; do
     --commit1 "$commit1" \
     --commit2 "$commit2" \
     --output "$FRONTEND_DIR"
-
-  # Always allow push — this is informational only
-  # To block on middleware change, uncomment:
-  # if grep -q '"middleware_modified": true' "$FRONTEND_DIR/impacted-routes-report.json" 2>/dev/null; then
-  #   echo "🚫 Middleware modified — review impacted-routes-report.md before pushing."
-  #   exit 1
-  # fi
 done
 
 exit 0
