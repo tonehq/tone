@@ -7,6 +7,7 @@ import Container from '@/app/auth/shared/ContainerComponent';
 import { GoogleIcon } from '@/components/icons/google';
 import { CheckboxField, CustomButton, CustomLink, Form, TextInput } from '@/components/shared';
 import { login } from '@/services/auth/helper';
+import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
 const LoginPage = () => {
@@ -26,8 +27,7 @@ const LoginPage = () => {
         showToast.error('Login Failed', 'Please enter email and password', 3);
       }
     } catch (error) {
-      showToast.error('Login Failed', 'Please try again.', 5);
-      console.log(error);
+      handleApiError(error);
     } finally {
       setLoader(false);
     }

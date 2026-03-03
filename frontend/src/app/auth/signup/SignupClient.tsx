@@ -10,6 +10,7 @@ import { Form } from '../../../components/shared/Form';
 import TextInput from '../../../components/shared/TextInput';
 import { signup } from '../../../services/auth/helper';
 import axios from '../../../utils/axios';
+import { handleApiError } from '../../../utils/helpers';
 import { showToast } from '../../../utils/toast';
 import Container from '../shared/ContainerComponent';
 
@@ -110,18 +111,7 @@ const SignupClient = () => {
         setActive(active + 1);
       }
     } catch (error) {
-      let errorMessage = '';
-
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'response' in error &&
-        'data' in (error as any).response &&
-        'detail' in (error as any).response.data
-      ) {
-        errorMessage = (error as any).response.data.detail;
-      }
-      showToast.error('Sign Up Failed', errorMessage, 5);
+      handleApiError(error);
       setLoader(false);
     }
   };

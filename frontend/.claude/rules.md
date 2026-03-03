@@ -131,6 +131,7 @@ Rules specific to Playwright e2e tests (enforced by `generate-tests`):
 - **Use shadcn and Tailwind CSS** for all UI: use `@/components/ui/` (shadcn) and Tailwind classes. Use **lucide-react** for generic icons.
 - **Do not add MUI dependencies.** MUI has been fully removed from the project. Use shadcn components, Tailwind, or plain SVG/icons in `@/components/icons/` (e.g. brand icons like Google).
 - **Notifications**: Use `showToast` from `@/utils/toast` (powered by Sonner). It is a plain function — not a hook — and can be called from components, helpers, and services.
+- **API error handling**: Use `handleApiError(error)` from `@/utils/helpers` in every `catch` block that handles API failures. It extracts `error.response.data.detail` from Axios errors and shows an error toast. Do NOT duplicate the error extraction logic inline.
 
 ---
 

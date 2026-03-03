@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import CustomButton from '../../../components/shared/CustomButton';
 import { Form } from '../../../components/shared/Form';
 import axios from '../../../utils/axios';
+import { handleApiError } from '../../../utils/helpers';
 import { showToast } from '../../../utils/toast';
 import Container from '../shared/ContainerComponent';
 
@@ -32,18 +33,7 @@ const EmailVerificationContent = () => {
         }
       }
     } catch (error) {
-      let errorMessage = '';
-
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'response' in error &&
-        'data' in (error as any).response &&
-        'detail' in (error as any).response.data
-      ) {
-        errorMessage = (error as any).response.data.detail;
-      }
-      showToast.error('Verification Failed', errorMessage || 'Invalid verification link', 5);
+      handleApiError(error);
     } finally {
       setLoader(false);
     }

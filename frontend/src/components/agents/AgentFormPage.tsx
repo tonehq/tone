@@ -16,6 +16,7 @@ import {
 } from '@/utils/agentFormUtils';
 import axiosInstance from '@/utils/axios';
 import { cn } from '@/utils/cn';
+import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
 import { startCase } from 'lodash';
@@ -61,8 +62,8 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       } else {
         showToast.error('Error', 'Agent not found');
       }
-    } catch {
-      showToast.error('Error', 'Failed to load agent');
+    } catch (error) {
+      handleApiError(error);
     } finally {
       setLoading(false);
     }
@@ -106,7 +107,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       }));
       showToast.success('Success', 'Phone number(s) assigned successfully');
     } catch (error) {
-      showToast.error('Error', 'Failed to assign phone number(s). Please try again.');
+      handleApiError(error);
       throw error;
     } finally {
       setAssigning(false);
@@ -129,8 +130,8 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       }));
       setUnassignTarget(null);
       showToast.success('Success', 'Phone number unassigned successfully');
-    } catch {
-      showToast.error('Error', 'Failed to unassign phone number. Please try again.');
+    } catch (error) {
+      handleApiError(error);
     } finally {
       setUnassigning(false);
     }
@@ -152,13 +153,8 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       if (!isEditMode) {
         router.push('/agents');
       }
-    } catch {
-      showToast.error(
-        'Error',
-        isEditMode
-          ? 'Failed to save agent. Please try again.'
-          : 'Failed to create agent. Please try again.',
-      );
+    } catch (error) {
+      handleApiError(error);
     } finally {
       setSaving(false);
     }
@@ -175,8 +171,8 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       } else {
         router.push('/agents');
       }
-    } catch {
-      showToast.error('Error', 'Failed to delete agent');
+    } catch (error) {
+      handleApiError(error);
     } finally {
       setDeletingAgent(false);
       setDeleteConfirmOpen(false);

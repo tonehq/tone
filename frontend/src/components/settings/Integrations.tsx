@@ -7,6 +7,7 @@ import {
 } from '@/atoms/IntegrationAtom';
 import { CustomButton } from '@/components/shared';
 import type { IntegrationRow } from '@/types/integration';
+import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
 import { Loader2, Plus } from 'lucide-react';
@@ -64,10 +65,8 @@ export default function Integrations() {
         'Success',
         data.id ? 'Integration updated successfully' : 'Integration created successfully',
       );
-    } catch (err: any) {
-      const detail: string =
-        err?.response?.data?.detail ?? err?.message ?? 'Failed to save integration. Please try again.';
-      showToast.error('Error', detail);
+    } catch (err) {
+      handleApiError(err);
       throw new Error('API call failed');
     }
   };
@@ -76,8 +75,8 @@ export default function Integrations() {
     try {
       await removeChannel(id);
       showToast.success('Success', 'Integration deleted successfully');
-    } catch {
-      showToast.error('Error', 'Failed to delete integration. Please try again.');
+    } catch (error) {
+      handleApiError(error);
     }
   };
 
@@ -97,7 +96,7 @@ export default function Integrations() {
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-xl font-semibold text-foreground">Integrations</h2>
         <CustomButton type="primary" icon={<Plus size={18} />} onClick={handleAdd}>
-          Add new API key
+          Add API key
         </CustomButton>
       </div>
       <IntegrationsTable

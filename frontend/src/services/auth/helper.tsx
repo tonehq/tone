@@ -4,6 +4,7 @@ import { ACCESS_TOKEN, FIREBASE_SIGNUP, SIGNUP, TENANT_ID } from '@/constants';
 
 import axios from '@/utils/axios';
 import { decodeJWT } from '@/utils/jwt';
+import { handleApiError } from '@/utils/helpers';
 
 export const setToken = async (LogInData: any) => {
   const decoded = decodeJWT(LogInData['access_token']);
@@ -78,8 +79,8 @@ export const signup = async (
       .then((res) => {
         setToken(res.data);
       })
-      .catch((_err) => {
-        alert('something went wrong');
+      .catch((err) => {
+        handleApiError(err);
       });
   } else {
     return await axios.post(SIGNUP, {

@@ -7,6 +7,7 @@ import CreateAgentModal from '@/components/agents/CreateAgentModal';
 import { CustomButton, CustomTable } from '@/components/shared';
 import type { ApiAgent } from '@/types/agent';
 import type { CustomTableColumn } from '@/types/components';
+import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import dayjs from 'dayjs';
 import { useAtom } from 'jotai';
@@ -38,8 +39,8 @@ const AgentListPage: React.FC = () => {
       try {
         await removeAgent(agentId);
         showToast.success('Agent Deleted', 'Agent deleted successfully');
-      } catch {
-        showToast.error('Delete Failed', 'Failed to delete agent. Please try again.');
+      } catch (error) {
+        handleApiError(error);
       }
     },
     [removeAgent],
