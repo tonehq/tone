@@ -192,6 +192,7 @@ class AgentService(BaseService):
             "system_prompt", "html_prompt", "first_message", "end_call_message",
             "voicemail_message", "llm_service_id", "tts_service_id", "stt_service_id",
             "llm_model_id", "tts_model_id", "stt_model_id",
+            "llm_metadata", "tts_metadata", "stt_metadata",
             *AGENT_METADATA_KEYS,
         )
         existing_config = self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).first()
@@ -294,6 +295,9 @@ class AgentService(BaseService):
                 "llm_model_id": llm_meta.get("model_id"),
                 "tts_model_id": tts_meta.get("model_id"),
                 "stt_model_id": stt_meta.get("model_id"),
+                "llm_metadata": llm_meta,
+                "tts_metadata": tts_meta,
+                "stt_metadata": stt_meta,
                 "first_message": config.first_message,
                 "system_prompt": config.system_prompt,
                 "end_call_message": config.end_call_message,
@@ -320,15 +324,28 @@ class AgentService(BaseService):
             return default
 
         voicemail = data.get("voice_mail_message") or data.get("voicemail_message") or (existing_config.voicemail_message if existing_config else None)
-        llm_model_id = data.get("llm_model_id")
-        if llm_model_id is None and existing_config and isinstance(getattr(existing_config, "llm_metadata"), dict):
-            llm_model_id = (existing_config.llm_metadata or {}).get("model_id")
-        tts_model_id = data.get("tts_model_id")
-        if tts_model_id is None and existing_config and isinstance(getattr(existing_config, "tts_metadata"), dict):
-            tts_model_id = (existing_config.tts_metadata or {}).get("model_id")
-        stt_model_id = data.get("stt_model_id") or data.get("stt_model_it")
-        if stt_model_id is None and existing_config and isinstance(getattr(existing_config, "stt_metadata"), dict):
-            stt_model_id = (existing_config.stt_metadata or {}).get("model_id")
+        # Build metadata dicts: start from existing, merge request-level metadata JSON, then apply model_id shorthand
+        def _build_metadata(meta_key: str, model_id_key: str) -> dict:
+            # Start from existing config
+            base = {}
+            if existing_config and isinstance(getattr(existing_config, meta_key, None), dict):
+                base = dict(getattr(existing_config, meta_key) or {})
+            # Merge full metadata JSON from request (if provided)
+            req_meta = data.get(meta_key)
+            if isinstance(req_meta, dict):
+                base.update(req_meta)
+            # model_id shorthand overrides metadata's model_id
+            model_id_val = data.get(model_id_key)
+            if model_id_val is not None:
+                base["model_id"] = model_id_val
+            return base
+
+        llm_metadata = _build_metadata("llm_metadata", "llm_model_id")
+        tts_metadata = _build_metadata("tts_metadata", "tts_model_id")
+        stt_model_id_val = data.get("stt_model_id") or data.get("stt_model_it")
+        stt_metadata = _build_metadata("stt_metadata", "stt_model_id")
+        if stt_model_id_val is not None and "model_id" not in stt_metadata:
+            stt_metadata["model_id"] = stt_model_id_val
         system_prompt = data.get("system_prompt")
         if system_prompt is None or system_prompt == "":
             system_prompt = (existing_config.system_prompt or "") if existing_config else ""
@@ -350,9 +367,9 @@ class AgentService(BaseService):
             "end_call_message": _get("end_call_message"),
             "voicemail_message": voicemail,
             "html_prompt": html_prompt,
-            "llm_metadata": {"model_id": llm_model_id} if llm_model_id is not None else (existing_config.llm_metadata if existing_config else {}),
-            "tts_metadata": {"model_id": tts_model_id} if tts_model_id is not None else (existing_config.tts_metadata if existing_config else {}),
-            "stt_metadata": {"model_id": stt_model_id} if stt_model_id is not None else (existing_config.stt_metadata if existing_config else {}),
+            "llm_metadata": llm_metadata,
+            "tts_metadata": tts_metadata,
+            "stt_metadata": stt_metadata,
             "agent_metadata": agent_metadata,
         }
         return config_data
