@@ -161,7 +161,12 @@ while read local_ref local_sha remote_ref remote_sha; do
     git -C "$REPO_ROOT" add "$FRONTEND_DIR/e2e/"
     git -C "$REPO_ROOT" commit -m "Update impacted routes report"
     echo ""
-    echo "  Report/tests updated and committed (will be included in this push)."
+    echo "  Report/tests updated and committed."
+    # Schedule a follow-up push after the current push completes.
+    # --no-verify skips the pre-push hook so it won't loop.
+    (sleep 3 && git -C "$REPO_ROOT" push --no-verify > /dev/null 2>&1) &
+    disown 2>/dev/null || true
+    echo "  Report commit will be pushed automatically after this push."
   else
     echo "  Report and tests up to date."
   fi
