@@ -47,7 +47,7 @@ test.describe('Login Page', () => {
   // ── 1. Page Rendering ──────────────────────────────────────────────────────
   test.describe('Page Rendering', () => {
     test('shows the "Welcome Hey" heading', async ({ page }) => {
-      await expect(page.getByRole('heading', { name: 'Welcome Hey' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
     });
 
     test('shows the subtitle text', async ({ page }) => {
@@ -376,7 +376,7 @@ test.describe('Login Page', () => {
     });
 
     test('renders the heading at the correct level', async ({ page }) => {
-      await expect(page.getByRole('heading', { level: 2, name: 'Welcome Hey' })).toBeVisible();
+      await expect(page.getByRole('heading', { level: 2, name: 'Welcome back' })).toBeVisible();
     });
   });
 });
