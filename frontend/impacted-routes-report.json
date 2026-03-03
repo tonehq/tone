@@ -1,8 +1,8 @@
 {
   "metadata": {
-    "generated_at": "2026-03-03T10:31:00.760155+00:00",
-    "commit1": "23055f701bca9802610631523660b10349fee6b1",
-    "commit2": "7a04fb99080115c4822867f0b14a29b14a0fe2f7",
+    "generated_at": "2026-03-03T10:33:26.250709+00:00",
+    "commit1": "58b700cb4a9408026da04798f4cfada2bf75547b",
+    "commit2": "7ea8a7388100e701a11d48c70cad7c6da351b009",
     "branch": "claude/shadcn-migration",
     "project_path": "/Users/kishokkumara/Projects/tonehq/frontend"
   },
@@ -12,11 +12,19 @@
     "layout_impacts": 0,
     "middleware_modified": false,
     "total_unique_routes": 0,
-    "files_changed_total": 0
+    "files_changed_total": 1
   },
   "impacted_routes": [],
   "layout_impacts": [],
   "middleware_modified": false,
-  "files_changed": [],
+  "files_changed": [
+    {
+      "file": "src/app/auth/login/LoginPage.tsx",
+      "category": "app-config",
+      "status": "modified",
+      "lines_added": 3,
+      "lines_removed": 1
+    }
+  ],
   "dependency_chains": []
 }
