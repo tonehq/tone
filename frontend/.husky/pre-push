@@ -14,7 +14,6 @@ if [ "$LAST_MSG" = "Update impacted routes report" ]; then
 fi
 
 while read local_ref local_sha remote_ref remote_sha; do
-  echo "DEBUG: loop iteration - local_ref=$local_ref local_sha=$local_sha"
   if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
     continue
   fi
