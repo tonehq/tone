@@ -1,8 +1,8 @@
 {
   "metadata": {
-    "generated_at": "2026-03-03T11:23:42.516366+00:00",
+    "generated_at": "2026-03-03T11:26:39.562300+00:00",
     "commit1": "f28ec20d2cdaf0d5e12066c6fadb5adaa3f8cd82",
-    "commit2": "7bcda84ee8b10ca6fe0323bd6a79988f67578fb4",
+    "commit2": "77f932fb1c920025807b5b0a20bf6948d4473841",
     "branch": "claude/shadcn-migration",
     "project_path": "/Users/kishokkumara/Projects/tonehq/frontend"
   },
@@ -34,7 +34,7 @@
       "category": "app-config",
       "status": "modified",
       "lines_added": 1,
-      "lines_removed": 1
+      "lines_removed": 3
     }
   ],
   "dependency_chains": [

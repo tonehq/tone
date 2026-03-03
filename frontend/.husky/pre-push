@@ -84,7 +84,37 @@ while read local_ref local_sha remote_ref remote_sha; do
     done
   fi
 
+  STARTED_DEV_SERVER=false
+
   if [ -n "$TEST_FILES" ]; then
+    if curl -s -o /dev/null -w '' http://localhost:3000 2>/dev/null; then
+      echo "  Dev server already running on :3000."
+    else
+      echo "  Starting dev server..."
+      cd "$FRONTEND_DIR"
+      PORT=3000 npx next dev --turbopack > /dev/null 2>&1 &
+      DEV_SERVER_PID=$!
+      STARTED_DEV_SERVER=true
+
+      # Wait up to 30s for the server to be ready
+      WAIT=0
+      while [ $WAIT -lt 30 ]; do
+        if curl -s -o /dev/null -w '' http://localhost:3000 2>/dev/null; then
+          break
+        fi
+        sleep 1
+        WAIT=$((WAIT + 1))
+      done
+
+      if ! curl -s -o /dev/null -w '' http://localhost:3000 2>/dev/null; then
+        echo "  Dev server failed to start within 30s — skipping tests."
+        kill "$DEV_SERVER_PID" 2>/dev/null
+        STARTED_DEV_SERVER=false
+      else
+        echo "  Dev server started (pid $DEV_SERVER_PID)."
+      fi
+    fi
+
     if curl -s -o /dev/null -w '' http://localhost:3000 2>/dev/null; then
       echo ""
       echo "  Running impacted tests..."
@@ -92,11 +122,13 @@ while read local_ref local_sha remote_ref remote_sha; do
       if ! npx playwright test $TEST_FILES --reporter=list; then
         echo ""
         echo "  Tests failed. Push aborted."
+        if [ "$STARTED_DEV_SERVER" = true ]; then
+          echo "  Stopping dev server (pid $DEV_SERVER_PID)..."
+          kill "$DEV_SERVER_PID" 2>/dev/null
+        fi
         exit 1
       fi
       echo "  All impacted tests passed."
-    else
-      echo "  Dev server not running — skipping tests."
     fi
   else
     echo "  No impacted test files."
@@ -122,10 +154,19 @@ while read local_ref local_sha remote_ref remote_sha; do
     git -C "$REPO_ROOT" commit -m "Update impacted routes report"
     echo ""
     echo "  Report/tests updated and committed. Run 'git push' again to include the changes."
+    if [ "$STARTED_DEV_SERVER" = true ]; then
+      echo "  Stopping dev server (pid $DEV_SERVER_PID)..."
+      kill "$DEV_SERVER_PID" 2>/dev/null
+    fi
     exit 1
   fi
 
   echo "  Report and tests up to date."
+
+  if [ "$STARTED_DEV_SERVER" = true ]; then
+    echo "  Stopping dev server (pid $DEV_SERVER_PID)..."
+    kill "$DEV_SERVER_PID" 2>/dev/null
+  fi
 done
 
 exit 0
