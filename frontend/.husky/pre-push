@@ -1,0 +1,47 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+FRONTEND_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPT="$FRONTEND_DIR/.claude/skills/find-impacted-routes/analyze_diff.py"
+
+# Skip if the script doesn't exist
+if [ ! -f "$SCRIPT" ]; then
+  echo "⚠️  find-impacted-routes: script not found at $SCRIPT — skipping."
+  exit 0
+fi
+
+# Read pre-push stdin: "<local_ref> <local_sha> <remote_ref> <remote_sha>"
+while read local_ref local_sha remote_ref remote_sha; do
+  # Skip deleting pushes
+  if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+    continue
+  fi
+
+  # New branch (no remote yet) — diff against main's merge base
+  if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+    commit1=$(git merge-base main "$local_sha" 2>/dev/null || git rev-parse main 2>/dev/null)
+  else
+    commit1="$remote_sha"
+  fi
+
+  commit2="$local_sha"
+
+  echo ""
+  echo "🔍 find-impacted-routes: analyzing $commit1...$commit2"
+  echo ""
+
+  python3 "$SCRIPT" \
+    --project-path "$FRONTEND_DIR" \
+    --commit1 "$commit1" \
+    --commit2 "$commit2" \
+    --output "$FRONTEND_DIR"
+
+  # Always allow push — this is informational only
+  # To block on middleware change, uncomment:
+  # if grep -q '"middleware_modified": true' "$FRONTEND_DIR/impacted-routes-report.json" 2>/dev/null; then
+  #   echo "🚫 Middleware modified — review impacted-routes-report.md before pushing."
+  #   exit 1
+  # fi
+done
+
+exit 0
