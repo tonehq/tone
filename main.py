@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
-from core.api.v1 import auth, users, organizations, api_keys, services, service_providers, agents, agent_configs, channel_phone_numbers, models as models_router, generated_api_keys, channels
+from core.api.v1 import auth, users, organizations, api_keys, services, service_providers, agents, agent_configs, channel_phone_numbers, models as models_router, generated_api_keys, channels, voices
 import core.models
 
 app = FastAPI(title="Tone API - Core", version="1.0.0")
@@ -28,6 +28,7 @@ api_v1.include_router(channel_phone_numbers.router, prefix="/channel_phone_numbe
 api_v1.include_router(models_router.router, prefix="/model", tags=["model"])
 api_v1.include_router(generated_api_keys.router, prefix="/generated-api-keys", tags=["generated-api-keys"])
 api_v1.include_router(channels.router, prefix="/channel", tags=["channel"])
+api_v1.include_router(voices.router, prefix="/voice", tags=["voice"])
 
 app.mount("/api/v1", api_v1)
 
