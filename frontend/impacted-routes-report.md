@@ -1,7 +1,7 @@
 # Impacted Routes Report
 
-> Generated: 2026-03-03T10:38:15.329977+00:00
-> Comparing: `bbdbdeab` → `af3d5e2f`
+> Generated: 2026-03-03T10:53:47.715778+00:00
+> Comparing: `f28ec20d` → `91005755`
 > Branch: `claude/shadcn-migration`
 
 ## Summary
@@ -13,4 +13,12 @@
 | Layout-impacted routes | 0 |
 | Middleware modified | ❌ No |
 | **Total unique routes affected** | **0** |
-| Files changed | 0 |
+| Files changed | 1 |
+
+---
+
+## Changed Files by Category
+
+| File | Category | Status | +Lines | -Lines |
+|------|----------|--------|--------|--------|
+| `src/app/auth/login/LoginPage.tsx` | app-config | modified | +1 | -1 |
