@@ -153,15 +153,10 @@ while read local_ref local_sha remote_ref remote_sha; do
     git -C "$REPO_ROOT" add "$FRONTEND_DIR/e2e/"
     git -C "$REPO_ROOT" commit -m "Update impacted routes report"
     echo ""
-    echo "  Report/tests updated and committed. Run 'git push' again to include the changes."
-    if [ "$STARTED_DEV_SERVER" = true ]; then
-      echo "  Stopping dev server (pid $DEV_SERVER_PID)..."
-      kill "$DEV_SERVER_PID" 2>/dev/null
-    fi
-    exit 1
+    echo "  Report/tests updated and committed locally (will be included in next push)."
+  else
+    echo "  Report and tests up to date."
   fi
-
-  echo "  Report and tests up to date."
 
   if [ "$STARTED_DEV_SERVER" = true ]; then
     echo "  Stopping dev server (pid $DEV_SERVER_PID)..."
