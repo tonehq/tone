@@ -139,21 +139,21 @@ Tests live in `e2e/<route-group>/<page-name>.spec.ts`, mirroring the `src/app/` 
 
 ### Notification assertions
 
-The `useNotification` hook formats Snackbar messages as `"${title}: ${message}"`:
+Notifications use Sonner toast (`showToast` from `@/utils/toast`). Title and description render in separate elements inside the toast:
 
-| Scenario                 | Expected text                       |
-| ------------------------ | ----------------------------------- |
-| Login success            | `"Login Successful: Welcome back!"` |
-| Login error (API throws) | `"Login Failed: Please try again."` |
+| Scenario                 | Title               | Description          |
+| ------------------------ | ------------------- | -------------------- |
+| Login success            | `Login Successful`  | `Welcome back!`      |
+| Login error (API throws) | `Login Failed`      | `Please try again.`  |
 
-Use `page.getByRole('alert')` to find MUI Alert/Snackbar notifications.
+Use `page.locator('[data-sonner-toast]')` to find Sonner toast notifications.
 
 ### Reference docs
 
 | File                                | Covers                                                 |
 | ----------------------------------- | ------------------------------------------------------ |
 | `references/test-patterns.md`       | Config template, API mocking, mock JWT, test structure |
-| `references/selectors-guide.md`     | MUI TextField, Button, Checkbox, Snackbar selectors    |
+| `references/selectors-guide.md`     | TextField, Button, Checkbox, Sonner toast selectors    |
 | `references/assertion-checklist.md` | Required assertions per test category, anti-patterns   |
 
 ---

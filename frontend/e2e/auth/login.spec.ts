@@ -2,23 +2,10 @@ import { BrowserContext, expect, Page, test as base } from '@playwright/test';
 
 import { TEST_EMAIL, TEST_PASSWORD } from '../helpers/auth';
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
-// JWT payload: {"sub":"1234567890","exp":9999999999} (year 2286 expiry)
-const MOCK_JWT =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9' +
-  '.eyJzdWIiOiIxMjM0NTY3ODkwIiwiZXhwIjo5OTk5OTk5OTk5fQ' +
-  '.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
-
-const MOCK_LOGIN_RESPONSE = {
-  access_token: MOCK_JWT,
-  user_id: 'user123',
-  organizations: [{ id: 'org123', name: 'Test Org' }],
-};
-
-// ── Alert helper ──────────────────────────────────────────────────────────────
-// Next.js injects an empty <div role="alert"> route announcer on every page.
-// Filter it out to avoid strict-mode violations when asserting notifications.
-const getAlert = (p: Page) => p.getByRole('alert').filter({ hasText: /\S+/ });
+// ── Toast helper ─────────────────────────────────────────────────────────────
+// Sonner renders toasts as <li data-sonner-toast> elements. Use this helper
+// to locate the most recent visible toast for assertions.
+const getToast = (p: Page) => p.locator('[data-sonner-toast]').first();
 
 // ── Browser lifecycle ─────────────────────────────────────────────────────────
 // Login page is public — no loginViaUI needed.
@@ -178,52 +165,29 @@ test.describe('Login Page', () => {
     });
 
     test('successful login redirects to home', async ({ page }) => {
-      await page.route('**/auth/login', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(MOCK_LOGIN_RESPONSE),
-        });
-      });
-
       await page.getByPlaceholder('Enter your email').fill(TEST_EMAIL);
       await page.getByPlaceholder('Enter your password').fill(TEST_PASSWORD);
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
-      await expect(page).toHaveURL(/\/home/, { timeout: 10_000 });
+      await expect(page).toHaveURL(/\/home/, { timeout: 15_000 });
     });
 
     test('successful login shows success notification', async ({ page }) => {
-      await page.route('**/auth/login', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(MOCK_LOGIN_RESPONSE),
-        });
-      });
-
       await page.getByPlaceholder('Enter your email').fill(TEST_EMAIL);
       await page.getByPlaceholder('Enter your password').fill(TEST_PASSWORD);
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
-      await expect(getAlert(page)).toBeVisible({ timeout: 5_000 });
-      await expect(getAlert(page)).toContainText('Login Successful: Welcome back!');
+      await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
+      await expect(getToast(page)).toContainText('Login Successful');
+      await expect(getToast(page)).toContainText('Welcome back!');
     });
 
     test('successful login sets the auth cookie', async ({ page }) => {
-      await page.route('**/auth/login', async (route) => {
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(MOCK_LOGIN_RESPONSE),
-        });
-      });
-
       await page.getByPlaceholder('Enter your email').fill(TEST_EMAIL);
       await page.getByPlaceholder('Enter your password').fill(TEST_PASSWORD);
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
-      await page.waitForURL(/\/home/, { timeout: 10_000 });
+      await page.waitForURL(/\/home/, { timeout: 15_000 });
 
       const cookies = await page.context().cookies();
       const accessToken = cookies.find((c) => c.name === 'tone_access_token');
@@ -246,7 +210,7 @@ test.describe('Login Page', () => {
       await page.getByPlaceholder('Enter your password').fill('mypassword');
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
-      await expect(getAlert(page)).toBeVisible({ timeout: 5_000 });
+      await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
       expect(requestBody.email).toBe('user@example.com');
       expect(requestBody.password).toBe('mypassword');
     });
@@ -264,8 +228,8 @@ test.describe('Login Page', () => {
       await page.getByPlaceholder('Enter your password').fill('wrongpassword');
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
-      await expect(getAlert(page)).toBeVisible({ timeout: 5_000 });
-      await expect(getAlert(page)).toContainText('Login Failed');
+      await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
+      await expect(getToast(page)).toContainText('Login Failed');
       await expect(page).toHaveURL(/\/auth\/login/);
     });
 
@@ -295,8 +259,9 @@ test.describe('Login Page', () => {
       await page.getByPlaceholder('Enter your password').fill(TEST_PASSWORD);
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
-      await expect(getAlert(page)).toBeVisible({ timeout: 5_000 });
-      await expect(getAlert(page)).toContainText('Login Failed: Please try again.');
+      await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
+      await expect(getToast(page)).toContainText('Login Failed');
+      await expect(getToast(page)).toContainText('Please try again.');
     });
 
     test('shows error notification on server error (500)', async ({ page }) => {
@@ -312,8 +277,8 @@ test.describe('Login Page', () => {
       await page.getByPlaceholder('Enter your password').fill(TEST_PASSWORD);
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
-      await expect(getAlert(page)).toBeVisible({ timeout: 5_000 });
-      await expect(getAlert(page)).toContainText('Login Failed');
+      await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
+      await expect(getToast(page)).toContainText('Login Failed');
     });
   });
 
@@ -401,8 +366,8 @@ test.describe('Login Page', () => {
       await page.getByPlaceholder('Enter your password').fill('somepassword');
       await page.getByPlaceholder('Enter your password').press('Enter');
 
-      await expect(getAlert(page)).toBeVisible({ timeout: 5_000 });
-      await expect(getAlert(page)).toContainText('Login Failed');
+      await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
+      await expect(getToast(page)).toContainText('Login Failed');
     });
 
     test('allows keyboard navigation through form inputs', async ({ page }) => {

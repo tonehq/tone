@@ -6,14 +6,13 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import CustomButton from '../../../components/shared/CustomButton';
 import { Form } from '../../../components/shared/Form';
 import axios from '../../../utils/axios';
-import { useNotification } from '../../../utils/notification';
+import { showToast } from '../../../utils/toast';
 import Container from '../shared/ContainerComponent';
 
 const EmailVerificationContent = () => {
   const [loader, setLoader] = useState(false);
   const params = useSearchParams();
   const router = useRouter();
-  const { notify, contextHolder } = useNotification();
 
   const handleSubmit = async () => {
     try {
@@ -23,7 +22,7 @@ const EmailVerificationContent = () => {
       );
       setLoader(false);
       if (res) {
-        notify.success('Email Verified', 'Your email has been verified successfully', 4);
+        showToast.success('Email Verified', 'Your email has been verified successfully', 4);
         const inviteRedirect = localStorage.getItem('invite_redirect');
         if (inviteRedirect) {
           localStorage.removeItem('invite_redirect');
@@ -44,14 +43,14 @@ const EmailVerificationContent = () => {
       ) {
         errorMessage = (error as any).response.data.detail;
       }
-      notify.error('Verification Failed', errorMessage || 'Invalid verification link', 5);
+      showToast.error('Verification Failed', errorMessage || 'Invalid verification link', 5);
+    } finally {
       setLoader(false);
     }
   };
 
   return (
     <Container>
-      {contextHolder}
       <div className="w-full max-w-[400px]">
         <h2 className="mb-4 text-3xl font-semibold text-foreground">Email Verification</h2>
         <Form onFinish={handleSubmit} layout="vertical" autoComplete="off">

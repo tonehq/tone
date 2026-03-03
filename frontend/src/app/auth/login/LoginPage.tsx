@@ -7,12 +7,11 @@ import Container from '@/app/auth/shared/ContainerComponent';
 import { GoogleIcon } from '@/components/icons/google';
 import { CheckboxField, CustomButton, CustomLink, Form, TextInput } from '@/components/shared';
 import { login } from '@/services/auth/helper';
-import { useNotification } from '@/utils/notification';
+import { showToast } from '@/utils/toast';
 
 const LoginPage = () => {
   const [loader, setLoader] = useState(false);
   const router = useRouter();
-  const { notify, contextHolder } = useNotification();
 
   const handleSubmit = async (values: any) => {
     console.log('values', values);
@@ -21,13 +20,13 @@ const LoginPage = () => {
       const res: any = await login(values['email'], values['password']);
 
       if (res) {
-        notify.success('Login Successful', 'Welcome back!', 3);
+        showToast.success('Login Successful', 'Welcome back!', 3);
         router.push('/home');
       } else {
-        notify.error('Login Failed', 'Please enter email and password', 3);
+        showToast.error('Login Failed', 'Please enter email and password', 3);
       }
     } catch (error) {
-      notify.error('Login Failed', 'Please try again.', 5);
+      showToast.error('Login Failed', 'Please try again.', 5);
       console.log(error);
     } finally {
       setLoader(false);
@@ -36,7 +35,6 @@ const LoginPage = () => {
 
   return (
     <Container>
-      {contextHolder}
       <div className="w-full max-w-[400px] animate-page">
         <h2 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">Welcome back</h2>
         <p className="mb-8 text-sm text-muted-foreground">

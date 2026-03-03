@@ -85,9 +85,10 @@ expect(requestBody.password).toBe('password123');
 ## 5. User Flows — Success path
 
 ```typescript
-// Success notification visible
-await expect(page.getByRole('alert')).toBeVisible({ timeout: 5000 });
-await expect(page.getByRole('alert')).toContainText('Login Successful');
+// Success toast visible (Sonner)
+const getToast = (p: Page) => p.locator('[data-sonner-toast]').first();
+await expect(getToast(page)).toBeVisible({ timeout: 5000 });
+await expect(getToast(page)).toContainText('Login Successful');
 
 // Redirected to correct page
 await expect(page).toHaveURL(/\/home/, { timeout: 10_000 });
@@ -103,9 +104,8 @@ expect(token).toBeDefined();
 ## 6. User Flows — Error path
 
 ```typescript
-// Error notification visible
-await expect(page.getByRole('alert')).toBeVisible({ timeout: 5000 });
-await expect(page.getByRole('alert')).toContainText('Login Failed');
+// Error toast visible (Sonner)
+await expect(page.locator('[data-sonner-toast]', { hasText: 'Login Failed' })).toBeVisible({ timeout: 5000 });
 
 // Did NOT navigate away
 await expect(page).toHaveURL(/\/auth\/login/);
@@ -171,41 +171,43 @@ await expect(page.getByPlaceholder('Enter your email')).toBeFocused();
 // Interactive elements are not divs with click handlers
 // (verified during code review, not directly assertable in Playwright)
 
-// Alert is announced via ARIA
-await expect(page.getByRole('alert')).toBeVisible();
+// Toast is visible (Sonner)
+await expect(page.locator('[data-sonner-toast]').first()).toBeVisible();
 ```
 
 ---
 
-## Next.js route announcer — avoid strict-mode violations
+## Sonner toast helper — avoid selector issues
 
-Next.js renders `<div role="alert" id="__next-route-announcer__">` on every page.
-Raw `page.getByRole('alert')` resolves to 2 elements and throws. Always use the filtered helper:
+Sonner renders toasts as `<li data-sonner-toast>` elements. Use the locator helper:
 
 ```typescript
 import { Page } from '@playwright/test';
 
 // Declare once per spec file, above the test.describe block
-const getAlert = (p: Page) => p.getByRole('alert').filter({ hasText: /\S+/ });
+const getToast = (p: Page) => p.locator('[data-sonner-toast]').first();
 
 // Usage
-await expect(getAlert(page)).toBeVisible({ timeout: 5000 });
-await expect(getAlert(page)).toContainText('Login Failed');
-await expect(getAlert(page)).not.toBeVisible(); // no notification shown
+await expect(getToast(page)).toBeVisible({ timeout: 5000 });
+await expect(getToast(page)).toContainText('Login Failed');
+await expect(getToast(page)).not.toBeVisible(); // no toast shown
+
+// Find toast with specific text
+await expect(page.locator('[data-sonner-toast]', { hasText: 'Error' })).toBeVisible();
 ```
 
 ---
 
-## Notification message format reference
+## Notification format reference
 
-The `useNotification` hook formats messages as: `"${title}: ${message}"`
+`showToast` from `@/utils/toast` renders title and description in separate elements:
 
-| Scenario                            | Expected text                                     |
-| ----------------------------------- | ------------------------------------------------- |
-| Login success                       | `"Login Successful: Welcome back!"`               |
-| Login failed (API error)            | `"Login Failed: Please try again."`               |
-| Login failed (empty/falsy response) | `"Login Failed: Please enter email and password"` |
-| General error                       | `"Login Failed: Please try again."`               |
+| Scenario                            | Title                | Description                         |
+| ----------------------------------- | -------------------- | ----------------------------------- |
+| Login success                       | `Login Successful`   | `Welcome back!`                     |
+| Login failed (API error)            | `Login Failed`       | `Please try again.`                 |
+| Login failed (empty/falsy response) | `Login Failed`       | `Please enter email and password`   |
+| General error                       | `Login Failed`       | `Please try again.`                 |
 
 ---
 
@@ -228,23 +230,23 @@ The `useNotification` hook formats messages as: `"${title}: ${message}"`
 await page.waitForTimeout(2000);
 
 // ✅ Wait for condition
-await expect(page.getByRole('alert')).toBeVisible({ timeout: 5000 });
+await expect(page.locator('[data-sonner-toast]').first()).toBeVisible({ timeout: 5000 });
 
 // ❌ XPath selectors — fragile and unreadable
 page.locator('//div[@class="MuiAlert-message"]');
 
-// ✅ Semantic selectors
-page.getByRole('alert');
+// ✅ Data attribute selectors for toast
+page.locator('[data-sonner-toast]');
 
-// ❌ Depending on CSS classes for logic — breaks on MUI version updates
+// ❌ Depending on CSS classes for logic — breaks on library updates
 page.locator('.MuiButton-contained');
 
 // ✅ Role + name
 page.getByRole('button', { name: 'Continue' });
 
 // ❌ No timeout on async assertions — can give false positives
-await expect(page.getByRole('alert')).toBeVisible();
+await expect(page.locator('[data-sonner-toast]').first()).toBeVisible();
 
 // ✅ Explicit timeout for async events
-await expect(page.getByRole('alert')).toBeVisible({ timeout: 5000 });
+await expect(page.locator('[data-sonner-toast]').first()).toBeVisible({ timeout: 5000 });
 ```

@@ -1,9 +1,9 @@
-import { BrowserContext, expect, Page, test as base } from '@playwright/test';
+import { test as base, BrowserContext, expect, Page } from '@playwright/test';
 
-// ── Alert helper ──────────────────────────────────────────────────────────────
-// Next.js injects an empty <div role="alert"> route announcer on every page.
-// Filter it out to avoid strict-mode violations when asserting notifications.
-const getAlert = (p: Page) => p.getByRole('alert').filter({ hasText: /\S+/ });
+// ── Toast helper ─────────────────────────────────────────────────────────────
+// Sonner renders toasts as <li data-sonner-toast> elements. Use this helper
+// to locate the most recent visible toast for assertions.
+const getToast = (p: Page) => p.locator('[data-sonner-toast]').first();
 
 // ── Browser lifecycle ─────────────────────────────────────────────────────────
 // Signup page is public — no loginViaUI needed.
@@ -191,10 +191,9 @@ test.describe('Signup Page', () => {
       await page.getByPlaceholder('Create a password').fill(TEST_USER.password);
       await page.getByRole('button', { name: 'Create account' }).click();
 
-      await expect(page).toHaveURL(
-        new RegExp(`email=${encodeURIComponent(TEST_USER.email)}`),
-        { timeout: 10_000 },
-      );
+      await expect(page).toHaveURL(new RegExp(`email=${encodeURIComponent(TEST_USER.email)}`), {
+        timeout: 10_000,
+      });
     });
 
     test('shows success notification on signup', async ({ page }) => {
@@ -210,8 +209,8 @@ test.describe('Signup Page', () => {
       await page.getByPlaceholder('Create a password').fill(TEST_USER.password);
       await page.getByRole('button', { name: 'Create account' }).click();
 
-      await expect(getAlert(page)).toBeVisible({ timeout: 5_000 });
-      await expect(getAlert(page)).toContainText('Account Created');
+      await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
+      await expect(getToast(page)).toContainText('Account Created');
     });
 
     test('sends correct email and password payload to the signup API', async ({ page }) => {
@@ -372,8 +371,8 @@ test.describe('Signup Page', () => {
       await page.getByPlaceholder('Create a password').fill(TEST_USER.password);
       await page.getByRole('button', { name: 'Create account' }).click();
 
-      await expect(getAlert(page)).toBeVisible({ timeout: 5_000 });
-      await expect(getAlert(page)).toContainText('Account Created');
+      await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
+      await expect(getToast(page)).toContainText('Account Created');
     });
   });
 
@@ -396,9 +395,9 @@ test.describe('Signup Page', () => {
       await page.getByPlaceholder('Create a password').fill(TEST_USER.password);
       await page.getByRole('button', { name: 'Create account' }).click();
 
-      await expect(getAlert(page)).toBeVisible({ timeout: 5_000 });
-      await expect(getAlert(page)).toContainText('Sign Up Failed');
-      await expect(getAlert(page)).toContainText('Email already registered');
+      await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
+      await expect(getToast(page)).toContainText('Sign Up Failed');
+      await expect(getToast(page)).toContainText('Email already registered');
     });
 
     test('stays on signup page after API error', async ({ page }) => {
@@ -414,7 +413,7 @@ test.describe('Signup Page', () => {
       await page.getByPlaceholder('Create a password').fill(TEST_USER.password);
       await page.getByRole('button', { name: 'Create account' }).click();
 
-      await expect(getAlert(page)).toBeVisible({ timeout: 5_000 });
+      await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
       await expect(page).toHaveURL(/\/auth\/signup/);
     });
 
@@ -427,8 +426,8 @@ test.describe('Signup Page', () => {
       await page.getByPlaceholder('Create a password').fill(TEST_USER.password);
       await page.getByRole('button', { name: 'Create account' }).click();
 
-      await expect(getAlert(page)).toBeVisible({ timeout: 5_000 });
-      await expect(getAlert(page)).toContainText('Sign Up Failed');
+      await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
+      await expect(getToast(page)).toContainText('Sign Up Failed');
     });
   });
 
@@ -466,8 +465,8 @@ test.describe('Signup Page', () => {
 
       await page.getByRole('button', { name: 'Create account' }).click();
 
-      await expect(getAlert(page)).toBeVisible({ timeout: 5_000 });
-      await expect(getAlert(page)).toContainText('Organization Exists');
+      await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
+      await expect(getToast(page)).toContainText('Organization Exists');
       // Submit was blocked — must stay on signup page
       await expect(page).toHaveURL(/\/auth\/signup/);
     });
@@ -583,7 +582,7 @@ test.describe('Signup Page', () => {
       await page.getByPlaceholder('Create a password').fill(TEST_USER.password);
       await page.getByRole('button', { name: 'Create account' }).click();
 
-      await expect(getAlert(page)).toBeVisible({ timeout: 5_000 });
+      await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
       await expect(page.getByRole('button', { name: 'Create account' })).toBeEnabled({
         timeout: 5_000,
       });

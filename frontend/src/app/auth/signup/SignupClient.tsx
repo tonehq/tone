@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { Box, Stack, Typography, useTheme } from '@mui/material';
 import { debounce } from 'lodash';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -11,7 +10,7 @@ import { Form } from '../../../components/shared/Form';
 import TextInput from '../../../components/shared/TextInput';
 import { signup } from '../../../services/auth/helper';
 import axios from '../../../utils/axios';
-import { useNotification } from '../../../utils/notification';
+import { showToast } from '../../../utils/toast';
 import Container from '../shared/ContainerComponent';
 
 interface ExistingOrg {
@@ -28,8 +27,6 @@ const SignupClient = () => {
   const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [loader, setLoader] = useState(false);
   const [active, setActive] = useState(0);
-  const { notify, contextHolder } = useNotification();
-  const theme = useTheme();
   const [existingOrg, setExistingOrg] = useState<ExistingOrg | null>(null);
   const [_checkingOrg, setCheckingOrg] = useState(false);
 
@@ -80,7 +77,7 @@ const SignupClient = () => {
 
   const handleSubmit = async (value: any) => {
     if (existingOrg) {
-      notify.warning(
+      showToast.warning(
         'Organization Exists',
         'An organization with this name already exists. Please choose a different name or request access.',
         5,
@@ -98,7 +95,7 @@ const SignupClient = () => {
         params.get('firebase_uid'),
         value['org_name'],
       );
-      notify.success('Account Created', 'Please check your email for verification', 4);
+      showToast.success('Account Created', 'Please check your email for verification', 4);
       if (params.get('firebase_signup') === 'true') {
         router.push('/home');
       } else {
@@ -106,9 +103,7 @@ const SignupClient = () => {
         if (redirect) {
           localStorage.setItem('invite_redirect', redirect);
         }
-        router.push(
-          `/auth/check-email?email=${encodeURIComponent(value['email'])}`,
-        );
+        router.push(`/auth/check-email?email=${encodeURIComponent(value['email'])}`);
       }
       if (res.status === 200) {
         setLoader(false);
@@ -126,21 +121,18 @@ const SignupClient = () => {
       ) {
         errorMessage = (error as any).response.data.detail;
       }
-      notify.error('Sign Up Failed', errorMessage, 5);
+      showToast.error('Sign Up Failed', errorMessage, 5);
       setLoader(false);
     }
   };
 
   return (
     <Container>
-      {contextHolder}
-      <Box sx={{ width: '100%', maxWidth: 400 }}>
-        <Typography variant="h4" sx={{ mb: 1, fontWeight: 600 }}>
-          Create your account
-        </Typography>
-        <Typography variant="body1" sx={{ mb: 4, color: theme.palette.text.secondary }}>
+      <div className="w-full max-w-[400px]">
+        <h4 className="mb-1 text-xl font-semibold">Create your account</h4>
+        <p className="mb-4 text-[15px] text-muted-foreground">
           Get started with Voice AI in minutes
-        </Typography>
+        </p>
 
         <Form onFinish={handleSubmit} layout="vertical" autoComplete="off">
           <TextInput
@@ -165,7 +157,7 @@ const SignupClient = () => {
             onChange={handleOrgNameChange}
           />
 
-          <Stack spacing={2} sx={{ mt: 2 }}>
+          <div className="mt-2 flex flex-col gap-2">
             <CustomButton loading={loader} type="primary" htmlType="submit" fullWidth>
               Create account
             </CustomButton>
@@ -183,33 +175,19 @@ const SignupClient = () => {
             >
               Sign up with Google
             </CustomButton>
-          </Stack>
+          </div>
 
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              mt: 3,
-              gap: 0.5,
-            }}
-          >
-            <Typography variant="body2">Already have an account?</Typography>
-            <Typography
-              component={Link}
+          <div className="mt-3 flex items-center justify-center gap-1">
+            <span className="text-sm">Already have an account?</span>
+            <Link
               href="/auth/login"
-              sx={{
-                fontWeight: theme.custom.typography.fontWeight.medium,
-                color: theme.palette.primary.main,
-                textDecoration: 'none',
-                '&:hover': { textDecoration: 'underline' },
-              }}
+              className="font-medium text-indigo-500 no-underline hover:underline"
             >
               Log in
-            </Typography>
-          </Box>
+            </Link>
+          </div>
         </Form>
-      </Box>
+      </div>
     </Container>
   );
 };

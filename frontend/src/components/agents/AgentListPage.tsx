@@ -7,7 +7,7 @@ import CreateAgentModal from '@/components/agents/CreateAgentModal';
 import { CustomButton, CustomTable } from '@/components/shared';
 import type { ApiAgent } from '@/types/agent';
 import type { CustomTableColumn } from '@/types/components';
-import { useNotification } from '@/utils/notification';
+import { showToast } from '@/utils/toast';
 import dayjs from 'dayjs';
 import { useAtom } from 'jotai';
 import { Plus } from 'lucide-react';
@@ -21,7 +21,6 @@ const AgentListPage: React.FC = () => {
   const [, removeAgent] = useAtom(deleteAgentAtom);
   const [loader, setLoader] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-  const { notify, contextHolder } = useNotification();
 
   const hasFetchedRef = useRef(false);
 
@@ -38,12 +37,12 @@ const AgentListPage: React.FC = () => {
     async (agentId: number) => {
       try {
         await removeAgent(agentId);
-        notify.success('Agent Deleted', 'Agent deleted successfully');
+        showToast.success('Agent Deleted', 'Agent deleted successfully');
       } catch {
-        notify.error('Delete Failed', 'Failed to delete agent. Please try again.');
+        showToast.error('Delete Failed', 'Failed to delete agent. Please try again.');
       }
     },
-    [removeAgent, notify],
+    [removeAgent],
   );
 
   useEffect(() => {
@@ -136,7 +135,6 @@ const AgentListPage: React.FC = () => {
       />
 
       <CreateAgentModal open={modalOpen} onClose={() => setModalOpen(false)} />
-      {contextHolder}
     </div>
   );
 };
