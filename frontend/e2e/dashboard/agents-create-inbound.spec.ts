@@ -655,7 +655,7 @@ test.describe('Create Inbound Agent Page', () => {
       await page.getByRole('button', { name: /save changes/i }).click();
 
       await expect(
-        page.locator('[data-sonner-toast]', { hasText: 'Failed to create agent' }),
+        page.locator('[data-sonner-toast]', { hasText: 'Server error' }),
       ).toBeVisible({ timeout: 5_000 });
       expect(page.url()).toContain('/agents/create/inbound');
     });

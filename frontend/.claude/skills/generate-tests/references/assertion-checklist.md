@@ -200,14 +200,15 @@ await expect(page.locator('[data-sonner-toast]', { hasText: 'Error' })).toBeVisi
 
 ## Notification format reference
 
-`showToast` from `@/utils/toast` renders title and description in separate elements:
+`showToast` from `@/utils/toast` renders title (and optional description) in the toast element.
+`handleApiError` from `@/utils/helpers` extracts `error.response.data.detail` and shows it as the toast title.
 
-| Scenario                            | Title                | Description                         |
-| ----------------------------------- | -------------------- | ----------------------------------- |
-| Login success                       | `Login Successful`   | `Welcome back!`                     |
-| Login failed (API error)            | `Login Failed`       | `Please try again.`                 |
-| Login failed (empty/falsy response) | `Login Failed`       | `Please enter email and password`   |
-| General error                       | `Login Failed`       | `Please try again.`                 |
+| Scenario                            | Toast text                                    |
+| ----------------------------------- | --------------------------------------------- |
+| Login success                       | Title: `Login Successful`, Desc: `Welcome back!` |
+| Login failed (empty/falsy response) | Title: `Login Failed`, Desc: `Please enter email and password` |
+| API error with detail               | Title: the `detail` value from the API response |
+| API error / network failure         | Title: `Something went wrong. Please try again.` |
 
 ---
 

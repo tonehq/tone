@@ -1,7 +1,7 @@
 # Impacted Routes Report
 
-> Generated: 2026-03-03T09:37:42.565230+00:00
-> Comparing: `ebcbc81b` → `12feae1e`
+> Generated: 2026-03-03T09:39:06.863980+00:00
+> Comparing: `ebcbc81b` → `c0233e42`
 > Branch: `claude/shadcn-migration`
 
 ## Summary
@@ -98,6 +98,12 @@ src/components/settings/Integrations.tsx (component, modified)
 
 ```
 src/utils/helpers.ts (util, modified)
+  → helpers.ts  → AgentListPage.tsx  → page.tsx
+  → /agents  [src/app/(dashboard)/agents/page.tsx]
+```
+
+```
+src/utils/helpers.ts (util, modified)
   → helpers.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
@@ -112,12 +118,6 @@ src/utils/helpers.ts (util, modified)
 src/utils/helpers.ts (util, modified)
   → helpers.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
-```
-
-```
-src/utils/helpers.ts (util, modified)
-  → helpers.ts  → AgentListPage.tsx  → page.tsx
-  → /agents  [src/app/(dashboard)/agents/page.tsx]
 ```
 
 ```
@@ -128,6 +128,12 @@ src/utils/helpers.ts (util, modified)
 
 ```
 src/utils/toast.tsx (util, modified)
+  → toast.tsx  → AgentListPage.tsx  → page.tsx
+  → /agents  [src/app/(dashboard)/agents/page.tsx]
+```
+
+```
+src/utils/toast.tsx (util, modified)
   → toast.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
@@ -142,12 +148,6 @@ src/utils/toast.tsx (util, modified)
 src/utils/toast.tsx (util, modified)
   → toast.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
-```
-
-```
-src/utils/toast.tsx (util, modified)
-  → toast.tsx  → AgentListPage.tsx  → page.tsx
-  → /agents  [src/app/(dashboard)/agents/page.tsx]
 ```
 
 ```

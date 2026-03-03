@@ -630,7 +630,7 @@ test.describe('Edit Agent Page', () => {
 
       await page.getByRole('button', { name: /save changes/i }).click();
 
-      await expect(page.locator('[data-sonner-toast]', { hasText: 'Failed to save agent' })).toBeVisible(
+      await expect(page.locator('[data-sonner-toast]', { hasText: 'Server error' })).toBeVisible(
         { timeout: 5_000 },
       );
       expect(page.url()).toContain(EDIT_URL);
@@ -712,7 +712,7 @@ test.describe('Edit Agent Page', () => {
 
       await page.goto(EDIT_URL);
       await expect(
-        page.locator('[data-sonner-toast]', { hasText: 'Failed to load agent' }),
+        page.locator('[data-sonner-toast]', { hasText: 'Server error' }),
       ).toBeVisible({ timeout: 10_000 });
     });
   });

@@ -396,7 +396,6 @@ test.describe('Signup Page', () => {
       await page.getByRole('button', { name: 'Create account' }).click();
 
       await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
-      await expect(getToast(page)).toContainText('Sign Up Failed');
       await expect(getToast(page)).toContainText('Email already registered');
     });
 
@@ -427,7 +426,7 @@ test.describe('Signup Page', () => {
       await page.getByRole('button', { name: 'Create account' }).click();
 
       await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
-      await expect(getToast(page)).toContainText('Sign Up Failed');
+      await expect(getToast(page)).toContainText('Something went wrong');
     });
   });
 

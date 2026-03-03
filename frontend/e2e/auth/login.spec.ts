@@ -229,7 +229,7 @@ test.describe('Login Page', () => {
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
       await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
-      await expect(getToast(page)).toContainText('Login Failed');
+      await expect(getToast(page)).toContainText('Invalid credentials');
       await expect(page).toHaveURL(/\/auth\/login/);
     });
 
@@ -260,8 +260,7 @@ test.describe('Login Page', () => {
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
       await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
-      await expect(getToast(page)).toContainText('Login Failed');
-      await expect(getToast(page)).toContainText('Please try again.');
+      await expect(getToast(page)).toContainText('Something went wrong');
     });
 
     test('shows error notification on server error (500)', async ({ page }) => {
@@ -278,7 +277,7 @@ test.describe('Login Page', () => {
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
 
       await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
-      await expect(getToast(page)).toContainText('Login Failed');
+      await expect(getToast(page)).toContainText('Internal server error');
     });
   });
 
@@ -367,7 +366,7 @@ test.describe('Login Page', () => {
       await page.getByPlaceholder('Enter your password').press('Enter');
 
       await expect(getToast(page)).toBeVisible({ timeout: 5_000 });
-      await expect(getToast(page)).toContainText('Login Failed');
+      await expect(getToast(page)).toContainText('Invalid credentials');
     });
 
     test('allows keyboard navigation through form inputs', async ({ page }) => {

@@ -1,8 +1,8 @@
 {
   "metadata": {
-    "generated_at": "2026-03-03T09:37:42.565230+00:00",
+    "generated_at": "2026-03-03T09:39:06.863980+00:00",
     "commit1": "ebcbc81bef07be410b70f92ca4036da87c3308ce",
-    "commit2": "12feae1ea124f20f49a71ebdf1d1461475cd8381",
+    "commit2": "c0233e42fa27a4c3a450ddde867b78df9ddeb2e6",
     "branch": "claude/shadcn-migration",
     "project_path": "/Users/kishokkumara/Projects/tonehq/frontend"
   },
@@ -195,15 +195,15 @@
     "src/components/agents/AgentFormPage.tsx (component, modified)\n  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
     "src/components/agents/AgentListPage.tsx (component, modified)\n  \u2192 AgentListPage.tsx  \u2192 page.tsx\n  \u2192 /agents  [src/app/(dashboard)/agents/page.tsx]",
     "src/components/settings/Integrations.tsx (component, modified)\n  \u2192 Integrations.tsx  \u2192 page.tsx\n  \u2192 /settings  [src/app/(dashboard)/settings/page.tsx]",
+    "src/utils/helpers.ts (util, modified)\n  \u2192 helpers.ts  \u2192 AgentListPage.tsx  \u2192 page.tsx\n  \u2192 /agents  [src/app/(dashboard)/agents/page.tsx]",
     "src/utils/helpers.ts (util, modified)\n  \u2192 helpers.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
     "src/utils/helpers.ts (util, modified)\n  \u2192 helpers.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
     "src/utils/helpers.ts (util, modified)\n  \u2192 helpers.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
-    "src/utils/helpers.ts (util, modified)\n  \u2192 helpers.ts  \u2192 AgentListPage.tsx  \u2192 page.tsx\n  \u2192 /agents  [src/app/(dashboard)/agents/page.tsx]",
     "src/utils/helpers.ts (util, modified)\n  \u2192 helpers.ts  \u2192 Integrations.tsx  \u2192 page.tsx\n  \u2192 /settings  [src/app/(dashboard)/settings/page.tsx]",
+    "src/utils/toast.tsx (util, modified)\n  \u2192 toast.tsx  \u2192 AgentListPage.tsx  \u2192 page.tsx\n  \u2192 /agents  [src/app/(dashboard)/agents/page.tsx]",
     "src/utils/toast.tsx (util, modified)\n  \u2192 toast.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
     "src/utils/toast.tsx (util, modified)\n  \u2192 toast.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
     "src/utils/toast.tsx (util, modified)\n  \u2192 toast.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
-    "src/utils/toast.tsx (util, modified)\n  \u2192 toast.tsx  \u2192 AgentListPage.tsx  \u2192 page.tsx\n  \u2192 /agents  [src/app/(dashboard)/agents/page.tsx]",
     "src/utils/toast.tsx (util, modified)\n  \u2192 toast.tsx  \u2192 Integrations.tsx  \u2192 page.tsx\n  \u2192 /settings  [src/app/(dashboard)/settings/page.tsx]"
   ]
 }
