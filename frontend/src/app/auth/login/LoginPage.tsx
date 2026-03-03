@@ -36,9 +36,7 @@ const LoginPage = () => {
   return (
     <Container>
       <div className="w-full max-w-[400px] animate-page">
-        <h2 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">
-          Welcome back 123456123456
-        </h2>
+        <h2 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">Welcome back</h2>
         <p className="mb-8 text-sm text-muted-foreground">
           Enter your credentials to access your account
         </p>
