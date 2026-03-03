@@ -152,8 +152,23 @@ while read local_ref local_sha remote_ref remote_sha; do
     git -C "$REPO_ROOT" add "$REPORT_JSON" "$REPORT_MD"
     git -C "$REPO_ROOT" add "$FRONTEND_DIR/e2e/"
     git -C "$REPO_ROOT" commit -m "Update impacted routes report"
+
+    if [ "$STARTED_DEV_SERVER" = true ]; then
+      echo "  Stopping dev server (pid $DEV_SERVER_PID)..."
+      kill "$DEV_SERVER_PID" 2>/dev/null
+    fi
+
     echo ""
-    echo "  Report/tests updated and committed locally (will be included in next push)."
+    echo "  Report/tests updated. Auto-pushing all changes..."
+    # Push with --no-verify to skip re-running this hook.
+    # The new commit (report) plus the user's commits all go through.
+    if git -C "$REPO_ROOT" push --no-verify 2>&1; then
+      echo "  Push completed successfully (including report update)."
+    else
+      echo "  Auto-push failed. Run 'git push' again manually."
+    fi
+    # Abort the original push — the inner push already sent everything.
+    exit 1
   else
     echo "  Report and tests up to date."
   fi
