@@ -1,7 +1,16 @@
 FRONTEND_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SCRIPT="$FRONTEND_DIR/.claude/skills/find-impacted-routes/analyze_diff.py"
+REPO_ROOT="$(cd "$FRONTEND_DIR/.." && pwd)"
+ANALYZE_SCRIPT="$FRONTEND_DIR/.claude/skills/find-impacted-routes/analyze_diff.py"
+REPORT_JSON="$FRONTEND_DIR/impacted-routes-report.json"
+REPORT_MD="$FRONTEND_DIR/impacted-routes-report.md"
 
-if [ ! -f "$SCRIPT" ]; then
+if [ ! -f "$ANALYZE_SCRIPT" ]; then
+  exit 0
+fi
+
+# Skip if last commit was the auto-committed report (prevents loop)
+LAST_MSG=$(git -C "$REPO_ROOT" log -1 --pretty=%s 2>/dev/null)
+if [ "$LAST_MSG" = "Update impacted routes report" ]; then
   exit 0
 fi
 
@@ -11,21 +20,97 @@ while read local_ref local_sha remote_ref remote_sha; do
   fi
 
   if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
-    commit1=$(git merge-base main "$local_sha" 2>/dev/null || git rev-parse main 2>/dev/null)
+    commit1=$(git -C "$REPO_ROOT" merge-base main "$local_sha" 2>/dev/null || git -C "$REPO_ROOT" rev-parse main 2>/dev/null)
   else
     commit1="$remote_sha"
   fi
 
+  # ── Step 1: Impacted routes analysis ──
   echo ""
-  echo "find-impacted-routes: analyzing $commit1...$local_sha"
-  echo "Use 'yarn push' for the full workflow (analysis + tests + auto-commit report)."
-  echo ""
+  echo "Step 1/3: Running impacted routes analysis ($commit1...$local_sha)"
 
-  python3 "$SCRIPT" \
+  python3 "$ANALYZE_SCRIPT" \
     --project-path "$FRONTEND_DIR" \
     --commit1 "$commit1" \
     --commit2 "$local_sha" \
     --output "$FRONTEND_DIR"
+
+  # ── Step 2: Map routes to test files and run tests ──
+  echo ""
+  echo "Step 2/3: Mapping impacted routes to test files..."
+
+  TEST_FILES=""
+  if [ -f "$REPORT_JSON" ]; then
+    ROUTES=$(node -e "
+      const r = require('$REPORT_JSON');
+      (r.impacted_routes || []).forEach(i => console.log(i.route));
+    " 2>/dev/null || echo "")
+
+    SEEN=""
+    for route in $ROUTES; do
+      case "$route" in
+        /auth/login)             spec="e2e/auth/login.spec.ts" ;;
+        /auth/signup)            spec="e2e/auth/signup.spec.ts" ;;
+        /home)                   spec="e2e/dashboard/home.spec.ts" ;;
+        /agents)                 spec="e2e/dashboard/agents.spec.ts" ;;
+        /agents/create/inbound)  spec="e2e/dashboard/agents-create-inbound.spec.ts" ;;
+        /agents/create/outbound) spec="e2e/dashboard/agents-create-outbound.spec.ts" ;;
+        /agents/edit/*)          spec="e2e/dashboard/agents-edit.spec.ts" ;;
+        *)                       spec="" ;;
+      esac
+      if [ -n "$spec" ] && [ -f "$FRONTEND_DIR/$spec" ]; then
+        case "$SEEN" in
+          *"$spec"*) ;;
+          *)
+            SEEN="$SEEN $spec"
+            TEST_FILES="$TEST_FILES $spec"
+            echo "  $route -> $spec"
+            ;;
+        esac
+      elif [ -n "$route" ]; then
+        echo "  $route -> (no spec file)"
+      fi
+    done
+  fi
+
+  if [ -n "$TEST_FILES" ]; then
+    if curl -s -o /dev/null -w '' http://localhost:3000 2>/dev/null; then
+      echo ""
+      echo "  Running impacted tests..."
+      cd "$FRONTEND_DIR"
+      if ! npx playwright test $TEST_FILES --reporter=list; then
+        echo ""
+        echo "  Tests failed. Push aborted. Fix tests and try again."
+        exit 1
+      fi
+      echo "  All impacted tests passed."
+    else
+      echo "  Dev server not running — skipping test execution."
+    fi
+  else
+    echo "  No impacted test files."
+  fi
+
+  # ── Step 3: Auto-commit report if changed ──
+  echo ""
+  echo "Step 3/3: Checking report..."
+
+  REPORT_CHANGED=false
+  if ! git -C "$REPO_ROOT" diff --quiet -- "$REPORT_JSON" "$REPORT_MD" 2>/dev/null; then
+    REPORT_CHANGED=true
+  fi
+  if git -C "$REPO_ROOT" ls-files --others --exclude-standard -- "$REPORT_JSON" "$REPORT_MD" 2>/dev/null | grep -q .; then
+    REPORT_CHANGED=true
+  fi
+
+  if [ "$REPORT_CHANGED" = true ]; then
+    git -C "$REPO_ROOT" add "$REPORT_JSON" "$REPORT_MD"
+    git -C "$REPO_ROOT" commit -m "Update impacted routes report"
+    echo "  Report auto-committed. Run 'git push' once more to include it."
+    exit 1
+  fi
+
+  echo "  Report up to date."
 done
 
 exit 0
