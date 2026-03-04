@@ -5,7 +5,8 @@ import { Slider } from '@/components/ui/slider';
 import { languages } from '@/data/mockAgents';
 import type { ServiceProvider } from '@/types/provider';
 import { cn } from '@/utils/cn';
-import type { ReactNode } from 'react';
+import { type ReactNode, useMemo } from 'react';
+import DynamicProviderFields from './DynamicProviderFields';
 import type { AgentVoiceFormData } from './types';
 
 interface VoiceTabProps {
@@ -53,6 +54,15 @@ export default function VoiceTab({
   const ttsOptions = ttsProviders.map((p) => ({ value: String(p.id), label: p.display_name }));
   const sttOptions = sttProviders.map((p) => ({ value: String(p.id), label: p.display_name }));
 
+  const selectedTtsProvider = useMemo(
+    () => ttsProviders.find((p) => p.id === formData.voiceProvider) ?? null,
+    [ttsProviders, formData.voiceProvider],
+  );
+  const selectedSttProvider = useMemo(
+    () => sttProviders.find((p) => p.id === formData.sttProvider) ?? null,
+    [sttProviders, formData.sttProvider],
+  );
+
   return (
     <div className="space-y-0 py-4">
       {/* Language */}
@@ -74,12 +84,23 @@ export default function VoiceTab({
         <SelectInput
           name="voiceProvider"
           value={formData.voiceProvider != null ? String(formData.voiceProvider) : ''}
-          onValueChange={(v) => onFormChange({ voiceProvider: v ? Number(v) : null })}
+          onValueChange={(v) => {
+            const newId = v ? Number(v) : null;
+            onFormChange({ voiceProvider: newId, ttsMetaData: {} });
+          }}
           options={ttsOptions}
           placeholder="Select a provider"
           loading={providersLoading}
         />
       </FormRow>
+
+      {selectedTtsProvider?.meta_data_schema?.length ? (
+        <DynamicProviderFields
+          schema={selectedTtsProvider.meta_data_schema}
+          values={formData.ttsMetaData}
+          onChange={(metaData) => onFormChange({ ttsMetaData: metaData })}
+        />
+      ) : null}
 
       {/* STT Provider */}
       <FormRow
@@ -89,12 +110,23 @@ export default function VoiceTab({
         <SelectInput
           name="sttProvider"
           value={formData.sttProvider != null ? String(formData.sttProvider) : ''}
-          onValueChange={(v) => onFormChange({ sttProvider: v ? Number(v) : null })}
+          onValueChange={(v) => {
+            const newId = v ? Number(v) : null;
+            onFormChange({ sttProvider: newId, sttMetaData: {} });
+          }}
           options={sttOptions}
           placeholder="Select a provider"
           loading={providersLoading}
         />
       </FormRow>
+
+      {selectedSttProvider?.meta_data_schema?.length ? (
+        <DynamicProviderFields
+          schema={selectedSttProvider.meta_data_schema}
+          values={formData.sttMetaData}
+          onChange={(metaData) => onFormChange({ sttMetaData: metaData })}
+        />
+      ) : null}
 
       {/* Voice Speed */}
       <FormRow label="Voice Speed" description="Adjust how fast or slow your agent will talk.">

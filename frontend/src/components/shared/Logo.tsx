@@ -18,8 +18,8 @@ const Logo = ({
 }: LogoProps) => (
   <div className={cn('flex items-center gap-2', className)}>
     <svg
-      viewBox="0 0 40 40"
-      className={cn('shrink-0', showTagline ? 'h-8 w-8' : iconOnly ? 'h-8 w-8' : 'h-10 w-10')}
+      viewBox="0 0 36 36"
+      className={cn('shrink-0', showTagline ? 'h-7 w-7' : iconOnly ? 'h-7 w-7' : 'h-7 w-7')}
       aria-hidden
     >
       <defs>
@@ -48,16 +48,6 @@ const Logo = ({
         >
           Tone
         </span>
-        {showTagline && (
-          <span
-            className={cn(
-              'text-[9px] font-medium uppercase tracking-widest',
-              inverted ? 'text-white/50' : 'text-muted-foreground',
-            )}
-          >
-            AI Voice Agent Builder
-          </span>
-        )}
       </div>
     )}
   </div>

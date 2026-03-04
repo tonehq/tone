@@ -201,6 +201,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
               customVocabulary: formData.customVocabulary,
               filterWords: formData.filterWords,
               useRealisticFillerWords: formData.useRealisticFillerWords,
+              llmMetaData: formData.llmMetaData,
             }}
             llmProviders={llmProviders}
             providersLoading={providersLoading}
@@ -222,6 +223,8 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
               sttProvider: formData.sttProvider,
               patienceLevel: formData.patienceLevel as 'low' | 'medium' | 'high',
               speechRecognition: formData.speechRecognition as 'fast' | 'accurate',
+              ttsMetaData: formData.ttsMetaData,
+              sttMetaData: formData.sttMetaData,
             }}
             ttsProviders={ttsProviders}
             sttProviders={sttProviders}

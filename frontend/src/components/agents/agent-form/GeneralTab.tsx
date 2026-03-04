@@ -6,7 +6,8 @@ import { CustomButton, SelectInput, TextAreaField, TextInput } from '@/component
 import { Form } from '@/components/shared/Form';
 import type { ServiceProvider } from '@/types/provider';
 import { X } from 'lucide-react';
-import { KeyboardEvent, ReactNode, useState } from 'react';
+import { KeyboardEvent, ReactNode, useMemo, useState } from 'react';
+import DynamicProviderFields from './DynamicProviderFields';
 import type { AgentGeneralFormData } from './types';
 
 interface GeneralTabProps {
@@ -60,6 +61,11 @@ export default function GeneralTab({
 }: GeneralTabProps) {
   const [vocabularyInput, setVocabularyInput] = useState('');
   const [filterWordsInput, setFilterWordsInput] = useState('');
+
+  const selectedLlmProvider = useMemo(
+    () => llmProviders.find((p) => p.id === formData.aiModel) ?? null,
+    [llmProviders, formData.aiModel],
+  );
 
   const handleFinish = (values: Record<string, string>) => {
     const customVocabulary = parseJsonArray(values.customVocabulary);
@@ -144,12 +150,23 @@ export default function GeneralTab({
         <SelectInput
           name="aiModel"
           value={formData.aiModel != null ? String(formData.aiModel) : ''}
-          onValueChange={(v) => onFormChange({ aiModel: v ? Number(v) : null })}
+          onValueChange={(v) => {
+            const newId = v ? Number(v) : null;
+            onFormChange({ aiModel: newId, llmMetaData: {} });
+          }}
           placeholder="Select a provider"
           options={llmProviders.map((p) => ({ value: String(p.id), label: p.display_name }))}
           loading={providersLoading}
         />
       </FormRow>
+
+      {selectedLlmProvider?.meta_data_schema?.length ? (
+        <DynamicProviderFields
+          schema={selectedLlmProvider.meta_data_schema}
+          values={formData.llmMetaData}
+          onChange={(metaData) => onFormChange({ llmMetaData: metaData })}
+        />
+      ) : null}
 
       <FormRow
         label="First Message"

@@ -111,4 +111,7 @@ export interface AgentFormState {
   callTranscription: boolean;
   phoneNumbers: { type: string; no: string }[];
   channels: any[];
+  llmMetaData: Record<string, unknown>;
+  ttsMetaData: Record<string, unknown>;
+  sttMetaData: Record<string, unknown>;
 }
