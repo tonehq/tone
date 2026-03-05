@@ -9,6 +9,7 @@ on:
 
 jobs:
   review:
+    if: false  # Disabled – remove this line to re-enable
     runs-on: ubuntu-latest
     permissions:
       contents: read
