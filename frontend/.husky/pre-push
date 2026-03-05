@@ -93,8 +93,39 @@ while read local_ref local_sha remote_ref remote_sha; do
   fi
 
   STARTED_DEV_SERVER=false
+  STARTED_BACKEND_SERVER=false
 
   if [ -n "$TEST_FILES" ]; then
+    # ── Check Python backend server (port 8000) ──────────────────────────────
+    if curl -s -o /dev/null -w '' http://localhost:8000 2>/dev/null; then
+      echo "  Backend server already running on :8000."
+    else
+      echo "  Starting backend server..."
+      cd "$REPO_ROOT"
+      python3 main.py > /dev/null 2>&1 &
+      BACKEND_SERVER_PID=$!
+      STARTED_BACKEND_SERVER=true
+
+      # Wait up to 30s for the backend to be ready
+      WAIT=0
+      while [ $WAIT -lt 30 ]; do
+        if curl -s -o /dev/null -w '' http://localhost:8000 2>/dev/null; then
+          break
+        fi
+        sleep 1
+        WAIT=$((WAIT + 1))
+      done
+
+      if ! curl -s -o /dev/null -w '' http://localhost:8000 2>/dev/null; then
+        echo "  Backend server failed to start within 30s — skipping tests."
+        kill "$BACKEND_SERVER_PID" 2>/dev/null
+        STARTED_BACKEND_SERVER=false
+      else
+        echo "  Backend server started (pid $BACKEND_SERVER_PID)."
+      fi
+    fi
+
+    # ── Check Next.js dev server (port 3000) ─────────────────────────────────
     if curl -s -o /dev/null -w '' http://localhost:3000 2>/dev/null; then
       echo "  Dev server already running on :3000."
     else
@@ -123,7 +154,13 @@ while read local_ref local_sha remote_ref remote_sha; do
       fi
     fi
 
-    if curl -s -o /dev/null -w '' http://localhost:3000 2>/dev/null; then
+    # ── Run tests only if both servers are available ─────────────────────────
+    FRONTEND_UP=false
+    BACKEND_UP=false
+    curl -s -o /dev/null -w '' http://localhost:3000 2>/dev/null && FRONTEND_UP=true
+    curl -s -o /dev/null -w '' http://localhost:8000 2>/dev/null && BACKEND_UP=true
+
+    if [ "$FRONTEND_UP" = true ] && [ "$BACKEND_UP" = true ]; then
       echo ""
       echo "  Running impacted tests..."
       cd "$FRONTEND_DIR"
@@ -134,9 +171,18 @@ while read local_ref local_sha remote_ref remote_sha; do
           echo "  Stopping dev server (pid $DEV_SERVER_PID)..."
           kill "$DEV_SERVER_PID" 2>/dev/null
         fi
+        if [ "$STARTED_BACKEND_SERVER" = true ]; then
+          echo "  Stopping backend server (pid $BACKEND_SERVER_PID)..."
+          kill "$BACKEND_SERVER_PID" 2>/dev/null
+        fi
         exit 1
       fi
       echo "  All impacted tests passed."
+    else
+      echo ""
+      [ "$FRONTEND_UP" = false ] && echo "  Next.js dev server (:3000) is not running."
+      [ "$BACKEND_UP" = false ] && echo "  Python backend server (:8000) is not running."
+      echo "  Skipping tests — both servers must be running."
     fi
   else
     echo "  No impacted test files."
@@ -174,6 +220,10 @@ while read local_ref local_sha remote_ref remote_sha; do
   if [ "$STARTED_DEV_SERVER" = true ]; then
     echo "  Stopping dev server (pid $DEV_SERVER_PID)..."
     kill "$DEV_SERVER_PID" 2>/dev/null
+  fi
+  if [ "$STARTED_BACKEND_SERVER" = true ]; then
+    echo "  Stopping backend server (pid $BACKEND_SERVER_PID)..."
+    kill "$BACKEND_SERVER_PID" 2>/dev/null
   fi
 done
 
