@@ -50,9 +50,11 @@ def get_all_service_providers(
     claims: JWTClaims = Depends(get_jwt_claims),
     db: Session = Depends(get_db)
 ):
-    return ServiceProviderService(db, user_id=claims.user_id).get_all_service_providers(
+    EXCLUDED_PROVIDER_IDS = {35, 38, 43, 46, 48, 50}
+    providers = ServiceProviderService(db, user_id=claims.user_id).get_all_service_providers(
         provider_type=provider_type
     )
+    return [p for p in providers if p.get("id") not in EXCLUDED_PROVIDER_IDS]
 
 
 @router.get("/get")

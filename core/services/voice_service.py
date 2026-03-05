@@ -37,6 +37,9 @@ class VoiceService(BaseService):
             }
 
 
+            languages = set()
+            genders = set()
+
             for voice, _ in data:
                 result["voices"].append({
                     "id": voice.id,
@@ -51,7 +54,14 @@ class VoiceService(BaseService):
                     "created_at": voice.created_at,
                     "updated_at": voice.updated_at,
                     })
-             
+                if voice.language:
+                    languages.add(voice.language)
+                if voice.gender:
+                    genders.add(voice.gender)
+
+            result["languages"] = sorted(languages)
+            result["genders"] = sorted(genders)
+
             return result
 
         except Exception as e:
