@@ -1,6 +1,5 @@
-import ThemeRegistry from '@/components/ThemeRegistry';
+import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { AppRouterCacheProvider } from '@mui/material-nextjs/v15-appRouter';
 import type { Metadata } from 'next';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
@@ -24,11 +23,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={`${inter.variable} ${mono.variable} font-sans antialiased`}>
-        <AppRouterCacheProvider options={{ key: 'css' }}>
-          <ThemeRegistry>
-            <TooltipProvider>{children}</TooltipProvider>
-          </ThemeRegistry>
-        </AppRouterCacheProvider>
+        <TooltipProvider>{children}</TooltipProvider>
+        <Toaster />
       </body>
     </html>
   );

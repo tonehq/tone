@@ -1,25 +1,19 @@
 'use client';
 
-import { Add } from '@mui/icons-material';
-import { Box, Button, Paper, Typography } from '@mui/material';
+import CustomButton from '@/components/shared/CustomButton';
+import { Plus } from 'lucide-react';
 
 export default function PhoneNumbersPage() {
   return (
-    <Box sx={{ flex: 1, p: 2, borderRadius: '5px', height: 'calc(100vh - 16px)' }}>
-      <Paper sx={{ height: '100%', borderRadius: '5px', overflow: 'hidden', p: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h5" sx={{ fontWeight: 600 }}>
-            Phone Numbers
-          </Typography>
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            sx={{ bgcolor: 'primary.main', '&:hover': { bgcolor: 'primary.dark' } }}
-          >
+    <div className="flex-1 rounded-[5px] p-2" style={{ height: 'calc(100vh - 16px)' }}>
+      <div className="h-full overflow-hidden rounded-[5px] border bg-white p-3">
+        <div className="mb-2 flex items-center justify-between">
+          <h5 className="text-lg font-semibold">Phone Numbers</h5>
+          <CustomButton type="primary" icon={<Plus className="size-4" />}>
             Link a Phone Number to An Agent
-          </Button>
-        </Box>
-      </Paper>
-    </Box>
+          </CustomButton>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -129,7 +129,7 @@ export default function HomePage() {
   return (
     <div className="animate-page space-y-8 p-6 lg:p-8">
       {/* ── Header + Quick Actions ──────────────────────────────────────── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Welcome to Tone</h1>
           <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">

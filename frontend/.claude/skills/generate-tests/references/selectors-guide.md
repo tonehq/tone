@@ -83,34 +83,31 @@ await expect(page).toHaveURL(/\/auth\/forgotpassword/);
 
 ---
 
-## MUI Snackbar + Alert (useNotification hook)
+## Sonner Toast (showToast function)
 
-The `useNotification` hook renders a MUI `Snackbar` containing a MUI `Alert`.
-MUI Alert has `role="alert"` by default.
-
-Message format: `"${title}: ${message}"` (title and message joined with `: `)
-
-> **Important**: Next.js always injects `<div role="alert" id="__next-route-announcer__">` on
-> every page. Using `page.getByRole('alert')` alone will match 2 elements and throw a strict-mode
-> violation. Always filter with `hasText` to exclude the empty announcer.
+`showToast` from `@/utils/toast` renders Sonner toast notifications.
+Sonner renders toasts as `<li data-sonner-toast>` elements with title and description
+in separate child elements.
 
 ```typescript
 import { Page } from '@playwright/test';
 
 // Define this helper once at the top of every spec file
-const getAlert = (p: Page) => p.getByRole('alert').filter({ hasText: /\S+/ });
+const getToast = (p: Page) => p.locator('[data-sonner-toast]').first();
 
-// Wait for and check notification
-await expect(getAlert(page)).toBeVisible({ timeout: 5000 });
-await expect(getAlert(page)).toContainText('Login Successful');
-await expect(getAlert(page)).toContainText('Login Failed');
+// Wait for and check notification (title)
+await expect(getToast(page)).toBeVisible({ timeout: 5000 });
+await expect(getToast(page)).toContainText('Login Successful');
 
-// Check full notification text
-await expect(getAlert(page)).toContainText('Login Successful: Welcome back!');
-await expect(getAlert(page)).toContainText('Login Failed: Please try again.');
+// Check title and description separately
+await expect(getToast(page)).toContainText('Login Successful');
+await expect(getToast(page)).toContainText('Welcome back!');
 
-// Assert no notification appeared (e.g. after HTML5 validation blocked submit)
-await expect(getAlert(page)).not.toBeVisible();
+// Find a toast with specific text (useful when multiple toasts may appear)
+await expect(page.locator('[data-sonner-toast]', { hasText: 'Login Failed' })).toBeVisible();
+
+// Assert no toast appeared (e.g. after HTML5 validation blocked submit)
+await expect(getToast(page)).not.toBeVisible();
 ```
 
 ---

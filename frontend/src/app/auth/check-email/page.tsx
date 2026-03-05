@@ -1,6 +1,5 @@
 'use client';
 
-import { Box, Typography, useTheme } from '@mui/material';
 import { Mail } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -8,83 +7,37 @@ import { Suspense } from 'react';
 
 const CheckEmailContent = () => {
   const params = useSearchParams();
-  const theme = useTheme();
   const email = params.get('email') || 'your email';
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        minHeight: '100vh',
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: '#f9fafb',
-        p: 4,
-      }}
-    >
-      <Box
-        sx={{
-          maxWidth: 400,
-          textAlign: 'center',
-          backgroundColor: '#ffffff',
-          p: 6,
-          borderRadius: '5px',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-        }}
-      >
+    <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
+      <div className="max-w-[400px] rounded-[5px] bg-white p-6 text-center shadow-md">
         {/* Icon */}
-        <Box
-          sx={{
-            width: 80,
-            height: 80,
-            borderRadius: '50%',
-            backgroundColor: 'rgba(139, 92, 246, 0.1)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            mx: 'auto',
-            mb: 3,
-          }}
-        >
-          <Mail size={40} color="#8b5cf6" />
-        </Box>
+        <div className="mx-auto mb-3 flex size-20 items-center justify-center rounded-full bg-violet-500/10">
+          <Mail size={40} className="text-violet-500" />
+        </div>
 
         {/* Title */}
-        <Typography variant="h4" sx={{ mb: 2, fontWeight: 600 }}>
-          Check your email
-        </Typography>
+        <h4 className="mb-2 text-xl font-semibold">Check your email</h4>
 
         {/* Description */}
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="body1" sx={{ color: theme.palette.text.secondary, mb: 1 }}>
-            We&apos;ve sent an email to
-          </Typography>
-          <Typography variant="body1" sx={{ fontWeight: 600 }}>
-            {email}
-          </Typography>
-          <Typography variant="body1" sx={{ color: theme.palette.text.secondary, mt: 1 }}>
+        <div className="mb-4">
+          <p className="mb-1 text-[15px] text-muted-foreground">We&apos;ve sent an email to</p>
+          <p className="text-[15px] font-semibold">{email}</p>
+          <p className="mt-1 text-[15px] text-muted-foreground">
             Click the link in the email to verify your account.
-          </Typography>
-        </Box>
+          </p>
+        </div>
 
         {/* Footer note */}
-        <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
+        <p className="text-sm text-muted-foreground">
           Didn&apos;t receive the email? Check your spam folder or{' '}
-          <Typography
-            component={Link}
-            href="/auth/login"
-            sx={{
-              color: theme.palette.primary.main,
-              textDecoration: 'none',
-              fontWeight: 500,
-              '&:hover': { textDecoration: 'underline' },
-            }}
-          >
+          <Link href="/auth/login" className="font-medium text-indigo-500 hover:underline">
             try again
-          </Typography>
-        </Typography>
-      </Box>
-    </Box>
+          </Link>
+        </p>
+      </div>
+    </div>
   );
 };
 

@@ -52,18 +52,13 @@ For **create, read, update, and delete** flows (e.g. agents, settings, any resou
 
 ## API Mocking with page.route()
 
-Use mocks for **error paths, loading states, and edge cases** — not for happy-path CRUD. Always use `**/path` pattern so tests are backend-URL-agnostic:
+Use mocks for **error paths, loading states, and edge cases** — not for happy-path CRUD. Always use `**/path` pattern so tests are backend-URL-agnostic.
+
+> **Never mock the login API for successful login** — always use `loginViaUI()` with real backend
+> credentials. Mock login only for error scenarios (401, 500, network failure) or to capture
+> request payloads.
 
 ```typescript
-// Successful API response
-await page.route('**/auth/login', async (route) => {
-  await route.fulfill({
-    status: 200,
-    contentType: 'application/json',
-    body: JSON.stringify({ access_token: MOCK_JWT, user_id: 'user123' }),
-  });
-});
-
 // Error response (4xx/5xx)
 await page.route('**/auth/login', async (route) => {
   await route.fulfill({
@@ -249,15 +244,21 @@ await Promise.all([
 
 ---
 
-## Waiting for notifications (MUI Snackbar + Alert)
+## Waiting for notifications (Sonner toast)
 
-MUI Alert renders with `role="alert"`. The notification message format in this project is:
-`"${title}: ${message}"` (e.g., "Login Successful: Welcome back!")
+Sonner renders toasts as `<li data-sonner-toast>` elements with title and description in separate child elements.
 
 ```typescript
-await expect(page.getByRole('alert')).toBeVisible({ timeout: 5000 });
-await expect(page.getByRole('alert')).toContainText('Login Successful');
-await expect(page.getByRole('alert')).toContainText('Login Failed');
+// Helper — declare once per spec file
+const getToast = (p: Page) => p.locator('[data-sonner-toast]').first();
+
+// Wait for toast and check text
+await expect(getToast(page)).toBeVisible({ timeout: 5000 });
+await expect(getToast(page)).toContainText('Login Successful');
+await expect(getToast(page)).toContainText('Welcome back!');
+
+// Find toast with specific text
+await expect(page.locator('[data-sonner-toast]', { hasText: 'Login Failed' })).toBeVisible();
 ```
 
 ---

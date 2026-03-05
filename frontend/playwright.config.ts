@@ -22,8 +22,8 @@ export default defineConfig({
   ],
   webServer: {
     command: 'yarn dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
+    port: 3000,
+    reuseExistingServer: true,
     timeout: 120_000,
   },
 });
