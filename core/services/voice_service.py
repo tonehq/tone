@@ -21,8 +21,11 @@ class VoiceService(BaseService):
     def get_voices_by_provider_id(self, provider_id: int):
         try:
             data = self.db.query(Voice, ServiceProvider).join(ServiceProvider, Voice.service_provider_id == ServiceProvider.id).filter(Voice.service_provider_id == provider_id).all()
-
-            provider = data[0][1]
+            
+            if data:
+                provider = data[0][1]
+            else:
+                return "No voices found for this provider"
 
             result = {
             "id": provider.id,
