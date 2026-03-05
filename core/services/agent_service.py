@@ -193,6 +193,7 @@ class AgentService(BaseService):
             "voicemail_message", "llm_service_id", "tts_service_id", "stt_service_id",
             "llm_model_id", "tts_model_id", "stt_model_id",
             "llm_metadata", "tts_metadata", "stt_metadata",
+            "llm_meta_data", "tts_meta_data", "stt_meta_data",
             *AGENT_METADATA_KEYS,
         )
         existing_config = self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).first()
@@ -298,6 +299,9 @@ class AgentService(BaseService):
                 "llm_metadata": llm_meta,
                 "tts_metadata": tts_meta,
                 "stt_metadata": stt_meta,
+                "llm_meta_data": llm_meta,
+                "tts_meta_data": tts_meta,
+                "stt_meta_data": stt_meta,
                 "first_message": config.first_message,
                 "system_prompt": config.system_prompt,
                 "end_call_message": config.end_call_message,
@@ -324,16 +328,21 @@ class AgentService(BaseService):
             return default
 
         voicemail = data.get("voice_mail_message") or data.get("voicemail_message") or (existing_config.voicemail_message if existing_config else None)
-        # Build metadata dicts: start from existing, merge request-level metadata JSON, then apply model_id shorthand
+        # Build metadata dicts from request, falling back to existing config when key is absent.
+        # Accept both "llm_metadata" and "llm_meta_data" naming conventions.
         def _build_metadata(meta_key: str, model_id_key: str) -> dict:
-            # Start from existing config
-            base = {}
-            if existing_config and isinstance(getattr(existing_config, meta_key, None), dict):
-                base = dict(getattr(existing_config, meta_key) or {})
-            # Merge full metadata JSON from request (if provided)
-            req_meta = data.get(meta_key)
-            if isinstance(req_meta, dict):
-                base.update(req_meta)
+            alt_key = meta_key.replace("metadata", "meta_data")
+            # Check if the request explicitly provides this metadata key
+            meta_key_present = meta_key in data or alt_key in data
+            if meta_key_present:
+                # Request explicitly sent this key — use it as-is (replaces existing)
+                req_meta = data.get(meta_key) if meta_key in data else data.get(alt_key)
+                base = dict(req_meta) if isinstance(req_meta, dict) else {}
+            else:
+                # Key absent from request — preserve existing config values
+                base = {}
+                if existing_config and isinstance(getattr(existing_config, meta_key, None), dict):
+                    base = dict(getattr(existing_config, meta_key) or {})
             # model_id shorthand overrides metadata's model_id
             model_id_val = data.get(model_id_key)
             if model_id_val is not None:

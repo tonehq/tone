@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Body, Query
 from sqlalchemy.orm import Session
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Set
 
 from core.database.session import get_db
+from core.models.voice import Voice
 from core.services.service_provider_service import ServiceProviderService
 from core.middleware.auth import get_jwt_claims, require_admin_or_owner, JWTClaims
 
@@ -54,7 +55,19 @@ def get_all_service_providers(
     providers = ServiceProviderService(db, user_id=claims.user_id).get_all_service_providers(
         provider_type=provider_type
     )
-    return [p for p in providers if p.get("id") not in EXCLUDED_PROVIDER_IDS]
+    # Get TTS provider IDs that have at least one voice
+    tts_provider_ids_with_voices: Set[int] = set(
+        row[0] for row in db.query(Voice.service_provider_id).filter(Voice.is_active == True).distinct().all()
+    )
+    result = []
+    for p in providers:
+        if p.get("id") in EXCLUDED_PROVIDER_IDS:
+            continue
+        # For TTS providers, only include if they have voices
+        if p.get("provider_type") == "tts" and p.get("id") not in tts_provider_ids_with_voices:
+            continue
+        result.append(p)
+    return result
 
 
 @router.get("/get")
