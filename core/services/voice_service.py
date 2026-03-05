@@ -8,7 +8,6 @@ from fastapi import HTTPException, status
 from core.services.base import BaseService
 from core.models.voice import Voice
 from core.models.service_provider import ServiceProvider
-from ee import database
 
 class VoiceService(BaseService):
     def __init__(self, db: Session, user_id: Optional[int] = None):
