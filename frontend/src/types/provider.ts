@@ -21,7 +21,8 @@ export interface MetaDataSchemaField {
     | 'date'
     | 'date range'
     | 'datetime'
-    | 'list';
+    | 'list'
+    | 'rangepicker';
   validator: string;
   description: string;
   values?: { value: string; label: string }[];

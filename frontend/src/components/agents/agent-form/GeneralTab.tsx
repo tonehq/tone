@@ -160,6 +160,26 @@ export default function GeneralTab({
         />
       </FormRow>
 
+      {selectedLlmProvider?.models?.length ? (
+        <FormRow label="Model" description="Choose a model for your agent.">
+          <SelectInput
+            name="llmModel"
+            value={formData.llmMetaData.model != null ? String(formData.llmMetaData.model) : ''}
+            onValueChange={(v) => {
+              onFormChange({
+                llmMetaData: { ...formData.llmMetaData, model: v || null },
+              });
+            }}
+            options={selectedLlmProvider.models.map((m) => ({
+              value: (m.meta_data as Record<string, string>)?.model ?? m.name,
+              label: m.name,
+            }))}
+            placeholder="Select a model"
+            position="popper"
+          />
+        </FormRow>
+      ) : null}
+
       {selectedLlmProvider?.meta_data_schema?.length ? (
         <DynamicProviderFields
           schema={selectedLlmProvider.meta_data_schema}

@@ -1,6 +1,7 @@
 'use client';
 
 import { CheckboxField, RadioGroupField, SelectInput, TextInput } from '@/components/shared';
+import { Slider } from '@/components/ui/slider';
 import type { MetaDataSchemaField } from '@/types/provider';
 import { X } from 'lucide-react';
 import { type KeyboardEvent, type ReactNode, useState } from 'react';
@@ -55,6 +56,7 @@ function resolveFieldType(
   | 'daterangepicker'
   | 'datetime'
   | 'multiselect'
+  | 'rangepicker'
   | 'select' {
   if (field.values && field.values.length > 0 && field.data_type !== 'list') {
     return 'select';
@@ -77,6 +79,8 @@ function resolveFieldType(
       return 'datetime';
     case 'list':
       return 'multiselect';
+    case 'rangepicker':
+      return 'rangepicker';
     default:
       return 'input';
   }
@@ -165,6 +169,20 @@ function MultiSelectField({
       )}
     </div>
   );
+}
+
+/** Parse "min-max" (e.g. "0-2") from description, fallback to 0–2. */
+function parseRange(description?: string): { min: number; max: number; step: number } {
+  if (description) {
+    const match = description.match(/(-?\d+(?:\.\d+)?)\s*(?:[-–]|to)\s*(-?\d+(?:\.\d+)?)/);
+    if (match) {
+      const min = parseFloat(match[1]);
+      const max = parseFloat(match[2]);
+      const isFloat = match[1].includes('.') || match[2].includes('.');
+      return { min, max, step: isFloat ? 0.1 : 1 };
+    }
+  }
+  return { min: 0, max: 2, step: 1 };
 }
 
 function DateRangeField({
@@ -364,6 +382,35 @@ export default function DynamicProviderFields({
                 />
               </FormRow>
             );
+
+          // Range picker (slider)
+          case 'rangepicker': {
+            const range = parseRange(field.description);
+            const sliderValue = currentValue != null ? Number(currentValue) : range.min;
+            return (
+              <FormRow
+                key={field.name}
+                label={label}
+                description={field.description}
+                required={isRequired}
+              >
+                <div className="w-full px-1">
+                  <Slider
+                    value={[sliderValue]}
+                    onValueChange={([v]) => handleChange(field.name, v)}
+                    min={range.min}
+                    max={range.max}
+                    step={range.step}
+                  />
+                  <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+                    <span>{range.min}</span>
+                    <span>{sliderValue}</span>
+                    <span>{range.max}</span>
+                  </div>
+                </div>
+              </FormRow>
+            );
+          }
 
           // Default: text input (string)
           case 'input':

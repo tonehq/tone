@@ -3,9 +3,11 @@
 import { CustomButton, SelectInput } from '@/components/shared';
 import { Slider } from '@/components/ui/slider';
 import { languages } from '@/data/mockAgents';
+import { getVoicesByProvider, type VoiceItem } from '@/services/voiceService';
 import type { ServiceProvider } from '@/types/provider';
 import { cn } from '@/utils/cn';
-import { type ReactNode, useMemo } from 'react';
+import { handleApiError } from '@/utils/helpers';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import DynamicProviderFields from './DynamicProviderFields';
 import type { AgentVoiceFormData } from './types';
 
@@ -46,10 +48,8 @@ export default function VoiceTab({
   providersLoading,
   onFormChange,
 }: VoiceTabProps) {
-  const languageOptions = languages.map((lang) => ({
-    value: lang.value,
-    label: `${lang.flag} ${lang.label}`,
-  }));
+  const [voices, setVoices] = useState<VoiceItem[]>([]);
+  const [voicesLoading, setVoicesLoading] = useState(false);
 
   const ttsOptions = ttsProviders.map((p) => ({ value: String(p.id), label: p.display_name }));
   const sttOptions = sttProviders.map((p) => ({ value: String(p.id), label: p.display_name }));
@@ -63,19 +63,66 @@ export default function VoiceTab({
     [sttProviders, formData.sttProvider],
   );
 
+  // Fetch voices when TTS provider changes
+  useEffect(() => {
+    if (!formData.voiceProvider) {
+      setVoices([]);
+      return;
+    }
+    let cancelled = false;
+    setVoicesLoading(true);
+    getVoicesByProvider(formData.voiceProvider)
+      .then((data) => {
+        if (!cancelled) {
+          setVoices(data.voices ?? []);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setVoices([]);
+          handleApiError(error);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setVoicesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [formData.voiceProvider]);
+
+  // Build language options from voices API response, enrich with flag/label from static list
+  const availableLanguageOptions = useMemo(() => {
+    const langMap = new Map(languages.map((l) => [l.value, l]));
+    const uniqueLangs = [...new Set(voices.map((v) => v.language))].sort();
+    return uniqueLangs.map((code) => {
+      const known = langMap.get(code);
+      return {
+        value: code,
+        label: known ? `${known.flag} ${known.label}` : code,
+      };
+    });
+  }, [voices]);
+
+  // Filter voices by selected language
+  const filteredVoiceOptions = useMemo(() => {
+    if (!formData.language) return voices;
+    return voices.filter((v) => v.language === formData.language);
+  }, [voices, formData.language]);
+
+  const voiceOptions = filteredVoiceOptions.map((v) => ({
+    value: v.voice_id,
+    label: v.name,
+  }));
+
+  // Language options with flags for STT
+  const sttLanguageOptions = languages.map((lang) => ({
+    value: lang.value,
+    label: `${lang.flag} ${lang.label}`,
+  }));
+
   return (
     <div className="space-y-0 py-4">
-      {/* Language */}
-      <FormRow label="Language" description="The language your agent understands.">
-        <SelectInput
-          name="language"
-          value={formData.language}
-          onValueChange={(v) => onFormChange({ language: v })}
-          options={languageOptions}
-          placeholder="Select a language"
-        />
-      </FormRow>
-
       {/* Voice Provider (TTS) */}
       <FormRow
         label="Voice Provider"
@@ -86,7 +133,7 @@ export default function VoiceTab({
           value={formData.voiceProvider != null ? String(formData.voiceProvider) : ''}
           onValueChange={(v) => {
             const newId = v ? Number(v) : null;
-            onFormChange({ voiceProvider: newId, ttsMetaData: {} });
+            onFormChange({ voiceProvider: newId, ttsMetaData: {}, language: '' });
           }}
           options={ttsOptions}
           placeholder="Select a provider"
@@ -94,9 +141,51 @@ export default function VoiceTab({
         />
       </FormRow>
 
+      {/* Language (shown after TTS provider is selected and voices are loaded) */}
+      {formData.voiceProvider != null && (
+        <FormRow label="Language" description="Select a language to filter available voices.">
+          <SelectInput
+            name="voiceLanguage"
+            value={formData.language}
+            onValueChange={(v) => {
+              onFormChange({
+                language: v,
+                ttsMetaData: { ...formData.ttsMetaData, voice_id: null },
+              });
+            }}
+            options={availableLanguageOptions}
+            placeholder="Select a language"
+            loading={voicesLoading}
+          />
+        </FormRow>
+      )}
+
+      {/* Voice select (filtered by language) */}
+      {formData.voiceProvider != null && formData.language && (
+        <FormRow label="Voice" description="Choose a voice for your agent.">
+          <SelectInput
+            name="voiceId"
+            value={
+              formData.ttsMetaData.voice_id != null ? String(formData.ttsMetaData.voice_id) : ''
+            }
+            onValueChange={(v) => {
+              onFormChange({
+                ttsMetaData: { ...formData.ttsMetaData, voice_id: v || null },
+              });
+            }}
+            options={voiceOptions}
+            placeholder="Select a voice"
+            loading={voicesLoading}
+            position="popper"
+          />
+        </FormRow>
+      )}
+
       {selectedTtsProvider?.meta_data_schema?.length ? (
         <DynamicProviderFields
-          schema={selectedTtsProvider.meta_data_schema}
+          schema={selectedTtsProvider.meta_data_schema.filter(
+            (f) => f.name !== 'language' && f.name !== 'speed',
+          )}
           values={formData.ttsMetaData}
           onChange={(metaData) => onFormChange({ ttsMetaData: metaData })}
         />
@@ -120,9 +209,28 @@ export default function VoiceTab({
         />
       </FormRow>
 
+      {/* STT Language */}
+      {formData.sttProvider != null && (
+        <FormRow label="Language" description="The language your agent understands.">
+          <SelectInput
+            name="sttLanguage"
+            value={
+              formData.sttMetaData.language != null ? String(formData.sttMetaData.language) : ''
+            }
+            onValueChange={(v) => {
+              onFormChange({
+                sttMetaData: { ...formData.sttMetaData, language: v || null },
+              });
+            }}
+            options={sttLanguageOptions}
+            placeholder="Select a language"
+          />
+        </FormRow>
+      )}
+
       {selectedSttProvider?.meta_data_schema?.length ? (
         <DynamicProviderFields
-          schema={selectedSttProvider.meta_data_schema}
+          schema={selectedSttProvider.meta_data_schema.filter((f) => f.name !== 'language')}
           values={formData.sttMetaData}
           onChange={(metaData) => onFormChange({ sttMetaData: metaData })}
         />

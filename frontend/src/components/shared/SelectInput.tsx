@@ -35,6 +35,7 @@ interface SelectInputProps {
   className?: string;
   triggerClassName?: string;
   size?: 'sm' | 'default';
+  position?: 'item-aligned' | 'popper';
 }
 
 const Skeleton = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
@@ -60,6 +61,7 @@ const SelectInput = forwardRef<HTMLButtonElement, SelectInputProps>(
       className,
       triggerClassName,
       size = 'default',
+      position,
     },
     ref,
   ) => {
@@ -102,7 +104,7 @@ const SelectInput = forwardRef<HTMLButtonElement, SelectInputProps>(
           >
             <SelectValue placeholder={placeholder} />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent position={position}>
             {options.map((opt) => (
               <SelectItem key={opt.value} value={opt.value} disabled={opt.disabled}>
                 {opt.label}
