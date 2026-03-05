@@ -121,16 +121,17 @@ Rules specific to Playwright e2e tests (enforced by `generate-tests`):
 - **Cookie cleanup (auth pages)**: Auth flow tests that mock the login API with a 200 success response trigger `setToken()` which sets real cookies. These test groups must clear cookies in `afterEach` to prevent interference with subsequent tests.
 - **Loading state mocks**: Delayed API mocks for testing loading state should use `route.abort()` instead of `route.fulfill()` to prevent the component's success handler from triggering navigation after the test ends.
 - **Selector disambiguation**: When sidebar and main content share element names (e.g., "Agents"), use the full accessible name or scope to a parent locator.
-- **Alert helper**: Always use `const getAlert = (p: Page) => p.getByRole('alert').filter({ hasText: /\S+/ })` to avoid Next.js route announcer collisions.
+- **Toast helper**: Use `const getToast = (p: Page) => p.locator('[data-sonner-toast]').first()` to locate Sonner toast notifications. For toasts with specific text, use `page.locator('[data-sonner-toast]', { hasText: 'text' })`.
 - **Unique test titles**: When generating tests in a loop, include enough context in the title to avoid duplicates (e.g., include card name, not just href).
 
 ---
 
-## 5. UI stack: shadcn + Tailwind (MUI removal planned)
+## 5. UI stack: shadcn + Tailwind (MUI fully removed)
 
-- **Prefer shadcn and Tailwind CSS** for new UI: use `@/components/ui/` (shadcn) and Tailwind classes. Use **lucide-react** for generic icons.
-- **Do not add new MUI dependencies.** For new features (icons, components, layouts), use shadcn components, Tailwind, or plain SVG/icons in `@/components/icons/` (e.g. brand icons like Google).
-- **MUI removal is planned.** Existing MUI usage remains for now, but when touching code that uses `@mui/icons-material` or `@mui/material`, prefer replacing with shadcn + Tailwind or `@/components/icons/` + lucide-react where practical.
+- **Use shadcn and Tailwind CSS** for all UI: use `@/components/ui/` (shadcn) and Tailwind classes. Use **lucide-react** for generic icons.
+- **Do not add MUI dependencies.** MUI has been fully removed from the project. Use shadcn components, Tailwind, or plain SVG/icons in `@/components/icons/` (e.g. brand icons like Google).
+- **Notifications**: Use `showToast` from `@/utils/toast` (powered by Sonner). It is a plain function — not a hook — and can be called from components, helpers, and services.
+- **API error handling**: Use `handleApiError(error)` from `@/utils/helpers` in every `catch` block that handles API failures. It extracts `error.response.data.detail` from Axios errors and shows an error toast. Do NOT duplicate the error extraction logic inline.
 
 ---
 

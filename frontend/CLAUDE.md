@@ -139,21 +139,37 @@ Tests live in `e2e/<route-group>/<page-name>.spec.ts`, mirroring the `src/app/` 
 
 ### Notification assertions
 
-The `useNotification` hook formats Snackbar messages as `"${title}: ${message}"`:
+Notifications use Sonner toast (`showToast` from `@/utils/toast`). Title and description render in separate elements inside the toast:
 
-| Scenario                 | Expected text                       |
-| ------------------------ | ----------------------------------- |
-| Login success            | `"Login Successful: Welcome back!"` |
-| Login error (API throws) | `"Login Failed: Please try again."` |
+| Scenario                 | Title               | Description          |
+| ------------------------ | ------------------- | -------------------- |
+| Login success            | `Login Successful`  | `Welcome back!`      |
+| Login error (API throws) | `Login Failed`      | `Please try again.`  |
 
-Use `page.getByRole('alert')` to find MUI Alert/Snackbar notifications.
+Use `page.locator('[data-sonner-toast]')` to find Sonner toast notifications.
+
+### API error handling
+
+All API `catch` blocks must use `handleApiError` from `@/utils/helpers`:
+
+```typescript
+import { handleApiError } from '@/utils/helpers';
+
+try {
+  await someApiCall();
+} catch (error) {
+  handleApiError(error);
+}
+```
+
+`handleApiError(error)` extracts `error.response.data.detail` from Axios errors and shows an error toast with a default title and fallback message. Do NOT duplicate inline error extraction logic.
 
 ### Reference docs
 
 | File                                | Covers                                                 |
 | ----------------------------------- | ------------------------------------------------------ |
 | `references/test-patterns.md`       | Config template, API mocking, mock JWT, test structure |
-| `references/selectors-guide.md`     | MUI TextField, Button, Checkbox, Snackbar selectors    |
+| `references/selectors-guide.md`     | TextField, Button, Checkbox, Sonner toast selectors    |
 | `references/assertion-checklist.md` | Required assertions per test category, anti-patterns   |
 
 ---
@@ -237,7 +253,7 @@ Every `/code-review` run works through all nine sections below. No section is sk
 - Missing list `key` props
 - `useMemo` / `useCallback` / `React.memo` misuse or missing
 - Prop drilling through 3+ levels without context or composition
-- **This project**: MUI component props that accept callbacks must be stabilised with `useCallback` to avoid re-renders inside MUI's internal `shouldComponentUpdate`
+- **This project**: Component props that accept callbacks should be stabilised with `useCallback` to avoid unnecessary re-renders
 
 #### 3. Next.js Best Practices
 
@@ -245,7 +261,7 @@ Every `/code-review` run works through all nine sections below. No section is sk
 - Raw `<img>` instead of `<Image>` from `next/image`
 - Incorrect data fetching pattern for the route type (Server Component vs Client Component)
 - Missing API route validation
-- **This project**: `ThemeRegistry.tsx` handles MUI + Emotion SSR — do not wrap it in `'use client'` or add a second Emotion cache; all new pages under `(dashboard)/` inherit the sidebar layout automatically
+- **This project**: All new pages under `(dashboard)/` inherit the sidebar layout automatically
 
 #### 4. SOLID + Architecture
 

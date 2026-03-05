@@ -1,0 +1,230 @@
+FRONTEND_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$FRONTEND_DIR/.." && pwd)"
+ANALYZE_SCRIPT="$FRONTEND_DIR/.claude/skills/find-impacted-routes/analyze_diff.py"
+SYNC_SCRIPT="$FRONTEND_DIR/scripts/sync_test_strings.py"
+REPORT_JSON="$FRONTEND_DIR/impacted-routes-report.json"
+REPORT_MD="$FRONTEND_DIR/impacted-routes-report.md"
+
+if [ ! -f "$ANALYZE_SCRIPT" ]; then
+  exit 0
+fi
+
+LAST_MSG=$(git -C "$REPO_ROOT" log -1 --pretty=%s 2>/dev/null)
+if [ "$LAST_MSG" = "Update impacted routes report" ]; then
+  exit 0
+fi
+
+while read local_ref local_sha remote_ref remote_sha; do
+  if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+    continue
+  fi
+
+  if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+    commit1=$(git -C "$REPO_ROOT" merge-base main "$local_sha" 2>/dev/null || git -C "$REPO_ROOT" rev-parse main 2>/dev/null)
+  else
+    commit1="$remote_sha"
+  fi
+
+  # Skip analysis entirely when no src/ files changed (avoids unnecessary report commits)
+  SRC_CHANGED=$(git -C "$REPO_ROOT" diff --name-only "$commit1" "$local_sha" -- "$FRONTEND_DIR/src/" 2>/dev/null | head -1)
+  if [ -z "$SRC_CHANGED" ]; then
+    echo ""
+    echo "  No source files changed — skipping analysis and tests."
+    continue
+  fi
+
+  echo ""
+  echo "Step 1/4: Running impacted routes analysis..."
+
+  python3 "$ANALYZE_SCRIPT" \
+    --project-path "$FRONTEND_DIR" \
+    --commit1 "$commit1" \
+    --commit2 "$local_sha" \
+    --output "$FRONTEND_DIR"
+
+  echo ""
+  echo "Step 2/4: Syncing test strings..."
+
+  if [ -f "$SYNC_SCRIPT" ] && [ -f "$REPORT_JSON" ]; then
+    python3 "$SYNC_SCRIPT" \
+      --project-path "$FRONTEND_DIR" \
+      --commit1 "$commit1" \
+      --commit2 "$local_sha" \
+      --report-json "impacted-routes-report.json"
+  else
+    echo "  Skipped — sync script or report not found."
+  fi
+
+  echo ""
+  echo "Step 3/4: Mapping impacted routes to test files..."
+
+  TEST_FILES=""
+  if [ -f "$REPORT_JSON" ]; then
+    ROUTES=$(node -e "
+      const r = require('$REPORT_JSON');
+      (r.impacted_routes || []).forEach(i => console.log(i.route));
+    " 2>/dev/null || echo "")
+
+    SEEN=""
+    for route in $ROUTES; do
+      case "$route" in
+        /auth/login)             spec="e2e/auth/login.spec.ts" ;;
+        /auth/signup)            spec="e2e/auth/signup.spec.ts" ;;
+        /home)                   spec="e2e/dashboard/home.spec.ts" ;;
+        /agents)                 spec="e2e/dashboard/agents.spec.ts" ;;
+        /agents/create/inbound)  spec="e2e/dashboard/agents-create-inbound.spec.ts" ;;
+        /agents/create/outbound) spec="e2e/dashboard/agents-create-outbound.spec.ts" ;;
+        /agents/edit/*)          spec="e2e/dashboard/agents-edit.spec.ts" ;;
+        *)                       spec="" ;;
+      esac
+      if [ -n "$spec" ] && [ -f "$FRONTEND_DIR/$spec" ]; then
+        case "$SEEN" in
+          *"$spec"*) ;;
+          *)
+            SEEN="$SEEN $spec"
+            TEST_FILES="$TEST_FILES $spec"
+            echo "  $route -> $spec"
+            ;;
+        esac
+      elif [ -n "$route" ]; then
+        echo "  $route -> (no spec file)"
+      fi
+    done
+  fi
+
+  STARTED_DEV_SERVER=false
+  STARTED_BACKEND_SERVER=false
+
+  if [ -n "$TEST_FILES" ]; then
+    # ── Check Python backend server (port 8000) ──────────────────────────────
+    if curl -s -o /dev/null -w '' http://localhost:8000 2>/dev/null; then
+      echo "  Backend server already running on :8000."
+    else
+      echo "  Starting backend server..."
+      cd "$REPO_ROOT"
+      python3 main.py > /dev/null 2>&1 &
+      BACKEND_SERVER_PID=$!
+      STARTED_BACKEND_SERVER=true
+
+      # Wait up to 30s for the backend to be ready
+      WAIT=0
+      while [ $WAIT -lt 30 ]; do
+        if curl -s -o /dev/null -w '' http://localhost:8000 2>/dev/null; then
+          break
+        fi
+        sleep 1
+        WAIT=$((WAIT + 1))
+      done
+
+      if ! curl -s -o /dev/null -w '' http://localhost:8000 2>/dev/null; then
+        echo "  Backend server failed to start within 30s — skipping tests."
+        kill "$BACKEND_SERVER_PID" 2>/dev/null
+        STARTED_BACKEND_SERVER=false
+      else
+        echo "  Backend server started (pid $BACKEND_SERVER_PID)."
+      fi
+    fi
+
+    # ── Check Next.js dev server (port 3000) ─────────────────────────────────
+    if curl -s -o /dev/null -w '' http://localhost:3000 2>/dev/null; then
+      echo "  Dev server already running on :3000."
+    else
+      echo "  Starting dev server..."
+      cd "$FRONTEND_DIR"
+      PORT=3000 npx next dev --turbopack > /dev/null 2>&1 &
+      DEV_SERVER_PID=$!
+      STARTED_DEV_SERVER=true
+
+      # Wait up to 30s for the server to be ready
+      WAIT=0
+      while [ $WAIT -lt 30 ]; do
+        if curl -s -o /dev/null -w '' http://localhost:3000 2>/dev/null; then
+          break
+        fi
+        sleep 1
+        WAIT=$((WAIT + 1))
+      done
+
+      if ! curl -s -o /dev/null -w '' http://localhost:3000 2>/dev/null; then
+        echo "  Dev server failed to start within 30s — skipping tests."
+        kill "$DEV_SERVER_PID" 2>/dev/null
+        STARTED_DEV_SERVER=false
+      else
+        echo "  Dev server started (pid $DEV_SERVER_PID)."
+      fi
+    fi
+
+    # ── Run tests only if both servers are available ─────────────────────────
+    FRONTEND_UP=false
+    BACKEND_UP=false
+    curl -s -o /dev/null -w '' http://localhost:3000 2>/dev/null && FRONTEND_UP=true
+    curl -s -o /dev/null -w '' http://localhost:8000 2>/dev/null && BACKEND_UP=true
+
+    if [ "$FRONTEND_UP" = true ] && [ "$BACKEND_UP" = true ]; then
+      echo ""
+      echo "  Running impacted tests..."
+      cd "$FRONTEND_DIR"
+      if ! npx playwright test $TEST_FILES --reporter=list; then
+        echo ""
+        echo "  Tests failed. Push aborted."
+        if [ "$STARTED_DEV_SERVER" = true ]; then
+          echo "  Stopping dev server (pid $DEV_SERVER_PID)..."
+          kill "$DEV_SERVER_PID" 2>/dev/null
+        fi
+        if [ "$STARTED_BACKEND_SERVER" = true ]; then
+          echo "  Stopping backend server (pid $BACKEND_SERVER_PID)..."
+          kill "$BACKEND_SERVER_PID" 2>/dev/null
+        fi
+        exit 1
+      fi
+      echo "  All impacted tests passed."
+    else
+      echo ""
+      [ "$FRONTEND_UP" = false ] && echo "  Next.js dev server (:3000) is not running."
+      [ "$BACKEND_UP" = false ] && echo "  Python backend server (:8000) is not running."
+      echo "  Skipping tests — both servers must be running."
+    fi
+  else
+    echo "  No impacted test files."
+  fi
+
+  echo ""
+  echo "Step 4/4: Checking report and test files..."
+
+  FILES_CHANGED=false
+  if ! git -C "$REPO_ROOT" diff --quiet -- "$REPORT_JSON" "$REPORT_MD" 2>/dev/null; then
+    FILES_CHANGED=true
+  fi
+  if git -C "$REPO_ROOT" ls-files --others --exclude-standard -- "$REPORT_JSON" "$REPORT_MD" 2>/dev/null | grep -q .; then
+    FILES_CHANGED=true
+  fi
+  if ! git -C "$REPO_ROOT" diff --quiet -- "$FRONTEND_DIR/e2e/" 2>/dev/null; then
+    FILES_CHANGED=true
+  fi
+
+  if [ "$FILES_CHANGED" = true ]; then
+    git -C "$REPO_ROOT" add "$REPORT_JSON" "$REPORT_MD"
+    git -C "$REPO_ROOT" add "$FRONTEND_DIR/e2e/"
+    git -C "$REPO_ROOT" commit -m "Update impacted routes report"
+    echo ""
+    echo "  Report/tests updated and committed."
+    # Schedule a follow-up push after the current push completes.
+    # --no-verify skips the pre-push hook so it won't loop.
+    (sleep 3 && git -C "$REPO_ROOT" push --no-verify > /dev/null 2>&1) &
+    disown 2>/dev/null || true
+    echo "  Report commit will be pushed automatically after this push."
+  else
+    echo "  Report and tests up to date."
+  fi
+
+  if [ "$STARTED_DEV_SERVER" = true ]; then
+    echo "  Stopping dev server (pid $DEV_SERVER_PID)..."
+    kill "$DEV_SERVER_PID" 2>/dev/null
+  fi
+  if [ "$STARTED_BACKEND_SERVER" = true ]; then
+    echo "  Stopping backend server (pid $BACKEND_SERVER_PID)..."
+    kill "$BACKEND_SERVER_PID" 2>/dev/null
+  fi
+done
+
+exit 0

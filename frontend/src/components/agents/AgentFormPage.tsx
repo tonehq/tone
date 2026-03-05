@@ -16,7 +16,8 @@ import {
 } from '@/utils/agentFormUtils';
 import axiosInstance from '@/utils/axios';
 import { cn } from '@/utils/cn';
-import { useNotification } from '@/utils/notification';
+import { handleApiError } from '@/utils/helpers';
+import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
 import { startCase } from 'lodash';
 import { ArrowLeft, Loader2, Phone, Save, Settings, Volume2 } from 'lucide-react';
@@ -31,7 +32,6 @@ interface AgentFormPageProps {
 export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps) {
   const router = useRouter();
   const isEditMode = !!agentId;
-  const { notify, contextHolder } = useNotification();
 
   const [providersLoadable] = useAtom(loadableProvidersAtom);
   const [activeTab, setActiveTab] = useState('general');
@@ -60,10 +60,10 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       if (agent) {
         setFormData(apiAgentToFormState(agent, agentType));
       } else {
-        notify.error('Error', 'Agent not found');
+        showToast.error('Error', 'Agent not found');
       }
-    } catch {
-      notify.error('Error', 'Failed to load agent');
+    } catch (error) {
+      handleApiError(error);
     } finally {
       setLoading(false);
     }
@@ -105,9 +105,9 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         ...prev,
         phoneNumbers: [...prev.phoneNumbers, ...phoneNumbers],
       }));
-      notify.success('Success', 'Phone number(s) assigned successfully');
+      showToast.success('Success', 'Phone number(s) assigned successfully');
     } catch (error) {
-      notify.error('Error', 'Failed to assign phone number(s). Please try again.');
+      handleApiError(error);
       throw error;
     } finally {
       setAssigning(false);
@@ -129,9 +129,9 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         phoneNumbers: prev.phoneNumbers.filter((pn) => pn.no !== unassignTarget.no),
       }));
       setUnassignTarget(null);
-      notify.success('Success', 'Phone number unassigned successfully');
-    } catch {
-      notify.error('Error', 'Failed to unassign phone number. Please try again.');
+      showToast.success('Success', 'Phone number unassigned successfully');
+    } catch (error) {
+      handleApiError(error);
     } finally {
       setUnassigning(false);
     }
@@ -146,20 +146,15 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         isEditMode ? Number(agentId) : undefined,
       );
       await upsertAgent(payload);
-      notify.success(
+      showToast.success(
         'Success',
         isEditMode ? 'Agent saved successfully' : 'Agent created successfully',
       );
       if (!isEditMode) {
         router.push('/agents');
       }
-    } catch {
-      notify.error(
-        'Error',
-        isEditMode
-          ? 'Failed to save agent. Please try again.'
-          : 'Failed to create agent. Please try again.',
-      );
+    } catch (error) {
+      handleApiError(error);
     } finally {
       setSaving(false);
     }
@@ -176,8 +171,8 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       } else {
         router.push('/agents');
       }
-    } catch {
-      notify.error('Error', 'Failed to delete agent');
+    } catch (error) {
+      handleApiError(error);
     } finally {
       setDeletingAgent(false);
       setDeleteConfirmOpen(false);
@@ -478,7 +473,6 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         </p>
       </CustomModal>
 
-      {contextHolder}
     </div>
   );
 }

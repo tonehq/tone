@@ -2,7 +2,7 @@ import { test as base, BrowserContext, expect, Page } from '@playwright/test';
 
 import { loginViaUI } from '../helpers/auth';
 
-// ── Mock data ────────────────────────────────────────────────────────────────
+// phone_number is now { type: string; no: string }[] in the API (not a plain string)
 const MOCK_AGENTS = [
   {
     id: 1,
@@ -10,7 +10,7 @@ const MOCK_AGENTS = [
     name: 'Sales Assistant',
     description: 'Handles inbound sales calls',
     agent_type: 'inbound',
-    phone_number: '+1 (555) 123-4567',
+    phone_number: [{ type: 'twilio', no: '+1 (555) 123-4567' }],
     is_public: false,
     tags: {},
     total_calls: 10,
@@ -80,9 +80,7 @@ const MOCK_AGENTS = [
 
 // ── Browser lifecycle ─────────────────────────────────────────────────────────
 // Worker-scoped context = one browser window shared across all tests in this worker.
-// Login happens ONCE during worker setup, not before every test.
-// Single tab = reused across all tests; beforeEach uses soft navigation.
-// IMPORTANT: name the Playwright fixture callback "provide", NOT "use".
+// Login happens ONCE during worker setup against the real backend, not before every test.
 const test = base.extend<{ page: Page }, { workerContext: BrowserContext }>({
   workerContext: [
     async ({ browser }, provide) => {
@@ -105,7 +103,6 @@ const test = base.extend<{ page: Page }, { workerContext: BrowserContext }>({
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 // Soft navigation helper — exact match for /agents (not /agents/create/...).
-// Uses sidebar link when on another dashboard page, falls back to page.goto().
 async function ensureOnAgentsPage(page: Page): Promise<void> {
   if (/\/agents(?:\?|$)/.test(page.url())) return;
 
@@ -140,89 +137,76 @@ test.describe('Agents List Page', () => {
   // ── 1. Page Rendering ──────────────────────────────────────────────────────
   test.describe('Page Rendering', () => {
     test('shows the agents heading', async ({ page }) => {
-      await expect(page.getByRole('heading', { name: 'Agents' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Agents', level: 1 })).toBeVisible();
     });
 
-    test('shows the search input with placeholder', async ({ page }) => {
-      await expect(page.getByPlaceholder('Search...')).toBeVisible();
+    test('shows the search input with correct placeholder', async ({ page }) => {
+      await expect(page.getByPlaceholder('Search agents...')).toBeVisible();
     });
 
     test('shows the create agent button', async ({ page }) => {
       await expect(page.getByRole('button', { name: /create agent/i })).toBeVisible();
     });
 
-    test('shows agent names in the data grid', async ({ page }) => {
-      const grid = page.locator('.MuiDataGrid-root');
-      await expect(grid.getByText('Sales Assistant')).toBeVisible({ timeout: 5_000 });
-      await expect(grid.getByText('Support Bot')).toBeVisible();
+    test('shows agent names in the table', async ({ page }) => {
+      await expect(page.getByText('Sales Assistant')).toBeVisible({ timeout: 5_000 });
+      await expect(page.getByText('Support Bot')).toBeVisible();
     });
 
-    test('shows inbound agent type chip', async ({ page }) => {
-      const grid = page.locator('.MuiDataGrid-root');
-      const inboundChip = grid.locator('.MuiChip-root').filter({ hasText: 'Inbound' });
-      await expect(inboundChip).toBeVisible({ timeout: 5_000 });
+    test('shows inbound agent type badge', async ({ page }) => {
+      // AgentTypeBadge renders a shadcn Badge with text 'Inbound' in the table body
+      const tableBody = page.locator('tbody');
+      await expect(tableBody.getByText('Inbound')).toBeVisible({ timeout: 5_000 });
     });
 
-    test('shows outbound agent type chip', async ({ page }) => {
-      const grid = page.locator('.MuiDataGrid-root');
-      const outboundChip = grid.locator('.MuiChip-root').filter({ hasText: 'Outbound' });
-      await expect(outboundChip).toBeVisible({ timeout: 5_000 });
+    test('shows outbound agent type badge', async ({ page }) => {
+      const tableBody = page.locator('tbody');
+      await expect(tableBody.getByText('Outbound')).toBeVisible({ timeout: 5_000 });
     });
 
     test('shows phone number for agents that have one', async ({ page }) => {
-      const grid = page.locator('.MuiDataGrid-root');
-      const salesRow = grid.locator('.MuiDataGrid-row').filter({ hasText: 'Sales Assistant' });
+      const salesRow = page.locator('tbody tr').filter({ hasText: 'Sales Assistant' });
       await expect(salesRow).toBeVisible({ timeout: 5_000 });
       await expect(salesRow.getByText('+1 (555) 123-4567')).toBeVisible();
     });
 
     test('shows dash for agents without a phone number', async ({ page }) => {
-      const grid = page.locator('.MuiDataGrid-root');
-      const supportRow = grid.locator('.MuiDataGrid-row').filter({ hasText: 'Support Bot' });
+      const supportRow = page.locator('tbody tr').filter({ hasText: 'Support Bot' });
       await expect(supportRow).toBeVisible({ timeout: 5_000 });
-      await expect(supportRow.locator('[data-field="phone_number"]').getByText('-')).toBeVisible();
+      await expect(supportRow.getByText('-')).toBeVisible();
     });
 
-    test('shows pagination controls', async ({ page }) => {
-      const grid = page.locator('.MuiDataGrid-root');
-      await expect(grid.locator('.MuiTablePagination-root')).toBeVisible({ timeout: 5_000 });
+    test('shows pagination footer with rows per page control', async ({ page }) => {
+      await expect(page.getByText('Rows per page')).toBeVisible({ timeout: 5_000 });
     });
   });
 
-  // ── 2. DataGrid Columns & Interaction ─────────────────────────────────────
-  test.describe('DataGrid Columns & Interaction', () => {
+  // ── 2. Table Columns & Interaction ─────────────────────────────────────────
+  test.describe('Table Columns & Interaction', () => {
     test('shows all column headers', async ({ page }) => {
-      const grid = page.locator('.MuiDataGrid-root');
-      await expect(grid.getByText('AGENT NAME')).toBeVisible({ timeout: 5_000 });
-      await expect(grid.getByText('PHONE NUMBER')).toBeVisible();
-      await expect(grid.getByText('LAST EDITED')).toBeVisible();
-      await expect(grid.getByText('AGENT TYPE')).toBeVisible();
-      await expect(grid.getByText('ACTION')).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Agent Name' })).toBeVisible({
+        timeout: 5_000,
+      });
+      await expect(page.getByRole('columnheader', { name: 'Phone Number' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Last Edited' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Agent Type' })).toBeVisible();
     });
 
-    test('shows action menu with Edit and Delete options', async ({ page }) => {
-      const grid = page.locator('.MuiDataGrid-root');
-      await expect(grid.getByText('Sales Assistant')).toBeVisible({ timeout: 5_000 });
+    test('shows inline Edit and Delete buttons for each row', async ({ page }) => {
+      // ActionMenu renders two inline icon buttons: Edit (Pencil) and Delete (Trash2)
+      await expect(page.getByText('Sales Assistant')).toBeVisible({ timeout: 5_000 });
 
-      // Click the action menu button (three-dot icon) in the first row
-      const firstRow = grid.locator('.MuiDataGrid-row').first();
-      await firstRow.locator('button').click();
-
-      await expect(page.getByRole('menuitem', { name: 'Edit' })).toBeVisible();
-      await expect(page.getByRole('menuitem', { name: 'Delete' })).toBeVisible();
-
-      // Close the menu by pressing Escape
-      await page.keyboard.press('Escape');
+      const firstRow = page.locator('tbody tr').first();
+      await expect(firstRow.getByRole('button', { name: 'Edit' })).toBeVisible();
+      await expect(firstRow.getByRole('button', { name: 'Delete' })).toBeVisible();
     });
 
-    test('navigates to edit page when clicking Edit in action menu', async ({ page }) => {
-      const grid = page.locator('.MuiDataGrid-root');
-      await expect(grid.getByText('Sales Assistant')).toBeVisible({ timeout: 5_000 });
+    test('navigates to edit page when clicking Edit in first row', async ({ page }) => {
+      await expect(page.getByText('Sales Assistant')).toBeVisible({ timeout: 5_000 });
 
-      // Open action menu on the first row (Sales Assistant, inbound, id=1)
-      const firstRow = grid.locator('.MuiDataGrid-row').first();
-      await firstRow.locator('button').click();
-      await page.getByRole('menuitem', { name: 'Edit' }).click();
+      // Click the inline Edit icon button in the first row (Sales Assistant, inbound, id=1)
+      const firstRow = page.locator('tbody tr').first();
+      await firstRow.getByRole('button', { name: 'Edit' }).click();
 
       await expect(page).toHaveURL(/\/agents\/edit\/inbound\/1/, { timeout: 10_000 });
     });
@@ -230,8 +214,7 @@ test.describe('Agents List Page', () => {
 
   // ── 3. Create Agent Modal ─────────────────────────────────────────────────
   test.describe('Create Agent Modal', () => {
-    // Dismiss any dialog left open by a previous test (e.g., test 13 opens modal
-    // but doesn't close it; without cleanup test 14 can't click behind the backdrop).
+    // Dismiss any dialog left open by a previous test
     test.beforeEach(async ({ page }) => {
       if (
         await page
@@ -297,18 +280,24 @@ test.describe('Agents List Page', () => {
       await page.goto('/agents');
     });
 
-    test('shows empty data grid when no agents exist', async ({ page }) => {
-      const grid = page.locator('.MuiDataGrid-root');
-      await expect(grid.getByText(/no rows/i)).toBeVisible({ timeout: 5_000 });
+    test('shows empty state when no agents exist', async ({ page }) => {
+      // CustomTable renders custom emptyState: "No agents yet" + "Create your first agent" button
+      await expect(page.getByText('No agents yet')).toBeVisible({ timeout: 5_000 });
+    });
+
+    test('shows create first agent button in empty state', async ({ page }) => {
+      await expect(page.getByRole('button', { name: /create your first agent/i })).toBeVisible({
+        timeout: 5_000,
+      });
     });
   });
 
   // ── 5. Loading State ──────────────────────────────────────────────────────
   test.describe('Loading State', () => {
-    test('shows loading indicator while agents are being fetched', async ({ page }) => {
+    test('shows skeleton rows while agents are being fetched', async ({ page }) => {
       await page.unrouteAll({ behavior: 'wait' });
 
-      // Delayed API response — use route.abort() to prevent success handler side effects
+      // Delayed API response — abort after 3s to prevent success handler side effects
       await page.route('**/agent/get_all_agents**', async (route) => {
         await new Promise((resolve) => setTimeout(resolve, 3000));
         await route.abort('failed');
@@ -316,9 +305,8 @@ test.describe('Agents List Page', () => {
 
       await page.goto('/agents');
 
-      // MUI DataGrid v6 shows skeleton placeholder rows when loading={true}
-      const grid = page.locator('.MuiDataGrid-root');
-      await expect(grid.locator('.MuiSkeleton-root').first()).toBeVisible({
+      // CustomTable shows skeleton rows with animate-pulse while loading={true}
+      await expect(page.locator('[class*="animate-pulse"]').first()).toBeVisible({
         timeout: 2_000,
       });
     });
@@ -326,7 +314,7 @@ test.describe('Agents List Page', () => {
 
   // ── 6. Error State ────────────────────────────────────────────────────────
   test.describe('Error State', () => {
-    test('shows empty grid when API returns an error', async ({ page }) => {
+    test('shows empty state when API returns an error', async ({ page }) => {
       await page.unrouteAll({ behavior: 'wait' });
       await page.route('**/agent/get_all_agents**', async (route) => {
         await route.fulfill({
@@ -337,9 +325,8 @@ test.describe('Agents List Page', () => {
       });
       await page.goto('/agents');
 
-      const grid = page.locator('.MuiDataGrid-root');
-      // After API error, atom sets agentList to [] — grid shows "No rows"
-      await expect(grid.getByText(/no rows/i)).toBeVisible({ timeout: 5_000 });
+      // After API error, atom sets agentList to [] — table shows empty state
+      await expect(page.getByText('No agents yet')).toBeVisible({ timeout: 5_000 });
     });
   });
 
@@ -369,16 +356,15 @@ test.describe('Agents List Page', () => {
       // No mock: real GET /agent/get_all_agents. Requires running backend.
       await ensureOnAgentsPage(page);
 
-      const grid = page.locator('.MuiDataGrid-root');
-      await expect(grid).toBeVisible({ timeout: 10_000 });
-      // List may be empty or have rows; grid is visible when API has responded
+      // Table should be visible once API has responded (data rows or empty state)
+      await expect(page.locator('table')).toBeVisible({ timeout: 10_000 });
     });
   });
 
   // ── 9. Accessibility ──────────────────────────────────────────────────────
   test.describe('Accessibility', () => {
-    test('shows proper heading level for the page title', async ({ page }) => {
-      const heading = page.getByRole('heading', { name: 'Agents', level: 4 });
+    test('renders page title as h1 heading', async ({ page }) => {
+      const heading = page.getByRole('heading', { name: 'Agents', level: 1 });
       await expect(heading).toBeVisible();
     });
 
@@ -399,7 +385,7 @@ test.describe('Agents List Page', () => {
       const dialog = page.getByRole('dialog');
       await expect(dialog).toBeVisible();
 
-      // MUI Dialog traps focus — Tab should cycle within the dialog
+      // Focus should stay within the dialog
       await page.keyboard.press('Tab');
       const focusedInDialog = await dialog.locator(':focus').count();
       expect(focusedInDialog).toBeGreaterThan(0);

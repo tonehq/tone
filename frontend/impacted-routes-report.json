@@ -1,0 +1,226 @@
+{
+  "metadata": {
+    "generated_at": "2026-03-05T06:58:23.123850+00:00",
+    "commit1": "1b43a35456a024f992bcfe30b0c6f0b3e3a508f7",
+    "commit2": "266a036c3d1c4a50f2222e189284d234198b877b",
+    "branch": "claude/shadcn-migration",
+    "project_path": "/Users/kishokkumara/Projects/tonehq/frontend"
+  },
+  "summary": {
+    "direct_route_changes": 0,
+    "transitive_impacts": 10,
+    "layout_impacts": 0,
+    "middleware_modified": false,
+    "total_unique_routes": 10,
+    "files_changed_total": 9
+  },
+  "impacted_routes": [
+    {
+      "route": "/agents/edit/[type]/[id]",
+      "page_file": "src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx",
+      "impact_type": "transitive",
+      "trigger_file": "src/components/agents/AgentFormPage.tsx",
+      "chain": [
+        "AgentFormPage.tsx",
+        "page.tsx"
+      ]
+    },
+    {
+      "route": "/agents/create/outbound",
+      "page_file": "src/app/(dashboard)/agents/create/outbound/page.tsx",
+      "impact_type": "transitive",
+      "trigger_file": "src/components/agents/AgentFormPage.tsx",
+      "chain": [
+        "AgentFormPage.tsx",
+        "page.tsx"
+      ]
+    },
+    {
+      "route": "/agents/create/inbound",
+      "page_file": "src/app/(dashboard)/agents/create/inbound/page.tsx",
+      "impact_type": "transitive",
+      "trigger_file": "src/components/agents/AgentFormPage.tsx",
+      "chain": [
+        "AgentFormPage.tsx",
+        "page.tsx"
+      ]
+    },
+    {
+      "route": "/settings",
+      "page_file": "src/app/(dashboard)/settings/page.tsx",
+      "impact_type": "transitive",
+      "trigger_file": "src/components/shared/Logo.tsx",
+      "chain": [
+        "Logo.tsx",
+        "index.tsx",
+        "page.tsx"
+      ]
+    },
+    {
+      "route": "/auth/reset-password",
+      "page_file": "src/app/auth/reset-password/page.tsx",
+      "impact_type": "transitive",
+      "trigger_file": "src/components/shared/Logo.tsx",
+      "chain": [
+        "Logo.tsx",
+        "ContainerComponent.tsx",
+        "page.tsx"
+      ]
+    },
+    {
+      "route": "/auth/verify_signup",
+      "page_file": "src/app/auth/verify_signup/page.tsx",
+      "impact_type": "transitive",
+      "trigger_file": "src/components/shared/Logo.tsx",
+      "chain": [
+        "Logo.tsx",
+        "ContainerComponent.tsx",
+        "page.tsx"
+      ]
+    },
+    {
+      "route": "/auth/forgotpassword",
+      "page_file": "src/app/auth/forgotpassword/page.tsx",
+      "impact_type": "transitive",
+      "trigger_file": "src/components/shared/Logo.tsx",
+      "chain": [
+        "Logo.tsx",
+        "ContainerComponent.tsx",
+        "page.tsx"
+      ]
+    },
+    {
+      "route": "/auth/login",
+      "page_file": "src/app/auth/login/page.tsx",
+      "impact_type": "transitive",
+      "trigger_file": "src/components/shared/Logo.tsx",
+      "chain": [
+        "Logo.tsx",
+        "index.tsx",
+        "LoginPage.tsx",
+        "page.tsx"
+      ]
+    },
+    {
+      "route": "/agents",
+      "page_file": "src/app/(dashboard)/agents/page.tsx",
+      "impact_type": "transitive",
+      "trigger_file": "src/components/shared/Logo.tsx",
+      "chain": [
+        "Logo.tsx",
+        "index.tsx",
+        "AgentListPage.tsx",
+        "page.tsx"
+      ]
+    },
+    {
+      "route": "/auth/signup",
+      "page_file": "src/app/auth/signup/page.tsx",
+      "impact_type": "transitive",
+      "trigger_file": "src/components/shared/Logo.tsx",
+      "chain": [
+        "Logo.tsx",
+        "ContainerComponent.tsx",
+        "SignupClient.tsx",
+        "page.tsx"
+      ]
+    }
+  ],
+  "layout_impacts": [],
+  "middleware_modified": false,
+  "files_changed": [
+    {
+      "file": "src/components/agents/AgentFormPage.tsx",
+      "category": "component",
+      "status": "modified",
+      "lines_added": 3,
+      "lines_removed": 0
+    },
+    {
+      "file": "src/components/agents/agent-form/DynamicProviderFields.tsx",
+      "category": "component",
+      "status": "added",
+      "lines_added": 391,
+      "lines_removed": 0
+    },
+    {
+      "file": "src/components/agents/agent-form/GeneralTab.tsx",
+      "category": "component",
+      "status": "modified",
+      "lines_added": 19,
+      "lines_removed": 2
+    },
+    {
+      "file": "src/components/agents/agent-form/VoiceTab.tsx",
+      "category": "component",
+      "status": "modified",
+      "lines_added": 35,
+      "lines_removed": 3
+    },
+    {
+      "file": "src/components/agents/agent-form/types.ts",
+      "category": "component",
+      "status": "modified",
+      "lines_added": 3,
+      "lines_removed": 0
+    },
+    {
+      "file": "src/components/shared/Logo.tsx",
+      "category": "component",
+      "status": "modified",
+      "lines_added": 2,
+      "lines_removed": 12
+    },
+    {
+      "file": "src/types/agent.ts",
+      "category": "type",
+      "status": "modified",
+      "lines_added": 3,
+      "lines_removed": 0
+    },
+    {
+      "file": "src/types/provider.ts",
+      "category": "type",
+      "status": "modified",
+      "lines_added": 21,
+      "lines_removed": 0
+    },
+    {
+      "file": "src/utils/agentFormUtils.ts",
+      "category": "util",
+      "status": "modified",
+      "lines_added": 9,
+      "lines_removed": 0
+    }
+  ],
+  "dependency_chains": [
+    "src/components/agents/AgentFormPage.tsx (component, modified)\n  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
+    "src/components/agents/AgentFormPage.tsx (component, modified)\n  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
+    "src/components/agents/AgentFormPage.tsx (component, modified)\n  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
+    "src/components/agents/agent-form/DynamicProviderFields.tsx (component, added)\n  \u2192 DynamicProviderFields.tsx  \u2192 VoiceTab.tsx  \u2192 index.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
+    "src/components/agents/agent-form/DynamicProviderFields.tsx (component, added)\n  \u2192 DynamicProviderFields.tsx  \u2192 VoiceTab.tsx  \u2192 index.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
+    "src/components/agents/agent-form/DynamicProviderFields.tsx (component, added)\n  \u2192 DynamicProviderFields.tsx  \u2192 VoiceTab.tsx  \u2192 index.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
+    "src/components/agents/agent-form/GeneralTab.tsx (component, modified)\n  \u2192 GeneralTab.tsx  \u2192 index.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
+    "src/components/agents/agent-form/GeneralTab.tsx (component, modified)\n  \u2192 GeneralTab.tsx  \u2192 index.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
+    "src/components/agents/agent-form/GeneralTab.tsx (component, modified)\n  \u2192 GeneralTab.tsx  \u2192 index.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
+    "src/components/agents/agent-form/VoiceTab.tsx (component, modified)\n  \u2192 VoiceTab.tsx  \u2192 index.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
+    "src/components/agents/agent-form/VoiceTab.tsx (component, modified)\n  \u2192 VoiceTab.tsx  \u2192 index.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
+    "src/components/agents/agent-form/VoiceTab.tsx (component, modified)\n  \u2192 VoiceTab.tsx  \u2192 index.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
+    "src/components/agents/agent-form/types.ts (component, modified)\n  \u2192 types.ts  \u2192 index.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
+    "src/components/agents/agent-form/types.ts (component, modified)\n  \u2192 types.ts  \u2192 index.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
+    "src/components/agents/agent-form/types.ts (component, modified)\n  \u2192 types.ts  \u2192 index.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
+    "src/components/shared/Logo.tsx (component, modified)\n  \u2192 Logo.tsx  \u2192 index.tsx  \u2192 page.tsx\n  \u2192 /settings  [src/app/(dashboard)/settings/page.tsx]",
+    "src/components/shared/Logo.tsx (component, modified)\n  \u2192 Logo.tsx  \u2192 ContainerComponent.tsx  \u2192 page.tsx\n  \u2192 /auth/reset-password  [src/app/auth/reset-password/page.tsx]",
+    "src/components/shared/Logo.tsx (component, modified)\n  \u2192 Logo.tsx  \u2192 ContainerComponent.tsx  \u2192 page.tsx\n  \u2192 /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]",
+    "src/components/shared/Logo.tsx (component, modified)\n  \u2192 Logo.tsx  \u2192 ContainerComponent.tsx  \u2192 page.tsx\n  \u2192 /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]",
+    "src/components/shared/Logo.tsx (component, modified)\n  \u2192 Logo.tsx  \u2192 index.tsx  \u2192 LoginPage.tsx  \u2192 page.tsx\n  \u2192 /auth/login  [src/app/auth/login/page.tsx]",
+    "src/components/shared/Logo.tsx (component, modified)\n  \u2192 Logo.tsx  \u2192 index.tsx  \u2192 AgentListPage.tsx  \u2192 page.tsx\n  \u2192 /agents  [src/app/(dashboard)/agents/page.tsx]",
+    "src/components/shared/Logo.tsx (component, modified)\n  \u2192 Logo.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
+    "src/components/shared/Logo.tsx (component, modified)\n  \u2192 Logo.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
+    "src/components/shared/Logo.tsx (component, modified)\n  \u2192 Logo.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
+    "src/components/shared/Logo.tsx (component, modified)\n  \u2192 Logo.tsx  \u2192 ContainerComponent.tsx  \u2192 SignupClient.tsx  \u2192 page.tsx\n  \u2192 /auth/signup  [src/app/auth/signup/page.tsx]",
+    "src/utils/agentFormUtils.ts (util, modified)\n  \u2192 agentFormUtils.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
+    "src/utils/agentFormUtils.ts (util, modified)\n  \u2192 agentFormUtils.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
+    "src/utils/agentFormUtils.ts (util, modified)\n  \u2192 agentFormUtils.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]"
+  ]
+}
