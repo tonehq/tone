@@ -209,25 +209,6 @@ export default function VoiceTab({
         />
       </FormRow>
 
-      {/* STT Language */}
-      {formData.sttProvider != null && (
-        <FormRow label="Language" description="The language your agent understands.">
-          <SelectInput
-            name="sttLanguage"
-            value={
-              formData.sttMetaData.language != null ? String(formData.sttMetaData.language) : ''
-            }
-            onValueChange={(v) => {
-              onFormChange({
-                sttMetaData: { ...formData.sttMetaData, language: v || null },
-              });
-            }}
-            options={sttLanguageOptions}
-            placeholder="Select a language"
-          />
-        </FormRow>
-      )}
-
       {selectedSttProvider?.meta_data_schema?.length ? (
         <DynamicProviderFields
           schema={selectedSttProvider.meta_data_schema.filter((f) => f.name !== 'language')}
