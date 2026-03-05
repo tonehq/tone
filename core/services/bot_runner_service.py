@@ -1,6 +1,5 @@
 """Service to resolve the bot (agent) for incoming telephony calls by phone number."""
 
-import os
 from typing import Optional, Tuple, Any, Dict
 
 import aiohttp
@@ -32,6 +31,7 @@ class BotRunnerService(BaseService):
             The Agent for that phone number, or None if not found.
         """
         normalized = self._normalize_phone_number(phone_number)
+        print("normalized in bot_runner_service.py file ===========", normalized)
         if not normalized:
             return None
         channel_phone = (
@@ -39,6 +39,7 @@ class BotRunnerService(BaseService):
             .filter(ChannelPhoneNumbers.phone_number == normalized)
             .first()
         )
+        
 
         if not channel_phone:
             return None
@@ -62,12 +63,41 @@ class BotRunnerService(BaseService):
 
         return None
 
+    def _get_twilio_credentials(self) -> dict:
+        """Fetch Twilio account_sid and auth_token from the DB (api_keys table)."""
+        from core.models.service_provider import ServiceProvider
+        from core.models.api_key import ApiKey
+        from core.utils.encryption import decrypt
+
+        provider = self.db.query(ServiceProvider).filter(ServiceProvider.name == "twilio").first()
+        if not provider:
+            logger.warning("Twilio service provider not found in DB")
+            return {}
+
+        api_keys = (
+            self.db.query(ApiKey)
+            .filter(ApiKey.service_provider_id == provider.id)
+            .all()
+        )
+
+        creds = {}
+        for ak in api_keys:
+            additional = ak.additional_credentials or {}
+            key_type = additional.get("key_type")
+            if key_type == "sid":
+                creds["account_sid"] = decrypt(ak.api_key_encrypted)
+            elif key_type == "auth_token":
+                creds["auth_token"] = decrypt(ak.api_key_encrypted)
+
+        return creds
+
     async def _fetch_twilio_to_number(self, call_sid: str) -> Optional[str]:
         """Fetch the 'to' number for a Twilio call from Twilio REST API."""
-        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+        twilio_creds = self._get_twilio_credentials()
+        account_sid = twilio_creds.get("account_sid")
+        auth_token = twilio_creds.get("auth_token")
         if not account_sid or not auth_token:
-            logger.warning("Missing Twilio credentials, cannot resolve to_number")
+            logger.warning("Missing Twilio credentials in DB, cannot resolve to_number")
             return None
         url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Calls/{call_sid}.json"
         try:
@@ -111,13 +141,15 @@ class BotRunnerService(BaseService):
         from pipecat.runner.utils import parse_telephony_websocket
 
         transport_type, call_data = await parse_telephony_websocket(websocket)
-        print("transport_type ===========", transport_type)
-        print("call_data ===========", call_data)
         to_number = await self.get_to_number_from_call_data_async(transport_type, call_data)
+        # print("to_number in bot_runner_service.py file ===========", to_number)
+        # print("transport_type in bot_runner_service.py file ===========", transport_type)
+        # print("call_data in bot_runner_service.py file ===========", call_data)
         if not to_number:
             logger.warning("Could not determine 'to' phone number from call data")
             return None, transport_type, call_data
         agent = self.get_bot_for_phone_number(to_number)
+        # print("agent ===========", agent)
         if agent:
             logger.info(
                 "Resolved bot for to_number=%s -> agent_id=%s name=%s",
@@ -127,4 +159,8 @@ class BotRunnerService(BaseService):
             )
         else:
             logger.warning("No agent found for phone number: %s", to_number)
+        
+        print("agent in bot_runner_service.py file before return ===========", agent.id)
+        print("transport_type in bot_runner_service.py file before return ===========", transport_type)
+        print("call_data in bot_runner_service.py file before return ===========", call_data)
         return agent, transport_type, call_data

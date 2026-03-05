@@ -7,6 +7,7 @@ export interface AgentGeneralFormData {
   customVocabulary: string[];
   filterWords: string[];
   useRealisticFillerWords: boolean;
+  llmMetaData: Record<string, unknown>;
 }
 
 export interface AgentVoiceFormData {
@@ -16,6 +17,8 @@ export interface AgentVoiceFormData {
   sttProvider: number | null;
   patienceLevel: 'low' | 'medium' | 'high';
   speechRecognition: 'fast' | 'accurate';
+  ttsMetaData: Record<string, unknown>;
+  sttMetaData: Record<string, unknown>;
 }
 
 export interface AgentCallConfigFormData {

@@ -40,6 +40,76 @@ from pipecat.runner.types import (
 load_dotenv(override=True)
 
 
+def _get_twilio_credentials() -> dict:
+    """Fetch Twilio account_sid and auth_token from the DB (api_keys table).
+
+    Queries service_providers for name='twilio', then finds the two api_keys
+    rows whose additional_credentials->key_type is 'sid' or 'auth_token'.
+    Returns {"account_sid": ..., "auth_token": ...}.
+    """
+    from core.database.session import get_db_context
+    from core.models.service_provider import ServiceProvider
+    from core.models.api_key import ApiKey
+    from core.utils.encryption import decrypt
+
+    with get_db_context() as db:
+        provider = db.query(ServiceProvider).filter(ServiceProvider.name == "twilio").first()
+        if not provider:
+            logger.warning("Twilio service provider not found in DB")
+            return {}
+
+        api_keys = (
+            db.query(ApiKey)
+            .filter(ApiKey.service_provider_id == provider.id)
+            .all()
+        )
+
+        creds = {}
+        for ak in api_keys:
+            additional = ak.additional_credentials or {}
+            key_type = additional.get("key_type")
+            if key_type == "sid":
+                creds["account_sid"] = decrypt(ak.api_key_encrypted)
+            elif key_type == "auth_token":
+                creds["auth_token"] = decrypt(ak.api_key_encrypted)
+
+        return creds
+
+
+def _get_provider_api_key(name: str, provider_type: str) -> str:
+    """Fetch the API key for a service provider from the DB.
+
+    Queries service_providers by name and provider_type, then retrieves
+    the first active api_key for that provider and decrypts it.
+    Returns the decrypted key or empty string if not found.
+    """
+    from core.database.session import get_db_context
+    from core.models.service_provider import ServiceProvider
+    from core.models.api_key import ApiKey
+    from core.utils.encryption import decrypt
+
+    with get_db_context() as db:
+        provider = (
+            db.query(ServiceProvider)
+            .filter(ServiceProvider.name == name, ServiceProvider.provider_type == provider_type)
+            .first()
+        )
+        if not provider:
+            logger.warning(f"Service provider not found in DB: name={name}, provider_type={provider_type}")
+            return ""
+
+        api_key = (
+            db.query(ApiKey)
+            .filter(ApiKey.service_provider_id == provider.id, ApiKey.status == "active")
+            .first()
+        )
+        if not api_key:
+            logger.warning(f"No active API key found for provider: name={name}, provider_type={provider_type}")
+            return ""
+
+        return decrypt(api_key.api_key_encrypted)
+
+
 async def _default_messages():
     """Fallback system prompt when no agent config is available."""
     return [
@@ -78,13 +148,13 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     from pipecat.services.deepgram.stt import DeepgramSTTService
     from pipecat.services.openai.llm import OpenAILLMService
 
-    openai_key = os.getenv("OPENAI_API_KEY")
-    deepgram_key = os.getenv("DEEPGRAM_API_KEY")
-    cartesia_key = os.getenv("CARTESIA_API_KEY")
+    openai_key = _get_provider_api_key("openai", "llm")
+    deepgram_key = _get_provider_api_key("deepgram", "stt")
+    cartesia_key = _get_provider_api_key("cartesia", "tts")
     if not all([openai_key, deepgram_key, cartesia_key]):
         raise ValueError(
-            "No agent in session and default services require env: "
-            "OPENAI_API_KEY, DEEPGRAM_API_KEY, CARTESIA_API_KEY"
+            "No agent in session and default service API keys not found in DB for: "
+            "openai (llm), deepgram (stt), cartesia (tts)"
         )
     llm = OpenAILLMService(api_key=openai_key, model="gpt-4o")
     stt = DeepgramSTTService(api_key=deepgram_key)
@@ -158,9 +228,6 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
 async def bot(runner_args: RunnerArguments, call_type: str = None):
     """Main bot entry point compatible with Pipecat Cloud."""
     logger.info(f"Starting the bot, received body: 0.3 {runner_args.body}")
-    print("call_typee", call_type)
-    print("runner_args type:", type(runner_args))
-
     
     #if runner_args:
     if isinstance(runner_args, WebSocketRunnerArguments):
@@ -179,11 +246,12 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
         if agent:
             logger.info(f"Resolved agent for this call: id={agent.id} name={agent.name}")
 
+        twilio_creds = _get_twilio_credentials()
         serializer = TwilioFrameSerializer(
             stream_sid=call_data["stream_id"],
             call_sid=call_data["call_id"],
-            account_sid=os.getenv("TWILIO_ACCOUNT_SID"),
-            auth_token=os.getenv("TWILIO_AUTH_TOKEN"),
+            account_sid=twilio_creds.get("account_sid", ""),
+            auth_token=twilio_creds.get("auth_token", ""),
         )
 
         transport = FastAPIWebsocketTransport(
@@ -248,11 +316,12 @@ async def get_call_info(call_sid: str) -> dict:
     Returns:
         Dictionary containing call information including from_number, to_number, status, etc.
     """
-    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+    twilio_creds = _get_twilio_credentials()
+    account_sid = twilio_creds.get("account_sid")
+    auth_token = twilio_creds.get("auth_token")
 
     if not account_sid or not auth_token:
-        logger.warning("Missing Twilio credentials, cannot fetch call info")
+        logger.warning("Missing Twilio credentials in DB, cannot fetch call info")
         return {}
 
     url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Calls/{call_sid}.json"

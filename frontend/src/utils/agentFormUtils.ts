@@ -22,6 +22,9 @@ export const defaultFormState = (agentType: 'inbound' | 'outbound'): AgentFormSt
   callTranscription: false,
   phoneNumbers: [],
   channels: [],
+  llmMetaData: {},
+  ttsMetaData: {},
+  sttMetaData: {},
 });
 
 function parseStringArray(val: string | string[] | null | undefined): string[] {
@@ -73,6 +76,9 @@ export function apiAgentToFormState(
     sttProvider: api.stt_service_id ?? defaults.sttProvider,
     phoneNumbers: api.phone_number ?? [],
     channels: api.channels ?? [],
+    llmMetaData: (api.llm_meta_data as Record<string, unknown>) ?? {},
+    ttsMetaData: (api.tts_meta_data as Record<string, unknown>) ?? {},
+    sttMetaData: (api.stt_meta_data as Record<string, unknown>) ?? {},
   };
 }
 
@@ -103,6 +109,9 @@ export function formStateToUpsertPayload(
     channel: {
       type: 'TWILIO',
     },
+    llm_meta_data: Object.keys(form.llmMetaData).length ? form.llmMetaData : null,
+    tts_meta_data: Object.keys(form.ttsMetaData).length ? form.ttsMetaData : null,
+    stt_meta_data: Object.keys(form.sttMetaData).length ? form.sttMetaData : null,
   };
   if (existingId != null) payload.id = existingId;
   return payload;
