@@ -19,8 +19,17 @@ import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
-import { startCase } from 'lodash';
-import { ArrowLeft, Loader2, Phone, Save, Settings, Volume2 } from 'lucide-react';
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronRight,
+  Loader2,
+  MessageSquare,
+  Phone,
+  Save,
+  Settings,
+  Volume2,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -35,7 +44,6 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
 
   const [providersLoadable] = useAtom(loadableProvidersAtom);
   const [activeTab, setActiveTab] = useState('general');
-  const [currentMenu, setCurrentMenu] = useState('configure');
   const [formData, setFormData] = useState<AgentFormState>(() => defaultFormState(agentType));
   const [loading, setLoading] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
@@ -229,6 +237,17 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         ),
       },
       {
+        key: 'prompt',
+        label: 'Prompt',
+        icon: <MessageSquare size={16} />,
+        children: (
+          <PromptPage
+            formData={{ voicePrompting: formData.voicePrompting }}
+            onFormChange={handleFormChange}
+          />
+        ),
+      },
+      {
         key: 'call-config',
         label: 'Call Configuration',
         icon: <Phone size={16} />,
@@ -293,152 +312,114 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       },
     ],
 
-    [formData, llmProviders, ttsProviders, sttProviders, providersLoading],
+    [formData, llmProviders, ttsProviders, sttProviders, providersLoading, isEditMode],
   );
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center p-3">
+      <div className="flex h-full items-center justify-center p-3">
         <Loader2 className="size-10 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   return (
-    <div className="flex h-screen">
-      {/* Left Sidebar */}
-      <aside className="flex w-64 flex-col border-r bg-sidebar">
-        {/* Header: back + agent info */}
-        <div className="flex h-16 items-center border-b px-4">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      {/* Status banner */}
+      <div
+        className={cn(
+          'flex shrink-0 items-center gap-2 px-6 py-1.5 text-[13px] leading-tight',
+          formData.phoneNumbers?.length > 0
+            ? 'bg-emerald-50/80 text-emerald-800'
+            : 'bg-amber-50/80 text-amber-800',
+        )}
+      >
+        {formData.phoneNumbers?.length > 0 ? (
+          <>
+            <CheckCircle2 size={13} className="shrink-0 text-emerald-600" />
+            <span>
+              <span className="font-medium">Phone assigned:</span>{' '}
+              {formData.phoneNumbers.map((pn) => pn.no).join(', ')}
+            </span>
+          </>
+        ) : (
+          <>
+            <AlertTriangle size={13} className="shrink-0 text-amber-600" />
+            <span>
+              <span className="font-medium">No phone number</span>
+              <span className="mx-1 opacity-40">&mdash;</span>
+              Your agent can&apos;t {agentType === 'inbound' ? 'receive' : 'make'} calls yet.
+            </span>
+          </>
+        )}
+      </div>
+
+      {/* Breadcrumb bar */}
+      <div className="flex shrink-0 items-center justify-between border-b border-border/60 bg-muted/30 px-6 py-2">
+        <nav className="flex items-center gap-1.5 text-[13px]">
           <CustomButton
-            type="text"
+            type="link"
             htmlType="button"
-            icon={<ArrowLeft className="h-4 w-4" />}
-            className="rounded-sm text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"
+            className="!p-0 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
             onClick={() => router.push('/agents')}
           >
-            Back to Agents
+            Agents
           </CustomButton>
-        </div>
-
-        {/* Agent info */}
-        <div className="border-b px-4 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sm bg-primary text-sm font-bold text-primary-foreground">
-              {formData.name?.charAt(0)?.toUpperCase() || 'A'}
-            </div>
-            <div className="min-w-0 space-y-1">
-              <h3 className="truncate text-sm font-semibold text-foreground">{formData.name}</h3>
-              <AgentTypeBadge agentType={agentType} />
-              {formData.phoneNumbers?.length > 0 && (
-                <div className="mt-1.5 space-y-0.5">
-                  {formData.phoneNumbers.map((pn) => (
-                    <p
-                      key={pn.no}
-                      className="flex items-center gap-1 text-xs text-muted-foreground"
-                    >
-                      <Phone size={12} />
-                      {pn.no}
-                    </p>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Test agent button */}
-        <div className="px-3 py-3">
-          <CustomButton type="primary" fullWidth icon={<Phone size={16} />}>
+          <ChevronRight size={12} className="text-muted-foreground/40" />
+          <span className="max-w-[240px] truncate font-medium text-foreground">
+            {formData.name || 'Untitled Agent'}
+          </span>
+        </nav>
+        <div className="flex shrink-0 items-center gap-2">
+          <CustomButton type="default" icon={<Phone size={14} />}>
             Test Agent
           </CustomButton>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          {[
-            { key: 'configure', label: 'Configure', icon: Settings },
-            { key: 'prompt', label: 'Prompt', icon: Volume2 },
-          ].map((item) => {
-            const isActive = item.key === currentMenu;
-            const Icon = item.icon;
-            return (
-              <CustomButton
-                key={item.key}
-                type="text"
-                htmlType="button"
-                fullWidth
-                icon={<Icon className="h-4 w-4" />}
-                className={cn(
-                  'justify-start gap-3 rounded-sm px-3 py-2 text-sm font-medium',
-                  isActive
-                    ? 'bg-sidebar-accent text-foreground'
-                    : 'text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground',
-                )}
-                onClick={() => setCurrentMenu(item.key)}
-              >
-                {item.label}
-              </CustomButton>
-            );
-          })}
-        </nav>
-      </aside>
-
-      {/* Main Content */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <div
-          className={cn(
-            'flex items-center border-b border-border px-6 py-2.5',
-            formData.phoneNumbers?.length > 0 ? 'bg-emerald-50' : 'bg-muted',
-          )}
-        >
-          <div className="flex-1 text-[13px]">
-            {formData.phoneNumbers?.length > 0 ? (
-              <>
-                <strong>Phone assigned:</strong>{' '}
-                {formData.phoneNumbers.map((pn) => pn.no).join(', ')}
-              </>
-            ) : (
-              <>
-                <strong>Important</strong> Your agent doesn&apos;t have a phone number and
-                can&apos;t {agentType === 'inbound' ? 'receive' : 'make'} calls.
-              </>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between border-b border-border bg-background px-6 py-4">
-          <h2 className="text-lg font-semibold text-foreground">{startCase(currentMenu)}</h2>
           <CustomButton
             type="primary"
-            icon={saving ? <Loader2 className="size-4 animate-spin" /> : <Save size={16} />}
+            icon={saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save size={14} />}
             onClick={handleSave}
             loading={saving}
           >
             {saving ? 'Saving...' : 'Save Changes'}
           </CustomButton>
         </div>
-
-        {currentMenu === 'configure' && (
-          <div className="flex flex-1 flex-col overflow-hidden">
-            <CustomTab
-              activeKey={activeTab}
-              onTabChange={setActiveTab}
-              className="flex flex-1 flex-col overflow-hidden"
-              tabBarClassName="px-6 border-b border-border"
-              contentClassName="flex-1 overflow-auto bg-background px-8 py-6"
-              items={configTabItems}
-            />
-          </div>
-        )}
-        {currentMenu === 'prompt' && (
-          <PromptPage
-            formData={{ voicePrompting: formData.voicePrompting }}
-            onFormChange={handleFormChange}
-          />
-        )}
       </div>
 
+      {/* Agent identity sub-header */}
+      <div className="flex shrink-0 items-center gap-4 bg-background px-6 py-3.5">
+        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-base font-bold text-primary">
+          {formData.name?.charAt(0)?.toUpperCase() || 'A'}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-lg font-semibold tracking-tight text-foreground">
+            {formData.name || 'Untitled Agent'}
+          </h1>
+          <div className="mt-1 flex items-center gap-2">
+            <AgentTypeBadge agentType={agentType} />
+            {formData.phoneNumbers?.length > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                <Phone size={11} />
+                {formData.phoneNumbers[0].no}
+                {formData.phoneNumbers.length > 1 && ` +${formData.phoneNumbers.length - 1}`}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Tabs + content */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <CustomTab
+          activeKey={activeTab}
+          onTabChange={setActiveTab}
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          tabBarClassName="shrink-0 border-b border-border bg-background px-6"
+          contentClassName="min-h-0 flex-1 overflow-auto bg-muted/20 px-8 py-6"
+          items={configTabItems}
+        />
+      </div>
+
+      {/* Modals */}
       <AssignPhoneNumberModal
         open={assignModalOpen}
         onClose={() => setAssignModalOpen(false)}
