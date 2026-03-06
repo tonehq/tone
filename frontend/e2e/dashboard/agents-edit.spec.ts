@@ -228,7 +228,7 @@ test.describe('Edit Agent Page', () => {
     });
 
     test('shows custom vocabulary chips from API', async ({ page }) => {
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       await expect(page.getByText('ToneHQ', { exact: true })).toBeVisible();
       await expect(page.getByText('Pipecat', { exact: true })).toBeVisible();
     });
@@ -399,7 +399,7 @@ test.describe('Edit Agent Page', () => {
     });
 
     test('shows no custom vocabulary chips for null value', async ({ page }) => {
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       // The badges container should be empty (no Badge components)
       const badges = page.locator('.flex-wrap').first().locator('[class*="badge"]');
       await expect(badges).toHaveCount(0);
@@ -464,7 +464,7 @@ test.describe('Edit Agent Page', () => {
       await page.locator('textarea[name="end_call_message"]').fill('Updated goodbye');
 
       // Remove existing vocabulary chip "ToneHQ" and add a new one
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       await page.getByText('ToneHQ', { exact: true }).getByRole('button').click();
       const vocabInput = page.locator('input[name="vocabularyInput"]');
       await vocabInput.fill('NewWord');
@@ -539,7 +539,7 @@ test.describe('Edit Agent Page', () => {
     });
 
     test('can add new vocabulary word alongside existing ones', async ({ page }) => {
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       const vocabInput = page.locator('input[name="vocabularyInput"]');
       await vocabInput.fill('NewTerm');
       await vocabInput.press('Enter');

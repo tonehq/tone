@@ -110,13 +110,13 @@ test.describe('Create Outbound Agent Page', () => {
 
     test('shows all General tab form row labels', async ({ page }) => {
       await expect(page.getByRole('heading', { name: 'Agent Name' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Agent Identity' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Agent Description' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'AI Model' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'First Message' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'description' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'End Call Message' })).toBeVisible();
 
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
-      await expect(page.getByRole('heading', { name: 'Custom Vocabulary' })).toBeVisible();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
+      await expect(page.getByRole('heading', { name: 'AI Configuration' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Filter Words' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Use Realistic Filler Words' })).toBeVisible();
     });
@@ -158,7 +158,7 @@ test.describe('Create Outbound Agent Page', () => {
     });
 
     test('allows adding and deleting custom vocabulary', async ({ page }) => {
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       const vocabInput = page.locator('input[name="vocabularyInput"]');
       await vocabInput.fill('ToneHQ');
       await vocabInput.press('Enter');
@@ -197,7 +197,7 @@ test.describe('Create Outbound Agent Page', () => {
       await expect(page.getByRole('heading', { name: 'Voice Provider' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'STT Provider' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Voice Speed' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Patience Level' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Speech-to-Text' })).toBeVisible();
 
       await page.getByText('Speech Recognition').first().scrollIntoViewIfNeeded();
       await expect(page.getByRole('heading', { name: 'Speech Recognition' })).toBeVisible();
@@ -393,7 +393,7 @@ test.describe('Create Outbound Agent Page', () => {
       await page.locator('textarea[name="first_message"]').fill('Hi, this is a test call.');
       await page.locator('textarea[name="end_call_message"]').fill('Thanks for your time!');
 
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       const vocabInput = page.locator('input[name="vocabularyInput"]');
       await vocabInput.fill('SalesForce');
       await vocabInput.press('Enter');

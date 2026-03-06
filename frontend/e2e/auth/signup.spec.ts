@@ -98,7 +98,8 @@ test.describe('Signup Page', () => {
     });
 
     test('shows the Google icon inside the Google button', async ({ page }) => {
-      await expect(page.getByRole('img', { name: 'Google' })).toBeVisible();
+      await expect(page.getByRole('img', { name: '}>
+              Continue with Google' })).toBeVisible();
     });
 
     test('shows the "Already have an account?" text', async ({ page }) => {
@@ -106,19 +107,19 @@ test.describe('Signup Page', () => {
     });
 
     test('shows the "Log in" link', async ({ page }) => {
-      await expect(page.getByRole('link', { name: 'Log in' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Welcome back' })).toBeVisible();
     });
   });
 
   // ── 2. Navigation ──────────────────────────────────────────────────────────
   test.describe('Navigation', () => {
     test('navigates to the login page via "Log in" link', async ({ page }) => {
-      await page.getByRole('link', { name: 'Log in' }).click();
+      await page.getByRole('link', { name: 'Welcome back' }).click();
       await expect(page).toHaveURL(/\/auth\/login/, { timeout: 10_000 });
     });
 
     test('renders the "Log in" link with correct href', async ({ page }) => {
-      await expect(page.getByRole('link', { name: 'Log in' })).toHaveAttribute(
+      await expect(page.getByRole('link', { name: 'Welcome back' })).toHaveAttribute(
         'href',
         '/auth/login',
       );

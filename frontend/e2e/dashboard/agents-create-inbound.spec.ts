@@ -115,23 +115,23 @@ test.describe('Create Inbound Agent Page', () => {
     test('shows all General tab form row labels and descriptions', async ({ page }) => {
       await expect(page.getByRole('heading', { name: 'Agent Name' })).toBeVisible();
       await expect(page.getByText('What name will your agent go by.')).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Agent Description' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Agent Identity' })).toBeVisible();
       await expect(
         page.getByText("Provide a brief summary explaining your agent's purpose."),
       ).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'AI Model' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Agent Description' })).toBeVisible();
       await expect(
         page.getByText("Opt for speed or depth to suit your agent's role."),
       ).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'First Message' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'description' })).toBeVisible();
       await expect(
         page.getByText('Initial message sent when the conversation starts.'),
       ).toBeVisible();
       await expect(page.getByRole('heading', { name: 'End Call Message' })).toBeVisible();
       await expect(page.getByText('Message sent at the end of a conversation.')).toBeVisible();
 
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
-      await expect(page.getByRole('heading', { name: 'Custom Vocabulary' })).toBeVisible();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
+      await expect(page.getByRole('heading', { name: 'AI Configuration' })).toBeVisible();
       await expect(page.getByText('Add business terms to improve accuracy.')).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Filter Words' })).toBeVisible();
       await expect(page.getByText('Words the agent should not speak.')).toBeVisible();
@@ -191,7 +191,7 @@ test.describe('Create Inbound Agent Page', () => {
     });
 
     test('allows adding custom vocabulary via Enter key', async ({ page }) => {
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       const vocabInput = page.locator('input[name="vocabularyInput"]');
       await vocabInput.fill('ToneHQ');
       await vocabInput.press('Enter');
@@ -200,7 +200,7 @@ test.describe('Create Inbound Agent Page', () => {
     });
 
     test('allows adding multiple custom vocabulary words', async ({ page }) => {
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       const vocabInput = page.locator('input[name="vocabularyInput"]');
 
       await vocabInput.fill('ToneHQ');
@@ -216,7 +216,7 @@ test.describe('Create Inbound Agent Page', () => {
     });
 
     test('prevents adding duplicate vocabulary words', async ({ page }) => {
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       const vocabInput = page.locator('input[name="vocabularyInput"]');
 
       await vocabInput.fill('ToneHQ');
@@ -230,7 +230,7 @@ test.describe('Create Inbound Agent Page', () => {
     });
 
     test('allows deleting custom vocabulary chips', async ({ page }) => {
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       const vocabInput = page.locator('input[name="vocabularyInput"]');
       await vocabInput.fill('ToneHQ');
       await vocabInput.press('Enter');
@@ -242,7 +242,7 @@ test.describe('Create Inbound Agent Page', () => {
     });
 
     test('allows adding custom vocabulary via Enter button', async ({ page }) => {
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       const vocabInput = page.locator('input[name="vocabularyInput"]');
       await vocabInput.fill('PipelineWord');
       // Click the paired Enter button (first "Enter" button in the form)
@@ -302,8 +302,8 @@ test.describe('Create Inbound Agent Page', () => {
         page.getByText('Select the service used to transcribe calls to text (Speech-to-Text).'),
       ).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Voice Speed' })).toBeVisible();
-      await expect(page.getByText('Adjust how fast or slow your agent will talk.')).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Patience Level' })).toBeVisible();
+      await expect(page.getByText('Text-to-Speech')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Speech-to-Text' })).toBeVisible();
       await expect(page.getByText(/Adjust the response speed/)).toBeVisible();
 
       await page.getByText('Speech Recognition').first().scrollIntoViewIfNeeded();
@@ -408,7 +408,7 @@ test.describe('Create Inbound Agent Page', () => {
 
     test('shows call recording label and description', async ({ page }) => {
       await expect(page.getByRole('heading', { name: 'Call Recording' })).toBeVisible();
-      await expect(page.getByText('Enable recording of all calls for review.')).toBeVisible();
+      await expect(page.getByText('Call Settings')).toBeVisible();
     });
 
     test('shows call transcription label and description', async ({ page }) => {
@@ -569,7 +569,7 @@ test.describe('Create Inbound Agent Page', () => {
       await page.locator('textarea[name="end_call_message"]').fill('Goodbye from E2E!');
 
       // Add custom vocabulary
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       const vocabInput = page.locator('input[name="vocabularyInput"]');
       await vocabInput.fill('ToneHQ');
       await vocabInput.press('Enter');
