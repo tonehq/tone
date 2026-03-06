@@ -38,7 +38,7 @@ const AgentListPage: React.FC = () => {
     async (agentId: number) => {
       try {
         await removeAgent(agentId);
-        showToast.success('Agent Deleted', 'Agent deleted successfully');
+        showToast.success('Agent deleted successfully');
       } catch (error) {
         handleApiError(error);
       }

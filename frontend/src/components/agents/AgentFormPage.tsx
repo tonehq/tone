@@ -26,6 +26,8 @@ import {
   Loader2,
   MessageSquare,
   Phone,
+  PhoneCall,
+  PhoneForwarded,
   Save,
   Settings,
   Volume2,
@@ -113,7 +115,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         ...prev,
         phoneNumbers: [...prev.phoneNumbers, ...phoneNumbers],
       }));
-      showToast.success('Success', 'Phone number(s) assigned successfully');
+      showToast.success('Phone number(s) assigned successfully');
     } catch (error) {
       handleApiError(error);
       throw error;
@@ -137,7 +139,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         phoneNumbers: prev.phoneNumbers.filter((pn) => pn.no !== unassignTarget.no),
       }));
       setUnassignTarget(null);
-      showToast.success('Success', 'Phone number unassigned successfully');
+      showToast.success('Phone number unassigned successfully');
     } catch (error) {
       handleApiError(error);
     } finally {
@@ -154,10 +156,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         isEditMode ? Number(agentId) : undefined,
       );
       await upsertAgent(payload);
-      showToast.success(
-        'Success',
-        isEditMode ? 'Agent saved successfully' : 'Agent created successfully',
-      );
+      showToast.success(isEditMode ? 'Agent saved successfully' : 'Agent created successfully');
       if (!isEditMode) {
         router.push('/agents');
       }
@@ -250,7 +249,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       {
         key: 'call-config',
         label: 'Call Configuration',
-        icon: <Phone size={16} />,
+        icon: <PhoneCall size={16} />,
         children: (
           <CallConfigurationTab
             formData={{
@@ -264,49 +263,71 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       {
         key: 'assign-number',
         label: 'Assign Number',
-        icon: <Phone size={16} />,
+        icon: <PhoneForwarded size={16} />,
         children: (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold text-foreground">Assign Number</h3>
-              {isEditMode && (
-                <CustomButton
-                  type="primary"
-                  icon={<Phone size={16} />}
-                  onClick={() => setAssignModalOpen(true)}
-                >
-                  Assign New Number
-                </CustomButton>
-              )}
-            </div>
-
-            {!formData.phoneNumbers?.length ? (
-              <p className="text-sm text-muted-foreground">
-                {isEditMode
-                  ? 'No phone numbers assigned yet. Click "Assign New Number" to add one.'
-                  : 'Save the agent first to assign phone numbers.'}
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {formData.phoneNumbers.map((pn) => (
-                  <div
-                    key={pn.no}
-                    className="flex items-center gap-3 rounded-md border border-border bg-background px-4 py-3"
-                  >
-                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">
-                      <Phone size={15} className="text-muted-foreground" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-foreground">{pn.no}</p>
-                      <p className="text-xs capitalize text-muted-foreground">{pn.type}</p>
-                    </div>
-                    <CustomButton type="default" onClick={() => setUnassignTarget(pn)}>
-                      Unassign
-                    </CustomButton>
+          <div className="space-y-5">
+            <div className="rounded-xl border border-border bg-background shadow-sm">
+              <div className="flex items-center justify-between border-b border-border/60 px-5 py-3.5">
+                <div className="flex items-center gap-3">
+                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <Phone size={16} className="text-primary" />
                   </div>
-                ))}
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold text-foreground">Phone Numbers</h2>
+                    <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">
+                      Manage phone numbers assigned to this agent.
+                    </p>
+                  </div>
+                </div>
+                {isEditMode && (
+                  <CustomButton
+                    type="primary"
+                    icon={<Phone size={14} />}
+                    onClick={() => setAssignModalOpen(true)}
+                  >
+                    Assign Number
+                  </CustomButton>
+                )}
               </div>
-            )}
+              <div className="px-5 py-4">
+                {!formData.phoneNumbers?.length ? (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <div className="flex size-12 items-center justify-center rounded-xl bg-muted/50">
+                      <Phone size={20} className="text-muted-foreground" />
+                    </div>
+                    <p className="mt-3 text-[13px] font-medium text-foreground">
+                      No phone numbers assigned
+                    </p>
+                    <p className="mt-1 text-[12px] text-muted-foreground">
+                      {isEditMode
+                        ? 'Click "Assign Number" above to add one.'
+                        : 'Save the agent first to assign phone numbers.'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border/40">
+                    {formData.phoneNumbers.map((pn) => (
+                      <div key={pn.no} className="flex items-center gap-3 py-3">
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50">
+                          <Phone size={15} className="text-emerald-600" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-medium text-foreground">{pn.no}</p>
+                          <p className="text-[11px] capitalize text-muted-foreground">{pn.type}</p>
+                        </div>
+                        <CustomButton
+                          type="default"
+                          className="text-[13px]"
+                          onClick={() => setUnassignTarget(pn)}
+                        >
+                          Unassign
+                        </CustomButton>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         ),
       },
@@ -328,7 +349,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       {/* Status banner */}
       <div
         className={cn(
-          'flex shrink-0 items-center gap-2 px-6 py-1.5 text-[13px] leading-tight',
+          'flex shrink-0 items-center gap-2 px-6 py-3 text-[13px] leading-tight',
           formData.phoneNumbers?.length > 0
             ? 'bg-emerald-50/80 text-emerald-800'
             : 'bg-amber-50/80 text-amber-800',
@@ -336,7 +357,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       >
         {formData.phoneNumbers?.length > 0 ? (
           <>
-            <CheckCircle2 size={13} className="shrink-0 text-emerald-600" />
+            <CheckCircle2 size={18} className="shrink-0 text-emerald-600" />
             <span>
               <span className="font-medium">Phone assigned:</span>{' '}
               {formData.phoneNumbers.map((pn) => pn.no).join(', ')}
@@ -344,7 +365,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
           </>
         ) : (
           <>
-            <AlertTriangle size={13} className="shrink-0 text-amber-600" />
+            <AlertTriangle size={18} className="shrink-0 text-amber-600" />
             <span>
               <span className="font-medium">No phone number</span>
               <span className="mx-1 opacity-40">&mdash;</span>
