@@ -111,7 +111,7 @@ test.describe('Create Outbound Agent Page', () => {
     test('shows all General tab form row labels', async ({ page }) => {
       await expect(page.getByRole('heading', { name: 'Agent Name' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Agent Identity' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Agent Description' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Agent Identity' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'description' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'End Call Message' })).toBeVisible();
 

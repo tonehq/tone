@@ -119,7 +119,7 @@ test.describe('Create Inbound Agent Page', () => {
       await expect(
         page.getByText("Provide a brief summary explaining your agent's purpose."),
       ).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Agent Description' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Agent Identity' })).toBeVisible();
       await expect(
         page.getByText("Opt for speed or depth to suit your agent's role."),
       ).toBeVisible();
