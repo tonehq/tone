@@ -5,6 +5,7 @@ import SearchableSelect, {
 } from '@/components/shared/SearchableSelect';
 import { Badge } from '@/components/ui/badge';
 import type { VoiceItem } from '@/services/voiceService';
+import { toSelectOptions } from '@/utils/selectUtils';
 import { CheckIcon } from 'lucide-react';
 import React, { useCallback, useMemo } from 'react';
 
@@ -69,26 +70,22 @@ function VoiceSelect({
   loading = false,
   disabled = false,
 }: VoiceSelectProps) {
-  const options: VoiceSelectOption[] = useMemo(
+  const options = useMemo(
     () =>
-      voices.map((v) => ({
-        value: v.voice_id,
-        label: v.name,
-        name: v.name,
-        gender: v.gender,
-        accent: v.accent,
-        description: v.description,
-      })),
+      toSelectOptions(voices, {
+        valueKey: 'voice_id',
+        labelKey: 'name',
+      }) as VoiceSelectOption[],
     [voices],
   );
 
   const filterFn = useCallback((option: VoiceSelectOption, query: string): boolean => {
     const q = query.toLowerCase();
     return (
-      option.name.toLowerCase().includes(q) ||
-      option.gender.toLowerCase().includes(q) ||
-      option.accent.toLowerCase().includes(q) ||
-      option.description.toLowerCase().includes(q)
+      (option.name ?? '').toLowerCase().includes(q) ||
+      (option.gender ?? '').toLowerCase().includes(q) ||
+      (option.accent ?? '').toLowerCase().includes(q) ||
+      (option.description ?? '').toLowerCase().includes(q)
     );
   }, []);
 

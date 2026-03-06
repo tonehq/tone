@@ -3,6 +3,7 @@
 import { CheckboxField, RadioGroupField, SelectInput, TextInput } from '@/components/shared';
 import { Slider } from '@/components/ui/slider';
 import type { MetaDataSchemaField } from '@/types/provider';
+import { toSelectOptions } from '@/utils/selectUtils';
 import { X } from 'lucide-react';
 import { type KeyboardEvent, type ReactNode, useState } from 'react';
 
@@ -251,10 +252,9 @@ export default function DynamicProviderFields({
                   onValueChange={(v) => handleChange(field.name, v)}
                   placeholder={`Select ${label.toLowerCase()}`}
                   options={
-                    field.values?.map((opt) => ({
-                      value: opt.value,
-                      label: opt.label,
-                    })) ?? []
+                    field.values
+                      ? toSelectOptions(field.values, { valueKey: 'value', labelKey: 'label' })
+                      : []
                   }
                 />
               </FormRow>

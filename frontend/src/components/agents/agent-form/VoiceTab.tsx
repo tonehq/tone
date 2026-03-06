@@ -7,6 +7,7 @@ import { getVoicesByProvider, type VoiceItem } from '@/services/voiceService';
 import type { ServiceProvider } from '@/types/provider';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
+import { toSelectOptions } from '@/utils/selectUtils';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import DynamicProviderFields from './DynamicProviderFields';
 import type { AgentVoiceFormData } from './types';
@@ -52,8 +53,8 @@ export default function VoiceTab({
   const [voices, setVoices] = useState<VoiceItem[]>([]);
   const [voicesLoading, setVoicesLoading] = useState(false);
 
-  const ttsOptions = ttsProviders.map((p) => ({ value: String(p.id), label: p.display_name }));
-  const sttOptions = sttProviders.map((p) => ({ value: String(p.id), label: p.display_name }));
+  const ttsOptions = toSelectOptions(ttsProviders, { valueKey: 'id', labelKey: 'display_name' });
+  const sttOptions = toSelectOptions(sttProviders, { valueKey: 'id', labelKey: 'display_name' });
 
   const selectedTtsProvider = useMemo(
     () => ttsProviders.find((p) => p.id === formData.voiceProvider) ?? null,
@@ -96,12 +97,14 @@ export default function VoiceTab({
   const availableLanguageOptions = useMemo(() => {
     const langMap = new Map(languages.map((l) => [l.value, l]));
     const uniqueLangs = [...new Set(voices.map((v) => v.language))].sort();
-    return uniqueLangs.map((code) => {
+    const langItems = uniqueLangs.map((code) => {
       const known = langMap.get(code);
-      return {
-        value: code,
-        label: known ? `${known.flag} ${known.label}` : code,
-      };
+      return { code, name: known ? known.label : code, flag: known?.flag ?? '' };
+    });
+    return toSelectOptions(langItems, {
+      valueKey: 'code',
+      labelKey: 'name',
+      labelFormatter: (item) => (item.flag ? `${item.flag} ${item.name}` : String(item.name)),
     });
   }, [voices]);
 
@@ -112,10 +115,11 @@ export default function VoiceTab({
   }, [voices, formData.language]);
 
   // Language options with flags for STT
-  const _sttLanguageOptions = languages.map((lang) => ({
-    value: lang.value,
-    label: `${lang.flag} ${lang.label}`,
-  }));
+  const _sttLanguageOptions = toSelectOptions(languages, {
+    valueKey: 'value',
+    labelKey: 'label',
+    labelFormatter: (lang) => `${lang.flag} ${lang.label}`,
+  });
 
   return (
     <div className="space-y-0 py-4">

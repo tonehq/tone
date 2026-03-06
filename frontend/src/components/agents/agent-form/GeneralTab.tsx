@@ -5,6 +5,7 @@ import { Switch } from '@/components/ui/switch';
 import { CustomButton, SelectInput, TextAreaField, TextInput } from '@/components/shared';
 import { Form } from '@/components/shared/Form';
 import type { ServiceProvider } from '@/types/provider';
+import { toSelectOptions } from '@/utils/selectUtils';
 import { X } from 'lucide-react';
 import { KeyboardEvent, ReactNode, useMemo, useState } from 'react';
 import DynamicProviderFields from './DynamicProviderFields';
@@ -155,7 +156,7 @@ export default function GeneralTab({
             onFormChange({ aiModel: newId, llmMetaData: {} });
           }}
           placeholder="Select a provider"
-          options={llmProviders.map((p) => ({ value: String(p.id), label: p.display_name }))}
+          options={toSelectOptions(llmProviders, { valueKey: 'id', labelKey: 'display_name' })}
           loading={providersLoading}
         />
       </FormRow>
@@ -170,10 +171,11 @@ export default function GeneralTab({
                 llmMetaData: { ...formData.llmMetaData, model: v || null },
               });
             }}
-            options={selectedLlmProvider.models.map((m) => ({
-              value: (m.meta_data as Record<string, string>)?.model ?? m.name,
-              label: m.name,
-            }))}
+            options={toSelectOptions(selectedLlmProvider.models, {
+              valueKey: 'name',
+              labelKey: 'name',
+              valueFormatter: (m) => (m.meta_data as Record<string, string>)?.model ?? m.name,
+            })}
             placeholder="Select a model"
             position="popper"
           />
