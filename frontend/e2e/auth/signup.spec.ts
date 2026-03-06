@@ -98,8 +98,7 @@ test.describe('Signup Page', () => {
     });
 
     test('shows the Google icon inside the Google button', async ({ page }) => {
-      await expect(page.getByRole('img', { name: '}>
-              Continue with Google' })).toBeVisible();
+      await expect(page.getByRole('img', { name: 'Google' })).toBeVisible();
     });
 
     test('shows the "Already have an account?" text', async ({ page }) => {

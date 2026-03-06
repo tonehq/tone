@@ -1,7 +1,7 @@
 # Impacted Routes Report
 
-> Generated: 2026-03-06T12:37:12.635103+00:00
-> Comparing: `4e5e833b` → `79c23b68`
+> Generated: 2026-03-06T12:38:09.098324+00:00
+> Comparing: `4e5e833b` → `ec5086b2`
 > Branch: `claude/UI-improvements`
 
 ## Summary
@@ -189,6 +189,12 @@ src/app/auth/login/LoginPage.tsx (app-config, modified)
 ```
 src/app/auth/shared/ContainerComponent.tsx (app-config, modified)
   → ContainerComponent.tsx  → page.tsx
+  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
+```
+
+```
+src/app/auth/shared/ContainerComponent.tsx (app-config, modified)
+  → ContainerComponent.tsx  → page.tsx
   → /auth/reset-password  [src/app/auth/reset-password/page.tsx]
 ```
 
@@ -200,20 +206,14 @@ src/app/auth/shared/ContainerComponent.tsx (app-config, modified)
 
 ```
 src/app/auth/shared/ContainerComponent.tsx (app-config, modified)
-  → ContainerComponent.tsx  → page.tsx
-  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
+  → ContainerComponent.tsx  → SignupClient.tsx  → page.tsx
+  → /auth/signup  [src/app/auth/signup/page.tsx]
 ```
 
 ```
 src/app/auth/shared/ContainerComponent.tsx (app-config, modified)
   → ContainerComponent.tsx  → LoginPage.tsx  → page.tsx
   → /auth/login  [src/app/auth/login/page.tsx]
-```
-
-```
-src/app/auth/shared/ContainerComponent.tsx (app-config, modified)
-  → ContainerComponent.tsx  → SignupClient.tsx  → page.tsx
-  → /auth/signup  [src/app/auth/signup/page.tsx]
 ```
 
 ```
@@ -284,6 +284,12 @@ src/components/agents/AgentListPage.tsx (component, modified)
 
 ```
 src/components/agents/AgentTypeBadge.tsx (component, added)
+  → AgentTypeBadge.tsx  → AgentListPage.tsx  → page.tsx
+  → /agents  [src/app/(dashboard)/agents/page.tsx]
+```
+
+```
+src/components/agents/AgentTypeBadge.tsx (component, added)
   → AgentTypeBadge.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
@@ -298,12 +304,6 @@ src/components/agents/AgentTypeBadge.tsx (component, added)
 src/components/agents/AgentTypeBadge.tsx (component, added)
   → AgentTypeBadge.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
-```
-
-```
-src/components/agents/AgentTypeBadge.tsx (component, added)
-  → AgentTypeBadge.tsx  → AgentListPage.tsx  → page.tsx
-  → /agents  [src/app/(dashboard)/agents/page.tsx]
 ```
 
 ```
@@ -573,6 +573,12 @@ src/components/shared/CheckboxField.tsx (component, added)
 ```
 src/components/shared/CustomButton.tsx (component, modified)
   → CustomButton.tsx  → page.tsx
+  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
+```
+
+```
+src/components/shared/CustomButton.tsx (component, modified)
+  → CustomButton.tsx  → page.tsx
   → /auth/reset-password  [src/app/auth/reset-password/page.tsx]
 ```
 
@@ -585,25 +591,19 @@ src/components/shared/CustomButton.tsx (component, modified)
 ```
 src/components/shared/CustomButton.tsx (component, modified)
   → CustomButton.tsx  → page.tsx
-  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
-```
-
-```
-src/components/shared/CustomButton.tsx (component, modified)
-  → CustomButton.tsx  → page.tsx
   → /phone-numbers  [src/app/(dashboard)/phone-numbers/page.tsx]
-```
-
-```
-src/components/shared/CustomButton.tsx (component, modified)
-  → CustomButton.tsx  → index.tsx  → page.tsx
-  → /settings  [src/app/(dashboard)/settings/page.tsx]
 ```
 
 ```
 src/components/shared/CustomButton.tsx (component, modified)
   → CustomButton.tsx  → SignupClient.tsx  → page.tsx
   → /auth/signup  [src/app/auth/signup/page.tsx]
+```
+
+```
+src/components/shared/CustomButton.tsx (component, modified)
+  → CustomButton.tsx  → index.tsx  → page.tsx
+  → /settings  [src/app/(dashboard)/settings/page.tsx]
 ```
 
 ```
@@ -819,6 +819,12 @@ src/components/shared/Divider.tsx (component, added)
 ```
 src/components/shared/Form.tsx (component, renamed)
   → Form.tsx  → page.tsx
+  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
+```
+
+```
+src/components/shared/Form.tsx (component, renamed)
+  → Form.tsx  → page.tsx
   → /auth/reset-password  [src/app/auth/reset-password/page.tsx]
 ```
 
@@ -830,20 +836,14 @@ src/components/shared/Form.tsx (component, renamed)
 
 ```
 src/components/shared/Form.tsx (component, renamed)
-  → Form.tsx  → page.tsx
-  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
+  → Form.tsx  → SignupClient.tsx  → page.tsx
+  → /auth/signup  [src/app/auth/signup/page.tsx]
 ```
 
 ```
 src/components/shared/Form.tsx (component, renamed)
   → Form.tsx  → index.tsx  → page.tsx
   → /settings  [src/app/(dashboard)/settings/page.tsx]
-```
-
-```
-src/components/shared/Form.tsx (component, renamed)
-  → Form.tsx  → SignupClient.tsx  → page.tsx
-  → /auth/signup  [src/app/auth/signup/page.tsx]
 ```
 
 ```
@@ -878,8 +878,8 @@ src/components/shared/Form.tsx (component, renamed)
 
 ```
 src/components/shared/Logo.tsx (component, added)
-  → Logo.tsx  → index.tsx  → page.tsx
-  → /settings  [src/app/(dashboard)/settings/page.tsx]
+  → Logo.tsx  → ContainerComponent.tsx  → page.tsx
+  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
 ```
 
 ```
@@ -896,8 +896,20 @@ src/components/shared/Logo.tsx (component, added)
 
 ```
 src/components/shared/Logo.tsx (component, added)
-  → Logo.tsx  → ContainerComponent.tsx  → page.tsx
-  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
+  → Logo.tsx  → index.tsx  → page.tsx
+  → /settings  [src/app/(dashboard)/settings/page.tsx]
+```
+
+```
+src/components/shared/Logo.tsx (component, added)
+  → Logo.tsx  → ContainerComponent.tsx  → SignupClient.tsx  → page.tsx
+  → /auth/signup  [src/app/auth/signup/page.tsx]
+```
+
+```
+src/components/shared/Logo.tsx (component, added)
+  → Logo.tsx  → ContainerComponent.tsx  → LoginPage.tsx  → page.tsx
+  → /auth/login  [src/app/auth/login/page.tsx]
 ```
 
 ```
@@ -922,18 +934,6 @@ src/components/shared/Logo.tsx (component, added)
 src/components/shared/Logo.tsx (component, added)
   → Logo.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
-```
-
-```
-src/components/shared/Logo.tsx (component, added)
-  → Logo.tsx  → index.tsx  → LoginPage.tsx  → page.tsx
-  → /auth/login  [src/app/auth/login/page.tsx]
-```
-
-```
-src/components/shared/Logo.tsx (component, added)
-  → Logo.tsx  → ContainerComponent.tsx  → SignupClient.tsx  → page.tsx
-  → /auth/signup  [src/app/auth/signup/page.tsx]
 ```
 
 ```
@@ -1178,6 +1178,12 @@ src/components/ui/badge.tsx (component, added)
 
 ```
 src/components/ui/badge.tsx (component, added)
+  → badge.tsx  → AgentTypeBadge.tsx  → AgentListPage.tsx  → page.tsx
+  → /agents  [src/app/(dashboard)/agents/page.tsx]
+```
+
+```
+src/components/ui/badge.tsx (component, added)
   → badge.tsx  → AgentTypeBadge.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
@@ -1195,9 +1201,9 @@ src/components/ui/badge.tsx (component, added)
 ```
 
 ```
-src/components/ui/badge.tsx (component, added)
-  → badge.tsx  → AgentTypeBadge.tsx  → AgentListPage.tsx  → page.tsx
-  → /agents  [src/app/(dashboard)/agents/page.tsx]
+src/components/ui/button.tsx (component, added)
+  → button.tsx  → CustomButton.tsx  → page.tsx
+  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
 ```
 
 ```
@@ -1215,25 +1221,19 @@ src/components/ui/button.tsx (component, added)
 ```
 src/components/ui/button.tsx (component, added)
   → button.tsx  → CustomButton.tsx  → page.tsx
-  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
-```
-
-```
-src/components/ui/button.tsx (component, added)
-  → button.tsx  → CustomButton.tsx  → page.tsx
   → /phone-numbers  [src/app/(dashboard)/phone-numbers/page.tsx]
-```
-
-```
-src/components/ui/button.tsx (component, added)
-  → button.tsx  → CustomButton.tsx  → index.tsx  → page.tsx
-  → /settings  [src/app/(dashboard)/settings/page.tsx]
 ```
 
 ```
 src/components/ui/button.tsx (component, added)
   → button.tsx  → CustomButton.tsx  → SignupClient.tsx  → page.tsx
   → /auth/signup  [src/app/auth/signup/page.tsx]
+```
+
+```
+src/components/ui/button.tsx (component, added)
+  → button.tsx  → CustomButton.tsx  → index.tsx  → page.tsx
+  → /settings  [src/app/(dashboard)/settings/page.tsx]
 ```
 
 ```
@@ -1346,7 +1346,7 @@ src/components/ui/dialog.tsx (component, added)
 
 ```
 src/components/ui/dropdown-menu.tsx (component, added)
-  → dropdown-menu.tsx  → PublicKeysTab.tsx  → Apikeys.tsx  → page.tsx
+  → dropdown-menu.tsx  → ApiKeysTab.tsx  → Apikeys.tsx  → page.tsx
   → /settings  [src/app/(dashboard)/settings/page.tsx]
 ```
 
@@ -1418,7 +1418,7 @@ src/components/ui/label.tsx (component, added)
 
 ```
 src/components/ui/label.tsx (component, added)
-  → label.tsx  → CheckboxField.tsx  → index.tsx  → page.tsx
+  → label.tsx  → SelectInput.tsx  → index.tsx  → page.tsx
   → /settings  [src/app/(dashboard)/settings/page.tsx]
 ```
 
@@ -1430,31 +1430,31 @@ src/components/ui/label.tsx (component, added)
 
 ```
 src/components/ui/label.tsx (component, added)
-  → label.tsx  → CheckboxField.tsx  → index.tsx  → AgentListPage.tsx  → page.tsx
+  → label.tsx  → SelectInput.tsx  → index.tsx  → AgentListPage.tsx  → page.tsx
   → /agents  [src/app/(dashboard)/agents/page.tsx]
 ```
 
 ```
 src/components/ui/label.tsx (component, added)
-  → label.tsx  → CheckboxField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → label.tsx  → SelectInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
 src/components/ui/label.tsx (component, added)
-  → label.tsx  → CheckboxField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → label.tsx  → SelectInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
 ```
 src/components/ui/label.tsx (component, added)
-  → label.tsx  → CheckboxField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → label.tsx  → SelectInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
 ```
 
 ```
 src/components/ui/label.tsx (component, added)
-  → label.tsx  → CheckboxField.tsx  → index.tsx  → LoginPage.tsx  → page.tsx
+  → label.tsx  → SelectInput.tsx  → index.tsx  → LoginPage.tsx  → page.tsx
   → /auth/login  [src/app/auth/login/page.tsx]
 ```
 
@@ -1568,12 +1568,6 @@ src/components/ui/select.tsx (component, added)
 
 ```
 src/components/ui/separator.tsx (component, added)
-  → separator.tsx  → Divider.tsx  → index.tsx  → page.tsx
-  → /settings  [src/app/(dashboard)/settings/page.tsx]
-```
-
-```
-src/components/ui/separator.tsx (component, added)
   → separator.tsx  → promptPage.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
@@ -1588,6 +1582,12 @@ src/components/ui/separator.tsx (component, added)
 src/components/ui/separator.tsx (component, added)
   → separator.tsx  → promptPage.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/ui/separator.tsx (component, added)
+  → separator.tsx  → Divider.tsx  → index.tsx  → page.tsx
+  → /settings  [src/app/(dashboard)/settings/page.tsx]
 ```
 
 ```
@@ -1724,8 +1724,8 @@ src/components/ui/textarea.tsx (component, added)
 
 ```
 src/constants/index.ts (config, modified)
-  → index.ts  → axios.ts  → page.tsx
-  → /auth/reset-password  [src/app/auth/reset-password/page.tsx]
+  → index.ts  → helper.tsx  → page.tsx
+  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
 ```
 
 ```
@@ -1736,8 +1736,20 @@ src/constants/index.ts (config, modified)
 
 ```
 src/constants/index.ts (config, modified)
-  → index.ts  → helper.tsx  → page.tsx
-  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
+  → index.ts  → axios.ts  → page.tsx
+  → /auth/reset-password  [src/app/auth/reset-password/page.tsx]
+```
+
+```
+src/constants/index.ts (config, modified)
+  → index.ts  → helper.tsx  → SignupClient.tsx  → page.tsx
+  → /auth/signup  [src/app/auth/signup/page.tsx]
+```
+
+```
+src/constants/index.ts (config, modified)
+  → index.ts  → helper.tsx  → LoginPage.tsx  → page.tsx
+  → /auth/login  [src/app/auth/login/page.tsx]
 ```
 
 ```
@@ -1762,18 +1774,6 @@ src/constants/index.ts (config, modified)
 src/constants/index.ts (config, modified)
   → index.ts  → axios.ts  → Apikeys.tsx  → page.tsx
   → /settings  [src/app/(dashboard)/settings/page.tsx]
-```
-
-```
-src/constants/index.ts (config, modified)
-  → index.ts  → axios.ts  → SignupClient.tsx  → page.tsx
-  → /auth/signup  [src/app/auth/signup/page.tsx]
-```
-
-```
-src/constants/index.ts (config, modified)
-  → index.ts  → helper.tsx  → LoginPage.tsx  → page.tsx
-  → /auth/login  [src/app/auth/login/page.tsx]
 ```
 
 ```
@@ -1905,13 +1905,19 @@ src/utils/agentFormUtils.ts (util, renamed)
 ```
 src/utils/axios.ts (util, modified)
   → axios.ts  → page.tsx
-  → /auth/reset-password  [src/app/auth/reset-password/page.tsx]
+  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
 ```
 
 ```
 src/utils/axios.ts (util, modified)
   → axios.ts  → page.tsx
-  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
+  → /auth/reset-password  [src/app/auth/reset-password/page.tsx]
+```
+
+```
+src/utils/axios.ts (util, modified)
+  → axios.ts  → SignupClient.tsx  → page.tsx
+  → /auth/signup  [src/app/auth/signup/page.tsx]
 ```
 
 ```
@@ -1934,20 +1940,14 @@ src/utils/axios.ts (util, modified)
 
 ```
 src/utils/axios.ts (util, modified)
-  → axios.ts  → helper.tsx  → page.tsx
-  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
-```
-
-```
-src/utils/axios.ts (util, modified)
   → axios.ts  → Apikeys.tsx  → page.tsx
   → /settings  [src/app/(dashboard)/settings/page.tsx]
 ```
 
 ```
 src/utils/axios.ts (util, modified)
-  → axios.ts  → SignupClient.tsx  → page.tsx
-  → /auth/signup  [src/app/auth/signup/page.tsx]
+  → axios.ts  → helper.tsx  → page.tsx
+  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
 ```
 
 ```
@@ -1970,36 +1970,6 @@ src/utils/cn.ts (util, added)
 
 ```
 src/utils/cn.ts (util, added)
-  → cn.ts  → CustomButton.tsx  → page.tsx
-  → /auth/reset-password  [src/app/auth/reset-password/page.tsx]
-```
-
-```
-src/utils/cn.ts (util, added)
-  → cn.ts  → CustomButton.tsx  → page.tsx
-  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
-```
-
-```
-src/utils/cn.ts (util, added)
-  → cn.ts  → CustomButton.tsx  → page.tsx
-  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
-```
-
-```
-src/utils/cn.ts (util, added)
-  → cn.ts  → CustomButton.tsx  → page.tsx
-  → /phone-numbers  [src/app/(dashboard)/phone-numbers/page.tsx]
-```
-
-```
-src/utils/cn.ts (util, added)
-  → cn.ts  → switch.tsx  → page.tsx
-  → /settings  [src/app/(dashboard)/settings/page.tsx]
-```
-
-```
-src/utils/cn.ts (util, added)
   → cn.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
@@ -2018,13 +1988,43 @@ src/utils/cn.ts (util, added)
 
 ```
 src/utils/cn.ts (util, added)
+  → cn.ts  → switch.tsx  → page.tsx
+  → /settings  [src/app/(dashboard)/settings/page.tsx]
+```
+
+```
+src/utils/cn.ts (util, added)
+  → cn.ts  → TextInput.tsx  → page.tsx
+  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
+```
+
+```
+src/utils/cn.ts (util, added)
+  → cn.ts  → TextInput.tsx  → page.tsx
+  → /auth/reset-password  [src/app/auth/reset-password/page.tsx]
+```
+
+```
+src/utils/cn.ts (util, added)
+  → cn.ts  → Form.tsx  → page.tsx
+  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
+```
+
+```
+src/utils/cn.ts (util, added)
+  → cn.ts  → CustomButton.tsx  → page.tsx
+  → /phone-numbers  [src/app/(dashboard)/phone-numbers/page.tsx]
+```
+
+```
+src/utils/cn.ts (util, added)
   → cn.ts  → AgentTypeBadge.tsx  → AgentListPage.tsx  → page.tsx
   → /agents  [src/app/(dashboard)/agents/page.tsx]
 ```
 
 ```
 src/utils/cn.ts (util, added)
-  → cn.ts  → CustomButton.tsx  → SignupClient.tsx  → page.tsx
+  → cn.ts  → TextInput.tsx  → SignupClient.tsx  → page.tsx
   → /auth/signup  [src/app/auth/signup/page.tsx]
 ```
 
@@ -2037,6 +2037,12 @@ src/utils/cn.ts (util, added)
 ```
 src/utils/helpers.ts (util, added)
   → helpers.ts  → page.tsx
+  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
+```
+
+```
+src/utils/helpers.ts (util, added)
+  → helpers.ts  → page.tsx
   → /auth/reset-password  [src/app/auth/reset-password/page.tsx]
 ```
 
@@ -2048,8 +2054,14 @@ src/utils/helpers.ts (util, added)
 
 ```
 src/utils/helpers.ts (util, added)
-  → helpers.ts  → page.tsx
-  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
+  → helpers.ts  → AgentListPage.tsx  → page.tsx
+  → /agents  [src/app/(dashboard)/agents/page.tsx]
+```
+
+```
+src/utils/helpers.ts (util, added)
+  → helpers.ts  → SignupClient.tsx  → page.tsx
+  → /auth/signup  [src/app/auth/signup/page.tsx]
 ```
 
 ```
@@ -2068,12 +2080,6 @@ src/utils/helpers.ts (util, added)
 src/utils/helpers.ts (util, added)
   → helpers.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
-```
-
-```
-src/utils/helpers.ts (util, added)
-  → helpers.ts  → AgentListPage.tsx  → page.tsx
-  → /agents  [src/app/(dashboard)/agents/page.tsx]
 ```
 
 ```
@@ -2089,12 +2095,6 @@ src/utils/helpers.ts (util, added)
 ```
 
 ```
-src/utils/helpers.ts (util, added)
-  → helpers.ts  → SignupClient.tsx  → page.tsx
-  → /auth/signup  [src/app/auth/signup/page.tsx]
-```
-
-```
 src/utils/selectUtils.ts (util, added)
   → selectUtils.ts  → VoiceTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
@@ -2110,6 +2110,12 @@ src/utils/selectUtils.ts (util, added)
 src/utils/selectUtils.ts (util, added)
   → selectUtils.ts  → VoiceTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/utils/toast.tsx (util, added)
+  → toast.tsx  → page.tsx
+  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
 ```
 
 ```
@@ -2126,8 +2132,14 @@ src/utils/toast.tsx (util, added)
 
 ```
 src/utils/toast.tsx (util, added)
-  → toast.tsx  → page.tsx
-  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
+  → toast.tsx  → AgentListPage.tsx  → page.tsx
+  → /agents  [src/app/(dashboard)/agents/page.tsx]
+```
+
+```
+src/utils/toast.tsx (util, added)
+  → toast.tsx  → SignupClient.tsx  → page.tsx
+  → /auth/signup  [src/app/auth/signup/page.tsx]
 ```
 
 ```
@@ -2150,12 +2162,6 @@ src/utils/toast.tsx (util, added)
 
 ```
 src/utils/toast.tsx (util, added)
-  → toast.tsx  → AgentListPage.tsx  → page.tsx
-  → /agents  [src/app/(dashboard)/agents/page.tsx]
-```
-
-```
-src/utils/toast.tsx (util, added)
   → toast.tsx  → LoginPage.tsx  → page.tsx
   → /auth/login  [src/app/auth/login/page.tsx]
 ```
@@ -2164,10 +2170,4 @@ src/utils/toast.tsx (util, added)
 src/utils/toast.tsx (util, added)
   → toast.tsx  → Integrations.tsx  → page.tsx
   → /settings  [src/app/(dashboard)/settings/page.tsx]
-```
-
-```
-src/utils/toast.tsx (util, added)
-  → toast.tsx  → SignupClient.tsx  → page.tsx
-  → /auth/signup  [src/app/auth/signup/page.tsx]
 ```
