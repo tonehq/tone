@@ -58,37 +58,29 @@ test.describe('Create Inbound Agent Page', () => {
 
   // ── 1. Page Rendering ───────────────────────────────────────────────────────
   test.describe('Page Rendering', () => {
-    test('shows agent name in sidebar', async ({ page }) => {
-      await expect(page.getByText('My Inbound Assistant')).toBeVisible();
+    test('shows agent name', async ({ page }) => {
+      await expect(page.getByRole('heading', { name: 'My Inbound Assistant', level: 1 })).toBeVisible();
     });
 
-    test('shows Inbound badge in sidebar', async ({ page }) => {
-      // AgentTypeBadge renders a shadcn Badge with text 'Inbound' in the sidebar
-      await expect(page.locator('aside').getByText('Inbound', { exact: true })).toBeVisible();
+    test('shows Inbound badge', async ({ page }) => {
+      await expect(page.getByText('Inbound', { exact: true })).toBeVisible();
     });
 
-    test('shows Back to Agents button', async ({ page }) => {
-      await expect(page.getByRole('button', { name: /back to agents/i })).toBeVisible();
+    test('shows Agents breadcrumb button', async ({ page }) => {
+      await expect(page.getByRole('button', { name: 'Agents' })).toBeVisible();
     });
 
     test('shows Test Agent button', async ({ page }) => {
       await expect(page.getByRole('button', { name: /test agent/i })).toBeVisible();
     });
 
-    test('shows sidebar menu items Configure and Prompt', async ({ page }) => {
-      // Sidebar nav items are CustomButton components (not <p> tags in new UI)
-      await expect(page.getByRole('button', { name: 'Configure' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Prompt' })).toBeVisible();
+    test('shows all tabs including Prompt', async ({ page }) => {
+      await expect(page.getByRole('tab', { name: /general/i })).toBeVisible();
+      await expect(page.getByRole('tab', { name: /prompt/i })).toBeVisible();
     });
 
     test('shows status bar about receiving calls', async ({ page }) => {
-      // Status bar: plain div (not MUI Alert) showing phone assignment status
       await expect(page.getByText(/can't receive calls/)).toBeVisible();
-    });
-
-    test('shows Configure heading', async ({ page }) => {
-      // AgentFormPage renders <h2> for currentMenu heading (not h5)
-      await expect(page.getByRole('heading', { name: 'Configure', level: 2 })).toBeVisible();
     });
 
     test('shows Save Changes button', async ({ page }) => {
@@ -168,8 +160,8 @@ test.describe('Create Inbound Agent Page', () => {
       await expect(nameInput).toHaveValue('My Inbound Assistant');
       await nameInput.fill('Custom Agent Name');
       await expect(nameInput).toHaveValue('Custom Agent Name');
-      // Sidebar should reflect the updated name
-      await expect(page.locator('aside').getByText('Custom Agent Name')).toBeVisible();
+      // Heading should reflect the updated name
+      await expect(page.getByRole('heading', { name: 'Custom Agent Name', level: 1 })).toBeVisible();
     });
 
     test('allows editing the description field', async ({ page }) => {
@@ -245,8 +237,8 @@ test.describe('Create Inbound Agent Page', () => {
       await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       const vocabInput = page.locator('input[name="vocabularyInput"]');
       await vocabInput.fill('PipelineWord');
-      // Click the paired Enter button (first "Enter" button in the form)
-      await page.getByRole('button', { name: 'Enter' }).nth(0).click();
+      // Click the paired Add button (first "Add" button in the form)
+      await page.getByRole('button', { name: 'Add' }).nth(0).click();
       await expect(page.getByText('PipelineWord', { exact: true })).toBeVisible();
     });
 
@@ -299,7 +291,7 @@ test.describe('Create Inbound Agent Page', () => {
       ).toBeVisible();
       await expect(page.getByRole('heading', { name: 'STT Provider' })).toBeVisible();
       await expect(
-        page.getByText('Select the service used to transcribe calls to text (Speech-to-Text).'),
+        page.getByText('Select the service used to transcribe calls to text.'),
       ).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Voice Speed' })).toBeVisible();
       await expect(page.getByText('Text-to-Speech')).toBeVisible();
@@ -465,8 +457,7 @@ test.describe('Create Inbound Agent Page', () => {
   // ── 6. Prompt Editor ───────────────────────────────────────────────────────
   test.describe('Prompt Editor', () => {
     test.beforeEach(async ({ page }) => {
-      // Sidebar nav items are CustomButton (not <p> in new UI)
-      await page.getByRole('button', { name: 'Prompt' }).click();
+      await page.getByRole('tab', { name: /prompt/i }).click();
     });
 
     test('shows TipTap editor when Prompt menu is selected', async ({ page }) => {
@@ -484,42 +475,21 @@ test.describe('Create Inbound Agent Page', () => {
 
   // ── 7. Tab Navigation ──────────────────────────────────────────────────────
   test.describe('Tab Navigation', () => {
-    test('switches between General, Voice, and Call Configuration tabs', async ({ page }) => {
-      // Ensure we're on the Configure view with the General tab
-      if (
-        !(await page
-          .getByRole('tab', { name: /general/i })
-          .isVisible()
-          .catch(() => false))
-      ) {
-        await page.getByRole('button', { name: 'Configure' }).click();
-      }
+    test('switches between all tabs', async ({ page }) => {
       await page.getByRole('tab', { name: /general/i }).click();
       await expect(page.getByText('Agent Name', { exact: true })).toBeVisible();
 
-      // Switch to Voice tab
       await page.getByRole('tab', { name: /voice/i }).click();
       await expect(page.getByText('Voice Provider')).toBeVisible();
 
-      // Switch to Call Configuration tab
       await page.getByRole('tab', { name: /call configuration/i }).click();
       await expect(page.getByText('Call Recording')).toBeVisible();
 
-      // Switch back to General
-      await page.getByRole('tab', { name: /general/i }).click();
-      await expect(page.getByText('Agent Name', { exact: true })).toBeVisible();
-    });
-
-    test('switches between Configure and Prompt menus via sidebar', async ({ page }) => {
-      // Click Prompt in sidebar (CustomButton, not <p> in new UI)
-      await page.getByRole('button', { name: 'Prompt' }).click();
-      await expect(page.getByRole('heading', { name: 'Prompt', level: 2 })).toBeVisible();
+      await page.getByRole('tab', { name: /prompt/i }).click();
       await expect(page.locator('.ProseMirror')).toBeVisible();
 
-      // Click Configure in sidebar (CustomButton)
-      await page.getByRole('button', { name: 'Configure' }).click();
-      await expect(page.getByRole('heading', { name: 'Configure', level: 2 })).toBeVisible();
-      await expect(page.getByRole('tab', { name: /general/i })).toBeVisible();
+      await page.getByRole('tab', { name: /general/i }).click();
+      await expect(page.getByText('Agent Name', { exact: true })).toBeVisible();
     });
   });
 
@@ -603,8 +573,8 @@ test.describe('Create Inbound Agent Page', () => {
       const transcriptionRow = page.getByText('Call Transcription').locator('..').locator('..');
       await transcriptionRow.getByRole('switch').click();
 
-      // ── Prompt (via sidebar) ──
-      await page.getByRole('button', { name: 'Prompt' }).click();
+      // ── Prompt tab ──
+      await page.getByRole('tab', { name: /prompt/i }).click();
       const editor = page.locator('.ProseMirror');
       await editor.click();
       await page.keyboard.type('You are a helpful sales agent.');
@@ -718,8 +688,8 @@ test.describe('Create Inbound Agent Page', () => {
 
   // ── 10. Back Navigation ─────────────────────────────────────────────────
   test.describe('Back Navigation', () => {
-    test('navigates to /agents when clicking Back to Agents', async ({ page }) => {
-      await page.getByRole('button', { name: /back to agents/i }).click();
+    test('navigates to /agents when clicking Agents breadcrumb', async ({ page }) => {
+      await page.getByRole('button', { name: 'Agents' }).click();
       await expect(page).toHaveURL(/\/agents(?:\?|$)/, { timeout: 10_000 });
     });
   });

@@ -1,7 +1,7 @@
 # Impacted Routes Report
 
-> Generated: 2026-03-06T12:38:09.098324+00:00
-> Comparing: `4e5e833b` → `ec5086b2`
+> Generated: 2026-03-06T12:44:00.814403+00:00
+> Comparing: `4e5e833b` → `d5fe33e3`
 > Branch: `claude/UI-improvements`
 
 ## Summary
@@ -189,7 +189,7 @@ src/app/auth/login/LoginPage.tsx (app-config, modified)
 ```
 src/app/auth/shared/ContainerComponent.tsx (app-config, modified)
   → ContainerComponent.tsx  → page.tsx
-  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
+  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
 ```
 
 ```
@@ -201,19 +201,19 @@ src/app/auth/shared/ContainerComponent.tsx (app-config, modified)
 ```
 src/app/auth/shared/ContainerComponent.tsx (app-config, modified)
   → ContainerComponent.tsx  → page.tsx
-  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
-```
-
-```
-src/app/auth/shared/ContainerComponent.tsx (app-config, modified)
-  → ContainerComponent.tsx  → SignupClient.tsx  → page.tsx
-  → /auth/signup  [src/app/auth/signup/page.tsx]
+  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
 ```
 
 ```
 src/app/auth/shared/ContainerComponent.tsx (app-config, modified)
   → ContainerComponent.tsx  → LoginPage.tsx  → page.tsx
   → /auth/login  [src/app/auth/login/page.tsx]
+```
+
+```
+src/app/auth/shared/ContainerComponent.tsx (app-config, modified)
+  → ContainerComponent.tsx  → SignupClient.tsx  → page.tsx
+  → /auth/signup  [src/app/auth/signup/page.tsx]
 ```
 
 ```
@@ -237,12 +237,6 @@ src/atoms/IntegrationAtom.tsx (atom, added)
 ```
 src/atoms/ProviderAtom.tsx (atom, added)
   → ProviderAtom.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/atoms/ProviderAtom.tsx (atom, added)
-  → ProviderAtom.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -250,6 +244,12 @@ src/atoms/ProviderAtom.tsx (atom, added)
 src/atoms/ProviderAtom.tsx (atom, added)
   → ProviderAtom.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/atoms/ProviderAtom.tsx (atom, added)
+  → ProviderAtom.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -261,12 +261,6 @@ src/components/agents/AgentActionMenu.tsx (component, added)
 ```
 src/components/agents/AgentFormPage.tsx (component, added)
   → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/agents/AgentFormPage.tsx (component, added)
-  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -274,6 +268,12 @@ src/components/agents/AgentFormPage.tsx (component, added)
 src/components/agents/AgentFormPage.tsx (component, added)
   → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/agents/AgentFormPage.tsx (component, added)
+  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -284,35 +284,29 @@ src/components/agents/AgentListPage.tsx (component, modified)
 
 ```
 src/components/agents/AgentTypeBadge.tsx (component, added)
+  → AgentTypeBadge.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
+```
+
+```
+src/components/agents/AgentTypeBadge.tsx (component, added)
+  → AgentTypeBadge.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/agents/AgentTypeBadge.tsx (component, added)
+  → AgentTypeBadge.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
+```
+
+```
+src/components/agents/AgentTypeBadge.tsx (component, added)
   → AgentTypeBadge.tsx  → AgentListPage.tsx  → page.tsx
   → /agents  [src/app/(dashboard)/agents/page.tsx]
 ```
 
 ```
-src/components/agents/AgentTypeBadge.tsx (component, added)
-  → AgentTypeBadge.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/agents/AgentTypeBadge.tsx (component, added)
-  → AgentTypeBadge.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
-```
-
-```
-src/components/agents/AgentTypeBadge.tsx (component, added)
-  → AgentTypeBadge.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
-```
-
-```
-src/components/agents/AssignPhoneNumberModal.tsx (component, added)
-  → AssignPhoneNumberModal.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
 src/components/agents/AssignPhoneNumberModal.tsx (component, added)
   → AssignPhoneNumberModal.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
@@ -322,6 +316,12 @@ src/components/agents/AssignPhoneNumberModal.tsx (component, added)
 src/components/agents/AssignPhoneNumberModal.tsx (component, added)
   → AssignPhoneNumberModal.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/agents/AssignPhoneNumberModal.tsx (component, added)
+  → AssignPhoneNumberModal.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -333,12 +333,6 @@ src/components/agents/CreateAgentModal.tsx (component, modified)
 ```
 src/components/agents/agent-form/CallConfigurationTab.tsx (component, modified)
   → CallConfigurationTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/agents/agent-form/CallConfigurationTab.tsx (component, modified)
-  → CallConfigurationTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -349,8 +343,8 @@ src/components/agents/agent-form/CallConfigurationTab.tsx (component, modified)
 ```
 
 ```
-src/components/agents/agent-form/DynamicProviderFields.tsx (component, added)
-  → DynamicProviderFields.tsx  → VoiceTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
+src/components/agents/agent-form/CallConfigurationTab.tsx (component, modified)
+  → CallConfigurationTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
@@ -367,8 +361,8 @@ src/components/agents/agent-form/DynamicProviderFields.tsx (component, added)
 ```
 
 ```
-src/components/agents/agent-form/GeneralTab.tsx (component, modified)
-  → GeneralTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
+src/components/agents/agent-form/DynamicProviderFields.tsx (component, added)
+  → DynamicProviderFields.tsx  → VoiceTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
@@ -385,8 +379,8 @@ src/components/agents/agent-form/GeneralTab.tsx (component, modified)
 ```
 
 ```
-src/components/agents/agent-form/VoiceSelect.tsx (component, added)
-  → VoiceSelect.tsx  → VoiceTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
+src/components/agents/agent-form/GeneralTab.tsx (component, modified)
+  → GeneralTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
@@ -403,8 +397,8 @@ src/components/agents/agent-form/VoiceSelect.tsx (component, added)
 ```
 
 ```
-src/components/agents/agent-form/VoiceTab.tsx (component, modified)
-  → VoiceTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
+src/components/agents/agent-form/VoiceSelect.tsx (component, added)
+  → VoiceSelect.tsx  → VoiceTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
@@ -421,8 +415,8 @@ src/components/agents/agent-form/VoiceTab.tsx (component, modified)
 ```
 
 ```
-src/components/agents/agent-form/promptPage.tsx (component, modified)
-  → promptPage.tsx  → AgentFormPage.tsx  → page.tsx
+src/components/agents/agent-form/VoiceTab.tsx (component, modified)
+  → VoiceTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
@@ -439,8 +433,8 @@ src/components/agents/agent-form/promptPage.tsx (component, modified)
 ```
 
 ```
-src/components/agents/agent-form/types.ts (component, modified)
-  → types.ts  → index.ts  → AgentFormPage.tsx  → page.tsx
+src/components/agents/agent-form/promptPage.tsx (component, modified)
+  → promptPage.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
@@ -454,6 +448,12 @@ src/components/agents/agent-form/types.ts (component, modified)
 src/components/agents/agent-form/types.ts (component, modified)
   → types.ts  → index.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/agents/agent-form/types.ts (component, modified)
+  → types.ts  → index.ts  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -513,12 +513,6 @@ src/components/shared/ActionMenu.tsx (component, added)
 ```
 src/components/shared/ActionMenu.tsx (component, added)
   → ActionMenu.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/shared/ActionMenu.tsx (component, added)
-  → ActionMenu.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -526,6 +520,12 @@ src/components/shared/ActionMenu.tsx (component, added)
 src/components/shared/ActionMenu.tsx (component, added)
   → ActionMenu.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/shared/ActionMenu.tsx (component, added)
+  → ActionMenu.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -549,12 +549,6 @@ src/components/shared/CheckboxField.tsx (component, added)
 ```
 src/components/shared/CheckboxField.tsx (component, added)
   → CheckboxField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/shared/CheckboxField.tsx (component, added)
-  → CheckboxField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -566,6 +560,12 @@ src/components/shared/CheckboxField.tsx (component, added)
 
 ```
 src/components/shared/CheckboxField.tsx (component, added)
+  → CheckboxField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
+```
+
+```
+src/components/shared/CheckboxField.tsx (component, added)
   → CheckboxField.tsx  → index.tsx  → LoginPage.tsx  → page.tsx
   → /auth/login  [src/app/auth/login/page.tsx]
 ```
@@ -573,13 +573,7 @@ src/components/shared/CheckboxField.tsx (component, added)
 ```
 src/components/shared/CustomButton.tsx (component, modified)
   → CustomButton.tsx  → page.tsx
-  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
-```
-
-```
-src/components/shared/CustomButton.tsx (component, modified)
-  → CustomButton.tsx  → page.tsx
-  → /auth/reset-password  [src/app/auth/reset-password/page.tsx]
+  → /phone-numbers  [src/app/(dashboard)/phone-numbers/page.tsx]
 ```
 
 ```
@@ -591,7 +585,13 @@ src/components/shared/CustomButton.tsx (component, modified)
 ```
 src/components/shared/CustomButton.tsx (component, modified)
   → CustomButton.tsx  → page.tsx
-  → /phone-numbers  [src/app/(dashboard)/phone-numbers/page.tsx]
+  → /auth/reset-password  [src/app/auth/reset-password/page.tsx]
+```
+
+```
+src/components/shared/CustomButton.tsx (component, modified)
+  → CustomButton.tsx  → page.tsx
+  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
 ```
 
 ```
@@ -615,12 +615,6 @@ src/components/shared/CustomButton.tsx (component, modified)
 ```
 src/components/shared/CustomButton.tsx (component, modified)
   → CustomButton.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/shared/CustomButton.tsx (component, modified)
-  → CustomButton.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -628,6 +622,12 @@ src/components/shared/CustomButton.tsx (component, modified)
 src/components/shared/CustomButton.tsx (component, modified)
   → CustomButton.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/shared/CustomButton.tsx (component, modified)
+  → CustomButton.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -651,12 +651,6 @@ src/components/shared/CustomLink.tsx (component, added)
 ```
 src/components/shared/CustomLink.tsx (component, added)
   → CustomLink.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/shared/CustomLink.tsx (component, added)
-  → CustomLink.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -664,6 +658,12 @@ src/components/shared/CustomLink.tsx (component, added)
 src/components/shared/CustomLink.tsx (component, added)
   → CustomLink.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/shared/CustomLink.tsx (component, added)
+  → CustomLink.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -687,12 +687,6 @@ src/components/shared/CustomModal.tsx (component, added)
 ```
 src/components/shared/CustomModal.tsx (component, added)
   → CustomModal.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/shared/CustomModal.tsx (component, added)
-  → CustomModal.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -700,6 +694,12 @@ src/components/shared/CustomModal.tsx (component, added)
 src/components/shared/CustomModal.tsx (component, added)
   → CustomModal.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/shared/CustomModal.tsx (component, added)
+  → CustomModal.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -723,12 +723,6 @@ src/components/shared/CustomTab.tsx (component, added)
 ```
 src/components/shared/CustomTab.tsx (component, added)
   → CustomTab.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/shared/CustomTab.tsx (component, added)
-  → CustomTab.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -736,6 +730,12 @@ src/components/shared/CustomTab.tsx (component, added)
 src/components/shared/CustomTab.tsx (component, added)
   → CustomTab.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/shared/CustomTab.tsx (component, added)
+  → CustomTab.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -759,12 +759,6 @@ src/components/shared/CustomTable.tsx (component, added)
 ```
 src/components/shared/CustomTable.tsx (component, added)
   → CustomTable.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/shared/CustomTable.tsx (component, added)
-  → CustomTable.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -772,6 +766,12 @@ src/components/shared/CustomTable.tsx (component, added)
 src/components/shared/CustomTable.tsx (component, added)
   → CustomTable.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/shared/CustomTable.tsx (component, added)
+  → CustomTable.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -795,12 +795,6 @@ src/components/shared/Divider.tsx (component, added)
 ```
 src/components/shared/Divider.tsx (component, added)
   → Divider.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/shared/Divider.tsx (component, added)
-  → Divider.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -812,6 +806,12 @@ src/components/shared/Divider.tsx (component, added)
 
 ```
 src/components/shared/Divider.tsx (component, added)
+  → Divider.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
+```
+
+```
+src/components/shared/Divider.tsx (component, added)
   → Divider.tsx  → index.tsx  → LoginPage.tsx  → page.tsx
   → /auth/login  [src/app/auth/login/page.tsx]
 ```
@@ -819,7 +819,7 @@ src/components/shared/Divider.tsx (component, added)
 ```
 src/components/shared/Form.tsx (component, renamed)
   → Form.tsx  → page.tsx
-  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
+  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
 ```
 
 ```
@@ -831,7 +831,7 @@ src/components/shared/Form.tsx (component, renamed)
 ```
 src/components/shared/Form.tsx (component, renamed)
   → Form.tsx  → page.tsx
-  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
+  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
 ```
 
 ```
@@ -855,12 +855,6 @@ src/components/shared/Form.tsx (component, renamed)
 ```
 src/components/shared/Form.tsx (component, renamed)
   → Form.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/shared/Form.tsx (component, renamed)
-  → Form.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -868,6 +862,12 @@ src/components/shared/Form.tsx (component, renamed)
 src/components/shared/Form.tsx (component, renamed)
   → Form.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/shared/Form.tsx (component, renamed)
+  → Form.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -879,7 +879,7 @@ src/components/shared/Form.tsx (component, renamed)
 ```
 src/components/shared/Logo.tsx (component, added)
   → Logo.tsx  → ContainerComponent.tsx  → page.tsx
-  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
+  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
 ```
 
 ```
@@ -891,7 +891,7 @@ src/components/shared/Logo.tsx (component, added)
 ```
 src/components/shared/Logo.tsx (component, added)
   → Logo.tsx  → ContainerComponent.tsx  → page.tsx
-  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
+  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
 ```
 
 ```
@@ -902,26 +902,20 @@ src/components/shared/Logo.tsx (component, added)
 
 ```
 src/components/shared/Logo.tsx (component, added)
-  → Logo.tsx  → ContainerComponent.tsx  → SignupClient.tsx  → page.tsx
-  → /auth/signup  [src/app/auth/signup/page.tsx]
-```
-
-```
-src/components/shared/Logo.tsx (component, added)
   → Logo.tsx  → ContainerComponent.tsx  → LoginPage.tsx  → page.tsx
   → /auth/login  [src/app/auth/login/page.tsx]
 ```
 
 ```
 src/components/shared/Logo.tsx (component, added)
-  → Logo.tsx  → index.tsx  → AgentListPage.tsx  → page.tsx
-  → /agents  [src/app/(dashboard)/agents/page.tsx]
+  → Logo.tsx  → ContainerComponent.tsx  → SignupClient.tsx  → page.tsx
+  → /auth/signup  [src/app/auth/signup/page.tsx]
 ```
 
 ```
 src/components/shared/Logo.tsx (component, added)
-  → Logo.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
+  → Logo.tsx  → index.tsx  → AgentListPage.tsx  → page.tsx
+  → /agents  [src/app/(dashboard)/agents/page.tsx]
 ```
 
 ```
@@ -934,6 +928,12 @@ src/components/shared/Logo.tsx (component, added)
 src/components/shared/Logo.tsx (component, added)
   → Logo.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/shared/Logo.tsx (component, added)
+  → Logo.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -951,12 +951,6 @@ src/components/shared/RadioGroupField.tsx (component, added)
 ```
 src/components/shared/RadioGroupField.tsx (component, added)
   → RadioGroupField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/shared/RadioGroupField.tsx (component, added)
-  → RadioGroupField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -964,6 +958,12 @@ src/components/shared/RadioGroupField.tsx (component, added)
 src/components/shared/RadioGroupField.tsx (component, added)
   → RadioGroupField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/shared/RadioGroupField.tsx (component, added)
+  → RadioGroupField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -987,12 +987,6 @@ src/components/shared/SearchableSelect.tsx (component, added)
 ```
 src/components/shared/SearchableSelect.tsx (component, added)
   → SearchableSelect.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/shared/SearchableSelect.tsx (component, added)
-  → SearchableSelect.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -1000,6 +994,12 @@ src/components/shared/SearchableSelect.tsx (component, added)
 src/components/shared/SearchableSelect.tsx (component, added)
   → SearchableSelect.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/shared/SearchableSelect.tsx (component, added)
+  → SearchableSelect.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1023,12 +1023,6 @@ src/components/shared/SelectInput.tsx (component, added)
 ```
 src/components/shared/SelectInput.tsx (component, added)
   → SelectInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/shared/SelectInput.tsx (component, added)
-  → SelectInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -1036,6 +1030,12 @@ src/components/shared/SelectInput.tsx (component, added)
 src/components/shared/SelectInput.tsx (component, added)
   → SelectInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/shared/SelectInput.tsx (component, added)
+  → SelectInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1059,12 +1059,6 @@ src/components/shared/TextAreaField.tsx (component, added)
 ```
 src/components/shared/TextAreaField.tsx (component, added)
   → TextAreaField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/shared/TextAreaField.tsx (component, added)
-  → TextAreaField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -1072,6 +1066,12 @@ src/components/shared/TextAreaField.tsx (component, added)
 src/components/shared/TextAreaField.tsx (component, added)
   → TextAreaField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/shared/TextAreaField.tsx (component, added)
+  → TextAreaField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1113,12 +1113,6 @@ src/components/shared/TextInput.tsx (component, modified)
 ```
 src/components/shared/TextInput.tsx (component, modified)
   → TextInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/shared/TextInput.tsx (component, modified)
-  → TextInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -1126,6 +1120,12 @@ src/components/shared/TextInput.tsx (component, modified)
 src/components/shared/TextInput.tsx (component, modified)
   → TextInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/shared/TextInput.tsx (component, modified)
+  → TextInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1149,12 +1149,6 @@ src/components/shared/index.tsx (component, added)
 ```
 src/components/shared/index.tsx (component, added)
   → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/shared/index.tsx (component, added)
-  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -1162,6 +1156,12 @@ src/components/shared/index.tsx (component, added)
 src/components/shared/index.tsx (component, added)
   → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/shared/index.tsx (component, added)
+  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1178,18 +1178,6 @@ src/components/ui/badge.tsx (component, added)
 
 ```
 src/components/ui/badge.tsx (component, added)
-  → badge.tsx  → AgentTypeBadge.tsx  → AgentListPage.tsx  → page.tsx
-  → /agents  [src/app/(dashboard)/agents/page.tsx]
-```
-
-```
-src/components/ui/badge.tsx (component, added)
-  → badge.tsx  → AgentTypeBadge.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/ui/badge.tsx (component, added)
   → badge.tsx  → AgentTypeBadge.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
@@ -1201,15 +1189,21 @@ src/components/ui/badge.tsx (component, added)
 ```
 
 ```
-src/components/ui/button.tsx (component, added)
-  → button.tsx  → CustomButton.tsx  → page.tsx
-  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
+src/components/ui/badge.tsx (component, added)
+  → badge.tsx  → AgentTypeBadge.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
+```
+
+```
+src/components/ui/badge.tsx (component, added)
+  → badge.tsx  → AgentTypeBadge.tsx  → AgentListPage.tsx  → page.tsx
+  → /agents  [src/app/(dashboard)/agents/page.tsx]
 ```
 
 ```
 src/components/ui/button.tsx (component, added)
   → button.tsx  → CustomButton.tsx  → page.tsx
-  → /auth/reset-password  [src/app/auth/reset-password/page.tsx]
+  → /phone-numbers  [src/app/(dashboard)/phone-numbers/page.tsx]
 ```
 
 ```
@@ -1221,7 +1215,13 @@ src/components/ui/button.tsx (component, added)
 ```
 src/components/ui/button.tsx (component, added)
   → button.tsx  → CustomButton.tsx  → page.tsx
-  → /phone-numbers  [src/app/(dashboard)/phone-numbers/page.tsx]
+  → /auth/reset-password  [src/app/auth/reset-password/page.tsx]
+```
+
+```
+src/components/ui/button.tsx (component, added)
+  → button.tsx  → CustomButton.tsx  → page.tsx
+  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
 ```
 
 ```
@@ -1245,12 +1245,6 @@ src/components/ui/button.tsx (component, added)
 ```
 src/components/ui/button.tsx (component, added)
   → button.tsx  → CustomButton.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/ui/button.tsx (component, added)
-  → button.tsx  → CustomButton.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -1258,6 +1252,12 @@ src/components/ui/button.tsx (component, added)
 src/components/ui/button.tsx (component, added)
   → button.tsx  → CustomButton.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/ui/button.tsx (component, added)
+  → button.tsx  → CustomButton.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1274,8 +1274,8 @@ src/components/ui/card.tsx (component, added)
 
 ```
 src/components/ui/checkbox.tsx (component, added)
-  → checkbox.tsx  → AssignPhoneNumberModal.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
+  → checkbox.tsx  → CheckboxField.tsx  → index.tsx  → page.tsx
+  → /settings  [src/app/(dashboard)/settings/page.tsx]
 ```
 
 ```
@@ -1292,8 +1292,8 @@ src/components/ui/checkbox.tsx (component, added)
 
 ```
 src/components/ui/checkbox.tsx (component, added)
-  → checkbox.tsx  → CheckboxField.tsx  → index.tsx  → page.tsx
-  → /settings  [src/app/(dashboard)/settings/page.tsx]
+  → checkbox.tsx  → AssignPhoneNumberModal.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1323,12 +1323,6 @@ src/components/ui/dialog.tsx (component, added)
 ```
 src/components/ui/dialog.tsx (component, added)
   → dialog.tsx  → CustomModal.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/ui/dialog.tsx (component, added)
-  → dialog.tsx  → CustomModal.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -1336,6 +1330,12 @@ src/components/ui/dialog.tsx (component, added)
 src/components/ui/dialog.tsx (component, added)
   → dialog.tsx  → CustomModal.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/ui/dialog.tsx (component, added)
+  → dialog.tsx  → CustomModal.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1383,12 +1383,6 @@ src/components/ui/input.tsx (component, added)
 ```
 src/components/ui/input.tsx (component, added)
   → input.tsx  → TextInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/ui/input.tsx (component, added)
-  → input.tsx  → TextInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -1396,6 +1390,12 @@ src/components/ui/input.tsx (component, added)
 src/components/ui/input.tsx (component, added)
   → input.tsx  → TextInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/ui/input.tsx (component, added)
+  → input.tsx  → TextInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1418,7 +1418,7 @@ src/components/ui/label.tsx (component, added)
 
 ```
 src/components/ui/label.tsx (component, added)
-  → label.tsx  → SelectInput.tsx  → index.tsx  → page.tsx
+  → label.tsx  → SearchableSelect.tsx  → index.tsx  → page.tsx
   → /settings  [src/app/(dashboard)/settings/page.tsx]
 ```
 
@@ -1430,31 +1430,31 @@ src/components/ui/label.tsx (component, added)
 
 ```
 src/components/ui/label.tsx (component, added)
-  → label.tsx  → SelectInput.tsx  → index.tsx  → AgentListPage.tsx  → page.tsx
+  → label.tsx  → SearchableSelect.tsx  → index.tsx  → AgentListPage.tsx  → page.tsx
   → /agents  [src/app/(dashboard)/agents/page.tsx]
 ```
 
 ```
 src/components/ui/label.tsx (component, added)
-  → label.tsx  → SelectInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/ui/label.tsx (component, added)
-  → label.tsx  → SelectInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → label.tsx  → SearchableSelect.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
 ```
 src/components/ui/label.tsx (component, added)
-  → label.tsx  → SelectInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → label.tsx  → SearchableSelect.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
 ```
 
 ```
 src/components/ui/label.tsx (component, added)
-  → label.tsx  → SelectInput.tsx  → index.tsx  → LoginPage.tsx  → page.tsx
+  → label.tsx  → SearchableSelect.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
+```
+
+```
+src/components/ui/label.tsx (component, added)
+  → label.tsx  → SearchableSelect.tsx  → index.tsx  → LoginPage.tsx  → page.tsx
   → /auth/login  [src/app/auth/login/page.tsx]
 ```
 
@@ -1473,12 +1473,6 @@ src/components/ui/popover.tsx (component, added)
 ```
 src/components/ui/popover.tsx (component, added)
   → popover.tsx  → SearchableSelect.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/ui/popover.tsx (component, added)
-  → popover.tsx  → SearchableSelect.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -1486,6 +1480,12 @@ src/components/ui/popover.tsx (component, added)
 src/components/ui/popover.tsx (component, added)
   → popover.tsx  → SearchableSelect.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/ui/popover.tsx (component, added)
+  → popover.tsx  → SearchableSelect.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1509,12 +1509,6 @@ src/components/ui/radio-group.tsx (component, added)
 ```
 src/components/ui/radio-group.tsx (component, added)
   → radio-group.tsx  → RadioGroupField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/ui/radio-group.tsx (component, added)
-  → radio-group.tsx  → RadioGroupField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -1522,6 +1516,12 @@ src/components/ui/radio-group.tsx (component, added)
 src/components/ui/radio-group.tsx (component, added)
   → radio-group.tsx  → RadioGroupField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/ui/radio-group.tsx (component, added)
+  → radio-group.tsx  → RadioGroupField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1545,12 +1545,6 @@ src/components/ui/select.tsx (component, added)
 ```
 src/components/ui/select.tsx (component, added)
   → select.tsx  → SelectInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/ui/select.tsx (component, added)
-  → select.tsx  → SelectInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -1558,6 +1552,12 @@ src/components/ui/select.tsx (component, added)
 src/components/ui/select.tsx (component, added)
   → select.tsx  → SelectInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/ui/select.tsx (component, added)
+  → select.tsx  → SelectInput.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1569,12 +1569,6 @@ src/components/ui/select.tsx (component, added)
 ```
 src/components/ui/separator.tsx (component, added)
   → separator.tsx  → promptPage.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/ui/separator.tsx (component, added)
-  → separator.tsx  → promptPage.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -1582,6 +1576,12 @@ src/components/ui/separator.tsx (component, added)
 src/components/ui/separator.tsx (component, added)
   → separator.tsx  → promptPage.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/ui/separator.tsx (component, added)
+  → separator.tsx  → promptPage.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1605,12 +1605,6 @@ src/components/ui/separator.tsx (component, added)
 ```
 src/components/ui/slider.tsx (component, added)
   → slider.tsx  → VoiceTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/ui/slider.tsx (component, added)
-  → slider.tsx  → VoiceTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -1618,6 +1612,12 @@ src/components/ui/slider.tsx (component, added)
 src/components/ui/slider.tsx (component, added)
   → slider.tsx  → VoiceTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/ui/slider.tsx (component, added)
+  → slider.tsx  → VoiceTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1629,12 +1629,6 @@ src/components/ui/switch.tsx (component, added)
 ```
 src/components/ui/switch.tsx (component, added)
   → switch.tsx  → CallConfigurationTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/ui/switch.tsx (component, added)
-  → switch.tsx  → CallConfigurationTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -1642,6 +1636,12 @@ src/components/ui/switch.tsx (component, added)
 src/components/ui/switch.tsx (component, added)
   → switch.tsx  → CallConfigurationTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/ui/switch.tsx (component, added)
+  → switch.tsx  → CallConfigurationTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1659,12 +1659,6 @@ src/components/ui/table.tsx (component, added)
 ```
 src/components/ui/table.tsx (component, added)
   → table.tsx  → CustomTable.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/ui/table.tsx (component, added)
-  → table.tsx  → CustomTable.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -1672,6 +1666,12 @@ src/components/ui/table.tsx (component, added)
 src/components/ui/table.tsx (component, added)
   → table.tsx  → CustomTable.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/ui/table.tsx (component, added)
+  → table.tsx  → CustomTable.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1701,12 +1701,6 @@ src/components/ui/textarea.tsx (component, added)
 ```
 src/components/ui/textarea.tsx (component, added)
   → textarea.tsx  → TextAreaField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/components/ui/textarea.tsx (component, added)
-  → textarea.tsx  → TextAreaField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -1714,6 +1708,12 @@ src/components/ui/textarea.tsx (component, added)
 src/components/ui/textarea.tsx (component, added)
   → textarea.tsx  → TextAreaField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/components/ui/textarea.tsx (component, added)
+  → textarea.tsx  → TextAreaField.tsx  → index.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1731,13 +1731,13 @@ src/constants/index.ts (config, modified)
 ```
 src/constants/index.ts (config, modified)
   → index.ts  → axios.ts  → page.tsx
-  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
+  → /auth/reset-password  [src/app/auth/reset-password/page.tsx]
 ```
 
 ```
 src/constants/index.ts (config, modified)
   → index.ts  → axios.ts  → page.tsx
-  → /auth/reset-password  [src/app/auth/reset-password/page.tsx]
+  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
 ```
 
 ```
@@ -1755,12 +1755,6 @@ src/constants/index.ts (config, modified)
 ```
 src/constants/index.ts (config, modified)
   → index.ts  → axios.ts  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/constants/index.ts (config, modified)
-  → index.ts  → axios.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -1768,6 +1762,12 @@ src/constants/index.ts (config, modified)
 src/constants/index.ts (config, modified)
   → index.ts  → axios.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/constants/index.ts (config, modified)
+  → index.ts  → axios.ts  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1785,12 +1785,6 @@ src/constants/index.ts (config, modified)
 ```
 src/services/agentsService.ts (service, modified)
   → agentsService.ts  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/services/agentsService.ts (service, modified)
-  → agentsService.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -1798,6 +1792,12 @@ src/services/agentsService.ts (service, modified)
 src/services/agentsService.ts (service, modified)
   → agentsService.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/services/agentsService.ts (service, modified)
+  → agentsService.ts  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1833,12 +1833,6 @@ src/services/channelService.ts (service, added)
 ```
 src/services/phoneNumberService.ts (service, added)
   → phoneNumberService.ts  → AssignPhoneNumberModal.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
-```
-
-```
-src/services/phoneNumberService.ts (service, added)
-  → phoneNumberService.ts  → AssignPhoneNumberModal.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]
 ```
 
@@ -1849,8 +1843,8 @@ src/services/phoneNumberService.ts (service, added)
 ```
 
 ```
-src/services/providerService.ts (service, added)
-  → providerService.ts  → ProviderAtom.tsx  → AgentFormPage.tsx  → page.tsx
+src/services/phoneNumberService.ts (service, added)
+  → phoneNumberService.ts  → AssignPhoneNumberModal.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
@@ -1867,8 +1861,8 @@ src/services/providerService.ts (service, added)
 ```
 
 ```
-src/services/voiceService.ts (service, added)
-  → voiceService.ts  → VoiceTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
+src/services/providerService.ts (service, added)
+  → providerService.ts  → ProviderAtom.tsx  → AgentFormPage.tsx  → page.tsx
   → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
@@ -1885,8 +1879,8 @@ src/services/voiceService.ts (service, added)
 ```
 
 ```
-src/utils/agentFormUtils.ts (util, renamed)
-  → agentFormUtils.ts  → AgentFormPage.tsx  → page.tsx
+src/services/voiceService.ts (service, added)
+  → voiceService.ts  → VoiceTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
@@ -1903,9 +1897,9 @@ src/utils/agentFormUtils.ts (util, renamed)
 ```
 
 ```
-src/utils/axios.ts (util, modified)
-  → axios.ts  → page.tsx
-  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
+src/utils/agentFormUtils.ts (util, renamed)
+  → agentFormUtils.ts  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -1916,14 +1910,14 @@ src/utils/axios.ts (util, modified)
 
 ```
 src/utils/axios.ts (util, modified)
-  → axios.ts  → SignupClient.tsx  → page.tsx
-  → /auth/signup  [src/app/auth/signup/page.tsx]
+  → axios.ts  → page.tsx
+  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
 ```
 
 ```
 src/utils/axios.ts (util, modified)
-  → axios.ts  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
+  → axios.ts  → helper.tsx  → page.tsx
+  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
 ```
 
 ```
@@ -1940,14 +1934,20 @@ src/utils/axios.ts (util, modified)
 
 ```
 src/utils/axios.ts (util, modified)
+  → axios.ts  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
+```
+
+```
+src/utils/axios.ts (util, modified)
   → axios.ts  → Apikeys.tsx  → page.tsx
   → /settings  [src/app/(dashboard)/settings/page.tsx]
 ```
 
 ```
 src/utils/axios.ts (util, modified)
-  → axios.ts  → helper.tsx  → page.tsx
-  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
+  → axios.ts  → SignupClient.tsx  → page.tsx
+  → /auth/signup  [src/app/auth/signup/page.tsx]
 ```
 
 ```
@@ -1970,8 +1970,26 @@ src/utils/cn.ts (util, added)
 
 ```
 src/utils/cn.ts (util, added)
-  → cn.ts  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
+  → cn.ts  → CustomButton.tsx  → page.tsx
+  → /phone-numbers  [src/app/(dashboard)/phone-numbers/page.tsx]
+```
+
+```
+src/utils/cn.ts (util, added)
+  → cn.ts  → CustomButton.tsx  → page.tsx
+  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
+```
+
+```
+src/utils/cn.ts (util, added)
+  → cn.ts  → CustomButton.tsx  → page.tsx
+  → /auth/reset-password  [src/app/auth/reset-password/page.tsx]
+```
+
+```
+src/utils/cn.ts (util, added)
+  → cn.ts  → CustomButton.tsx  → page.tsx
+  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
 ```
 
 ```
@@ -1988,44 +2006,26 @@ src/utils/cn.ts (util, added)
 
 ```
 src/utils/cn.ts (util, added)
+  → cn.ts  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
+```
+
+```
+src/utils/cn.ts (util, added)
   → cn.ts  → switch.tsx  → page.tsx
   → /settings  [src/app/(dashboard)/settings/page.tsx]
 ```
 
 ```
 src/utils/cn.ts (util, added)
-  → cn.ts  → TextInput.tsx  → page.tsx
-  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
-```
-
-```
-src/utils/cn.ts (util, added)
-  → cn.ts  → TextInput.tsx  → page.tsx
-  → /auth/reset-password  [src/app/auth/reset-password/page.tsx]
-```
-
-```
-src/utils/cn.ts (util, added)
-  → cn.ts  → Form.tsx  → page.tsx
-  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
-```
-
-```
-src/utils/cn.ts (util, added)
-  → cn.ts  → CustomButton.tsx  → page.tsx
-  → /phone-numbers  [src/app/(dashboard)/phone-numbers/page.tsx]
+  → cn.ts  → CustomButton.tsx  → SignupClient.tsx  → page.tsx
+  → /auth/signup  [src/app/auth/signup/page.tsx]
 ```
 
 ```
 src/utils/cn.ts (util, added)
   → cn.ts  → AgentTypeBadge.tsx  → AgentListPage.tsx  → page.tsx
   → /agents  [src/app/(dashboard)/agents/page.tsx]
-```
-
-```
-src/utils/cn.ts (util, added)
-  → cn.ts  → TextInput.tsx  → SignupClient.tsx  → page.tsx
-  → /auth/signup  [src/app/auth/signup/page.tsx]
 ```
 
 ```
@@ -2037,7 +2037,7 @@ src/utils/cn.ts (util, added)
 ```
 src/utils/helpers.ts (util, added)
   → helpers.ts  → page.tsx
-  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
+  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
 ```
 
 ```
@@ -2049,25 +2049,13 @@ src/utils/helpers.ts (util, added)
 ```
 src/utils/helpers.ts (util, added)
   → helpers.ts  → page.tsx
-  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
+  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
 ```
 
 ```
 src/utils/helpers.ts (util, added)
-  → helpers.ts  → AgentListPage.tsx  → page.tsx
-  → /agents  [src/app/(dashboard)/agents/page.tsx]
-```
-
-```
-src/utils/helpers.ts (util, added)
-  → helpers.ts  → SignupClient.tsx  → page.tsx
-  → /auth/signup  [src/app/auth/signup/page.tsx]
-```
-
-```
-src/utils/helpers.ts (util, added)
-  → helpers.ts  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
+  → helpers.ts  → Integrations.tsx  → page.tsx
+  → /settings  [src/app/(dashboard)/settings/page.tsx]
 ```
 
 ```
@@ -2080,6 +2068,12 @@ src/utils/helpers.ts (util, added)
 src/utils/helpers.ts (util, added)
   → helpers.ts  → AgentFormPage.tsx  → page.tsx
   → /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]
+```
+
+```
+src/utils/helpers.ts (util, added)
+  → helpers.ts  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
 ```
 
 ```
@@ -2090,14 +2084,14 @@ src/utils/helpers.ts (util, added)
 
 ```
 src/utils/helpers.ts (util, added)
-  → helpers.ts  → Integrations.tsx  → page.tsx
-  → /settings  [src/app/(dashboard)/settings/page.tsx]
+  → helpers.ts  → SignupClient.tsx  → page.tsx
+  → /auth/signup  [src/app/auth/signup/page.tsx]
 ```
 
 ```
-src/utils/selectUtils.ts (util, added)
-  → selectUtils.ts  → VoiceTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
+src/utils/helpers.ts (util, added)
+  → helpers.ts  → AgentListPage.tsx  → page.tsx
+  → /agents  [src/app/(dashboard)/agents/page.tsx]
 ```
 
 ```
@@ -2113,9 +2107,15 @@ src/utils/selectUtils.ts (util, added)
 ```
 
 ```
+src/utils/selectUtils.ts (util, added)
+  → selectUtils.ts  → VoiceTab.tsx  → index.ts  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
+```
+
+```
 src/utils/toast.tsx (util, added)
   → toast.tsx  → page.tsx
-  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
+  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
 ```
 
 ```
@@ -2127,25 +2127,13 @@ src/utils/toast.tsx (util, added)
 ```
 src/utils/toast.tsx (util, added)
   → toast.tsx  → page.tsx
-  → /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]
+  → /auth/verify_signup  [src/app/auth/verify_signup/page.tsx]
 ```
 
 ```
 src/utils/toast.tsx (util, added)
-  → toast.tsx  → AgentListPage.tsx  → page.tsx
-  → /agents  [src/app/(dashboard)/agents/page.tsx]
-```
-
-```
-src/utils/toast.tsx (util, added)
-  → toast.tsx  → SignupClient.tsx  → page.tsx
-  → /auth/signup  [src/app/auth/signup/page.tsx]
-```
-
-```
-src/utils/toast.tsx (util, added)
-  → toast.tsx  → AgentFormPage.tsx  → page.tsx
-  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
+  → toast.tsx  → Integrations.tsx  → page.tsx
+  → /settings  [src/app/(dashboard)/settings/page.tsx]
 ```
 
 ```
@@ -2162,12 +2150,24 @@ src/utils/toast.tsx (util, added)
 
 ```
 src/utils/toast.tsx (util, added)
+  → toast.tsx  → AgentFormPage.tsx  → page.tsx
+  → /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]
+```
+
+```
+src/utils/toast.tsx (util, added)
   → toast.tsx  → LoginPage.tsx  → page.tsx
   → /auth/login  [src/app/auth/login/page.tsx]
 ```
 
 ```
 src/utils/toast.tsx (util, added)
-  → toast.tsx  → Integrations.tsx  → page.tsx
-  → /settings  [src/app/(dashboard)/settings/page.tsx]
+  → toast.tsx  → SignupClient.tsx  → page.tsx
+  → /auth/signup  [src/app/auth/signup/page.tsx]
+```
+
+```
+src/utils/toast.tsx (util, added)
+  → toast.tsx  → AgentListPage.tsx  → page.tsx
+  → /agents  [src/app/(dashboard)/agents/page.tsx]
 ```

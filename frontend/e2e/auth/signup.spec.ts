@@ -106,19 +106,19 @@ test.describe('Signup Page', () => {
     });
 
     test('shows the "Log in" link', async ({ page }) => {
-      await expect(page.getByRole('link', { name: 'Welcome back' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Log in' })).toBeVisible();
     });
   });
 
   // ── 2. Navigation ──────────────────────────────────────────────────────────
   test.describe('Navigation', () => {
     test('navigates to the login page via "Log in" link', async ({ page }) => {
-      await page.getByRole('link', { name: 'Welcome back' }).click();
+      await page.getByRole('link', { name: 'Log in' }).click();
       await expect(page).toHaveURL(/\/auth\/login/, { timeout: 10_000 });
     });
 
     test('renders the "Log in" link with correct href', async ({ page }) => {
-      await expect(page.getByRole('link', { name: 'Welcome back' })).toHaveAttribute(
+      await expect(page.getByRole('link', { name: 'Log in' })).toHaveAttribute(
         'href',
         '/auth/login',
       );

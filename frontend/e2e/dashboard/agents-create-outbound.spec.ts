@@ -58,29 +58,27 @@ test.describe('Create Outbound Agent Page', () => {
 
   // ── 1. Page Rendering ───────────────────────────────────────────────────────
   test.describe('Page Rendering', () => {
-    test('shows agent name in sidebar', async ({ page }) => {
-      await expect(page.getByText('My Outbound Assistant')).toBeVisible();
+    test('shows agent name', async ({ page }) => {
+      await expect(
+        page.getByRole('heading', { name: 'My Outbound Assistant', level: 1 }),
+      ).toBeVisible();
     });
 
-    test('shows Outbound badge in sidebar', async ({ page }) => {
-      await expect(page.locator('aside').getByText('Outbound', { exact: true })).toBeVisible();
+    test('shows Outbound badge', async ({ page }) => {
+      await expect(page.getByText('Outbound', { exact: true })).toBeVisible();
     });
 
     test('shows status bar about making calls', async ({ page }) => {
       await expect(page.getByText(/can't make calls/)).toBeVisible();
     });
 
-    test('shows sidebar menu items Configure and Prompt', async ({ page }) => {
-      await expect(page.getByRole('button', { name: 'Configure' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Prompt' })).toBeVisible();
+    test('shows all tabs including Prompt', async ({ page }) => {
+      await expect(page.getByRole('tab', { name: /general/i })).toBeVisible();
+      await expect(page.getByRole('tab', { name: /prompt/i })).toBeVisible();
     });
 
-    test('shows Configure heading', async ({ page }) => {
-      await expect(page.getByRole('heading', { name: 'Configure', level: 2 })).toBeVisible();
-    });
-
-    test('shows Back to Agents button', async ({ page }) => {
-      await expect(page.getByRole('button', { name: /back to agents/i })).toBeVisible();
+    test('shows Agents breadcrumb button', async ({ page }) => {
+      await expect(page.getByRole('button', { name: 'Agents' })).toBeVisible();
     });
 
     test('shows Test Agent button', async ({ page }) => {
@@ -136,7 +134,9 @@ test.describe('Create Outbound Agent Page', () => {
       const nameInput = page.locator('input[name="name"]');
       await nameInput.fill('Custom Outbound Agent');
       await expect(nameInput).toHaveValue('Custom Outbound Agent');
-      await expect(page.locator('aside').getByText('Custom Outbound Agent')).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'Custom Outbound Agent', level: 1 }),
+      ).toBeVisible();
     });
 
     test('allows editing the description field', async ({ page }) => {
@@ -297,7 +297,7 @@ test.describe('Create Outbound Agent Page', () => {
   // ── 6. Prompt Editor ───────────────────────────────────────────────────────
   test.describe('Prompt Editor', () => {
     test.beforeEach(async ({ page }) => {
-      await page.getByRole('button', { name: 'Prompt' }).click();
+      await page.getByRole('tab', { name: /prompt/i }).click();
     });
 
     test('shows TipTap editor when Prompt menu is selected', async ({ page }) => {
@@ -316,15 +316,6 @@ test.describe('Create Outbound Agent Page', () => {
   // ── 7. Tab Navigation ──────────────────────────────────────────────────────
   test.describe('Tab Navigation', () => {
     test('switches between all tabs', async ({ page }) => {
-      if (
-        !(await page
-          .getByRole('tab', { name: /general/i })
-          .isVisible()
-          .catch(() => false))
-      ) {
-        await page.getByRole('button', { name: 'Configure' }).click();
-      }
-
       await page.getByRole('tab', { name: /general/i }).click();
       await expect(page.getByText('Agent Name', { exact: true })).toBeVisible();
 
@@ -335,17 +326,10 @@ test.describe('Create Outbound Agent Page', () => {
       await expect(page.getByText('Call Recording')).toBeVisible();
 
       await page.getByRole('tab', { name: /assign number/i }).click();
-      await expect(page.getByRole('heading', { name: 'Assign Number' })).toBeVisible();
-    });
+      await expect(page.getByRole('heading', { name: 'Phone Numbers' })).toBeVisible();
 
-    test('switches between Configure and Prompt menus via sidebar', async ({ page }) => {
-      await page.getByRole('button', { name: 'Prompt' }).click();
-      await expect(page.getByRole('heading', { name: 'Prompt', level: 2 })).toBeVisible();
+      await page.getByRole('tab', { name: /prompt/i }).click();
       await expect(page.locator('.ProseMirror')).toBeVisible();
-
-      await page.getByRole('button', { name: 'Configure' }).click();
-      await expect(page.getByRole('heading', { name: 'Configure', level: 2 })).toBeVisible();
-      await expect(page.getByRole('tab', { name: /general/i })).toBeVisible();
     });
   });
 
@@ -419,8 +403,8 @@ test.describe('Create Outbound Agent Page', () => {
       const transcriptionRow = page.getByText('Call Transcription').locator('..').locator('..');
       await transcriptionRow.getByRole('switch').click();
 
-      // ── Prompt ──
-      await page.getByRole('button', { name: 'Prompt' }).click();
+      // ── Prompt tab ──
+      await page.getByRole('tab', { name: /prompt/i }).click();
       const editor = page.locator('.ProseMirror');
       await editor.click();
       await page.keyboard.type('You are an outbound sales agent.');
@@ -536,8 +520,8 @@ test.describe('Create Outbound Agent Page', () => {
 
   // ── 10. Back Navigation ─────────────────────────────────────────────────────
   test.describe('Back Navigation', () => {
-    test('navigates to /agents when clicking Back to Agents', async ({ page }) => {
-      await page.getByRole('button', { name: /back to agents/i }).click();
+    test('navigates to /agents when clicking Agents breadcrumb', async ({ page }) => {
+      await page.getByRole('button', { name: 'Agents' }).click();
       await expect(page).toHaveURL(/\/agents(?:\?|$)/, { timeout: 10_000 });
     });
   });
