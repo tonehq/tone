@@ -254,8 +254,12 @@ test.describe('Edit Agent Page', () => {
       await page.getByRole('tab', { name: /voice/i }).click();
     });
 
-    test('shows language as English from API', async ({ page }) => {
-      await expect(page.getByText(/English/).first()).toBeVisible();
+    test('shows language field when voice provider is set', async ({ page }) => {
+      // Language field is visible because the mock agent has tts_service_id set
+      await expect(page.getByRole('heading', { name: 'Language' })).toBeVisible();
+      await expect(
+        page.getByText('Select a language to filter available voices.'),
+      ).toBeVisible();
     });
 
     test('shows voice speed at 70 from API', async ({ page }) => {
@@ -665,6 +669,11 @@ test.describe('Edit Agent Page', () => {
 
   // ── 11. Delete Agent ───────────────────────────────────────────────────────
   test.describe('Delete Agent', () => {
+    test.beforeEach(async ({ page }) => {
+      // Ensure we're on the General tab where the Delete Agent button lives
+      await page.getByRole('tab', { name: /general/i }).click();
+    });
+
     test('opens delete confirmation modal from General tab', async ({ page }) => {
       await page.getByRole('button', { name: 'Delete Agent' }).scrollIntoViewIfNeeded();
       await page.getByRole('button', { name: 'Delete Agent' }).click();

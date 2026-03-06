@@ -194,7 +194,6 @@ test.describe('Create Outbound Agent Page', () => {
     });
 
     test('shows all Voice tab form row labels', async ({ page }) => {
-      await expect(page.getByRole('heading', { name: 'Language' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Voice Provider' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'STT Provider' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Voice Speed' })).toBeVisible();
@@ -202,10 +201,13 @@ test.describe('Create Outbound Agent Page', () => {
 
       await page.getByText('Speech Recognition').first().scrollIntoViewIfNeeded();
       await expect(page.getByRole('heading', { name: 'Speech Recognition' })).toBeVisible();
+
+      // Language is hidden until a Voice Provider is selected
+      await expect(page.getByRole('heading', { name: 'Language' })).not.toBeVisible();
     });
 
-    test('defaults language to English', async ({ page }) => {
-      await expect(page.getByText(/English/).first()).toBeVisible();
+    test('language field is hidden when no voice provider selected', async ({ page }) => {
+      await expect(page.getByRole('heading', { name: 'Language' })).not.toBeVisible();
     });
 
     test('defaults voice speed slider to 50', async ({ page }) => {
@@ -486,8 +488,21 @@ test.describe('Create Outbound Agent Page', () => {
       await page.getByRole('button', { name: /save changes/i }).click();
       await expect(page).toHaveURL(/\/agents(?:\?|$)/, { timeout: 15_000 });
 
+      // Wait for the agent list to finish loading
+      await page.waitForFunction(
+        () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
+        null,
+        { timeout: 20_000 },
+      );
+
+      // Search for the created agent (it may be on a later pagination page)
+      await page.getByPlaceholder('Search agents...').fill(agentName);
+
       await expect(page.getByText(agentName).first()).toBeVisible({ timeout: 10_000 });
       await expect(page.locator('tbody').getByText('Outbound').first()).toBeVisible();
+
+      // Navigate back to create page so subsequent tests aren't affected
+      await page.goto('/agents/create/outbound');
     });
   });
 

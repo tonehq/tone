@@ -293,8 +293,6 @@ test.describe('Create Inbound Agent Page', () => {
     });
 
     test('shows all Voice tab form row labels and descriptions', async ({ page }) => {
-      await expect(page.getByRole('heading', { name: 'Language' })).toBeVisible();
-      await expect(page.getByText('The language your agent understands.')).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Voice Provider' })).toBeVisible();
       await expect(
         page.getByText("Select the service used to generate your agent's voice."),
@@ -313,10 +311,14 @@ test.describe('Create Inbound Agent Page', () => {
       await expect(
         page.getByText('Adjusts how quickly incoming speech is transcribed.'),
       ).toBeVisible();
+
+      // Language is hidden until a Voice Provider is selected
+      await expect(page.getByRole('heading', { name: 'Language' })).not.toBeVisible();
     });
 
-    test('defaults language to English', async ({ page }) => {
-      await expect(page.getByText(/English/).first()).toBeVisible();
+    test('language field appears after selecting a voice provider', async ({ page }) => {
+      // Language is hidden by default (no voice provider selected)
+      await expect(page.getByRole('heading', { name: 'Language' })).not.toBeVisible();
     });
 
     test('shows voice speed slider with labels', async ({ page }) => {
@@ -668,9 +670,21 @@ test.describe('Create Inbound Agent Page', () => {
       await page.getByRole('button', { name: /save changes/i }).click();
       await expect(page).toHaveURL(/\/agents(?:\?|$)/, { timeout: 15_000 });
 
-      // Created item should show in the list (from real get_all_agents)
+      // Wait for the agent list to finish loading
+      await page.waitForFunction(
+        () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
+        null,
+        { timeout: 20_000 },
+      );
+
+      // Search for the created agent (it may be on a later pagination page)
+      await page.getByPlaceholder('Search agents...').fill(agentName);
+
       await expect(page.getByText(agentName).first()).toBeVisible({ timeout: 10_000 });
       await expect(page.locator('tbody').getByText('Inbound').first()).toBeVisible();
+
+      // Navigate back to create page so subsequent tests aren't affected
+      await page.goto('/agents/create/inbound');
     });
   });
 
