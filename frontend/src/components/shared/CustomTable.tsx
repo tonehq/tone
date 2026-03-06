@@ -44,7 +44,7 @@ function CustomTableInner<TRow>({
   dataSource,
   rowKey,
   loading = false,
-  skeletonRows = 5,
+  skeletonRows = 10,
   searchable = false,
   searchPlaceholder = 'Search...',
   pagination,
@@ -54,33 +54,35 @@ function CustomTableInner<TRow>({
 }: CustomTableProps<TRow>) {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortState>({ columnKey: null, direction: null });
-  const [internalPage, setInternalPage] = useState(1);
-  const [internalPageSize, setInternalPageSize] = useState(DEFAULT_PAGE_SIZE);
 
+  const paginationConfig = pagination || null;
   const paginationEnabled = pagination !== false;
-  const isControlled = paginationEnabled && pagination != null;
+  const isControlled = paginationConfig != null && typeof paginationConfig.onChange === 'function';
 
-  const currentPage = isControlled ? pagination.current : internalPage;
-  const pageSize = isControlled ? pagination.pageSize : internalPageSize;
-  const pageSizeOptions = isControlled
-    ? (pagination.pageSizeOptions ?? DEFAULT_PAGE_SIZE_OPTIONS)
-    : DEFAULT_PAGE_SIZE_OPTIONS;
+  const [internalPage, setInternalPage] = useState(paginationConfig?.current ?? 1);
+  const [internalPageSize, setInternalPageSize] = useState(
+    paginationConfig?.pageSize ?? DEFAULT_PAGE_SIZE,
+  );
+
+  const currentPage = isControlled ? (paginationConfig.current ?? 1) : internalPage;
+  const pageSize = isControlled
+    ? (paginationConfig.pageSize ?? DEFAULT_PAGE_SIZE)
+    : internalPageSize;
+  const pageSizeOptions = paginationConfig?.pageSizeOptions ?? DEFAULT_PAGE_SIZE_OPTIONS;
 
   const setPage = (page: number) => {
     if (isControlled) {
-      pagination.onChange?.(page, pageSize);
-    } else {
-      setInternalPage(page);
+      paginationConfig.onChange!(page, pageSize);
     }
+    setInternalPage(page);
   };
 
   const setPageSize = (size: number) => {
     if (isControlled) {
-      pagination.onChange?.(1, size);
-    } else {
-      setInternalPageSize(size);
-      setInternalPage(1);
+      paginationConfig.onChange!(1, size);
     }
+    setInternalPageSize(size);
+    setInternalPage(1);
   };
 
   const getRowKey = (record: TRow): string | number => {
@@ -127,8 +129,7 @@ function CustomTableInner<TRow>({
     });
   }, [filteredData, sort, columns]);
 
-  const totalItems =
-    isControlled && pagination.total != null ? pagination.total : sortedData.length;
+  const totalItems = paginationConfig?.total ?? sortedData.length;
   const totalPages = paginationEnabled ? Math.max(1, Math.ceil(totalItems / pageSize)) : 1;
   const paginatedData = paginationEnabled
     ? sortedData.slice((currentPage - 1) * pageSize, currentPage * pageSize)
@@ -155,7 +156,7 @@ function CustomTableInner<TRow>({
   };
 
   return (
-    <div className={cn('flex flex-col gap-5', className)}>
+    <div className={cn('flex flex-col gap-5 min-h-0 flex-1', className)}>
       {searchable && (
         <div className="max-w-xs">
           <TextInput
@@ -171,9 +172,9 @@ function CustomTableInner<TRow>({
         </div>
       )}
 
-      <div className="rounded-md border border-border bg-card shadow-sm overflow-hidden">
+      <div className="flex flex-1 flex-col min-h-0 overflow-hidden rounded-md border border-border bg-card shadow-sm">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-card">
             <TableRow className="border-b border-border bg-muted/40 hover:bg-muted/40">
               {visibleColumns.map((col) => (
                 <TableHead

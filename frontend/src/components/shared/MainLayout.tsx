@@ -33,7 +33,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
       : SIDEBAR_WIDTH_COLLAPSED;
 
   return (
-    <div className="flex w-full min-h-screen">
+    <div className="flex w-full h-screen">
       <SidebarComponent
         isExpanded={sidebarExpanded}
         onToggle={() => setSidebarExpanded((prev) => !prev)}
@@ -60,7 +60,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
       )}
 
       <main
-        className="flex-1 min-h-screen overflow-auto bg-background transition-[margin-left,width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+        className="flex-1 h-full overflow-hidden bg-background transition-[margin-left,width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
         style={{
           width: isMobile ? '100%' : `calc(100% - ${sidebarWidth}px)`,
           marginLeft: isMobile ? 0 : sidebarWidth,

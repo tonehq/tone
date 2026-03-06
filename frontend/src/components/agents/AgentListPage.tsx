@@ -108,7 +108,7 @@ const AgentListPage: React.FC = () => {
   ];
 
   return (
-    <div className="h-full p-6">
+    <div className="flex h-full flex-col p-6">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-foreground">Agents</h1>
         <CustomButton type="primary" icon={<Plus />} onClick={() => setModalOpen(true)}>
@@ -124,7 +124,6 @@ const AgentListPage: React.FC = () => {
         onRowClick={handleEdit}
         searchable
         searchPlaceholder="Search agents..."
-        pagination={{ current: 1, pageSize: 10, pageSizeOptions: [10, 20, 50] }}
         emptyState={
           <div className="flex flex-col items-center gap-3">
             <p className="text-muted-foreground">No agents yet</p>
