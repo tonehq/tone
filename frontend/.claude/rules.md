@@ -14,7 +14,7 @@ Every skill (`generate-tests`, `code-review`, `generate-feature-docs`) **must** 
 | --------------------- | -------------------------------------------------------------------------- |
 | Test failure          | Playwright test fails with selector/timeout/assertion error                |
 | Test generation error | Generated spec has syntax errors, duplicate titles, strict-mode violations |
-| Doc generation error  | Feature doc missing sections, unresolvable imports, file not found          |
+| Doc generation error  | Feature doc missing sections, unresolvable imports, file not found         |
 | Code review finding   | Critical or high-priority issues found during `/code-review`               |
 | Skill execution error | Skill cannot run (dev server down, missing deps, config issue)             |
 | Fix applied           | A previously logged error was resolved                                     |
@@ -228,8 +228,8 @@ Certain UI elements have canonical component implementations. Always use these i
 
 ### Required domain components
 
-| Need | Use | Do NOT use |
-| --- | --- | --- |
+| Need                              | Use                                                        | Do NOT use                                                   |
+| --------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------ |
 | Inbound/Outbound agent type badge | `AgentTypeBadge` from `@/components/agents/AgentTypeBadge` | Inline `Badge` with custom emerald/violet colors, MUI `Chip` |
 
 ### Rules
@@ -259,20 +259,20 @@ Use a **55% / 40%** left-right split with a gap between label and control:
 
 ### Spacing tokens
 
-| Element | Class | Value |
-| --- | --- | --- |
-| Between form rows | `mb-6` | 1.5rem vertical |
-| Section container padding | `py-4` | 1rem vertical |
-| Tab content area | `px-8 py-6` | 2rem / 1.5rem |
-| Sidebar nav item spacing | `space-y-0.5` | 0.125rem between items |
+| Element                       | Class                                | Value                      |
+| ----------------------------- | ------------------------------------ | -------------------------- |
+| Between form rows             | `mb-6`                               | 1.5rem vertical            |
+| Section container padding     | `py-4`                               | 1rem vertical              |
+| Tab content area              | `px-8 py-6`                          | 2rem / 1.5rem              |
+| Sidebar nav item spacing      | `space-y-0.5`                        | 0.125rem between items     |
 | Description text below labels | `mt-0.5 text-[13px] leading-relaxed` | Tighter to label, readable |
-| Alert/banner bar | `px-6 py-2.5` | Compact horizontal bar |
+| Alert/banner bar              | `px-6 py-2.5`                        | Compact horizontal bar     |
 
 ### Typography in forms
 
-| Element | Classes |
-| --- | --- |
-| Form row label | `text-sm font-semibold text-foreground` |
+| Element              | Classes                                             |
+| -------------------- | --------------------------------------------------- |
+| Form row label       | `text-sm font-semibold text-foreground`             |
 | Form row description | `text-[13px] leading-relaxed text-muted-foreground` |
-| Page heading | `text-lg font-semibold text-foreground` |
-| Banner/alert text | `text-[13px]` |
+| Page heading         | `text-lg font-semibold text-foreground`             |
+| Banner/alert text    | `text-[13px]`                                       |

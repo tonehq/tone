@@ -472,7 +472,6 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
           it from the agent.
         </p>
       </CustomModal>
-
     </div>
   );
 }

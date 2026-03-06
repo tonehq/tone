@@ -257,9 +257,7 @@ test.describe('Edit Agent Page', () => {
     test('shows language field when voice provider is set', async ({ page }) => {
       // Language field is visible because the mock agent has tts_service_id set
       await expect(page.getByRole('heading', { name: 'Language' })).toBeVisible();
-      await expect(
-        page.getByText('Select a language to filter available voices.'),
-      ).toBeVisible();
+      await expect(page.getByText('Select a language to filter available voices.')).toBeVisible();
     });
 
     test('shows voice speed at 70 from API', async ({ page }) => {

@@ -65,6 +65,7 @@ find src/app -name "page.tsx" -path "*$TARGET*"
 ```
 
 Map each `page.tsx` to its route:
+
 - `src/app/(dashboard)/settings/page.tsx` → `/settings`
 - `src/app/auth/login/page.tsx` → `/auth/login`
 - Strip `src/app/`, remove `(dashboard)/` and other route groups, remove `/page.tsx`
@@ -115,16 +116,16 @@ For each route discovered in Step 1c, read the `page.tsx` file. Identify:
 
 Read the main component file. For each import, classify it per the analysis guide:
 
-| Classification     | Action                                                          |
-| ------------------ | --------------------------------------------------------------- |
-| Service            | Read the service file → extract endpoints, methods, payloads   |
-| Atom               | Read the atom file → extract state shape, actions, loadable    |
-| Type               | Read the type file → extract interface fields                  |
-| Child component    | Read the file → trace its imports (max 3 levels deep)          |
-| Shared component   | Read `docs/shared-components.md` (do NOT read individual files) |
-| Constants          | Read the constants file → extract relevant values              |
-| Navigation         | Note `router.push`, `<Link>`, `useParams`, `useSearchParams`  |
-| Utility            | Read only if it affects visible UI behavior                    |
+| Classification   | Action                                                          |
+| ---------------- | --------------------------------------------------------------- |
+| Service          | Read the service file → extract endpoints, methods, payloads    |
+| Atom             | Read the atom file → extract state shape, actions, loadable     |
+| Type             | Read the type file → extract interface fields                   |
+| Child component  | Read the file → trace its imports (max 3 levels deep)           |
+| Shared component | Read `docs/shared-components.md` (do NOT read individual files) |
+| Constants        | Read the constants file → extract relevant values               |
+| Navigation       | Note `router.push`, `<Link>`, `useParams`, `useSearchParams`    |
+| Utility          | Read only if it affects visible UI behavior                     |
 
 ### 3c. Build internal analysis artifact
 
@@ -205,6 +206,7 @@ Create a table for each route/section of the page:
 | Trigger | Destination | Condition |
 
 Capture every navigation path found in Step 3 analysis. Include:
+
 - User-triggered navigation (clicks, form submits)
 - Programmatic navigation (router.push on success/error)
 - Middleware redirects (auth)
@@ -215,6 +217,7 @@ Capture every navigation path found in Step 3 analysis. Include:
 | Endpoint | Method | Request | Success Response | Error Response |
 
 For each service function called by the page's atoms:
+
 - **Endpoint**: exact path from service file
 - **Method**: GET, POST, PUT, DELETE
 - **Request**: body or query params (from the service function signature and call site)
@@ -228,6 +231,7 @@ Include response shape examples (JSON) for complex responses, following the agen
 ### Section 6: Edge Cases
 
 List as checkboxes (unchecked). Discover from:
+
 - Error paths in try/catch blocks
 - Conditional renders (empty state, loading state, error state)
 - Null/undefined guards in the component
@@ -238,6 +242,7 @@ List as checkboxes (unchecked). Discover from:
 ### Section 7: Business Rules
 
 List as bullet points. Discover from:
+
 - Constants and defaults in the component or form utils
 - Conditional logic that enforces rules (role checks, feature flags)
 - Data transformation patterns (camelCase ↔ snake_case)
@@ -247,6 +252,7 @@ List as bullet points. Discover from:
 ### Section 8: Accessibility Requirements
 
 List as checkboxes (unchecked). Check for:
+
 - Heading hierarchy (h1 > h2 > h3 etc.)
 - Interactive elements: are they semantic (`<button>`, `<a>`) or non-semantic (`<div onClick>`)
 - Form inputs: do they have labels or aria-labels
@@ -271,15 +277,15 @@ Write the complete feature doc to `e2e/docs/<page-name>.md`.
 
 Cross-check the generated doc against the analysis artifact:
 
-| Check | What to verify |
-| ----- | -------------- |
-| UI elements | Every interactive element from the component JSX is documented |
-| API calls | Every service function called by the page's atoms has an API contract entry |
-| Navigation | Every `router.push`, `<Link>`, and middleware redirect is in the Navigation table |
-| Form fields | Every form input, select, toggle, and radio is listed in UI Elements with its default |
-| State management | Loading, error, and empty states are covered in Edge Cases |
-| Auth | Auth requirement matches middleware.ts |
-| Types | Response shapes match the type files |
+| Check            | What to verify                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| UI elements      | Every interactive element from the component JSX is documented                        |
+| API calls        | Every service function called by the page's atoms has an API contract entry           |
+| Navigation       | Every `router.push`, `<Link>`, and middleware redirect is in the Navigation table     |
+| Form fields      | Every form input, select, toggle, and radio is listed in UI Elements with its default |
+| State management | Loading, error, and empty states are covered in Edge Cases                            |
+| Auth             | Auth requirement matches middleware.ts                                                |
+| Types            | Response shapes match the type files                                                  |
 
 If any gaps are found, update the doc before proceeding.
 
@@ -314,8 +320,8 @@ Present a structured report to the user:
 
 ## Component Trace
 
-| File | Classification | Items extracted |
-| ---- | -------------- | --------------- |
+| File                 | Classification    | Items extracted         |
+| -------------------- | ----------------- | ----------------------- |
 | `src/components/...` | Primary component | N elements, N nav paths |
 | `src/services/...`   | Service           | N endpoints             |
 | `src/atoms/...`      | Atom              | N state fields          |

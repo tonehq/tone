@@ -10,6 +10,7 @@ import { handleApiError } from '@/utils/helpers';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import DynamicProviderFields from './DynamicProviderFields';
 import type { AgentVoiceFormData } from './types';
+import VoiceSelect from './VoiceSelect';
 
 interface VoiceTabProps {
   formData: AgentVoiceFormData;
@@ -110,13 +111,8 @@ export default function VoiceTab({
     return voices.filter((v) => v.language === formData.language);
   }, [voices, formData.language]);
 
-  const voiceOptions = filteredVoiceOptions.map((v) => ({
-    value: v.voice_id,
-    label: v.name,
-  }));
-
   // Language options with flags for STT
-  const sttLanguageOptions = languages.map((lang) => ({
+  const _sttLanguageOptions = languages.map((lang) => ({
     value: lang.value,
     label: `${lang.flag} ${lang.label}`,
   }));
@@ -163,8 +159,9 @@ export default function VoiceTab({
       {/* Voice select (filtered by language) */}
       {formData.voiceProvider != null && formData.language && (
         <FormRow label="Voice" description="Choose a voice for your agent.">
-          <SelectInput
+          <VoiceSelect
             name="voiceId"
+            voices={filteredVoiceOptions}
             value={
               formData.ttsMetaData.voice_id != null ? String(formData.ttsMetaData.voice_id) : ''
             }
@@ -173,10 +170,8 @@ export default function VoiceTab({
                 ttsMetaData: { ...formData.ttsMetaData, voice_id: v || null },
               });
             }}
-            options={voiceOptions}
             placeholder="Select a voice"
             loading={voicesLoading}
-            position="popper"
           />
         </FormRow>
       )}

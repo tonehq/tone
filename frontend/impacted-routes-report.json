@@ -20,110 +20,70 @@
       "page_file": "src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx",
       "impact_type": "transitive",
       "trigger_file": "src/components/agents/AgentFormPage.tsx",
-      "chain": [
-        "AgentFormPage.tsx",
-        "page.tsx"
-      ]
+      "chain": ["AgentFormPage.tsx", "page.tsx"]
     },
     {
       "route": "/agents/create/outbound",
       "page_file": "src/app/(dashboard)/agents/create/outbound/page.tsx",
       "impact_type": "transitive",
       "trigger_file": "src/components/agents/AgentFormPage.tsx",
-      "chain": [
-        "AgentFormPage.tsx",
-        "page.tsx"
-      ]
+      "chain": ["AgentFormPage.tsx", "page.tsx"]
     },
     {
       "route": "/agents/create/inbound",
       "page_file": "src/app/(dashboard)/agents/create/inbound/page.tsx",
       "impact_type": "transitive",
       "trigger_file": "src/components/agents/AgentFormPage.tsx",
-      "chain": [
-        "AgentFormPage.tsx",
-        "page.tsx"
-      ]
+      "chain": ["AgentFormPage.tsx", "page.tsx"]
     },
     {
       "route": "/settings",
       "page_file": "src/app/(dashboard)/settings/page.tsx",
       "impact_type": "transitive",
       "trigger_file": "src/components/shared/Logo.tsx",
-      "chain": [
-        "Logo.tsx",
-        "index.tsx",
-        "page.tsx"
-      ]
+      "chain": ["Logo.tsx", "index.tsx", "page.tsx"]
     },
     {
       "route": "/auth/reset-password",
       "page_file": "src/app/auth/reset-password/page.tsx",
       "impact_type": "transitive",
       "trigger_file": "src/components/shared/Logo.tsx",
-      "chain": [
-        "Logo.tsx",
-        "ContainerComponent.tsx",
-        "page.tsx"
-      ]
+      "chain": ["Logo.tsx", "ContainerComponent.tsx", "page.tsx"]
     },
     {
       "route": "/auth/verify_signup",
       "page_file": "src/app/auth/verify_signup/page.tsx",
       "impact_type": "transitive",
       "trigger_file": "src/components/shared/Logo.tsx",
-      "chain": [
-        "Logo.tsx",
-        "ContainerComponent.tsx",
-        "page.tsx"
-      ]
+      "chain": ["Logo.tsx", "ContainerComponent.tsx", "page.tsx"]
     },
     {
       "route": "/auth/forgotpassword",
       "page_file": "src/app/auth/forgotpassword/page.tsx",
       "impact_type": "transitive",
       "trigger_file": "src/components/shared/Logo.tsx",
-      "chain": [
-        "Logo.tsx",
-        "ContainerComponent.tsx",
-        "page.tsx"
-      ]
+      "chain": ["Logo.tsx", "ContainerComponent.tsx", "page.tsx"]
     },
     {
       "route": "/auth/login",
       "page_file": "src/app/auth/login/page.tsx",
       "impact_type": "transitive",
       "trigger_file": "src/components/shared/Logo.tsx",
-      "chain": [
-        "Logo.tsx",
-        "index.tsx",
-        "LoginPage.tsx",
-        "page.tsx"
-      ]
+      "chain": ["Logo.tsx", "index.tsx", "LoginPage.tsx", "page.tsx"]
     },
     {
       "route": "/agents",
       "page_file": "src/app/(dashboard)/agents/page.tsx",
       "impact_type": "transitive",
       "trigger_file": "src/components/shared/Logo.tsx",
-      "chain": [
-        "Logo.tsx",
-        "index.tsx",
-        "AgentListPage.tsx",
-        "page.tsx"
-      ]
+      "chain": ["Logo.tsx", "index.tsx", "AgentListPage.tsx", "page.tsx"]
     },
     {
       "route": "/auth/signup",
       "page_file": "src/app/auth/signup/page.tsx",
       "impact_type": "transitive",
       "trigger_file": "src/components/shared/Logo.tsx",
-      "chain": [
-        "Logo.tsx",
-        "ContainerComponent.tsx",
-        "SignupClient.tsx",
-        "page.tsx"
-      ]
+      "chain": ["Logo.tsx", "ContainerComponent.tsx", "SignupClient.tsx", "page.tsx"]
     }
   ],
   "layout_impacts": [],

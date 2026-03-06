@@ -9,6 +9,7 @@ import Divider from './Divider';
 import Form from './Form';
 import Logo from './Logo';
 import RadioGroupField from './RadioGroupField';
+import SearchableSelect from './SearchableSelect';
 import SelectInput from './SelectInput';
 import TextAreaField from './TextAreaField';
 import TextInput from './TextInput';
@@ -20,6 +21,7 @@ export type {
   CustomTableProps,
 } from '@/types/components';
 export type { RadioGroupOption } from './RadioGroupField';
+export type { SearchableSelectOption } from './SearchableSelect';
 export type { SelectOption } from './SelectInput';
 export type { TabItem } from './CustomTab';
 
@@ -37,6 +39,7 @@ export {
   Form,
   Logo,
   RadioGroupField,
+  SearchableSelect,
   SelectInput,
   TextAreaField,
   TextInput,

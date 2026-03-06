@@ -141,10 +141,10 @@ Tests live in `e2e/<route-group>/<page-name>.spec.ts`, mirroring the `src/app/` 
 
 Notifications use Sonner toast (`showToast` from `@/utils/toast`). Title and description render in separate elements inside the toast:
 
-| Scenario                 | Title               | Description          |
-| ------------------------ | ------------------- | -------------------- |
-| Login success            | `Login Successful`  | `Welcome back!`      |
-| Login error (API throws) | `Login Failed`      | `Please try again.`  |
+| Scenario                 | Title              | Description         |
+| ------------------------ | ------------------ | ------------------- |
+| Login success            | `Login Successful` | `Welcome back!`     |
+| Login error (API throws) | `Login Failed`     | `Please try again.` |
 
 Use `page.locator('[data-sonner-toast]')` to find Sonner toast notifications.
 
