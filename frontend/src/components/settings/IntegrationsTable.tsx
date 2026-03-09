@@ -40,7 +40,7 @@ function AuthTokenCell({ token }: { token: string }) {
         aria-label={visible ? 'hide token' : 'show token'}
         className="p-0"
       >
-        {visible ? (
+        {!visible ? (
           <EyeOff className="size-3.5 text-muted-foreground" />
         ) : (
           <Eye className="size-3.5 text-muted-foreground" />

@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.2.1",
+    "@tanstack/react-table": "^8.21.3",
     "@tiptap/extension-heading": "^3.18.0",
     "@tiptap/extension-link": "^3.18.0",
     "@tiptap/extension-paragraph": "^3.18.0",
@@ -37,7 +38,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cookies-next": "^6.1.0",
-    "date-fns": "^4.1.0",
     "dayjs": "^1.11.19",
     "firebase": "^12.2.1",
     "jotai": "^2.13.1",

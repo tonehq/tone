@@ -58,29 +58,27 @@ test.describe('Create Outbound Agent Page', () => {
 
   // ── 1. Page Rendering ───────────────────────────────────────────────────────
   test.describe('Page Rendering', () => {
-    test('shows agent name in sidebar', async ({ page }) => {
-      await expect(page.getByText('My Outbound Assistant')).toBeVisible();
+    test('shows agent name', async ({ page }) => {
+      await expect(
+        page.getByRole('heading', { name: 'My Outbound Assistant', level: 1 }),
+      ).toBeVisible();
     });
 
-    test('shows Outbound badge in sidebar', async ({ page }) => {
-      await expect(page.locator('aside').getByText('Outbound', { exact: true })).toBeVisible();
+    test('shows Outbound badge', async ({ page }) => {
+      await expect(page.getByText('Outbound', { exact: true })).toBeVisible();
     });
 
     test('shows status bar about making calls', async ({ page }) => {
       await expect(page.getByText(/can't make calls/)).toBeVisible();
     });
 
-    test('shows sidebar menu items Configure and Prompt', async ({ page }) => {
-      await expect(page.getByRole('button', { name: 'Configure' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Prompt' })).toBeVisible();
+    test('shows all tabs including Prompt', async ({ page }) => {
+      await expect(page.getByRole('tab', { name: /general/i })).toBeVisible();
+      await expect(page.getByRole('tab', { name: /prompt/i })).toBeVisible();
     });
 
-    test('shows Configure heading', async ({ page }) => {
-      await expect(page.getByRole('heading', { name: 'Configure', level: 2 })).toBeVisible();
-    });
-
-    test('shows Back to Agents button', async ({ page }) => {
-      await expect(page.getByRole('button', { name: /back to agents/i })).toBeVisible();
+    test('shows Agents breadcrumb button', async ({ page }) => {
+      await expect(page.getByRole('button', { name: 'Agents' })).toBeVisible();
     });
 
     test('shows Test Agent button', async ({ page }) => {
@@ -110,13 +108,13 @@ test.describe('Create Outbound Agent Page', () => {
 
     test('shows all General tab form row labels', async ({ page }) => {
       await expect(page.getByRole('heading', { name: 'Agent Name' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Agent Description' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'AI Model' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'First Message' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Agent Identity' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Agent Identity' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'description' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'End Call Message' })).toBeVisible();
 
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
-      await expect(page.getByRole('heading', { name: 'Custom Vocabulary' })).toBeVisible();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
+      await expect(page.getByRole('heading', { name: 'AI Configuration' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Filter Words' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Use Realistic Filler Words' })).toBeVisible();
     });
@@ -136,7 +134,9 @@ test.describe('Create Outbound Agent Page', () => {
       const nameInput = page.locator('input[name="name"]');
       await nameInput.fill('Custom Outbound Agent');
       await expect(nameInput).toHaveValue('Custom Outbound Agent');
-      await expect(page.locator('aside').getByText('Custom Outbound Agent')).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'Custom Outbound Agent', level: 1 }),
+      ).toBeVisible();
     });
 
     test('allows editing the description field', async ({ page }) => {
@@ -158,7 +158,7 @@ test.describe('Create Outbound Agent Page', () => {
     });
 
     test('allows adding and deleting custom vocabulary', async ({ page }) => {
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       const vocabInput = page.locator('input[name="vocabularyInput"]');
       await vocabInput.fill('ToneHQ');
       await vocabInput.press('Enter');
@@ -194,18 +194,20 @@ test.describe('Create Outbound Agent Page', () => {
     });
 
     test('shows all Voice tab form row labels', async ({ page }) => {
-      await expect(page.getByRole('heading', { name: 'Language' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Voice Provider' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'STT Provider' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Voice Speed' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Patience Level' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Speech-to-Text' })).toBeVisible();
 
       await page.getByText('Speech Recognition').first().scrollIntoViewIfNeeded();
       await expect(page.getByRole('heading', { name: 'Speech Recognition' })).toBeVisible();
+
+      // Language is hidden until a Voice Provider is selected
+      await expect(page.getByRole('heading', { name: 'Language' })).not.toBeVisible();
     });
 
-    test('defaults language to English', async ({ page }) => {
-      await expect(page.getByText(/English/).first()).toBeVisible();
+    test('language field is hidden when no voice provider selected', async ({ page }) => {
+      await expect(page.getByRole('heading', { name: 'Language' })).not.toBeVisible();
     });
 
     test('defaults voice speed slider to 50', async ({ page }) => {
@@ -295,7 +297,7 @@ test.describe('Create Outbound Agent Page', () => {
   // ── 6. Prompt Editor ───────────────────────────────────────────────────────
   test.describe('Prompt Editor', () => {
     test.beforeEach(async ({ page }) => {
-      await page.getByRole('button', { name: 'Prompt' }).click();
+      await page.getByRole('tab', { name: /prompt/i }).click();
     });
 
     test('shows TipTap editor when Prompt menu is selected', async ({ page }) => {
@@ -314,15 +316,6 @@ test.describe('Create Outbound Agent Page', () => {
   // ── 7. Tab Navigation ──────────────────────────────────────────────────────
   test.describe('Tab Navigation', () => {
     test('switches between all tabs', async ({ page }) => {
-      if (
-        !(await page
-          .getByRole('tab', { name: /general/i })
-          .isVisible()
-          .catch(() => false))
-      ) {
-        await page.getByRole('button', { name: 'Configure' }).click();
-      }
-
       await page.getByRole('tab', { name: /general/i }).click();
       await expect(page.getByText('Agent Name', { exact: true })).toBeVisible();
 
@@ -333,17 +326,10 @@ test.describe('Create Outbound Agent Page', () => {
       await expect(page.getByText('Call Recording')).toBeVisible();
 
       await page.getByRole('tab', { name: /assign number/i }).click();
-      await expect(page.getByRole('heading', { name: 'Assign Number' })).toBeVisible();
-    });
+      await expect(page.getByRole('heading', { name: 'Phone Numbers' })).toBeVisible();
 
-    test('switches between Configure and Prompt menus via sidebar', async ({ page }) => {
-      await page.getByRole('button', { name: 'Prompt' }).click();
-      await expect(page.getByRole('heading', { name: 'Prompt', level: 2 })).toBeVisible();
+      await page.getByRole('tab', { name: /prompt/i }).click();
       await expect(page.locator('.ProseMirror')).toBeVisible();
-
-      await page.getByRole('button', { name: 'Configure' }).click();
-      await expect(page.getByRole('heading', { name: 'Configure', level: 2 })).toBeVisible();
-      await expect(page.getByRole('tab', { name: /general/i })).toBeVisible();
     });
   });
 
@@ -391,7 +377,7 @@ test.describe('Create Outbound Agent Page', () => {
       await page.locator('textarea[name="first_message"]').fill('Hi, this is a test call.');
       await page.locator('textarea[name="end_call_message"]').fill('Thanks for your time!');
 
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       const vocabInput = page.locator('input[name="vocabularyInput"]');
       await vocabInput.fill('SalesForce');
       await vocabInput.press('Enter');
@@ -417,8 +403,8 @@ test.describe('Create Outbound Agent Page', () => {
       const transcriptionRow = page.getByText('Call Transcription').locator('..').locator('..');
       await transcriptionRow.getByRole('switch').click();
 
-      // ── Prompt ──
-      await page.getByRole('button', { name: 'Prompt' }).click();
+      // ── Prompt tab ──
+      await page.getByRole('tab', { name: /prompt/i }).click();
       const editor = page.locator('.ProseMirror');
       await editor.click();
       await page.keyboard.type('You are an outbound sales agent.');
@@ -486,8 +472,21 @@ test.describe('Create Outbound Agent Page', () => {
       await page.getByRole('button', { name: /save changes/i }).click();
       await expect(page).toHaveURL(/\/agents(?:\?|$)/, { timeout: 15_000 });
 
+      // Wait for the agent list to finish loading
+      await page.waitForFunction(
+        () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
+        null,
+        { timeout: 20_000 },
+      );
+
+      // Search for the created agent (it may be on a later pagination page)
+      await page.getByPlaceholder('Search agents...').fill(agentName);
+
       await expect(page.getByText(agentName).first()).toBeVisible({ timeout: 10_000 });
       await expect(page.locator('tbody').getByText('Outbound').first()).toBeVisible();
+
+      // Navigate back to create page so subsequent tests aren't affected
+      await page.goto('/agents/create/outbound');
     });
   });
 
@@ -521,8 +520,8 @@ test.describe('Create Outbound Agent Page', () => {
 
   // ── 10. Back Navigation ─────────────────────────────────────────────────────
   test.describe('Back Navigation', () => {
-    test('navigates to /agents when clicking Back to Agents', async ({ page }) => {
-      await page.getByRole('button', { name: /back to agents/i }).click();
+    test('navigates to /agents when clicking Agents breadcrumb', async ({ page }) => {
+      await page.getByRole('button', { name: 'Agents' }).click();
       await expect(page).toHaveURL(/\/agents(?:\?|$)/, { timeout: 10_000 });
     });
   });

@@ -11,8 +11,8 @@ export interface CustomTableColumn<TRow> {
 }
 
 export interface CustomTablePagination {
-  current: number;
-  pageSize: number;
+  current?: number;
+  pageSize?: number;
   total?: number;
   pageSizeOptions?: number[];
   onChange?: (page: number, pageSize: number) => void;

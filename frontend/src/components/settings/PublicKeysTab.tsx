@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
 import type { CustomTableColumn } from '@/types/components';
+import { formatNow } from '@/utils/date';
 import { generateUUID } from '@/utils/helpers';
 import { Eye, MoreVertical, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
@@ -180,7 +181,7 @@ export default function PublicKeysTab() {
         domains: data.domains.join(', ') || '—',
         abusePrevention: data.abusePrevention,
         fraudProtection: data.fraudProtection,
-        createdAt: new Date().toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }),
+        createdAt: formatNow(),
       },
     ]);
   };

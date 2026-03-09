@@ -3,6 +3,7 @@
 import { CheckboxField, RadioGroupField, SelectInput, TextInput } from '@/components/shared';
 import { Slider } from '@/components/ui/slider';
 import type { MetaDataSchemaField } from '@/types/provider';
+import { toSelectOptions } from '@/utils/selectUtils';
 import { X } from 'lucide-react';
 import { type KeyboardEvent, type ReactNode, useState } from 'react';
 
@@ -24,17 +25,17 @@ function FormRow({
   children: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex items-start justify-between gap-6">
-      <div className="flex-[0_0_55%]">
-        <h3 className="text-sm font-semibold text-foreground">
+    <div className="flex items-start justify-between gap-6 border-b border-border/40 py-4">
+      <div className="flex-[0_0_50%]">
+        <h3 className="text-[13px] font-medium text-foreground">
           {label}
           {required && <span className="ml-0.5 text-destructive">*</span>}
         </h3>
         {description && (
-          <p className="mt-0.5 text-[13px] leading-relaxed text-muted-foreground">{description}</p>
+          <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">{description}</p>
         )}
       </div>
-      <div className="flex-[0_0_40%]">{children}</div>
+      <div className="flex-[0_0_45%]">{children}</div>
     </div>
   );
 }
@@ -251,10 +252,9 @@ export default function DynamicProviderFields({
                   onValueChange={(v) => handleChange(field.name, v)}
                   placeholder={`Select ${label.toLowerCase()}`}
                   options={
-                    field.values?.map((opt) => ({
-                      value: opt.value,
-                      label: opt.label,
-                    })) ?? []
+                    field.values
+                      ? toSelectOptions(field.values, { valueKey: 'value', labelKey: 'label' })
+                      : []
                   }
                 />
               </FormRow>

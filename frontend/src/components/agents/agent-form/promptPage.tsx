@@ -1,14 +1,6 @@
 'use client';
 
-import { CustomButton } from '@/components/shared';
-import { Card } from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { CustomButton, SelectInput } from '@/components/shared';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/utils/cn';
 import Heading from '@tiptap/extension-heading';
@@ -25,18 +17,54 @@ import {
   Bold,
   Italic,
   List,
+  Trash2,
   Underline as Under,
 } from 'lucide-react';
+import type { MouseEvent, ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 
-interface StepThreeProps {
+interface PromptPageProps {
   formData: {
     voicePrompting?: string;
   };
   onFormChange: <T extends object>(partial: T) => void;
 }
 
-export default function StepThree({ formData, onFormChange }: StepThreeProps) {
+const HEADING_OPTIONS = [
+  { value: 'normal', label: 'Normal' },
+  { value: 'heading1', label: 'Heading 1' },
+  { value: 'heading2', label: 'Heading 2' },
+  { value: 'heading3', label: 'Heading 3' },
+];
+
+function ToolbarButton({
+  isActive,
+  onClick,
+  children,
+}: {
+  isActive: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <CustomButton
+      type="text"
+      htmlType="button"
+      size="icon-sm"
+      className={cn('rounded-md transition-colors', isActive && 'bg-accent text-accent-foreground')}
+      onMouseDown={(e: MouseEvent) => e.preventDefault()}
+      onClick={onClick}
+    >
+      {children}
+    </CustomButton>
+  );
+}
+
+function ToolbarDivider() {
+  return <Separator orientation="vertical" className="mx-1.5 !h-5" />;
+}
+
+export default function PromptPage({ formData, onFormChange }: PromptPageProps) {
   const [headingType, setHeadingType] = useState<'normal' | 'heading1' | 'heading2' | 'heading3'>(
     'normal',
   );
@@ -69,12 +97,9 @@ export default function StepThree({ formData, onFormChange }: StepThreeProps) {
         class: 'ProseMirror',
       },
     },
-
     content: formData.voicePrompting || '',
-
     onUpdate({ editor }) {
-      const html = editor.getHTML();
-      onFormChange({ voicePrompting: html });
+      onFormChange({ voicePrompting: editor.getHTML() });
     },
   });
 
@@ -157,116 +182,77 @@ export default function StepThree({ formData, onFormChange }: StepThreeProps) {
   };
 
   return (
-    <div className="p-6">
-      <p className="mb-3 text-[13px] leading-relaxed text-muted-foreground">
+    <div className="space-y-3">
+      <p className="text-[13px] leading-relaxed text-muted-foreground">
         Below is an AI-generated job description. You can edit it or clear it.
       </p>
 
-      <Card className="gap-0 overflow-hidden rounded-lg border py-0 shadow-none">
+      <div className="overflow-hidden rounded-lg border border-border bg-background">
         {/* Toolbar */}
-        <div className="flex items-center gap-1 px-2 py-1">
-          <Select value={headingType} onValueChange={handleHeadingChange}>
-            <SelectTrigger size="sm" className="min-w-[130px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="normal">Normal</SelectItem>
-              <SelectItem value="heading1">Heading 1</SelectItem>
-              <SelectItem value="heading2">Heading 2</SelectItem>
-              <SelectItem value="heading3">Heading 3</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex items-center gap-1 border-b border-border bg-muted/30 px-3 py-1.5">
+          <SelectInput
+            name="headingType"
+            value={headingType}
+            onValueChange={handleHeadingChange}
+            options={HEADING_OPTIONS}
+            size="sm"
+            className="w-[130px]"
+          />
 
-          <Separator orientation="vertical" className="mx-1 h-6" />
+          <ToolbarDivider />
 
-          <CustomButton
-            type="text"
-            size="icon-sm"
-            className={cn(active.bold && 'bg-accent')}
-            onClick={() => toggleStyle('bold')}
-          >
-            <Bold size={18} />
-          </CustomButton>
+          <ToolbarButton isActive={active.bold} onClick={() => toggleStyle('bold')}>
+            <Bold size={16} />
+          </ToolbarButton>
 
-          <CustomButton
-            type="text"
-            size="icon-sm"
-            className={cn(active.italic && 'bg-accent')}
-            onClick={() => toggleStyle('italic')}
-          >
-            <Italic size={18} />
-          </CustomButton>
+          <ToolbarButton isActive={active.italic} onClick={() => toggleStyle('italic')}>
+            <Italic size={16} />
+          </ToolbarButton>
 
-          <CustomButton
-            type="text"
-            size="icon-sm"
-            className={cn(active.underline && 'bg-accent')}
-            onClick={() => toggleStyle('underline')}
-          >
-            <Under size={18} />
-          </CustomButton>
+          <ToolbarButton isActive={active.underline} onClick={() => toggleStyle('underline')}>
+            <Under size={16} />
+          </ToolbarButton>
 
-          <Separator orientation="vertical" className="mx-1 h-6" />
+          <ToolbarDivider />
 
-          <CustomButton
-            type="text"
-            size="icon-sm"
-            className={cn(active.bulletList && 'bg-accent')}
-            onClick={() => toggleStyle('bulletList')}
-          >
-            <List size={18} />
-          </CustomButton>
+          <ToolbarButton isActive={active.bulletList} onClick={() => toggleStyle('bulletList')}>
+            <List size={16} />
+          </ToolbarButton>
 
-          <Separator orientation="vertical" className="mx-1 h-6" />
+          <ToolbarDivider />
 
-          <CustomButton
-            type="text"
-            size="icon-sm"
-            className={cn(active.align === 'left' && 'bg-accent')}
-            onClick={() => toggleStyle('left')}
-          >
-            <AlignLeft size={18} />
-          </CustomButton>
+          <ToolbarButton isActive={active.align === 'left'} onClick={() => toggleStyle('left')}>
+            <AlignLeft size={16} />
+          </ToolbarButton>
 
-          <CustomButton
-            type="text"
-            size="icon-sm"
-            className={cn(active.align === 'center' && 'bg-accent')}
-            onClick={() => toggleStyle('center')}
-          >
-            <AlignCenter size={18} />
-          </CustomButton>
+          <ToolbarButton isActive={active.align === 'center'} onClick={() => toggleStyle('center')}>
+            <AlignCenter size={16} />
+          </ToolbarButton>
 
-          <CustomButton
-            type="text"
-            size="icon-sm"
-            className={cn(active.align === 'right' && 'bg-accent')}
-            onClick={() => toggleStyle('right')}
-          >
-            <AlignRight size={18} />
-          </CustomButton>
+          <ToolbarButton isActive={active.align === 'right'} onClick={() => toggleStyle('right')}>
+            <AlignRight size={16} />
+          </ToolbarButton>
 
           <div className="flex-1" />
 
           <CustomButton
             type="text"
-            className="text-sm text-destructive hover:text-destructive/80"
+            className="gap-1.5 text-[13px] text-destructive hover:text-destructive/80"
             onClick={clearContent}
+            icon={<Trash2 size={14} />}
           >
             Clear all
           </CustomButton>
         </div>
 
-        <Separator />
-
         {/* Editor */}
         <div
-          className="min-h-[460px] cursor-text px-4 py-4 [&_.ProseMirror]:min-h-[180px] [&_.ProseMirror]:text-sm [&_.ProseMirror]:leading-relaxed [&_.ProseMirror]:outline-none"
+          className="min-h-[400px] cursor-text px-4 py-4 [&_.ProseMirror]:min-h-[180px] [&_.ProseMirror]:text-sm [&_.ProseMirror]:leading-relaxed [&_.ProseMirror]:outline-none"
           onClick={() => editor?.commands.focus()}
         >
           <EditorContent editor={editor} />
         </div>
-      </Card>
+      </div>
     </div>
   );
 }

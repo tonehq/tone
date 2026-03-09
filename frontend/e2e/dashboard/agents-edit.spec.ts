@@ -174,12 +174,12 @@ test.describe('Edit Agent Page', () => {
 
   // ── 2. Page Rendering ──────────────────────────────────────────────────────
   test.describe('Page Rendering', () => {
-    test('shows populated agent name in sidebar', async ({ page }) => {
-      await expect(page.locator('aside').getByText('Sales Assistant')).toBeVisible();
+    test('shows populated agent name', async ({ page }) => {
+      await expect(page.getByRole('heading', { name: 'Sales Assistant', level: 1 })).toBeVisible();
     });
 
-    test('shows correct type badge in sidebar', async ({ page }) => {
-      await expect(page.locator('aside').getByText('Inbound')).toBeVisible();
+    test('shows correct type badge', async ({ page }) => {
+      await expect(page.getByText('Inbound', { exact: true })).toBeVisible();
     });
 
     test('shows status bar about receiving calls', async ({ page }) => {
@@ -197,8 +197,8 @@ test.describe('Edit Agent Page', () => {
       await expect(page.getByRole('tab', { name: /assign number/i })).toBeVisible();
     });
 
-    test('shows Back to Agents button', async ({ page }) => {
-      await expect(page.getByRole('button', { name: /back to agents/i })).toBeVisible();
+    test('shows Agents breadcrumb button', async ({ page }) => {
+      await expect(page.getByRole('button', { name: 'Agents' })).toBeVisible();
     });
 
     test('shows Test Agent button', async ({ page }) => {
@@ -228,7 +228,7 @@ test.describe('Edit Agent Page', () => {
     });
 
     test('shows custom vocabulary chips from API', async ({ page }) => {
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       await expect(page.getByText('ToneHQ', { exact: true })).toBeVisible();
       await expect(page.getByText('Pipecat', { exact: true })).toBeVisible();
     });
@@ -243,8 +243,8 @@ test.describe('Edit Agent Page', () => {
       await expect(fillerRow.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
     });
 
-    test('agent name reflects in sidebar', async ({ page }) => {
-      await expect(page.locator('aside').getByText('Sales Assistant')).toBeVisible();
+    test('agent name reflects in heading', async ({ page }) => {
+      await expect(page.getByRole('heading', { name: 'Sales Assistant', level: 1 })).toBeVisible();
     });
   });
 
@@ -254,8 +254,10 @@ test.describe('Edit Agent Page', () => {
       await page.getByRole('tab', { name: /voice/i }).click();
     });
 
-    test('shows language as English from API', async ({ page }) => {
-      await expect(page.getByText(/English/).first()).toBeVisible();
+    test('shows language field when voice provider is set', async ({ page }) => {
+      // Language field is visible because the mock agent has tts_service_id set
+      await expect(page.getByRole('heading', { name: 'Language' })).toBeVisible();
+      await expect(page.getByText('Select a language to filter available voices.')).toBeVisible();
     });
 
     test('shows voice speed at 70 from API', async ({ page }) => {
@@ -311,7 +313,7 @@ test.describe('Edit Agent Page', () => {
   // ── 6. Pre-populated Data — Prompt ─────────────────────────────────────────
   test.describe('Pre-populated Data — Prompt', () => {
     test('shows system prompt from API in editor', async ({ page }) => {
-      await page.getByRole('button', { name: 'Prompt' }).click();
+      await page.getByRole('tab', { name: /prompt/i }).click();
       const editor = page.locator('.ProseMirror');
       await expect(editor).toContainText('You are a helpful sales assistant.');
     });
@@ -319,19 +321,16 @@ test.describe('Edit Agent Page', () => {
 
   // ── 7. Pre-populated Data — Assign Number Tab (edit mode) ──────────────────
   test.describe('Assign Number Tab — Edit Mode', () => {
-    test('shows Assign New Number button in edit mode', async ({ page }) => {
-      // Ensure we're on Configure view (previous test may leave page on Prompt view)
-      await page.getByRole('button', { name: 'Configure' }).click();
+    test('shows Assign Number button in edit mode', async ({ page }) => {
       const tab = page.getByRole('tab', { name: /assign number/i });
       await expect(tab).toBeVisible({ timeout: 10_000 });
       await tab.click();
-      await expect(page.getByRole('button', { name: /assign new number/i })).toBeVisible();
+      await expect(page.getByRole('button', { name: /assign number/i })).toBeVisible();
     });
 
     test('shows no-numbers message when no phone assigned', async ({ page }) => {
-      await page.getByRole('button', { name: 'Configure' }).click();
       await page.getByRole('tab', { name: /assign number/i }).click();
-      await expect(page.getByText('No phone numbers assigned yet.')).toBeVisible();
+      await expect(page.getByText('No phone numbers assigned')).toBeVisible();
     });
   });
 
@@ -347,13 +346,15 @@ test.describe('Edit Agent Page', () => {
     test('shows phone assigned status bar', async ({ page }) => {
       const statusBar = page.getByText('Phone assigned:');
       await expect(statusBar).toBeVisible();
-      await expect(page.locator('aside').getByText('+1 (555) 123-4567')).toBeVisible();
-      await expect(page.locator('aside').getByText('+1 (555) 987-6543')).toBeVisible();
+      await expect(page.getByText('+1 (555) 123-4567').first()).toBeVisible();
+      await expect(page.getByText('+1 (555) 987-6543').first()).toBeVisible();
     });
 
-    test('shows phone numbers in sidebar', async ({ page }) => {
-      await expect(page.locator('aside').getByText('+1 (555) 123-4567')).toBeVisible();
-      await expect(page.locator('aside').getByText('+1 (555) 987-6543')).toBeVisible();
+    test('shows phone numbers in assign number tab', async ({ page }) => {
+      await page.getByRole('tab', { name: /assign number/i }).click();
+      const tabPanel = page.locator('[role="tabpanel"]');
+      await expect(tabPanel.getByText('+1 (555) 123-4567')).toBeVisible();
+      await expect(tabPanel.getByText('+1 (555) 987-6543')).toBeVisible();
     });
 
     test('shows assigned phone numbers in Assign Number tab', async ({ page }) => {
@@ -381,7 +382,7 @@ test.describe('Edit Agent Page', () => {
 
     test('shows agent name and Outbound badge', async ({ page }) => {
       await expect(page.locator('input[name="name"]')).toHaveValue('Minimal Agent');
-      await expect(page.locator('aside').getByText('Outbound')).toBeVisible();
+      await expect(page.getByText('Outbound', { exact: true })).toBeVisible();
     });
 
     test('shows empty description for null value', async ({ page }) => {
@@ -397,7 +398,7 @@ test.describe('Edit Agent Page', () => {
     });
 
     test('shows no custom vocabulary chips for null value', async ({ page }) => {
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       // The badges container should be empty (no Badge components)
       const badges = page.locator('.flex-wrap').first().locator('[class*="badge"]');
       await expect(badges).toHaveCount(0);
@@ -462,7 +463,7 @@ test.describe('Edit Agent Page', () => {
       await page.locator('textarea[name="end_call_message"]').fill('Updated goodbye');
 
       // Remove existing vocabulary chip "ToneHQ" and add a new one
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       await page.getByText('ToneHQ', { exact: true }).getByRole('button').click();
       const vocabInput = page.locator('input[name="vocabularyInput"]');
       await vocabInput.fill('NewWord');
@@ -495,7 +496,7 @@ test.describe('Edit Agent Page', () => {
       await transcriptionRow.getByRole('switch').click();
 
       // ── Prompt: update prompt text ──
-      await page.getByRole('button', { name: 'Prompt' }).click();
+      await page.getByRole('tab', { name: /prompt/i }).click();
       const editor = page.locator('.ProseMirror');
       // Select all existing text and replace
       await editor.click();
@@ -531,13 +532,13 @@ test.describe('Edit Agent Page', () => {
       expect(payload.system_prompt).toContain('Updated system prompt.');
     });
 
-    test('sidebar reflects name change in real time', async ({ page }) => {
+    test('heading reflects name change in real time', async ({ page }) => {
       await page.locator('input[name="name"]').fill('Renamed Agent');
-      await expect(page.locator('aside').getByText('Renamed Agent')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Renamed Agent', level: 1 })).toBeVisible();
     });
 
     test('can add new vocabulary word alongside existing ones', async ({ page }) => {
-      await page.getByText('Custom Vocabulary').scrollIntoViewIfNeeded();
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       const vocabInput = page.locator('input[name="vocabularyInput"]');
       await vocabInput.fill('NewTerm');
       await vocabInput.press('Enter');
@@ -665,6 +666,11 @@ test.describe('Edit Agent Page', () => {
 
   // ── 11. Delete Agent ───────────────────────────────────────────────────────
   test.describe('Delete Agent', () => {
+    test.beforeEach(async ({ page }) => {
+      // Ensure we're on the General tab where the Delete Agent button lives
+      await page.getByRole('tab', { name: /general/i }).click();
+    });
+
     test('opens delete confirmation modal from General tab', async ({ page }) => {
       await page.getByRole('button', { name: 'Delete Agent' }).scrollIntoViewIfNeeded();
       await page.getByRole('button', { name: 'Delete Agent' }).click();
@@ -730,8 +736,8 @@ test.describe('Edit Agent Page', () => {
 
   // ── 13. Back Navigation ─────────────────────────────────────────────────────
   test.describe('Back Navigation', () => {
-    test('navigates to /agents when clicking Back to Agents', async ({ page }) => {
-      await page.getByRole('button', { name: /back to agents/i }).click();
+    test('navigates to /agents when clicking Agents breadcrumb', async ({ page }) => {
+      await page.getByRole('button', { name: 'Agents' }).click();
       await expect(page).toHaveURL(/\/agents(?:\?|$)/, { timeout: 10_000 });
     });
   });
@@ -759,15 +765,15 @@ test.describe('Edit Agent Page', () => {
       await expect(page.locator('input[name="name"]')).toHaveValue('Sales Assistant');
     });
 
-    test('switches between Configure and Prompt preserving data', async ({ page }) => {
+    test('switches between General and Prompt tabs preserving data', async ({ page }) => {
       // Check prompt
-      await page.getByRole('button', { name: 'Prompt' }).click();
+      await page.getByRole('tab', { name: /prompt/i }).click();
       await expect(page.locator('.ProseMirror')).toContainText(
         'You are a helpful sales assistant.',
       );
 
-      // Switch back to Configure and verify data preserved
-      await page.getByRole('button', { name: 'Configure' }).click();
+      // Switch back to General and verify data preserved
+      await page.getByRole('tab', { name: /general/i }).click();
       await expect(page.locator('input[name="name"]')).toHaveValue('Sales Assistant');
     });
   });
