@@ -317,7 +317,7 @@ test.describe('Create Outbound Agent Page', () => {
   test.describe('Tab Navigation', () => {
     test('switches between all tabs', async ({ page }) => {
       await page.getByRole('tab', { name: /general/i }).click();
-      await expect(page.getByText('Agent Name', { exact: false })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /^Agent Name/, level: 3 })).toBeVisible();
 
       await page.getByRole('tab', { name: /voice/i }).click();
       await expect(page.getByText('Voice Provider')).toBeVisible();
@@ -341,6 +341,9 @@ test.describe('Create Outbound Agent Page', () => {
 
     test('sends correct default payload with outbound agent_type', async ({ page }) => {
       const captured = await mockUpsertAPI(page);
+      await page.route('**/agent/get_all_agents**', (route) =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
+      );
 
       await page.getByRole('button', { name: /save changes/i }).click();
       await expect(page).toHaveURL(/\/agents(?:\?|$)/, { timeout: 10_000 });
@@ -370,6 +373,9 @@ test.describe('Create Outbound Agent Page', () => {
 
     test('sends full payload with all fields filled across all tabs', async ({ page }) => {
       const captured = await mockUpsertAPI(page);
+      await page.route('**/agent/get_all_agents**', (route) =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
+      );
 
       // ── General Tab ──
       await page.locator('input[name="name"]').fill('E2E Outbound Agent');
@@ -435,6 +441,9 @@ test.describe('Create Outbound Agent Page', () => {
 
     test('redirects to /agents after save', async ({ page }) => {
       await mockUpsertAPI(page);
+      await page.route('**/agent/get_all_agents**', (route) =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
+      );
       await page.getByRole('button', { name: /save changes/i }).click();
       await expect(page).toHaveURL(/\/agents(?:\?|$)/, { timeout: 10_000 });
     });
