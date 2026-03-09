@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import type { CustomTableColumn } from '@/types/components';
+import { formatNow } from '@/utils/date';
 import { generateUUID } from '@/utils/helpers';
 import { Eye, Key, MoreVertical, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
@@ -37,10 +38,7 @@ export default function ApiKeysTab() {
           name: keyName.trim(),
           keyValue: '•••••••••••',
           masked: true,
-          createdAt: new Date().toLocaleString(undefined, {
-            dateStyle: 'short',
-            timeStyle: 'short',
-          }),
+          createdAt: formatNow(),
         },
       ]);
       setKeyName('');

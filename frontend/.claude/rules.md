@@ -126,7 +126,27 @@ Rules specific to Playwright e2e tests (enforced by `generate-tests`):
 
 ---
 
-## 5. UI stack: shadcn + Tailwind (MUI fully removed)
+## 5. Date formatting (mandatory)
+
+All date formatting must go through `@/utils/date`. This ensures a consistent date format across the entire application.
+
+### Required usage
+
+| Need                                | Use                                          | Do NOT use                                                             |
+| ----------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------- |
+| Format a timestamp for display      | `formatDate(ts)` from `@/utils/date` | `dayjs.unix(ts).format(...)`, `dayjs.utc(s).format(...)`, `new Date(ts).toLocaleString()` |
+| Format current date/time            | `formatNow()` from `@/utils/date`            | `new Date().toLocaleString(...)`, `dayjs().format(...)`                |
+| Reference the standard format       | `DATE_FORMAT` from `@/utils/date`            | Inline format strings like `'DD MMM YYYY, HH:mm, A'`                      |
+
+### Rules
+
+1. **Never import dayjs directly** in components or atoms for date formatting. All formatting goes through `@/utils/date`.
+2. **Use the default format.** Both `formatDate` and `formatNow` default to `DATE_FORMAT` (`'DD MMM YYYY, HH:mm, A'`). Only pass a custom format when the design explicitly requires a different one.
+3. **Extend `@/utils/date` for new needs.** If you need a new date operation (e.g., relative time, date math), add it to `date.ts` rather than importing dayjs elsewhere.
+
+---
+
+## 6. UI stack: shadcn + Tailwind (MUI fully removed)
 
 - **Use shadcn and Tailwind CSS** for all UI: use `@/components/ui/` (shadcn) and Tailwind classes. Use **lucide-react** for generic icons.
 - **Do not add MUI dependencies.** MUI has been fully removed from the project. Use shadcn components, Tailwind, or plain SVG/icons in `@/components/icons/` (e.g. brand icons like Google).
@@ -135,7 +155,7 @@ Rules specific to Playwright e2e tests (enforced by `generate-tests`):
 
 ---
 
-## 6. Shared component usage (mandatory)
+## 7. Shared component usage (mandatory)
 
 All UI must go through `@/components/shared` where a shared component exists. This ensures consistent styling, centralized control, and easier maintenance. Read `docs/shared-components.md` for the full API reference.
 
@@ -173,7 +193,7 @@ All UI must go through `@/components/shared` where a shared component exists. Th
 
 ---
 
-## 7. Code comments policy
+## 8. Code comments policy
 
 Keep code clean and self-documenting. Comments are noise unless they explain _why_, not _what_.
 
@@ -194,7 +214,7 @@ Keep code clean and self-documenting. Comments are noise unless they explain _wh
 
 ---
 
-## 8. File organization conventions
+## 9. File organization conventions
 
 Keep code organized by responsibility. Every new file must land in the correct directory.
 
@@ -204,7 +224,7 @@ Keep code organized by responsibility. Every new file must land in the correct d
 | ------------------------ | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `src/types/`             | TypeScript interfaces and type aliases          | `agent.ts`, `provider.ts`, `components.ts`, `integration.ts`, `sidebar.ts`                               |
 | `src/constants/`         | Static values, config objects, enums            | `index.ts` (cookie keys, URLs), `sidebar.ts` (nav config, widths), `settings.ts`                         |
-| `src/utils/`             | Pure helper functions and utilities             | `helpers.ts` (generateUUID), `agentFormUtils.ts` (form state transforms), `axios.ts`, `notification.tsx` |
+| `src/utils/`             | Pure helper functions and utilities             | `helpers.ts` (generateUUID), `date.ts` (date formatting), `agentFormUtils.ts` (form state transforms), `axios.ts`, `notification.tsx` |
 | `src/services/`          | API call functions (thin wrappers around axios) | `agentsService.ts`, `channelService.ts`, `providerService.ts`                                            |
 | `src/atoms/`             | Jotai atoms (state + write actions)             | `AgentsAtom.tsx`, `AuthAtom.tsx`, `ProviderAtom.tsx`                                                     |
 | `src/components/shared/` | Reusable UI components                          | `CustomTable.tsx`, `CustomModal.tsx`, `CustomButton.tsx`                                                 |
@@ -222,7 +242,7 @@ Keep code organized by responsibility. Every new file must land in the correct d
 
 ---
 
-## 9. Reusable domain components (mandatory)
+## 10. Reusable domain components (mandatory)
 
 Certain UI elements have canonical component implementations. Always use these instead of re-implementing with inline styles or ad-hoc Badge/Chip usage.
 
@@ -239,7 +259,7 @@ Certain UI elements have canonical component implementations. Always use these i
 
 ---
 
-## 10. Form layout and spacing standards
+## 11. Form layout and spacing standards
 
 All form pages (agent form, settings, etc.) follow consistent spacing rules for visual breathing room and alignment.
 
