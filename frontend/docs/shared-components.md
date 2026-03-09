@@ -8,7 +8,7 @@ Single source of truth for `@/components/shared` components. Use this file to un
 
 ## CustomTable
 
-Reusable data table built on shadcn `Table` primitives. API follows Ant Design Table conventions (`columns`, `dataSource`, `rowKey`, `render`, `pagination`). Includes built-in client-side search, sorting, pagination, loading skeleton, and empty state.
+Reusable data table built on shadcn `Table` primitives. API follows Ant Design Table conventions (`columns`, `dataSource`, `rowKey`, `render`, `pagination`). Includes built-in client-side search, sorting, pagination, loading skeleton, and empty state. The table takes only its content height (no `flex-1` stretch) — when rows are few, no empty space appears below; scrolling activates only when content exceeds the viewport.
 
 ### Props
 
@@ -213,17 +213,17 @@ import { CustomModal, CustomButton } from '@/components/shared';
 
 ## TextInput
 
-Wraps shadcn `Input` + `Label`. Supports password visibility toggle.
+Wraps shadcn `Input` + `Label`. Supports password visibility toggle. Renders as a single `<div>` container (label + input + helperText), so `space-y-*` on a parent form adds gaps between fields, not between label/input/error.
 
 | Prop                     | Type      | Default  | Description                                                    |
 | ------------------------ | --------- | -------- | -------------------------------------------------------------- |
 | name                     | string    | —        | **Required.** Input name and id.                               |
 | type                     | string    | `'text'` | Input type. `'password'` shows show/hide toggle.               |
 | label                    | string    | —        | Label text above input.                                        |
-| isRequired               | boolean   | `false`  | Shows asterisk, sets aria.                                     |
+| isRequired               | boolean   | `false`  | Shows red asterisk `*` next to label.                          |
 | loading                  | boolean   | `false`  | Shows skeleton instead of input.                               |
 | error                    | boolean   | `false`  | Destructive border + ring.                                     |
-| helperText               | string    | —        | Small text below input.                                        |
+| helperText               | string    | —        | Small text below input (red when `error=true`).                |
 | labelClassName           | string    | —        | Class for the label.                                           |
 | className                | string    | —        | Class for the input.                                           |
 | leftIcon                 | ReactNode | —        | Optional icon on the left (e.g. Search). Adds `pl-9` to input. |
@@ -287,7 +287,9 @@ Wraps shadcn `Button` with semantic `type` and loading/icon support.
 
 ## Form
 
-Simple form wrapper that collects native input values and calls `onFinish(values)` on submit. No validation—just `FormData` → object.
+Simple form wrapper that collects native input values and calls `onFinish(values)` on submit. No validation—just `FormData` → object. Applies `space-y-5` for vertical spacing between children.
+
+> **Note:** Auth forms (login, signup, forgot password, reset password) have migrated from `Form` + `TextInput` to `useForm` + `zodResolver` + `FormTextInput` for proper client-side validation and type safety. See `src/schemas/auth.ts` for Zod schemas. The `Form` component is still used in the agent form (`GeneralTab`).
 
 | Prop         | Type                                  | Default      | Description                                        |
 | ------------ | ------------------------------------- | ------------ | -------------------------------------------------- |
@@ -297,16 +299,32 @@ Simple form wrapper that collects native input values and calls `onFinish(values
 | autoComplete | string                                | `'off'`      | Form autocomplete.                                 |
 | className    | string                                | —            | Applied to `<form>`.                               |
 
-**Example:**
+**Example (legacy — agent form):**
 
 ```tsx
-<Form onFinish={(values) => login(values.email, values.password)} layout="vertical">
+<Form onFinish={handleFinish} layout="vertical">
   <TextInput name="email" label="Email" />
-  <TextInput name="password" type="password" label="Password" />
-  <CustomButton type="primary" htmlType="submit">
-    Submit
-  </CustomButton>
+  <CustomButton type="primary" htmlType="submit">Submit</CustomButton>
 </Form>
+```
+
+**Example (auth forms — RHF + Zod):**
+
+```tsx
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { loginSchema, type LoginFormData } from '@/schemas/auth';
+
+const { control, handleSubmit } = useForm<LoginFormData>({
+  resolver: zodResolver(loginSchema),
+  defaultValues: { email: '', password: '' },
+});
+
+<form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+  <FormTextInput name="email" control={control} label="Email" isRequired />
+  <FormTextInput name="password" control={control} type="password" label="Password" isRequired />
+  <CustomButton type="primary" htmlType="submit">Continue</CustomButton>
+</form>
 ```
 
 ---
@@ -556,13 +574,18 @@ RHF `Controller` wrapper around `TextInput`. Eliminates Controller boilerplate f
 | ------------- | ----------------------- | ------- | --------------------------------------------------------- |
 | name          | string                  | —       | **Required.** RHF field name.                             |
 | control       | `Control<any>`          | —       | **Required.** RHF `control` from `useForm`.               |
-| rules         | `RegisterOptions`       | —       | RHF validation rules.                                     |
+| rules         | `RegisterOptions`       | —       | RHF validation rules (used by agent form).                |
 | onValueChange | `(value: string) => void` | —     | Side-effect callback (e.g. `onFormChange`).               |
 | + TextInput props (minus `value`, `onChange`, `onBlur`) | | | All other TextInput props forwarded. |
 
-Error state and helperText are auto-derived from `fieldState` but overridable via props.
+Error state and helperText are auto-derived from `fieldState` but overridable via props. **Important:** When using inside a layout that also renders errors (e.g. `FormRow` with `error` prop in agent form), do NOT pass the error to both — let `FormTextInput` handle error display to avoid duplicate messages.
 
-**Example:**
+**Validation approaches:**
+
+- **Agent form:** Uses `rules` prop (RHF built-in validation), e.g. `rules={{ required: 'Name is required' }}`
+- **Auth forms:** Uses `zodResolver(schema)` on `useForm` — Zod schemas in `src/schemas/auth.ts` handle validation; no `rules` prop needed on `FormTextInput`
+
+**Example (with RHF rules — agent form):**
 
 ```tsx
 <FormTextInput
@@ -571,6 +594,12 @@ Error state and helperText are auto-derived from `fieldState` but overridable vi
   rules={{ required: 'Name is required' }}
   onValueChange={(v) => onFormChange({ name: v })}
 />
+```
+
+**Example (with Zod resolver — auth forms):**
+
+```tsx
+<FormTextInput name="email" control={control} label="Email" isRequired />
 ```
 
 ---

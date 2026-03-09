@@ -19,6 +19,8 @@ so that data is persisted in the DB and tests validate the full stack.
 
 **Prerequisites**: Running backend and DB; `NEXT_PUBLIC_BACKEND_URL` set. Tests that need deterministic data (e.g. empty state, loading state, error state) may still mock the API only for those scenarios.
 
+**Important: Mocked save tests** — When mocking `upsert_agent` AND asserting redirect to `/agents`, you MUST also mock `get_all_agents`. After save, `router.push('/agents')` loads the agents list page which fetches from the real API. Without the mock, the navigation hangs waiting for the API response and `toHaveURL` times out. Only the "real API" integration tests should skip the `get_all_agents` mock.
+
 ---
 
 ## Page
@@ -32,8 +34,10 @@ so that data is persisted in the DB and tests validate the full stack.
   - Create modal: `src/components/agents/CreateAgentModal.tsx`
   - Create inbound: `src/app/(dashboard)/agents/create/inbound/page.tsx`
   - Create outbound: `src/app/(dashboard)/agents/create/outbound/page.tsx`
+  - Form page: `src/components/agents/AgentFormPage.tsx`
   - Form tabs: `src/components/agents/agent-form/` (GeneralTab, VoiceTab, CallConfigurationTab, promptPage)
-  - Form utils: `src/components/agents/agent-form/agentFormUtils.ts`
+  - Dynamic fields: `src/components/agents/agent-form/DynamicProviderFields.tsx`
+  - Form utils: `src/utils/agentFormUtils.ts`
 - **Auth required**: yes (redirects to `/auth/login?redirect=<path>` without `tone_access_token` cookie)
 
 ---
@@ -347,8 +351,10 @@ so that data is persisted in the DB and tests validate the full stack.
 - [ ] DataGrid has built-in keyboard navigation (MUI DataGrid)
 - [ ] Action menu uses MUI Menu with proper aria attributes
 - [ ] Tab components use MUI Tabs with `role="tabpanel"` for content panels
-- [ ] Form inputs use the project's `TextInput` / `Form` components with labels
-- [ ] Toggle switches are MUI Switch components (accessible by default)
-- [ ] "Back to Agents" button is a proper `<button>` element
-- [ ] "Save Changes" button has `disabled` attribute when saving
-- [ ] Info Alert uses MUI Alert with `severity="info"` and `role="alert"`
+- [ ] Form inputs use `FormTextInput` (RHF Controller wrapper) in agent form — error messages auto-derived from `fieldState`
+- [ ] `FormRow` in GeneralTab does NOT pass `error` prop when child is `FormTextInput` (to avoid duplicate error messages)
+- [ ] Toggle switches use shadcn `Switch` component (accessible by default)
+- [ ] "Back to Agents" / "Agents" breadcrumb button is a proper `<button>` element
+- [ ] "Save Changes" button has `disabled` attribute and shows "Saving..." text when saving
+- [ ] CustomTable takes only its content height — no empty space below rows when data is sparse
+- [ ] Agent Name heading in FormRow renders as `<h3>` with text "Agent Name*" (asterisk in child `<span>`, no space char) — use `getByRole('heading', { name: /^Agent Name/, level: 3 })` in tests, not `getByText('Agent Name', { exact: true })`
