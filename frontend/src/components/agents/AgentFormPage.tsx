@@ -2,6 +2,8 @@
 
 import { loadableProvidersAtom } from '@/atoms/ProviderAtom';
 import { CallConfigurationTab, GeneralTab, VoiceTab } from '@/components/agents/agent-form';
+import type { DynamicProviderFieldsHandle } from '@/components/agents/agent-form/DynamicProviderFields';
+import type { GeneralTabHandle } from '@/components/agents/agent-form/GeneralTab';
 import PromptPage from '@/components/agents/agent-form/promptPage';
 import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 import AssignPhoneNumberModal from '@/components/agents/AssignPhoneNumberModal';
@@ -33,7 +35,7 @@ import {
   Volume2,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 interface AgentFormPageProps {
   agentType: 'inbound' | 'outbound';
@@ -55,6 +57,11 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
   const [deletingAgent, setDeletingAgent] = useState(false);
   const [unassignTarget, setUnassignTarget] = useState<{ no: string; type: string } | null>(null);
   const [unassigning, setUnassigning] = useState(false);
+
+  const generalHandle = useRef<GeneralTabHandle | null>(null);
+  const llmHandle = useRef<DynamicProviderFieldsHandle | null>(null);
+  const ttsHandle = useRef<DynamicProviderFieldsHandle | null>(null);
+  const sttHandle = useRef<DynamicProviderFieldsHandle | null>(null);
 
   const providers = providersLoadable.state === 'hasData' ? providersLoadable.data : [];
   const providersLoading = providersLoadable.state === 'loading';
@@ -148,6 +155,17 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
   };
 
   const handleSave = async () => {
+    const results = await Promise.all([
+      generalHandle.current?.trigger() ?? true,
+      llmHandle.current?.trigger() ?? true,
+      ttsHandle.current?.trigger() ?? true,
+      sttHandle.current?.trigger() ?? true,
+    ]);
+
+    if (results.some((valid) => !valid)) {
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = formStateToUpsertPayload(
@@ -209,6 +227,12 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
             providersLoading={providersLoading}
             onFormChange={handleFormChange}
             onDeleteAgent={openDeleteConfirm}
+            onGeneralValidityChange={(h) => {
+              generalHandle.current = h;
+            }}
+            onLlmValidityChange={(h) => {
+              llmHandle.current = h;
+            }}
           />
         ),
       },
@@ -232,6 +256,12 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
             sttProviders={sttProviders}
             providersLoading={providersLoading}
             onFormChange={handleFormChange}
+            onTtsValidityChange={(h) => {
+              ttsHandle.current = h;
+            }}
+            onSttValidityChange={(h) => {
+              sttHandle.current = h;
+            }}
           />
         ),
       },

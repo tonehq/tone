@@ -10,7 +10,7 @@ import { handleApiError } from '@/utils/helpers';
 import { toSelectOptions } from '@/utils/selectUtils';
 import { Gauge, Mic, Volume2 } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import DynamicProviderFields from './DynamicProviderFields';
+import DynamicProviderFields, { type DynamicProviderFieldsHandle } from './DynamicProviderFields';
 import type { AgentVoiceFormData } from './types';
 import VoiceSelect from './VoiceSelect';
 
@@ -20,6 +20,8 @@ interface VoiceTabProps {
   sttProviders: ServiceProvider[];
   providersLoading?: boolean;
   onFormChange: (partial: Partial<AgentVoiceFormData>) => void;
+  onTtsValidityChange?: (handle: DynamicProviderFieldsHandle) => void;
+  onSttValidityChange?: (handle: DynamicProviderFieldsHandle) => void;
 }
 
 function SectionCard({
@@ -83,6 +85,8 @@ export default function VoiceTab({
   sttProviders,
   providersLoading,
   onFormChange,
+  onTtsValidityChange,
+  onSttValidityChange,
 }: VoiceTabProps) {
   const [voices, setVoices] = useState<VoiceItem[]>([]);
   const [voicesLoading, setVoicesLoading] = useState(false);
@@ -129,6 +133,7 @@ export default function VoiceTab({
   const availableLanguageOptions = useMemo(() => {
     const langMap = new Map(languages.map((l) => [l.value, l]));
     const uniqueLangs = [...new Set(voices.map((v) => v.language))].sort();
+    if (!uniqueLangs.length) return [];
     const langItems = uniqueLangs.map((code) => {
       const known = langMap.get(code);
       return { code, name: known ? known.label : code, flag: known?.flag ?? '' };
@@ -138,18 +143,12 @@ export default function VoiceTab({
       labelKey: 'name',
       labelFormatter: (item) => (item.flag ? `${item.flag} ${item.name}` : String(item.name)),
     });
-  }, [voices]);
+  }, [voices, languages]);
 
   const filteredVoiceOptions = useMemo(() => {
     if (!formData.language) return voices;
     return voices.filter((v) => v.language === formData.language);
   }, [voices, formData.language]);
-
-  const _sttLanguageOptions = toSelectOptions(languages, {
-    valueKey: 'value',
-    labelKey: 'label',
-    labelFormatter: (lang) => `${lang.flag} ${lang.label}`,
-  });
 
   return (
     <div className="space-y-5">
@@ -220,6 +219,7 @@ export default function VoiceTab({
             )}
             values={formData.ttsMetaData}
             onChange={(metaData) => onFormChange({ ttsMetaData: metaData })}
+            onValidityChange={onTtsValidityChange}
           />
         ) : null}
 
@@ -273,6 +273,7 @@ export default function VoiceTab({
             schema={selectedSttProvider.meta_data_schema.filter((f) => f.name !== 'language')}
             values={formData.sttMetaData}
             onChange={(metaData) => onFormChange({ sttMetaData: metaData })}
+            onValidityChange={onSttValidityChange}
           />
         ) : null}
 

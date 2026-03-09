@@ -28,6 +28,8 @@ export interface MetaDataSchemaField {
   values?: { value: string; label: string }[];
 }
 
+export type ValidatorFn = (value: unknown, field: MetaDataSchemaField) => string | true;
+
 export interface ServiceProvider {
   id: number;
   uuid: string;

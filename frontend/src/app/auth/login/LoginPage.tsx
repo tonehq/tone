@@ -2,10 +2,13 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 
 import Container from '@/app/auth/shared/ContainerComponent';
 import { GoogleIcon } from '@/components/icons/google';
-import { CheckboxField, CustomButton, CustomLink, Form, TextInput } from '@/components/shared';
+import { CheckboxField, CustomButton, CustomLink, FormTextInput } from '@/components/shared';
+import { type LoginFormData, loginSchema } from '@/schemas/auth';
 import { login } from '@/services/auth/helper';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
@@ -14,11 +17,15 @@ const LoginPage = () => {
   const [loader, setLoader] = useState(false);
   const router = useRouter();
 
-  const handleSubmit = async (values: any) => {
-    console.log('values', values);
+  const { control, handleSubmit } = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' },
+  });
+
+  const onSubmit = async (values: LoginFormData) => {
     setLoader(true);
     try {
-      const res: any = await login(values['email'], values['password']);
+      const res = await login(values.email, values.password);
 
       if (res) {
         showToast.success('Login Successful', 'Welcome back!', 3);
@@ -41,16 +48,18 @@ const LoginPage = () => {
           Enter your credentials to access your account
         </p>
 
-        <Form onFinish={handleSubmit} layout="vertical" autoComplete="off">
-          <TextInput
+        <form onSubmit={handleSubmit(onSubmit)} autoComplete="off" className="space-y-5">
+          <FormTextInput
             name="email"
+            control={control}
             type="email"
             label="Email"
             placeholder="Enter your email"
             isRequired
           />
-          <TextInput
+          <FormTextInput
             name="password"
+            control={control}
             type="password"
             label="Password"
             placeholder="Enter your password"
@@ -82,7 +91,7 @@ const LoginPage = () => {
             <span className="text-sm text-muted-foreground">Don&apos;t have an account?</span>
             <CustomLink href="/auth/signup">Sign up</CustomLink>
           </div>
-        </Form>
+        </form>
       </div>
     </Container>
   );

@@ -548,10 +548,142 @@ Popover-based combobox with built-in search, keyboard navigation, and custom ite
 
 ---
 
+## FormTextInput
+
+RHF `Controller` wrapper around `TextInput`. Eliminates Controller boilerplate for text/date/url inputs.
+
+| Prop          | Type                    | Default | Description                                               |
+| ------------- | ----------------------- | ------- | --------------------------------------------------------- |
+| name          | string                  | —       | **Required.** RHF field name.                             |
+| control       | `Control<any>`          | —       | **Required.** RHF `control` from `useForm`.               |
+| rules         | `RegisterOptions`       | —       | RHF validation rules.                                     |
+| onValueChange | `(value: string) => void` | —     | Side-effect callback (e.g. `onFormChange`).               |
+| + TextInput props (minus `value`, `onChange`, `onBlur`) | | | All other TextInput props forwarded. |
+
+Error state and helperText are auto-derived from `fieldState` but overridable via props.
+
+**Example:**
+
+```tsx
+<FormTextInput
+  name="name"
+  control={control}
+  rules={{ required: 'Name is required' }}
+  onValueChange={(v) => onFormChange({ name: v })}
+/>
+```
+
+---
+
+## FormSelectInput
+
+RHF `Controller` wrapper around `SelectInput`.
+
+| Prop          | Type                    | Default | Description                                               |
+| ------------- | ----------------------- | ------- | --------------------------------------------------------- |
+| name          | string                  | —       | **Required.** RHF field name.                             |
+| control       | `Control<any>`          | —       | **Required.** RHF `control` from `useForm`.               |
+| rules         | `RegisterOptions`       | —       | RHF validation rules.                                     |
+| onValueChange | `(value: string) => void` | —     | Side-effect callback.                                     |
+| + SelectInput props (minus `value`, `onValueChange`) | | | All other SelectInput props forwarded. |
+
+**Example:**
+
+```tsx
+<FormSelectInput
+  name="provider"
+  control={control}
+  rules={{ required: 'Select a provider' }}
+  options={providerOptions}
+  placeholder="Select a provider"
+  onValueChange={(v) => handleChange('provider', v)}
+/>
+```
+
+---
+
+## FormTextAreaField
+
+RHF `Controller` wrapper around `TextAreaField`.
+
+| Prop          | Type                    | Default | Description                                               |
+| ------------- | ----------------------- | ------- | --------------------------------------------------------- |
+| name          | string                  | —       | **Required.** RHF field name.                             |
+| control       | `Control<any>`          | —       | **Required.** RHF `control` from `useForm`.               |
+| rules         | `RegisterOptions`       | —       | RHF validation rules.                                     |
+| onValueChange | `(value: string) => void` | —     | Side-effect callback.                                     |
+| + TextAreaField props (minus `value`, `onChange`, `onBlur`) | | | All other TextAreaField props forwarded. |
+
+**Example:**
+
+```tsx
+<FormTextAreaField
+  name="description"
+  control={control}
+  rules={{ maxLength: { value: 500, message: 'Too long' } }}
+  rows={4}
+/>
+```
+
+---
+
+## FormRadioGroupField
+
+RHF `Controller` wrapper around `RadioGroupField`.
+
+| Prop          | Type                    | Default | Description                                               |
+| ------------- | ----------------------- | ------- | --------------------------------------------------------- |
+| name          | string                  | —       | **Required.** RHF field name.                             |
+| control       | `Control<any>`          | —       | **Required.** RHF `control` from `useForm`.               |
+| rules         | `RegisterOptions`       | —       | RHF validation rules.                                     |
+| onValueChange | `(value: string) => void` | —     | Side-effect callback.                                     |
+| + RadioGroupField props (minus `value`, `onValueChange`) | | | All other RadioGroupField props forwarded. |
+
+**Example:**
+
+```tsx
+<FormRadioGroupField
+  name="plan"
+  control={control}
+  options={[
+    { value: 'monthly', label: 'Monthly' },
+    { value: 'yearly', label: 'Yearly' },
+  ]}
+  orientation="horizontal"
+/>
+```
+
+---
+
+## FormCheckboxField
+
+RHF `Controller` wrapper around `CheckboxField`. Uses the `id` prop as the RHF field name.
+
+| Prop           | Type                      | Default | Description                                               |
+| -------------- | ------------------------- | ------- | --------------------------------------------------------- |
+| id             | string                    | —       | **Required.** Checkbox id and RHF field name.             |
+| control        | `Control<any>`            | —       | **Required.** RHF `control` from `useForm`.               |
+| rules          | `RegisterOptions`         | —       | RHF validation rules.                                     |
+| onCheckedChange | `(checked: boolean) => void` | —  | Side-effect callback.                                     |
+| + CheckboxField props (minus `checked`, `onCheckedChange`) | | | All other CheckboxField props forwarded. |
+
+**Example:**
+
+```tsx
+<FormCheckboxField
+  id="terms"
+  control={control}
+  rules={{ required: 'You must accept' }}
+  label="I accept the terms"
+/>
+```
+
+---
+
 ## Exports from `@/components/shared`
 
-- **Components:** `CheckboxField`, `CustomButton`, `CustomLink`, `CustomModal`, `CustomTab`, `CustomTable`, `Form`, `Logo`, `RadioGroupField`, `SearchableSelect`, `SelectInput`, `TextAreaField`, `TextInput`
-- **Types:** `CustomModalProps`, `CustomTableColumn`, `CustomTablePagination`, `CustomTableProps`, `RadioGroupOption`, `SearchableSelectOption`, `SelectOption`, `TabItem`
+- **Components:** `CheckboxField`, `CustomButton`, `CustomLink`, `CustomModal`, `CustomTab`, `CustomTable`, `Form`, `FormCheckboxField`, `FormRadioGroupField`, `FormSelectInput`, `FormTextAreaField`, `FormTextInput`, `Logo`, `RadioGroupField`, `SearchableSelect`, `SelectInput`, `TextAreaField`, `TextInput`
+- **Types:** `CustomModalProps`, `CustomTableColumn`, `CustomTablePagination`, `CustomTableProps`, `FormCheckboxFieldProps`, `FormRadioGroupFieldProps`, `FormSelectInputProps`, `FormTextAreaFieldProps`, `FormTextInputProps`, `RadioGroupOption`, `SearchableSelectOption`, `SelectOption`, `TabItem`
 
 ---
 

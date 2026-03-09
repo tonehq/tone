@@ -1,9 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+
 import CustomButton from '../../../components/shared/CustomButton';
-import { Form } from '../../../components/shared/Form';
-import TextInput from '../../../components/shared/TextInput';
+import FormTextInput from '../../../components/shared/FormTextInput';
+import { type ForgotPasswordFormData, forgotPasswordSchema } from '../../../schemas/auth';
 import { forgotPassword } from '../../../services/auth/helper';
 import { handleApiError } from '../../../utils/helpers';
 import { showToast } from '../../../utils/toast';
@@ -12,20 +15,21 @@ import Container from '../shared/ContainerComponent';
 const ForgotPasswordPage = () => {
   const [loader, setLoader] = useState(false);
 
-  const handleSubmit = async (value: any) => {
+  const { control, handleSubmit } = useForm<ForgotPasswordFormData>({
+    resolver: zodResolver(forgotPasswordSchema),
+    defaultValues: { email: '' },
+  });
+
+  const onSubmit = async (values: ForgotPasswordFormData) => {
     setLoader(true);
-    if (value['email']) {
-      try {
-        const res: any = await forgotPassword(value['email']);
-        if (res) {
-          showToast.success('Email Sent', 'Password reset instructions sent to your email', 4);
-          setLoader(false);
-        }
-      } catch (error) {
-        handleApiError(error);
+    try {
+      const res = await forgotPassword(values.email);
+      if (res) {
+        showToast.success('Email Sent', 'Password reset instructions sent to your email', 4);
         setLoader(false);
       }
-    } else {
+    } catch (error) {
+      handleApiError(error);
       setLoader(false);
     }
   };
@@ -39,9 +43,10 @@ const ForgotPasswordPage = () => {
           your password.
         </p>
 
-        <Form onFinish={handleSubmit} layout="vertical" autoComplete="off">
-          <TextInput
+        <form onSubmit={handleSubmit(onSubmit)} autoComplete="off" className="space-y-5">
+          <FormTextInput
             name="email"
+            control={control}
             type="email"
             label="Email"
             placeholder="Enter your email"
@@ -56,7 +61,7 @@ const ForgotPasswordPage = () => {
               Cancel
             </CustomButton>
           </div>
-        </Form>
+        </form>
       </div>
     </Container>
   );

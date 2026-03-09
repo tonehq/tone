@@ -2,9 +2,12 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+
 import CustomButton from '../../../components/shared/CustomButton';
-import { Form } from '../../../components/shared/Form';
-import TextInput from '../../../components/shared/TextInput';
+import FormTextInput from '../../../components/shared/FormTextInput';
+import { type ResetPasswordFormData, resetPasswordSchema } from '../../../schemas/auth';
 import axiosInstance from '../../../utils/axios';
 import { handleApiError } from '../../../utils/helpers';
 import { showToast } from '../../../utils/toast';
@@ -15,29 +18,26 @@ const ResetPasswordContent = () => {
   const router = useRouter();
   const params = useSearchParams();
 
-  const handleSubmit = async (value: any) => {
+  const { control, handleSubmit } = useForm<ResetPasswordFormData>({
+    resolver: zodResolver(resetPasswordSchema),
+    defaultValues: { password: '', confirm_password: '' },
+  });
+
+  const onSubmit = async (values: ResetPasswordFormData) => {
     setLoader(true);
-    if (
-      value['password'] &&
-      value['confirm_password'] &&
-      value['password'] === value['confirm_password']
-    ) {
-      try {
-        const res = await axiosInstance.get(
-          `api/v1/auth/acceptForgotPassword?email=${params?.get('email')}&password=${value['password'].trim()}&token=${params?.get('token')}`,
-        );
-        if (res) {
-          showToast.success('Password Reset', 'Your password has been updated successfully', 4);
-          setTimeout(() => {
-            router.push('/auth/login');
-          }, 2000);
-        }
-        setLoader(false);
-      } catch (error) {
-        handleApiError(error);
-        setLoader(false);
+    try {
+      const res = await axiosInstance.get(
+        `api/v1/auth/acceptForgotPassword?email=${params?.get('email')}&password=${values.password.trim()}&token=${params?.get('token')}`,
+      );
+      if (res) {
+        showToast.success('Password Reset', 'Your password has been updated successfully', 4);
+        setTimeout(() => {
+          router.push('/auth/login');
+        }, 2000);
       }
-    } else {
+      setLoader(false);
+    } catch (error) {
+      handleApiError(error);
       setLoader(false);
     }
   };
@@ -48,16 +48,18 @@ const ResetPasswordContent = () => {
         <h4 className="mb-1 text-xl font-semibold">Reset password</h4>
         <p className="mb-4 text-[15px] text-muted-foreground">Enter your new password below</p>
 
-        <Form onFinish={handleSubmit} layout="vertical" autoComplete="off">
-          <TextInput
+        <form onSubmit={handleSubmit(onSubmit)} autoComplete="off" className="space-y-5">
+          <FormTextInput
             name="password"
+            control={control}
             type="password"
             label="New Password"
             placeholder="Enter new password"
             isRequired
           />
-          <TextInput
+          <FormTextInput
             name="confirm_password"
+            control={control}
             type="password"
             label="Confirm Password"
             placeholder="Confirm new password"
@@ -69,7 +71,7 @@ const ResetPasswordContent = () => {
               Reset Password
             </CustomButton>
           </div>
-        </Form>
+        </form>
       </div>
     </Container>
   );

@@ -60,7 +60,7 @@ const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
     }
 
     return (
-      <>
+      <div>
         {label && (
           <Label htmlFor={name} className={cn('mb-1.5', labelClassName)}>
             {label}
@@ -114,7 +114,7 @@ const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
             {helperText}
           </p>
         )}
-      </>
+      </div>
     );
   },
 );
