@@ -62,7 +62,6 @@ export default function Integrations() {
     try {
       await upsertChannel(payload as any);
       showToast.success(
-        'Success',
         data.id ? 'Integration updated successfully' : 'Integration created successfully',
       );
     } catch (err) {
@@ -74,7 +73,7 @@ export default function Integrations() {
   const handleDelete = async (id: number) => {
     try {
       await removeChannel(id);
-      showToast.success('Success', 'Integration deleted successfully');
+      showToast.success('Integration deleted successfully');
     } catch (error) {
       handleApiError(error);
     }

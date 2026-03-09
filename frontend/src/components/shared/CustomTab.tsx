@@ -38,11 +38,11 @@ const CustomTab: React.FC<CustomTabProps> = ({
       defaultValue={activeKey ? undefined : defaultKey}
       value={activeKey}
       onValueChange={onTabChange}
-      className={cn('flex flex-col', className)}
+      className={cn('flex min-h-0 flex-col', className)}
     >
       <TabsPrimitive.List
         className={cn(
-          'inline-flex w-full items-center gap-0 border-b border-border',
+          'inline-flex w-full shrink-0 items-center gap-0 border-b border-border',
           tabBarClassName,
         )}
       >
@@ -70,7 +70,7 @@ const CustomTab: React.FC<CustomTabProps> = ({
         <TabsPrimitive.Content
           key={item.key}
           value={item.key}
-          className={cn('flex-1 outline-none', contentClassName)}
+          className={cn('min-h-0 flex-1 outline-none', contentClassName)}
         >
           {item.children}
         </TabsPrimitive.Content>

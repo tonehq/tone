@@ -106,6 +106,7 @@ export function formStateToUpsertPayload(
     llm_service_id: form.aiModel,
     tts_service_id: form.voiceProvider,
     stt_service_id: form.sttProvider,
+    voice_id: form.ttsMetaData?.voice_id ?? null,
     channel: {
       type: 'TWILIO',
     },

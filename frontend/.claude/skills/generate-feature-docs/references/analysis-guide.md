@@ -9,26 +9,26 @@ Used by the `generate-feature-docs` skill during Step 3 (analysis).
 
 ### Dashboard routes (auth required)
 
-| Route                             | Page file                                                       | Main component                                   |
-| --------------------------------- | --------------------------------------------------------------- | ------------------------------------------------ |
-| `/home`                           | `src/app/(dashboard)/home/page.tsx`                             | Inline or `src/components/home/...`              |
-| `/agents`                         | `src/app/(dashboard)/agents/page.tsx`                           | `src/components/agents/AgentListPage.tsx`         |
-| `/agents/create/inbound`          | `src/app/(dashboard)/agents/create/inbound/page.tsx`            | `src/components/agents/agent-form/...`           |
-| `/agents/create/outbound`         | `src/app/(dashboard)/agents/create/outbound/page.tsx`           | `src/components/agents/agent-form/...`           |
-| `/agents/edit/:type/:id`          | `src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx`          | `src/components/agents/agent-form/...`           |
-| `/settings`                       | `src/app/(dashboard)/settings/page.tsx`                         | `src/components/settings/...`                    |
-| `/phone-numbers`                  | `src/app/(dashboard)/phone-numbers/page.tsx`                    | `src/components/phone-numbers/...`               |
+| Route                     | Page file                                              | Main component                            |
+| ------------------------- | ------------------------------------------------------ | ----------------------------------------- |
+| `/home`                   | `src/app/(dashboard)/home/page.tsx`                    | Inline or `src/components/home/...`       |
+| `/agents`                 | `src/app/(dashboard)/agents/page.tsx`                  | `src/components/agents/AgentListPage.tsx` |
+| `/agents/create/inbound`  | `src/app/(dashboard)/agents/create/inbound/page.tsx`   | `src/components/agents/agent-form/...`    |
+| `/agents/create/outbound` | `src/app/(dashboard)/agents/create/outbound/page.tsx`  | `src/components/agents/agent-form/...`    |
+| `/agents/edit/:type/:id`  | `src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx` | `src/components/agents/agent-form/...`    |
+| `/settings`               | `src/app/(dashboard)/settings/page.tsx`                | `src/components/settings/...`             |
+| `/phone-numbers`          | `src/app/(dashboard)/phone-numbers/page.tsx`           | `src/components/phone-numbers/...`        |
 
 ### Auth routes (public)
 
-| Route                  | Page file                                      |
-| ---------------------- | ---------------------------------------------- |
-| `/auth/login`          | `src/app/auth/login/page.tsx`                  |
-| `/auth/signup`         | `src/app/auth/signup/page.tsx`                 |
-| `/auth/forgotpassword` | `src/app/auth/forgotpassword/page.tsx`         |
-| `/auth/check-email`    | `src/app/auth/check-email/page.tsx`            |
-| `/auth/verify_signup`  | `src/app/auth/verify_signup/page.tsx`          |
-| `/auth/reset-password` | `src/app/auth/reset-password/page.tsx`         |
+| Route                  | Page file                              |
+| ---------------------- | -------------------------------------- |
+| `/auth/login`          | `src/app/auth/login/page.tsx`          |
+| `/auth/signup`         | `src/app/auth/signup/page.tsx`         |
+| `/auth/forgotpassword` | `src/app/auth/forgotpassword/page.tsx` |
+| `/auth/check-email`    | `src/app/auth/check-email/page.tsx`    |
+| `/auth/verify_signup`  | `src/app/auth/verify_signup/page.tsx`  |
+| `/auth/reset-password` | `src/app/auth/reset-password/page.tsx` |
 
 ### Discovery commands
 
@@ -61,21 +61,21 @@ Pages under `(dashboard)` are **thin wrappers** — they import and render a com
 
 When reading a component, classify every import to determine what to trace further:
 
-| Import source             | Classification     | Action                                              |
-| ------------------------- | ------------------ | --------------------------------------------------- |
-| `@/services/*`            | Service            | Read file → extract endpoint, method, request/response |
-| `@/atoms/*`               | Atom               | Read file → extract state shape, read/write actions |
-| `@/types/*`               | Type               | Read file → extract interface fields                |
-| `@/utils/*`               | Utility            | Read file only if it affects UI behavior            |
-| `@/components/shared/*`   | Shared component   | Read `docs/shared-components.md` instead of file    |
-| `@/components/ui/*`       | shadcn primitive   | Read `docs/shared-components.md` instead of file    |
-| `@/components/<domain>/*` | Child component    | Read file → trace recursively (max 3 levels deep)   |
-| `@/constants/*`           | Constants          | Read file → extract relevant values                 |
-| `next/navigation`         | Navigation         | Note `useRouter`, `useParams`, `useSearchParams`    |
-| `next/link`               | Navigation         | Note `<Link>` hrefs                                 |
-| `jotai`                   | State management   | Note `useAtom`, `useAtomValue`, `useSetAtom`        |
-| `react`                   | React              | Note hooks (`useState`, `useEffect`, `useCallback`) |
-| External packages         | Third-party        | Note only if it affects visible UI                  |
+| Import source             | Classification   | Action                                                 |
+| ------------------------- | ---------------- | ------------------------------------------------------ |
+| `@/services/*`            | Service          | Read file → extract endpoint, method, request/response |
+| `@/atoms/*`               | Atom             | Read file → extract state shape, read/write actions    |
+| `@/types/*`               | Type             | Read file → extract interface fields                   |
+| `@/utils/*`               | Utility          | Read file only if it affects UI behavior               |
+| `@/components/shared/*`   | Shared component | Read `docs/shared-components.md` instead of file       |
+| `@/components/ui/*`       | shadcn primitive | Read `docs/shared-components.md` instead of file       |
+| `@/components/<domain>/*` | Child component  | Read file → trace recursively (max 3 levels deep)      |
+| `@/constants/*`           | Constants        | Read file → extract relevant values                    |
+| `next/navigation`         | Navigation       | Note `useRouter`, `useParams`, `useSearchParams`       |
+| `next/link`               | Navigation       | Note `<Link>` hrefs                                    |
+| `jotai`                   | State management | Note `useAtom`, `useAtomValue`, `useSetAtom`           |
+| `react`                   | React            | Note hooks (`useState`, `useEffect`, `useCallback`)    |
+| External packages         | Third-party      | Note only if it affects visible UI                     |
 
 ### Depth limit
 
@@ -183,12 +183,12 @@ Read `src/middleware.ts` and extract:
 
 ### Auth cookies (4 total)
 
-| Cookie              | Purpose                           | Set by           |
-| ------------------- | --------------------------------- | ---------------- |
-| `tone_access_token` | JWT token for API auth            | Login flow       |
-| `org_tenant_id`     | Organization/tenant ID for API    | Login flow       |
-| `login_data`        | User profile data (JSON)          | Login flow       |
-| `user_id`           | Current user ID                   | Login flow       |
+| Cookie              | Purpose                        | Set by     |
+| ------------------- | ------------------------------ | ---------- |
+| `tone_access_token` | JWT token for API auth         | Login flow |
+| `org_tenant_id`     | Organization/tenant ID for API | Login flow |
+| `login_data`        | User profile data (JSON)       | Login flow |
+| `user_id`           | Current user ID                | Login flow |
 
 ---
 
@@ -198,14 +198,14 @@ Scan the component and its children for all navigation triggers:
 
 ### Sources
 
-| Code pattern                        | Type              |
-| ----------------------------------- | ----------------- |
-| `router.push('/path')`              | Programmatic nav  |
-| `router.replace('/path')`           | Programmatic nav  |
-| `<Link href="/path">`               | Declarative link  |
-| `<a href="/path">`                  | HTML link         |
-| Middleware redirect                  | Server redirect   |
-| `window.location` / `window.open`   | Browser nav       |
+| Code pattern                      | Type             |
+| --------------------------------- | ---------------- |
+| `router.push('/path')`            | Programmatic nav |
+| `router.replace('/path')`         | Programmatic nav |
+| `<Link href="/path">`             | Declarative link |
+| `<a href="/path">`                | HTML link        |
+| Middleware redirect               | Server redirect  |
+| `window.location` / `window.open` | Browser nav      |
 
 ### What to capture
 
@@ -223,15 +223,15 @@ Scan the component for error states and conditional renders:
 
 ### Sources
 
-| Pattern                                    | What it means                      |
-| ------------------------------------------ | ---------------------------------- |
-| `try/catch` in atom write                  | API call error handling            |
-| `loadable` state === 'hasError'            | Async data fetch failure           |
-| Conditional render on error state          | Error UI shown to user             |
-| `useNotification` calls                    | Toast/snackbar messages            |
-| `console.error` / `console.log`           | Silent error logging               |
-| Empty/null/undefined checks before render  | Guard against missing data         |
-| Loading state (`isLoading`, `state === 'loading'`) | Loading indicators          |
+| Pattern                                            | What it means              |
+| -------------------------------------------------- | -------------------------- |
+| `try/catch` in atom write                          | API call error handling    |
+| `loadable` state === 'hasError'                    | Async data fetch failure   |
+| Conditional render on error state                  | Error UI shown to user     |
+| `useNotification` calls                            | Toast/snackbar messages    |
+| `console.error` / `console.log`                    | Silent error logging       |
+| Empty/null/undefined checks before render          | Guard against missing data |
+| Loading state (`isLoading`, `state === 'loading'`) | Loading indicators         |
 
 ### What to capture
 

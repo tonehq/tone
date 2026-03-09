@@ -9,7 +9,7 @@ import type { ApiAgent } from '@/types/agent';
 import type { CustomTableColumn } from '@/types/components';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
-import dayjs from 'dayjs';
+import { formatDate } from '@/utils/date';
 import { useAtom } from 'jotai';
 import { Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -38,7 +38,7 @@ const AgentListPage: React.FC = () => {
     async (agentId: number) => {
       try {
         await removeAgent(agentId);
-        showToast.success('Agent Deleted', 'Agent deleted successfully');
+        showToast.success('Agent deleted successfully');
       } catch (error) {
         handleApiError(error);
       }
@@ -86,7 +86,7 @@ const AgentListPage: React.FC = () => {
       title: 'Last Edited',
       dataIndex: 'updated_at',
       sorter: true,
-      render: (value) => (value ? dayjs.unix(value as number).format('DD MMM YYYY, HH:mm') : '-'),
+      render: (value) => (value ? formatDate(value as number) : '-'),
     },
     {
       key: 'agent_type',
@@ -108,7 +108,7 @@ const AgentListPage: React.FC = () => {
   ];
 
   return (
-    <div className="h-full p-6">
+    <div className="flex h-full flex-col p-6">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-foreground">Agents</h1>
         <CustomButton type="primary" icon={<Plus />} onClick={() => setModalOpen(true)}>
@@ -124,7 +124,6 @@ const AgentListPage: React.FC = () => {
         onRowClick={handleEdit}
         searchable
         searchPlaceholder="Search agents..."
-        pagination={{ current: 1, pageSize: 10, pageSizeOptions: [10, 20, 50] }}
         emptyState={
           <div className="flex flex-col items-center gap-3">
             <p className="text-muted-foreground">No agents yet</p>

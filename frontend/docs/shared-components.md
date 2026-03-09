@@ -381,24 +381,24 @@ Single-choice group. Uses shadcn `RadioGroup` + `RadioGroupItem` + `Label` per o
 
 Wraps shadcn `Select` + `Label`. Provides loading skeleton, error state, and helper text.
 
-| Prop             | Type                      | Default               | Description                                                      |
-| ---------------- | ------------------------- | --------------------- | ---------------------------------------------------------------- |
-| name             | string                    | —                     | **Required.** Select name and id.                                |
-| options          | `SelectOption[]`          | —                     | **Required.** `{ value, label, disabled? }[]`.                   |
-| value            | string                    | —                     | Controlled value.                                                |
-| defaultValue     | string                    | —                     | Uncontrolled default.                                            |
-| onValueChange    | `(value: string) => void` | —                     | Called when selection changes.                                    |
-| placeholder      | string                    | `'Select an option'`  | Placeholder text when no value selected.                         |
-| label            | string                    | —                     | Label text above select.                                         |
-| isRequired       | boolean                   | `false`               | Shows asterisk on label.                                         |
-| loading          | boolean                   | `false`               | Shows skeleton instead of select.                                |
-| disabled         | boolean                   | `false`               | Disables the select.                                             |
-| error            | boolean                   | `false`               | Destructive border + ring.                                       |
-| helperText       | string                    | —                     | Small text below select.                                         |
-| size             | `'sm' \| 'default'`       | `'default'`           | Size variant passed to SelectTrigger.                            |
-| labelClassName   | string                    | —                     | Class for the label.                                             |
-| className        | string                    | —                     | Class for the outer wrapper div.                                 |
-| triggerClassName  | string                    | —                     | Class for the SelectTrigger.                                     |
+| Prop             | Type                      | Default              | Description                                    |
+| ---------------- | ------------------------- | -------------------- | ---------------------------------------------- |
+| name             | string                    | —                    | **Required.** Select name and id.              |
+| options          | `SelectOption[]`          | —                    | **Required.** `{ value, label, disabled? }[]`. |
+| value            | string                    | —                    | Controlled value.                              |
+| defaultValue     | string                    | —                    | Uncontrolled default.                          |
+| onValueChange    | `(value: string) => void` | —                    | Called when selection changes.                 |
+| placeholder      | string                    | `'Select an option'` | Placeholder text when no value selected.       |
+| label            | string                    | —                    | Label text above select.                       |
+| isRequired       | boolean                   | `false`              | Shows asterisk on label.                       |
+| loading          | boolean                   | `false`              | Shows skeleton instead of select.              |
+| disabled         | boolean                   | `false`              | Disables the select.                           |
+| error            | boolean                   | `false`              | Destructive border + ring.                     |
+| helperText       | string                    | —                    | Small text below select.                       |
+| size             | `'sm' \| 'default'`       | `'default'`          | Size variant passed to SelectTrigger.          |
+| labelClassName   | string                    | —                    | Class for the label.                           |
+| className        | string                    | —                    | Class for the outer wrapper div.               |
+| triggerClassName | string                    | —                    | Class for the SelectTrigger.                   |
 
 **SelectOption:** `{ value: string; label: string; disabled?: boolean }`
 
@@ -422,18 +422,18 @@ Wraps shadcn `Select` + `Label`. Provides loading skeleton, error state, and hel
 
 Wraps shadcn `Textarea` + `Label`. Supports loading skeleton, error state, and helper text.
 
-| Prop                        | Type    | Default | Description                          |
-| --------------------------- | ------- | ------- | ------------------------------------ |
-| name                        | string  | —       | **Required.** Textarea name and id.  |
-| label                       | string  | —       | Label text above textarea.           |
-| isRequired                  | boolean | `false` | Shows asterisk on label.             |
-| loading                     | boolean | `false` | Shows skeleton instead of textarea.  |
-| error                       | boolean | `false` | Destructive border + ring.           |
-| helperText                  | string  | —       | Small text below textarea.           |
-| rows                        | number  | `3`     | Number of visible text rows.         |
-| labelClassName              | string  | —       | Class for the label.                 |
-| className                   | string  | —       | Class for the textarea.              |
-| + all native textarea props |         |         | placeholder, value, onChange, etc.   |
+| Prop                        | Type    | Default | Description                         |
+| --------------------------- | ------- | ------- | ----------------------------------- |
+| name                        | string  | —       | **Required.** Textarea name and id. |
+| label                       | string  | —       | Label text above textarea.          |
+| isRequired                  | boolean | `false` | Shows asterisk on label.            |
+| loading                     | boolean | `false` | Shows skeleton instead of textarea. |
+| error                       | boolean | `false` | Destructive border + ring.          |
+| helperText                  | string  | —       | Small text below textarea.          |
+| rows                        | number  | `3`     | Number of visible text rows.        |
+| labelClassName              | string  | —       | Class for the label.                |
+| className                   | string  | —       | Class for the textarea.             |
+| + all native textarea props |         |         | placeholder, value, onChange, etc.  |
 
 **Example:**
 
@@ -454,25 +454,25 @@ Wraps shadcn `Textarea` + `Label`. Supports loading skeleton, error state, and h
 
 Ant Design-style line tabs built on Radix Tab primitives. Items-based API with `TabItem[]`.
 
-| Prop             | Type        | Default          | Description                                       |
-| ---------------- | ----------- | ---------------- | ------------------------------------------------- |
-| items            | `TabItem[]` | —                | **Required.** Tab definitions (see below).        |
-| defaultActiveKey | string      | first item's key | Default active tab (uncontrolled).                |
-| activeKey        | string      | —                | Controlled active tab key.                        |
-| onTabChange      | `(key: string) => void` | —     | Called when the active tab changes.               |
-| className        | string      | —                | Class for the root container.                     |
-| tabBarClassName  | string      | —                | Class for the tab bar (trigger list).             |
-| contentClassName | string      | —                | Class for each tab content panel.                 |
+| Prop             | Type                    | Default          | Description                                |
+| ---------------- | ----------------------- | ---------------- | ------------------------------------------ |
+| items            | `TabItem[]`             | —                | **Required.** Tab definitions (see below). |
+| defaultActiveKey | string                  | first item's key | Default active tab (uncontrolled).         |
+| activeKey        | string                  | —                | Controlled active tab key.                 |
+| onTabChange      | `(key: string) => void` | —                | Called when the active tab changes.        |
+| className        | string                  | —                | Class for the root container.              |
+| tabBarClassName  | string                  | —                | Class for the tab bar (trigger list).      |
+| contentClassName | string                  | —                | Class for each tab content panel.          |
 
 **TabItem:**
 
-| Field    | Type      | Description                             |
-| -------- | --------- | --------------------------------------- |
-| key      | string    | **Required.** Unique tab identifier.    |
-| label    | ReactNode | **Required.** Tab trigger label.        |
-| icon     | ReactNode | Optional icon before label.             |
-| disabled | boolean   | Disables the tab trigger.               |
-| children | ReactNode | **Required.** Tab panel content.        |
+| Field    | Type      | Description                          |
+| -------- | --------- | ------------------------------------ |
+| key      | string    | **Required.** Unique tab identifier. |
+| label    | ReactNode | **Required.** Tab trigger label.     |
+| icon     | ReactNode | Optional icon before label.          |
+| disabled | boolean   | Disables the tab trigger.            |
+| children | ReactNode | **Required.** Tab panel content.     |
 
 **Example:**
 
@@ -489,10 +489,69 @@ Ant Design-style line tabs built on Radix Tab primitives. Items-based API with `
 
 ---
 
+## SearchableSelect
+
+Popover-based combobox with built-in search, keyboard navigation, and custom item rendering. Use when options need rich JSX (avatars, badges, descriptions) or when the list is long enough to warrant filtering.
+
+### Props
+
+| Prop                | Type                                            | Default                | Description                                                  |
+| ------------------- | ----------------------------------------------- | ---------------------- | ------------------------------------------------------------ |
+| name                | string                                          | —                      | **Required.** Input name and id.                             |
+| options             | `T[]` (extends `SearchableSelectOption`)        | —                      | **Required.** `{ value, label, ...extra }[]`.                |
+| value               | string                                          | —                      | Controlled value.                                            |
+| onValueChange       | `(value: string) => void`                       | —                      | Called when selection changes.                               |
+| placeholder         | string                                          | `'Select an option'`   | Trigger placeholder.                                         |
+| searchPlaceholder   | string                                          | `'Search...'`          | Search input placeholder.                                    |
+| label               | string                                          | —                      | Label text above the trigger.                                |
+| isRequired          | boolean                                         | `false`                | Shows asterisk on label.                                     |
+| loading             | boolean                                         | `false`                | Shows skeleton.                                              |
+| disabled            | boolean                                         | `false`                | Disables the trigger.                                        |
+| error               | boolean                                         | `false`                | Destructive border + ring.                                   |
+| helperText          | string                                          | —                      | Small text below trigger.                                    |
+| renderOption        | `(option: T, isSelected: boolean) => ReactNode` | —                      | Custom item renderer. Falls back to plain text + check icon. |
+| renderSelectedValue | `(option: T) => ReactNode`                      | —                      | Custom trigger display. Falls back to label.                 |
+| filterFn            | `(option: T, query: string) => boolean`         | case-insensitive label | Custom search filter.                                        |
+| emptyMessage        | string                                          | `'No results found.'`  | Shown when no options match the search.                      |
+| className           | string                                          | —                      | Class for the outer wrapper.                                 |
+
+**SearchableSelectOption:** `{ value: string; label: string; disabled?: boolean }`
+
+### Example
+
+```tsx
+<SearchableSelect
+  name="voice"
+  options={voiceOptions}
+  value={selectedVoice}
+  onValueChange={setSelectedVoice}
+  placeholder="Select a voice"
+  searchPlaceholder="Search voices..."
+  renderOption={(opt, isSelected) => (
+    <div className="flex items-center gap-2">
+      <Avatar name={opt.name} />
+      <span>{opt.label}</span>
+      {isSelected && <CheckIcon className="size-4" />}
+    </div>
+  )}
+  renderSelectedValue={(opt) => <span>{opt.label}</span>}
+  filterFn={(opt, q) => opt.label.toLowerCase().includes(q.toLowerCase())}
+/>
+```
+
+### Do's and Don'ts
+
+- **Do** use `SearchableSelect` when options need custom rendering (avatars, badges, descriptions).
+- **Do** use `SelectInput` for simple text-only dropdowns with few options.
+- **Do** provide `renderOption` with a check indicator for the selected item.
+- **Don't** use `SearchableSelect` if options are plain `{ value, label }` — use `SelectInput` instead.
+
+---
+
 ## Exports from `@/components/shared`
 
-- **Components:** `CheckboxField`, `CustomButton`, `CustomLink`, `CustomModal`, `CustomTab`, `CustomTable`, `Form`, `Logo`, `RadioGroupField`, `SelectInput`, `TextAreaField`, `TextInput`
-- **Types:** `CustomModalProps`, `CustomTableColumn`, `CustomTablePagination`, `CustomTableProps`, `RadioGroupOption`, `SelectOption`, `TabItem`
+- **Components:** `CheckboxField`, `CustomButton`, `CustomLink`, `CustomModal`, `CustomTab`, `CustomTable`, `Form`, `Logo`, `RadioGroupField`, `SearchableSelect`, `SelectInput`, `TextAreaField`, `TextInput`
+- **Types:** `CustomModalProps`, `CustomTableColumn`, `CustomTablePagination`, `CustomTableProps`, `RadioGroupOption`, `SearchableSelectOption`, `SelectOption`, `TabItem`
 
 ---
 

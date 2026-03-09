@@ -105,7 +105,9 @@ expect(token).toBeDefined();
 
 ```typescript
 // Error toast visible (Sonner)
-await expect(page.locator('[data-sonner-toast]', { hasText: 'Login Failed' })).toBeVisible({ timeout: 5000 });
+await expect(page.locator('[data-sonner-toast]', { hasText: 'Login Failed' })).toBeVisible({
+  timeout: 5000,
+});
 
 // Did NOT navigate away
 await expect(page).toHaveURL(/\/auth\/login/);
@@ -203,12 +205,12 @@ await expect(page.locator('[data-sonner-toast]', { hasText: 'Error' })).toBeVisi
 `showToast` from `@/utils/toast` renders title (and optional description) in the toast element.
 `handleApiError` from `@/utils/helpers` extracts `error.response.data.detail` and shows it as the toast title.
 
-| Scenario                            | Toast text                                    |
-| ----------------------------------- | --------------------------------------------- |
-| Login success                       | Title: `Login Successful`, Desc: `Welcome back!` |
+| Scenario                            | Toast text                                                     |
+| ----------------------------------- | -------------------------------------------------------------- |
+| Login success                       | Title: `Login Successful`, Desc: `Welcome back!`               |
 | Login failed (empty/falsy response) | Title: `Login Failed`, Desc: `Please enter email and password` |
-| API error with detail               | Title: the `detail` value from the API response |
-| API error / network failure         | Title: `Something went wrong. Please try again.` |
+| API error with detail               | Title: the `detail` value from the API response                |
+| API error / network failure         | Title: `Something went wrong. Please try again.`               |
 
 ---
 

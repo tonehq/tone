@@ -193,7 +193,7 @@ def extract_strings_from_lines(lines: list[str]) -> list[str]:
     for pattern in SOURCE_PATTERNS:
         for match in pattern.finditer(text):
             s = match.group(1).strip()
-            if len(s) >= 3:
+            if len(s) >= 3 and "\n" not in s:
                 # Decode common HTML entities
                 s = decode_html_entities(s)
                 strings.append(s)
@@ -205,7 +205,7 @@ def extract_strings_from_lines(lines: list[str]) -> list[str]:
             m = RE_BARE_TEXT_LINE.match(line)
             if m:
                 s = m.group(1).strip()
-                if len(s) >= 3:
+                if len(s) >= 3 and "\n" not in s:
                     s = decode_html_entities(s)
                     strings.append(s)
 
@@ -227,10 +227,45 @@ def decode_html_entities(s: str) -> str:
     return s
 
 
+def _strings_are_similar(old: str, new: str) -> bool:
+    """
+    Check if two strings are similar enough to be considered a direct edit
+    of the same UI element (not two unrelated strings from the same hunk).
+
+    Requirements:
+    - Both strings must have similar word counts (within ±2 words)
+    - Must share at least 50% of words (case-insensitive)
+    - Single-word strings must be at least 6 chars to avoid false positives
+    """
+    old_words = old.lower().split()
+    new_words = new.lower().split()
+
+    # Reject single short words — too generic (e.g., "Google", "Voice")
+    if len(old_words) == 1 and len(old) < 6:
+        return False
+    if len(new_words) == 1 and len(new) < 6:
+        return False
+
+    # Word count must be similar (within ±2)
+    if abs(len(old_words) - len(new_words)) > 2:
+        return False
+
+    # Must share at least 50% of words
+    old_set = set(old_words)
+    new_set = set(new_words)
+    shared = len(old_set & new_set)
+    max_words = max(len(old_set), len(new_set))
+    if max_words == 0:
+        return False
+
+    return shared / max_words >= 0.5
+
+
 def pair_string_changes(hunks: list[HunkStrings], source_file: str) -> list[StringChange]:
     """
-    Pair removed strings with added strings within each hunk by position.
-    First removed → first added, second removed → second added, etc.
+    Pair removed strings with added strings within each hunk.
+    Only pairs strings that share at least one word (to avoid mismatches
+    in large hunks with many unrelated string changes).
     """
     changes: list[StringChange] = []
 
@@ -247,22 +282,26 @@ def pair_string_changes(hunks: list[HunkStrings], source_file: str) -> list[Stri
         removed_strings = [s for s in removed_strings if s not in common]
         added_strings = [s for s in added_strings if s not in common]
 
-        # Pair by position
-        pairs = min(len(removed_strings), len(added_strings))
-        for i in range(pairs):
-            changes.append(StringChange(
-                old=removed_strings[i],
-                new=added_strings[i],
-                source_file=source_file,
-            ))
+        # Match by similarity (shared words) instead of blind positional pairing
+        used_added: set[int] = set()
+        for old_str in removed_strings:
+            for j, new_str in enumerate(added_strings):
+                if j in used_added:
+                    continue
+                if _strings_are_similar(old_str, new_str):
+                    changes.append(StringChange(
+                        old=old_str,
+                        new=new_str,
+                        source_file=source_file,
+                    ))
+                    used_added.add(j)
+                    break
+            else:
+                print(f"  WARNING: Unpaired removed string: \"{old_str}\" in {source_file}")
 
-        # Log unpaired strings
-        if len(removed_strings) > pairs:
-            for s in removed_strings[pairs:]:
-                print(f"  WARNING: Unpaired removed string: \"{s}\" in {source_file}")
-        if len(added_strings) > pairs:
-            for s in added_strings[pairs:]:
-                print(f"  WARNING: Unpaired added string: \"{s}\" in {source_file}")
+        for j, new_str in enumerate(added_strings):
+            if j not in used_added:
+                print(f"  WARNING: Unpaired added string: \"{new_str}\" in {source_file}")
 
     return changes
 
@@ -352,20 +391,17 @@ def is_word_prefix(short: str, long: str) -> bool:
 
 def replace_in_context(line: str, pattern: re.Pattern, old: str, new: str) -> str:
     """Replace old string with new string only within a specific test context pattern."""
+    # Never replace with multi-line strings or strings containing JSX fragments
+    if "\n" in new or ">" in new or "<" in new:
+        return line
+
     def replacer(match: re.Match) -> str:
         prefix = match.group(1)
         captured = match.group(2)
         suffix = match.group(3)
 
-        # Exact match of the old string
+        # Exact match of the old string only
         if captured == old:
-            return f"{prefix}{new}{suffix}"
-
-        # Fallback: test string is a word-prefix of the old diff string.
-        # This handles cases where the test is stale from a previous change
-        # (e.g., test has "Welcome back" but source changed from
-        # "Welcome back 123456" to "Welcome back 789").
-        if is_word_prefix(captured, old):
             return f"{prefix}{new}{suffix}"
 
         return match.group(0)

@@ -297,10 +297,17 @@ test.describe('Agents List Page', () => {
     test('shows skeleton rows while agents are being fetched', async ({ page }) => {
       await page.unrouteAll({ behavior: 'wait' });
 
-      // Delayed API response — abort after 3s to prevent success handler side effects
+      // Delayed API response — hold request long enough to observe skeleton
+      let resolveRoute: (() => void) | null = null;
       await page.route('**/agent/get_all_agents**', async (route) => {
-        await new Promise((resolve) => setTimeout(resolve, 3000));
-        await route.abort('failed');
+        await new Promise<void>((resolve) => {
+          resolveRoute = resolve;
+        });
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([]),
+        });
       });
 
       await page.goto('/agents');
@@ -309,6 +316,9 @@ test.describe('Agents List Page', () => {
       await expect(page.locator('[class*="animate-pulse"]').first()).toBeVisible({
         timeout: 2_000,
       });
+
+      // Release the pending route so unrouteAll doesn't hang
+      resolveRoute?.();
     });
   });
 
