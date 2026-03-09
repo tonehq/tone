@@ -263,8 +263,8 @@ class AgentFactoryService(BaseService):
             if provider_name == "cartesia":
                 from pipecat.services.cartesia.tts import CartesiaTTSService
                 voice_kwargs = {}
-                if tts_voice_id is not None:
-                    voice_kwargs["voice_id"] = tts_voice_id or "e07c00bc-4134-4eae-9ea4-1a55fb45746b"
+                voice_kwargs["voice_id"] = tts_voice_id or "e07c00bc-4134-4eae-9ea4-1a55fb45746b"
+                
                 if tts_language is not None:
                     voice_kwargs["language"] = tts_language or "en"
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
@@ -283,8 +283,9 @@ class AgentFactoryService(BaseService):
             if provider_name == "elevenlabs":
                 from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
                 voice_kwargs = {}
-                if tts_voice_id is not None:
-                    voice_kwargs["voice_id"] = tts_voice_id or "CwhRBWXzGAHq8TQ4Fs17"
+
+                voice_kwargs["voice_id"] = tts_voice_id or "CwhRBWXzGAHq8TQ4Fs17"
+
                 if tts_language is not None:
                     voice_kwargs["language"] = tts_language or "en"
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
@@ -304,8 +305,8 @@ class AgentFactoryService(BaseService):
                 # To check languages in this
                 from pipecat.services.asyncai.tts import AsyncAIHttpTTSService
                 voice_kwargs = {}
-                if tts_voice_id is not None:
-                    voice_kwargs["voice_id"] = tts_voice_id or "13616e5f-6fda-4247-b548-8821cb71fb54"
+                voice_kwargs["voice_id"] = tts_voice_id or "13616e5f-6fda-4247-b548-8821cb71fb54"
+
                 if tts_language is not None:
                     voice_kwargs["language"] = tts_language
                 else:
@@ -342,7 +343,7 @@ class AgentFactoryService(BaseService):
                 else:
                     voice_kwargs["language"] = None
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return DeepgramHttpTTSService(api_key=api_key, **voice_kwargs)
+                return DeepgramHttpTTSService(api_key=api_key, aiohttp_session = aiohttp.ClientSession,  **voice_kwargs)
             if provider_name == "google_base":
                 # To check this fully
                 from pipecat.services.google.tts import GoogleBaseTTSService
@@ -389,8 +390,9 @@ class AgentFactoryService(BaseService):
                 # To check language
                 from pipecat.services.neuphonic.tts import NeuphonicHttpTTSService
                 voice_kwargs = {}
-                if tts_voice_id is not None:
-                    voice_kwargs["voice_id"] = tts_voice_id or "6654e5a9-143e-46f4-a44a-4fcb9e1fe2a6"
+
+                voice_kwargs["voice_id"] = tts_voice_id or "6654e5a9-143e-46f4-a44a-4fcb9e1fe2a6"
+
                 if tts_language is not None:
                     voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
@@ -408,8 +410,8 @@ class AgentFactoryService(BaseService):
             if provider_name == "rime":
                 from pipecat.services.rime.tts import RimeHttpTTSService
                 voice_kwargs = {}
-                if tts_voice_id is not None:
-                    voice_kwargs["voice_id"] = tts_voice_id or "albion"
+                voice_kwargs["voice_id"] = tts_voice_id or "albion"
+
                 if tts_language is not None:
                     voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
@@ -448,8 +450,8 @@ class AgentFactoryService(BaseService):
                 # To check this fully
                 from pipecat.services.fish.tts import FishAudioTTSService
                 voice_kwargs = {}
-                if tts_voice_id is not None:
-                    voice_kwargs["reference_id"] = tts_voice_id
+                voice_kwargs["reference_id"] = tts_voice_id or "0eb2bd3576714dbcad7cd4c6b2b6e12f"
+
                 if tts_language is not None:
                     voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
@@ -457,8 +459,11 @@ class AgentFactoryService(BaseService):
             if provider_name == "hume":
                 from pipecat.services.hume.tts import HumeTTSService
                 voice_kwargs = {}
-                if tts_voice_id is not None:
-                    voice_kwargs["voice_id"] = tts_voice_id or "d8ab67c6-953d-4bd8-9370-8fa53a0f1453"
+                # if tts_voice_id is not None:
+                    # voice_kwargs["voice_id"] = tts_voice_id or "d8ab67c6-953d-4bd8-9370-8fa53a0f1453"
+
+                voice_kwargs["voice_id"] = tts_voice_id or "d8ab67c6-953d-4bd8-9370-8fa53a0f1453"
+
                 if tts_language is not None:
                     voice_kwargs["language"] = tts_language
                 else:
@@ -479,20 +484,19 @@ class AgentFactoryService(BaseService):
             if provider_name == "lmnt":
                 from pipecat.services.lmnt.tts import LmntTTSService
                 voice_kwargs = {}
-                if tts_voice_id is not None:
-                    voice_kwargs["voice_id"] = tts_voice_id or "ava"
+                voice_kwargs["voice_id"] = tts_voice_id or "ava"
+
                 if tts_language is not None:
                     voice_kwargs["language"] = tts_language
-                else:
-                    voice_kwargs["language"] = None
-                print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
+
                 return LmntTTSService(api_key=api_key, **voice_kwargs)
             if provider_name == "resemble":
                 # Need to check voices
                 from pipecat.services.resembleai.tts import ResembleAITTSService
                 voice_kwargs = {}
-                if tts_voice_id is not None:
-                    voice_kwargs["voice_id"] = tts_voice_id
+
+                voice_kwargs["voice_id"] = tts_voice_id
+                
                 if tts_language is not None:
                     voice_kwargs["language"] = tts_language
                 else:
