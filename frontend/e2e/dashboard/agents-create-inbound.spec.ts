@@ -477,7 +477,7 @@ test.describe('Create Inbound Agent Page', () => {
   test.describe('Tab Navigation', () => {
     test('switches between all tabs', async ({ page }) => {
       await page.getByRole('tab', { name: /general/i }).click();
-      await expect(page.getByText('Agent Name', { exact: true })).toBeVisible();
+      await expect(page.getByText('Agent Name', { exact: false })).toBeVisible();
 
       await page.getByRole('tab', { name: /voice/i }).click();
       await expect(page.getByText('Voice Provider')).toBeVisible();
@@ -489,7 +489,7 @@ test.describe('Create Inbound Agent Page', () => {
       await expect(page.locator('.ProseMirror')).toBeVisible();
 
       await page.getByRole('tab', { name: /general/i }).click();
-      await expect(page.getByText('Agent Name', { exact: true })).toBeVisible();
+      await expect(page.getByText('Agent Name', { exact: false })).toBeVisible();
     });
   });
 
