@@ -256,8 +256,8 @@ class AgentFactoryService(BaseService):
         model = self._get_model_name_by_id(metadata.get("model_id"))
 
         import aiohttp
-        # session = aiohttp.ClientSession()
-        session = None
+        session = aiohttp.ClientSession()
+        # session = None
 
         try:
             if provider_name == "cartesia":
@@ -343,7 +343,7 @@ class AgentFactoryService(BaseService):
                 else:
                     voice_kwargs["language"] = None
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return DeepgramHttpTTSService(api_key=api_key, aiohttp_session = aiohttp.ClientSession,  **voice_kwargs)
+                return DeepgramHttpTTSService(api_key=api_key, aiohttp_session = session,  **voice_kwargs)
             if provider_name == "google_base":
                 # To check this fully
                 from pipecat.services.google.tts import GoogleBaseTTSService
