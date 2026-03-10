@@ -309,7 +309,7 @@ export default function VoiceTab({
                   role="radio"
                   aria-checked={isActive}
                   className={cn(
-                    '!flex-col !h-auto !w-[170px] !items-start rounded-md border p-3 text-left transition-colors',
+                    'flex-col! h-auto! w-[170px]! items-start! rounded-md border p-3 text-left transition-colors',
                     isActive
                       ? 'border-primary bg-primary/10'
                       : 'border-border hover:border-muted-foreground/50',

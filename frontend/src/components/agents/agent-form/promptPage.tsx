@@ -61,7 +61,7 @@ function ToolbarButton({
 }
 
 function ToolbarDivider() {
-  return <Separator orientation="vertical" className="mx-1.5 !h-5" />;
+  return <Separator orientation="vertical" className="mx-1.5 h-5!" />;
 }
 
 export default function PromptPage({ formData, onFormChange }: PromptPageProps) {
