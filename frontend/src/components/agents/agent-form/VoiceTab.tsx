@@ -9,7 +9,7 @@ import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { toSelectOptions } from '@/utils/selectUtils';
 import { Gauge, Mic, Volume2 } from 'lucide-react';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import DynamicProviderFields, { type DynamicProviderFieldsHandle } from './DynamicProviderFields';
 import type { AgentVoiceFormData } from './types';
 import VoiceSelect from './VoiceSelect';
@@ -90,6 +90,7 @@ export default function VoiceTab({
 }: VoiceTabProps) {
   const [voices, setVoices] = useState<VoiceItem[]>([]);
   const [voicesLoading, setVoicesLoading] = useState(false);
+  const fetchedProviderRef = useRef<number | null>(null);
 
   const ttsOptions = toSelectOptions(ttsProviders, { valueKey: 'id', labelKey: 'display_name' });
   const sttOptions = toSelectOptions(sttProviders, { valueKey: 'id', labelKey: 'display_name' });
@@ -106,13 +107,17 @@ export default function VoiceTab({
   useEffect(() => {
     if (!formData.voiceProvider) {
       setVoices([]);
+      fetchedProviderRef.current = null;
       return;
     }
+    if (fetchedProviderRef.current === formData.voiceProvider) return;
+
     let cancelled = false;
     setVoicesLoading(true);
     getVoicesByProvider(formData.voiceProvider)
       .then((data) => {
         if (!cancelled) {
+          fetchedProviderRef.current = formData.voiceProvider;
           setVoices(data.voices ?? []);
         }
       })
