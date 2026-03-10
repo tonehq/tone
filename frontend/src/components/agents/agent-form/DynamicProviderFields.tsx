@@ -1,18 +1,16 @@
 'use client';
 
 import {
-  CheckboxField,
-  FormSelectInput,
-  FormTextInput,
+  MultiSelectField,
   RadioGroupField,
+  SelectInput,
+  SliderField,
   TextInput,
 } from '@/components/shared';
-import { Slider } from '@/components/ui/slider';
 import type { MetaDataSchemaField } from '@/types/provider';
 import { toSelectOptions } from '@/utils/selectUtils';
 import { buildFieldRules, getDefaultValue } from '@/utils/validators';
-import { X } from 'lucide-react';
-import { type KeyboardEvent, type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 
 export interface DynamicProviderFieldsHandle {
@@ -103,89 +101,6 @@ function resolveFieldType(
     default:
       return 'input';
   }
-}
-
-function MultiSelectField({
-  field,
-  currentValue,
-  onFieldChange,
-}: {
-  field: MetaDataSchemaField;
-  currentValue: unknown;
-  onFieldChange: (value: unknown) => void;
-}) {
-  const [tagInput, setTagInput] = useState('');
-  const selectedValues = Array.isArray(currentValue) ? (currentValue as string[]) : [];
-
-  if (field.values && field.values.length > 0) {
-    return (
-      <div className="flex flex-col gap-2">
-        {field.values.map((opt) => {
-          const isChecked = selectedValues.includes(opt.value);
-          return (
-            <CheckboxField
-              key={opt.value}
-              id={`${field.name}-${opt.value}`}
-              label={opt.label}
-              checked={isChecked}
-              onCheckedChange={(checked) => {
-                const next = checked
-                  ? [...selectedValues, opt.value]
-                  : selectedValues.filter((v) => v !== opt.value);
-                onFieldChange(next);
-              }}
-            />
-          );
-        })}
-      </div>
-    );
-  }
-
-  const addTag = () => {
-    const trimmed = tagInput.trim();
-    if (trimmed && !selectedValues.includes(trimmed)) {
-      onFieldChange([...selectedValues, trimmed]);
-      setTagInput('');
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex gap-2">
-        <TextInput
-          name={`${field.name}-input`}
-          value={tagInput}
-          onChange={(e) => setTagInput(e.target.value)}
-          onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              addTag();
-            }
-          }}
-          placeholder={`Add ${formatLabel(field.name).toLowerCase()}`}
-        />
-      </div>
-      {selectedValues.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {selectedValues.map((val) => (
-            <span
-              key={val}
-              className="inline-flex items-center gap-1 rounded-md border bg-muted px-2 py-0.5 text-xs"
-            >
-              {val}
-              <button
-                type="button"
-                onClick={() => onFieldChange(selectedValues.filter((v) => v !== val))}
-                className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20"
-              >
-                <X className="size-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function parseRange(description?: string): { min: number; max: number; step: number } {
@@ -288,7 +203,7 @@ export default function DynamicProviderFields({
                 description={field.description}
                 required={isRequired}
               >
-                <FormSelectInput
+                <SelectInput
                   name={field.name}
                   control={control}
                   rules={rules}
@@ -352,26 +267,17 @@ export default function DynamicProviderFields({
                 description={field.description}
                 required={isRequired}
               >
-                <Controller
+                <RadioGroupField
                   name={field.name}
                   control={control}
                   rules={rules}
-                  render={({ field: rhf }) => (
-                    <RadioGroupField
-                      name={field.name}
-                      value={rhf.value != null ? String(rhf.value) : ''}
-                      onValueChange={(v) => {
-                        const boolVal = v === 'true';
-                        rhf.onChange(boolVal);
-                        handleChange(field.name, boolVal);
-                      }}
-                      orientation="horizontal"
-                      options={[
-                        { value: 'true', label: 'Yes' },
-                        { value: 'false', label: 'No' },
-                      ]}
-                    />
-                  )}
+                  orientation="horizontal"
+                  options={[
+                    { value: 'true', label: 'Yes' },
+                    { value: 'false', label: 'No' },
+                  ]}
+                  transformValue={(v) => v === 'true'}
+                  onValueChange={(v) => handleChange(field.name, v === 'true')}
                 />
               </FormRow>
             );
@@ -384,7 +290,7 @@ export default function DynamicProviderFields({
                 description={field.description}
                 required={isRequired}
               >
-                <FormTextInput
+                <TextInput
                   name={field.name}
                   control={control}
                   rules={rules}
@@ -429,7 +335,7 @@ export default function DynamicProviderFields({
                 description={field.description}
                 required={isRequired}
               >
-                <FormTextInput
+                <TextInput
                   name={field.name}
                   control={control}
                   rules={rules}
@@ -448,20 +354,13 @@ export default function DynamicProviderFields({
                 description={field.description}
                 required={isRequired}
               >
-                <Controller
+                <MultiSelectField
                   name={field.name}
                   control={control}
                   rules={rules}
-                  render={({ field: rhf }) => (
-                    <MultiSelectField
-                      field={field}
-                      currentValue={rhf.value}
-                      onFieldChange={(v) => {
-                        rhf.onChange(v);
-                        handleChange(field.name, v);
-                      }}
-                    />
-                  )}
+                  options={field.values}
+                  placeholder={`Add ${label.toLowerCase()}`}
+                  onChange={(v) => handleChange(field.name, v)}
                 />
               </FormRow>
             );
@@ -475,32 +374,14 @@ export default function DynamicProviderFields({
                 description={field.description}
                 required={isRequired}
               >
-                <Controller
+                <SliderField
                   name={field.name}
                   control={control}
                   rules={rules}
-                  render={({ field: rhf }) => {
-                    const sliderValue = rhf.value != null ? Number(rhf.value) : range.min;
-                    return (
-                      <div className="w-full px-1">
-                        <Slider
-                          value={[sliderValue]}
-                          onValueChange={([v]) => {
-                            rhf.onChange(v);
-                            handleChange(field.name, v);
-                          }}
-                          min={range.min}
-                          max={range.max}
-                          step={range.step}
-                        />
-                        <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                          <span>{range.min}</span>
-                          <span>{sliderValue}</span>
-                          <span>{range.max}</span>
-                        </div>
-                      </div>
-                    );
-                  }}
+                  min={range.min}
+                  max={range.max}
+                  step={range.step}
+                  onValueChange={(v) => handleChange(field.name, v)}
                 />
               </FormRow>
             );
@@ -515,7 +396,7 @@ export default function DynamicProviderFields({
                 description={field.description}
                 required={isRequired}
               >
-                <FormTextInput
+                <TextInput
                   name={field.name}
                   control={control}
                   rules={rules}

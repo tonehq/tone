@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  CustomButton,
-  FormTextInput,
-  SelectInput,
-  TextAreaField,
-  TextInput,
-} from '@/components/shared';
+import { CustomButton, SelectInput, TextAreaField, TextInput } from '@/components/shared';
 import { Form } from '@/components/shared/Form';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -210,7 +204,7 @@ export default function GeneralTab({
           description="Basic information about your agent."
         >
           <FormRow label="Agent Name" description="What name will your agent go by." required>
-            <FormTextInput
+            <TextInput
               name="name"
               control={control}
               rules={{ required: 'Please enter a name for your agent' }}

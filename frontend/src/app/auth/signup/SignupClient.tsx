@@ -8,7 +8,7 @@ import { debounce } from 'lodash';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import CustomButton from '../../../components/shared/CustomButton';
-import FormTextInput from '../../../components/shared/FormTextInput';
+import TextInput from '../../../components/shared/TextInput';
 import { type SignupFormData, signupSchema } from '../../../schemas/auth';
 import { signup } from '../../../services/auth/helper';
 import axios from '../../../utils/axios';
@@ -128,7 +128,7 @@ const SignupClient = () => {
         </p>
 
         <form onSubmit={handleSubmit(onSubmit)} autoComplete="off" className="space-y-5">
-          <FormTextInput
+          <TextInput
             name="email"
             control={control}
             type="email"
@@ -136,7 +136,7 @@ const SignupClient = () => {
             placeholder="Enter your email"
             isRequired
           />
-          <FormTextInput
+          <TextInput
             name="password"
             control={control}
             type="password"
@@ -144,7 +144,7 @@ const SignupClient = () => {
             placeholder="Create a password"
             isRequired
           />
-          <FormTextInput
+          <TextInput
             name="org_name"
             control={control}
             type="text"

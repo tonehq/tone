@@ -7,7 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 
 import Container from '@/app/auth/shared/ContainerComponent';
 import { GoogleIcon } from '@/components/icons/google';
-import { CheckboxField, CustomButton, CustomLink, FormTextInput } from '@/components/shared';
+import { CheckboxField, CustomButton, CustomLink, TextInput } from '@/components/shared';
 import { type LoginFormData, loginSchema } from '@/schemas/auth';
 import { login } from '@/services/auth/helper';
 import { handleApiError } from '@/utils/helpers';
@@ -49,7 +49,7 @@ const LoginPage = () => {
         </p>
 
         <form onSubmit={handleSubmit(onSubmit)} autoComplete="off" className="space-y-5">
-          <FormTextInput
+          <TextInput
             name="email"
             control={control}
             type="email"
@@ -57,7 +57,7 @@ const LoginPage = () => {
             placeholder="Enter your email"
             isRequired
           />
-          <FormTextInput
+          <TextInput
             name="password"
             control={control}
             type="password"

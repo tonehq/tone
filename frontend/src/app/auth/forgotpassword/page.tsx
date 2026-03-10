@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import CustomButton from '../../../components/shared/CustomButton';
-import FormTextInput from '../../../components/shared/FormTextInput';
+import TextInput from '../../../components/shared/TextInput';
 import { type ForgotPasswordFormData, forgotPasswordSchema } from '../../../schemas/auth';
 import { forgotPassword } from '../../../services/auth/helper';
 import { handleApiError } from '../../../utils/helpers';
@@ -44,7 +44,7 @@ const ForgotPasswordPage = () => {
         </p>
 
         <form onSubmit={handleSubmit(onSubmit)} autoComplete="off" className="space-y-5">
-          <FormTextInput
+          <TextInput
             name="email"
             control={control}
             type="email"

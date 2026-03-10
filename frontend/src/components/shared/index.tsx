@@ -7,32 +7,38 @@ import CustomTab from './CustomTab';
 import CustomTable from './CustomTable';
 import Divider from './Divider';
 import Form from './Form';
-import FormCheckboxField from './FormCheckboxField';
-import FormRadioGroupField from './FormRadioGroupField';
-import FormSelectInput from './FormSelectInput';
-import FormTextAreaField from './FormTextAreaField';
-import FormTextInput from './FormTextInput';
 import Logo from './Logo';
+import MultiSelectField from './MultiSelectField';
 import RadioGroupField from './RadioGroupField';
 import SearchableSelect from './SearchableSelect';
 import SelectInput from './SelectInput';
+import SliderField from './SliderField';
 import TextAreaField from './TextAreaField';
 import TextInput from './TextInput';
 
 export type {
+  CheckboxFieldBaseProps,
   CustomModalProps,
   CustomTableColumn,
   CustomTablePagination,
   CustomTableProps,
+  FormCheckboxFieldProps,
+  FormMultiSelectFieldProps,
+  FormRadioGroupFieldProps,
+  FormSelectInputProps,
+  FormSliderFieldProps,
+  FormTextAreaFieldProps,
+  FormTextInputProps,
+  MultiSelectFieldBaseProps,
+  MultiSelectOption,
+  RadioGroupOption,
+  SelectInputBaseProps,
+  SelectOption,
+  SliderFieldBaseProps,
+  TextAreaFieldBaseProps,
+  TextInputBaseProps,
 } from '@/types/components';
-export type { FormCheckboxFieldProps } from './FormCheckboxField';
-export type { FormRadioGroupFieldProps } from './FormRadioGroupField';
-export type { FormSelectInputProps } from './FormSelectInput';
-export type { FormTextAreaFieldProps } from './FormTextAreaField';
-export type { FormTextInputProps } from './FormTextInput';
-export type { RadioGroupOption } from './RadioGroupField';
 export type { SearchableSelectOption } from './SearchableSelect';
-export type { SelectOption } from './SelectInput';
 export type { TabItem } from './CustomTab';
 
 export type { ActionMenuProps } from './ActionMenu';
@@ -47,15 +53,12 @@ export {
   CustomTable,
   Divider,
   Form,
-  FormCheckboxField,
-  FormRadioGroupField,
-  FormSelectInput,
-  FormTextAreaField,
-  FormTextInput,
   Logo,
+  MultiSelectField,
   RadioGroupField,
   SearchableSelect,
   SelectInput,
+  SliderField,
   TextAreaField,
   TextInput,
 };

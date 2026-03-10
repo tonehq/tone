@@ -2,6 +2,7 @@
 
 import { cn } from '@/utils/cn';
 import React, { forwardRef } from 'react';
+import { Controller } from 'react-hook-form';
 
 import { Label } from '@/components/ui/label';
 import {
@@ -11,38 +12,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import type { FormSelectInputProps, SelectInputBaseProps, SelectOption } from '@/types/components';
 
-export interface SelectOption {
-  value: string;
-  label: string;
-  disabled?: boolean;
-}
+export type { SelectOption };
 
-interface SelectInputProps {
-  name: string;
-  options: SelectOption[];
-  value?: string;
-  defaultValue?: string;
-  onValueChange?: (value: string) => void;
-  placeholder?: string;
-  label?: string;
-  isRequired?: boolean;
-  loading?: boolean;
-  disabled?: boolean;
-  error?: boolean;
-  helperText?: string;
-  labelClassName?: string;
-  className?: string;
-  triggerClassName?: string;
-  size?: 'sm' | 'default';
-  position?: 'item-aligned' | 'popper';
+type SelectInputProps = SelectInputBaseProps | FormSelectInputProps;
+
+function isFormSelect(props: SelectInputProps): props is FormSelectInputProps {
+  return 'control' in props && props.control !== undefined;
 }
 
 const Skeleton = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div className={cn('animate-pulse rounded-lg bg-muted', className)} {...props} />
 );
 
-const SelectInput = forwardRef<HTMLButtonElement, SelectInputProps>(
+const PlainSelectInput = forwardRef<HTMLButtonElement, SelectInputBaseProps>(
   (
     {
       name,
@@ -122,6 +106,38 @@ const SelectInput = forwardRef<HTMLButtonElement, SelectInputProps>(
     );
   },
 );
+
+PlainSelectInput.displayName = 'PlainSelectInput';
+
+const MemoizedPlainSelectInput = React.memo(PlainSelectInput);
+
+const SelectInput = forwardRef<HTMLButtonElement, SelectInputProps>((props, ref) => {
+  if (isFormSelect(props)) {
+    const { name, control, rules, onValueChange, error, helperText, ...rest } = props;
+    return (
+      <Controller
+        name={name}
+        control={control}
+        rules={rules}
+        render={({ field, fieldState }) => (
+          <MemoizedPlainSelectInput
+            {...rest}
+            name={name}
+            value={field.value != null ? String(field.value) : ''}
+            onValueChange={(v) => {
+              field.onChange(v);
+              onValueChange?.(v);
+            }}
+            error={error ?? !!fieldState.error}
+            helperText={helperText ?? (fieldState.error?.message as string)}
+          />
+        )}
+      />
+    );
+  }
+
+  return <MemoizedPlainSelectInput ref={ref} {...props} />;
+});
 
 SelectInput.displayName = 'SelectInput';
 

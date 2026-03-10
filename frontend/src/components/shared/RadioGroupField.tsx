@@ -2,36 +2,31 @@
 
 import { cn } from '@/utils/cn';
 import React, { memo } from 'react';
+import { Controller } from 'react-hook-form';
 
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import type {
+  FormRadioGroupFieldProps,
+  RadioGroupFieldBaseProps,
+  RadioGroupOption,
+} from '@/types/components';
 
-export interface RadioGroupOption {
-  value: string;
-  label: string;
-  disabled?: boolean;
-}
+export type { RadioGroupOption };
 
-interface RadioGroupFieldProps
-  extends Omit<React.ComponentProps<typeof RadioGroup>, 'aria-invalid' | 'aria-required'> {
-  name: string;
-  label?: string;
-  options: RadioGroupOption[];
-  isRequired?: boolean;
-  loading?: boolean;
-  error?: boolean;
-  helperText?: string;
-  labelClassName?: string;
-  orientation?: 'horizontal' | 'vertical';
+type RadioGroupFieldProps = RadioGroupFieldBaseProps | FormRadioGroupFieldProps;
+
+function isFormRadioGroup(props: RadioGroupFieldProps): props is FormRadioGroupFieldProps {
+  return 'control' in props && props.control !== undefined;
 }
 
 const Skeleton = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div className={cn('animate-pulse rounded-lg bg-muted', className)} {...props} />
 );
 
-const RadioGroupField = React.forwardRef<
+const PlainRadioGroupField = React.forwardRef<
   React.ComponentRef<typeof RadioGroup>,
-  RadioGroupFieldProps
+  RadioGroupFieldBaseProps
 >(
   (
     {
@@ -132,6 +127,42 @@ const RadioGroupField = React.forwardRef<
     );
   },
 );
+
+PlainRadioGroupField.displayName = 'PlainRadioGroupField';
+
+const MemoizedPlainRadioGroupField = memo(PlainRadioGroupField);
+
+const RadioGroupField = React.forwardRef<
+  React.ComponentRef<typeof RadioGroup>,
+  RadioGroupFieldProps
+>((props, ref) => {
+  if (isFormRadioGroup(props)) {
+    const { name, control, rules, onValueChange, transformValue, error, helperText, ...rest } =
+      props;
+    return (
+      <Controller
+        name={name}
+        control={control}
+        rules={rules}
+        render={({ field, fieldState }) => (
+          <MemoizedPlainRadioGroupField
+            {...rest}
+            name={name}
+            value={field.value != null ? String(field.value) : ''}
+            onValueChange={(v) => {
+              field.onChange(transformValue ? transformValue(v) : v);
+              onValueChange?.(v);
+            }}
+            error={error ?? !!fieldState.error}
+            helperText={helperText ?? (fieldState.error?.message as string)}
+          />
+        )}
+      />
+    );
+  }
+
+  return <MemoizedPlainRadioGroupField ref={ref} {...props} />;
+});
 
 RadioGroupField.displayName = 'RadioGroupField';
 

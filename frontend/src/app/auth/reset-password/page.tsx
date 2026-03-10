@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import CustomButton from '../../../components/shared/CustomButton';
-import FormTextInput from '../../../components/shared/FormTextInput';
+import TextInput from '../../../components/shared/TextInput';
 import { type ResetPasswordFormData, resetPasswordSchema } from '../../../schemas/auth';
 import axiosInstance from '../../../utils/axios';
 import { handleApiError } from '../../../utils/helpers';
@@ -49,7 +49,7 @@ const ResetPasswordContent = () => {
         <p className="mb-4 text-[15px] text-muted-foreground">Enter your new password below</p>
 
         <form onSubmit={handleSubmit(onSubmit)} autoComplete="off" className="space-y-5">
-          <FormTextInput
+          <TextInput
             name="password"
             control={control}
             type="password"
@@ -57,7 +57,7 @@ const ResetPasswordContent = () => {
             placeholder="Enter new password"
             isRequired
           />
-          <FormTextInput
+          <TextInput
             name="confirm_password"
             control={control}
             type="password"
