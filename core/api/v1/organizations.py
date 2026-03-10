@@ -37,6 +37,42 @@ def accept_invitation(
     return AuthService(db).accept_invitation(email, code)
 
 
+@router.get("/validate_invitation")
+def validate_invitation(
+    email: str = Query(...),
+    code: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    return AuthService(db).validate_invitation_token(email, code)
+
+
+@router.post("/accept_invitation_with_password")
+def accept_invitation_with_password(
+    payload: Dict[str, str] = Body(...),
+    db: Session = Depends(get_db)
+):
+    email = payload.get("email")
+    code = payload.get("code")
+    password = payload.get("password")
+
+    if not all([email, code, password]):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email, code, and password are required"
+        )
+
+    return AuthService(db).accept_invitation_with_password(email, code, password)
+
+
+@router.delete("/cancel_invitation")
+def cancel_invitation(
+    invite_id: int = Query(...),
+    claims: JWTClaims = Depends(require_admin_or_owner),
+    db: Session = Depends(get_db)
+):
+    return AuthService(db, user_id=claims.user_id).cancel_invitation(invite_id)
+
+
 @router.delete("/remove_user_from_organization")
 def remove_user_from_organization(
     user_id: int = Query(...),

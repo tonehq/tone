@@ -1,5 +1,5 @@
 import type { SidebarMenuItem, SidebarSection } from '@/types/sidebar';
-import { Bot, Home, Plug } from 'lucide-react';
+import { Bot, Home, Plug, Users } from 'lucide-react';
 
 export const SIDEBAR_WIDTH_EXPANDED = 240;
 export const SIDEBAR_WIDTH_COLLAPSED = 72;
@@ -19,7 +19,10 @@ export const sidebarSections: SidebarSection[] = [
   },
   {
     heading: 'SETTINGS',
-    items: [{ key: 'integrations', title: 'Integrations', path: '/settings', icon: Plug }],
+    items: [
+      { key: 'integrations', title: 'Integrations', path: '/settings', icon: Plug },
+      { key: 'members', title: 'Members', path: '/members', icon: Users },
+    ],
   },
 ];
 

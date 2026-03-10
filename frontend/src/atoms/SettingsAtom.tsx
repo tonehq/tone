@@ -2,47 +2,15 @@ import { atom } from 'jotai';
 import { loadable } from 'jotai/utils';
 
 import {
+  cancelInvitation,
   getAllInvitedUsersForOrganization,
   getAllUsersForOrganization,
   inviteUserToOrganization,
+  removeOrganizationMember,
   updateOrganizationMemberRole,
 } from '@/services/userService';
 
 import { OrganizationInviteApi, OrganizationMemberApi } from '@/types/settings/members';
-
-interface MemberData {
-  key: string;
-  name: string;
-  email: string;
-  joinedDate: string;
-  role: string;
-  avatar: string | null;
-}
-
-interface InvitationData {
-  key: string;
-  name: string;
-  email: string;
-  invitedDate: string;
-  status: string;
-  role: string;
-}
-
-interface SettingsState {
-  organizationList: any[];
-  membersList: MemberData[];
-  invitationsList: InvitationData[];
-  membersLoading: boolean;
-  invitationsLoading: boolean;
-}
-
-const settingsAtom = atom<SettingsState>({
-  organizationList: [],
-  membersList: [],
-  invitationsList: [],
-  membersLoading: false,
-  invitationsLoading: false,
-});
 
 // Trigger to force refetch in loadable atoms
 const membersRefreshAtom = atom(0);
@@ -88,12 +56,25 @@ const updateMemberRoleAtom = atom(
   },
 );
 
+// Action: remove member and refresh members
+const removeMemberAtom = atom(null, async (_get, set, userId: number) => {
+  await removeOrganizationMember(userId);
+  set(membersRefreshAtom, (c) => c + 1);
+});
+
+// Action: cancel invitation and refresh invitations
+const cancelInvitationAtom = atom(null, async (_get, set, inviteId: number) => {
+  await cancelInvitation(inviteId);
+  set(invitationsRefreshAtom, (c) => c + 1);
+});
+
 export {
+  cancelInvitationAtom,
   inviteUserToOrganizationAtom,
   loadableInvitationsRowsAtom,
   loadableMembersRowsAtom,
   refetchInvitationsAtom,
   refetchMembersAtom,
-  settingsAtom,
+  removeMemberAtom,
   updateMemberRoleAtom,
 };

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, BigInteger, String, Text, Enum, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, BigInteger, String, Text, Enum, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
 
@@ -8,7 +8,6 @@ from core.models.enums import Role, InviteStatus
 
 class OrganizationInvite(TimestampModel):
     __tablename__ = 'organization_invites'
-    __table_args__ = (UniqueConstraint('email', name='invite_email_unique'),)
 
     uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
     email = Column(String, nullable=False, index=True)

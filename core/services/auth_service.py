@@ -200,9 +200,13 @@ class AuthService(BaseService):
             user.status = UserStatus.ACTIVE
             user.updated_at = current_time
 
+            # First user in the org becomes owner
+            existing_member_count = self.db.query(Member).count()
+            role = Role.OWNER if existing_member_count == 0 else Role.MEMBER
+
             member = Member(
                 user_id=user.id,
-                role=Role.MEMBER,
+                role=role,
                 status='active',
                 created_by=user.id,
                 created_at=current_time,
@@ -278,18 +282,31 @@ class AuthService(BaseService):
                 detail="Invalid role"
             )
 
-        existing_member = (
-            self.db.query(Member)
-            .join(User, Member.user_id == User.id)
-            .filter(User.email == email)
-            .first()
-        )
+        existing_user = self.db.query(User).filter(User.email == email).first()
 
-        if existing_member:
+        if existing_user:
+            existing_member = (
+                self.db.query(Member)
+                .filter(Member.user_id == existing_user.id)
+                .first()
+            )
+            if existing_member:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="User is already a member of the organization"
+                )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User is already a member"
+                detail="A user with this email already exists"
             )
+
+        # Clean up expired invites for same email before checking for pending duplicates
+        self.db.query(OrganizationInvite).filter(
+            OrganizationInvite.email == email,
+            OrganizationInvite.status == InviteStatus.PENDING,
+            OrganizationInvite.expires_at <= current_time
+        ).delete()
+        self.db.flush()
 
         existing_invite = self.db.query(OrganizationInvite).filter(
             OrganizationInvite.email == email,
@@ -390,6 +407,115 @@ class AuthService(BaseService):
             "message": "Invitation accepted successfully",
             "role": invitation.role.value
         }
+
+    def validate_invitation_token(self, email: str, token: str) -> Dict[str, Any]:
+        current_time = int(time.time())
+
+        invitation = self.db.query(OrganizationInvite).filter(
+            OrganizationInvite.email == email,
+            OrganizationInvite.invitation_token == token,
+            OrganizationInvite.status == InviteStatus.PENDING,
+            OrganizationInvite.expires_at > current_time
+        ).first()
+
+        if not invitation:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired invitation"
+            )
+
+        user_exists = self.db.query(User).filter(User.email == email).first() is not None
+
+        return {
+            "valid": True,
+            "email": invitation.email,
+            "name": invitation.name,
+            "role": invitation.role.value,
+            "user_exists": user_exists
+        }
+
+    def accept_invitation_with_password(self, email: str, token: str,
+                                        password: str) -> Dict[str, Any]:
+        current_time = int(time.time())
+
+        invitation = self.db.query(OrganizationInvite).filter(
+            OrganizationInvite.email == email,
+            OrganizationInvite.invitation_token == token,
+            OrganizationInvite.status == InviteStatus.PENDING,
+            OrganizationInvite.expires_at > current_time
+        ).first()
+
+        if not invitation:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired invitation"
+            )
+
+        existing_user = self.db.query(User).filter(User.email == email).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User already exists. Please login and accept the invitation."
+            )
+
+        password_hash = hash_password(password)
+
+        user = User(
+            email=email,
+            username=invitation.name,
+            password_hash=password_hash,
+            profile={},
+            auth_provider=AuthProvider.EMAIL,
+            status=UserStatus.ACTIVE,
+            email_verified=True,
+            email_verified_at=current_time,
+            created_at=current_time,
+            updated_at=current_time
+        )
+
+        self.db.add(user)
+        self.db.flush()
+
+        member = Member(
+            user_id=user.id,
+            role=invitation.role,
+            status='active',
+            created_by=invitation.invited_by,
+            created_at=current_time,
+            updated_at=current_time,
+            joined_at=current_time
+        )
+
+        self.db.add(member)
+
+        invitation.status = InviteStatus.ACCEPTED
+        invitation.accepted_by = user.id
+        invitation.accepted_at = current_time
+        invitation.updated_at = current_time
+
+        self.db.commit()
+
+        return {
+            "message": "Account created and invitation accepted successfully",
+            "role": invitation.role.value
+        }
+
+    def cancel_invitation(self, invite_id: int) -> Dict[str, str]:
+        invitation = self.db.query(OrganizationInvite).filter(
+            OrganizationInvite.id == invite_id,
+            OrganizationInvite.status == InviteStatus.PENDING
+        ).first()
+
+        if not invitation:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Pending invitation not found"
+            )
+
+        self.db.delete(invitation)
+        self.db.commit()
+
+        return {"message": "Invitation cancelled successfully"}
 
     def remove_user_from_organization(self, user_id: int) -> Dict[str, str]:
         member = self.db.query(Member).filter(
