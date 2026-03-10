@@ -23,7 +23,6 @@ import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
 import {
   AlertTriangle,
-  CheckCircle2,
   ChevronRight,
   Loader2,
   MessageSquare,
@@ -377,33 +376,20 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* Status banner */}
-      <div
-        className={cn(
-          'flex shrink-0 items-center gap-2 px-6 py-3 text-[13px] leading-tight',
-          formData.phoneNumbers?.length > 0
-            ? 'bg-emerald-50/80 text-emerald-800'
-            : 'bg-amber-50/80 text-amber-800',
-        )}
-      >
-        {formData.phoneNumbers?.length > 0 ? (
-          <>
-            <CheckCircle2 size={18} className="shrink-0 text-emerald-600" />
-            <span>
-              <span className="font-medium">Phone assigned:</span>{' '}
-              {formData.phoneNumbers.map((pn) => pn.no).join(', ')}
-            </span>
-          </>
-        ) : (
-          <>
-            <AlertTriangle size={18} className="shrink-0 text-amber-600" />
-            <span>
-              <span className="font-medium">No phone number</span>
-              <span className="mx-1 opacity-40">&mdash;</span>
-              Your agent can&apos;t {agentType === 'inbound' ? 'receive' : 'make'} calls yet.
-            </span>
-          </>
-        )}
-      </div>
+      {!(formData.phoneNumbers?.length > 0) && (
+        <div
+          className={cn(
+            'flex shrink-0 items-center gap-2 px-6 py-3 text-[13px] leading-tight bg-amber-50/80 text-amber-800',
+          )}
+        >
+          <AlertTriangle size={18} className="shrink-0 text-amber-600" />
+          <span>
+            <span className="font-medium">No phone number</span>
+            <span className="mx-1 opacity-40">&mdash;</span>
+            Your agent can&apos;t {agentType === 'inbound' ? 'receive' : 'make'} calls yet.
+          </span>
+        </div>
+      )}
 
       {/* Breadcrumb bar */}
       <div className="flex shrink-0 items-center justify-between border-b border-border/60 bg-muted/30 px-6 py-2">
