@@ -2,6 +2,8 @@
 
 import { loadableProvidersAtom } from '@/atoms/ProviderAtom';
 import { CallConfigurationTab, GeneralTab, VoiceTab } from '@/components/agents/agent-form';
+import type { DynamicProviderFieldsHandle } from '@/components/agents/agent-form/DynamicProviderFields';
+import type { GeneralTabHandle } from '@/components/agents/agent-form/GeneralTab';
 import PromptPage from '@/components/agents/agent-form/promptPage';
 import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 import AssignPhoneNumberModal from '@/components/agents/AssignPhoneNumberModal';
@@ -21,7 +23,6 @@ import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
 import {
   AlertTriangle,
-  CheckCircle2,
   ChevronRight,
   Loader2,
   MessageSquare,
@@ -33,7 +34,7 @@ import {
   Volume2,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 interface AgentFormPageProps {
   agentType: 'inbound' | 'outbound';
@@ -55,6 +56,11 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
   const [deletingAgent, setDeletingAgent] = useState(false);
   const [unassignTarget, setUnassignTarget] = useState<{ no: string; type: string } | null>(null);
   const [unassigning, setUnassigning] = useState(false);
+
+  const generalHandle = useRef<GeneralTabHandle | null>(null);
+  const llmHandle = useRef<DynamicProviderFieldsHandle | null>(null);
+  const ttsHandle = useRef<DynamicProviderFieldsHandle | null>(null);
+  const sttHandle = useRef<DynamicProviderFieldsHandle | null>(null);
 
   const providers = providersLoadable.state === 'hasData' ? providersLoadable.data : [];
   const providersLoading = providersLoadable.state === 'loading';
@@ -148,6 +154,17 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
   };
 
   const handleSave = async () => {
+    const results = await Promise.all([
+      generalHandle.current?.trigger() ?? true,
+      llmHandle.current?.trigger() ?? true,
+      ttsHandle.current?.trigger() ?? true,
+      sttHandle.current?.trigger() ?? true,
+    ]);
+
+    if (results.some((valid) => !valid)) {
+      return;
+    }
+
     setSaving(true);
     try {
       const payload = formStateToUpsertPayload(
@@ -209,6 +226,12 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
             providersLoading={providersLoading}
             onFormChange={handleFormChange}
             onDeleteAgent={openDeleteConfirm}
+            onGeneralValidityChange={(h) => {
+              generalHandle.current = h;
+            }}
+            onLlmValidityChange={(h) => {
+              llmHandle.current = h;
+            }}
           />
         ),
       },
@@ -232,6 +255,12 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
             sttProviders={sttProviders}
             providersLoading={providersLoading}
             onFormChange={handleFormChange}
+            onTtsValidityChange={(h) => {
+              ttsHandle.current = h;
+            }}
+            onSttValidityChange={(h) => {
+              sttHandle.current = h;
+            }}
           />
         ),
       },
@@ -347,33 +376,20 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* Status banner */}
-      <div
-        className={cn(
-          'flex shrink-0 items-center gap-2 px-6 py-3 text-[13px] leading-tight',
-          formData.phoneNumbers?.length > 0
-            ? 'bg-emerald-50/80 text-emerald-800'
-            : 'bg-amber-50/80 text-amber-800',
-        )}
-      >
-        {formData.phoneNumbers?.length > 0 ? (
-          <>
-            <CheckCircle2 size={18} className="shrink-0 text-emerald-600" />
-            <span>
-              <span className="font-medium">Phone assigned:</span>{' '}
-              {formData.phoneNumbers.map((pn) => pn.no).join(', ')}
-            </span>
-          </>
-        ) : (
-          <>
-            <AlertTriangle size={18} className="shrink-0 text-amber-600" />
-            <span>
-              <span className="font-medium">No phone number</span>
-              <span className="mx-1 opacity-40">&mdash;</span>
-              Your agent can&apos;t {agentType === 'inbound' ? 'receive' : 'make'} calls yet.
-            </span>
-          </>
-        )}
-      </div>
+      {!(formData.phoneNumbers?.length > 0) && (
+        <div
+          className={cn(
+            'flex shrink-0 items-center gap-2 px-6 py-3 text-[13px] leading-tight bg-amber-50/80 text-amber-800',
+          )}
+        >
+          <AlertTriangle size={18} className="shrink-0 text-amber-600" />
+          <span>
+            <span className="font-medium">No phone number</span>
+            <span className="mx-1 opacity-40">&mdash;</span>
+            Your agent can&apos;t {agentType === 'inbound' ? 'receive' : 'make'} calls yet.
+          </span>
+        </div>
+      )}
 
       {/* Breadcrumb bar */}
       <div className="flex shrink-0 items-center justify-between border-b border-border/60 bg-muted/30 px-6 py-2">

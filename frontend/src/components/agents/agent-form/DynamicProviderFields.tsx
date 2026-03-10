@@ -1,27 +1,40 @@
 'use client';
 
-import { CheckboxField, RadioGroupField, SelectInput, TextInput } from '@/components/shared';
-import { Slider } from '@/components/ui/slider';
+import {
+  MultiSelectField,
+  RadioGroupField,
+  SelectInput,
+  SliderField,
+  TextInput,
+} from '@/components/shared';
 import type { MetaDataSchemaField } from '@/types/provider';
 import { toSelectOptions } from '@/utils/selectUtils';
-import { X } from 'lucide-react';
-import { type KeyboardEvent, type ReactNode, useState } from 'react';
+import { buildFieldRules, getDefaultValue } from '@/utils/validators';
+import { type ReactNode, useEffect } from 'react';
+import { Controller, useForm } from 'react-hook-form';
+
+export interface DynamicProviderFieldsHandle {
+  trigger: () => Promise<boolean>;
+}
 
 interface DynamicProviderFieldsProps {
   schema: MetaDataSchemaField[];
   values: Record<string, unknown>;
   onChange: (values: Record<string, unknown>) => void;
+  onValidityChange?: (handle: DynamicProviderFieldsHandle) => void;
 }
 
 function FormRow({
   label,
   description,
   required,
+  error,
   children,
 }: {
   label: string;
   description?: string;
   required?: boolean;
+  error?: string;
   children: ReactNode;
 }) {
   return (
@@ -35,7 +48,10 @@ function FormRow({
           <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">{description}</p>
         )}
       </div>
-      <div className="flex-[0_0_45%]">{children}</div>
+      <div className="flex-[0_0_45%]">
+        {children}
+        {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+      </div>
     </div>
   );
 }
@@ -87,92 +103,6 @@ function resolveFieldType(
   }
 }
 
-function MultiSelectField({
-  field,
-  currentValue,
-  onFieldChange,
-}: {
-  field: MetaDataSchemaField;
-  currentValue: unknown;
-  onFieldChange: (value: unknown) => void;
-}) {
-  const [tagInput, setTagInput] = useState('');
-  const selectedValues = Array.isArray(currentValue) ? (currentValue as string[]) : [];
-
-  // If predefined values exist, render checkboxes
-  if (field.values && field.values.length > 0) {
-    return (
-      <div className="flex flex-col gap-2">
-        {field.values.map((opt) => {
-          const isChecked = selectedValues.includes(opt.value);
-          return (
-            <CheckboxField
-              key={opt.value}
-              id={`${field.name}-${opt.value}`}
-              label={opt.label}
-              checked={isChecked}
-              onCheckedChange={(checked) => {
-                const next = checked
-                  ? [...selectedValues, opt.value]
-                  : selectedValues.filter((v) => v !== opt.value);
-                onFieldChange(next);
-              }}
-            />
-          );
-        })}
-      </div>
-    );
-  }
-
-  // Otherwise render a tag input for free-form list
-  const addTag = () => {
-    const trimmed = tagInput.trim();
-    if (trimmed && !selectedValues.includes(trimmed)) {
-      onFieldChange([...selectedValues, trimmed]);
-      setTagInput('');
-    }
-  };
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex gap-2">
-        <TextInput
-          name={`${field.name}-input`}
-          value={tagInput}
-          onChange={(e) => setTagInput(e.target.value)}
-          onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              addTag();
-            }
-          }}
-          placeholder={`Add ${formatLabel(field.name).toLowerCase()}`}
-        />
-      </div>
-      {selectedValues.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {selectedValues.map((val) => (
-            <span
-              key={val}
-              className="inline-flex items-center gap-1 rounded-md border bg-muted px-2 py-0.5 text-xs"
-            >
-              {val}
-              <button
-                type="button"
-                onClick={() => onFieldChange(selectedValues.filter((v) => v !== val))}
-                className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20"
-              >
-                <X className="size-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** Parse "min-max" (e.g. "0-2") from description, fallback to 0–2. */
 function parseRange(description?: string): { min: number; max: number; step: number } {
   if (description) {
     const match = description.match(/(-?\d+(?:\.\d+)?)\s*(?:[-–]|to)\s*(-?\d+(?:\.\d+)?)/);
@@ -223,7 +153,34 @@ export default function DynamicProviderFields({
   schema,
   values,
   onChange,
+  onValidityChange,
 }: DynamicProviderFieldsProps) {
+  useEffect(() => {
+    const defaults: Record<string, unknown> = {};
+    for (const field of schema) {
+      if (values[field.name] == null) {
+        const def = getDefaultValue(field);
+        if (def !== undefined) defaults[field.name] = def;
+      }
+    }
+    if (Object.keys(defaults).length > 0) {
+      onChange({ ...values, ...defaults });
+    }
+  }, [schema]);
+
+  const {
+    control,
+    trigger,
+    formState: { errors },
+  } = useForm({
+    mode: 'onChange',
+    values,
+  });
+
+  useEffect(() => {
+    onValidityChange?.({ trigger });
+  }, [onValidityChange, trigger]);
+
   const handleChange = (name: string, value: unknown) => {
     onChange({ ...values, [name]: value });
   };
@@ -231,13 +188,13 @@ export default function DynamicProviderFields({
   return (
     <>
       {schema.map((field) => {
-        const currentValue = values[field.name];
         const isRequired = field.required === 1;
         const label = formatLabel(field.name);
         const fieldType = resolveFieldType(field);
+        const fieldError = errors[field.name]?.message as string | undefined;
+        const rules = buildFieldRules(field);
 
         switch (fieldType) {
-          // Single-select dropdown (values array present, non-list)
           case 'select':
             return (
               <FormRow
@@ -248,19 +205,19 @@ export default function DynamicProviderFields({
               >
                 <SelectInput
                   name={field.name}
-                  value={currentValue != null ? String(currentValue) : ''}
-                  onValueChange={(v) => handleChange(field.name, v)}
+                  control={control}
+                  rules={rules}
                   placeholder={`Select ${label.toLowerCase()}`}
                   options={
                     field.values
                       ? toSelectOptions(field.values, { valueKey: 'value', labelKey: 'label' })
                       : []
                   }
+                  onValueChange={(v) => handleChange(field.name, v)}
                 />
               </FormRow>
             );
 
-          // Number input (int / integer / float)
           case 'input_number':
             return (
               <FormRow
@@ -269,29 +226,39 @@ export default function DynamicProviderFields({
                 description={field.description}
                 required={isRequired}
               >
-                <TextInput
+                <Controller
                   name={field.name}
-                  type="number"
-                  step={field.data_type === 'float' ? 'any' : '1'}
-                  value={currentValue != null ? String(currentValue) : ''}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    if (raw === '') {
-                      handleChange(field.name, null);
-                      return;
-                    }
-                    const parsed =
-                      field.data_type === 'float' ? parseFloat(raw) : parseInt(raw, 10);
-                    if (!isNaN(parsed)) {
-                      handleChange(field.name, parsed);
-                    }
-                  }}
-                  placeholder={field.description}
+                  control={control}
+                  rules={rules}
+                  render={({ field: rhf }) => (
+                    <TextInput
+                      name={field.name}
+                      type="number"
+                      step={field.data_type === 'float' ? 'any' : '1'}
+                      value={rhf.value != null ? String(rhf.value) : ''}
+                      error={!!fieldError}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        if (raw === '') {
+                          rhf.onChange(null);
+                          handleChange(field.name, null);
+                          return;
+                        }
+                        const parsed =
+                          field.data_type === 'float' ? parseFloat(raw) : parseInt(raw, 10);
+                        if (!isNaN(parsed)) {
+                          rhf.onChange(parsed);
+                          handleChange(field.name, parsed);
+                        }
+                      }}
+                      onBlur={rhf.onBlur}
+                      placeholder={field.description}
+                    />
+                  )}
                 />
               </FormRow>
             );
 
-          // Boolean radio (Yes / No)
           case 'radio':
             return (
               <FormRow
@@ -302,18 +269,19 @@ export default function DynamicProviderFields({
               >
                 <RadioGroupField
                   name={field.name}
-                  value={currentValue != null ? String(currentValue) : ''}
-                  onValueChange={(v) => handleChange(field.name, v === 'true')}
+                  control={control}
+                  rules={rules}
                   orientation="horizontal"
                   options={[
                     { value: 'true', label: 'Yes' },
                     { value: 'false', label: 'No' },
                   ]}
+                  transformValue={(v) => v === 'true'}
+                  onValueChange={(v) => handleChange(field.name, v === 'true')}
                 />
               </FormRow>
             );
 
-          // Date picker (native)
           case 'datepicker':
             return (
               <FormRow
@@ -324,14 +292,15 @@ export default function DynamicProviderFields({
               >
                 <TextInput
                   name={field.name}
+                  control={control}
+                  rules={rules}
                   type="date"
-                  value={currentValue != null ? String(currentValue) : ''}
-                  onChange={(e) => handleChange(field.name, e.target.value)}
+                  error={!!fieldError}
+                  onValueChange={(v) => handleChange(field.name, v)}
                 />
               </FormRow>
             );
 
-          // Date range picker (two date inputs)
           case 'daterangepicker':
             return (
               <FormRow
@@ -340,15 +309,24 @@ export default function DynamicProviderFields({
                 description={field.description}
                 required={isRequired}
               >
-                <DateRangeField
-                  field={field}
-                  currentValue={currentValue}
-                  onFieldChange={(v) => handleChange(field.name, v)}
+                <Controller
+                  name={field.name}
+                  control={control}
+                  rules={rules}
+                  render={({ field: rhf }) => (
+                    <DateRangeField
+                      field={field}
+                      currentValue={rhf.value}
+                      onFieldChange={(v) => {
+                        rhf.onChange(v);
+                        handleChange(field.name, v);
+                      }}
+                    />
+                  )}
                 />
               </FormRow>
             );
 
-          // Datetime picker (native)
           case 'datetime':
             return (
               <FormRow
@@ -359,14 +337,15 @@ export default function DynamicProviderFields({
               >
                 <TextInput
                   name={field.name}
+                  control={control}
+                  rules={rules}
                   type="datetime-local"
-                  value={currentValue != null ? String(currentValue) : ''}
-                  onChange={(e) => handleChange(field.name, e.target.value)}
+                  error={!!fieldError}
+                  onValueChange={(v) => handleChange(field.name, v)}
                 />
               </FormRow>
             );
 
-          // Multiselect (checkboxes if values exist, tag input otherwise)
           case 'multiselect':
             return (
               <FormRow
@@ -376,17 +355,18 @@ export default function DynamicProviderFields({
                 required={isRequired}
               >
                 <MultiSelectField
-                  field={field}
-                  currentValue={currentValue}
-                  onFieldChange={(v) => handleChange(field.name, v)}
+                  name={field.name}
+                  control={control}
+                  rules={rules}
+                  options={field.values}
+                  placeholder={`Add ${label.toLowerCase()}`}
+                  onChange={(v) => handleChange(field.name, v)}
                 />
               </FormRow>
             );
 
-          // Range picker (slider)
           case 'rangepicker': {
             const range = parseRange(field.description);
-            const sliderValue = currentValue != null ? Number(currentValue) : range.min;
             return (
               <FormRow
                 key={field.name}
@@ -394,25 +374,19 @@ export default function DynamicProviderFields({
                 description={field.description}
                 required={isRequired}
               >
-                <div className="w-full px-1">
-                  <Slider
-                    value={[sliderValue]}
-                    onValueChange={([v]) => handleChange(field.name, v)}
-                    min={range.min}
-                    max={range.max}
-                    step={range.step}
-                  />
-                  <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                    <span>{range.min}</span>
-                    <span>{sliderValue}</span>
-                    <span>{range.max}</span>
-                  </div>
-                </div>
+                <SliderField
+                  name={field.name}
+                  control={control}
+                  rules={rules}
+                  min={range.min}
+                  max={range.max}
+                  step={range.step}
+                  onValueChange={(v) => handleChange(field.name, v)}
+                />
               </FormRow>
             );
           }
 
-          // Default: text input (string)
           case 'input':
           default:
             return (
@@ -424,10 +398,12 @@ export default function DynamicProviderFields({
               >
                 <TextInput
                   name={field.name}
+                  control={control}
+                  rules={rules}
                   type={field.format === 'url' ? 'url' : 'text'}
-                  value={currentValue != null ? String(currentValue) : ''}
-                  onChange={(e) => handleChange(field.name, e.target.value)}
+                  error={!!fieldError}
                   placeholder={field.description}
+                  onValueChange={(v) => handleChange(field.name, v)}
                 />
               </FormRow>
             );

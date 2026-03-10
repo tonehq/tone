@@ -2,25 +2,23 @@
 
 import { cn } from '@/utils/cn';
 import React, { forwardRef } from 'react';
+import { Controller } from 'react-hook-form';
 
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import type { FormTextAreaFieldProps, TextAreaFieldBaseProps } from '@/types/components';
 
-interface TextAreaFieldProps extends Omit<React.ComponentProps<'textarea'>, 'size'> {
-  name: string;
-  label?: string;
-  isRequired?: boolean;
-  loading?: boolean;
-  error?: boolean;
-  helperText?: string;
-  labelClassName?: string;
+type TextAreaFieldProps = TextAreaFieldBaseProps | FormTextAreaFieldProps;
+
+function isFormTextArea(props: TextAreaFieldProps): props is FormTextAreaFieldProps {
+  return 'control' in props && props.control !== undefined;
 }
 
 const Skeleton = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div className={cn('animate-pulse rounded-lg bg-muted', className)} {...props} />
 );
 
-const TextAreaField = forwardRef<HTMLTextAreaElement, TextAreaFieldProps>(
+const PlainTextAreaField = forwardRef<HTMLTextAreaElement, TextAreaFieldBaseProps>(
   (
     {
       name,
@@ -88,6 +86,39 @@ const TextAreaField = forwardRef<HTMLTextAreaElement, TextAreaFieldProps>(
     );
   },
 );
+
+PlainTextAreaField.displayName = 'PlainTextAreaField';
+
+const MemoizedPlainTextAreaField = React.memo(PlainTextAreaField);
+
+const TextAreaField = forwardRef<HTMLTextAreaElement, TextAreaFieldProps>((props, ref) => {
+  if (isFormTextArea(props)) {
+    const { name, control, rules, onValueChange, error, helperText, ...rest } = props;
+    return (
+      <Controller
+        name={name}
+        control={control}
+        rules={rules}
+        render={({ field, fieldState }) => (
+          <MemoizedPlainTextAreaField
+            {...rest}
+            name={name}
+            value={field.value ?? ''}
+            onChange={(e) => {
+              field.onChange(e.target.value);
+              onValueChange?.(e.target.value);
+            }}
+            onBlur={field.onBlur}
+            error={error ?? !!fieldState.error}
+            helperText={helperText ?? (fieldState.error?.message as string)}
+          />
+        )}
+      />
+    );
+  }
+
+  return <MemoizedPlainTextAreaField ref={ref} {...props} />;
+});
 
 TextAreaField.displayName = 'TextAreaField';
 

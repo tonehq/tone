@@ -129,7 +129,7 @@ async function mockAgentsAPI(page: Page, agents: unknown[] = MOCK_AGENTS): Promi
 // ── Tests ────────────────────────────────────────────────────────────────────
 test.describe('Agents List Page', () => {
   test.beforeEach(async ({ page }) => {
-    await page.unrouteAll({ behavior: 'wait' });
+    await page.unrouteAll({ behavior: 'ignoreErrors' });
     await mockAgentsAPI(page);
     await ensureOnAgentsPage(page);
   });

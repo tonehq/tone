@@ -2,25 +2,23 @@
 
 import { cn } from '@/utils/cn';
 import React, { memo } from 'react';
+import { Controller } from 'react-hook-form';
 
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import type { CheckboxFieldBaseProps, FormCheckboxFieldProps } from '@/types/components';
 
-interface CheckboxFieldProps extends Omit<React.ComponentProps<typeof Checkbox>, 'id'> {
-  id: string;
-  label?: string;
-  isRequired?: boolean;
-  loading?: boolean;
-  error?: boolean;
-  helperText?: string;
-  labelClassName?: string;
+type CheckboxFieldProps = CheckboxFieldBaseProps | FormCheckboxFieldProps;
+
+function isFormCheckbox(props: CheckboxFieldProps): props is FormCheckboxFieldProps {
+  return 'control' in props && props.control !== undefined;
 }
 
 const Skeleton = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div className={cn('animate-pulse rounded-lg bg-muted', className)} {...props} />
 );
 
-const CheckboxField = memo(
+const PlainCheckboxField = memo(
   ({
     id,
     label,
@@ -32,7 +30,7 @@ const CheckboxField = memo(
     className,
     disabled = false,
     ...props
-  }: CheckboxFieldProps) => {
+  }: CheckboxFieldBaseProps) => {
     if (loading) {
       return (
         <div className="mb-2">
@@ -82,6 +80,37 @@ const CheckboxField = memo(
   },
 );
 
+PlainCheckboxField.displayName = 'PlainCheckboxField';
+
+const CheckboxField = (props: CheckboxFieldProps) => {
+  if (isFormCheckbox(props)) {
+    const { id, control, rules, onCheckedChange, error, helperText, ...rest } = props;
+    return (
+      <Controller
+        name={id}
+        control={control}
+        rules={rules}
+        render={({ field, fieldState }) => (
+          <PlainCheckboxField
+            {...rest}
+            id={id}
+            checked={!!field.value}
+            onCheckedChange={(checked) => {
+              const boolVal = !!checked;
+              field.onChange(boolVal);
+              onCheckedChange?.(boolVal);
+            }}
+            error={error ?? !!fieldState.error}
+            helperText={helperText ?? (fieldState.error?.message as string)}
+          />
+        )}
+      />
+    );
+  }
+
+  return <PlainCheckboxField {...props} />;
+};
+
 CheckboxField.displayName = 'CheckboxField';
 
-export default CheckboxField;
+export default memo(CheckboxField);

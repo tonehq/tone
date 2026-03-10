@@ -368,7 +368,7 @@ The app requires `NEXT_PUBLIC_BACKEND_URL` to be set (see `src/urls.ts`). This i
 
 - `src/app/page.tsx` — redirects `/` to `/home`
 - `src/app/(dashboard)/` — route group for all authenticated pages (agents, home, settings, phone-numbers); shares a sidebar layout via `(dashboard)/layout.tsx`
-- `src/app/auth/` — public auth pages (login, signup, forgot password, etc.)
+- `src/app/auth/` — public auth pages (login, signup, forgot password, reset password). All auth forms use react-hook-form + Zod for validation (see below).
 - `src/middleware.ts` — enforces auth by checking the `tone_access_token` cookie; unauthenticated requests redirect to `/auth/login?redirect=<path>`
 
 **Page pattern**: Pages under `(dashboard)` are thin wrappers that import and render a component from `src/components/`. All the actual UI logic lives in components.
@@ -390,9 +390,25 @@ Write-only atoms (e.g., `atom(null, async (_get, set, payload) => {...})`) are t
 
 **UI**: Material UI v6 with a custom theme defined in `src/utils/theme.ts`. Primary color is `#8b5cf6` (purple). The theme is provided via `src/components/ThemeRegistry.tsx` which handles MUI + Emotion SSR setup for Next.js. Use `useTheme()` to access theme values in components. **Direction**: Prefer **shadcn** (`src/components/ui/`) and **Tailwind** for new UI; use **lucide-react** or `src/components/icons/` (e.g. brand icons) instead of `@mui/icons-material`. MUI removal is planned; see `.claude/rules.md` §5.
 
-**Shared components**: `src/components/shared/` holds reusable form/UI pieces (TextInput, CustomButton, Form, CheckboxField, RadioGroupField, CustomLink). To understand or use them without reading each file, read **`docs/shared-components.md`** (single reference, lower token usage). When adding or changing a shared component, update that doc.
+**Shared components**: `src/components/shared/` holds reusable form/UI pieces (TextInput, CustomButton, Form, CheckboxField, RadioGroupField, SelectInput, TextAreaField, CustomLink). Each form component is **unified** — passing a `control` prop activates RHF `Controller` integration automatically (no separate `Form*` wrapper needed). Component prop types are defined in `src/types/components.ts`. To understand or use them without reading each file, read **`docs/shared-components.md`** (single reference, lower token usage). When adding or changing a shared component, update that doc.
 
-**Agent form**: The create/edit agent flow is a multi-tab form (`GeneralTab`, `VoiceTab`, `CallConfigurationTab`) plus a `PromptPage`. Form state uses `AgentFormState` from `src/components/agents/agent-form/agentFormUtils.ts`, which also exports `defaultFormState` and `formStateToUpsertPayload` for serializing to the API.
+**Form validation**: Two patterns are used for form validation:
+
+1. **Auth forms** (login, signup, forgot password, reset password) — use `react-hook-form` with `zodResolver` and Zod schemas from `src/schemas/auth.ts`. Each form uses `useForm<SchemaType>` + `TextInput` (with `control` prop) for inline error display. Dependencies: `zod`, `@hookform/resolvers`.
+2. **Agent forms** — use `react-hook-form` with inline `rules` prop validation on `TextInput` / `SelectInput` fields (with `control` prop). No Zod schemas.
+
+**Important**: When using `TextInput` with `control`, do NOT also pass `error` to a parent `FormRow` — the component already renders `fieldState.error.message` as `helperText`, causing duplicate error messages.
+
+**Agent form**: The create/edit agent flow is a multi-tab form (`GeneralTab`, `VoiceTab`, `CallConfigurationTab`) plus a `PromptPage`. Form state uses `AgentFormState` from `src/components/agents/agent-form/agentFormUtils.ts`, which also exports `defaultFormState` and `formStateToUpsertPayload` for serializing to the API. The form is wrapped by `AgentFormPage.tsx` which handles loading agent data for edit mode and provides the `FormProvider` context.
+
+**Key files**:
+
+| File | Purpose |
+| --- | --- |
+| `src/schemas/auth.ts` | Zod schemas + inferred types for all auth forms |
+| `src/components/agents/agent-form/agentFormUtils.ts` | `AgentFormState`, `defaultFormState`, `formStateToUpsertPayload` |
+| `src/components/agents/AgentFormPage.tsx` | Agent create/edit page wrapper with `FormProvider` |
+| `src/components/agents/agent-form/DynamicProviderFields.tsx` | Renders provider-specific config fields dynamically |
 
 ---
 

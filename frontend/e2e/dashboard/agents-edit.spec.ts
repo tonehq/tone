@@ -343,13 +343,6 @@ test.describe('Edit Agent Page', () => {
       await expect(page.locator('[class*="animate-spin"]')).not.toBeVisible({ timeout: 10_000 });
     });
 
-    test('shows phone assigned status bar', async ({ page }) => {
-      const statusBar = page.getByText('Phone assigned:');
-      await expect(statusBar).toBeVisible();
-      await expect(page.getByText('+1 (555) 123-4567').first()).toBeVisible();
-      await expect(page.getByText('+1 (555) 987-6543').first()).toBeVisible();
-    });
-
     test('shows phone numbers in assign number tab', async ({ page }) => {
       await page.getByRole('tab', { name: /assign number/i }).click();
       const tabPanel = page.locator('[role="tabpanel"]');

@@ -3,29 +3,25 @@
 import { cn } from '@/utils/cn';
 import { Eye, EyeOff } from 'lucide-react';
 import React, { forwardRef, useState } from 'react';
+import { Controller } from 'react-hook-form';
 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 import CustomButton from '@/components/shared/CustomButton';
+import type { FormTextInputProps, TextInputBaseProps } from '@/types/components';
 
-interface TextInputProps extends Omit<React.ComponentProps<'input'>, 'size'> {
-  name: string;
-  type?: string;
-  label?: string;
-  isRequired?: boolean;
-  loading?: boolean;
-  error?: boolean;
-  helperText?: string;
-  labelClassName?: string;
-  leftIcon?: React.ReactNode;
+type TextInputProps = TextInputBaseProps | FormTextInputProps;
+
+function isFormInput(props: TextInputProps): props is FormTextInputProps {
+  return 'control' in props && props.control !== undefined;
 }
 
 const Skeleton = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div className={cn('animate-pulse rounded-lg bg-muted', className)} {...props} />
 );
 
-const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
+const PlainTextInput = forwardRef<HTMLInputElement, TextInputBaseProps>(
   (
     {
       name,
@@ -60,7 +56,7 @@ const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
     }
 
     return (
-      <>
+      <div>
         {label && (
           <Label htmlFor={name} className={cn('mb-1.5', labelClassName)}>
             {label}
@@ -114,10 +110,43 @@ const TextInput = forwardRef<HTMLInputElement, TextInputProps>(
             {helperText}
           </p>
         )}
-      </>
+      </div>
     );
   },
 );
+
+PlainTextInput.displayName = 'PlainTextInput';
+
+const MemoizedPlainTextInput = React.memo(PlainTextInput);
+
+const TextInput = forwardRef<HTMLInputElement, TextInputProps>((props, ref) => {
+  if (isFormInput(props)) {
+    const { name, control, rules, onValueChange, error, helperText, ...rest } = props;
+    return (
+      <Controller
+        name={name}
+        control={control}
+        rules={rules}
+        render={({ field, fieldState }) => (
+          <MemoizedPlainTextInput
+            {...rest}
+            name={name}
+            value={field.value ?? ''}
+            onChange={(e) => {
+              field.onChange(e.target.value);
+              onValueChange?.(e.target.value);
+            }}
+            onBlur={field.onBlur}
+            error={error ?? !!fieldState.error}
+            helperText={helperText ?? (fieldState.error?.message as string)}
+          />
+        )}
+      />
+    );
+  }
+
+  return <MemoizedPlainTextInput ref={ref} {...props} />;
+});
 
 TextInput.displayName = 'TextInput';
 

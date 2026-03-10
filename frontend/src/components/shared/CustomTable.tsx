@@ -152,7 +152,7 @@ function CustomTableInner<TRow>({
     : processedRows;
 
   return (
-    <div className={cn('flex flex-col gap-5 min-h-0 flex-1', className)}>
+    <div className={cn('flex flex-col gap-5 min-h-0', className)}>
       {searchable && (
         <div className="max-w-xs">
           <TextInput
@@ -168,7 +168,7 @@ function CustomTableInner<TRow>({
         </div>
       )}
 
-      <div className="flex flex-1 flex-col min-h-0 overflow-hidden rounded-md border border-border bg-card shadow-sm">
+      <div className="flex flex-col min-h-0 overflow-hidden rounded-md border border-border bg-card shadow-sm">
         <DataTable
           table={table}
           rows={paginatedRows}

@@ -1,13 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 
 import { debounce } from 'lodash';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import CustomButton from '../../../components/shared/CustomButton';
-import { Form } from '../../../components/shared/Form';
 import TextInput from '../../../components/shared/TextInput';
+import { type SignupFormData, signupSchema } from '../../../schemas/auth';
 import { signup } from '../../../services/auth/helper';
 import axios from '../../../utils/axios';
 import { handleApiError } from '../../../utils/helpers';
@@ -30,6 +32,11 @@ const SignupClient = () => {
   const [active, setActive] = useState(0);
   const [existingOrg, setExistingOrg] = useState<ExistingOrg | null>(null);
   const [_checkingOrg, setCheckingOrg] = useState(false);
+
+  const { control, handleSubmit } = useForm<SignupFormData>({
+    resolver: zodResolver(signupSchema),
+    defaultValues: { email: '', password: '', org_name: '' },
+  });
 
   useEffect(() => {
     const firebase_signup = params.get('firebase_signup');
@@ -72,11 +79,7 @@ const SignupClient = () => {
     [],
   );
 
-  const handleOrgNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    checkOrgExists(e.target.value);
-  };
-
-  const handleSubmit = async (value: any) => {
+  const onSubmit = async (values: SignupFormData) => {
     if (existingOrg) {
       showToast.warning(
         'Organization Exists',
@@ -90,11 +93,11 @@ const SignupClient = () => {
 
     try {
       const res: any = await signup(
-        value['email'],
-        value['password'],
+        values.email,
+        values.password,
         {},
         params.get('firebase_uid'),
-        value['org_name'],
+        values.org_name,
       );
       showToast.success('Account Created', 'Please check your email for verification', 4);
       if (params.get('firebase_signup') === 'true') {
@@ -104,7 +107,7 @@ const SignupClient = () => {
         if (redirect) {
           localStorage.setItem('invite_redirect', redirect);
         }
-        router.push(`/auth/check-email?email=${encodeURIComponent(value['email'])}`);
+        router.push(`/auth/check-email?email=${encodeURIComponent(values.email)}`);
       }
       if (res.status === 200) {
         setLoader(false);
@@ -124,9 +127,10 @@ const SignupClient = () => {
           Get started with Voice AI in minutes
         </p>
 
-        <Form onFinish={handleSubmit} layout="vertical" autoComplete="off">
+        <form onSubmit={handleSubmit(onSubmit)} autoComplete="off" className="space-y-5">
           <TextInput
             name="email"
+            control={control}
             type="email"
             label="Email"
             placeholder="Enter your email"
@@ -134,6 +138,7 @@ const SignupClient = () => {
           />
           <TextInput
             name="password"
+            control={control}
             type="password"
             label="Password"
             placeholder="Create a password"
@@ -141,10 +146,11 @@ const SignupClient = () => {
           />
           <TextInput
             name="org_name"
+            control={control}
             type="text"
             label="Organisation name (optional)"
             placeholder="Enter your organisation name"
-            onChange={handleOrgNameChange}
+            onValueChange={(value) => checkOrgExists(value)}
           />
 
           <div className="mt-2 flex flex-col gap-2">
@@ -176,7 +182,7 @@ const SignupClient = () => {
               Log in
             </Link>
           </div>
-        </Form>
+        </form>
       </div>
     </Container>
   );

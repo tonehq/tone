@@ -28,7 +28,7 @@ function alignClass(align?: 'left' | 'center' | 'right') {
 
 function Table({ className, ...props }: React.ComponentProps<'table'>) {
   return (
-    <div data-slot="table-container" className="relative w-full flex-1 overflow-auto">
+    <div data-slot="table-container" className="relative w-full overflow-auto">
       <table
         data-slot="table"
         className={cn('w-full caption-bottom text-sm', className)}

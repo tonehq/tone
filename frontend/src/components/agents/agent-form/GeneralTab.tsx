@@ -1,15 +1,20 @@
 'use client';
 
-import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
 import { CustomButton, SelectInput, TextAreaField, TextInput } from '@/components/shared';
 import { Form } from '@/components/shared/Form';
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import type { ServiceProvider } from '@/types/provider';
 import { toSelectOptions } from '@/utils/selectUtils';
 import { Bot, Brain, MessageSquare, Settings2, Trash2, X } from 'lucide-react';
-import { KeyboardEvent, ReactNode, useMemo, useState } from 'react';
-import DynamicProviderFields from './DynamicProviderFields';
+import { KeyboardEvent, ReactNode, useEffect, useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import DynamicProviderFields, { type DynamicProviderFieldsHandle } from './DynamicProviderFields';
 import type { AgentGeneralFormData } from './types';
+
+export interface GeneralTabHandle {
+  trigger: () => Promise<boolean>;
+}
 
 interface GeneralTabProps {
   formData: AgentGeneralFormData;
@@ -18,6 +23,8 @@ interface GeneralTabProps {
   onFormChange: (partial: Partial<AgentGeneralFormData>) => void;
   onDeleteAgent: () => void;
   onFormSubmit?: (values: AgentGeneralFormData) => void;
+  onLlmValidityChange?: (handle: DynamicProviderFieldsHandle) => void;
+  onGeneralValidityChange?: (handle: GeneralTabHandle) => void;
 }
 
 function SectionCard({
@@ -60,11 +67,15 @@ function SectionCard({
 function FormRow({
   label,
   description,
+  required,
+  error,
   children,
   isLast = false,
 }: {
   label: string;
   description?: string;
+  required?: boolean;
+  error?: string;
   children: ReactNode;
   isLast?: boolean;
 }) {
@@ -73,12 +84,18 @@ function FormRow({
       className={`flex items-start justify-between gap-6 py-4 ${!isLast ? 'border-b border-border/40' : ''}`}
     >
       <div className="flex-[0_0_50%]">
-        <h3 className="text-[13px] font-medium text-foreground">{label}</h3>
+        <h3 className="text-[13px] font-medium text-foreground">
+          {label}
+          {required && <span className="ml-0.5 text-destructive">*</span>}
+        </h3>
         {description && (
           <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">{description}</p>
         )}
       </div>
-      <div className="flex-[0_0_45%]">{children}</div>
+      <div className="flex-[0_0_45%]">
+        {children}
+        {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+      </div>
     </div>
   );
 }
@@ -100,9 +117,20 @@ export default function GeneralTab({
   onFormChange,
   onDeleteAgent,
   onFormSubmit,
+  onLlmValidityChange,
+  onGeneralValidityChange,
 }: GeneralTabProps) {
   const [vocabularyInput, setVocabularyInput] = useState('');
   const [filterWordsInput, setFilterWordsInput] = useState('');
+
+  const { control, trigger } = useForm({
+    mode: 'onChange',
+    values: { name: formData.name },
+  });
+
+  useEffect(() => {
+    onGeneralValidityChange?.({ trigger });
+  }, [onGeneralValidityChange, trigger]);
 
   const selectedLlmProvider = useMemo(
     () => llmProviders.find((p) => p.id === formData.aiModel) ?? null,
@@ -175,11 +203,12 @@ export default function GeneralTab({
           title="Agent Identity"
           description="Basic information about your agent."
         >
-          <FormRow label="Agent Name" description="What name will your agent go by.">
+          <FormRow label="Agent Name" description="What name will your agent go by." required>
             <TextInput
               name="name"
-              value={formData.name}
-              onChange={(e) => onFormChange({ name: e.target.value })}
+              control={control}
+              rules={{ required: 'Please enter a name for your agent' }}
+              onValueChange={(v) => onFormChange({ name: v })}
             />
           </FormRow>
 
@@ -246,6 +275,7 @@ export default function GeneralTab({
               schema={selectedLlmProvider.meta_data_schema}
               values={formData.llmMetaData}
               onChange={(metaData) => onFormChange({ llmMetaData: metaData })}
+              onValidityChange={onLlmValidityChange}
             />
           ) : null}
 
