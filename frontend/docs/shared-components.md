@@ -436,12 +436,13 @@ Single-choice group. Uses shadcn `RadioGroup` + `RadioGroupItem` + `Label` per o
 
 Error state and helperText are auto-derived from `fieldState`.
 
-| Prop          | Type                        | Default | Description                           |
-| ------------- | --------------------------- | ------- | ------------------------------------- |
-| name          | string                      | —       | **Required.** RHF field name.         |
-| control       | `Control<any>`              | —       | **Required.** RHF `control`.          |
-| rules         | `RegisterOptions`           | —       | RHF validation rules.                 |
-| onValueChange | `(value: string) => void`   | —       | Side-effect callback.                 |
+| Prop           | Type                           | Default | Description                                                       |
+| -------------- | ------------------------------ | ------- | ----------------------------------------------------------------- |
+| name           | string                         | —       | **Required.** RHF field name.                                     |
+| control        | `Control<any>`                 | —       | **Required.** RHF `control`.                                      |
+| rules          | `RegisterOptions`              | —       | RHF validation rules.                                             |
+| onValueChange  | `(value: string) => void`      | —       | Side-effect callback.                                             |
+| transformValue | `(value: string) => unknown`   | —       | Converts the string value before passing to RHF (e.g. to boolean). |
 | + plain RadioGroupField props (minus `value`, `onValueChange`) | | | Forwarded. |
 
 **RadioGroupOption:** `{ value: string; label: string; disabled?: boolean }`
@@ -471,6 +472,18 @@ Error state and helperText are auto-derived from `fieldState`.
     { value: 'yearly', label: 'Yearly' },
   ]}
   orientation="horizontal"
+/>
+
+{/* RHF with boolean conversion (Yes/No toggle) */}
+<RadioGroupField
+  name="enabled"
+  control={control}
+  options={[
+    { value: 'true', label: 'Yes' },
+    { value: 'false', label: 'No' },
+  ]}
+  orientation="horizontal"
+  transformValue={(v) => v === 'true'}
 />
 ```
 
