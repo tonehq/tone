@@ -5,8 +5,40 @@ from typing import Dict, Any
 from core.database.session import get_db
 from core.services.auth_service import AuthService
 from core.middleware.auth import get_jwt_claims, require_org_member, require_admin_or_owner, JWTClaims
+from core.internal.capabilities import has_capability, is_ee_enabled
+from core.internal.license import get_license_info
+from core.models.member import Member
+from core.context import get_current_org_id
 
 router = APIRouter()
+
+CORE_MAX_MEMBERS = 3
+
+
+def require_team_capability():
+    if not has_capability("t"):
+        raise HTTPException(status_code=404, detail="Not found")
+
+
+def check_member_limit(db: Session):
+    if is_ee_enabled():
+        license_info = get_license_info()
+        if license_info.seats > 0:
+            org_id = get_current_org_id()
+            current_members = db.query(Member).filter(Member.organization_id == org_id).count()
+            if current_members >= license_info.seats:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Member limit reached. Your license allows {license_info.seats} seats."
+                )
+    else:
+        org_id = get_current_org_id()
+        current_members = db.query(Member).filter(Member.organization_id == org_id).count()
+        if current_members >= CORE_MAX_MEMBERS:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Member limit reached. Core edition allows up to {CORE_MAX_MEMBERS} members. Upgrade to Enterprise for more."
+            )
 
 
 @router.post("/invite_user_to_organization")
@@ -24,6 +56,8 @@ def invite_user_to_organization(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Name, email, and role are required"
         )
+
+    check_member_limit(db)
 
     return AuthService(db, user_id=claims.user_id).invite_user_to_organization(name, email, role, claims.user_id)
 

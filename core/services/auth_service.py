@@ -8,11 +8,12 @@ from fastapi import HTTPException, status
 from core.services.base import BaseService
 from core.models.user import User
 from core.models.member import Member
+from core.models.organization import Organization
 from core.models.organization_invite import OrganizationInvite
 from core.models.email_verification import EmailVerification
 from core.models.password_reset import PasswordReset
 from core.models.organization_access_request import OrganizationAccessRequest
-from core.models.enums import UserStatus, Role, InviteStatus, AuthProvider, AccessRequestStatus
+from core.models.enums import UserStatus, Role, InviteStatus, AuthProvider, AccessRequestStatus, OrganizationStatus
 from core.middleware.auth import jwt_manager
 from core.utils.security import hash_password, verify_password, generate_verification_code, generate_token
 from core.services.email_service import MailService
@@ -22,6 +23,30 @@ from core.config import settings
 class AuthService(BaseService):
     def __init__(self, db: Session, user_id: Optional[int] = None):
         super().__init__(db, user_id)
+
+    def ensure_default_organization(self, created_by: int) -> Organization:
+        from uuid import UUID
+        default_org_id = UUID(settings.DEFAULT_ORG_ID)
+        existing = self.db.query(Organization).filter(Organization.id == default_org_id).first()
+        if existing:
+            return existing
+
+        current_time = int(time.time())
+        org = Organization(
+            id=default_org_id,
+            name="Default Organization",
+            slug="default",
+            description="Default organization",
+            status=OrganizationStatus.ACTIVE,
+            created_by=created_by,
+            subscription_plan="free",
+            subscription_status="active",
+            created_at=current_time,
+            updated_at=current_time,
+        )
+        self.db.add(org)
+        self.db.commit()
+        return org
 
     def signup(self, email: str, password: str, username: Optional[str] = None,
                profile: Optional[Dict] = None) -> Dict[str, Any]:
@@ -200,8 +225,11 @@ class AuthService(BaseService):
             user.status = UserStatus.ACTIVE
             user.updated_at = current_time
 
-            # First user in the org becomes owner
-            existing_member_count = self.db.query(Member).count()
+            self.ensure_default_organization(user.id)
+
+            existing_member_count = self.db.query(Member).filter(
+                Member.organization_id == settings.DEFAULT_ORG_ID
+            ).count()
             role = Role.OWNER if existing_member_count == 0 else Role.MEMBER
 
             member = Member(
@@ -211,7 +239,8 @@ class AuthService(BaseService):
                 created_by=user.id,
                 created_at=current_time,
                 updated_at=current_time,
-                joined_at=current_time
+                joined_at=current_time,
+                organization_id=settings.DEFAULT_ORG_ID
             )
             self.db.add(member)
 
@@ -319,6 +348,7 @@ class AuthService(BaseService):
                 detail="Pending invitation already exists"
             )
 
+        org_id = self.org_id or settings.DEFAULT_ORG_ID
         invitation = OrganizationInvite(
             email=email,
             name=name,
@@ -327,7 +357,8 @@ class AuthService(BaseService):
             expires_at=expires_at,
             invited_by=invited_by,
             created_at=current_time,
-            updated_at=current_time
+            updated_at=current_time,
+            organization_id=org_id
         )
 
         self.db.add(invitation)
@@ -386,6 +417,7 @@ class AuthService(BaseService):
                 detail="You are already a member"
             )
 
+        org_id = invitation.organization_id if invitation.organization_id else settings.DEFAULT_ORG_ID
         member = Member(
             user_id=user.id,
             role=invitation.role,
@@ -393,7 +425,8 @@ class AuthService(BaseService):
             created_by=invitation.invited_by,
             created_at=current_time,
             updated_at=current_time,
-            joined_at=current_time
+            joined_at=current_time,
+            organization_id=org_id
         )
 
         self.db.add(member)
@@ -476,6 +509,7 @@ class AuthService(BaseService):
         self.db.add(user)
         self.db.flush()
 
+        org_id = invitation.organization_id if invitation.organization_id else settings.DEFAULT_ORG_ID
         member = Member(
             user_id=user.id,
             role=invitation.role,
@@ -483,7 +517,8 @@ class AuthService(BaseService):
             created_by=invitation.invited_by,
             created_at=current_time,
             updated_at=current_time,
-            joined_at=current_time
+            joined_at=current_time,
+            organization_id=org_id
         )
 
         self.db.add(member)
@@ -655,6 +690,7 @@ class AuthService(BaseService):
             access_request.reviewed_at = current_time
             access_request.updated_at = current_time
 
+            org_id = access_request.organization_id if access_request.organization_id else settings.DEFAULT_ORG_ID
             member = Member(
                 user_id=access_request.user_id,
                 role=Role.MEMBER,
@@ -662,7 +698,8 @@ class AuthService(BaseService):
                 created_by=reviewer_id,
                 created_at=current_time,
                 updated_at=current_time,
-                joined_at=current_time
+                joined_at=current_time,
+                organization_id=org_id
             )
             self.db.add(member)
             self.db.commit()

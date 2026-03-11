@@ -1,17 +1,14 @@
-from uuid import UUID
-
-
 import uuid
 
 from sqlalchemy import Column, BigInteger, String, Enum
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
-from core.models.base import TimestampModel
+from core.models.base import OrgScopedModel
 from core.models.enums import ChannelType
 
 
-class Channel(TimestampModel):
+class Channel(OrgScopedModel):
     __tablename__ = 'channels'
 
     uuid = Column[UUID](UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)

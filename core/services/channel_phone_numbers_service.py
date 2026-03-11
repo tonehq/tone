@@ -48,14 +48,14 @@ class ChannelPhoneNumbersService(BaseService):
     )
 
     def get_channel_phone_numbers(self, channel_id: int):
-        channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
+        channel = self.query(Channel).filter(Channel.id == channel_id).first()
         if not channel:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Channel not found",
             )
         return (
-            self.db.query(ChannelPhoneNumbers)
+            self.query(ChannelPhoneNumbers)
             .filter(
                 ChannelPhoneNumbers.channel_id == channel_id,
                 ChannelPhoneNumbers.status == "active",
@@ -69,9 +69,10 @@ class ChannelPhoneNumbersService(BaseService):
 
         try:
             rows = (
-                self.db.query(ChannelPhoneNumbers, Agent.name)
+                self.query(ChannelPhoneNumbers)
                 .join(Agent, ChannelPhoneNumbers.agent_id == Agent.id)
                 .filter(ChannelPhoneNumbers.agent_id.isnot(None))
+                .add_columns(Agent.name)
                 .all()
             )
             return [
@@ -92,14 +93,14 @@ class ChannelPhoneNumbersService(BaseService):
         phone_number = data["phone_number"].strip()
         agent_id = data.get("agent_id")
 
-        channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
+        channel = self.query(Channel).filter(Channel.id == channel_id).first()
         if not channel:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Channel not found",
             )
 
-        q = self.db.query(ChannelPhoneNumbers).filter(
+        q = self.query(ChannelPhoneNumbers).filter(
             ChannelPhoneNumbers.channel_id == channel_id,
             ChannelPhoneNumbers.phone_number == phone_number,
         )
@@ -178,18 +179,17 @@ class ChannelPhoneNumbersService(BaseService):
         agent_id = data.get("agent_id")
 
         if channel_id is not None:
-            channel = self.db.query(Channel).filter(Channel.id == int(channel_id)).first()
+            channel = self.query(Channel).filter(Channel.id == int(channel_id)).first()
             if not channel:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Channel not found",
                 )
 
-        # Check if this phone number is already assigned to a different agent
         if agent_id is not None:
             try:
                 existing_assignment = (
-                    self.db.query(ChannelPhoneNumbers)
+                    self.query(ChannelPhoneNumbers)
                     .filter(
                         ChannelPhoneNumbers.phone_number == phone_number,
                         ChannelPhoneNumbers.agent_id.isnot(None),
@@ -210,12 +210,11 @@ class ChannelPhoneNumbersService(BaseService):
         row_id = data.get("id")
         row_uuid_raw = data.get("uuid")
 
-        # If created_by + provider given, try to find existing record
         created_by = data.get("created_by")
         provider = data.get("provider")
         if created_by is not None and provider and row_id is None and row_uuid_raw is None:
             existing_by_creator = (
-                self.db.query(ChannelPhoneNumbers)
+                self.query(ChannelPhoneNumbers)
                 .join(Channel, ChannelPhoneNumbers.channel_id == Channel.id)
                 .filter(
                     Channel.created_by == int(created_by),
@@ -228,7 +227,7 @@ class ChannelPhoneNumbersService(BaseService):
                 row_id = existing_by_creator.id
 
         if row_id is not None:
-            existing = self.db.query(ChannelPhoneNumbers).filter(
+            existing = self.query(ChannelPhoneNumbers).filter(
                 ChannelPhoneNumbers.id == int(row_id)
             ).first()
             if not existing:
@@ -240,7 +239,7 @@ class ChannelPhoneNumbersService(BaseService):
         elif row_uuid_raw is not None:
             row_uuid = UUID(str(row_uuid_raw)) if isinstance(row_uuid_raw, str) else row_uuid_raw
         else:
-            existing = self.db.query(ChannelPhoneNumbers).filter(
+            existing = self.query(ChannelPhoneNumbers).filter(
                 ChannelPhoneNumbers.phone_number == phone_number
             ).first()
             if existing:
@@ -290,7 +289,7 @@ class ChannelPhoneNumbersService(BaseService):
         from core.models.enums import ChannelType
 
         if channel_id is not None:
-            channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
+            channel = self.query(Channel).filter(Channel.id == channel_id).first()
             if not channel:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -310,7 +309,7 @@ class ChannelPhoneNumbersService(BaseService):
                 )
 
             channel = (
-                self.db.query(Channel)
+                self.query(Channel)
                 .filter(Channel.type == channel_enum)
                 .first()
             )
@@ -338,9 +337,8 @@ class ChannelPhoneNumbersService(BaseService):
                 detail=f"Failed to fetch phone numbers from Twilio: {str(e)}",
             )
 
-        # Build a set of phone numbers assigned to OTHER agents (exclude current agent)
         try:
-            q = self.db.query(ChannelPhoneNumbers.phone_number).filter(
+            q = self.query(ChannelPhoneNumbers).with_entities(ChannelPhoneNumbers.phone_number).filter(
                 ChannelPhoneNumbers.agent_id.isnot(None),
             )
             if agent_id is not None:

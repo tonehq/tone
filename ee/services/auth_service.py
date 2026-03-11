@@ -5,26 +5,27 @@ from uuid import UUID
 import time
 from fastapi import HTTPException, status
 
-from core.models.enums import UserStatus, Role, InviteStatus, AuthProvider, AccessRequestStatus, OrganizationStatus
+from core.models.enums import UserStatus, Role, InviteStatus, AuthProvider, AccessRequestStatus
 from core.utils.security import hash_password, verify_password, generate_verification_code, generate_token
 from core.services.email_service import MailService
+from core.services.base import BaseService
 
-from ee.models.user import User
-from ee.models.email_verification import EmailVerification
-from ee.models.password_reset import PasswordReset
-from ee.models.organization import Organization
-from ee.models.member import Member
-from ee.models.organization_invite import OrganizationInvite
-from ee.models.organization_access_request import OrganizationAccessRequest
+from core.models.user import User
+from core.models.email_verification import EmailVerification
+from core.models.password_reset import PasswordReset
+from core.models.organization import Organization
+from core.models.member import Member
+from core.models.organization_invite import OrganizationInvite
+from core.models.organization_access_request import OrganizationAccessRequest
+
 from ee.config import ee_settings
 from ee.middleware.auth import ee_jwt_manager
 
 
-class EEAuthService:
+class EEAuthService(BaseService):
     def __init__(self, db: Session, org_id: Optional[UUID] = None, user_id: Optional[int] = None):
-        self.db = db
+        super().__init__(db, user_id)
         self._org_id = org_id
-        self._user_id = user_id
 
     def create_slug_from_name(self, name: str) -> str:
         slug = name.lower().replace(' ', '-').replace('_', '-')
@@ -463,7 +464,7 @@ class EEAuthService:
         return result
 
     def get_all_invited_users_for_organization(self, org_id: UUID) -> List[Dict[str, Any]]:
-        invites = self.db.query(OrganizationInvite).filter(
+        invites = self.query(OrganizationInvite).filter(
             OrganizationInvite.organization_id == org_id,
             OrganizationInvite.status == InviteStatus.PENDING
         ).all()
@@ -509,7 +510,7 @@ class EEAuthService:
                 detail="User is already a member of this organization"
             )
 
-        existing_invite = self.db.query(OrganizationInvite).filter(
+        existing_invite = self.query(OrganizationInvite).filter(
             OrganizationInvite.email == email,
             OrganizationInvite.organization_id == org_id,
             OrganizationInvite.status == InviteStatus.PENDING
@@ -553,7 +554,7 @@ class EEAuthService:
     def accept_invitation(self, email: str, token: str, org_id: UUID) -> Dict[str, Any]:
         current_time = int(time.time())
 
-        invitation = self.db.query(OrganizationInvite).filter(
+        invitation = self.query(OrganizationInvite).filter(
             OrganizationInvite.email == email,
             OrganizationInvite.invitation_token == token,
             OrganizationInvite.organization_id == org_id,
@@ -580,7 +581,7 @@ class EEAuthService:
                 detail="Please verify your email before accepting the invitation"
             )
 
-        existing_member = self.db.query(Member).filter(
+        existing_member = self.query(Member).filter(
             Member.user_id == user.id,
             Member.organization_id == org_id
         ).first()
@@ -624,7 +625,7 @@ class EEAuthService:
         }
 
     def remove_user_from_organization(self, org_id: UUID, user_id: int) -> Dict[str, str]:
-        member = self.db.query(Member).filter(
+        member = self.query(Member).filter(
             Member.user_id == user_id,
             Member.organization_id == org_id
         ).first()
@@ -636,7 +637,7 @@ class EEAuthService:
             )
 
         if member.role == Role.OWNER:
-            owner_count = self.db.query(Member).filter(
+            owner_count = self.query(Member).filter(
                 Member.organization_id == org_id,
                 Member.role == Role.OWNER,
                 Member.status == 'active'
@@ -662,7 +663,7 @@ class EEAuthService:
                 detail="Invalid role"
             )
 
-        member = self.db.query(Member).filter(
+        member = self.query(Member).filter(
             Member.id == member_id,
             Member.organization_id == org_id
         ).first()
@@ -673,7 +674,7 @@ class EEAuthService:
                 detail="Member not found"
             )
 
-        current_user_member = self.db.query(Member).filter(
+        current_user_member = self.query(Member).filter(
             Member.user_id == self._user_id,
             Member.organization_id == org_id,
             Member.status == 'active'
@@ -698,7 +699,7 @@ class EEAuthService:
                 )
 
         if member.role == Role.OWNER and role_enum != Role.OWNER:
-            owner_count = self.db.query(Member).filter(
+            owner_count = self.query(Member).filter(
                 Member.organization_id == org_id,
                 Member.role == Role.OWNER,
                 Member.status == 'active'
@@ -746,7 +747,7 @@ class EEAuthService:
     def request_organization_access(self, user_id: int, org_id: UUID, message: str = None) -> Dict[str, Any]:
         current_time = int(time.time())
 
-        existing_member = self.db.query(Member).filter(
+        existing_member = self.query(Member).filter(
             Member.user_id == user_id,
             Member.organization_id == org_id
         ).first()
@@ -757,7 +758,7 @@ class EEAuthService:
                 detail="You are already a member of this organization"
             )
 
-        existing_request = self.db.query(OrganizationAccessRequest).filter(
+        existing_request = self.query(OrganizationAccessRequest).filter(
             OrganizationAccessRequest.user_id == user_id,
             OrganizationAccessRequest.organization_id == org_id,
             OrganizationAccessRequest.status == AccessRequestStatus.PENDING
@@ -788,26 +789,30 @@ class EEAuthService:
         }
 
     def get_access_requests(self, org_id: UUID) -> List[Dict[str, Any]]:
-        requests = self.db.query(OrganizationAccessRequest, User).join(
-            User, OrganizationAccessRequest.user_id == User.id
-        ).filter(
+        requests = self.query(OrganizationAccessRequest).filter(
             OrganizationAccessRequest.organization_id == org_id,
             OrganizationAccessRequest.status == AccessRequestStatus.PENDING
         ).all()
 
-        return [{
-            "id": req.id,
-            "user_id": req.user_id,
-            "email": user.email,
-            "username": user.username,
-            "message": req.message,
-            "created_at": req.created_at
-        } for req, user in requests]
+        result = []
+        for req in requests:
+            user = self.db.query(User).filter(User.id == req.user_id).first()
+            if user:
+                result.append({
+                    "id": req.id,
+                    "user_id": req.user_id,
+                    "email": user.email,
+                    "username": user.username,
+                    "message": req.message,
+                    "created_at": req.created_at
+                })
+
+        return result
 
     def handle_access_request(self, org_id: UUID, request_id: int, action: str, reviewer_id: int) -> Dict[str, str]:
         current_time = int(time.time())
 
-        access_request = self.db.query(OrganizationAccessRequest).filter(
+        access_request = self.query(OrganizationAccessRequest).filter(
             OrganizationAccessRequest.id == request_id,
             OrganizationAccessRequest.organization_id == org_id
         ).first()

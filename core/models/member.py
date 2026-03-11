@@ -1,13 +1,13 @@
 from sqlalchemy import Column, BigInteger, String, Enum, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 
-from core.models.base import TimestampModel
+from core.models.base import OrgScopedModel
 from core.models.enums import Role
 
 
-class Member(TimestampModel):
+class Member(OrgScopedModel):
     __tablename__ = 'members'
-    __table_args__ = (UniqueConstraint('user_id', name='member_user_unique'),)
+    __table_args__ = (UniqueConstraint('organization_id', 'user_id', name='member_org_user_unique'),)
 
     user_id = Column(BigInteger, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
     role = Column(Enum(Role), default=Role.MEMBER)

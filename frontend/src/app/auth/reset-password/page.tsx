@@ -27,7 +27,7 @@ const ResetPasswordContent = () => {
     setLoader(true);
     try {
       const res = await axiosInstance.get(
-        `api/v1/auth/acceptForgotPassword?email=${params?.get('email')}&password=${values.password.trim()}&token=${params?.get('token')}`,
+        `auth/acceptForgotPassword?email=${params?.get('email')}&password=${values.password.trim()}&token=${params?.get('token')}`,
       );
       if (res) {
         showToast.success('Password Reset', 'Your password has been updated successfully', 4);
