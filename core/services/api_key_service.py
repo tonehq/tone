@@ -88,11 +88,12 @@ class ApiKeyService(BaseService):
         }
 
     def get_all_api_keys(self) -> List[Dict[str, Any]]:
-        results = self.db.query(ApiKey, ServiceProvider).join(
+        base_query = self.query(ApiKey)
+        results = base_query.join(
             ServiceProvider, ApiKey.service_provider_id == ServiceProvider.id
         ).filter(
             ApiKey.status == 'active'
-        ).all()
+        ).add_entity(ServiceProvider).all()
 
         return [{
             "id": key.id,
@@ -111,11 +112,11 @@ class ApiKeyService(BaseService):
         } for key, provider in results]
 
     def get_api_key(self, api_key_id: int) -> Dict[str, Any]:
-        result = self.db.query(ApiKey, ServiceProvider).join(
+        result = self.query(ApiKey).join(
             ServiceProvider, ApiKey.service_provider_id == ServiceProvider.id
         ).filter(
             ApiKey.id == api_key_id
-        ).first()
+        ).add_entity(ServiceProvider).first()
 
         if not result:
             raise HTTPException(
@@ -149,7 +150,7 @@ class ApiKeyService(BaseService):
         }
 
     def delete_api_key(self, api_key_id: int) -> Dict[str, str]:
-        key = self.db.query(ApiKey).filter(ApiKey.id == api_key_id).first()
+        key = self.query(ApiKey).filter(ApiKey.id == api_key_id).first()
 
         if not key:
             raise HTTPException(
@@ -164,7 +165,7 @@ class ApiKeyService(BaseService):
 
     def validate_api_key(self, api_key_id: int, is_valid: bool,
                          validation_error: Optional[str] = None) -> Dict[str, Any]:
-        key = self.db.query(ApiKey).filter(ApiKey.id == api_key_id).first()
+        key = self.query(ApiKey).filter(ApiKey.id == api_key_id).first()
 
         if not key:
             raise HTTPException(

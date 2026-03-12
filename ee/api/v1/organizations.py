@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Dict, Any
 from uuid import UUID
 
-from ee.database.session import get_ee_db
+from core.database.session import get_db
 from ee.services.auth_service import EEAuthService
 from ee.middleware.auth import get_ee_jwt_claims, get_ee_current_user, require_ee_org_member, require_ee_admin_or_owner, EEJWTClaims
 
@@ -13,7 +13,7 @@ router = APIRouter()
 @router.get("/get_associated_tenants")
 def get_associated_tenants(
     claims: EEJWTClaims = Depends(get_ee_jwt_claims),
-    db: Session = Depends(get_ee_db)
+    db: Session = Depends(get_db)
 ):
     return EEAuthService(db).get_associated_organizations(claims.user_id)
 
@@ -22,7 +22,7 @@ def get_associated_tenants(
 def create_tenants(
     name: str = Query(...),
     claims: EEJWTClaims = Depends(get_ee_jwt_claims),
-    db: Session = Depends(get_ee_db)
+    db: Session = Depends(get_db)
 ):
     return EEAuthService(db).create_organization(name, claims.user_id)
 
@@ -31,7 +31,7 @@ def create_tenants(
 def invite_user_to_organization(
     invite_data: Dict[str, str] = Body(...),
     claims: EEJWTClaims = Depends(require_ee_admin_or_owner),
-    db: Session = Depends(get_ee_db)
+    db: Session = Depends(get_db)
 ):
     name = invite_data.get("name")
     email = invite_data.get("email")
@@ -53,7 +53,7 @@ def accept_invitation(
     email: str = Query(...),
     code: str = Query(...),
     user_tenant_id: str = Query(...),
-    db: Session = Depends(get_ee_db)
+    db: Session = Depends(get_db)
 ):
     return EEAuthService(db).accept_invitation(email, code, UUID(user_tenant_id))
 
@@ -62,7 +62,7 @@ def accept_invitation(
 def remove_user_from_organization(
     user_id: int = Query(...),
     claims: EEJWTClaims = Depends(require_ee_admin_or_owner),
-    db: Session = Depends(get_ee_db)
+    db: Session = Depends(get_db)
 ):
     return EEAuthService(db, org_id=UUID(claims.org_id), user_id=claims.user_id).remove_user_from_organization(
         UUID(claims.org_id), user_id
@@ -74,7 +74,7 @@ def update_member_role(
     member_id: int = Query(...),
     role: str = Query(...),
     claims: EEJWTClaims = Depends(require_ee_admin_or_owner),
-    db: Session = Depends(get_ee_db)
+    db: Session = Depends(get_db)
 ):
     return EEAuthService(db, org_id=UUID(claims.org_id), user_id=claims.user_id).update_member_role(
         UUID(claims.org_id), member_id, role
@@ -84,7 +84,7 @@ def update_member_role(
 @router.get("/settings")
 def get_organization_settings(
     claims: EEJWTClaims = Depends(require_ee_org_member),
-    db: Session = Depends(get_ee_db)
+    db: Session = Depends(get_db)
 ):
     return EEAuthService(db, org_id=UUID(claims.org_id)).get_organization_settings(UUID(claims.org_id))
 
@@ -93,7 +93,7 @@ def get_organization_settings(
 def update_organization_settings(
     settings_data: Dict[str, Any] = Body(...),
     claims: EEJWTClaims = Depends(require_ee_admin_or_owner),
-    db: Session = Depends(get_ee_db)
+    db: Session = Depends(get_db)
 ):
     return EEAuthService(db, org_id=UUID(claims.org_id)).update_organization_settings(UUID(claims.org_id), settings_data)
 
@@ -102,7 +102,7 @@ def update_organization_settings(
 def request_access(
     request_data: Dict[str, Any] = Body(...),
     claims: EEJWTClaims = Depends(get_ee_jwt_claims),
-    db: Session = Depends(get_ee_db)
+    db: Session = Depends(get_db)
 ):
     org_id = request_data.get("org_id")
     message = request_data.get("message")
@@ -119,7 +119,7 @@ def request_access(
 @router.get("/access_requests")
 def get_access_requests(
     claims: EEJWTClaims = Depends(require_ee_admin_or_owner),
-    db: Session = Depends(get_ee_db)
+    db: Session = Depends(get_db)
 ):
     return EEAuthService(db, org_id=UUID(claims.org_id)).get_access_requests(UUID(claims.org_id))
 
@@ -128,7 +128,7 @@ def get_access_requests(
 def handle_access_request(
     request_data: Dict[str, Any] = Body(...),
     claims: EEJWTClaims = Depends(require_ee_admin_or_owner),
-    db: Session = Depends(get_ee_db)
+    db: Session = Depends(get_db)
 ):
     request_id = request_data.get("request_id")
     action = request_data.get("action")
@@ -147,6 +147,22 @@ def handle_access_request(
 @router.get("/roles")
 def get_roles(
     claims: EEJWTClaims = Depends(get_ee_jwt_claims),
-    db: Session = Depends(get_ee_db)
+    db: Session = Depends(get_db)
 ):
     return EEAuthService(db).get_roles_by_scope()
+
+
+@router.get("/members")
+def get_members(
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db)
+):
+    return EEAuthService(db, org_id=UUID(claims.org_id)).get_all_users_for_organization(UUID(claims.org_id))
+
+
+@router.get("/invited_users")
+def get_invited_users(
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db)
+):
+    return EEAuthService(db, org_id=UUID(claims.org_id)).get_all_invited_users_for_organization(UUID(claims.org_id))

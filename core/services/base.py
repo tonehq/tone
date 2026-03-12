@@ -1,9 +1,11 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, Query
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from typing import Optional, Union, List, Dict, Any
+from typing import Optional, Union, List, Dict, Any, Type, TypeVar
 from uuid import UUID
 
 from core.context import get_current_org_id, get_current_user_id
+
+T = TypeVar('T')
 
 
 class BaseService:
@@ -19,8 +21,16 @@ class BaseService:
     def user_id(self) -> Optional[int]:
         return self._user_id or get_current_user_id()
 
+    def query(self, model: Type[T]) -> Query:
+        q = self.db.query(model)
+        if hasattr(model, 'organization_id') and self.org_id:
+            q = q.filter(model.organization_id == self.org_id)
+        return q
+
     def upsert(self, model, values: Dict[str, Any], conflict_fields: List[str],
                update_fields: List[str], extra_update: Optional[Dict[str, Any]] = None):
+        if hasattr(model, 'organization_id') and 'organization_id' not in values and self.org_id:
+            values['organization_id'] = self.org_id
         stmt = pg_insert(model).values(**values)
         update_dict = {field: getattr(stmt.excluded, field) for field in update_fields}
         if extra_update:

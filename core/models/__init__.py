@@ -1,3 +1,4 @@
+from core.models.organization import Organization
 from core.models.user import User
 from core.models.member import Member
 from core.models.organization_invite import OrganizationInvite

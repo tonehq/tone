@@ -109,7 +109,7 @@ class AgentService(BaseService):
         agent_id = agent_data.get("id")
         agent_uuid_raw = agent_data.get("uuid")
         if agent_id is not None:
-            existing = self.db.query(Agent).filter(Agent.id == int(agent_id)).first()
+            existing = self.query(Agent).filter(Agent.id == int(agent_id)).first()
             if not existing:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -157,9 +157,8 @@ class AgentService(BaseService):
                 status_code=status.HTTP_409_CONFLICT,
                 detail=detail,
             ) from e
-        agent = self.db.query(Agent).filter(Agent.uuid == agent_uuid).first()
+        agent = self.query(Agent).filter(Agent.uuid == agent_uuid).first()
 
-        # Handle channel creation and agent-channel association
         channel_data = agent_data.get("channel")
         if channel_data and channel_data.get("type"):
             channel_svc = ChannelService(self.db, user_id=self.user_id)
@@ -168,20 +167,21 @@ class AgentService(BaseService):
                 meta_data=channel_data.get("meta_data"),
                 created_by=created_by,
             )
-            # Create agent_channel link if it doesn't already exist
             existing_link = (
-                self.db.query(AgentChannel)
+                self.query(AgentChannel)
                 .filter(AgentChannel.agent_id == agent.id, AgentChannel.channel_id == channel.id)
                 .first()
             )
             if not existing_link:
                 import uuid as _uuid
+                from core.config import settings
                 link = AgentChannel(
                     uuid=_uuid.uuid4(),
                     agent_id=agent.id,
                     channel_id=channel.id,
                     created_at=int(time.time()),
                     updated_at=int(time.time()),
+                    organization_id=self.org_id or settings.DEFAULT_ORG_ID
                 )
                 self.db.add(link)
                 self.db.commit()
@@ -196,7 +196,7 @@ class AgentService(BaseService):
             "llm_meta_data", "tts_meta_data", "stt_meta_data",
             *AGENT_METADATA_KEYS,
         )
-        existing_config = self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).first()
+        existing_config = self.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).first()
         has_config_field = any(k in agent_data for k in CONFIG_TRIGGER_KEYS)
         if has_config_field or existing_config:
             config_data = self._build_agent_config_data(agent.id, agent_data, existing_config=existing_config)
@@ -205,34 +205,31 @@ class AgentService(BaseService):
                 config_data["uuid"] = str(existing_config.uuid)
             AgentConfigService(self.db).upsert_agent_config(config_data)
 
-        config = self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).first()
+        config = self.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).first()
         return self._agent_response_item(agent, config)
 
     def _agent_response_item(self, agent: Agent, config: Any) -> Dict[str, Any]:
         """Build response dict: agent + config as single flat object (no agent_config key)."""
         from core.models.channel import Channel
 
-        # Fetch linked channels via agent_channels
         channel_rows = (
-            self.db.query(Channel)
+            self.query(Channel)
             .join(AgentChannel, AgentChannel.channel_id == Channel.id)
             .filter(AgentChannel.agent_id == agent.id)
             .all()
         )
 
-        # Fetch phone numbers assigned to this specific agent
         channel_ids = [c.id for c in channel_rows]
         try:
             phone_rows = (
-                self.db.query(ChannelPhoneNumbers)
+                self.query(ChannelPhoneNumbers)
                 .filter(ChannelPhoneNumbers.agent_id == agent.id)
                 .all()
             )
         except Exception:
             self.db.rollback()
-            # Fallback for when agent_id column doesn't exist yet
             phone_rows = (
-                self.db.query(ChannelPhoneNumbers)
+                self.query(ChannelPhoneNumbers)
                 .filter(ChannelPhoneNumbers.channel_id.in_(channel_ids))
                 .all()
             ) if channel_ids else []
@@ -384,18 +381,15 @@ class AgentService(BaseService):
         return config_data
 
     def delete_agent(self, agent_id: int):
-        agent = self.db.query(Agent).filter(Agent.id == agent_id).first()
+        agent = self.query(Agent).filter(Agent.id == agent_id).first()
         if not agent:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Agent not found",
             )
-        # Delete associated phone number assignments
-        self.db.query(ChannelPhoneNumbers).filter(ChannelPhoneNumbers.agent_id == agent.id).delete()
-        # Delete associated agent_config
-        self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).delete()
-        # Delete associated agent_channel links
-        self.db.query(AgentChannel).filter(AgentChannel.agent_id == agent.id).delete()
+        self.query(ChannelPhoneNumbers).filter(ChannelPhoneNumbers.agent_id == agent.id).delete()
+        self.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).delete()
+        self.query(AgentChannel).filter(AgentChannel.agent_id == agent.id).delete()
         self.db.delete(agent)
         self.db.commit()
         return {"message": "Agent deleted successfully"}
@@ -409,11 +403,15 @@ class AgentService(BaseService):
         stt_provider = aliased(ServiceProvider)
 
         q = (
-            self.db.query(Agent, AgentConfig, llm_provider, tts_provider, stt_provider)
+            self.query(Agent)
             .outerjoin(AgentConfig, AgentConfig.agent_id == Agent.id)
             .outerjoin(llm_provider, AgentConfig.llm_service_id == llm_provider.id)
             .outerjoin(tts_provider, AgentConfig.tts_service_id == tts_provider.id)
             .outerjoin(stt_provider, AgentConfig.stt_service_id == stt_provider.id)
+            .add_entity(AgentConfig)
+            .add_entity(llm_provider)
+            .add_entity(tts_provider)
+            .add_entity(stt_provider)
         )
         if agent_id is not None:
             q = q.filter(Agent.id == agent_id)

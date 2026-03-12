@@ -1,22 +1,7 @@
-from sqlalchemy.orm import sessionmaker, Session
-from contextlib import contextmanager
-from ee.database.base import ee_engine
+from core.database.session import SessionLocal, get_db
 
-EESessionLocal = sessionmaker(bind=ee_engine, autocommit=False, autoflush=False)
+EESessionLocal = SessionLocal
 
 
 def get_ee_db():
-    db = EESessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-@contextmanager
-def get_ee_db_context():
-    db = EESessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    return get_db()

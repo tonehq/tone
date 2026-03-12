@@ -2,10 +2,10 @@ from sqlalchemy import Column, BigInteger, String, Boolean, Text, Integer, Forei
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
 
-from core.models.base import TimestampModel
+from core.models.base import OrgScopedModel
 
 
-class Service(TimestampModel):
+class Service(OrgScopedModel):
     __tablename__ = 'services'
 
     uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)

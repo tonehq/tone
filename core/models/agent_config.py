@@ -1,14 +1,13 @@
 from sqlalchemy import Column, BigInteger, String, ForeignKey, Text, UniqueConstraint
 import uuid
 from sqlalchemy.dialects.postgresql import UUID, JSON
-from core.database.base import Base
-from core.models.base import TimestampModel
+from core.models.base import OrgScopedModel
 
 
-class AgentConfig(TimestampModel):
+class AgentConfig(OrgScopedModel):
     __tablename__ = 'agent_configs'
     __table_args__ = (
-        UniqueConstraint('agent_id', name='agent_config_agent_id_unique'),
+        UniqueConstraint('organization_id', 'agent_id', name='agent_config_org_agent_unique'),
     )
 
     uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)

@@ -7,6 +7,7 @@ from fastapi import HTTPException, status
 
 from core.services.base import BaseService
 from core.models.generated_api_key import GeneratedApiKey
+from core.config import settings
 
 
 class GeneratedApiKeyService(BaseService):
@@ -34,13 +35,13 @@ class GeneratedApiKeyService(BaseService):
             key.key_value = key_value
             key.updated_at = current_time
         else:
-            # Create new key
             key = GeneratedApiKey(
                 uuid=uuid_lib.uuid4(),
                 name=name,
                 key_value=key_value,
                 created_at=current_time,
-                updated_at=current_time
+                updated_at=current_time,
+                organization_id=self.org_id or settings.DEFAULT_ORG_ID
             )
             self.db.add(key)
 
@@ -83,7 +84,6 @@ class GeneratedApiKeyService(BaseService):
             key.fraud_protection = fraud_protection
             key.updated_at = current_time
         else:
-            # Create new key
             key = GeneratedApiKey(
                 uuid=uuid_lib.uuid4(),
                 name=name,
@@ -92,7 +92,8 @@ class GeneratedApiKeyService(BaseService):
                 abuse_prevention=abuse_prevention,
                 fraud_protection=fraud_protection,
                 created_at=current_time,
-                updated_at=current_time
+                updated_at=current_time,
+                organization_id=self.org_id or settings.DEFAULT_ORG_ID
             )
             self.db.add(key)
 

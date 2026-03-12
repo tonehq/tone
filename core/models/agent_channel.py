@@ -3,13 +3,13 @@ import uuid
 from sqlalchemy import Column, BigInteger, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 
-from core.models.base import TimestampModel
+from core.models.base import OrgScopedModel
 
 
-class AgentChannel(TimestampModel):
+class AgentChannel(OrgScopedModel):
     __tablename__ = 'agent_channels'
     __table_args__ = (
-        UniqueConstraint('agent_id', 'channel_id', name='agent_channel_unique'),
+        UniqueConstraint('organization_id', 'agent_id', 'channel_id', name='agent_channel_org_unique'),
     )
 
     uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)

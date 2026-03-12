@@ -4,9 +4,9 @@ import jwt
 from typing import Optional, Dict, Any
 import time
 from pydantic import BaseModel
-from uuid import UUID
 
 from ee.config import ee_settings
+from core.context import set_tenant_context
 
 
 security = HTTPBearer()
@@ -90,7 +90,10 @@ ee_jwt_manager = EEJWTManager()
 
 
 def get_ee_jwt_claims(credentials: HTTPAuthorizationCredentials = Depends(security)) -> EEJWTClaims:
-    return ee_jwt_manager.verify_token(credentials)
+    claims = ee_jwt_manager.verify_token(credentials)
+    if claims.org_id:
+        set_tenant_context(org_id=claims.org_id, user_id=claims.user_id, role=claims.role)
+    return claims
 
 
 def get_optional_ee_jwt_claims(
@@ -107,6 +110,7 @@ def get_ee_current_user(
 ) -> EEJWTClaims:
     if tenant_id:
         claims.org_id = tenant_id
+        set_tenant_context(org_id=tenant_id, user_id=claims.user_id, role=claims.role)
     return claims
 
 

@@ -2,10 +2,10 @@ from sqlalchemy import Column, String, Boolean, Text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
 
-from core.models.base import TimestampModel
+from core.models.base import OrgScopedModel
 
 
-class GeneratedApiKey(TimestampModel):
+class GeneratedApiKey(OrgScopedModel):
     __tablename__ = 'generated_api_keys'
 
     uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
