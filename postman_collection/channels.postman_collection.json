@@ -1,0 +1,260 @@
+{
+  "info": {
+    "name": "Channel API",
+    "description": "Auto-generated from core/api/v1/channels.py",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/api/v1" },
+    { "key": "authToken", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{authToken}}" }]
+  },
+  "item": [
+    {
+      "name": "Upsert Channel",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/channel/upsert",
+          "host": ["{{baseUrl}}"],
+          "path": ["channel", "upsert"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"My Twilio Channel\",\n  \"type\": \"twilio\",\n  \"meta_data\": {\n    \"account_sid\": \"AC_example\",\n    \"auth_token\": \"example_token\"\n  }\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      },
+      "response": [
+        {
+          "name": "Upsert Channel - Create",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/channel/upsert",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel", "upsert"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"My Twilio Channel\",\n  \"type\": \"twilio\",\n  \"meta_data\": {\n    \"account_sid\": \"AC_example\",\n    \"auth_token\": \"example_token\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"f6a7b8c9-d0e1-2345-fghi-456789012345\",\n  \"name\": \"My Twilio Channel\",\n  \"type\": \"TWILIO\",\n  \"created_by\": 1,\n  \"meta_data\": {\n    \"account_sid\": \"AC_example\",\n    \"auth_token\": \"example_token\"\n  },\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Upsert Channel - Update",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/channel/upsert",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel", "upsert"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"name\": \"Updated Twilio Channel\",\n  \"type\": \"twilio\",\n  \"meta_data\": {\n    \"account_sid\": \"AC_new_example\",\n    \"auth_token\": \"new_example_token\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"f6a7b8c9-d0e1-2345-fghi-456789012345\",\n  \"name\": \"Updated Twilio Channel\",\n  \"type\": \"TWILIO\",\n  \"created_by\": 1,\n  \"meta_data\": {\n    \"account_sid\": \"AC_new_example\",\n    \"auth_token\": \"new_example_token\"\n  },\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710288000\n}"
+        },
+        {
+          "name": "Upsert Channel - Missing Name",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/channel/upsert",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel", "upsert"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"twilio\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"name is required\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get All Channels",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/channel/list",
+          "host": ["{{baseUrl}}"],
+          "path": ["channel", "list"]
+        }
+      },
+      "response": [
+        {
+          "name": "Get All Channels - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/channel/list",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel", "list"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"f6a7b8c9-d0e1-2345-fghi-456789012345\",\n    \"name\": \"My Twilio Channel\",\n    \"type\": \"TWILIO\",\n    \"created_by\": 1,\n    \"meta_data\": {},\n    \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  },\n  {\n    \"id\": 2,\n    \"uuid\": \"a7b8c9d0-e1f2-3456-ghij-567890123456\",\n    \"name\": \"Web Channel\",\n    \"type\": \"WEB\",\n    \"created_by\": 1,\n    \"meta_data\": {},\n    \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
+        }
+      ]
+    },
+    {
+      "name": "Get Channel",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/channel/get?channel_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["channel", "get"],
+          "query": [
+            { "key": "channel_id", "value": "1" }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Get Channel - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/channel/get?channel_id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel", "get"],
+              "query": [
+                { "key": "channel_id", "value": "1" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"f6a7b8c9-d0e1-2345-fghi-456789012345\",\n  \"name\": \"My Twilio Channel\",\n  \"type\": \"TWILIO\",\n  \"created_by\": 1,\n  \"meta_data\": {\n    \"account_sid\": \"AC_example\",\n    \"auth_token\": \"example_token\"\n  },\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get Channel By Type",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/channel/get_by_type?type=twilio",
+          "host": ["{{baseUrl}}"],
+          "path": ["channel", "get_by_type"],
+          "query": [
+            { "key": "type", "value": "twilio", "description": "The channel type (e.g. twilio, web, google_meet, zoom)" }
+          ]
+        },
+        "auth": { "type": "noauth" }
+      },
+      "response": [
+        {
+          "name": "Get Channel By Type - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/channel/get_by_type?type=twilio",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel", "get_by_type"],
+              "query": [
+                { "key": "type", "value": "twilio" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"f6a7b8c9-d0e1-2345-fghi-456789012345\",\n  \"name\": \"My Twilio Channel\",\n  \"type\": \"TWILIO\",\n  \"created_by\": 1,\n  \"meta_data\": {},\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        }
+      ]
+    },
+    {
+      "name": "Delete Channel",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/channel/delete?channel_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["channel", "delete"],
+          "query": [
+            { "key": "channel_id", "value": "1" }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Delete Channel - Success",
+          "originalRequest": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/channel/delete?channel_id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel", "delete"],
+              "query": [
+                { "key": "channel_id", "value": "1" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"message\": \"Channel deleted successfully\"\n}"
+        }
+      ]
+    }
+  ]
+}

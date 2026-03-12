@@ -1,0 +1,363 @@
+{
+  "info": {
+    "name": "Auth API",
+    "description": "Auto-generated from core/api/v1/auth.py",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/api/v1" },
+    { "key": "authToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Signup",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/signup",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "signup"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"securePassword123\",\n  \"username\": \"johndoe\",\n  \"profile\": {\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\"\n  }\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      },
+      "response": [
+        {
+          "name": "Signup - Success",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/signup",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "signup"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"securePassword123\",\n  \"username\": \"johndoe\",\n  \"profile\": {\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Created",
+          "code": 201,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"message\": \"User created successfully. Please verify your email.\",\n  \"user\": {\n    \"id\": 1,\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"email\": \"user@example.com\",\n    \"username\": \"johndoe\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"status\": \"PENDING\",\n    \"email_verified\": false,\n    \"auth_provider\": \"EMAIL\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n}"
+        },
+        {
+          "name": "Signup - Missing Fields",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/signup",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "signup"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Email and password are required\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Signup With Firebase",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{firebaseToken}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/signup_with_firebase",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "signup_with_firebase"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"user@example.com\",\n  \"profile\": {\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\"\n  }\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      },
+      "response": [
+        {
+          "name": "Signup With Firebase - Success",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{firebaseToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/signup_with_firebase",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "signup_with_firebase"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"profile\": {\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Created",
+          "code": 201,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"message\": \"User created successfully via Firebase.\",\n  \"user\": {\n    \"id\": 1,\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"email\": \"user@example.com\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"status\": \"ACTIVE\",\n    \"email_verified\": true,\n    \"auth_provider\": \"FIREBASE\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  },\n  \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Resend Verification Email",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/auth/resend_verification_email?email=user@example.com",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "resend_verification_email"],
+          "query": [
+            { "key": "email", "value": "user@example.com" }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Resend Verification Email - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/resend_verification_email?email=user@example.com",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "resend_verification_email"],
+              "query": [
+                { "key": "email", "value": "user@example.com" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"message\": \"Verification email sent successfully.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Verify User Email",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/auth/verify_user_email?email=user@example.com&code=123456&user_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "verify_user_email"],
+          "query": [
+            { "key": "email", "value": "user@example.com" },
+            { "key": "code", "value": "123456" },
+            { "key": "user_id", "value": "1" }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Verify User Email - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify_user_email?email=user@example.com&code=123456&user_id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "verify_user_email"],
+              "query": [
+                { "key": "email", "value": "user@example.com" },
+                { "key": "code", "value": "123456" },
+                { "key": "user_id", "value": "1" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"message\": \"Email verified successfully.\",\n  \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"securePassword123\"\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      },
+      "response": [
+        {
+          "name": "Login - Success",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"securePassword123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n  \"token_type\": \"bearer\",\n  \"user\": {\n    \"id\": 1,\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"email\": \"user@example.com\",\n    \"username\": \"johndoe\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"status\": \"ACTIVE\",\n    \"email_verified\": true\n  },\n  \"organization\": {\n    \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"name\": \"My Organization\",\n    \"slug\": \"my-organization\",\n    \"role\": \"OWNER\"\n  }\n}"
+        },
+        {
+          "name": "Login - Invalid Credentials",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"wrongPassword\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Unauthorized",
+          "code": 401,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Invalid email or password\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Forget Password",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/auth/forget-password?email=user@example.com",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "forget-password"],
+          "query": [
+            { "key": "email", "value": "user@example.com" }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Forget Password - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/forget-password?email=user@example.com",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "forget-password"],
+              "query": [
+                { "key": "email", "value": "user@example.com" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"message\": \"Password reset email sent successfully.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Accept Forgot Password",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/auth/acceptForgotPassword?email=user@example.com&password=newPassword123&token=reset-token-here",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "acceptForgotPassword"],
+          "query": [
+            { "key": "email", "value": "user@example.com" },
+            { "key": "password", "value": "newPassword123" },
+            { "key": "token", "value": "reset-token-here" }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Accept Forgot Password - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/acceptForgotPassword?email=user@example.com&password=newPassword123&token=reset-token-here",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "acceptForgotPassword"],
+              "query": [
+                { "key": "email", "value": "user@example.com" },
+                { "key": "password", "value": "newPassword123" },
+                { "key": "token", "value": "reset-token-here" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"message\": \"Password reset successfully.\"\n}"
+        }
+      ]
+    }
+  ]
+}

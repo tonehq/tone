@@ -1,0 +1,113 @@
+{
+  "info": {
+    "name": "Agent Config API",
+    "description": "Auto-generated from core/api/v1/agent_configs.py",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/api/v1" },
+    { "key": "authToken", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{authToken}}" }]
+  },
+  "item": [
+    {
+      "name": "Upsert Agent Config",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/agent_config/upsert_agent_config",
+          "host": ["{{baseUrl}}"],
+          "path": ["agent_config", "upsert_agent_config"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"agent_id\": 1,\n  \"system_prompt\": \"You are a helpful voice assistant for customer support.\",\n  \"first_message\": \"Hello! How can I help you today?\",\n  \"end_call_message\": \"Thank you for calling. Goodbye!\",\n  \"voicemail_message\": \"Please leave a message after the tone.\",\n  \"html_prompt\": null,\n  \"llm_service_id\": 1,\n  \"tts_service_id\": 2,\n  \"stt_service_id\": 3,\n  \"llm_metadata\": {\n    \"model\": \"gpt-4\",\n    \"temperature\": 0.7,\n    \"max_tokens\": 1024\n  },\n  \"tts_metadata\": {\n    \"voice_id\": \"voice_123\",\n    \"speed\": 1.0\n  },\n  \"stt_metadata\": {\n    \"language\": \"en\",\n    \"model\": \"nova-2\"\n  },\n  \"agent_metadata\": {\n    \"max_call_duration\": 600,\n    \"silence_timeout\": 10\n  },\n  \"description\": \"Production config for customer support agent\",\n  \"status\": \"active\"\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      },
+      "response": [
+        {
+          "name": "Upsert Agent Config - Create",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agent_config/upsert_agent_config",
+              "host": ["{{baseUrl}}"],
+              "path": ["agent_config", "upsert_agent_config"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agent_id\": 1,\n  \"system_prompt\": \"You are a helpful voice assistant.\",\n  \"first_message\": \"Hello! How can I help you today?\",\n  \"llm_service_id\": 1,\n  \"tts_service_id\": 2,\n  \"stt_service_id\": 3,\n  \"llm_metadata\": {\"model\": \"gpt-4\", \"temperature\": 0.7},\n  \"tts_metadata\": {\"voice_id\": \"voice_123\"},\n  \"stt_metadata\": {\"language\": \"en\"},\n  \"agent_metadata\": {}\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"c3d4e5f6-a7b8-9012-cdef-123456789012\",\n  \"agent_id\": 1,\n  \"system_prompt\": \"You are a helpful voice assistant.\",\n  \"first_message\": \"Hello! How can I help you today?\",\n  \"end_call_message\": null,\n  \"voicemail_message\": null,\n  \"html_prompt\": null,\n  \"llm_service_id\": 1,\n  \"tts_service_id\": 2,\n  \"stt_service_id\": 3,\n  \"llm_metadata\": {\"model\": \"gpt-4\", \"temperature\": 0.7},\n  \"tts_metadata\": {\"voice_id\": \"voice_123\"},\n  \"stt_metadata\": {\"language\": \"en\"},\n  \"agent_metadata\": {},\n  \"description\": null,\n  \"status\": \"active\",\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Upsert Agent Config - Missing Agent ID",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agent_config/upsert_agent_config",
+              "host": ["{{baseUrl}}"],
+              "path": ["agent_config", "upsert_agent_config"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"system_prompt\": \"You are a helpful voice assistant.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"agent_id is required\"\n}"
+        },
+        {
+          "name": "Upsert Agent Config - Missing System Prompt",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/agent_config/upsert_agent_config",
+              "host": ["{{baseUrl}}"],
+              "path": ["agent_config", "upsert_agent_config"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agent_id\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"system_prompt is required\"\n}"
+        }
+      ]
+    }
+  ]
+}
