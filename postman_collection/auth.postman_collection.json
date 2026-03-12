@@ -1,0 +1,135 @@
+{
+  "info": {
+    "name": "Auth API",
+    "description": "Auto-generated from core/api/v1/auth.py",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/api/v1" },
+    { "key": "authToken", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Signup",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/signup",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "signup"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"securePassword123\",\n  \"username\": \"johndoe\",\n  \"profile\": {\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\"\n  }\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      }
+    },
+    {
+      "name": "Signup With Firebase",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{firebaseToken}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/signup_with_firebase",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "signup_with_firebase"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"user@example.com\",\n  \"profile\": {\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\"\n  }\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      }
+    },
+    {
+      "name": "Resend Verification Email",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/auth/resend_verification_email?email=user@example.com",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "resend_verification_email"],
+          "query": [
+            { "key": "email", "value": "user@example.com" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Verify User Email",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/auth/verify_user_email?email=user@example.com&code=123456&user_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "verify_user_email"],
+          "query": [
+            { "key": "email", "value": "user@example.com" },
+            { "key": "code", "value": "123456" },
+            { "key": "user_id", "value": "1" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "login"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"securePassword123\"\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      }
+    },
+    {
+      "name": "Forget Password",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/auth/forget-password?email=user@example.com",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "forget-password"],
+          "query": [
+            { "key": "email", "value": "user@example.com" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Accept Forgot Password",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/auth/acceptForgotPassword?email=user@example.com&password=newPassword123&token=reset-token-here",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "acceptForgotPassword"],
+          "query": [
+            { "key": "email", "value": "user@example.com" },
+            { "key": "password", "value": "newPassword123" },
+            { "key": "token", "value": "reset-token-here" }
+          ]
+        }
+      }
+    }
+  ]
+}

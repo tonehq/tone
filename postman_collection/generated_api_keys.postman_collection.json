@@ -1,0 +1,103 @@
+{
+  "info": {
+    "name": "Generated API Keys API",
+    "description": "Auto-generated from core/api/v1/generated_api_keys.py",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/api/v1" },
+    { "key": "authToken", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{authToken}}" }]
+  },
+  "item": [
+    {
+      "name": "Upsert Basic Key",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/generated-api-keys/upsert",
+          "host": ["{{baseUrl}}"],
+          "path": ["generated-api-keys", "upsert"],
+          "query": [
+            { "key": "id", "value": "1", "description": "Provide ID to update existing key", "disabled": true }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"My API Key\",\n  \"key_value\": \"tone_api_key_example_123\"\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      }
+    },
+    {
+      "name": "Upsert Full Key",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/generated-api-keys/upsert-full",
+          "host": ["{{baseUrl}}"],
+          "path": ["generated-api-keys", "upsert-full"],
+          "query": [
+            { "key": "id", "value": "1", "description": "Provide ID to update existing key", "disabled": true }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"My Full API Key\",\n  \"key_value\": \"tone_api_key_example_456\",\n  \"domains\": [\"example.com\", \"api.example.com\"],\n  \"abuse_prevention\": {\n    \"is_toggled\": true,\n    \"recaptcha_secret_key\": \"recaptcha-secret-here\",\n    \"threshold\": 0.5\n  },\n  \"fraud_protection\": true\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      }
+    },
+    {
+      "name": "Get All Keys",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/generated-api-keys/list",
+          "host": ["{{baseUrl}}"],
+          "path": ["generated-api-keys", "list"]
+        }
+      }
+    },
+    {
+      "name": "Get Key",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/generated-api-keys/get?key_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["generated-api-keys", "get"],
+          "query": [
+            { "key": "key_id", "value": "1" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Delete Key",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/generated-api-keys/delete?key_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["generated-api-keys", "delete"],
+          "query": [
+            { "key": "key_id", "value": "1" }
+          ]
+        }
+      }
+    }
+  ]
+}

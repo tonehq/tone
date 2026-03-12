@@ -1,0 +1,96 @@
+{
+  "info": {
+    "name": "Services API",
+    "description": "Auto-generated from core/api/v1/services.py",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/api/v1" },
+    { "key": "authToken", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{authToken}}" }]
+  },
+  "item": [
+    {
+      "name": "Upsert Service",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/services/upsert",
+          "host": ["{{baseUrl}}"],
+          "path": ["services", "upsert"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"service_provider_id\": 1,\n  \"name\": \"My LLM Service\",\n  \"service_type\": \"llm\",\n  \"config\": {\n    \"model\": \"gpt-4\",\n    \"temperature\": 0.7\n  },\n  \"api_key_id\": 1,\n  \"description\": \"Primary LLM service\",\n  \"is_default\": false,\n  \"is_public\": false,\n  \"tags\": [],\n  \"uuid\": null,\n  \"status\": \"active\"\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      }
+    },
+    {
+      "name": "Get All Services",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/services/list",
+          "host": ["{{baseUrl}}"],
+          "path": ["services", "list"],
+          "query": [
+            { "key": "service_type", "value": "llm", "description": "Filter by service type (llm, stt, tts)", "disabled": true }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Service",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/services/get?service_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["services", "get"],
+          "query": [
+            { "key": "service_id", "value": "1" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Default Service",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/services/default?service_type=llm",
+          "host": ["{{baseUrl}}"],
+          "path": ["services", "default"],
+          "query": [
+            { "key": "service_type", "value": "llm" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Delete Service",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/services/delete?service_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["services", "delete"],
+          "query": [
+            { "key": "service_id", "value": "1" }
+          ]
+        }
+      }
+    }
+  ]
+}
