@@ -1,28 +1,24 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 import time
 from fastapi import HTTPException, status
 
-from core.models.enums import UserStatus, Role, InviteStatus, AuthProvider, AccessRequestStatus
-from core.utils.security import hash_password, verify_password, generate_verification_code, generate_token
+from core.services.auth_service import AuthService
 from core.services.email_service import MailService
-from core.services.base import BaseService
-
 from core.models.user import User
-from core.models.email_verification import EmailVerification
-from core.models.password_reset import PasswordReset
 from core.models.organization import Organization
 from core.models.member import Member
 from core.models.organization_invite import OrganizationInvite
 from core.models.organization_access_request import OrganizationAccessRequest
+from core.models.enums import UserStatus, Role, InviteStatus, AccessRequestStatus
+from core.utils.security import generate_token
+from core.middleware.auth import jwt_manager
 
-from ee.config import ee_settings
-from ee.middleware.auth import ee_jwt_manager
+from shared.config import settings
 
 
-class EEAuthService(BaseService):
+class EEAuthService(AuthService):
     def __init__(self, db: Session, org_id: Optional[UUID] = None, user_id: Optional[int] = None):
         super().__init__(db, user_id)
         self._org_id = org_id
@@ -34,154 +30,17 @@ class EEAuthService(BaseService):
 
     def signup(self, email: str, password: str, username: Optional[str] = None,
                profile: Optional[Dict] = None, org_name: Optional[str] = None) -> Dict[str, Any]:
-        current_time = int(time.time())
-
-        existing_user = self.db.query(User).filter(User.email == email).first()
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User with this email already exists"
-            )
-
-        if username:
-            existing_username = self.db.query(User).filter(User.username == username).first()
-            if existing_username:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Username already taken"
-                )
-
-        password_hash = hash_password(password)
-
         user_profile = profile or {}
         if org_name:
             user_profile["org_name"] = org_name
 
-        user = User(
-            email=email,
-            username=username,
-            password_hash=password_hash,
-            profile=user_profile,
-            auth_provider=AuthProvider.EMAIL,
-            status=UserStatus.PENDING,
-            created_at=current_time,
-            updated_at=current_time
-        )
-
-        self.db.add(user)
-        self.db.commit()
-        self.db.refresh(user)
-
-        verification = self.create_email_verification(user.id, email)
-        verification_url = f"{ee_settings.APPLICATION_URL}/auth/verify_signup?email={email}&code={verification.code}&user_id={user.id}"
-
-        mail_service = MailService()
-        mail_service.send_signup_email(email, verification_url, username or email.split('@')[0])
-
-        return {
-            "user_id": user.id,
-            "email": user.email,
-            "username": user.username,
-            "status": user.status.value,
-            "message": "User created successfully. Please verify your email."
-        }
-
-    def signup_with_firebase(self, firebase_token: str, email: str,
-                             profile: Optional[Dict] = None) -> Dict[str, Any]:
-        current_time = int(time.time())
-
-        firebase_uid = self.verify_firebase_token(firebase_token)
-
-        existing_user = self.db.query(User).filter(
-            or_(User.email == email, User.firebase_uid == firebase_uid)
-        ).first()
-
-        if existing_user:
-            existing_user.firebase_uid = firebase_uid
-            existing_user.email_verified = True
-            existing_user.email_verified_at = current_time
-            existing_user.status = UserStatus.ACTIVE
-            existing_user.updated_at = current_time
-            self.db.commit()
-            user = existing_user
-        else:
-            user = User(
-                email=email,
-                firebase_uid=firebase_uid,
-                profile=profile or {},
-                auth_provider=AuthProvider.FIREBASE,
-                status=UserStatus.ACTIVE,
-                email_verified=True,
-                email_verified_at=current_time,
-                created_at=current_time,
-                updated_at=current_time
-            )
-            self.db.add(user)
-            self.db.commit()
-            self.db.refresh(user)
-
-        return {
-            "user_id": user.id,
-            "email": user.email,
-            "status": user.status.value,
-            "message": "User authenticated with Firebase successfully"
-        }
-
-    def verify_firebase_token(self, token: str) -> str:
-        try:
-            return f"firebase_uid_{int(time.time())}"
-        except Exception:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid Firebase token"
-            )
-
-    def create_email_verification(self, user_id: int, email: str) -> EmailVerification:
-        current_time = int(time.time())
-        expires_at = current_time + (24 * 3600)
-
-        self.db.query(EmailVerification).filter(EmailVerification.email == email).delete()
-
-        verification = EmailVerification(
-            user_id=user_id,
-            email=email,
-            code=generate_verification_code(),
-            token=generate_token(),
-            expires_at=expires_at,
-            created_at=current_time,
-            updated_at=current_time
-        )
-
-        self.db.add(verification)
-        self.db.commit()
-
-        return verification
-
-    def resend_verification_email(self, email: str) -> Dict[str, str]:
-        user = self.db.query(User).filter(User.email == email).first()
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
-
-        if user.email_verified:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already verified"
-            )
-
-        verification = self.create_email_verification(user.id, email)
-        verification_url = f"{ee_settings.APPLICATION_URL}/auth/verify_signup?email={email}&code={verification.code}&user_id={user.id}"
-
-        mail_service = MailService()
-        mail_service.send_signup_email(email, verification_url, user.username or email.split('@')[0])
-
-        return {"message": "Verification email sent successfully"}
+        result = super().signup(email, password, username, user_profile)
+        return result
 
     def verify_user_email(self, email: str, code: str, user_id: int) -> Dict[str, str]:
         current_time = int(time.time())
 
+        from core.models.email_verification import EmailVerification
         verification = self.db.query(EmailVerification).filter(
             EmailVerification.email == email,
             EmailVerification.code == code,
@@ -220,106 +79,6 @@ class EEAuthService(BaseService):
         self.db.commit()
 
         return {"message": "Email verified successfully"}
-
-    def login(self, email: str, password: str) -> Dict[str, Any]:
-        user = self.db.query(User).filter(User.email == email).first()
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid email or password"
-            )
-
-        if not user.password_hash or not verify_password(password, user.password_hash):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid email or password"
-            )
-
-        if user.status != UserStatus.ACTIVE:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Account not active. Please verify your email."
-            )
-
-        user.last_login_at = int(time.time())
-        self.db.commit()
-
-        organizations = self.get_associated_organizations(user.id)
-
-        access_token = ee_jwt_manager.create_access_token(
-            user_id=user.id,
-            email=user.email
-        )
-
-        return {
-            "access_token": access_token,
-            "token_type": "bearer",
-            "user_id": user.id,
-            "email": user.email,
-            "organizations": organizations
-        }
-
-    def forgot_password(self, email: str) -> Dict[str, str]:
-        user = self.db.query(User).filter(User.email == email).first()
-        if not user:
-            return {"message": "If the email exists, you will receive a password reset link"}
-
-        current_time = int(time.time())
-        expires_at = current_time + 3600
-
-        self.db.query(PasswordReset).filter(PasswordReset.user_id == user.id).delete()
-
-        reset = PasswordReset(
-            user_id=user.id,
-            email=email,
-            token=generate_token(),
-            expires_at=expires_at,
-            created_at=current_time,
-            updated_at=current_time
-        )
-
-        self.db.add(reset)
-        self.db.commit()
-
-        verification_url = f"{ee_settings.APPLICATION_URL}/auth/reset-password?token={reset.token}&email={user.email}"
-
-        mail_service = MailService()
-        mail_service.send_forgot_password_email(email, verification_url)
-
-        return {"message": "If the email exists, you will receive a password reset link"}
-
-    def accept_forgot_password(self, email: str, password: str, token: str) -> Dict[str, str]:
-        current_time = int(time.time())
-
-        reset = self.db.query(PasswordReset).filter(
-            PasswordReset.email == email,
-            PasswordReset.token == token,
-            PasswordReset.used == False,
-            PasswordReset.expires_at > current_time
-        ).first()
-
-        if not reset:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired reset token"
-            )
-
-        user = self.db.query(User).filter(User.id == reset.user_id).first()
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
-
-        user.password_hash = hash_password(password)
-        user.updated_at = current_time
-
-        reset.used = True
-        reset.used_at = current_time
-
-        self.db.commit()
-
-        return {"message": "Password reset successfully"}
 
     def check_organization_exists(self, name: str) -> Dict[str, Any]:
         slug = self.create_slug_from_name(name)
@@ -393,6 +152,46 @@ class EEAuthService(BaseService):
 
         return organizations
 
+    def login(self, email: str, password: str) -> Dict[str, Any]:
+        from core.utils.security import verify_password
+
+        user = self.db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password"
+            )
+
+        if not user.password_hash or not verify_password(password, user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password"
+            )
+
+        if user.status != UserStatus.ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Account not active. Please verify your email."
+            )
+
+        user.last_login_at = int(time.time())
+        self.db.commit()
+
+        organizations = self.get_associated_organizations(user.id)
+
+        access_token = jwt_manager.create_access_token(
+            user_id=user.id,
+            email=user.email
+        )
+
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user_id": user.id,
+            "email": user.email,
+            "organizations": organizations
+        }
+
     def switch_organization(self, user_id: int, org_id: UUID) -> Dict[str, Any]:
         member = self.db.query(Member).filter(
             Member.user_id == user_id,
@@ -420,7 +219,7 @@ class EEAuthService(BaseService):
                 detail="User not found"
             )
 
-        access_token = ee_jwt_manager.create_access_token(
+        access_token = jwt_manager.create_access_token(
             user_id=user.id,
             email=user.email,
             org_id=str(org_id),
@@ -538,7 +337,7 @@ class EEAuthService(BaseService):
         self.db.commit()
         self.db.refresh(invitation)
 
-        invite_url = f"{ee_settings.APPLICATION_URL}/verify/user_to_workspace?email={email}&code={invitation.invitation_token}&user_tenant_id={org_id}"
+        invite_url = f"{settings.APPLICATION_URL}/verify/user_to_workspace?email={email}&code={invitation.invitation_token}&user_tenant_id={org_id}"
 
         mail_service = MailService()
         mail_service.send_invite_email(email, invite_url)
@@ -864,11 +663,3 @@ class EEAuthService(BaseService):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid action. Use 'approve' or 'reject'"
             )
-
-    def get_roles_by_scope(self) -> List[Dict[str, str]]:
-        return [
-            {"role": "owner", "description": "Full access to organization"},
-            {"role": "admin", "description": "Administrative access"},
-            {"role": "member", "description": "Standard member access"},
-            {"role": "viewer", "description": "Read-only access"}
-        ]

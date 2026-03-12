@@ -1,4 +1,5 @@
 import sys
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -19,6 +20,15 @@ fingerprint = generate_fingerprint(settings.DATABASE_URL)
 init_license_validator(settings.LICENSE_KEY)
 license_info = get_license_info(fingerprint)
 capabilities = init_capabilities(fingerprint)
+
+from core.internal.license import LicenseTier
+
+ee_folder_exists = os.path.isdir(os.path.join(os.path.dirname(__file__), "ee"))
+
+if ee_folder_exists and license_info.tier == LicenseTier.FREE:
+    print("ERROR: EE code detected but no valid EE license found.")
+    print("Please provide a valid TONE_LICENSE_KEY or remove the 'ee' folder to run Core edition.")
+    sys.exit(1)
 
 if not license_info.is_valid and settings.LICENSE_KEY:
     print(f"License validation failed: {license_info.validation_error}")
@@ -41,30 +51,52 @@ app.add_middleware(
 
 api_v1 = FastAPI()
 
-api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
-api_v1.include_router(users.router, prefix="/user", tags=["users"])
-api_v1.include_router(organizations.router, prefix="/organization", tags=["organization"])
-api_v1.include_router(service_providers.router, prefix="/service-providers", tags=["service-providers"])
-api_v1.include_router(api_keys.router, prefix="/api-keys", tags=["api-keys"])
-api_v1.include_router(services.router, prefix="/services", tags=["services"])
-api_v1.include_router(agents.router, prefix="/agent", tags=["agent"])
-api_v1.include_router(agent_configs.router, prefix="/agent_config", tags=["agent_config"])
-api_v1.include_router(channel_phone_numbers.router, prefix="/channel_phone_number", tags=["channel_phone_number"])
-api_v1.include_router(models_router.router, prefix="/model", tags=["model"])
-api_v1.include_router(generated_api_keys.router, prefix="/generated-api-keys", tags=["generated-api-keys"])
-api_v1.include_router(channels.router, prefix="/channel", tags=["channel"])
-api_v1.include_router(voices.router, prefix="/voice", tags=["voice"])
-
 if ee_enabled:
-    try:
-        from ee.api.v1 import auth as ee_auth
-        from ee.api.v1 import organizations as ee_organizations
+    from ee.api.v1 import (
+        auth as ee_auth,
+        users as ee_users,
+        organizations as ee_organizations,
+        service_providers as ee_service_providers,
+        api_keys as ee_api_keys,
+        services as ee_services,
+        agents as ee_agents,
+        agent_configs as ee_agent_configs,
+        channel_phone_numbers as ee_channel_phone_numbers,
+        models as ee_models,
+        generated_api_keys as ee_generated_api_keys,
+        channels as ee_channels,
+        voices as ee_voices,
+    )
 
-        api_v1.include_router(ee_auth.router, prefix="/ee/auth", tags=["ee-auth"])
-        api_v1.include_router(ee_organizations.router, prefix="/ee/org", tags=["ee-org"])
-        print(f"EE routes loaded successfully")
-    except ImportError as e:
-        print(f"Failed to load EE routes: {e}")
+    api_v1.include_router(ee_auth.router, prefix="/auth", tags=["auth"])
+    api_v1.include_router(ee_users.router, prefix="/user", tags=["users"])
+    api_v1.include_router(ee_organizations.router, prefix="/organization", tags=["organization"])
+    api_v1.include_router(ee_service_providers.router, prefix="/service-providers", tags=["service-providers"])
+    api_v1.include_router(ee_api_keys.router, prefix="/api-keys", tags=["api-keys"])
+    api_v1.include_router(ee_services.router, prefix="/services", tags=["services"])
+    api_v1.include_router(ee_agents.router, prefix="/agent", tags=["agent"])
+    api_v1.include_router(ee_agent_configs.router, prefix="/agent_config", tags=["agent_config"])
+    api_v1.include_router(ee_channel_phone_numbers.router, prefix="/channel_phone_number", tags=["channel_phone_number"])
+    api_v1.include_router(ee_models.router, prefix="/model", tags=["model"])
+    api_v1.include_router(ee_generated_api_keys.router, prefix="/generated-api-keys", tags=["generated-api-keys"])
+    api_v1.include_router(ee_channels.router, prefix="/channel", tags=["channel"])
+    api_v1.include_router(ee_voices.router, prefix="/voice", tags=["voice"])
+    print("EE edition: Multi-tenant routes loaded")
+else:
+    api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
+    api_v1.include_router(users.router, prefix="/user", tags=["users"])
+    api_v1.include_router(organizations.router, prefix="/organization", tags=["organization"])
+    api_v1.include_router(service_providers.router, prefix="/service-providers", tags=["service-providers"])
+    api_v1.include_router(api_keys.router, prefix="/api-keys", tags=["api-keys"])
+    api_v1.include_router(services.router, prefix="/services", tags=["services"])
+    api_v1.include_router(agents.router, prefix="/agent", tags=["agent"])
+    api_v1.include_router(agent_configs.router, prefix="/agent_config", tags=["agent_config"])
+    api_v1.include_router(channel_phone_numbers.router, prefix="/channel_phone_number", tags=["channel_phone_number"])
+    api_v1.include_router(models_router.router, prefix="/model", tags=["model"])
+    api_v1.include_router(generated_api_keys.router, prefix="/generated-api-keys", tags=["generated-api-keys"])
+    api_v1.include_router(channels.router, prefix="/channel", tags=["channel"])
+    api_v1.include_router(voices.router, prefix="/voice", tags=["voice"])
+    print("Core edition: Single-tenant routes loaded")
 
 
 @api_v1.get("/capabilities", tags=["system"])
