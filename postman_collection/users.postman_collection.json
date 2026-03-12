@@ -23,7 +23,27 @@
           "host": ["{{baseUrl}}"],
           "path": ["user", "get_all_users_for_organization"]
         }
-      }
+      },
+      "response": [
+        {
+          "name": "Get All Users For Organization - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/user/get_all_users_for_organization",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "get_all_users_for_organization"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"email\": \"owner@example.com\",\n    \"username\": \"owner\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"avatar_url\": null,\n    \"phone_number\": null,\n    \"status\": \"ACTIVE\",\n    \"email_verified\": true,\n    \"role\": \"OWNER\",\n    \"joined_at\": 1710201600,\n    \"last_activity_at\": 1710288000\n  },\n  {\n    \"id\": 2,\n    \"uuid\": \"b2c3d4e5-f6a7-8901-bcde-234567890123\",\n    \"email\": \"member@example.com\",\n    \"username\": \"member1\",\n    \"first_name\": \"Jane\",\n    \"last_name\": \"Smith\",\n    \"avatar_url\": null,\n    \"phone_number\": null,\n    \"status\": \"ACTIVE\",\n    \"email_verified\": true,\n    \"role\": \"MEMBER\",\n    \"joined_at\": 1710288000,\n    \"last_activity_at\": 1710374400\n  }\n]"
+        }
+      ]
     },
     {
       "name": "Get All Invited Users For Organization",
@@ -35,7 +55,27 @@
           "host": ["{{baseUrl}}"],
           "path": ["user", "get_all_invited_users_for_organization"]
         }
-      }
+      },
+      "response": [
+        {
+          "name": "Get All Invited Users For Organization - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/user/get_all_invited_users_for_organization",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "get_all_invited_users_for_organization"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"d4e5f6a7-b8c9-0123-defg-234567890123\",\n    \"email\": \"invited@example.com\",\n    \"name\": \"Bob Jones\",\n    \"role\": \"MEMBER\",\n    \"status\": \"PENDING\",\n    \"invited_by\": 1,\n    \"expires_at\": 1710806400,\n    \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
+        }
+      ]
     }
   ]
 }

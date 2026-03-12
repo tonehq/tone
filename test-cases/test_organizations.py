@@ -13,8 +13,10 @@ from fastapi import HTTPException
 class TestInviteUserToOrganization:
     """Tests for POST /api/v1/organization/invite_user_to_organization"""
 
+    @patch("core.api.v1.organizations.check_member_limit")
     @patch("core.api.v1.organizations.AuthService")
-    def test_invite_user_success(self, mock_service_cls, client_as_admin):
+    def test_invite_user_success(self, mock_service_cls, mock_check_limit, client_as_admin):
+        mock_check_limit.return_value = None
         mock_service_cls.return_value.invite_user_to_organization.return_value = {"message": "invited"}
         response = client_as_admin.post("/api/v1/organization/invite_user_to_organization", json={
             "name": "New User",
@@ -23,8 +25,9 @@ class TestInviteUserToOrganization:
         })
         assert response.status_code == 200
 
+    @patch("core.api.v1.organizations.check_member_limit")
     @patch("core.api.v1.organizations.AuthService")
-    def test_invite_user_missing_name(self, mock_service_cls, client_as_admin):
+    def test_invite_user_missing_name(self, mock_service_cls, mock_check_limit, client_as_admin):
         response = client_as_admin.post("/api/v1/organization/invite_user_to_organization", json={
             "email": "newuser@example.com",
             "role": "member"
@@ -32,24 +35,27 @@ class TestInviteUserToOrganization:
         assert response.status_code == 400
         assert "Name, email, and role are required" in response.json()["detail"]
 
+    @patch("core.api.v1.organizations.check_member_limit")
     @patch("core.api.v1.organizations.AuthService")
-    def test_invite_user_missing_email(self, mock_service_cls, client_as_admin):
+    def test_invite_user_missing_email(self, mock_service_cls, mock_check_limit, client_as_admin):
         response = client_as_admin.post("/api/v1/organization/invite_user_to_organization", json={
             "name": "New User",
             "role": "member"
         })
         assert response.status_code == 400
 
+    @patch("core.api.v1.organizations.check_member_limit")
     @patch("core.api.v1.organizations.AuthService")
-    def test_invite_user_missing_role(self, mock_service_cls, client_as_admin):
+    def test_invite_user_missing_role(self, mock_service_cls, mock_check_limit, client_as_admin):
         response = client_as_admin.post("/api/v1/organization/invite_user_to_organization", json={
             "name": "New User",
             "email": "newuser@example.com"
         })
         assert response.status_code == 400
 
+    @patch("core.api.v1.organizations.check_member_limit")
     @patch("core.api.v1.organizations.AuthService")
-    def test_invite_user_empty_body(self, mock_service_cls, client_as_admin):
+    def test_invite_user_empty_body(self, mock_service_cls, mock_check_limit, client_as_admin):
         response = client_as_admin.post("/api/v1/organization/invite_user_to_organization", json={})
         assert response.status_code == 400
 
@@ -59,8 +65,10 @@ class TestInviteUserToOrganization:
         })
         assert response.status_code in (401, 403)
 
+    @patch("core.api.v1.organizations.check_member_limit")
     @patch("core.api.v1.organizations.AuthService")
-    def test_invite_user_duplicate_email(self, mock_service_cls, client_as_admin):
+    def test_invite_user_duplicate_email(self, mock_service_cls, mock_check_limit, client_as_admin):
+        mock_check_limit.return_value = None
         mock_service_cls.return_value.invite_user_to_organization.side_effect = HTTPException(
             status_code=409, detail="User already invited"
         )
@@ -68,6 +76,17 @@ class TestInviteUserToOrganization:
             "name": "Dup User", "email": "dup@example.com", "role": "member"
         })
         assert response.status_code == 409
+
+    @patch("core.api.v1.organizations.check_member_limit")
+    @patch("core.api.v1.organizations.AuthService")
+    def test_invite_user_member_limit_reached(self, mock_service_cls, mock_check_limit, client_as_admin):
+        mock_check_limit.side_effect = HTTPException(
+            status_code=403, detail="Member limit reached. Core edition allows up to 3 members. Upgrade to Enterprise for more."
+        )
+        response = client_as_admin.post("/api/v1/organization/invite_user_to_organization", json={
+            "name": "New User", "email": "new@example.com", "role": "member"
+        })
+        assert response.status_code == 403
 
 
 # ─── GET /api/v1/organization/accept_invitation ───
@@ -100,6 +119,128 @@ class TestAcceptInvitation:
             "/api/v1/organization/accept_invitation?email=test@example.com&code=bad-code"
         )
         assert response.status_code == 400
+
+
+# ─── GET /api/v1/organization/validate_invitation ───
+
+class TestValidateInvitation:
+    """Tests for GET /api/v1/organization/validate_invitation"""
+
+    @patch("core.api.v1.organizations.AuthService")
+    def test_validate_invitation_success(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.validate_invitation_token.return_value = {"valid": True, "email": "test@example.com"}
+        response = client_as_member.get(
+            "/api/v1/organization/validate_invitation?email=test@example.com&code=invite-code"
+        )
+        assert response.status_code == 200
+
+    def test_validate_invitation_missing_email(self, client_as_member):
+        response = client_as_member.get("/api/v1/organization/validate_invitation?code=invite-code")
+        assert response.status_code == 422
+
+    def test_validate_invitation_missing_code(self, client_as_member):
+        response = client_as_member.get("/api/v1/organization/validate_invitation?email=test@example.com")
+        assert response.status_code == 422
+
+    @patch("core.api.v1.organizations.AuthService")
+    def test_validate_invitation_invalid_token(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.validate_invitation_token.side_effect = HTTPException(
+            status_code=400, detail="Invalid or expired invitation"
+        )
+        response = client_as_member.get(
+            "/api/v1/organization/validate_invitation?email=test@example.com&code=bad-code"
+        )
+        assert response.status_code == 400
+
+
+# ─── POST /api/v1/organization/accept_invitation_with_password ───
+
+class TestAcceptInvitationWithPassword:
+    """Tests for POST /api/v1/organization/accept_invitation_with_password"""
+
+    @patch("core.api.v1.organizations.AuthService")
+    def test_accept_with_password_success(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.accept_invitation_with_password.return_value = {"message": "accepted"}
+        response = client_as_member.post("/api/v1/organization/accept_invitation_with_password", json={
+            "email": "test@example.com",
+            "code": "invite-code",
+            "password": "securepass123"
+        })
+        assert response.status_code == 200
+
+    @patch("core.api.v1.organizations.AuthService")
+    def test_accept_with_password_missing_email(self, mock_service_cls, client_as_member):
+        response = client_as_member.post("/api/v1/organization/accept_invitation_with_password", json={
+            "code": "invite-code",
+            "password": "securepass123"
+        })
+        assert response.status_code == 400
+        assert "Email, code, and password are required" in response.json()["detail"]
+
+    @patch("core.api.v1.organizations.AuthService")
+    def test_accept_with_password_missing_code(self, mock_service_cls, client_as_member):
+        response = client_as_member.post("/api/v1/organization/accept_invitation_with_password", json={
+            "email": "test@example.com",
+            "password": "securepass123"
+        })
+        assert response.status_code == 400
+
+    @patch("core.api.v1.organizations.AuthService")
+    def test_accept_with_password_missing_password(self, mock_service_cls, client_as_member):
+        response = client_as_member.post("/api/v1/organization/accept_invitation_with_password", json={
+            "email": "test@example.com",
+            "code": "invite-code"
+        })
+        assert response.status_code == 400
+
+    @patch("core.api.v1.organizations.AuthService")
+    def test_accept_with_password_empty_body(self, mock_service_cls, client_as_member):
+        response = client_as_member.post("/api/v1/organization/accept_invitation_with_password", json={})
+        assert response.status_code == 400
+
+    @patch("core.api.v1.organizations.AuthService")
+    def test_accept_with_password_invalid_code(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.accept_invitation_with_password.side_effect = HTTPException(
+            status_code=400, detail="Invalid or expired invitation"
+        )
+        response = client_as_member.post("/api/v1/organization/accept_invitation_with_password", json={
+            "email": "test@example.com",
+            "code": "bad-code",
+            "password": "securepass123"
+        })
+        assert response.status_code == 400
+
+
+# ─── DELETE /api/v1/organization/cancel_invitation ───
+
+class TestCancelInvitation:
+    """Tests for DELETE /api/v1/organization/cancel_invitation"""
+
+    @patch("core.api.v1.organizations.AuthService")
+    def test_cancel_invitation_success(self, mock_service_cls, client_as_admin):
+        mock_service_cls.return_value.cancel_invitation.return_value = {"message": "cancelled"}
+        response = client_as_admin.delete("/api/v1/organization/cancel_invitation?invite_id=1")
+        assert response.status_code == 200
+
+    def test_cancel_invitation_missing_id(self, client_as_admin):
+        response = client_as_admin.delete("/api/v1/organization/cancel_invitation")
+        assert response.status_code == 422
+
+    def test_cancel_invitation_invalid_id(self, client_as_admin):
+        response = client_as_admin.delete("/api/v1/organization/cancel_invitation?invite_id=abc")
+        assert response.status_code == 422
+
+    @patch("core.api.v1.organizations.AuthService")
+    def test_cancel_invitation_not_found(self, mock_service_cls, client_as_admin):
+        mock_service_cls.return_value.cancel_invitation.side_effect = HTTPException(
+            status_code=404, detail="Invitation not found"
+        )
+        response = client_as_admin.delete("/api/v1/organization/cancel_invitation?invite_id=999")
+        assert response.status_code == 404
+
+    def test_cancel_invitation_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.delete("/api/v1/organization/cancel_invitation?invite_id=1")
+        assert response.status_code in (401, 403)
 
 
 # ─── DELETE /api/v1/organization/remove_user_from_organization ───

@@ -26,7 +26,30 @@
             { "key": "channel_id", "value": "1", "description": "The channel ID to fetch phone numbers for" }
           ]
         }
-      }
+      },
+      "response": [
+        {
+          "name": "Get Channel Phone Numbers - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/channel_phone_number/get_channel_phone_numbers?channel_id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel_phone_number", "get_channel_phone_numbers"],
+              "query": [
+                { "key": "channel_id", "value": "1" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"b8c9d0e1-f2a3-4567-hijk-678901234567\",\n    \"channel_id\": 1,\n    \"agent_id\": 1,\n    \"phone_number\": \"+15551234567\",\n    \"phone_number_sid\": \"PN_example_sid\",\n    \"provider\": \"twilio\",\n    \"country_code\": \"US\",\n    \"number_type\": \"local\",\n    \"capabilities\": {\"voice\": true, \"sms\": true, \"mms\": false},\n    \"status\": \"active\",\n    \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
+        }
+      ]
     },
     {
       "name": "Upsert Channel Phone Number",
@@ -42,10 +65,62 @@
         },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"phone_number\": \"+15551234567\",\n  \"phone_number_sid\": \"PN_example_sid\",\n  \"phone_number_auth_token\": \"example_auth_token\",\n  \"provider\": \"twilio\",\n  \"channel_id\": 1,\n  \"agent_id\": 1\n}",
+          "raw": "{\n  \"phone_number\": \"+15551234567\",\n  \"phone_number_sid\": \"PN_example_sid\",\n  \"phone_number_auth_token\": \"example_auth_token\",\n  \"provider\": \"twilio\",\n  \"channel_id\": 1,\n  \"agent_id\": 1,\n  \"country_code\": \"US\",\n  \"number_type\": \"local\",\n  \"capabilities\": {\n    \"voice\": true,\n    \"sms\": true,\n    \"mms\": false\n  },\n  \"status\": \"active\"\n}",
           "options": { "raw": { "language": "json" } }
         }
-      }
+      },
+      "response": [
+        {
+          "name": "Upsert Channel Phone Number - Create",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/channel_phone_number/upsert_channel_phone_number",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel_phone_number", "upsert_channel_phone_number"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone_number\": \"+15551234567\",\n  \"phone_number_sid\": \"PN_example_sid\",\n  \"phone_number_auth_token\": \"example_auth_token\",\n  \"provider\": \"twilio\",\n  \"channel_id\": 1,\n  \"agent_id\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"b8c9d0e1-f2a3-4567-hijk-678901234567\",\n  \"channel_id\": 1,\n  \"agent_id\": 1,\n  \"phone_number\": \"+15551234567\",\n  \"phone_number_sid\": \"PN_example_sid\",\n  \"provider\": \"twilio\",\n  \"country_code\": null,\n  \"number_type\": null,\n  \"capabilities\": null,\n  \"status\": \"active\",\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Upsert Channel Phone Number - Missing Fields",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/channel_phone_number/upsert_channel_phone_number",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel_phone_number", "upsert_channel_phone_number"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone_number\": \"+15551234567\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"phone_number_sid is required\"\n}"
+        }
+      ]
     },
     {
       "name": "Detach Channel Phone Number",
@@ -64,7 +139,34 @@
           "raw": "{\n  \"channel_id\": 1,\n  \"phone_number\": \"+15551234567\"\n}",
           "options": { "raw": { "language": "json" } }
         }
-      }
+      },
+      "response": [
+        {
+          "name": "Detach Channel Phone Number - Success",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/channel_phone_number/detach_channel_phone_number",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel_phone_number", "detach_channel_phone_number"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel_id\": 1,\n  \"phone_number\": \"+15551234567\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"message\": \"Phone number detached successfully\"\n}"
+        }
+      ]
     },
     {
       "name": "Get Assigned Phone Numbers",
@@ -76,7 +178,27 @@
           "host": ["{{baseUrl}}"],
           "path": ["channel_phone_number", "get_assigned_phone_numbers"]
         }
-      }
+      },
+      "response": [
+        {
+          "name": "Get Assigned Phone Numbers - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/channel_phone_number/get_assigned_phone_numbers",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel_phone_number", "get_assigned_phone_numbers"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"b8c9d0e1-f2a3-4567-hijk-678901234567\",\n    \"channel_id\": 1,\n    \"agent_id\": 1,\n    \"phone_number\": \"+15551234567\",\n    \"phone_number_sid\": \"PN_example_sid\",\n    \"provider\": \"twilio\",\n    \"country_code\": \"US\",\n    \"number_type\": \"local\",\n    \"capabilities\": {\"voice\": true, \"sms\": true},\n    \"status\": \"active\",\n    \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
+        }
+      ]
     },
     {
       "name": "Get Twilio Phone Numbers",
@@ -94,7 +216,31 @@
           ]
         },
         "auth": { "type": "noauth" }
-      }
+      },
+      "response": [
+        {
+          "name": "Get Twilio Phone Numbers - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/channel_phone_number/get_twilio_phone_numbers?type=twilio&channel_id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel_phone_number", "get_twilio_phone_numbers"],
+              "query": [
+                { "key": "type", "value": "twilio" },
+                { "key": "channel_id", "value": "1" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "[\n  {\n    \"phone_number\": \"+15551234567\",\n    \"friendly_name\": \"My Twilio Number\",\n    \"phone_number_sid\": \"PN_example_sid\",\n    \"capabilities\": {\"voice\": true, \"sms\": true}\n  },\n  {\n    \"phone_number\": \"+15559876543\",\n    \"friendly_name\": \"Secondary Number\",\n    \"phone_number_sid\": \"PN_example_sid_2\",\n    \"capabilities\": {\"voice\": true, \"sms\": false}\n  }\n]"
+        }
+      ]
     }
   ]
 }

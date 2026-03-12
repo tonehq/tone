@@ -7,13 +7,13 @@ from fastapi.testclient import TestClient
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
-from main import app
+from main import app, api_v1
 from core.middleware.auth import JWTClaims, get_jwt_claims, require_org_member, require_admin_or_owner, security
 
 
 def make_claims(
     user_id: int = 1,
-    org_id: int = 1,
+    org_id: str = "550e8400-e29b-41d4-a716-446655440000",
     role: str = "member",
     email: str = "test@example.com",
 ) -> JWTClaims:
@@ -36,7 +36,7 @@ def make_claims(
 @pytest.fixture
 def mock_db():
     """Mock database session."""
-    db = MagicMock(spec=Session)
+    db = MagicMock()
     db.query.return_value = db
     db.filter.return_value = db
     db.first.return_value = None
@@ -45,6 +45,7 @@ def mock_db():
     db.refresh.return_value = None
     db.add.return_value = None
     db.delete.return_value = None
+    db.count.return_value = 0
     return db
 
 
@@ -72,6 +73,11 @@ def auth_headers():
     return {"Authorization": "Bearer test-token"}
 
 
+def _fake_security():
+    """Bypass HTTPBearer so tests don't need an Authorization header."""
+    return HTTPAuthorizationCredentials(scheme="Bearer", credentials="test-token")
+
+
 def _override_auth(claims: JWTClaims):
     """Return a dependency override function that returns *claims*."""
     def _override():
@@ -84,14 +90,15 @@ def client_as_member(mock_db, member_claims):
     """TestClient authenticated as a regular org member."""
     from core.database.session import get_db
 
-    app.dependency_overrides[get_db] = lambda: mock_db
-    app.dependency_overrides[get_jwt_claims] = _override_auth(member_claims)
-    app.dependency_overrides[require_org_member] = _override_auth(member_claims)
-    app.dependency_overrides[require_admin_or_owner] = _override_auth(member_claims)
+    api_v1.dependency_overrides[security] = _fake_security
+    api_v1.dependency_overrides[get_db] = lambda: mock_db
+    api_v1.dependency_overrides[get_jwt_claims] = _override_auth(member_claims)
+    api_v1.dependency_overrides[require_org_member] = _override_auth(member_claims)
+    api_v1.dependency_overrides[require_admin_or_owner] = _override_auth(member_claims)
 
     client = TestClient(app)
     yield client
-    app.dependency_overrides.clear()
+    api_v1.dependency_overrides.clear()
 
 
 @pytest.fixture
@@ -99,14 +106,15 @@ def client_as_admin(mock_db, admin_claims):
     """TestClient authenticated as an admin."""
     from core.database.session import get_db
 
-    app.dependency_overrides[get_db] = lambda: mock_db
-    app.dependency_overrides[get_jwt_claims] = _override_auth(admin_claims)
-    app.dependency_overrides[require_org_member] = _override_auth(admin_claims)
-    app.dependency_overrides[require_admin_or_owner] = _override_auth(admin_claims)
+    api_v1.dependency_overrides[security] = _fake_security
+    api_v1.dependency_overrides[get_db] = lambda: mock_db
+    api_v1.dependency_overrides[get_jwt_claims] = _override_auth(admin_claims)
+    api_v1.dependency_overrides[require_org_member] = _override_auth(admin_claims)
+    api_v1.dependency_overrides[require_admin_or_owner] = _override_auth(admin_claims)
 
     client = TestClient(app)
     yield client
-    app.dependency_overrides.clear()
+    api_v1.dependency_overrides.clear()
 
 
 @pytest.fixture
@@ -114,12 +122,12 @@ def client_unauthenticated(mock_db):
     """TestClient with DB mocked but NO auth override — auth should reject."""
     from core.database.session import get_db
 
-    app.dependency_overrides[get_db] = lambda: mock_db
+    api_v1.dependency_overrides[get_db] = lambda: mock_db
     # Remove any leftover auth overrides
-    app.dependency_overrides.pop(get_jwt_claims, None)
-    app.dependency_overrides.pop(require_org_member, None)
-    app.dependency_overrides.pop(require_admin_or_owner, None)
+    api_v1.dependency_overrides.pop(get_jwt_claims, None)
+    api_v1.dependency_overrides.pop(require_org_member, None)
+    api_v1.dependency_overrides.pop(require_admin_or_owner, None)
 
     client = TestClient(app)
     yield client
-    app.dependency_overrides.clear()
+    api_v1.dependency_overrides.clear()

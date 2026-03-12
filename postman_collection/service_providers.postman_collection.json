@@ -27,10 +27,87 @@
         },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"name\": \"openai\",\n  \"display_name\": \"OpenAI\",\n  \"provider_type\": \"llm\",\n  \"auth_type\": \"api_key\",\n  \"description\": \"OpenAI LLM provider\",\n  \"logo_url\": \"https://example.com/openai-logo.png\",\n  \"website_url\": \"https://openai.com\",\n  \"documentation_url\": \"https://platform.openai.com/docs\",\n  \"base_url\": \"https://api.openai.com/v1\",\n  \"supports_streaming\": true,\n  \"config_schema\": {},\n  \"is_system\": false,\n  \"status\": \"active\"\n}",
+          "raw": "{\n  \"name\": \"openai\",\n  \"display_name\": \"OpenAI\",\n  \"provider_type\": \"llm\",\n  \"auth_type\": \"api_key\",\n  \"description\": \"OpenAI LLM provider\",\n  \"logo_url\": \"https://example.com/openai-logo.png\",\n  \"website_url\": \"https://openai.com\",\n  \"documentation_url\": \"https://platform.openai.com/docs\",\n  \"base_url\": \"https://api.openai.com/v1\",\n  \"supports_streaming\": true,\n  \"config_schema\": {},\n  \"is_system\": false,\n  \"status\": \"active\",\n  \"meta_data_schema\": {}\n}",
           "options": { "raw": { "language": "json" } }
         }
-      }
+      },
+      "response": [
+        {
+          "name": "Upsert Service Provider - Create",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/service-providers/upsert",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-providers", "upsert"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"openai\",\n  \"display_name\": \"OpenAI\",\n  \"provider_type\": \"llm\",\n  \"auth_type\": \"api_key\",\n  \"description\": \"OpenAI LLM provider\",\n  \"supports_streaming\": true,\n  \"is_system\": false,\n  \"status\": \"active\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"a7b8c9d0-e1f2-3456-ghij-567890123456\",\n  \"name\": \"openai\",\n  \"display_name\": \"OpenAI\",\n  \"description\": \"OpenAI LLM provider\",\n  \"provider_type\": \"llm\",\n  \"logo_url\": null,\n  \"website_url\": null,\n  \"documentation_url\": null,\n  \"base_url\": null,\n  \"auth_type\": \"api_key\",\n  \"supports_streaming\": true,\n  \"config_schema\": null,\n  \"status\": \"active\",\n  \"is_system\": false,\n  \"meta_data_schema\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Upsert Service Provider - Update",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/service-providers/upsert",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-providers", "upsert"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": 1,\n  \"name\": \"openai\",\n  \"display_name\": \"OpenAI - Updated\",\n  \"provider_type\": \"llm\",\n  \"auth_type\": \"api_key\",\n  \"description\": \"Updated OpenAI provider\",\n  \"supports_streaming\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"a7b8c9d0-e1f2-3456-ghij-567890123456\",\n  \"name\": \"openai\",\n  \"display_name\": \"OpenAI - Updated\",\n  \"description\": \"Updated OpenAI provider\",\n  \"provider_type\": \"llm\",\n  \"auth_type\": \"api_key\",\n  \"supports_streaming\": true,\n  \"status\": \"active\",\n  \"is_system\": false,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710288000\n}"
+        },
+        {
+          "name": "Upsert Service Provider - Missing Fields",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/service-providers/upsert",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-providers", "upsert"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"openai\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"name, display_name, provider_type, and auth_type are required\"\n}"
+        }
+      ]
     },
     {
       "name": "Get All Service Providers",
@@ -45,7 +122,48 @@
             { "key": "provider_type", "value": "llm", "description": "Filter by provider type (llm, stt, tts)", "disabled": true }
           ]
         }
-      }
+      },
+      "response": [
+        {
+          "name": "Get All Service Providers - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-providers/list",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-providers", "list"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"a7b8c9d0-e1f2-3456-ghij-567890123456\",\n    \"name\": \"openai\",\n    \"display_name\": \"OpenAI\",\n    \"description\": \"OpenAI LLM provider\",\n    \"provider_type\": \"llm\",\n    \"auth_type\": \"api_key\",\n    \"supports_streaming\": true,\n    \"status\": \"active\",\n    \"is_system\": false,\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  },\n  {\n    \"id\": 2,\n    \"uuid\": \"b8c9d0e1-f2a3-4567-hijk-678901234567\",\n    \"name\": \"elevenlabs\",\n    \"display_name\": \"ElevenLabs\",\n    \"description\": \"ElevenLabs TTS provider\",\n    \"provider_type\": \"tts\",\n    \"auth_type\": \"api_key\",\n    \"supports_streaming\": true,\n    \"status\": \"active\",\n    \"is_system\": false,\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
+        },
+        {
+          "name": "Get All Service Providers - Filtered",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-providers/list?provider_type=tts",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-providers", "list"],
+              "query": [
+                { "key": "provider_type", "value": "tts" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "[\n  {\n    \"id\": 2,\n    \"uuid\": \"b8c9d0e1-f2a3-4567-hijk-678901234567\",\n    \"name\": \"elevenlabs\",\n    \"display_name\": \"ElevenLabs\",\n    \"provider_type\": \"tts\",\n    \"auth_type\": \"api_key\",\n    \"status\": \"active\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
+        }
+      ]
     },
     {
       "name": "Get Service Provider",
@@ -60,7 +178,30 @@
             { "key": "provider_id", "value": "1" }
           ]
         }
-      }
+      },
+      "response": [
+        {
+          "name": "Get Service Provider - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-providers/get?provider_id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-providers", "get"],
+              "query": [
+                { "key": "provider_id", "value": "1" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"a7b8c9d0-e1f2-3456-ghij-567890123456\",\n  \"name\": \"openai\",\n  \"display_name\": \"OpenAI\",\n  \"description\": \"OpenAI LLM provider\",\n  \"provider_type\": \"llm\",\n  \"logo_url\": \"https://example.com/openai-logo.png\",\n  \"website_url\": \"https://openai.com\",\n  \"documentation_url\": \"https://platform.openai.com/docs\",\n  \"base_url\": \"https://api.openai.com/v1\",\n  \"auth_type\": \"api_key\",\n  \"supports_streaming\": true,\n  \"config_schema\": {},\n  \"status\": \"active\",\n  \"is_system\": false,\n  \"meta_data_schema\": {},\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        }
+      ]
     },
     {
       "name": "Delete Service Provider",
@@ -75,7 +216,30 @@
             { "key": "provider_id", "value": "1" }
           ]
         }
-      }
+      },
+      "response": [
+        {
+          "name": "Delete Service Provider - Success",
+          "originalRequest": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/service-providers/delete?provider_id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["service-providers", "delete"],
+              "query": [
+                { "key": "provider_id", "value": "1" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"message\": \"Service provider deleted successfully\"\n}"
+        }
+      ]
     }
   ]
 }
