@@ -475,17 +475,29 @@ test.describe('Create Outbound Agent Page', () => {
     });
 
     test('saves outbound agent to DB and shows in list (real API)', async ({ page }) => {
+      test.slow(); // triple timeout — real API may be slow
+
       const agentName = `E2E Outbound ${Date.now()}`;
       await page.locator('input[name="name"]').fill(agentName);
+
+      // Start listening for the agent list response BEFORE clicking save,
+      // so we don't miss it if the navigation + fetch happen quickly.
+      const agentListResponse = page.waitForResponse(
+        (resp) => resp.url().includes('/agent/get_all_agents'),
+        { timeout: 60_000 },
+      );
 
       await page.getByRole('button', { name: /save changes/i }).click();
       await expect(page).toHaveURL(/\/agents(?:\?|$)/, { timeout: 15_000 });
 
-      // Wait for the agent list to finish loading
+      // Wait for the agent list API to respond
+      await agentListResponse;
+
+      // Wait for the agent list to finish loading (skeletons disappear)
       await page.waitForFunction(
         () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
         null,
-        { timeout: 20_000 },
+        { timeout: 10_000 },
       );
 
       // Search for the created agent (it may be on a later pagination page)
@@ -502,7 +514,8 @@ test.describe('Create Outbound Agent Page', () => {
   // ── 9. Delete Agent Confirmation ──────────────────────────────────────────
   test.describe('Delete Agent Confirmation', () => {
     test('opens confirmation modal when clicking Delete Agent', async ({ page }) => {
-      await page.getByRole('button', { name: 'Delete Agent' }).scrollIntoViewIfNeeded();
+      // Use click() directly — it auto-scrolls and retries on element detachment
+      // (provider loading can cause React re-renders that detach DOM nodes)
       await page.getByRole('button', { name: 'Delete Agent' }).click();
 
       const dialog = page.getByRole('dialog');
@@ -518,7 +531,6 @@ test.describe('Create Outbound Agent Page', () => {
     });
 
     test('closes delete modal when cancelled', async ({ page }) => {
-      await page.getByRole('button', { name: 'Delete Agent' }).scrollIntoViewIfNeeded();
       await page.getByRole('button', { name: 'Delete Agent' }).click();
       await expect(page.getByRole('dialog')).toBeVisible();
 
