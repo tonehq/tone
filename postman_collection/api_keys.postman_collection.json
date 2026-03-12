@@ -1,0 +1,97 @@
+{
+  "info": {
+    "name": "API Keys API",
+    "description": "Auto-generated from core/api/v1/api_keys.py",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/api/v1" },
+    { "key": "authToken", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{authToken}}" }]
+  },
+  "item": [
+    {
+      "name": "Upsert Api Key",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api-keys/upsert",
+          "host": ["{{baseUrl}}"],
+          "path": ["api-keys", "upsert"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"service_provider_id\": 1,\n  \"name\": \"My OpenAI Key\",\n  \"api_key\": \"sk-example-key-here\",\n  \"description\": \"Production API key\",\n  \"additional_credentials\": {},\n  \"rate_limit_config\": {},\n  \"expires_at\": null,\n  \"uuid\": null,\n  \"status\": \"active\"\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      }
+    },
+    {
+      "name": "Get All Api Keys",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api-keys/list",
+          "host": ["{{baseUrl}}"],
+          "path": ["api-keys", "list"]
+        }
+      }
+    },
+    {
+      "name": "Get Api Key",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api-keys/get?api_key_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["api-keys", "get"],
+          "query": [
+            { "key": "api_key_id", "value": "1" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Delete Api Key",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api-keys/delete?api_key_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["api-keys", "delete"],
+          "query": [
+            { "key": "api_key_id", "value": "1" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Validate Api Key",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api-keys/validate",
+          "host": ["{{baseUrl}}"],
+          "path": ["api-keys", "validate"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"api_key_id\": 1,\n  \"is_valid\": true,\n  \"validation_error\": null\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      }
+    }
+  ]
+}

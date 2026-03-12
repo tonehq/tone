@@ -1,0 +1,158 @@
+{
+  "info": {
+    "name": "Organization API",
+    "description": "Auto-generated from core/api/v1/organizations.py",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/api/v1" },
+    { "key": "authToken", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{authToken}}" }]
+  },
+  "item": [
+    {
+      "name": "Invite User To Organization",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/organization/invite_user_to_organization",
+          "host": ["{{baseUrl}}"],
+          "path": ["organization", "invite_user_to_organization"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Jane Smith\",\n  \"email\": \"jane@example.com\",\n  \"role\": \"member\"\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      }
+    },
+    {
+      "name": "Accept Invitation",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/organization/accept_invitation?email=jane@example.com&code=invite-code-here",
+          "host": ["{{baseUrl}}"],
+          "path": ["organization", "accept_invitation"],
+          "query": [
+            { "key": "email", "value": "jane@example.com" },
+            { "key": "code", "value": "invite-code-here" }
+          ]
+        },
+        "auth": { "type": "noauth" }
+      }
+    },
+    {
+      "name": "Remove User From Organization",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/organization/remove_user_from_organization?user_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["organization", "remove_user_from_organization"],
+          "query": [
+            { "key": "user_id", "value": "1" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Update Member Role",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/organization/update_member_role?member_id=1&role=admin",
+          "host": ["{{baseUrl}}"],
+          "path": ["organization", "update_member_role"],
+          "query": [
+            { "key": "member_id", "value": "1" },
+            { "key": "role", "value": "admin" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Organization Settings",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/organization/settings",
+          "host": ["{{baseUrl}}"],
+          "path": ["organization", "settings"]
+        }
+      }
+    },
+    {
+      "name": "Update Organization Settings",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/organization/settings",
+          "host": ["{{baseUrl}}"],
+          "path": ["organization", "settings"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"org_name\": \"My Organization\",\n  \"default_role\": \"member\",\n  \"allow_signups\": true\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      }
+    },
+    {
+      "name": "Get Access Requests",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/organization/access_requests",
+          "host": ["{{baseUrl}}"],
+          "path": ["organization", "access_requests"]
+        }
+      }
+    },
+    {
+      "name": "Handle Access Request",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/organization/handle_access_request",
+          "host": ["{{baseUrl}}"],
+          "path": ["organization", "handle_access_request"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"request_id\": 1,\n  \"action\": \"approve\"\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      }
+    },
+    {
+      "name": "Get Roles",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/organization/roles",
+          "host": ["{{baseUrl}}"],
+          "path": ["organization", "roles"]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "info": {
+    "name": "Users API",
+    "description": "Auto-generated from core/api/v1/users.py",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/api/v1" },
+    { "key": "authToken", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{authToken}}" }]
+  },
+  "item": [
+    {
+      "name": "Get All Users For Organization",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/user/get_all_users_for_organization",
+          "host": ["{{baseUrl}}"],
+          "path": ["user", "get_all_users_for_organization"]
+        }
+      }
+    },
+    {
+      "name": "Get All Invited Users For Organization",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/user/get_all_invited_users_for_organization",
+          "host": ["{{baseUrl}}"],
+          "path": ["user", "get_all_invited_users_for_organization"]
+        }
+      }
+    }
+  ]
+}

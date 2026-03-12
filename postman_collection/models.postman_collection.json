@@ -1,0 +1,66 @@
+{
+  "info": {
+    "name": "Model API",
+    "description": "Auto-generated from core/api/v1/models.py",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/api/v1" },
+    { "key": "authToken", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{authToken}}" }]
+  },
+  "item": [
+    {
+      "name": "Get Models By Provider",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/model/get_models_by_provider?service_provider_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["model", "get_models_by_provider"],
+          "query": [
+            { "key": "service_provider_id", "value": "1", "description": "The service provider ID to fetch models for" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Upsert Model",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/model/upsert_model",
+          "host": ["{{baseUrl}}"],
+          "path": ["model", "upsert_model"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"service_provider_id\": 1,\n  \"name\": \"gpt-4\",\n  \"display_name\": \"GPT-4\",\n  \"model_type\": \"llm\",\n  \"config\": {}\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      }
+    },
+    {
+      "name": "Delete Model",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/model/delete_model?model_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["model", "delete_model"],
+          "query": [
+            { "key": "model_id", "value": "1", "description": "The model ID to delete" }
+          ]
+        }
+      }
+    }
+  ]
+}

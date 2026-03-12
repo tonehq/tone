@@ -1,0 +1,36 @@
+{
+  "info": {
+    "name": "Agent Config API",
+    "description": "Auto-generated from core/api/v1/agent_configs.py",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/api/v1" },
+    { "key": "authToken", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{authToken}}" }]
+  },
+  "item": [
+    {
+      "name": "Upsert Agent Config",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/agent_config/upsert_agent_config",
+          "host": ["{{baseUrl}}"],
+          "path": ["agent_config", "upsert_agent_config"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"agent_id\": 1,\n  \"system_prompt\": \"You are a helpful voice assistant.\",\n  \"llm_service_id\": 1,\n  \"stt_service_id\": 1,\n  \"tts_service_id\": 1,\n  \"settings\": {}\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      }
+    }
+  ]
+}

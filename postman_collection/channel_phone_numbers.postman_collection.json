@@ -1,0 +1,100 @@
+{
+  "info": {
+    "name": "Channel Phone Numbers API",
+    "description": "Auto-generated from core/api/v1/channel_phone_numbers.py",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/api/v1" },
+    { "key": "authToken", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{authToken}}" }]
+  },
+  "item": [
+    {
+      "name": "Get Channel Phone Numbers",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/channel_phone_number/get_channel_phone_numbers?channel_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["channel_phone_number", "get_channel_phone_numbers"],
+          "query": [
+            { "key": "channel_id", "value": "1", "description": "The channel ID to fetch phone numbers for" }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Upsert Channel Phone Number",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/channel_phone_number/upsert_channel_phone_number",
+          "host": ["{{baseUrl}}"],
+          "path": ["channel_phone_number", "upsert_channel_phone_number"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone_number\": \"+15551234567\",\n  \"phone_number_sid\": \"PN_example_sid\",\n  \"phone_number_auth_token\": \"example_auth_token\",\n  \"provider\": \"twilio\",\n  \"channel_id\": 1,\n  \"agent_id\": 1\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      }
+    },
+    {
+      "name": "Detach Channel Phone Number",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/channel_phone_number/detach_channel_phone_number",
+          "host": ["{{baseUrl}}"],
+          "path": ["channel_phone_number", "detach_channel_phone_number"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"channel_id\": 1,\n  \"phone_number\": \"+15551234567\"\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      }
+    },
+    {
+      "name": "Get Assigned Phone Numbers",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/channel_phone_number/get_assigned_phone_numbers",
+          "host": ["{{baseUrl}}"],
+          "path": ["channel_phone_number", "get_assigned_phone_numbers"]
+        }
+      }
+    },
+    {
+      "name": "Get Twilio Phone Numbers",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/channel_phone_number/get_twilio_phone_numbers?type=twilio",
+          "host": ["{{baseUrl}}"],
+          "path": ["channel_phone_number", "get_twilio_phone_numbers"],
+          "query": [
+            { "key": "type", "value": "twilio", "description": "The channel type (e.g. twilio)" },
+            { "key": "channel_id", "value": "1", "description": "The channel ID to use for credentials", "disabled": true },
+            { "key": "agent_id", "value": "1", "description": "Current agent ID — numbers assigned to other agents are excluded", "disabled": true }
+          ]
+        },
+        "auth": { "type": "noauth" }
+      }
+    }
+  ]
+}
