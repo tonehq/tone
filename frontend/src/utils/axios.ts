@@ -12,7 +12,7 @@ axiosInstance.interceptors.request.use(function (config) {
   const accessToken = Cookies.get('tone_access_token');
 
   if (tenant_id) {
-    config.headers['tenant_id'] = Number(tenant_id);
+    config.headers['tenant_id'] = tenant_id;
   }
   if (accessToken) {
     config.headers['Authorization'] = `Bearer ${accessToken}`;

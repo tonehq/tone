@@ -1,8 +1,14 @@
 'use client';
 
-import { CustomModal, TextInput } from '@/components/shared';
+import { CustomModal, SelectInput, TextInput } from '@/components/shared';
 import type { IntegrationRow } from '@/types/integration';
 import { useCallback, useEffect, useState } from 'react';
+
+const CHANNEL_TYPE_OPTIONS = [
+  { label: 'Twilio', value: 'TWILIO' },
+  { label: 'Telnyx', value: 'TELNYX' },
+  { label: 'Exotel', value: 'EXOTEL' },
+];
 
 interface AddChannelModalProps {
   open: boolean;
@@ -10,6 +16,7 @@ interface AddChannelModalProps {
   onSubmit: (data: {
     id?: number;
     name: string;
+    type: string;
     auth_token: string;
     account_sid: string;
   }) => Promise<void>;
@@ -18,6 +25,7 @@ interface AddChannelModalProps {
 
 const initialFormState = {
   name: '',
+  type: 'TWILIO',
   auth_token: '',
   account_sid: '',
 };
@@ -29,6 +37,7 @@ export default function AddChannelModal({
   editData,
 }: AddChannelModalProps) {
   const [name, setName] = useState(initialFormState.name);
+  const [type, setType] = useState(initialFormState.type);
   const [auth_token, setAuthToken] = useState(initialFormState.auth_token);
   const [account_sid, setAccountSid] = useState(initialFormState.account_sid);
   const [saving, setSaving] = useState(false);
@@ -38,10 +47,12 @@ export default function AddChannelModal({
   useEffect(() => {
     if (open && editData) {
       setName(editData.name);
+      setType(editData.type ?? initialFormState.type);
       setAuthToken(editData.auth_token);
       setAccountSid(editData.account_sid);
     } else if (open) {
       setName(initialFormState.name);
+      setType(initialFormState.type);
       setAuthToken(initialFormState.auth_token);
       setAccountSid(initialFormState.account_sid);
     }
@@ -49,6 +60,7 @@ export default function AddChannelModal({
 
   const resetForm = useCallback(() => {
     setName(initialFormState.name);
+    setType(initialFormState.type);
     setAuthToken(initialFormState.auth_token);
     setAccountSid(initialFormState.account_sid);
   }, []);
@@ -60,6 +72,7 @@ export default function AddChannelModal({
       await onSubmit({
         ...(editData ? { id: editData.id } : {}),
         name: name.trim(),
+        type,
         auth_token: auth_token.trim(),
         account_sid: account_sid.trim(),
       });
@@ -93,6 +106,16 @@ export default function AddChannelModal({
             placeholder="e.g. Twilio Production"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            disabled={saving}
+          />
+        </div>
+        <div>
+          <SelectInput
+            name="channel-type"
+            label="Type"
+            options={CHANNEL_TYPE_OPTIONS}
+            value={type}
+            onValueChange={setType}
             disabled={saving}
           />
         </div>

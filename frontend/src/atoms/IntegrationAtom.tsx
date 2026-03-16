@@ -17,6 +17,7 @@ const channelsRowsAtom = atom<Promise<IntegrationRow[]>>(async (get) => {
   return apiData.map((row: any) => ({
     id: row.id,
     name: row.name,
+    type: row.type,
     auth_token: row.meta_data.auth_token ?? '••••••••',
     account_sid: row.meta_data.account_sid ?? '',
     createdAt: row.created_at ? formatDate(Number(row.created_at)) : '-',
@@ -36,7 +37,7 @@ const upsertChannelAtom = atom(
   async (
     _get,
     set,
-    payload: { id?: number; name: string; type: 'TWILIO'; meta_data: TwilioMetaData },
+    payload: { id?: number; name: string; type: string; meta_data: TwilioMetaData },
   ) => {
     await upsertChannel(payload);
     set(channelsRefreshAtom, (c) => c + 1);
