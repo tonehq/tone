@@ -351,7 +351,7 @@ export default function VoiceTab({
                   role="radio"
                   aria-checked={isActive}
                   className={cn(
-                    'flex !flex-col h-auto w-[105px] !items-start rounded-md border p-2 text-left transition-colors',
+                    'flex flex-col! h-auto w-[105px] items-start! rounded-md border p-2 text-left transition-colors',
                     isActive
                       ? 'border-primary bg-primary/10'
                       : 'border-border hover:border-muted-foreground/50',
