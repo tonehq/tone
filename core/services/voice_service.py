@@ -10,8 +10,8 @@ from core.models.voice import Voice
 from core.models.service_provider import ServiceProvider
 
 class VoiceService(BaseService):
-    def __init__(self, db: Session, user_id: Optional[int] = None):
-        super().__init__(db, user_id)
+    def __init__(self, db: Session, user_id: Optional[int] = None, org_id=None):
+        super().__init__(db, user_id, org_id=org_id)
 
 
     def get_voices(self):

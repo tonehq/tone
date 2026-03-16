@@ -13,7 +13,7 @@ from fastapi import HTTPException
 class TestSignup:
     """Tests for POST /api/v1/auth/signup"""
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_signup_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.signup.return_value = {
             "id": 1, "email": "new@example.com", "token": "jwt-token"
@@ -25,7 +25,7 @@ class TestSignup:
         })
         assert response.status_code == 201
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_signup_with_profile(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.signup.return_value = {"id": 1}
         response = client_as_member.post("/api/v1/auth/signup", json={
@@ -35,7 +35,7 @@ class TestSignup:
         })
         assert response.status_code == 201
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_signup_missing_email(self, mock_service_cls, client_as_member):
         response = client_as_member.post("/api/v1/auth/signup", json={
             "password": "pass123"
@@ -43,24 +43,24 @@ class TestSignup:
         assert response.status_code == 400
         assert "Email and password are required" in response.json()["detail"]
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_signup_missing_password(self, mock_service_cls, client_as_member):
         response = client_as_member.post("/api/v1/auth/signup", json={
             "email": "new@example.com"
         })
         assert response.status_code == 400
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_signup_missing_both_email_and_password(self, mock_service_cls, client_as_member):
         response = client_as_member.post("/api/v1/auth/signup", json={})
         assert response.status_code == 400
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_signup_empty_body(self, mock_service_cls, client_as_member):
         response = client_as_member.post("/api/v1/auth/signup", json={})
         assert response.status_code == 400
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_signup_service_raises_conflict(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.signup.side_effect = HTTPException(
             status_code=409, detail="Email already exists"
@@ -77,7 +77,7 @@ class TestSignup:
 class TestSignupWithFirebase:
     """Tests for POST /api/v1/auth/signup_with_firebase"""
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_signup_with_firebase_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.signup_with_firebase.return_value = {"id": 1}
         response = client_as_member.post(
@@ -87,7 +87,7 @@ class TestSignupWithFirebase:
         )
         assert response.status_code == 201
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_signup_with_firebase_missing_email(self, mock_service_cls, client_as_member):
         response = client_as_member.post(
             "/api/v1/auth/signup_with_firebase",
@@ -97,7 +97,7 @@ class TestSignupWithFirebase:
         assert response.status_code == 400
         assert "Email is required" in response.json()["detail"]
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_signup_with_firebase_invalid_auth_header(self, mock_service_cls, client_as_member):
         response = client_as_member.post(
             "/api/v1/auth/signup_with_firebase",
@@ -119,7 +119,7 @@ class TestSignupWithFirebase:
 class TestResendVerificationEmail:
     """Tests for GET /api/v1/auth/resend_verification_email"""
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_resend_verification_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.resend_verification_email.return_value = {"message": "sent"}
         response = client_as_member.get("/api/v1/auth/resend_verification_email?email=test@example.com")
@@ -135,7 +135,7 @@ class TestResendVerificationEmail:
 class TestVerifyUserEmail:
     """Tests for GET /api/v1/auth/verify_user_email"""
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_verify_email_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.verify_user_email.return_value = {"verified": True}
         response = client_as_member.get(
@@ -173,7 +173,7 @@ class TestVerifyUserEmail:
 class TestLogin:
     """Tests for POST /api/v1/auth/login"""
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_login_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.login.return_value = {"token": "jwt-token"}
         response = client_as_member.post("/api/v1/auth/login", json={
@@ -182,26 +182,26 @@ class TestLogin:
         })
         assert response.status_code == 200
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_login_missing_email(self, mock_service_cls, client_as_member):
         response = client_as_member.post("/api/v1/auth/login", json={
             "password": "pass123"
         })
         assert response.status_code == 400
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_login_missing_password(self, mock_service_cls, client_as_member):
         response = client_as_member.post("/api/v1/auth/login", json={
             "email": "test@example.com"
         })
         assert response.status_code == 400
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_login_empty_body(self, mock_service_cls, client_as_member):
         response = client_as_member.post("/api/v1/auth/login", json={})
         assert response.status_code == 400
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_login_invalid_credentials(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.login.side_effect = HTTPException(
             status_code=401, detail="Invalid credentials"
@@ -218,7 +218,7 @@ class TestLogin:
 class TestForgotPassword:
     """Tests for GET /api/v1/auth/forget-password"""
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_forgot_password_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.forgot_password.return_value = {"message": "sent"}
         response = client_as_member.get("/api/v1/auth/forget-password?email=test@example.com")
@@ -228,7 +228,7 @@ class TestForgotPassword:
         response = client_as_member.get("/api/v1/auth/forget-password")
         assert response.status_code == 422
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_forgot_password_nonexistent_email(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.forgot_password.side_effect = HTTPException(
             status_code=404, detail="User not found"
@@ -242,7 +242,7 @@ class TestForgotPassword:
 class TestAcceptForgotPassword:
     """Tests for GET /api/v1/auth/acceptForgotPassword"""
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_accept_forgot_password_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.accept_forgot_password.return_value = {"message": "reset"}
         response = client_as_member.get(
@@ -268,7 +268,7 @@ class TestAcceptForgotPassword:
         )
         assert response.status_code == 422
 
-    @patch("core.api.v1.auth.AuthService")
+    @patch("ee.api.v1.auth.EEAuthService")
     def test_accept_forgot_password_invalid_token(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.accept_forgot_password.side_effect = HTTPException(
             status_code=400, detail="Invalid or expired token"

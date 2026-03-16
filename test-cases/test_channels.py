@@ -24,31 +24,31 @@ def sample_channel_data():
 class TestUpsertChannel:
     """Tests for POST /api/v1/channel/upsert"""
 
-    @patch("core.api.v1.channels.ChannelService")
+    @patch("ee.api.v1.channels.ChannelService")
     def test_upsert_channel_create_success(self, mock_service_cls, client_as_member, sample_channel_data):
         mock_service_cls.return_value.upsert_channel.return_value = {"id": 1, **sample_channel_data}
         response = client_as_member.post("/api/v1/channel/upsert", json=sample_channel_data)
         assert response.status_code == 200
 
-    @patch("core.api.v1.channels.ChannelService")
+    @patch("ee.api.v1.channels.ChannelService")
     def test_upsert_channel_update_success(self, mock_service_cls, client_as_member):
         data = {"id": 1, "name": "Updated Channel"}
         mock_service_cls.return_value.upsert_channel.return_value = data
         response = client_as_member.post("/api/v1/channel/upsert", json=data)
         assert response.status_code == 200
 
-    @patch("core.api.v1.channels.ChannelService")
+    @patch("ee.api.v1.channels.ChannelService")
     def test_upsert_channel_missing_name(self, mock_service_cls, client_as_member):
         response = client_as_member.post("/api/v1/channel/upsert", json={"type": "web"})
         assert response.status_code == 400
         assert "name is required" in response.json()["detail"]
 
-    @patch("core.api.v1.channels.ChannelService")
+    @patch("ee.api.v1.channels.ChannelService")
     def test_upsert_channel_empty_name(self, mock_service_cls, client_as_member):
         response = client_as_member.post("/api/v1/channel/upsert", json={"name": ""})
         assert response.status_code == 400
 
-    @patch("core.api.v1.channels.ChannelService")
+    @patch("ee.api.v1.channels.ChannelService")
     def test_upsert_channel_empty_body(self, mock_service_cls, client_as_member):
         response = client_as_member.post("/api/v1/channel/upsert", json={})
         assert response.status_code == 400
@@ -63,14 +63,14 @@ class TestUpsertChannel:
 class TestGetAllChannels:
     """Tests for GET /api/v1/channel/list"""
 
-    @patch("core.api.v1.channels.ChannelService")
+    @patch("ee.api.v1.channels.ChannelService")
     def test_get_all_channels_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_all_channels.return_value = [{"id": 1, "name": "Web"}]
         response = client_as_member.get("/api/v1/channel/list")
         assert response.status_code == 200
         assert isinstance(response.json(), list)
 
-    @patch("core.api.v1.channels.ChannelService")
+    @patch("ee.api.v1.channels.ChannelService")
     def test_get_all_channels_empty(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_all_channels.return_value = []
         response = client_as_member.get("/api/v1/channel/list")
@@ -87,7 +87,7 @@ class TestGetAllChannels:
 class TestGetChannel:
     """Tests for GET /api/v1/channel/get"""
 
-    @patch("core.api.v1.channels.ChannelService")
+    @patch("ee.api.v1.channels.ChannelService")
     def test_get_channel_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_channel.return_value = {"id": 1, "name": "Web"}
         response = client_as_member.get("/api/v1/channel/get?channel_id=1")
@@ -101,7 +101,7 @@ class TestGetChannel:
         response = client_as_member.get("/api/v1/channel/get?channel_id=abc")
         assert response.status_code == 422
 
-    @patch("core.api.v1.channels.ChannelService")
+    @patch("ee.api.v1.channels.ChannelService")
     def test_get_channel_not_found(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_channel.side_effect = HTTPException(
             status_code=404, detail="Channel not found"
@@ -119,7 +119,7 @@ class TestGetChannel:
 class TestGetChannelByType:
     """Tests for GET /api/v1/channel/get_by_type"""
 
-    @patch("core.api.v1.channels.ChannelService")
+    @patch("ee.api.v1.channels.ChannelService")
     def test_get_by_type_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_channel_by_type.return_value = {"id": 1, "type": "twilio"}
         response = client_as_member.get("/api/v1/channel/get_by_type?type=twilio")
@@ -129,7 +129,7 @@ class TestGetChannelByType:
         response = client_as_member.get("/api/v1/channel/get_by_type")
         assert response.status_code == 422
 
-    @patch("core.api.v1.channels.ChannelService")
+    @patch("ee.api.v1.channels.ChannelService")
     def test_get_by_type_not_found(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_channel_by_type.side_effect = HTTPException(
             status_code=404, detail="Channel not found"
@@ -143,7 +143,7 @@ class TestGetChannelByType:
 class TestDeleteChannel:
     """Tests for DELETE /api/v1/channel/delete"""
 
-    @patch("core.api.v1.channels.ChannelService")
+    @patch("ee.api.v1.channels.ChannelService")
     def test_delete_channel_success(self, mock_service_cls, client_as_admin):
         mock_service_cls.return_value.delete_channel.return_value = {"message": "deleted"}
         response = client_as_admin.delete("/api/v1/channel/delete?channel_id=1")
@@ -157,7 +157,7 @@ class TestDeleteChannel:
         response = client_as_admin.delete("/api/v1/channel/delete?channel_id=abc")
         assert response.status_code == 422
 
-    @patch("core.api.v1.channels.ChannelService")
+    @patch("ee.api.v1.channels.ChannelService")
     def test_delete_channel_not_found(self, mock_service_cls, client_as_admin):
         mock_service_cls.return_value.delete_channel.side_effect = HTTPException(
             status_code=404, detail="Channel not found"

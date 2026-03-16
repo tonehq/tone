@@ -34,21 +34,21 @@ def mock_agent_response():
 class TestGetAllAgents:
     """Tests for GET /api/v1/agent/get_all_agents"""
 
-    @patch("core.api.v1.agents.AgentService")
+    @patch("ee.api.v1.agents.AgentService")
     def test_get_all_agents_success(self, mock_service_cls, client_as_member, mock_agent_response):
         mock_service_cls.return_value.get_all_agents.return_value = [mock_agent_response]
         response = client_as_member.get("/api/v1/agent/get_all_agents")
         assert response.status_code == 200
         assert isinstance(response.json(), list)
 
-    @patch("core.api.v1.agents.AgentService")
+    @patch("ee.api.v1.agents.AgentService")
     def test_get_all_agents_empty(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_all_agents.return_value = []
         response = client_as_member.get("/api/v1/agent/get_all_agents")
         assert response.status_code == 200
         assert response.json() == []
 
-    @patch("core.api.v1.agents.AgentService")
+    @patch("ee.api.v1.agents.AgentService")
     def test_get_all_agents_with_agent_id_filter(self, mock_service_cls, client_as_member, mock_agent_response):
         mock_service_cls.return_value.get_all_agents.return_value = [mock_agent_response]
         response = client_as_member.get("/api/v1/agent/get_all_agents?agent_id=1")
@@ -68,13 +68,13 @@ class TestGetAllAgents:
 class TestGetAgent:
     """Tests for GET /api/v1/agent/get_agent"""
 
-    @patch("core.api.v1.agents.AgentService")
+    @patch("ee.api.v1.agents.AgentService")
     def test_get_agent_success(self, mock_service_cls, client_as_member, mock_agent_response):
         mock_service_cls.return_value.get_all_agents.return_value = [mock_agent_response]
         response = client_as_member.get("/api/v1/agent/get_agent?agent_id=1")
         assert response.status_code == 200
 
-    @patch("core.api.v1.agents.AgentService")
+    @patch("ee.api.v1.agents.AgentService")
     def test_get_agent_not_found(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_all_agents.return_value = []
         response = client_as_member.get("/api/v1/agent/get_agent?agent_id=999")
@@ -99,7 +99,7 @@ class TestGetAgent:
 class TestDeleteAgent:
     """Tests for DELETE /api/v1/agent/delete_agent"""
 
-    @patch("core.api.v1.agents.AgentService")
+    @patch("ee.api.v1.agents.AgentService")
     def test_delete_agent_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.delete_agent.return_value = {"message": "deleted"}
         response = client_as_member.delete("/api/v1/agent/delete_agent?agent_id=1")
@@ -113,7 +113,7 @@ class TestDeleteAgent:
         response = client_as_member.delete("/api/v1/agent/delete_agent?agent_id=abc")
         assert response.status_code == 422
 
-    @patch("core.api.v1.agents.AgentService")
+    @patch("ee.api.v1.agents.AgentService")
     def test_delete_agent_not_found(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.delete_agent.side_effect = HTTPException(
             status_code=404, detail="Agent not found"
@@ -131,31 +131,31 @@ class TestDeleteAgent:
 class TestUpsertAgent:
     """Tests for POST /api/v1/agent/upsert_agent"""
 
-    @patch("core.api.v1.agents.AgentService")
+    @patch("ee.api.v1.agents.AgentService")
     def test_upsert_agent_create_success(self, mock_service_cls, client_as_member, sample_agent_data):
         mock_service_cls.return_value.upsert_agent.return_value = {"id": 1, **sample_agent_data}
         response = client_as_member.post("/api/v1/agent/upsert_agent", json=sample_agent_data)
         assert response.status_code == 200
 
-    @patch("core.api.v1.agents.AgentService")
+    @patch("ee.api.v1.agents.AgentService")
     def test_upsert_agent_update_success(self, mock_service_cls, client_as_member):
         data = {"id": 1, "name": "Updated Agent"}
         mock_service_cls.return_value.upsert_agent.return_value = data
         response = client_as_member.post("/api/v1/agent/upsert_agent", json=data)
         assert response.status_code == 200
 
-    @patch("core.api.v1.agents.AgentService")
+    @patch("ee.api.v1.agents.AgentService")
     def test_upsert_agent_missing_name(self, mock_service_cls, client_as_member):
         response = client_as_member.post("/api/v1/agent/upsert_agent", json={"description": "no name"})
         assert response.status_code == 400
         assert "name is required" in response.json()["detail"]
 
-    @patch("core.api.v1.agents.AgentService")
+    @patch("ee.api.v1.agents.AgentService")
     def test_upsert_agent_empty_name(self, mock_service_cls, client_as_member):
         response = client_as_member.post("/api/v1/agent/upsert_agent", json={"name": ""})
         assert response.status_code == 400
 
-    @patch("core.api.v1.agents.AgentService")
+    @patch("ee.api.v1.agents.AgentService")
     def test_upsert_agent_empty_body(self, mock_service_cls, client_as_member):
         response = client_as_member.post("/api/v1/agent/upsert_agent", json={})
         assert response.status_code == 400
@@ -164,7 +164,7 @@ class TestUpsertAgent:
         response = client_unauthenticated.post("/api/v1/agent/upsert_agent", json={"name": "Test"})
         assert response.status_code in (401, 403)
 
-    @patch("core.api.v1.agents.AgentService")
+    @patch("ee.api.v1.agents.AgentService")
     def test_upsert_agent_service_error(self, mock_service_cls, client_as_member, sample_agent_data):
         mock_service_cls.return_value.upsert_agent.side_effect = HTTPException(
             status_code=500, detail="Internal error"

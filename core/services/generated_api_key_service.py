@@ -11,8 +11,8 @@ from core.config import settings
 
 
 class GeneratedApiKeyService(BaseService):
-    def __init__(self, db: Session, user_id: Optional[int] = None):
-        super().__init__(db, user_id)
+    def __init__(self, db: Session, user_id: Optional[int] = None, org_id=None):
+        super().__init__(db, user_id, org_id=org_id)
 
     def upsert_basic_key(
         self,

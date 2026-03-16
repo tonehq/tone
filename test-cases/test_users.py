@@ -12,7 +12,7 @@ from unittest.mock import patch, MagicMock
 class TestGetAllUsersForOrganization:
     """Tests for GET /api/v1/user/get_all_users_for_organization"""
 
-    @patch("core.api.v1.users.AuthService")
+    @patch("ee.api.v1.users.EEAuthService")
     def test_get_all_users_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_all_users_for_organization.return_value = [
             {"id": 1, "email": "user1@example.com"},
@@ -22,7 +22,7 @@ class TestGetAllUsersForOrganization:
         assert response.status_code == 200
         assert isinstance(response.json(), list)
 
-    @patch("core.api.v1.users.AuthService")
+    @patch("ee.api.v1.users.EEAuthService")
     def test_get_all_users_empty(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_all_users_for_organization.return_value = []
         response = client_as_member.get("/api/v1/user/get_all_users_for_organization")
@@ -39,7 +39,7 @@ class TestGetAllUsersForOrganization:
 class TestGetAllInvitedUsersForOrganization:
     """Tests for GET /api/v1/user/get_all_invited_users_for_organization"""
 
-    @patch("core.api.v1.users.AuthService")
+    @patch("ee.api.v1.users.EEAuthService")
     def test_get_all_invited_users_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_all_invited_users_for_organization.return_value = [
             {"id": 1, "email": "invited@example.com", "status": "pending"}
@@ -48,7 +48,7 @@ class TestGetAllInvitedUsersForOrganization:
         assert response.status_code == 200
         assert isinstance(response.json(), list)
 
-    @patch("core.api.v1.users.AuthService")
+    @patch("ee.api.v1.users.EEAuthService")
     def test_get_all_invited_users_empty(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_all_invited_users_for_organization.return_value = []
         response = client_as_member.get("/api/v1/user/get_all_invited_users_for_organization")
