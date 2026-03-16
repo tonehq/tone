@@ -20,3 +20,6 @@ dependencies = [
 [tool.setuptools.packages.find]
 include = ["core*", "ee*"]
 exclude = ["frontend*", "pipecatfork*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

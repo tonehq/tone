@@ -1,0 +1,283 @@
+{
+  "info": {
+    "name": "Services API",
+    "description": "Auto-generated from core/api/v1/services.py",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/api/v1" },
+    { "key": "authToken", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{authToken}}" }]
+  },
+  "item": [
+    {
+      "name": "Upsert Service",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/services/upsert",
+          "host": ["{{baseUrl}}"],
+          "path": ["services", "upsert"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"service_provider_id\": 1,\n  \"name\": \"My LLM Service\",\n  \"service_type\": \"llm\",\n  \"config\": {\n    \"model\": \"gpt-4\",\n    \"temperature\": 0.7\n  },\n  \"api_key_id\": 1,\n  \"description\": \"Primary LLM service\",\n  \"is_default\": false,\n  \"is_public\": false,\n  \"tags\": [\"production\"],\n  \"uuid\": null,\n  \"status\": \"active\"\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      },
+      "response": [
+        {
+          "name": "Upsert Service - Create",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/services/upsert",
+              "host": ["{{baseUrl}}"],
+              "path": ["services", "upsert"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"service_provider_id\": 1,\n  \"name\": \"My LLM Service\",\n  \"service_type\": \"llm\",\n  \"config\": {\"model\": \"gpt-4\", \"temperature\": 0.7},\n  \"api_key_id\": 1,\n  \"description\": \"Primary LLM service\",\n  \"is_default\": false,\n  \"is_public\": false,\n  \"tags\": [\"production\"],\n  \"status\": \"active\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"c9d0e1f2-a3b4-5678-ijkl-789012345678\",\n  \"service_provider_id\": 1,\n  \"api_key_id\": 1,\n  \"name\": \"My LLM Service\",\n  \"description\": \"Primary LLM service\",\n  \"service_type\": \"llm\",\n  \"config\": {\"model\": \"gpt-4\", \"temperature\": 0.7},\n  \"status\": \"active\",\n  \"is_default\": false,\n  \"is_public\": false,\n  \"tags\": [\"production\"],\n  \"usage_count\": 0,\n  \"last_used_at\": null,\n  \"created_by\": 1,\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Upsert Service - Update",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/services/upsert",
+              "host": ["{{baseUrl}}"],
+              "path": ["services", "upsert"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"uuid\": \"c9d0e1f2-a3b4-5678-ijkl-789012345678\",\n  \"service_provider_id\": 1,\n  \"name\": \"My LLM Service - Updated\",\n  \"service_type\": \"llm\",\n  \"config\": {\"model\": \"gpt-4-turbo\", \"temperature\": 0.5},\n  \"api_key_id\": 1,\n  \"is_default\": true,\n  \"status\": \"active\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"c9d0e1f2-a3b4-5678-ijkl-789012345678\",\n  \"service_provider_id\": 1,\n  \"api_key_id\": 1,\n  \"name\": \"My LLM Service - Updated\",\n  \"service_type\": \"llm\",\n  \"config\": {\"model\": \"gpt-4-turbo\", \"temperature\": 0.5},\n  \"status\": \"active\",\n  \"is_default\": true,\n  \"is_public\": false,\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710288000\n}"
+        },
+        {
+          "name": "Upsert Service - Missing Fields",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/services/upsert",
+              "host": ["{{baseUrl}}"],
+              "path": ["services", "upsert"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"My Service\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"service_provider_id, name, service_type, and config are required\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get All Services",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/services/list",
+          "host": ["{{baseUrl}}"],
+          "path": ["services", "list"],
+          "query": [
+            { "key": "service_type", "value": "llm", "description": "Filter by service type (llm, stt, tts)", "disabled": true }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Get All Services - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/services/list",
+              "host": ["{{baseUrl}}"],
+              "path": ["services", "list"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"c9d0e1f2-a3b4-5678-ijkl-789012345678\",\n    \"service_provider_id\": 1,\n    \"api_key_id\": 1,\n    \"name\": \"My LLM Service\",\n    \"description\": \"Primary LLM service\",\n    \"service_type\": \"llm\",\n    \"config\": {\"model\": \"gpt-4\", \"temperature\": 0.7},\n    \"status\": \"active\",\n    \"is_default\": true,\n    \"is_public\": false,\n    \"tags\": [\"production\"],\n    \"usage_count\": 42,\n    \"last_used_at\": 1710288000,\n    \"created_by\": 1,\n    \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
+        },
+        {
+          "name": "Get All Services - Filtered by Type",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/services/list?service_type=tts",
+              "host": ["{{baseUrl}}"],
+              "path": ["services", "list"],
+              "query": [
+                { "key": "service_type", "value": "tts" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "[\n  {\n    \"id\": 2,\n    \"uuid\": \"d0e1f2a3-b4c5-6789-jklm-890123456789\",\n    \"service_provider_id\": 2,\n    \"api_key_id\": 2,\n    \"name\": \"My TTS Service\",\n    \"service_type\": \"tts\",\n    \"config\": {\"voice_id\": \"voice_123\"},\n    \"status\": \"active\",\n    \"is_default\": true,\n    \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
+        }
+      ]
+    },
+    {
+      "name": "Get Service",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/services/get?service_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["services", "get"],
+          "query": [
+            { "key": "service_id", "value": "1" }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Get Service - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/services/get?service_id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["services", "get"],
+              "query": [
+                { "key": "service_id", "value": "1" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"c9d0e1f2-a3b4-5678-ijkl-789012345678\",\n  \"service_provider_id\": 1,\n  \"api_key_id\": 1,\n  \"name\": \"My LLM Service\",\n  \"description\": \"Primary LLM service\",\n  \"service_type\": \"llm\",\n  \"config\": {\"model\": \"gpt-4\", \"temperature\": 0.7},\n  \"status\": \"active\",\n  \"is_default\": true,\n  \"is_public\": false,\n  \"tags\": [\"production\"],\n  \"usage_count\": 42,\n  \"last_used_at\": 1710288000,\n  \"created_by\": 1,\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get Default Service",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/services/default?service_type=llm",
+          "host": ["{{baseUrl}}"],
+          "path": ["services", "default"],
+          "query": [
+            { "key": "service_type", "value": "llm", "description": "Service type (llm, stt, tts)" }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Get Default Service - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/services/default?service_type=llm",
+              "host": ["{{baseUrl}}"],
+              "path": ["services", "default"],
+              "query": [
+                { "key": "service_type", "value": "llm" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"c9d0e1f2-a3b4-5678-ijkl-789012345678\",\n  \"service_provider_id\": 1,\n  \"api_key_id\": 1,\n  \"name\": \"My LLM Service\",\n  \"service_type\": \"llm\",\n  \"config\": {\"model\": \"gpt-4\", \"temperature\": 0.7},\n  \"status\": \"active\",\n  \"is_default\": true,\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        }
+      ]
+    },
+    {
+      "name": "Delete Service",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/services/delete?service_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["services", "delete"],
+          "query": [
+            { "key": "service_id", "value": "1" }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Delete Service - Success",
+          "originalRequest": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/services/delete?service_id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["services", "delete"],
+              "query": [
+                { "key": "service_id", "value": "1" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"message\": \"Service deleted successfully\"\n}"
+        }
+      ]
+    }
+  ]
+}
