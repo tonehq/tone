@@ -26,7 +26,7 @@ def sample_phone_number_data():
 class TestGetChannelPhoneNumbers:
     """Tests for GET /api/v1/channel_phone_number/get_channel_phone_numbers"""
 
-    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_get_phone_numbers_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_channel_phone_numbers.return_value = [
             {"id": 1, "phone_number": "+15551234567"}
@@ -35,7 +35,7 @@ class TestGetChannelPhoneNumbers:
         assert response.status_code == 200
         assert isinstance(response.json(), list)
 
-    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_get_phone_numbers_empty(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_channel_phone_numbers.return_value = []
         response = client_as_member.get("/api/v1/channel_phone_number/get_channel_phone_numbers?channel_id=1")
@@ -60,7 +60,7 @@ class TestGetChannelPhoneNumbers:
 class TestUpsertChannelPhoneNumber:
     """Tests for POST /api/v1/channel_phone_number/upsert_channel_phone_number"""
 
-    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_upsert_phone_number_success(self, mock_service_cls, client_as_member, sample_phone_number_data):
         mock_service_cls.return_value.upsert_channel_phone_numbers.return_value = {"id": 1}
         response = client_as_member.post(
@@ -69,7 +69,7 @@ class TestUpsertChannelPhoneNumber:
         )
         assert response.status_code == 200
 
-    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_upsert_phone_number_missing_phone_number(self, mock_service_cls, client_as_member):
         response = client_as_member.post(
             "/api/v1/channel_phone_number/upsert_channel_phone_number",
@@ -78,7 +78,7 @@ class TestUpsertChannelPhoneNumber:
         assert response.status_code == 400
         assert "phone_number is required" in response.json()["detail"]
 
-    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_upsert_phone_number_missing_sid(self, mock_service_cls, client_as_member):
         response = client_as_member.post(
             "/api/v1/channel_phone_number/upsert_channel_phone_number",
@@ -87,7 +87,7 @@ class TestUpsertChannelPhoneNumber:
         assert response.status_code == 400
         assert "phone_number_sid is required" in response.json()["detail"]
 
-    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_upsert_phone_number_missing_auth_token(self, mock_service_cls, client_as_member):
         response = client_as_member.post(
             "/api/v1/channel_phone_number/upsert_channel_phone_number",
@@ -96,7 +96,7 @@ class TestUpsertChannelPhoneNumber:
         assert response.status_code == 400
         assert "phone_number_auth_token is required" in response.json()["detail"]
 
-    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_upsert_phone_number_missing_provider(self, mock_service_cls, client_as_member):
         response = client_as_member.post(
             "/api/v1/channel_phone_number/upsert_channel_phone_number",
@@ -105,7 +105,7 @@ class TestUpsertChannelPhoneNumber:
         assert response.status_code == 400
         assert "provider is required" in response.json()["detail"]
 
-    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_upsert_phone_number_empty_body(self, mock_service_cls, client_as_member):
         response = client_as_member.post(
             "/api/v1/channel_phone_number/upsert_channel_phone_number", json={}
@@ -125,7 +125,7 @@ class TestUpsertChannelPhoneNumber:
 class TestDetachChannelPhoneNumber:
     """Tests for POST /api/v1/channel_phone_number/detach_channel_phone_number"""
 
-    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_detach_phone_number_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.detach_channel_phone_number.return_value = {"message": "detached"}
         response = client_as_member.post(
@@ -134,7 +134,7 @@ class TestDetachChannelPhoneNumber:
         )
         assert response.status_code == 200
 
-    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_detach_phone_number_missing_channel_id(self, mock_service_cls, client_as_member):
         response = client_as_member.post(
             "/api/v1/channel_phone_number/detach_channel_phone_number",
@@ -143,7 +143,7 @@ class TestDetachChannelPhoneNumber:
         assert response.status_code == 400
         assert "channel_id is required" in response.json()["detail"]
 
-    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_detach_phone_number_missing_phone_number(self, mock_service_cls, client_as_member):
         response = client_as_member.post(
             "/api/v1/channel_phone_number/detach_channel_phone_number",
@@ -152,7 +152,7 @@ class TestDetachChannelPhoneNumber:
         assert response.status_code == 400
         assert "phone_number is required" in response.json()["detail"]
 
-    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_detach_phone_number_empty_body(self, mock_service_cls, client_as_member):
         response = client_as_member.post(
             "/api/v1/channel_phone_number/detach_channel_phone_number", json={}
@@ -172,7 +172,7 @@ class TestDetachChannelPhoneNumber:
 class TestGetAssignedPhoneNumbers:
     """Tests for GET /api/v1/channel_phone_number/get_assigned_phone_numbers"""
 
-    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_get_assigned_numbers_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_assigned_phone_numbers.return_value = [
             {"phone_number": "+15551234567", "channel_id": 1}
@@ -181,7 +181,7 @@ class TestGetAssignedPhoneNumbers:
         assert response.status_code == 200
         assert isinstance(response.json(), list)
 
-    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_get_assigned_numbers_empty(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_assigned_phone_numbers.return_value = []
         response = client_as_member.get("/api/v1/channel_phone_number/get_assigned_phone_numbers")
@@ -198,7 +198,7 @@ class TestGetAssignedPhoneNumbers:
 class TestGetTwilioPhoneNumbers:
     """Tests for GET /api/v1/channel_phone_number/get_twilio_phone_numbers"""
 
-    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_get_twilio_numbers_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_twilio_phone_numbers.return_value = [
             {"phone_number": "+15551234567", "friendly_name": "Main"}
@@ -207,7 +207,7 @@ class TestGetTwilioPhoneNumbers:
         assert response.status_code == 200
         assert isinstance(response.json(), list)
 
-    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_get_twilio_numbers_with_channel_id(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_twilio_phone_numbers.return_value = []
         response = client_as_member.get(
@@ -215,7 +215,7 @@ class TestGetTwilioPhoneNumbers:
         )
         assert response.status_code == 200
 
-    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_get_twilio_numbers_with_agent_id(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_twilio_phone_numbers.return_value = []
         response = client_as_member.get(
@@ -227,14 +227,14 @@ class TestGetTwilioPhoneNumbers:
         response = client_as_member.get("/api/v1/channel_phone_number/get_twilio_phone_numbers")
         assert response.status_code == 422
 
-    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_get_twilio_numbers_empty(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_twilio_phone_numbers.return_value = []
         response = client_as_member.get("/api/v1/channel_phone_number/get_twilio_phone_numbers?type=twilio")
         assert response.status_code == 200
         assert response.json() == []
 
-    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_get_twilio_numbers_service_error(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_twilio_phone_numbers.side_effect = HTTPException(
             status_code=400, detail="Invalid channel credentials"
