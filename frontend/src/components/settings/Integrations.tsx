@@ -46,13 +46,14 @@ export default function Integrations() {
   const handleSubmit = async (data: {
     id?: number;
     name: string;
+    type: string;
     auth_token: string;
     account_sid: string;
   }) => {
     const payload = {
       ...(data.id ? { id: data.id } : {}),
       name: data.name,
-      type: 'TWILIO' as const,
+      type: data.type,
       meta_data: {
         account_sid: data.account_sid,
         auth_token: data.auth_token,

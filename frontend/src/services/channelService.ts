@@ -21,7 +21,7 @@ export const getChannels = async (): Promise<ChannelApiResponse[]> => {
 export const upsertChannel = async (payload: {
   id?: number;
   name: string;
-  type: 'TWILIO';
+  type: string;
   meta_data: TwilioMetaData;
 }): Promise<ChannelApiResponse> => {
   const { data } = await axiosInstance.post<ChannelApiResponse>('/channel/upsert', payload);
