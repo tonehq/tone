@@ -148,7 +148,7 @@ class ChannelService(BaseService):
 
         return {"message": "Channel deleted successfully"}
 
-    def get_or_create_channel_by_type(self, channel_type: str, meta_data: Optional[Dict[str, Any]] = None, created_by: Optional[int] = None) -> Channel:
+    def get_or_create_channel_by_type(self, channel_type: str, meta_data: Optional[Dict[str, Any]] = None, created_by: Optional[int] = None, auto_commit: bool = True) -> Channel:
         """Find an existing channel by type or create one. Returns the ORM object."""
         from core.models.enums import ChannelType
 
@@ -171,21 +171,26 @@ class ChannelService(BaseService):
         # Create a new channel with type as the default name
         now = int(time.time())
         md = meta_data if isinstance(meta_data, dict) else {}
+        channel_uuid = uuid_lib.uuid4()
 
-        from core.config import settings
-        channel = Channel(
-            uuid=uuid_lib.uuid4(),
-            name=channel_enum.value,
-            type=channel_enum,
-            created_by=created_by,
-            meta_data=md,
-            created_at=now,
-            updated_at=now,
-            organization_id=self.org_id or settings.DEFAULT_ORG_ID
+        self.upsert(
+            model=Channel,
+            values={
+                "uuid": channel_uuid,
+                "name": channel_enum.value,
+                "type": channel_enum,
+                "created_by": created_by,
+                "meta_data": md,
+                "created_at": now,
+                "updated_at": now,
+            },
+            conflict_fields=["uuid"],
+            update_fields=["name", "type", "meta_data", "updated_at"],
+            auto_commit=auto_commit,
         )
-        self.db.add(channel)
-        self.db.commit()
-        self.db.refresh(channel)
+        if not auto_commit:
+            self.db.flush()
+        channel = self.query(Channel).filter(Channel.uuid == channel_uuid).first()
         return channel
 
     def _response_item(self, record: Channel) -> Dict[str, Any]:

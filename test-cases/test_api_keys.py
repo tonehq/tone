@@ -4,8 +4,12 @@ Source: core/api/v1/api_keys.py
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from uuid import UUID
+from unittest.mock import patch, MagicMock, ANY
 from fastapi import HTTPException
+
+EXPECTED_ORG_ID = UUID("550e8400-e29b-41d4-a716-446655440000")
+EXPECTED_USER_ID = 1
 
 
 # ─── Fixtures ───
@@ -29,6 +33,7 @@ class TestUpsertApiKey:
         mock_service_cls.return_value.upsert_api_key.return_value = {"id": 1, "name": "Test API Key"}
         response = client_as_admin.post("/api/v1/api-keys/upsert", json=sample_api_key_data)
         assert response.status_code == 200
+        mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID, user_id=EXPECTED_USER_ID)
 
     @patch("ee.api.v1.api_keys.ApiKeyService")
     def test_upsert_api_key_with_optional_fields(self, mock_service_cls, client_as_admin, sample_api_key_data):
@@ -82,6 +87,7 @@ class TestGetAllApiKeys:
         response = client_as_member.get("/api/v1/api-keys/list")
         assert response.status_code == 200
         assert isinstance(response.json(), list)
+        mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID, user_id=EXPECTED_USER_ID)
 
     @patch("ee.api.v1.api_keys.ApiKeyService")
     def test_get_all_api_keys_empty(self, mock_service_cls, client_as_member):
@@ -105,6 +111,7 @@ class TestGetApiKey:
         mock_service_cls.return_value.get_api_key.return_value = {"id": 1, "name": "Key1"}
         response = client_as_member.get("/api/v1/api-keys/get?api_key_id=1")
         assert response.status_code == 200
+        mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID, user_id=EXPECTED_USER_ID)
 
     def test_get_api_key_missing_id(self, client_as_member):
         response = client_as_member.get("/api/v1/api-keys/get")
@@ -137,6 +144,7 @@ class TestDeleteApiKey:
         mock_service_cls.return_value.delete_api_key.return_value = {"message": "deleted"}
         response = client_as_admin.delete("/api/v1/api-keys/delete?api_key_id=1")
         assert response.status_code == 200
+        mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID, user_id=EXPECTED_USER_ID)
 
     def test_delete_api_key_missing_id(self, client_as_admin):
         response = client_as_admin.delete("/api/v1/api-keys/delete")
@@ -171,6 +179,7 @@ class TestValidateApiKey:
             "api_key_id": 1, "is_valid": True
         })
         assert response.status_code == 200
+        mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID, user_id=EXPECTED_USER_ID)
 
     @patch("ee.api.v1.api_keys.ApiKeyService")
     def test_validate_api_key_invalid_with_error(self, mock_service_cls, client_as_admin):
@@ -199,6 +208,16 @@ class TestValidateApiKey:
     def test_validate_api_key_empty_body(self, mock_service_cls, client_as_admin):
         response = client_as_admin.post("/api/v1/api-keys/validate", json={})
         assert response.status_code == 400
+
+    @patch("ee.api.v1.api_keys.ApiKeyService")
+    def test_validate_api_key_not_found(self, mock_service_cls, client_as_admin):
+        mock_service_cls.return_value.validate_api_key.side_effect = HTTPException(
+            status_code=404, detail="API key not found"
+        )
+        response = client_as_admin.post("/api/v1/api-keys/validate", json={
+            "api_key_id": 999, "is_valid": True
+        })
+        assert response.status_code == 404
 
     def test_validate_api_key_unauthenticated(self, client_unauthenticated):
         response = client_unauthenticated.post("/api/v1/api-keys/validate", json={

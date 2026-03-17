@@ -47,7 +47,7 @@ class AgentConfigService(BaseService):
         "description", "updated_at",
     )
 
-    def upsert_agent_config(self, config_data: Dict[str, Any]):
+    def upsert_agent_config(self, config_data: Dict[str, Any], auto_commit: bool = True):
         if config_data.get("agent_id") is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -94,9 +94,11 @@ class AgentConfigService(BaseService):
                 conflict_fields=["uuid"],
                 update_fields=list(self.UPDATABLE_ATTRS),
                 extra_update={"updated_at": now},
+                auto_commit=auto_commit,
             )
         except IntegrityError as e:
-            self.db.rollback()
+            if auto_commit:
+                self.db.rollback()
             detail = _agent_config_unique_constraint_detail(e)
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,

@@ -4,8 +4,12 @@ Source: core/api/v1/service_providers.py
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from uuid import UUID
+from unittest.mock import patch, MagicMock, ANY
 from fastapi import HTTPException
+
+EXPECTED_ORG_ID = UUID("550e8400-e29b-41d4-a716-446655440000")
+EXPECTED_USER_ID = 1
 
 
 # ─── Fixtures ───
@@ -30,6 +34,7 @@ class TestUpsertServiceProvider:
         mock_service_cls.return_value.upsert_service_provider.return_value = {"id": 1, **sample_provider_data}
         response = client_as_admin.post("/api/v1/service-providers/upsert", json=sample_provider_data)
         assert response.status_code == 200
+        mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID, user_id=EXPECTED_USER_ID)
 
     @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_upsert_provider_with_optional_fields(self, mock_service_cls, client_as_admin, sample_provider_data):
@@ -99,6 +104,7 @@ class TestGetAllServiceProviders:
         response = client_as_member.get("/api/v1/service-providers/list")
         assert response.status_code == 200
         assert isinstance(response.json(), list)
+        mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID, user_id=EXPECTED_USER_ID)
 
     @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_get_all_providers_filter_by_type(self, mock_service_cls, client_as_member, mock_db):
@@ -130,6 +136,7 @@ class TestGetServiceProvider:
         mock_service_cls.return_value.get_service_provider.return_value = {"id": 1, "name": "openai"}
         response = client_as_member.get("/api/v1/service-providers/get?provider_id=1")
         assert response.status_code == 200
+        mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID, user_id=EXPECTED_USER_ID)
 
     def test_get_provider_missing_id(self, client_as_member):
         response = client_as_member.get("/api/v1/service-providers/get")
@@ -162,6 +169,7 @@ class TestDeleteServiceProvider:
         mock_service_cls.return_value.delete_service_provider.return_value = {"message": "deleted"}
         response = client_as_admin.delete("/api/v1/service-providers/delete?provider_id=1")
         assert response.status_code == 200
+        mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID, user_id=EXPECTED_USER_ID)
 
     def test_delete_provider_missing_id(self, client_as_admin):
         response = client_as_admin.delete("/api/v1/service-providers/delete")
@@ -178,6 +186,22 @@ class TestDeleteServiceProvider:
         )
         response = client_as_admin.delete("/api/v1/service-providers/delete?provider_id=999")
         assert response.status_code == 404
+
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
+    def test_delete_provider_system_provider(self, mock_service_cls, client_as_admin):
+        mock_service_cls.return_value.delete_service_provider.side_effect = HTTPException(
+            status_code=400, detail="Cannot delete system provider"
+        )
+        response = client_as_admin.delete("/api/v1/service-providers/delete?provider_id=1")
+        assert response.status_code == 400
+
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
+    def test_upsert_provider_duplicate_name_and_type(self, mock_service_cls, client_as_admin, sample_provider_data):
+        mock_service_cls.return_value.upsert_service_provider.side_effect = HTTPException(
+            status_code=409, detail="Provider with this name and type already exists"
+        )
+        response = client_as_admin.post("/api/v1/service-providers/upsert", json=sample_provider_data)
+        assert response.status_code == 409
 
     def test_delete_provider_unauthenticated(self, client_unauthenticated):
         response = client_unauthenticated.delete("/api/v1/service-providers/delete?provider_id=1")

@@ -18,6 +18,7 @@ from core.middleware.auth import jwt_manager
 from core.utils.security import hash_password, verify_password, generate_verification_code, generate_token
 from core.services.email_service import MailService
 from core.config import settings
+import uuid as uuid_lib
 
 
 class AuthService(BaseService):
@@ -232,17 +233,22 @@ class AuthService(BaseService):
             ).count()
             role = Role.OWNER if existing_member_count == 0 else Role.MEMBER
 
-            member = Member(
-                user_id=user.id,
-                role=role,
-                status='active',
-                created_by=user.id,
-                created_at=current_time,
-                updated_at=current_time,
-                joined_at=current_time,
-                organization_id=settings.DEFAULT_ORG_ID
+            self.upsert(
+                model=Member,
+                values={
+                    "user_id": user.id,
+                    "role": role,
+                    "status": "active",
+                    "created_by": user.id,
+                    "created_at": current_time,
+                    "updated_at": current_time,
+                    "joined_at": current_time,
+                    "organization_id": settings.DEFAULT_ORG_ID,
+                },
+                conflict_fields=["organization_id", "user_id"],
+                update_fields=["role", "status", "updated_at", "joined_at"],
+                auto_commit=False,
             )
-            self.db.add(member)
 
         self.db.commit()
 
@@ -348,22 +354,25 @@ class AuthService(BaseService):
                 detail="Pending invitation already exists"
             )
 
-        org_id = self.org_id or settings.DEFAULT_ORG_ID
-        invitation = OrganizationInvite(
-            email=email,
-            name=name,
-            role=role_enum,
-            invitation_token=generate_token(),
-            expires_at=expires_at,
-            invited_by=invited_by,
-            created_at=current_time,
-            updated_at=current_time,
-            organization_id=org_id
+        invite_uuid = uuid_lib.uuid4()
+        invitation_token = generate_token()
+        self.upsert(
+            model=OrganizationInvite,
+            values={
+                "uuid": invite_uuid,
+                "email": email,
+                "name": name,
+                "role": role_enum,
+                "invitation_token": invitation_token,
+                "expires_at": expires_at,
+                "invited_by": invited_by,
+                "created_at": current_time,
+                "updated_at": current_time,
+            },
+            conflict_fields=["uuid"],
+            update_fields=["name", "role", "invitation_token", "expires_at", "updated_at"],
         )
-
-        self.db.add(invitation)
-        self.db.commit()
-        self.db.refresh(invitation)
+        invitation = self.db.query(OrganizationInvite).filter(OrganizationInvite.uuid == invite_uuid).first()
 
         invite_url = f"{settings.APPLICATION_URL}/verify/user_to_workspace?email={email}&code={invitation.invitation_token}"
 
@@ -418,18 +427,22 @@ class AuthService(BaseService):
             )
 
         org_id = invitation.organization_id if invitation.organization_id else settings.DEFAULT_ORG_ID
-        member = Member(
-            user_id=user.id,
-            role=invitation.role,
-            status='active',
-            created_by=invitation.invited_by,
-            created_at=current_time,
-            updated_at=current_time,
-            joined_at=current_time,
-            organization_id=org_id
+        self.upsert(
+            model=Member,
+            values={
+                "user_id": user.id,
+                "role": invitation.role,
+                "status": "active",
+                "created_by": invitation.invited_by,
+                "created_at": current_time,
+                "updated_at": current_time,
+                "joined_at": current_time,
+                "organization_id": org_id,
+            },
+            conflict_fields=["organization_id", "user_id"],
+            update_fields=["role", "status", "updated_at", "joined_at"],
+            auto_commit=False,
         )
-
-        self.db.add(member)
 
         invitation.status = InviteStatus.ACCEPTED
         invitation.updated_at = current_time
@@ -510,18 +523,22 @@ class AuthService(BaseService):
         self.db.flush()
 
         org_id = invitation.organization_id if invitation.organization_id else settings.DEFAULT_ORG_ID
-        member = Member(
-            user_id=user.id,
-            role=invitation.role,
-            status='active',
-            created_by=invitation.invited_by,
-            created_at=current_time,
-            updated_at=current_time,
-            joined_at=current_time,
-            organization_id=org_id
+        self.upsert(
+            model=Member,
+            values={
+                "user_id": user.id,
+                "role": invitation.role,
+                "status": "active",
+                "created_by": invitation.invited_by,
+                "created_at": current_time,
+                "updated_at": current_time,
+                "joined_at": current_time,
+                "organization_id": org_id,
+            },
+            conflict_fields=["organization_id", "user_id"],
+            update_fields=["role", "status", "updated_at", "joined_at"],
+            auto_commit=False,
         )
-
-        self.db.add(member)
 
         invitation.status = InviteStatus.ACCEPTED
         invitation.accepted_by = user.id
@@ -691,17 +708,22 @@ class AuthService(BaseService):
             access_request.updated_at = current_time
 
             org_id = access_request.organization_id if access_request.organization_id else settings.DEFAULT_ORG_ID
-            member = Member(
-                user_id=access_request.user_id,
-                role=Role.MEMBER,
-                status='active',
-                created_by=reviewer_id,
-                created_at=current_time,
-                updated_at=current_time,
-                joined_at=current_time,
-                organization_id=org_id
+            self.upsert(
+                model=Member,
+                values={
+                    "user_id": access_request.user_id,
+                    "role": Role.MEMBER,
+                    "status": "active",
+                    "created_by": reviewer_id,
+                    "created_at": current_time,
+                    "updated_at": current_time,
+                    "joined_at": current_time,
+                    "organization_id": org_id,
+                },
+                conflict_fields=["organization_id", "user_id"],
+                update_fields=["role", "status", "updated_at", "joined_at"],
+                auto_commit=False,
             )
-            self.db.add(member)
             self.db.commit()
 
             return {"message": "Access request approved"}

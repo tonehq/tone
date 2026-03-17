@@ -277,3 +277,60 @@ class TestAcceptForgotPassword:
             "/api/v1/auth/acceptForgotPassword?email=test@example.com&password=new&token=bad"
         )
         assert response.status_code == 400
+
+
+# ─── GET /api/v1/auth/check_organization_exists — Check Organization Exists (EE) ───
+
+class TestCheckOrganizationExists:
+    """Tests for GET /api/v1/auth/check_organization_exists"""
+
+    @patch("ee.api.v1.auth.EEAuthService")
+    def test_check_org_exists_success(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.check_organization_exists.return_value = {"exists": True}
+        response = client_as_member.get("/api/v1/auth/check_organization_exists?name=TestOrg")
+        assert response.status_code == 200
+
+    @patch("ee.api.v1.auth.EEAuthService")
+    def test_check_org_not_exists(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.check_organization_exists.return_value = {"exists": False}
+        response = client_as_member.get("/api/v1/auth/check_organization_exists?name=NonExistent")
+        assert response.status_code == 200
+
+    def test_check_org_exists_missing_name(self, client_as_member):
+        response = client_as_member.get("/api/v1/auth/check_organization_exists")
+        assert response.status_code == 422
+
+
+# ─── POST /api/v1/auth/switch_organization — Switch Organization (EE) ───
+
+class TestSwitchOrganization:
+    """Tests for POST /api/v1/auth/switch_organization"""
+
+    @patch("ee.api.v1.auth.EEAuthService")
+    def test_switch_organization_success(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.switch_organization.return_value = {"token": "new-jwt"}
+        response = client_as_member.post("/api/v1/auth/switch_organization", json={
+            "organization_id": "550e8400-e29b-41d4-a716-446655440000"
+        })
+        assert response.status_code == 200
+
+    @patch("ee.api.v1.auth.EEAuthService")
+    def test_switch_organization_missing_org_id(self, mock_service_cls, client_as_member):
+        response = client_as_member.post("/api/v1/auth/switch_organization", json={})
+        assert response.status_code == 400
+
+    @patch("ee.api.v1.auth.EEAuthService")
+    def test_switch_organization_not_found(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.switch_organization.side_effect = HTTPException(
+            status_code=404, detail="Organization not found"
+        )
+        response = client_as_member.post("/api/v1/auth/switch_organization", json={
+            "organization_id": "00000000-0000-0000-0000-000000000000"
+        })
+        assert response.status_code == 404
+
+    def test_switch_organization_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.post("/api/v1/auth/switch_organization", json={
+            "organization_id": "550e8400-e29b-41d4-a716-446655440000"
+        })
+        assert response.status_code in (401, 403)

@@ -270,3 +270,129 @@ class TestGetRoles:
     def test_get_roles_unauthenticated(self, client_unauthenticated):
         response = client_unauthenticated.get("/api/v1/organization/roles")
         assert response.status_code in (401, 403)
+
+
+# ─── GET /api/v1/organization/get_associated_tenants — Get Associated Tenants (EE) ───
+
+class TestGetAssociatedTenants:
+    """Tests for GET /api/v1/organization/get_associated_tenants"""
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_get_associated_tenants_success(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.get_associated_organizations.return_value = [
+            {"id": "550e8400-e29b-41d4-a716-446655440000", "name": "Org1"}
+        ]
+        response = client_as_member.get("/api/v1/organization/get_associated_tenants")
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_get_associated_tenants_empty(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.get_associated_organizations.return_value = []
+        response = client_as_member.get("/api/v1/organization/get_associated_tenants")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_get_associated_tenants_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get("/api/v1/organization/get_associated_tenants")
+        assert response.status_code in (401, 403)
+
+
+# ─── POST /api/v1/organization/create_tenants — Create Tenant (EE) ───
+
+class TestCreateTenants:
+    """Tests for POST /api/v1/organization/create_tenants"""
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_create_tenant_success(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.create_organization.return_value = {
+            "id": "new-org-uuid", "name": "New Org"
+        }
+        response = client_as_member.post("/api/v1/organization/create_tenants?name=New%20Org")
+        assert response.status_code == 200
+
+    def test_create_tenant_missing_name(self, client_as_member):
+        response = client_as_member.post("/api/v1/organization/create_tenants")
+        assert response.status_code == 422
+
+    def test_create_tenant_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.post("/api/v1/organization/create_tenants?name=Test")
+        assert response.status_code in (401, 403)
+
+
+# ─── POST /api/v1/organization/request_access — Request Access (EE) ───
+
+class TestRequestAccess:
+    """Tests for POST /api/v1/organization/request_access"""
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_request_access_success(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.request_organization_access.return_value = {"message": "requested"}
+        response = client_as_member.post("/api/v1/organization/request_access", json={
+            "org_id": "550e8400-e29b-41d4-a716-446655440000",
+            "message": "Please add me"
+        })
+        assert response.status_code == 200
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_request_access_missing_org_id(self, mock_service_cls, client_as_member):
+        response = client_as_member.post("/api/v1/organization/request_access", json={
+            "message": "Please add me"
+        })
+        assert response.status_code == 400
+
+    def test_request_access_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.post("/api/v1/organization/request_access", json={
+            "org_id": "550e8400-e29b-41d4-a716-446655440000"
+        })
+        assert response.status_code in (401, 403)
+
+
+# ─── GET /api/v1/organization/members — Get Members (EE) ───
+
+class TestGetMembers:
+    """Tests for GET /api/v1/organization/members"""
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_get_members_success(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.get_all_users_for_organization.return_value = [
+            {"id": 1, "email": "user@example.com", "role": "member"}
+        ]
+        response = client_as_member.get("/api/v1/organization/members")
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_get_members_empty(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.get_all_users_for_organization.return_value = []
+        response = client_as_member.get("/api/v1/organization/members")
+        assert response.status_code == 200
+
+    def test_get_members_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get("/api/v1/organization/members")
+        assert response.status_code in (401, 403)
+
+
+# ─── GET /api/v1/organization/invited_users — Get Invited Users (EE) ───
+
+class TestGetInvitedUsers:
+    """Tests for GET /api/v1/organization/invited_users"""
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_get_invited_users_success(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.get_all_invited_users_for_organization.return_value = [
+            {"email": "invited@example.com", "status": "pending"}
+        ]
+        response = client_as_member.get("/api/v1/organization/invited_users")
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_get_invited_users_empty(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.get_all_invited_users_for_organization.return_value = []
+        response = client_as_member.get("/api/v1/organization/invited_users")
+        assert response.status_code == 200
+
+    def test_get_invited_users_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get("/api/v1/organization/invited_users")
+        assert response.status_code in (401, 403)
