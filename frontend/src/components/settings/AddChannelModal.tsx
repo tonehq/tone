@@ -5,9 +5,9 @@ import type { IntegrationRow } from '@/types/integration';
 import { useCallback, useEffect, useState } from 'react';
 
 const CHANNEL_TYPE_OPTIONS = [
-  { label: 'Twilio', value: 'TWILIO' },
-  { label: 'Telnyx', value: 'TELNYX' },
-  { label: 'Exotel', value: 'EXOTEL' },
+  { label: 'Twilio', value: 'twilio' },
+  { label: 'Telnyx', value: 'telnyx' },
+  { label: 'Exotel', value: 'exotel' },
 ];
 
 interface AddChannelModalProps {
@@ -25,7 +25,7 @@ interface AddChannelModalProps {
 
 const initialFormState = {
   name: '',
-  type: 'TWILIO',
+  type: 'twilio',
   auth_token: '',
   account_sid: '',
 };
