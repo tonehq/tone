@@ -479,9 +479,6 @@ class AgentFactoryService(BaseService):
             if provider_name == "hume":
                 from pipecat.services.hume.tts import HumeTTSService
                 voice_kwargs = {}
-                # if tts_voice_id is not None:
-                    # voice_kwargs["voice_id"] = tts_voice_id or "d8ab67c6-953d-4bd8-9370-8fa53a0f1453"
-
                 voice_kwargs["voice_id"] = tts_voice_id or "d8ab67c6-953d-4bd8-9370-8fa53a0f1453"
 
                 if tts_language is not None:
@@ -659,10 +656,4 @@ class AgentFactoryService(BaseService):
         )
 
 
-
-
-
-
-
-
-# Cartesia:  Voice id ->         
+      

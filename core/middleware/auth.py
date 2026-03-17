@@ -1,10 +1,10 @@
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import jwt
 from typing import Optional, Dict, Any, Union
 from uuid import UUID
 import time
 from pydantic import BaseModel
+from jose import JWTError, jwt
 
 from core.config import settings
 from core.context import set_tenant_context
@@ -76,7 +76,7 @@ class JWTManager:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token has expired"
             )
-        except jwt.JWTError:
+        except jwt.PyJWTError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token"

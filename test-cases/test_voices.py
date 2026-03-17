@@ -25,14 +25,14 @@ def sample_voice_data():
 class TestGetVoices:
     """Tests for GET /api/v1/voice/get_voices"""
 
-    @patch("core.api.v1.voices.VoiceService")
+    @patch("ee.api.v1.voices.VoiceService")
     def test_get_voices_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_voices.return_value = [{"id": 1, "name": "Voice1"}]
         response = client_as_member.get("/api/v1/voice/get_voices")
         assert response.status_code == 200
         assert isinstance(response.json(), list)
 
-    @patch("core.api.v1.voices.VoiceService")
+    @patch("ee.api.v1.voices.VoiceService")
     def test_get_voices_empty(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_voices.return_value = []
         response = client_as_member.get("/api/v1/voice/get_voices")
@@ -49,7 +49,7 @@ class TestGetVoices:
 class TestGetVoiceByProvider:
     """Tests for GET /api/v1/voice/get_voice_by_provider"""
 
-    @patch("core.api.v1.voices.VoiceService")
+    @patch("ee.api.v1.voices.VoiceService")
     def test_get_voice_by_provider_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_voices_by_provider_id.return_value = [
             {"id": 1, "name": "Voice1"}
@@ -58,7 +58,7 @@ class TestGetVoiceByProvider:
         assert response.status_code == 200
         assert isinstance(response.json(), list)
 
-    @patch("core.api.v1.voices.VoiceService")
+    @patch("ee.api.v1.voices.VoiceService")
     def test_get_voice_by_provider_empty(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_voices_by_provider_id.return_value = []
         response = client_as_member.get("/api/v1/voice/get_voice_by_provider?service_provider_id=1")
@@ -83,20 +83,20 @@ class TestGetVoiceByProvider:
 class TestUpsertVoice:
     """Tests for POST /api/v1/voice/upsert_voice"""
 
-    @patch("core.api.v1.voices.VoiceService")
+    @patch("ee.api.v1.voices.VoiceService")
     def test_upsert_voice_create_success(self, mock_service_cls, client_as_member, sample_voice_data):
         mock_service_cls.return_value.upsert_voice.return_value = {"id": 1, **sample_voice_data}
         response = client_as_member.post("/api/v1/voice/upsert_voice", json=sample_voice_data)
         assert response.status_code == 200
 
-    @patch("core.api.v1.voices.VoiceService")
+    @patch("ee.api.v1.voices.VoiceService")
     def test_upsert_voice_update_success(self, mock_service_cls, client_as_member):
         data = {"id": 1, "name": "Updated Voice"}
         mock_service_cls.return_value.upsert_voice.return_value = data
         response = client_as_member.post("/api/v1/voice/upsert_voice", json=data)
         assert response.status_code == 200
 
-    @patch("core.api.v1.voices.VoiceService")
+    @patch("ee.api.v1.voices.VoiceService")
     def test_upsert_voice_service_error(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.upsert_voice.side_effect = HTTPException(
             status_code=400, detail="Invalid voice data"
@@ -114,7 +114,7 @@ class TestUpsertVoice:
 class TestDeleteVoice:
     """Tests for DELETE /api/v1/voice/delete_voice"""
 
-    @patch("core.api.v1.voices.VoiceService")
+    @patch("ee.api.v1.voices.VoiceService")
     def test_delete_voice_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.delete_voice.return_value = {"message": "deleted"}
         response = client_as_member.delete("/api/v1/voice/delete_voice?voice_id=1")
@@ -128,7 +128,7 @@ class TestDeleteVoice:
         response = client_as_member.delete("/api/v1/voice/delete_voice?voice_id=abc")
         assert response.status_code == 422
 
-    @patch("core.api.v1.voices.VoiceService")
+    @patch("ee.api.v1.voices.VoiceService")
     def test_delete_voice_not_found(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.delete_voice.side_effect = HTTPException(
             status_code=404, detail="Voice not found"

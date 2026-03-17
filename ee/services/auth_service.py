@@ -179,9 +179,19 @@ class EEAuthService(AuthService):
 
         organizations = self.get_associated_organizations(user.id)
 
+        # Auto-set org_id if user has organizations
+        org_id = None
+        role = None
+        if organizations:
+            # Use first organization as default
+            org_id = organizations[0]["id"]
+            role = organizations[0]["role"]
+
         access_token = jwt_manager.create_access_token(
             user_id=user.id,
-            email=user.email
+            email=user.email,
+            org_id=org_id,
+            role=role
         )
 
         return {
@@ -189,7 +199,8 @@ class EEAuthService(AuthService):
             "token_type": "bearer",
             "user_id": user.id,
             "email": user.email,
-            "organizations": organizations
+            "organizations": organizations,
+            "current_organization": organizations[0] if organizations else None
         }
 
     def switch_organization(self, user_id: int, org_id: UUID) -> Dict[str, Any]:

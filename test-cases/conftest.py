@@ -9,6 +9,19 @@ from sqlalchemy.orm import Session
 
 from main import app, api_v1
 from core.middleware.auth import JWTClaims, get_jwt_claims, require_org_member, require_admin_or_owner, security
+from core.internal.capabilities import is_ee_enabled
+
+try:
+    from ee.middleware.auth import (
+        get_ee_jwt_claims,
+        get_ee_current_user,
+        require_ee_org_member,
+        require_ee_admin_or_owner,
+        require_ee_owner,
+    )
+    EE_AVAILABLE = True
+except ImportError:
+    EE_AVAILABLE = False
 
 
 def make_claims(
@@ -96,6 +109,13 @@ def client_as_member(mock_db, member_claims):
     api_v1.dependency_overrides[require_org_member] = _override_auth(member_claims)
     api_v1.dependency_overrides[require_admin_or_owner] = _override_auth(member_claims)
 
+    if EE_AVAILABLE and is_ee_enabled():
+        api_v1.dependency_overrides[get_ee_jwt_claims] = _override_auth(member_claims)
+        api_v1.dependency_overrides[get_ee_current_user] = _override_auth(member_claims)
+        api_v1.dependency_overrides[require_ee_org_member] = _override_auth(member_claims)
+        api_v1.dependency_overrides[require_ee_admin_or_owner] = _override_auth(member_claims)
+        api_v1.dependency_overrides[require_ee_owner] = _override_auth(member_claims)
+
     client = TestClient(app)
     yield client
     api_v1.dependency_overrides.clear()
@@ -111,6 +131,13 @@ def client_as_admin(mock_db, admin_claims):
     api_v1.dependency_overrides[get_jwt_claims] = _override_auth(admin_claims)
     api_v1.dependency_overrides[require_org_member] = _override_auth(admin_claims)
     api_v1.dependency_overrides[require_admin_or_owner] = _override_auth(admin_claims)
+
+    if EE_AVAILABLE and is_ee_enabled():
+        api_v1.dependency_overrides[get_ee_jwt_claims] = _override_auth(admin_claims)
+        api_v1.dependency_overrides[get_ee_current_user] = _override_auth(admin_claims)
+        api_v1.dependency_overrides[require_ee_org_member] = _override_auth(admin_claims)
+        api_v1.dependency_overrides[require_ee_admin_or_owner] = _override_auth(admin_claims)
+        api_v1.dependency_overrides[require_ee_owner] = _override_auth(admin_claims)
 
     client = TestClient(app)
     yield client

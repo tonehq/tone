@@ -21,8 +21,8 @@ from core.config import settings
 
 
 class AuthService(BaseService):
-    def __init__(self, db: Session, user_id: Optional[int] = None):
-        super().__init__(db, user_id)
+    def __init__(self, db: Session, user_id: Optional[int] = None, org_id=None):
+        super().__init__(db, user_id, org_id=org_id)
 
     def ensure_default_organization(self, created_by: int) -> Organization:
         from uuid import UUID
@@ -744,16 +744,32 @@ class AuthService(BaseService):
         user.last_login_at = int(time.time())
         self.db.commit()
 
+        # Get user's organization membership
+        member = self.db.query(Member).filter(
+            Member.user_id == user.id,
+            Member.status == 'active'
+        ).first()
+
+        org_id = None
+        role = None
+        if member:
+            org_id = str(member.organization_id)
+            role = member.role.value
+
         access_token = jwt_manager.create_access_token(
             user_id=user.id,
-            email=user.email
+            email=user.email,
+            org_id=org_id,
+            role=role
         )
 
         return {
             "access_token": access_token,
             "token_type": "bearer",
             "user_id": user.id,
-            "email": user.email
+            "email": user.email,
+            "org_id": org_id,
+            "role": role
         }
 
     def forgot_password(self, email: str) -> Dict[str, str]:

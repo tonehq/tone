@@ -13,8 +13,8 @@ from core.models.api_key import ApiKey
 
 
 class ServiceConfigService(BaseService):
-    def __init__(self, db: Session, user_id: Optional[int] = None):
-        super().__init__(db, user_id)
+    def __init__(self, db: Session, user_id: Optional[int] = None, org_id=None):
+        super().__init__(db, user_id, org_id=org_id)
 
     def upsert_service(self, service_provider_id: int, name: str, service_type: str,
                        config: Dict, api_key_id: Optional[int] = None,
