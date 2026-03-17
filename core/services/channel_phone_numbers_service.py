@@ -10,6 +10,7 @@ from fastapi import HTTPException, status
 from core.services.base import BaseService
 from core.models.channel_phone_numbers import ChannelPhoneNumbers
 from core.models.channel import Channel
+import requests
 
 
 def _channel_phone_number_unique_constraint_detail(exc: IntegrityError) -> str:
@@ -360,3 +361,144 @@ class ChannelPhoneNumbersService(BaseService):
             for number in phone_numbers
             if number.phone_number not in taken_numbers
         ]
+
+
+    def get_phone_number_list_to_buy(self, channel_type: str, user_id: int):
+        from core.models.enums import ChannelType
+        from requests.auth import HTTPBasicAuth
+
+        type_name = channel_type.strip().upper()
+        channel_enum = None
+        for ct in ChannelType:
+            if ct.name == type_name:
+                channel_enum = ct
+                break
+        if channel_enum is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid channel type: {channel_type}",
+            )
+
+        channel = (
+            self.query(Channel)
+            .filter(Channel.type == channel_enum, Channel.created_by == user_id)
+            .first()
+        )
+        if not channel:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No channel found with type: {channel_type} for the current user",
+            )
+
+        meta_data = channel.meta_data if isinstance(channel.meta_data, dict) else {}
+
+        if channel_enum == ChannelType.TWILIO:
+            account_sid = meta_data.get("account_sid")
+            auth_token = meta_data.get("auth_token")
+            if not account_sid or not auth_token:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Channel meta_data is missing account_sid or auth_token",
+                )
+            url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/AvailablePhoneNumbers/US/Local.json"
+            auth = HTTPBasicAuth(account_sid, auth_token)
+
+        elif channel_enum == ChannelType.EXOTEL:
+            account_sid = meta_data.get("account_sid")
+            api_key = meta_data.get("api_key")
+            api_token = meta_data.get("api_token")
+            if not account_sid or not api_key or not api_token:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Channel meta_data is missing account_sid, api_key, or api_token",
+                )
+            url = f"https://api.exotel.com/v2_beta/Accounts/{account_sid}/AvailablePhoneNumbers/SG/Landline"
+            auth = HTTPBasicAuth(api_key, api_token)
+
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Phone number purchase is not supported for channel type: {channel_type}",
+            )
+
+        try:
+            response = requests.get(url, auth=auth)
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to fetch available phone numbers from {channel_type}: {str(e)}",
+            )
+
+        return response.json()
+
+
+    def buy_phone_number(self, data: Dict[str, Any], user_id: int):
+        from core.models.enums import ChannelType
+        from requests.auth import HTTPBasicAuth
+
+        phone_number = data["phone_number"].strip()
+        channel_name = data["channel_name"].strip()
+
+        # Find channel by name for the current user
+        channel = (
+            self.query(Channel)
+            .filter(Channel.name == channel_name, Channel.created_by == user_id)
+            .first()
+        )
+        if not channel:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No channel found with name: {channel_name} for the current user",
+            )
+
+        meta_data = channel.meta_data if isinstance(channel.meta_data, dict) else {}
+        account_sid = meta_data.get("account_sid")
+
+        if not account_sid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Channel meta_data is missing account_sid",
+            )
+
+        if channel.type == ChannelType.TWILIO:
+            auth_token = meta_data.get("auth_token")
+            if not auth_token:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Channel meta_data is missing auth_token",
+                )
+            url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/IncomingPhoneNumbers.json"
+            auth = HTTPBasicAuth(account_sid, auth_token)
+
+        elif channel.type == ChannelType.EXOTEL:
+            api_key = meta_data.get("api_key")
+            api_token = meta_data.get("api_token")
+            if not api_key or not api_token:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Channel meta_data is missing api_key or api_token",
+                )
+            url = f"https://api.exotel.com/v1/Accounts/{account_sid}/IncomingPhoneNumbers"
+            auth = HTTPBasicAuth(api_key, api_token)
+
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Phone number purchase is not supported for channel type: {channel.type.value}",
+            )
+
+        try:
+            response = requests.post(
+                url,
+                auth=auth,
+                data={"PhoneNumber": phone_number},
+            )
+            response.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to buy phone number from {channel.type.value}: {str(e)}",
+            )
+
+        return response.json()

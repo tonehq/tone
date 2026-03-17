@@ -70,6 +70,7 @@ class BotRunnerService(BaseService):
         from core.utils.encryption import decrypt
 
         provider = self.db.query(ServiceProvider).filter(ServiceProvider.name == "twilio").first()
+        print("provider_idd", provider.id)
         if not provider:
             logger.warning("Twilio service provider not found in DB")
             return {}
@@ -80,15 +81,19 @@ class BotRunnerService(BaseService):
             .all()
         )
 
+        print("api_keyss", api_keys)
+
         creds = {}
         for ak in api_keys:
             additional = ak.additional_credentials or {}
             key_type = additional.get("key_type")
-            if key_type == "sid":
+            print("key_typee", key_type)
+            if key_type == "account_sid":
                 creds["account_sid"] = decrypt(ak.api_key_encrypted)
-            elif key_type == "auth_token":
+            if key_type == "auth_token":
                 creds["auth_token"] = decrypt(ak.api_key_encrypted)
 
+        print("credssss", creds)
         return creds
 
     async def _fetch_twilio_to_number(self, call_sid: str) -> Optional[str]:
@@ -96,6 +101,9 @@ class BotRunnerService(BaseService):
         twilio_creds = self._get_twilio_credentials()
         account_sid = twilio_creds.get("account_sid")
         auth_token = twilio_creds.get("auth_token")
+
+        print("account_sidd", account_sid)
+        print("auth_tokenn", auth_token)
         if not account_sid or not auth_token:
             logger.warning("Missing Twilio credentials in DB, cannot resolve to_number")
             return None
@@ -112,15 +120,131 @@ class BotRunnerService(BaseService):
             logger.error("Error fetching Twilio call info: %s", e)
             return None
 
+    def _get_telnyx_api_key(self) -> Optional[str]:
+        """Fetch Telnyx API key from the DB (service_providers + api_keys)."""
+        from core.models.service_provider import ServiceProvider
+        from core.models.api_key import ApiKey
+        from core.utils.encryption import decrypt
+
+        provider = self.db.query(ServiceProvider).filter(ServiceProvider.name == "telnyx").first()
+        if not provider:
+            logger.warning("Telnyx service provider not found in DB")
+            return None
+
+        api_key = (
+            self.db.query(ApiKey)
+            .filter(ApiKey.service_provider_id == provider.id, ApiKey.status == "active")
+            .first()
+        )
+        if not api_key:
+            logger.warning("No active API key found for Telnyx")
+            return None
+
+        return decrypt(api_key.api_key_encrypted)
+
+    async def _fetch_telnyx_to_number(self, call_control_id: str) -> Optional[str]:
+        """Fetch the 'to' number for a Telnyx call from Telnyx REST API."""
+        api_key = self._get_telnyx_api_key()
+        if not api_key:
+            logger.warning("Missing Telnyx API key in DB, cannot resolve to_number")
+            return None
+        url = f"https://api.telnyx.com/v2/calls/{call_control_id}"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        }
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers) as response:
+                    if response.status != 200:
+                        logger.warning("Telnyx API returned status %s for call %s", response.status, call_control_id)
+                        return None
+                    data = await response.json()
+                    call_data = data.get("data", {})
+                    return call_data.get("to")
+        except Exception as e:
+            logger.error("Error fetching Telnyx call info: %s", e)
+            return None
+
+    def _get_exotel_credentials(self, account_sid: str) -> dict:
+        """Fetch Exotel credentials from the Channel meta_data for the given account_sid."""
+        from core.models.channel import Channel
+        from core.models.enums import ChannelType
+
+        channels = (
+            self.db.query(Channel)
+            .filter(Channel.type == ChannelType.EXOTEL)
+            .all()
+        )
+        for channel in channels:
+            meta = channel.meta_data or {}
+            if meta.get("account_sid") == account_sid:
+                return {
+                    "account_sid": meta.get("account_sid"),
+                    "api_key": meta.get("api_key"),
+                    "api_token": meta.get("api_token"),
+                }
+        logger.warning("No Exotel channel found for account_sid=%s", account_sid)
+        return {}
+
+    async def _fetch_exotel_to_number(self, call_sid: str, account_sid: str) -> Optional[str]:
+        """Fetch the 'to' number for an Exotel call from Exotel REST API."""
+        creds = self._get_exotel_credentials(account_sid)
+        api_key = creds.get("api_key")
+        api_token = creds.get("api_token")
+        if not api_key or not api_token or not account_sid:
+            logger.warning("Missing Exotel credentials in DB, cannot resolve to_number")
+            return None
+        url = f"https://api.exotel.com/v1/Accounts/{account_sid}/Calls/{call_sid}.json"
+        try:
+            auth = aiohttp.BasicAuth(api_key, api_token)
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, auth=auth) as response:
+                    if response.status != 200:
+                        logger.warning("Exotel API returned status %s for call %s", response.status, call_sid)
+                        return None
+                    data = await response.json()
+                    call_details = data.get("Call", {})
+                    return call_details.get("To")
+        except Exception as e:
+            logger.error("Error fetching Exotel call info: %s", e)
+            return None
+
     async def get_to_number_from_call_data_async(
         self, transport_type: str, call_data: Dict[str, Any]
     ) -> Optional[str]:
-        """Get the 'to' phone number from parsed call_data (async; handles Twilio API)."""
+        """Get the 'to' phone number from parsed call_data (async; handles provider APIs)."""
         if transport_type == "twilio":
             call_sid = call_data.get("call_id")
             if not call_sid:
                 return None
             return await self._fetch_twilio_to_number(call_sid)
+
+        elif transport_type == "telnyx":
+            # Telnyx provides 'to' directly in WebSocket start message
+            to_number = call_data.get("to")
+            if to_number:
+                return to_number
+            # Fallback: fetch from Telnyx REST API using call_control_id
+            call_control_id = call_data.get("call_control_id")
+            if not call_control_id:
+                logger.warning("Telnyx call_data missing both 'to' and 'call_control_id'")
+                return None
+            return await self._fetch_telnyx_to_number(call_control_id)
+
+        elif transport_type == "exotel":
+            # Exotel provides 'to' directly in WebSocket start message
+            to_number = call_data.get("to")
+            if to_number:
+                return to_number
+            # Fallback: fetch from Exotel REST API using call_sid and account_sid
+            call_sid = call_data.get("call_id")
+            account_sid = call_data.get("account_sid")
+            if not call_sid or not account_sid:
+                logger.warning("Exotel call_data missing both 'to' and 'call_id'/'account_sid'")
+                return None
+            return await self._fetch_exotel_to_number(call_sid, account_sid)
+
         return call_data.get("to") or None
 
     async def get_bot_for_incoming_call(

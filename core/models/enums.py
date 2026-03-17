@@ -49,6 +49,7 @@ class AgentType(enum.Enum):
 
 class ChannelType(enum.Enum):
     TWILIO = "twilio"
+    EXOTEL = "exotel"
     WEB = "web"
     GOOGLE_MEET = "google_meet"
     ZOOM = "zoom"
