@@ -76,10 +76,13 @@ class AgentFactoryService(BaseService):
         Returns None if the service has no InputParams class.
         """
         input_params_class = getattr(service_class, "InputParams", None)
+        # print(f"input_params_class: {input_params_class}")
         if not input_params_class:
             return None
         valid_keys = set(input_params_class.model_fields.keys())
+        # print(f"valid_keys: {valid_keys}")
         filtered = {k: v for k, v in metadata.items() if k in valid_keys and v is not None}
+        # print(f"filtered: {filtered}")
         if not filtered:
             return input_params_class()
         try:
@@ -125,7 +128,9 @@ class AgentFactoryService(BaseService):
                 return OpenAILLMService(api_key = api_key, model=model or "gpt-4.1", params=self._build_input_params(OpenAILLMService, metadata))
             if provider_name == "anthropic": #done
                 from pipecat.services.anthropic.llm import AnthropicLLMService
-                return AnthropicLLMService(api_key=api_key, model= model or "claude-sonnet-4-5-20250929", params=self._build_input_params(AnthropicLLMService, metadata))
+                params=self._build_input_params(AnthropicLLMService, metadata)
+                print(f"params: {params}")
+                return AnthropicLLMService(api_key=api_key, model= model or "claude-sonnet-4-5-20250929", params=params)
             if provider_name == "groq": #done
                 from pipecat.services.groq.llm import GroqLLMService
                 return GroqLLMService(api_key=api_key, model=model or "llama-3.3-70b-versatile", params=self._build_input_params(GroqLLMService, metadata))
@@ -137,7 +142,9 @@ class AgentFactoryService(BaseService):
                 return AWSBedrockLLMService(api_key=api_key, model=model or "amazon.nova-pro-v1:0", params=self._build_input_params(AWSBedrockLLMService, metadata))
             if provider_name == "google": #Done
                 from pipecat.services.google.llm import GoogleLLMService
-                return GoogleLLMService(api_key=api_key, model=model or "gemini-2.5-flash", params=self._build_input_params(GoogleLLMService, metadata))
+                params=self._build_input_params(GoogleLLMService, metadata)
+                print(f"params: {params}")
+                return GoogleLLMService(api_key=api_key, model=model or "gemini-2.5-flash", params=params)
             if provider_name == "ollama": #done
                 from pipecat.services.ollama.llm import OLLamaLLMService
                 base_url = api_key if api_key else "http://localhost:11434/v1"
@@ -205,10 +212,22 @@ class AgentFactoryService(BaseService):
                 return DeepgramSTTService(api_key=api_key)
             if provider_name == "openai":
                 from pipecat.services.openai.stt import OpenAISTTService
-                return OpenAISTTService(api_key=api_key, model=model or "gpt-4o-transcribe")
+                return OpenAISTTService(
+                    api_key=api_key,
+                    model=model or "gpt-4o-transcribe",
+                    language=metadata.get("language"),
+                    prompt=metadata.get("prompt"),
+                    temperature=metadata.get("temperature"),
+                )
             if provider_name == "groq":
                 from pipecat.services.groq.stt import GroqSTTService
-                return GroqSTTService(api_key=api_key, model=model or "whisper-large-v3-turbo")
+                return GroqSTTService(
+                    api_key=api_key,
+                    model=model or "whisper-large-v3-turbo",
+                    language=metadata.get("language"),
+                    prompt=metadata.get("prompt"),
+                    temperature=metadata.get("temperature"),
+                )
             if provider_name == "azure":
                 from pipecat.services.azure.stt import AzureSTTService
                 region = model_meta.get("region") or metadata.get("region") or "eastus"
@@ -221,22 +240,46 @@ class AgentFactoryService(BaseService):
                 return NvidiaSTTService(api_key=api_key, params=self._build_input_params(NvidiaSTTService, metadata))
             if provider_name == "sarvam":
                 from pipecat.services.sarvam.stt import SarvamSTTService
-                return SarvamSTTService(api_key=api_key, model=model or "saarika:v2.5", params=self._build_input_params(SarvamSTTService, metadata))
+                return SarvamSTTService(
+                    api_key=api_key,
+                    model=model or "saarika:v2.5",
+                    sample_rate=metadata.get("sample_rate"),
+                    params=self._build_input_params(SarvamSTTService, metadata),
+                )
             if provider_name == "speechmatics":
                 from pipecat.services.speechmatics.stt import SpeechmaticsSTTService
-                return SpeechmaticsSTTService(api_key=api_key, params=self._build_input_params(SpeechmaticsSTTService, metadata))
+                return SpeechmaticsSTTService(
+                    api_key=api_key,
+                    sample_rate=metadata.get("sample_rate"),
+                    params=self._build_input_params(SpeechmaticsSTTService, metadata),
+                )
             if provider_name == "assemblyai":
                 from pipecat.services.assemblyai.stt import AssemblyAISTTService
                 return AssemblyAISTTService(api_key=api_key)
             if provider_name == "cartesia":
                 from pipecat.services.cartesia.stt import CartesiaSTTService
-                return CartesiaSTTService(api_key=api_key)
+                from pipecat.services.cartesia.stt import CartesiaLiveOptions
+                live_options = CartesiaLiveOptions(
+                    language=metadata.get("language") or "en",
+                    sample_rate=metadata.get("sample_rate") or 16000,
+                )
+                return CartesiaSTTService(
+                    api_key=api_key,
+                    sample_rate=metadata.get("sample_rate") or 16000,
+                    live_options=live_options,
+                )
             if provider_name == "elevenlabs":
                 from pipecat.services.elevenlabs.stt import ElevenLabsRealtimeSTTService
                 return ElevenLabsRealtimeSTTService(api_key=api_key, model=model or "scribe_v2_realtime", params=self._build_input_params(ElevenLabsRealtimeSTTService, metadata))
             if provider_name == "gladia":
                 from pipecat.services.gladia.stt import GladiaSTTService
-                return GladiaSTTService(api_key=api_key, model=model or "solaria-1", params=self._build_input_params(GladiaSTTService, metadata))
+                return GladiaSTTService(
+                    api_key=api_key,
+                    model=model or "solaria-1",
+                    region=metadata.get("region"),
+                    sample_rate=metadata.get("sample_rate"),
+                    params=self._build_input_params(GladiaSTTService, metadata),
+                )
             if provider_name == "soniox":
                 from pipecat.services.soniox.stt import SonioxSTTService
                 return SonioxSTTService(api_key=api_key, params=self._build_input_params(SonioxSTTService, metadata))
@@ -455,7 +498,7 @@ class AgentFactoryService(BaseService):
                 else:
                     voice_kwargs["language"] = None
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return SpeechmaticsTTSService(api_key=api_key, aiohttp_session=session, params=self._build_input_params(SpeechmaticsTTSService, metadata), **voice_kwargs)
+                return SpeechmaticsTTSService(api_key=api_key, aiohttp_session=session, sample_rate=metadata.get("sample_rate"), params=self._build_input_params(SpeechmaticsTTSService, metadata), **voice_kwargs)
             if provider_name == "azure":
                 from pipecat.services.azure.tts import AzureTTSService
                 region = model_meta.get("region") or metadata.get("region") or "eastus"
@@ -582,6 +625,7 @@ class AgentFactoryService(BaseService):
         from pipecat.pipeline.pipeline import Pipeline
         from pipecat.pipeline.runner import PipelineRunner
         from pipecat.pipeline.task import PipelineParams, PipelineTask
+        from core.processors.call_end_detector import CallEndDetectorProcessor
 
 
         tools = NOT_GIVEN
@@ -589,6 +633,7 @@ class AgentFactoryService(BaseService):
         context_aggregator = LLMContextAggregatorPair(context)
         llm_text_processor = LLMTextProcessor()
         rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
+        call_end_detector = CallEndDetectorProcessor()
 
 
         pipeline = Pipeline(
@@ -596,6 +641,7 @@ class AgentFactoryService(BaseService):
                 transport.input(),
                 rtvi,
                 stt,
+                call_end_detector,
                 context_aggregator.user(),
                 llm,
                 llm_text_processor,

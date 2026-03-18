@@ -4,8 +4,11 @@ Source: core/api/v1/agent_configs.py
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from uuid import UUID
+from unittest.mock import patch, MagicMock, ANY
 from fastapi import HTTPException
+
+EXPECTED_ORG_ID = UUID("550e8400-e29b-41d4-a716-446655440000")
 
 
 # ─── Fixtures ───
@@ -31,6 +34,7 @@ class TestUpsertAgentConfig:
         mock_service_cls.return_value.upsert_agent_config.return_value = {"id": 1, **sample_agent_config_data}
         response = client_as_member.post("/api/v1/agent_config/upsert_agent_config", json=sample_agent_config_data)
         assert response.status_code == 200
+        mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID)
 
     @patch("ee.api.v1.agent_configs.AgentConfigService")
     def test_upsert_config_update_success(self, mock_service_cls, client_as_member):
@@ -82,3 +86,32 @@ class TestUpsertAgentConfig:
             "agent_id": 999, "system_prompt": "Hello"
         })
         assert response.status_code == 404
+
+    @patch("ee.api.v1.agent_configs.AgentConfigService")
+    def test_upsert_config_conflict(self, mock_service_cls, client_as_member, sample_agent_config_data):
+        mock_service_cls.return_value.upsert_agent_config.side_effect = HTTPException(
+            status_code=409, detail="Unique constraint violation"
+        )
+        response = client_as_member.post("/api/v1/agent_config/upsert_agent_config", json=sample_agent_config_data)
+        assert response.status_code == 409
+
+    @patch("ee.api.v1.agent_configs.AgentConfigService")
+    def test_upsert_config_with_optional_fields(self, mock_service_cls, client_as_member, sample_agent_config_data):
+        data = {
+            **sample_agent_config_data,
+            "first_message": "Hello, how can I help?",
+            "end_call_message": "Goodbye!",
+            "voicemail_message": "Leave a message.",
+            "description": "Test config",
+        }
+        mock_service_cls.return_value.upsert_agent_config.return_value = {"id": 1, **data}
+        response = client_as_member.post("/api/v1/agent_config/upsert_agent_config", json=data)
+        assert response.status_code == 200
+
+    @patch("ee.api.v1.agent_configs.AgentConfigService")
+    def test_upsert_config_service_error(self, mock_service_cls, client_as_member, sample_agent_config_data):
+        mock_service_cls.return_value.upsert_agent_config.side_effect = HTTPException(
+            status_code=500, detail="Internal error"
+        )
+        response = client_as_member.post("/api/v1/agent_config/upsert_agent_config", json=sample_agent_config_data)
+        assert response.status_code == 500

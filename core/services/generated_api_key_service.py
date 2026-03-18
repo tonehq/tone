@@ -7,7 +7,6 @@ from fastapi import HTTPException, status
 
 from core.services.base import BaseService
 from core.models.generated_api_key import GeneratedApiKey
-from core.config import settings
 
 
 class GeneratedApiKeyService(BaseService):
@@ -25,7 +24,7 @@ class GeneratedApiKeyService(BaseService):
 
         if key_id:
             # Update existing key
-            key = self.db.query(GeneratedApiKey).filter(GeneratedApiKey.id == key_id).first()
+            key = self.query(GeneratedApiKey).filter(GeneratedApiKey.id == key_id).first()
             if not key:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -34,19 +33,23 @@ class GeneratedApiKeyService(BaseService):
             key.name = name
             key.key_value = key_value
             key.updated_at = current_time
+            self.db.commit()
+            self.db.refresh(key)
         else:
-            key = GeneratedApiKey(
-                uuid=uuid_lib.uuid4(),
-                name=name,
-                key_value=key_value,
-                created_at=current_time,
-                updated_at=current_time,
-                organization_id=self.org_id or settings.DEFAULT_ORG_ID
+            key_uuid = uuid_lib.uuid4()
+            self.upsert(
+                model=GeneratedApiKey,
+                values={
+                    "uuid": key_uuid,
+                    "name": name,
+                    "key_value": key_value,
+                    "created_at": current_time,
+                    "updated_at": current_time,
+                },
+                conflict_fields=["uuid"],
+                update_fields=["name", "key_value", "updated_at"],
             )
-            self.db.add(key)
-
-        self.db.commit()
-        self.db.refresh(key)
+            key = self.query(GeneratedApiKey).filter(GeneratedApiKey.uuid == key_uuid).first()
 
         return {
             "id": key.id,
@@ -71,7 +74,7 @@ class GeneratedApiKeyService(BaseService):
 
         if key_id:
             # Update existing key
-            key = self.db.query(GeneratedApiKey).filter(GeneratedApiKey.id == key_id).first()
+            key = self.query(GeneratedApiKey).filter(GeneratedApiKey.id == key_id).first()
             if not key:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -83,22 +86,30 @@ class GeneratedApiKeyService(BaseService):
             key.abuse_prevention = abuse_prevention
             key.fraud_protection = fraud_protection
             key.updated_at = current_time
+            self.db.commit()
+            self.db.refresh(key)
         else:
-            key = GeneratedApiKey(
-                uuid=uuid_lib.uuid4(),
-                name=name,
-                key_value=key_value,
-                domains=domains,
-                abuse_prevention=abuse_prevention,
-                fraud_protection=fraud_protection,
-                created_at=current_time,
-                updated_at=current_time,
-                organization_id=self.org_id or settings.DEFAULT_ORG_ID
+            key_uuid = uuid_lib.uuid4()
+            values = {
+                "uuid": key_uuid,
+                "name": name,
+                "key_value": key_value,
+                "created_at": current_time,
+                "updated_at": current_time,
+            }
+            if domains is not None:
+                values["domains"] = domains
+            if abuse_prevention is not None:
+                values["abuse_prevention"] = abuse_prevention
+            if fraud_protection is not None:
+                values["fraud_protection"] = fraud_protection
+            self.upsert(
+                model=GeneratedApiKey,
+                values=values,
+                conflict_fields=["uuid"],
+                update_fields=["name", "key_value", "domains", "abuse_prevention", "fraud_protection", "updated_at"],
             )
-            self.db.add(key)
-
-        self.db.commit()
-        self.db.refresh(key)
+            key = self.query(GeneratedApiKey).filter(GeneratedApiKey.uuid == key_uuid).first()
 
         return {
             "id": key.id,
@@ -114,7 +125,7 @@ class GeneratedApiKeyService(BaseService):
 
     def get_all_keys(self) -> List[Dict[str, Any]]:
         """Get all generated API keys."""
-        keys = self.db.query(GeneratedApiKey).all()
+        keys = self.query(GeneratedApiKey).all()
 
         return [{
             "id": key.id,
@@ -130,7 +141,7 @@ class GeneratedApiKeyService(BaseService):
 
     def get_key_by_id(self, key_id: int) -> Dict[str, Any]:
         """Get a specific API key by ID."""
-        key = self.db.query(GeneratedApiKey).filter(
+        key = self.query(GeneratedApiKey).filter(
             GeneratedApiKey.id == key_id
         ).first()
 
@@ -154,7 +165,7 @@ class GeneratedApiKeyService(BaseService):
 
     def delete_key(self, key_id: int) -> Dict[str, str]:
         """Delete an API key by ID."""
-        key = self.db.query(GeneratedApiKey).filter(
+        key = self.query(GeneratedApiKey).filter(
             GeneratedApiKey.id == key_id
         ).first()
 

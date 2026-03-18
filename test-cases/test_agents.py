@@ -4,8 +4,11 @@ Source: core/api/v1/agents.py
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from uuid import UUID
+from unittest.mock import patch, MagicMock, ANY
 from fastapi import HTTPException
+
+EXPECTED_ORG_ID = UUID("550e8400-e29b-41d4-a716-446655440000")
 
 
 # ─── Fixtures ───
@@ -40,6 +43,7 @@ class TestGetAllAgents:
         response = client_as_member.get("/api/v1/agent/get_all_agents")
         assert response.status_code == 200
         assert isinstance(response.json(), list)
+        mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID)
 
     @patch("ee.api.v1.agents.AgentService")
     def test_get_all_agents_empty(self, mock_service_cls, client_as_member):
@@ -73,6 +77,7 @@ class TestGetAgent:
         mock_service_cls.return_value.get_all_agents.return_value = [mock_agent_response]
         response = client_as_member.get("/api/v1/agent/get_agent?agent_id=1")
         assert response.status_code == 200
+        mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID)
 
     @patch("ee.api.v1.agents.AgentService")
     def test_get_agent_not_found(self, mock_service_cls, client_as_member):
@@ -104,6 +109,7 @@ class TestDeleteAgent:
         mock_service_cls.return_value.delete_agent.return_value = {"message": "deleted"}
         response = client_as_member.delete("/api/v1/agent/delete_agent?agent_id=1")
         assert response.status_code == 200
+        mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID)
 
     def test_delete_agent_missing_agent_id(self, client_as_member):
         response = client_as_member.delete("/api/v1/agent/delete_agent")
@@ -136,6 +142,7 @@ class TestUpsertAgent:
         mock_service_cls.return_value.upsert_agent.return_value = {"id": 1, **sample_agent_data}
         response = client_as_member.post("/api/v1/agent/upsert_agent", json=sample_agent_data)
         assert response.status_code == 200
+        mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID)
 
     @patch("ee.api.v1.agents.AgentService")
     def test_upsert_agent_update_success(self, mock_service_cls, client_as_member):
@@ -163,6 +170,28 @@ class TestUpsertAgent:
     def test_upsert_agent_unauthenticated(self, client_unauthenticated):
         response = client_unauthenticated.post("/api/v1/agent/upsert_agent", json={"name": "Test"})
         assert response.status_code in (401, 403)
+
+    @patch("ee.api.v1.agents.AgentService")
+    def test_upsert_agent_with_agent_type(self, mock_service_cls, client_as_member, sample_agent_data):
+        data = {**sample_agent_data, "agent_type": "inbound"}
+        mock_service_cls.return_value.upsert_agent.return_value = {"id": 1, **data}
+        response = client_as_member.post("/api/v1/agent/upsert_agent", json=data)
+        assert response.status_code == 200
+
+    @patch("ee.api.v1.agents.AgentService")
+    def test_upsert_agent_with_channel_data(self, mock_service_cls, client_as_member, sample_agent_data):
+        data = {**sample_agent_data, "channel_type": "twilio", "channel_name": "Main"}
+        mock_service_cls.return_value.upsert_agent.return_value = {"id": 1, **data}
+        response = client_as_member.post("/api/v1/agent/upsert_agent", json=data)
+        assert response.status_code == 200
+
+    @patch("ee.api.v1.agents.AgentService")
+    def test_upsert_agent_conflict(self, mock_service_cls, client_as_member, sample_agent_data):
+        mock_service_cls.return_value.upsert_agent.side_effect = HTTPException(
+            status_code=409, detail="Agent name already exists"
+        )
+        response = client_as_member.post("/api/v1/agent/upsert_agent", json=sample_agent_data)
+        assert response.status_code == 409
 
     @patch("ee.api.v1.agents.AgentService")
     def test_upsert_agent_service_error(self, mock_service_cls, client_as_member, sample_agent_data):

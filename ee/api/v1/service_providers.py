@@ -52,7 +52,7 @@ def get_all_service_providers(
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db)
 ):
-    ALLOWED_PROVIDER_IDS = {1, 2, 3, 6, 19, 20, 21, 23, 26, 30, 43, 47, 51, 55}
+    ALLOWED_PROVIDER_IDS = {1, 2, 3, 19, 20, 21, 23, 26, 30, 43, 47}
     providers = ServiceProviderService(db, org_id=UUID(claims.org_id), user_id=claims.user_id).get_all_service_providers(
         provider_type=provider_type
     )
