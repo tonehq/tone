@@ -357,7 +357,9 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
         if transport_type == "twilio":
             call_info = await get_call_info(transport_type, call_data.get("call_id", ""))
             if call_info:
-                logger.info(f"Call from: {call_info.get('from_number')} to: {call_info.get('to_number')}")
+                call_data["from"] = call_info.get("from_number", "")
+                call_data["to"] = call_info.get("to_number", "")
+                logger.info(f"Call from: {call_data['from']} to: {call_data['to']}")
         elif transport_type in ("telnyx", "exotel"):
             # Telnyx and Exotel provide from/to in the call_data directly
             from_number = call_data.get("from", "")
