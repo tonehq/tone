@@ -24,7 +24,8 @@ from core.models.api_key import ApiKey
 from core.models.service import Service
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
-from core.models.channel_phone_numbers import ChannelPhoneNumbers
+from core.models.agent_channel_phone_numbers import AgentChannelPhoneNumbers
+from core.models.channel_phone_numbers import ChannelPhoneNumber
 from core.models.models import Model
 from core.models.voice import Voice
 from core.models.generated_api_key import GeneratedApiKey

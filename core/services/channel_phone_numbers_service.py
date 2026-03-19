@@ -1,293 +1,158 @@
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
-from typing import Dict, Any, List, Optional
+# Standard library
 import time
 import uuid as uuid_lib
-from uuid import UUID
+from typing import Dict, Any, List, Optional
 
+# SQLAlchemy
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+
+# FastAPI
 from fastapi import HTTPException, status
 
+# Logging
+from loguru import logger
+
+# Local
 from core.services.base import BaseService
-from core.models.channel_phone_numbers import ChannelPhoneNumbers
+from core.models.channel_phone_numbers import ChannelPhoneNumber
 from core.models.channel import Channel
 import requests
 
 
-def _channel_phone_number_unique_constraint_detail(exc: IntegrityError) -> str:
-    """Return a user-friendly message for ChannelPhoneNumbers unique constraint violations."""
-    msg = str(exc).lower()
-    orig = getattr(exc, "orig", None)
-    constraint_name = None
-    if orig is not None:
-        pgcode = getattr(orig, "pgcode", None)
-        if pgcode == "23505":
-            if hasattr(orig, "diag") and orig.diag is not None:
-                constraint_name = getattr(orig.diag, "constraint_name", None)
-    if constraint_name is None and "channel_phone_numbers_channel_phone_unique" in msg:
-        constraint_name = "channel_phone_numbers_channel_phone_unique"
-    if constraint_name is None and "phone_number" in msg and "unique" in msg:
-        return "Phone number already in use."
-    if constraint_name == "channel_phone_numbers_channel_phone_unique":
-        return "This channel already has this phone number."
-    if constraint_name and "phone_number" in (constraint_name or "").lower():
-        return "Phone number already in use."
-    if constraint_name and "uuid" in (constraint_name or "").lower():
-        return "Duplicate channel phone number identifier (uuid)."
-    if "unique" in msg or (orig and getattr(orig, "pgcode", None) == "23505"):
-        return "A record with this value already exists. Please use a unique phone number."
-    return "Unique constraint violated."
-
-
 class ChannelPhoneNumbersService(BaseService):
     CREATED_ATTRS = (
-        "channel_id", "agent_id", "phone_number", "phone_number_sid", "phone_number_auth_token",
-        "provider", "country_code", "number_type", "capabilities", "status",
+        "channel_id", "phone_number", "phone_number_sid", "provider",
+        "country_code", "number_type", "capabilities", "friendly_name", "status",
     )
     UPDATABLE_ATTRS = (
-        "channel_id", "agent_id", "phone_number", "phone_number_sid", "phone_number_auth_token", "provider",
-        "country_code", "number_type", "capabilities", "status", "updated_at",
+        "channel_id", "phone_number", "phone_number_sid", "provider",
+        "country_code", "number_type", "capabilities", "friendly_name", "status",
     )
 
-    def get_channel_phone_numbers(self, channel_id: int):
-        channel = self.query(Channel).filter(Channel.id == channel_id).first()
-        if not channel:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Channel not found",
-            )
-        return (
-            self.query(ChannelPhoneNumbers)
-            .filter(
-                ChannelPhoneNumbers.channel_id == channel_id,
-                ChannelPhoneNumbers.status == "active",
-            )
-            .all()
-        )
-
-    def get_assigned_phone_numbers(self) -> List[Dict[str, Any]]:
-        """Return all phone numbers that are assigned to an agent."""
-        from core.models.agent import Agent
-
-        try:
-            rows = (
-                self.query(ChannelPhoneNumbers)
-                .join(Agent, ChannelPhoneNumbers.agent_id == Agent.id)
-                .filter(ChannelPhoneNumbers.agent_id.isnot(None))
-                .add_columns(Agent.name)
-                .all()
-            )
-            return [
-                {
-                    "phone_number": cpn.phone_number,
-                    "agent_id": cpn.agent_id,
-                    "agent_name": agent_name,
-                    "provider": cpn.provider,
-                }
-                for cpn, agent_name in rows
-            ]
-        except Exception:
-            self.db.rollback()
-            return []
-
-    def detach_channel_phone_number(self, data: Dict[str, Any]):
-        channel_id = int(data["channel_id"])
-        phone_number = data["phone_number"].strip()
-        agent_id = data.get("agent_id")
-
-        channel = self.query(Channel).filter(Channel.id == channel_id).first()
-        if not channel:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Channel not found",
-            )
-
-        q = self.query(ChannelPhoneNumbers).filter(
-            ChannelPhoneNumbers.channel_id == channel_id,
-            ChannelPhoneNumbers.phone_number == phone_number,
-        )
-        if agent_id is not None:
-            q = q.filter(ChannelPhoneNumbers.agent_id == int(agent_id))
-
-        record = q.first()
-        if not record:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Phone number not found for this channel",
-            )
-
-        self.db.delete(record)
-        self.db.commit()
-        return {"message": "Phone number detached from channel successfully"}
-
-    def upsert_channel_phone_numbers(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """
-        Accepts phone_number as either:
-          - a list of objects: [{"type": "twilio", "no": "+1..."}, ...]
-          - a plain string: "+1..." (legacy, single entry)
-
-        Shared fields (phone_number_sid, phone_number_auth_token, provider,
-        country_code, number_type, capabilities, status, channel_id) apply to
-        every entry in the list.
-        """
-        phone_number_raw = data.get("phone_number")
-
-        # Normalise to list of {"no": str, "type": str} entries
-        if isinstance(phone_number_raw, list):
-            entries = phone_number_raw
-        else:
-            # Legacy string path
-            provider_fallback = data.get("provider", "")
-            entries = [{"no": str(phone_number_raw), "type": provider_fallback}]
-
-        if not entries:
+    def upsert_channel_phone_number(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        if not data.get("phone_number"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="phone_number is required",
             )
-
-        results = []
-        for entry in entries:
-            number_str = entry.get("no", "").strip()
-            if not number_str:
-                continue
-            # Per-entry provider falls back to the top-level provider field
-            provider = entry.get("type") or data.get("provider", "")
-            row_data = {
-                **data,
-                "phone_number": number_str,
-                "provider": provider,
-            }
-            row = self._upsert_single(row_data)
-            results.append({
-                "id": row.id,
-                "uuid": str(row.uuid),
-                "phone_number": row.phone_number,
-                "provider": row.provider,
-                "channel_id": row.channel_id,
-                "status": row.status,
-            })
-
-        return results
-
-    # Keep old name as alias so any other callers don't break
-    def upsert_channel_phone_number(self, data: Dict[str, Any]):
-        return self.upsert_channel_phone_numbers(data)
-
-    def _upsert_single(self, data: Dict[str, Any]) -> ChannelPhoneNumbers:
-        """Upsert a single phone number row. phone_number must be a plain string here."""
-        phone_number = data["phone_number"].strip()
-        channel_id = data.get("channel_id")
-        agent_id = data.get("agent_id")
-
-        if channel_id is not None:
-            channel = self.query(Channel).filter(Channel.id == int(channel_id)).first()
-            if not channel:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Channel not found",
-                )
-
-        if agent_id is not None:
-            try:
-                existing_assignment = (
-                    self.query(ChannelPhoneNumbers)
-                    .filter(
-                        ChannelPhoneNumbers.phone_number == phone_number,
-                        ChannelPhoneNumbers.agent_id.isnot(None),
-                        ChannelPhoneNumbers.agent_id != int(agent_id),
-                    )
-                    .first()
-                )
-                if existing_assignment:
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail=f"Phone number {phone_number} is already assigned to another agent.",
-                    )
-            except HTTPException:
-                raise
-            except Exception:
-                self.db.rollback()
-
-        row_id = data.get("id")
-        row_uuid_raw = data.get("uuid")
-
-        created_by = data.get("created_by")
-        provider = data.get("provider")
-        if created_by is not None and provider and row_id is None and row_uuid_raw is None:
-            existing_by_creator = (
-                self.query(ChannelPhoneNumbers)
-                .join(Channel, ChannelPhoneNumbers.channel_id == Channel.id)
-                .filter(
-                    Channel.created_by == int(created_by),
-                    ChannelPhoneNumbers.provider == provider,
-                    ChannelPhoneNumbers.phone_number == phone_number,
-                )
-                .first()
+        if not data.get("phone_number_sid"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="phone_number_sid is required",
             )
-            if existing_by_creator:
-                row_id = existing_by_creator.id
+        if not data.get("provider"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="provider is required",
+            )
+        if data.get("channel_id") is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="channel_id is required",
+            )
 
-        if row_id is not None:
-            existing = self.query(ChannelPhoneNumbers).filter(
-                ChannelPhoneNumbers.id == int(row_id)
-            ).first()
+        channel_id = int(data["channel_id"])
+        channel = self.query(Channel).filter(Channel.id == channel_id).first()
+        if not channel:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Channel not found",
+            )
+
+        model_id = data.get("id")
+        model_uuid_raw = data.get("uuid")
+        if model_id is not None:
+            existing = self.query(ChannelPhoneNumber).filter(ChannelPhoneNumber.id == int(model_id)).first()
             if not existing:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Channel phone number not found",
                 )
-            row_uuid = existing.uuid
-        elif row_uuid_raw is not None:
-            row_uuid = UUID(str(row_uuid_raw)) if isinstance(row_uuid_raw, str) else row_uuid_raw
+            model_uuid = existing.uuid
+        elif model_uuid_raw is not None:
+            from uuid import UUID
+            model_uuid = UUID(str(model_uuid_raw)) if isinstance(model_uuid_raw, str) else model_uuid_raw
         else:
-            existing = self.query(ChannelPhoneNumbers).filter(
-                ChannelPhoneNumbers.phone_number == phone_number
+            existing = self.query(ChannelPhoneNumber).filter(
+                ChannelPhoneNumber.phone_number == data["phone_number"].strip(),
+                ChannelPhoneNumber.channel_id == channel_id,
             ).first()
-            if existing:
-                row_uuid = existing.uuid
-            else:
-                row_uuid = uuid_lib.uuid4()
+            model_uuid = existing.uuid if existing else uuid_lib.uuid4()
 
         now = int(time.time())
         values = {
-            "uuid": row_uuid,
-            "channel_id": int(channel_id) if channel_id is not None else None,
-            "agent_id": int(agent_id) if agent_id is not None else None,
-            "phone_number": phone_number,
-            "phone_number_sid": data.get("phone_number_sid", ""),
-            "phone_number_auth_token": data.get("phone_number_auth_token", ""),
-            "provider": data.get("provider", ""),
+            "uuid": model_uuid,
+            "channel_id": channel_id,
+            "phone_number": data["phone_number"].strip(),
+            "phone_number_sid": data["phone_number_sid"],
+            "provider": data["provider"],
             "created_at": now,
             "updated_at": now,
         }
+
         for key in self.CREATED_ATTRS:
             if key in values:
                 continue
-            if key in data and data[key] is not None and data[key] != "":
+            if key in data and data[key] is not None:
                 values[key] = data[key]
+
+        if "status" not in values:
+            values["status"] = "active"
+
         try:
             self.upsert(
-                model=ChannelPhoneNumbers,
+                model=ChannelPhoneNumber,
                 values=values,
                 conflict_fields=["uuid"],
-                update_fields=list(self.UPDATABLE_ATTRS),
+                update_fields=[f for f in self.UPDATABLE_ATTRS if f in values],
                 extra_update={"updated_at": now},
             )
         except IntegrityError as e:
             self.db.rollback()
-            detail = _channel_phone_number_unique_constraint_detail(e)
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=detail,
+                detail="A phone number with this value already exists for this channel.",
             ) from e
 
-        return self.db.query(ChannelPhoneNumbers).filter(
-            ChannelPhoneNumbers.uuid == row_uuid
-        ).first()
+        record = self.db.query(ChannelPhoneNumber).filter(ChannelPhoneNumber.uuid == model_uuid).first()
+        return self._response_item(record)
+
+    def get_channel_phone_number(self, phone_number_id: int) -> Dict[str, Any]:
+        record = self.query(ChannelPhoneNumber).filter(ChannelPhoneNumber.id == phone_number_id).first()
+        if not record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Channel phone number not found",
+            )
+        return self._response_item(record)
+
+    def get_all_channel_phone_numbers(self, channel_id: Optional[int] = None) -> List[Dict[str, Any]]:
+        query = self.query(ChannelPhoneNumber).filter(ChannelPhoneNumber.status == "active")
+
+        if channel_id is not None:
+            query = query.filter(ChannelPhoneNumber.channel_id == channel_id)
+
+        rows = query.order_by(ChannelPhoneNumber.id).all()
+        return [self._response_item(row) for row in rows]
+
+    def delete_channel_phone_number(self, phone_number_id: int) -> Dict[str, str]:
+        record = self.query(ChannelPhoneNumber).filter(ChannelPhoneNumber.id == phone_number_id).first()
+        if not record:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Channel phone number not found",
+            )
+
+        self.db.delete(record)
+        self.db.commit()
+        return {"message": "Channel phone number deleted successfully"}
 
     def get_twilio_phone_numbers(self, channel_type: str, channel_id: Optional[int] = None, agent_id: Optional[int] = None):
+        print("into get_twilio_phone_numbers")
         from twilio.rest import Client
         from core.models.enums import ChannelType
+        from core.models.agent_channel_phone_numbers import AgentChannelPhoneNumbers
 
         if channel_id is not None:
             channel = self.query(Channel).filter(Channel.id == channel_id).first()
@@ -309,6 +174,7 @@ class ChannelPhoneNumbersService(BaseService):
                     detail=f"Invalid channel type: {channel_type}",
                 )
 
+            print(f"channel_enum: {channel_enum}")
             channel = (
                 self.query(Channel)
                 .filter(Channel.type == channel_enum)
@@ -339,11 +205,11 @@ class ChannelPhoneNumbersService(BaseService):
             )
 
         try:
-            q = self.query(ChannelPhoneNumbers).with_entities(ChannelPhoneNumbers.phone_number).filter(
-                ChannelPhoneNumbers.agent_id.isnot(None),
+            q = self.query(AgentChannelPhoneNumbers).with_entities(AgentChannelPhoneNumbers.phone_number).filter(
+                AgentChannelPhoneNumbers.agent_id.isnot(None),
             )
             if agent_id is not None:
-                q = q.filter(ChannelPhoneNumbers.agent_id != agent_id)
+                q = q.filter(AgentChannelPhoneNumbers.agent_id != agent_id)
             taken_numbers = {row[0] for row in q.all()}
         except Exception:
             self.db.rollback()
@@ -361,7 +227,6 @@ class ChannelPhoneNumbersService(BaseService):
             for number in phone_numbers
             if number.phone_number not in taken_numbers
         ]
-
 
     def get_phone_number_list_to_buy(self, channel_type: str, user_id: int):
         from core.models.enums import ChannelType
@@ -432,7 +297,6 @@ class ChannelPhoneNumbersService(BaseService):
 
         return response.json()
 
-
     def buy_phone_number(self, data: Dict[str, Any], user_id: int):
         from core.models.enums import ChannelType
         from requests.auth import HTTPBasicAuth
@@ -440,7 +304,6 @@ class ChannelPhoneNumbersService(BaseService):
         phone_number = data["phone_number"].strip()
         channel_name = data["channel_name"].strip()
 
-        # Find channel by name for the current user
         channel = (
             self.query(Channel)
             .filter(Channel.name == channel_name, Channel.created_by == user_id)
@@ -502,3 +365,20 @@ class ChannelPhoneNumbersService(BaseService):
             )
 
         return response.json()
+
+    def _response_item(self, record: ChannelPhoneNumber) -> Dict[str, Any]:
+        return {
+            "id": record.id,
+            "uuid": str(record.uuid),
+            "channel_id": record.channel_id,
+            "phone_number": record.phone_number,
+            "phone_number_sid": record.phone_number_sid,
+            "provider": record.provider,
+            "country_code": record.country_code,
+            "number_type": record.number_type,
+            "capabilities": record.capabilities if isinstance(record.capabilities, dict) else {},
+            "friendly_name": record.friendly_name,
+            "status": record.status,
+            "created_at": record.created_at,
+            "updated_at": record.updated_at,
+        }

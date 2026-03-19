@@ -11,7 +11,7 @@ from fastapi import HTTPException, status
 from core.services.base import BaseService
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
-from core.models.channel_phone_numbers import ChannelPhoneNumbers
+from core.models.agent_channel_phone_numbers import AgentChannelPhoneNumbers
 from core.models.service_provider import ServiceProvider
 from core.models.enums import AgentType
 from core.services.agent_config_service import AgentConfigService
@@ -240,15 +240,15 @@ class AgentService(BaseService):
         channel_ids = [c.id for c in channel_rows]
         try:
             phone_rows = (
-                self.query(ChannelPhoneNumbers)
-                .filter(ChannelPhoneNumbers.agent_id == agent.id)
+                self.query(AgentChannelPhoneNumbers)
+                .filter(AgentChannelPhoneNumbers.agent_id == agent.id)
                 .all()
             )
         except Exception:
             self.db.rollback()
             phone_rows = (
-                self.query(ChannelPhoneNumbers)
-                .filter(ChannelPhoneNumbers.channel_id.in_(channel_ids))
+                self.query(AgentChannelPhoneNumbers)
+                .filter(AgentChannelPhoneNumbers.channel_id.in_(channel_ids))
                 .all()
             ) if channel_ids else []
 
@@ -405,7 +405,7 @@ class AgentService(BaseService):
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Agent not found",
             )
-        self.query(ChannelPhoneNumbers).filter(ChannelPhoneNumbers.agent_id == agent.id).delete()
+        self.query(AgentChannelPhoneNumbers).filter(AgentChannelPhoneNumbers.agent_id == agent.id).delete()
         self.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).delete()
         self.query(AgentChannel).filter(AgentChannel.agent_id == agent.id).delete()
         self.db.delete(agent)

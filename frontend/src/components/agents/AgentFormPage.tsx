@@ -115,7 +115,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         },
         status: 'active',
       };
-      await axiosInstance.post('/channel_phone_number/upsert_channel_phone_number', payload);
+      await axiosInstance.post('/agent_channel_phone_number/upsert_channel_phone_number', payload);
 
       setFormData((prev) => ({
         ...prev,

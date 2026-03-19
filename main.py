@@ -11,7 +11,8 @@ from core.internal.capabilities import init_capabilities, is_ee_enabled, get_cap
 from core.api.v1 import (
     auth, users, organizations, api_keys, services,
     service_providers, agents, agent_configs,
-    channel_phone_numbers, models as models_router,
+    agent_channel_phone_numbers, channel_phone_numbers,
+    models as models_router,
     generated_api_keys, channels, voices
 )
 import core.models
@@ -61,6 +62,7 @@ if ee_enabled:
         services as ee_services,
         agents as ee_agents,
         agent_configs as ee_agent_configs,
+        agent_channel_phone_numbers as ee_agent_channel_phone_numbers,
         channel_phone_numbers as ee_channel_phone_numbers,
         models as ee_models,
         generated_api_keys as ee_generated_api_keys,
@@ -76,7 +78,8 @@ if ee_enabled:
     api_v1.include_router(ee_services.router, prefix="/services", tags=["services"])
     api_v1.include_router(ee_agents.router, prefix="/agent", tags=["agent"])
     api_v1.include_router(ee_agent_configs.router, prefix="/agent_config", tags=["agent_config"])
-    api_v1.include_router(ee_channel_phone_numbers.router, prefix="/channel_phone_number", tags=["channel_phone_number"])
+    api_v1.include_router(ee_agent_channel_phone_numbers.router, prefix="/agent_channel_phone_number", tags=["channel_phone_number"])
+    api_v1.include_router(ee_channel_phone_numbers.router, prefix="/channel_phone_number", tags=["channel-phone-number"])
     api_v1.include_router(ee_models.router, prefix="/model", tags=["model"])
     api_v1.include_router(ee_generated_api_keys.router, prefix="/generated-api-keys", tags=["generated-api-keys"])
     api_v1.include_router(ee_channels.router, prefix="/channel", tags=["channel"])
@@ -91,7 +94,8 @@ else:
     api_v1.include_router(services.router, prefix="/services", tags=["services"])
     api_v1.include_router(agents.router, prefix="/agent", tags=["agent"])
     api_v1.include_router(agent_configs.router, prefix="/agent_config", tags=["agent_config"])
-    api_v1.include_router(channel_phone_numbers.router, prefix="/channel_phone_number", tags=["channel_phone_number"])
+    api_v1.include_router(agent_channel_phone_numbers.router, prefix="/channel_phone_number", tags=["channel_phone_number"])
+    api_v1.include_router(channel_phone_numbers.router, prefix="/channel-phone-number", tags=["channel-phone-number"])
     api_v1.include_router(models_router.router, prefix="/model", tags=["model"])
     api_v1.include_router(generated_api_keys.router, prefix="/generated-api-keys", tags=["generated-api-keys"])
     api_v1.include_router(channels.router, prefix="/channel", tags=["channel"])

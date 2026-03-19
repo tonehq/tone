@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from core.models.agent import Agent
 from core.models.agent_channel import AgentChannel
-from core.models.channel_phone_numbers import ChannelPhoneNumbers
+from core.models.agent_channel_phone_numbers import AgentChannelPhoneNumbers
 from core.services.base import BaseService
 
 
@@ -35,8 +35,8 @@ class BotRunnerService(BaseService):
         if not normalized:
             return None
         channel_phone = (
-            self.db.query(ChannelPhoneNumbers)
-            .filter(ChannelPhoneNumbers.phone_number == normalized)
+            self.db.query(AgentChannelPhoneNumbers)
+            .filter(AgentChannelPhoneNumbers.phone_number == normalized)
             .first()
         )
         

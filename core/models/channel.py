@@ -17,5 +17,6 @@ class Channel(OrgScopedModel):
     created_by = Column(BigInteger, nullable=True)
     meta_data = Column(JSONB, nullable=True, default={})
 
-    phone_numbers = relationship("ChannelPhoneNumbers", back_populates="channel")
+    phone_numbers = relationship("ChannelPhoneNumber", back_populates="channel")
+    agent_phone_numbers = relationship("AgentChannelPhoneNumbers", back_populates="channel")
     agents = relationship("Agent", secondary="agent_channels", back_populates="channels")
