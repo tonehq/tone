@@ -13,7 +13,7 @@ from core.api.v1 import (
     service_providers, agents, agent_configs,
     agent_channel_phone_numbers, channel_phone_numbers,
     models as models_router,
-    generated_api_keys, channels, voices
+    generated_api_keys, channels, voices, call_logs
 )
 import core.models
 
@@ -84,6 +84,7 @@ if ee_enabled:
     api_v1.include_router(ee_generated_api_keys.router, prefix="/generated-api-keys", tags=["generated-api-keys"])
     api_v1.include_router(ee_channels.router, prefix="/channel", tags=["channel"])
     api_v1.include_router(ee_voices.router, prefix="/voice", tags=["voice"])
+    api_v1.include_router(call_logs.router, prefix="/call-log", tags=["call-log"])
     print("EE edition: Multi-tenant routes loaded")
 else:
     api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -100,6 +101,7 @@ else:
     api_v1.include_router(generated_api_keys.router, prefix="/generated-api-keys", tags=["generated-api-keys"])
     api_v1.include_router(channels.router, prefix="/channel", tags=["channel"])
     api_v1.include_router(voices.router, prefix="/voice", tags=["voice"])
+    api_v1.include_router(call_logs.router, prefix="/call-log", tags=["call-log"])
     print("Core edition: Single-tenant routes loaded")
 
 

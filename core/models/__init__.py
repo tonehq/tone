@@ -17,4 +17,5 @@ from core.models.voice import Voice
 from core.models.generated_api_key import GeneratedApiKey
 from core.models.channel import Channel
 from core.models.agent_channel import AgentChannel
+from core.models.upload import Upload
 from core.models.call_log import CallLog

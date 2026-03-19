@@ -1,9 +1,10 @@
 import time
-from typing import Any, List, Optional
+from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from core.models.upload import Upload
 from core.models.call_log import CallLog
 from core.services.base import BaseService
 
@@ -36,10 +37,35 @@ class CallLogService(BaseService):
         self.db.refresh(call_log)
         return call_log
 
+    def create_upload(
+        self,
+        r2_object_key: str,
+        agent_id: int,
+        organization_id: UUID,
+        call_log_id: Optional[int] = None,
+        file_name: Optional[str] = None,
+        content_type: str = "audio/mpeg",
+        file_size_bytes: Optional[int] = None,
+    ) -> Upload:
+        upload = Upload(
+            r2_object_key=r2_object_key,
+            agent_id=agent_id,
+            organization_id=organization_id,
+            call_log_id=call_log_id,
+            file_name=file_name,
+            content_type=content_type,
+            file_size_bytes=file_size_bytes,
+        )
+        self.db.add(upload)
+        self.db.commit()
+        self.db.refresh(upload)
+        return upload
+
     def complete_call(
         self,
         call_log_id: int,
         audio_file_path: Optional[str] = None,
+        upload_id: Optional[int] = None,
         transcript: Optional[List[dict]] = None,
     ) -> Optional[CallLog]:
         call_log = self.db.query(CallLog).filter(CallLog.id == call_log_id).first()
@@ -51,11 +77,21 @@ class CallLogService(BaseService):
         call_log.ended_at = now
         call_log.duration_seconds = now - call_log.started_at
         call_log.audio_file_path = audio_file_path
+        if upload_id:
+            call_log.upload_id = upload_id
         call_log.transcript = transcript
 
         self.db.commit()
         self.db.refresh(call_log)
         return call_log
+
+    def get_upload(self, call_log_id: int) -> Optional[Upload]:
+        call_log = self.db.query(CallLog).filter(CallLog.id == call_log_id).first()
+        if not call_log or not call_log.upload_id:
+            return None
+        return self.db.query(Upload).filter(
+            Upload.id == call_log.upload_id
+        ).first()
 
     def fail_call(self, call_log_id: int) -> Optional[CallLog]:
         call_log = self.db.query(CallLog).filter(CallLog.id == call_log_id).first()
