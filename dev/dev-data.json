@@ -376,15 +376,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "Custom API base URL for OpenAI-compatible endpoints"
-        },
-        {
           "name": "frequency_penalty",
           "data_type": "float",
           "type": "input number",
@@ -428,15 +419,6 @@
           "validator": "range_validator",
           "required": 1,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
-        },
-        {
-          "name": "max_tokens",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
-          "description": "Maximum number of tokens to generate. Min: 1"
         },
         {
           "name": "max_completion_tokens",
@@ -531,15 +513,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "API base URL. Default: https://api.groq.com/openai/v1"
-        },
-        {
           "name": "frequency_penalty",
           "data_type": "float",
           "type": "input number",
@@ -585,15 +558,6 @@
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
         },
         {
-          "name": "max_tokens",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
-          "description": "Maximum number of tokens to generate. Min: 1"
-        },
-        {
           "name": "max_completion_tokens",
           "data_type": "integer",
           "type": "input number",
@@ -612,33 +576,33 @@
       "api_key_env": "ANTHROPIC_API_KEY",
       "models": [
         {
-          "name": "claude-opus-4.6",
+          "name": "claude-opus-4-6",
           "meta_data": {
-            "model": "claude-opus-4.6"
+            "model": "claude-opus-4-6"
           }
         },
         {
-          "name": "claude-opus-4.5",
+          "name": "claude-opus-4-5",
           "meta_data": {
-            "model": "claude-opus-4.5"
+            "model": "claude-opus-4-5"
           }
         },
         {
-          "name": "claude-haiku-4.5",
+          "name": "claude-haiku-4-5",
           "meta_data": {
-            "model": "claude-haiku-4.5"
+            "model": "claude-haiku-4-5"
           }
         },
         {
-          "name": "claude-sonnet-4.5",
+          "name": "claude-sonnet-4-5",
           "meta_data": {
-            "model": "claude-sonnet-4.5"
+            "model": "claude-sonnet-4-5"
           }
         },
         {
-          "name": "claude-opus-4.1",
+          "name": "claude-opus-4-1",
           "meta_data": {
-            "model": "claude-opus-4.1"
+            "model": "claude-opus-4-1"
           }
         },
         {
@@ -1665,15 +1629,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "API base URL. Default: https://openrouter.ai/api/v1"
-        },
-        {
           "name": "frequency_penalty",
           "data_type": "float",
           "type": "input number",
@@ -1783,15 +1738,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "Custom API base URL for the provider"
-        },
         {
           "name": "frequency_penalty",
           "data_type": "float",
@@ -1927,15 +1873,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "Custom API base URL for the provider"
-        },
-        {
           "name": "frequency_penalty",
           "data_type": "float",
           "type": "input number",
@@ -2021,15 +1958,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "Custom API base URL for the provider"
-        },
         {
           "name": "frequency_penalty",
           "data_type": "float",
@@ -2140,15 +2068,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "Custom API base URL for the provider"
-        },
         {
           "name": "frequency_penalty",
           "data_type": "float",
@@ -2344,15 +2263,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "API base URL. Default: http://localhost:11434/v1"
-        },
-        {
           "name": "frequency_penalty",
           "data_type": "float",
           "type": "input number",
@@ -2462,15 +2372,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "Custom API base URL for the provider"
-        },
         {
           "name": "frequency_penalty",
           "data_type": "float",
@@ -2641,15 +2542,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "Custom API base URL for the provider"
-        },
         {
           "name": "frequency_penalty",
           "data_type": "float",
@@ -3229,15 +3121,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "Custom API base URL for the provider"
-        },
-        {
           "name": "frequency_penalty",
           "data_type": "float",
           "type": "input number",
@@ -3570,15 +3453,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "Custom API base URL for the provider"
-        },
-        {
           "name": "frequency_penalty",
           "data_type": "float",
           "type": "input number",
@@ -3905,15 +3779,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "Custom API base URL for the provider"
-        },
-        {
           "name": "frequency_penalty",
           "data_type": "float",
           "type": "input number",
@@ -4233,15 +4098,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "Custom API base URL for the provider"
-        },
         {
           "name": "frequency_penalty",
           "data_type": "float",
@@ -4963,15 +4819,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "Custom API base URL for Deepgram"
-        },
-        {
           "name": "sample_rate",
           "data_type": "integer",
           "type": "input number",
@@ -5031,15 +4878,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "Custom API base URL for OpenAI-compatible endpoints"
-        },
-        {
           "name": "language",
           "data_type": "string",
           "type": "input",
@@ -5089,15 +4927,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "API base URL. Default: https://api.groq.com/openai/v1"
-        },
         {
           "name": "language",
           "data_type": "string",
@@ -5273,15 +5102,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "Custom API base URL for Cartesia"
-        },
-        {
           "name": "sample_rate",
           "data_type": "integer",
           "type": "input number",
@@ -5393,15 +5213,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "API base URL. Default: https://api.elevenlabs.io"
-        },
         {
           "name": "sample_rate",
           "data_type": "integer",
@@ -5756,15 +5567,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "Custom API base URL for Speechmatics"
-        },
         {
           "name": "sample_rate",
           "data_type": "integer",
@@ -7275,15 +7077,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "API base URL. Default: https://api.deepgram.com"
-        },
-        {
           "name": "sample_rate",
           "data_type": "integer",
           "type": "input number",
@@ -8375,15 +8168,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "API base URL. Default: https://api.models.hathora.dev/inference/v1/tts"
-        },
-        {
           "name": "speed",
           "data_type": "float",
           "type": "input number",
@@ -8440,15 +8224,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "API base URL. Default: https://api.minimax.io/v1/t2a_v2"
-        },
         {
           "name": "group_id",
           "data_type": "string",
@@ -16336,15 +16111,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "API base URL. Default: https://api.sarvam.ai"
-        },
-        {
           "name": "language",
           "data_type": "string",
           "type": "input",
@@ -20537,15 +20303,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "Custom API base URL for OpenAI-compatible endpoints"
-        },
         {
           "name": "instructions",
           "data_type": "string",
@@ -26242,15 +25999,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "base_url",
-          "data_type": "string",
-          "type": "input",
-          "format": "url",
-          "validator": "url_validator",
-          "required": 1,
-          "description": "API base URL. Default: https://preview.tts.speechmatics.com"
-        },
         {
           "name": "sample_rate",
           "data_type": "integer",

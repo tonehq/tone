@@ -603,16 +603,22 @@ class AgentFactoryService(BaseService):
         stt: Any,
         tts: Any,
         messages: List[dict],
+        agent: Any = None,
     ) -> None:
         """
         Run the voice pipeline with the given transport and services.
         Called by run_bot_for_agent or from bot.py with default components.
         """
+        import io
+        import time as _time
 
+        from pydub import AudioSegment
         from pipecat.processors.aggregators.llm_context import NOT_GIVEN
         from pipecat.processors.aggregators.llm_context import LLMContext
         from pipecat.processors.aggregators.llm_response_universal import (
             LLMContextAggregatorPair,
+            UserTurnStoppedMessage,
+            AssistantTurnStoppedMessage,
         )
         from pipecat.processors.aggregators.llm_text_processor import (
             LLMTextProcessor,
@@ -622,35 +628,186 @@ class AgentFactoryService(BaseService):
             RTVIObserver,
             RTVIProcessor,
         )
+        from pipecat.processors.audio.audio_buffer_processor import AudioBufferProcessor
         from pipecat.pipeline.pipeline import Pipeline
         from pipecat.pipeline.runner import PipelineRunner
         from pipecat.pipeline.task import PipelineParams, PipelineTask
         from core.processors.call_end_detector import CallEndDetectorProcessor
+        from core.services.call_log_service import CallLogService
+        from core.database.session import get_db_context
 
+        # Extract call metadata from runner_args
+        body = getattr(runner_args, "body", None) or {}
+        call_data = body.get("call_data", {})
+        transport_type = body.get("transport_type", "unknown")
+        provider_call_id = (
+            call_data.get("call_id")
+            or call_data.get("call_control_id")
+            or call_data.get("stream_id", "")
+        )
+        from_number = call_data.get("from", "")
+        to_number = call_data.get("to", "")
+
+        # Create call log entry in DB
+        call_log_id = None
+        audio_buffer = None
+        transcript_entries: list[dict] = []
+        call_log_updated = {"done": False}
+
+        if agent:
+            try:
+                with get_db_context() as db:
+                    call_log = CallLogService(db).create_call_log(
+                        agent_id=agent.id,
+                        organization_id=agent.organization_id,
+                        provider_call_id=provider_call_id,
+                        transport_type=transport_type,
+                        from_number=from_number,
+                        to_number=to_number,
+                    )
+                    call_log_id = call_log.id
+                    logger.info("Created call log: id={} for agent={}", call_log_id, agent.name)
+            except Exception as e:
+                logger.error("Failed to create call log: {}", e)
+
+            # Pipecat's built-in AudioBufferProcessor for recording
+            audio_buffer = AudioBufferProcessor(sample_rate=16000, num_channels=1)
+
+            # Save audio + update DB inside this event handler.
+            # This runs DURING pipeline lifecycle (before cleanup() returns),
+            # guaranteeing completion before the subprocess can be terminated.
+            @audio_buffer.event_handler("on_audio_data")
+            async def on_audio_data(processor, audio, sample_rate, num_channels):
+                import asyncio
+                # Yield to let pending transcript event handlers complete first
+                await asyncio.sleep(0)
+
+                if not audio or len(audio) == 0:
+                    logger.warning("on_audio_data called with empty audio for call_log_id={}", call_log_id)
+                    return
+
+                logger.info("on_audio_data: {} bytes, {}Hz, {}ch", len(audio), sample_rate, num_channels)
+
+                # Convert raw audio to MP3
+                audio_bytes = None
+                file_name = None
+                try:
+                    audio_segment = AudioSegment(
+                        data=audio,
+                        sample_width=2,
+                        frame_rate=sample_rate,
+                        channels=num_channels,
+                    )
+                    agent_uuid_str = str(agent.uuid) if hasattr(agent, 'uuid') else str(agent.id)
+                    call_id_str = provider_call_id or str(int(_time.time()))
+                    file_name = f"{call_id_str}.mp3"
+
+                    mp3_buffer = io.BytesIO()
+                    audio_segment.export(mp3_buffer, format="mp3")
+                    audio_bytes = mp3_buffer.getvalue()
+                    logger.info("Encoded call recording: {} ({:.1f}s, {} bytes)", file_name, len(audio_segment) / 1000, len(audio_bytes))
+                except Exception as e:
+                    logger.error("Failed to encode call recording: {}", e)
+
+                # Upload to Cloudflare R2 and update DB
+                if call_log_id:
+                    upload_id = None
+                    r2_object_key = None
+                    if audio_bytes and file_name:
+                        try:
+                            from core.services.r2_storage_service import R2StorageService
+                            r2 = R2StorageService()
+                            r2_object_key = f"{agent_uuid_str}/{file_name}"
+                            r2.upload_file(audio_bytes, r2_object_key, content_type="audio/mpeg")
+
+                            with get_db_context() as db:
+                                upload = CallLogService(db).create_upload(
+                                    r2_object_key=r2_object_key,
+                                    agent_id=agent.id,
+                                    organization_id=agent.organization_id,
+                                    call_log_id=call_log_id,
+                                    file_name=file_name,
+                                    content_type="audio/mpeg",
+                                    file_size_bytes=len(audio_bytes),
+                                )
+                                upload_id = upload.id
+                            logger.info("Audio uploaded to R2: key={} upload_id={}", r2_object_key, upload_id)
+                        except Exception as e:
+                            logger.error("Failed to upload audio to R2: {}", e)
+
+                    try:
+                        transcript_data = transcript_entries if transcript_entries else None
+
+                        with get_db_context() as db:
+                            CallLogService(db).complete_call(
+                                call_log_id=call_log_id,
+                                audio_file_path=r2_object_key,
+                                upload_id=upload_id,
+                                transcript=transcript_data,
+                            )
+                        call_log_updated["done"] = True
+                        logger.info(
+                            "Call log completed: id={} r2_key={} transcript_entries={}",
+                            call_log_id,
+                            r2_object_key,
+                            len(transcript_data) if transcript_data else 0,
+                        )
+                    except Exception as e:
+                        logger.error("Failed to complete call log in on_audio_data: {}", e)
 
         tools = NOT_GIVEN
         context = LLMContext(messages, tools)
         context_aggregator = LLMContextAggregatorPair(context)
+        user_aggregator = context_aggregator.user()
+        assistant_aggregator = context_aggregator.assistant()
         llm_text_processor = LLMTextProcessor()
         rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
-        call_end_detector = CallEndDetectorProcessor()
+        end_call_message = None
+        if agent:
+            agent_config = self._get_agent_config(agent)
+            if agent_config:
+                end_call_message = agent_config.end_call_message
+        call_end_detector = CallEndDetectorProcessor(end_call_message=end_call_message)
 
+        # Collect transcripts via Pipecat's built-in aggregator events
+        if agent:
+            @user_aggregator.event_handler("on_user_turn_stopped")
+            async def on_user_turn_stopped(aggregator, strategy, message: UserTurnStoppedMessage):
+                transcript_entries.append({
+                    "role": "user",
+                    "text": message.content,
+                    "timestamp": message.timestamp,
+                })
 
-        pipeline = Pipeline(
-            [
-                transport.input(),
-                rtvi,
-                stt,
-                call_end_detector,
-                context_aggregator.user(),
-                llm,
-                llm_text_processor,
-                tts,
-                transport.output(),
-                context_aggregator.assistant(),
-            ]
-        )
+            @assistant_aggregator.event_handler("on_assistant_turn_stopped")
+            async def on_assistant_turn_stopped(aggregator, message: AssistantTurnStoppedMessage):
+                transcript_entries.append({
+                    "role": "assistant",
+                    "text": message.content,
+                    "timestamp": message.timestamp,
+                })
 
+        # Build pipeline
+        pipeline_processors = [transport.input()]
+
+        pipeline_processors.extend([
+            rtvi,
+            stt,
+            call_end_detector,
+            user_aggregator,
+            llm,
+            llm_text_processor,
+            tts,
+            transport.output(),
+            assistant_aggregator,
+        ])
+
+        # AudioBufferProcessor sees both InputAudioRawFrame and OutputAudioRawFrame
+        # when placed at the end of the pipeline
+        if audio_buffer:
+            pipeline_processors.append(audio_buffer)
+
+        pipeline = Pipeline(pipeline_processors)
 
         task = PipelineTask(
             pipeline,
@@ -662,14 +819,21 @@ class AgentFactoryService(BaseService):
             observers=[RTVIObserver(rtvi)],
         )
 
+        # Start recording when client connects
+        if audio_buffer:
+            @transport.event_handler("on_client_connected")
+            async def on_client_connected(transport, client):
+                logger.info("Client connected — starting audio recording.")
+                await audio_buffer.start_recording()
+        else:
+            @transport.event_handler("on_client_connected")
+            async def on_client_connected(transport, client):
+                logger.info("Client connected.")
+
         @rtvi.event_handler("on_client_ready")
         async def on_client_ready(rtvi):
             logger.debug("Client ready event received")
             await rtvi.set_bot_ready()
-
-        @transport.event_handler("on_client_connected")
-        async def on_client_connected(transport, client):
-            logger.info("Client connected.")
 
         @transport.event_handler("on_client_disconnected")
         async def on_client_disconnected(transport, participant):
@@ -678,6 +842,28 @@ class AgentFactoryService(BaseService):
 
         runner = PipelineRunner(handle_sigint=getattr(runner_args, "handle_sigint", False))
         await runner.run(task)
+
+        # Fallback: if on_audio_data didn't update DB (e.g. no audio captured),
+        # update the call log here with whatever we have.
+        if call_log_id and agent and not call_log_updated["done"]:
+            logger.info("on_audio_data did not complete DB update, running fallback for call_log_id={}", call_log_id)
+            try:
+                transcript_data = transcript_entries if transcript_entries else None
+
+                with get_db_context() as db:
+                    CallLogService(db).complete_call(
+                        call_log_id=call_log_id,
+                        audio_file_path=None,
+                        transcript=transcript_data,
+                    )
+                logger.info("Call log completed (fallback): id={}", call_log_id)
+            except Exception as e:
+                logger.error("Failed to complete call log id={}: {}", call_log_id, e)
+                try:
+                    with get_db_context() as db:
+                        CallLogService(db).fail_call(call_log_id)
+                except Exception:
+                    pass
 
     async def run_bot_for_agent(
         self, agent: Any, transport: Any, runner_args: Any
@@ -699,6 +885,7 @@ class AgentFactoryService(BaseService):
             stt=data["stt"],
             tts=data["tts"],
             messages=data["messages"],
+            agent=agent,
         )
 
 

@@ -7,6 +7,7 @@ from ee.api.v1 import (
     services,
     agents,
     agent_configs,
+    agent_channel_phone_numbers,
     channel_phone_numbers,
     models,
     generated_api_keys,
