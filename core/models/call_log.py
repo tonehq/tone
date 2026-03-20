@@ -16,6 +16,7 @@ class CallLog(OrgScopedModel):
     from_number = Column(String, nullable=True)
     to_number = Column(String, nullable=True)
     audio_file_path = Column(String, nullable=True)
+    upload_id = Column(BigInteger, ForeignKey('uploads.id'), nullable=True, index=True)
     transcript = Column(JSONB, nullable=True)
     status = Column(String, nullable=False, default='in_progress')
     started_at = Column(BigInteger, nullable=False)

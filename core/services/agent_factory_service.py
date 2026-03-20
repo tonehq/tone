@@ -609,7 +609,7 @@ class AgentFactoryService(BaseService):
         Run the voice pipeline with the given transport and services.
         Called by run_bot_for_agent or from bot.py with default components.
         """
-        import os
+        import io
         import time as _time
 
         from pydub import AudioSegment
@@ -688,8 +688,9 @@ class AgentFactoryService(BaseService):
 
                 logger.info("on_audio_data: {} bytes, {}Hz, {}ch", len(audio), sample_rate, num_channels)
 
-                # Save audio to disk
-                audio_path = None
+                # Convert raw audio to MP3
+                audio_bytes = None
+                file_name = None
                 try:
                     audio_segment = AudioSegment(
                         data=audio,
@@ -699,30 +700,56 @@ class AgentFactoryService(BaseService):
                     )
                     agent_uuid_str = str(agent.uuid) if hasattr(agent, 'uuid') else str(agent.id)
                     call_id_str = provider_call_id or str(int(_time.time()))
-                    recordings_dir = os.path.join(os.getcwd(), "recordings", agent_uuid_str)
-                    os.makedirs(recordings_dir, exist_ok=True)
-                    audio_path = os.path.join(recordings_dir, f"{call_id_str}.mp3")
-                    audio_segment.export(audio_path, format="mp3")
-                    logger.info("Saved call recording: {} ({:.1f}s)", audio_path, len(audio_segment) / 1000)
-                except Exception as e:
-                    logger.error("Failed to save call recording: {}", e)
+                    file_name = f"{call_id_str}.mp3"
 
-                # Build transcript JSON and update DB
+                    mp3_buffer = io.BytesIO()
+                    audio_segment.export(mp3_buffer, format="mp3")
+                    audio_bytes = mp3_buffer.getvalue()
+                    logger.info("Encoded call recording: {} ({:.1f}s, {} bytes)", file_name, len(audio_segment) / 1000, len(audio_bytes))
+                except Exception as e:
+                    logger.error("Failed to encode call recording: {}", e)
+
+                # Upload to Cloudflare R2 and update DB
                 if call_log_id:
+                    upload_id = None
+                    r2_object_key = None
+                    if audio_bytes and file_name:
+                        try:
+                            from core.services.r2_storage_service import R2StorageService
+                            r2 = R2StorageService()
+                            r2_object_key = f"{agent_uuid_str}/{file_name}"
+                            r2.upload_file(audio_bytes, r2_object_key, content_type="audio/mpeg")
+
+                            with get_db_context() as db:
+                                upload = CallLogService(db).create_upload(
+                                    r2_object_key=r2_object_key,
+                                    agent_id=agent.id,
+                                    organization_id=agent.organization_id,
+                                    call_log_id=call_log_id,
+                                    file_name=file_name,
+                                    content_type="audio/mpeg",
+                                    file_size_bytes=len(audio_bytes),
+                                )
+                                upload_id = upload.id
+                            logger.info("Audio uploaded to R2: key={} upload_id={}", r2_object_key, upload_id)
+                        except Exception as e:
+                            logger.error("Failed to upload audio to R2: {}", e)
+
                     try:
                         transcript_data = transcript_entries if transcript_entries else None
 
                         with get_db_context() as db:
                             CallLogService(db).complete_call(
                                 call_log_id=call_log_id,
-                                audio_file_path=audio_path,
+                                audio_file_path=r2_object_key,
+                                upload_id=upload_id,
                                 transcript=transcript_data,
                             )
                         call_log_updated["done"] = True
                         logger.info(
-                            "Call log completed: id={} audio={} transcript_entries={}",
+                            "Call log completed: id={} r2_key={} transcript_entries={}",
                             call_log_id,
-                            audio_path,
+                            r2_object_key,
                             len(transcript_data) if transcript_data else 0,
                         )
                     except Exception as e:
@@ -735,7 +762,12 @@ class AgentFactoryService(BaseService):
         assistant_aggregator = context_aggregator.assistant()
         llm_text_processor = LLMTextProcessor()
         rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
-        call_end_detector = CallEndDetectorProcessor()
+        end_call_message = None
+        if agent:
+            agent_config = self._get_agent_config(agent)
+            if agent_config:
+                end_call_message = agent_config.end_call_message
+        call_end_detector = CallEndDetectorProcessor(end_call_message=end_call_message)
 
         # Collect transcripts via Pipecat's built-in aggregator events
         if agent:
