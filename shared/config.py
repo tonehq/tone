@@ -59,5 +59,12 @@ class Settings:
 
         self.DEFAULT_ORG_ID: str = get_secret("DEFAULT_ORG_ID", "00000000-0000-0000-0000-000000000001")
 
+        # Cloudflare R2 Storage
+        self.R2_ENDPOINT_URL: str = get_secret("R2_ENDPOINT_URL", "")
+        self.R2_ACCESS_KEY_ID: str = get_secret("R2_ACCESS_KEY_ID", "")
+        self.R2_SECRET_ACCESS_KEY: str = get_secret("R2_SECRET_ACCESS_KEY", "")
+        self.R2_BUCKET_NAME: str = get_secret("R2_BUCKET_NAME", "")
+        self.R2_TOKEN: str = get_secret("R2_TOKEN", "")
+
 
 settings = Settings()
