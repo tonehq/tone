@@ -1,6 +1,8 @@
 'use client';
 
 import { CustomButton } from '@/components/shared';
+import Logo from '@/components/shared/Logo';
+import { ThemeToggle } from '@/components/shared/ThemeToggle';
 import { SIDEBAR_WIDTH_COLLAPSED, SIDEBAR_WIDTH_EXPANDED } from '@/constants/sidebar';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { Menu } from 'lucide-react';
@@ -33,7 +35,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
       : SIDEBAR_WIDTH_COLLAPSED;
 
   return (
-    <div className="flex w-full h-screen">
+    <div className="flex w-full h-screen bg-background">
       <SidebarComponent
         isExpanded={sidebarExpanded}
         onToggle={() => setSidebarExpanded((prev) => !prev)}
@@ -42,20 +44,20 @@ export default function MainLayout({ children }: MainLayoutProps) {
       />
 
       {isMobile && (
-        <header className="fixed inset-x-0 top-0 z-50 flex h-14 items-center gap-3 border-b border-border bg-background px-4 shadow-sm">
-          <CustomButton
-            type="text"
-            htmlType="button"
-            aria-label="Open sidebar"
-            onClick={() => setMobileOpen(true)}
-            className="rounded-md p-1.5 text-foreground transition-colors hover:bg-muted"
-          >
-            <Menu size={24} />
-          </CustomButton>
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
-            T
+        <header className="fixed inset-x-0 top-0 z-50 flex h-14 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur-sm">
+          <div className="flex items-center gap-3">
+            <CustomButton
+              type="text"
+              htmlType="button"
+              aria-label="Open sidebar"
+              onClick={() => setMobileOpen(true)}
+              className="rounded-lg p-1.5 text-foreground transition-colors hover:bg-muted"
+            >
+              <Menu size={20} />
+            </CustomButton>
+            <Logo />
           </div>
-          <span className="text-lg font-bold text-foreground">Tone</span>
+          <ThemeToggle className="h-8 w-8 rounded-lg border-0 bg-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground" />
         </header>
       )}
 

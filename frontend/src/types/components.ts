@@ -33,7 +33,7 @@ export interface CustomTableProps<TRow> {
 }
 
 export interface TextInputBaseProps extends Omit<React.ComponentProps<'input'>, 'size'> {
-  name: string;
+  name?: string;
   type?: string;
   label?: string;
   isRequired?: boolean;
@@ -46,6 +46,7 @@ export interface TextInputBaseProps extends Omit<React.ComponentProps<'input'>, 
 
 export interface FormTextInputProps
   extends Omit<TextInputBaseProps, 'value' | 'onChange' | 'onBlur' | 'ref'> {
+  name: string;
   control: import('react-hook-form').Control<any>;
   rules?: import('react-hook-form').RegisterOptions;
   onValueChange?: (value: string) => void;

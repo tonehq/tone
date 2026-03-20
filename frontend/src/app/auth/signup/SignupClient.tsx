@@ -5,15 +5,14 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
 import { debounce } from 'lodash';
-import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import CustomButton from '../../../components/shared/CustomButton';
-import TextInput from '../../../components/shared/TextInput';
-import { type SignupFormData, signupSchema } from '../../../schemas/auth';
-import { signup } from '../../../services/auth/helper';
-import axios from '../../../utils/axios';
-import { handleApiError } from '../../../utils/helpers';
-import { showToast } from '../../../utils/toast';
+import { GoogleIcon } from '@/components/icons/google';
+import { CustomButton, CustomLink, TextInput } from '@/components/shared';
+import { type SignupFormData, signupSchema } from '@/schemas/auth';
+import { signup } from '@/services/auth/helper';
+import axios from '@/utils/axios';
+import { handleApiError } from '@/utils/helpers';
+import { showToast } from '@/utils/toast';
 import Container from '../shared/ContainerComponent';
 
 interface ExistingOrg {
@@ -121,10 +120,12 @@ const SignupClient = () => {
 
   return (
     <Container>
-      <div className="w-full max-w-[400px]">
-        <h4 className="mb-1 text-xl font-semibold">Create your account</h4>
-        <p className="mb-4 text-[15px] text-muted-foreground">
-          Get started with Voice AI in minutes
+      <div className="w-full max-w-[400px] animate-page">
+        <h2 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">
+          Create your account
+        </h2>
+        <p className="mb-8 text-sm text-muted-foreground">
+          Get started with AI Voice Agents in minutes
         </p>
 
         <form onSubmit={handleSubmit(onSubmit)} autoComplete="off" className="space-y-5">
@@ -153,34 +154,25 @@ const SignupClient = () => {
             onValueChange={(value) => checkOrgExists(value)}
           />
 
-          <div className="mt-2 flex flex-col gap-2">
+          <div className="space-y-3">
             <CustomButton loading={loader} type="primary" htmlType="submit" fullWidth>
               Create account
             </CustomButton>
-            <CustomButton
-              type="default"
-              fullWidth
-              icon={
-                <img
-                  src="https://developers.google.com/identity/images/g-logo.png"
-                  alt="Google"
-                  width={16}
-                  height={16}
-                />
-              }
-            >
+
+            <div className="relative flex items-center">
+              <div className="flex-1 border-t" />
+              <span className="px-3 text-xs text-muted-foreground">or</span>
+              <div className="flex-1 border-t" />
+            </div>
+
+            <CustomButton type="default" fullWidth icon={<GoogleIcon className="size-4" />}>
               Sign up with Google
             </CustomButton>
           </div>
 
-          <div className="mt-3 flex items-center justify-center gap-1">
-            <span className="text-sm">Already have an account?</span>
-            <Link
-              href="/auth/login"
-              className="font-medium text-indigo-500 no-underline hover:underline"
-            >
-              Log in
-            </Link>
+          <div className="flex items-center justify-center gap-1">
+            <span className="text-sm text-muted-foreground">Already have an account?</span>
+            <CustomLink href="/auth/login">Log in</CustomLink>
           </div>
         </form>
       </div>

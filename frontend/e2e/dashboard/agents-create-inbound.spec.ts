@@ -59,7 +59,9 @@ test.describe('Create Inbound Agent Page', () => {
   // ── 1. Page Rendering ───────────────────────────────────────────────────────
   test.describe('Page Rendering', () => {
     test('shows agent name', async ({ page }) => {
-      await expect(page.getByRole('heading', { name: 'My Inbound Assistant', level: 1 })).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'My Inbound Assistant', level: 1 }),
+      ).toBeVisible();
     });
 
     test('shows Inbound badge', async ({ page }) => {
@@ -161,7 +163,9 @@ test.describe('Create Inbound Agent Page', () => {
       await nameInput.fill('Custom Agent Name');
       await expect(nameInput).toHaveValue('Custom Agent Name');
       // Heading should reflect the updated name
-      await expect(page.getByRole('heading', { name: 'Custom Agent Name', level: 1 })).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'Custom Agent Name', level: 1 }),
+      ).toBeVisible();
     });
 
     test('allows editing the description field', async ({ page }) => {

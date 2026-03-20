@@ -403,12 +403,12 @@ Write-only atoms (e.g., `atom(null, async (_get, set, payload) => {...})`) are t
 
 **Key files**:
 
-| File | Purpose |
-| --- | --- |
-| `src/schemas/auth.ts` | Zod schemas + inferred types for all auth forms |
-| `src/components/agents/agent-form/agentFormUtils.ts` | `AgentFormState`, `defaultFormState`, `formStateToUpsertPayload` |
-| `src/components/agents/AgentFormPage.tsx` | Agent create/edit page wrapper with `FormProvider` |
-| `src/components/agents/agent-form/DynamicProviderFields.tsx` | Renders provider-specific config fields dynamically |
+| File                                                         | Purpose                                                          |
+| ------------------------------------------------------------ | ---------------------------------------------------------------- |
+| `src/schemas/auth.ts`                                        | Zod schemas + inferred types for all auth forms                  |
+| `src/components/agents/agent-form/agentFormUtils.ts`         | `AgentFormState`, `defaultFormState`, `formStateToUpsertPayload` |
+| `src/components/agents/AgentFormPage.tsx`                    | Agent create/edit page wrapper with `FormProvider`               |
+| `src/components/agents/agent-form/DynamicProviderFields.tsx` | Renders provider-specific config fields dynamically              |
 
 ---
 

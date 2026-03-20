@@ -153,7 +153,7 @@ export default function GeneralTab({
     onFormSubmit?.({ ...formData, ...next });
   };
 
-  const addVocabulary = () => {
+  const _addVocabulary = () => {
     const trimmed = vocabularyInput.trim();
     if (trimmed && !formData.customVocabulary.includes(trimmed)) {
       onFormChange({
@@ -163,7 +163,7 @@ export default function GeneralTab({
     }
   };
 
-  const addFilterWord = () => {
+  const _addFilterWord = () => {
     const trimmed = filterWordsInput.trim();
     if (trimmed && !formData.filterWords.includes(trimmed)) {
       onFormChange({

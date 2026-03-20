@@ -112,8 +112,13 @@ export default function Members() {
 
   return (
     <div className="w-full">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-foreground">Members</h2>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Members</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Manage your team and invite new members
+          </p>
+        </div>
         <CustomButton
           type="primary"
           icon={<UserPlus size={18} />}

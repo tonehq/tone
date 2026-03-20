@@ -1,19 +1,40 @@
 'use client';
 
-import CustomButton from '@/components/shared/CustomButton';
-import { Plus } from 'lucide-react';
+import { CustomButton } from '@/components/shared';
+import { Card, CardContent } from '@/components/ui/card';
+import { Phone, Plus } from 'lucide-react';
 
 export default function PhoneNumbersPage() {
   return (
-    <div className="flex-1 rounded-[5px] p-2" style={{ height: 'calc(100vh - 16px)' }}>
-      <div className="h-full overflow-hidden rounded-[5px] border bg-white p-3">
-        <div className="mb-2 flex items-center justify-between">
-          <h5 className="text-lg font-semibold">Phone Numbers</h5>
-          <CustomButton type="primary" icon={<Plus className="size-4" />}>
-            Link a Phone Number to An Agent
-          </CustomButton>
+    <div className="animate-page flex h-full flex-col p-6">
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Phone Numbers</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Manage phone numbers linked to your voice agents
+          </p>
         </div>
+        <CustomButton type="primary" icon={<Plus className="size-4" />}>
+          Link Phone Number
+        </CustomButton>
       </div>
+
+      <Card className="flex flex-1 items-center justify-center">
+        <CardContent className="flex flex-col items-center gap-4 py-12">
+          <div className="flex size-12 items-center justify-center rounded-xl bg-muted">
+            <Phone className="size-6 text-muted-foreground" />
+          </div>
+          <div className="text-center">
+            <p className="font-semibold text-foreground">No phone numbers yet</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Link a phone number to an agent to start receiving calls
+            </p>
+          </div>
+          <CustomButton type="primary" icon={<Plus className="size-4" />}>
+            Link Phone Number
+          </CustomButton>
+        </CardContent>
+      </Card>
     </div>
   );
 }
