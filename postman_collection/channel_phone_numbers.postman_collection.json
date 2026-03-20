@@ -130,7 +130,7 @@
           { "key": "Content-Type", "value": "application/json" }
         ],
         "url": {
-          "raw": "{{baseUrl}}/channel_phone_number/detach_channel_phone_number",
+          "raw": "{{baseUrl}}/agent_channel_phone_number/detach_channel_phone_number",
           "host": ["{{baseUrl}}"],
           "path": ["channel_phone_number", "detach_channel_phone_number"]
         },
@@ -149,7 +149,7 @@
               { "key": "Content-Type", "value": "application/json" }
             ],
             "url": {
-              "raw": "{{baseUrl}}/channel_phone_number/detach_channel_phone_number",
+              "raw": "{{baseUrl}}/agent_channel_phone_number/detach_channel_phone_number",
               "host": ["{{baseUrl}}"],
               "path": ["channel_phone_number", "detach_channel_phone_number"]
             },

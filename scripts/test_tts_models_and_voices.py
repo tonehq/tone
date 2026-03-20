@@ -312,15 +312,37 @@ async def generate_speech(tts_service, provider_name: str) -> tuple[bool, bytes,
         sample_rate = 16000
         has_error = False
         error_msg = None
-        async for _frame in tts_service.run_tts(TEST_TEXT):
-            if _frame is None:
-                continue
-            if isinstance(_frame, ErrorFrame):
-                has_error = True
-                error_msg = getattr(_frame, "error", None) or str(_frame)
-            elif isinstance(_frame, TTSAudioRawFrame):
-                audio_chunks.append(_frame.audio)
-                sample_rate = _frame.sample_rate
+
+        # Intercept push_frame to capture audio from WebSocket-based TTS services
+        # (e.g., LMNT, ElevenLabs, Fish) that send audio via background tasks
+        # instead of yielding TTSAudioRawFrame from run_tts().
+        original_push_frame = tts_service.push_frame
+
+        async def _capturing_push_frame(frame, *args, **kwargs):
+            nonlocal sample_rate
+            if isinstance(frame, TTSAudioRawFrame):
+                audio_chunks.append(frame.audio)
+                sample_rate = frame.sample_rate
+            return await original_push_frame(frame, *args, **kwargs)
+
+        tts_service.push_frame = _capturing_push_frame
+
+        try:
+            async for _frame in tts_service.run_tts(TEST_TEXT):
+                if _frame is None:
+                    continue
+                if isinstance(_frame, ErrorFrame):
+                    has_error = True
+                    error_msg = getattr(_frame, "error", None) or str(_frame)
+                elif isinstance(_frame, TTSAudioRawFrame):
+                    audio_chunks.append(_frame.audio)
+                    sample_rate = _frame.sample_rate
+
+            # For WebSocket-based services, wait briefly for background audio delivery
+            if not audio_chunks:
+                await asyncio.sleep(2)
+        finally:
+            tts_service.push_frame = original_push_frame
 
         combined_audio = b"".join(audio_chunks)
 

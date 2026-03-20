@@ -51,7 +51,7 @@ def get_all_service_providers(
     claims: JWTClaims = Depends(get_jwt_claims),
     db: Session = Depends(get_db)
 ):
-    ALLOWED_PROVIDER_IDS = {1, 2, 3, 19, 20, 21, 23, 26, 30, 43, 47}
+    ALLOWED_PROVIDER_IDS = {1, 2, 3, 19, 20, 21, 23, 26, 30, 33, 36, 37, 38, 39, 40, 42, 43, 46, 47, 48, 49, 50, 51, 55}
     providers = ServiceProviderService(db, user_id=claims.user_id).get_all_service_providers(
         provider_type=provider_type
     )
