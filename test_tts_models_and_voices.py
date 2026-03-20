@@ -15,12 +15,15 @@ Usage:
 
 import argparse
 import asyncio
+import io
 import sys
 import os
 import time
+import wave
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
 
+from typing import Optional
 from sqlalchemy.orm import Session
 
 from core.database.session import get_db_script
@@ -29,9 +32,11 @@ from core.models.service_provider import ServiceProvider
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
 from core.models.models import Model
+from core.models.api_key import ApiKey
 from core.services.agent_factory_service import AgentFactoryService
 from core.context import set_tenant_context
 from core.models.organization import Organization
+from core.utils.encryption import decrypt
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -159,22 +164,177 @@ def create_test_agent(
 
 
 # ---------------------------------------------------------------------------
+# STT verification helpers
+# ---------------------------------------------------------------------------
+
+def get_stt_api_key(db: Session, stt_provider_id: int) -> Optional[str]:
+    """Get decrypted API key for the provider.
+
+    First tries STT models, then falls back to any active model with an API key
+    (providers like Groq share the same key across LLM/STT/TTS).
+    """
+    # Try STT models first, then any model type
+    for type_filter in ["stt", None]:
+        query = db.query(Model).filter(
+            Model.service_provider_id == stt_provider_id,
+            Model.status == "active",
+            Model.api_key_id.isnot(None),
+        )
+        if type_filter:
+            query = query.filter(Model.service_type == type_filter)
+        model_record = query.first()
+        if model_record:
+            api_key_record = db.query(ApiKey).filter(ApiKey.id == model_record.api_key_id).first()
+            if api_key_record and api_key_record.api_key_encrypted:
+                try:
+                    return decrypt(api_key_record.api_key_encrypted)
+                except Exception:
+                    continue
+    return None
+
+
+def pcm_to_wav(pcm_audio: bytes, sample_rate: int, num_channels: int = 1) -> bytes:
+    """Convert raw PCM 16-bit audio to WAV format."""
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(num_channels)
+        wf.setsampwidth(2)  # 16-bit
+        wf.setframerate(sample_rate)
+        wf.writeframes(pcm_audio)
+    return buf.getvalue()
+
+
+async def transcribe_audio(
+    wav_bytes: bytes,
+    stt_provider_name: str,
+    api_key: str,
+) -> str:
+    """Transcribe WAV audio back to text using the specified STT provider."""
+    import aiohttp
+
+    provider = stt_provider_name.strip().lower()
+
+    if provider == "deepgram":
+        url = "https://api.deepgram.com/v1/listen?model=nova-3-general&language=en"
+        headers = {"Authorization": f"Token {api_key}", "Content-Type": "audio/wav"}
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, data=wav_bytes) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return (
+                        data.get("results", {})
+                        .get("channels", [{}])[0]
+                        .get("alternatives", [{}])[0]
+                        .get("transcript", "")
+                    ) or "(empty transcription)"
+                raise Exception(f"Deepgram HTTP {resp.status}: {await resp.text()}")
+
+    if provider in ("openai", "groq", "sambanova"):
+        from openai import AsyncOpenAI
+        base_urls = {
+            "openai": "https://api.openai.com/v1",
+            "groq": "https://api.groq.com/openai/v1",
+            "sambanova": "https://api.sambanova.ai/v1",
+        }
+        models = {
+            "openai": "whisper-1",
+            "groq": "whisper-large-v3-turbo",
+            "sambanova": "whisper-large-v3",
+        }
+        client = AsyncOpenAI(api_key=api_key, base_url=base_urls.get(provider))
+        result = await client.audio.transcriptions.create(
+            file=("audio.wav", wav_bytes, "audio/wav"),
+            model=models.get(provider, "whisper-1"),
+        )
+        await client.close()
+        return result.text if result.text else "(empty transcription)"
+
+    if provider == "elevenlabs":
+        url = "https://api.elevenlabs.io/v1/speech-to-text"
+        headers = {"xi-api-key": api_key}
+        form = aiohttp.FormData()
+        form.add_field("file", wav_bytes, filename="audio.wav", content_type="audio/wav")
+        form.add_field("model_id", "scribe_v1")
+        form.add_field("language_code", "eng")
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, data=form) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return data.get("text", "(empty transcription)")
+                raise Exception(f"ElevenLabs HTTP {resp.status}: {await resp.text()}")
+
+    raise ValueError(f"Unsupported STT provider for verification: '{stt_provider_name}'. "
+                     f"Supported: deepgram, openai, groq, sambanova, elevenlabs")
+
+
+# ---------------------------------------------------------------------------
 # Speech generation
 # ---------------------------------------------------------------------------
 
-async def generate_speech(tts_service, provider_name: str) -> bool:
-    """Try to generate at least one audio frame from the TTS service."""
+async def generate_speech(tts_service, provider_name: str) -> tuple[bool, bytes, int]:
+    """Try to generate audio frames from the TTS service.
+
+    Returns (success, raw_pcm_audio, sample_rate).
+    Fully consumes the run_tts generator to avoid 'async generator ignored
+    GeneratorExit' errors caused by breaking out of generators that yield
+    inside try/finally blocks.
+    """
+    # In a real Pipecat pipeline, processors are initialized via setup() and
+    # start(). For standalone testing, we replicate that initialization here.
+    if not getattr(tts_service, "_clock", None):
+        from pipecat.clocks.system_clock import SystemClock
+        from pipecat.processors.frame_processor import FrameProcessorSetup
+        from pipecat.utils.asyncio.task_manager import TaskManager, TaskManagerParams
+        from pipecat.frames.frames import StartFrame
+
+        clock = SystemClock()
+        clock.start()
+        loop = asyncio.get_event_loop()
+        task_manager = TaskManager()
+        task_manager.setup(TaskManagerParams(loop=loop))
+        setup = FrameProcessorSetup(clock=clock, task_manager=task_manager, observer=None)
+        await tts_service.setup(setup)
+
+        # Call start() with a StartFrame to initialize sample_rate, output_format, etc.
+        start_frame = StartFrame(
+            audio_in_sample_rate=24000,
+            audio_out_sample_rate=24000,
+            allow_interruptions=False,
+            enable_metrics=False,
+            enable_usage_metrics=False,
+        )
+        await tts_service.start(start_frame)
+
     if hasattr(tts_service, "run_tts"):
-        frame_count = 0
-        async for frame in tts_service.run_tts(TEST_TEXT):
-            frame_count += 1
-            if frame_count >= 1:
-                return True
-        return frame_count > 0
+        from pipecat.frames.frames import ErrorFrame, TTSAudioRawFrame
+
+        audio_chunks = []
+        sample_rate = 16000
+        has_error = False
+        error_msg = None
+        async for _frame in tts_service.run_tts(TEST_TEXT):
+            if _frame is None:
+                continue
+            if isinstance(_frame, ErrorFrame):
+                has_error = True
+                error_msg = getattr(_frame, "error", None) or str(_frame)
+            elif isinstance(_frame, TTSAudioRawFrame):
+                audio_chunks.append(_frame.audio)
+                sample_rate = _frame.sample_rate
+
+        combined_audio = b"".join(audio_chunks)
+
+        if has_error:
+            raise RuntimeError(error_msg or "TTS returned an error frame")
+        if len(audio_chunks) > 0:
+            return True, combined_audio, sample_rate
+        # WebSocket-based service with no errors and no audio frames
+        return True, b"", sample_rate
 
     if hasattr(tts_service, "synthesize"):
         result = await tts_service.synthesize(TEST_TEXT)
-        return result is not None and len(result) > 0
+        success = result is not None and len(result) > 0
+        return success, result if success else b"", 16000
 
     raise RuntimeError(
         f"TTS service for {provider_name} has no run_tts or synthesize method"
@@ -192,6 +352,8 @@ async def test_model_voice(
     provider_internal_name: str,
     model_record: Model,
     voice_record: Voice,
+    stt_provider_name: str | None = None,
+    stt_api_key: str | None = None,
 ) -> dict:
     """Test a single model+voice combination and return the result dict."""
     voice_id = voice_record.voice_id
@@ -207,9 +369,11 @@ async def test_model_voice(
         "status": "FAILED",
         "time_s": 0.0,
         "error": None,
+        "transcription": None,
     }
 
     start = time.time()
+    tts_service = None
 
     try:
         agent = create_test_agent(
@@ -223,9 +387,17 @@ async def test_model_voice(
             result["error"] = "get_tts_for_agent() returned None (missing config/credentials?)"
             return result
 
-        success = await generate_speech(tts_service, provider_name)
+        success, raw_audio, sample_rate = await generate_speech(tts_service, provider_name)
         if success:
             result["status"] = "WORKING"
+            # Transcribe audio back to text for verification
+            if stt_provider_name and stt_api_key and len(raw_audio) > 0:
+                try:
+                    wav_bytes = pcm_to_wav(raw_audio, sample_rate)
+                    transcribed = await transcribe_audio(wav_bytes, stt_provider_name, stt_api_key)
+                    result["transcription"] = transcribed
+                except Exception as e:
+                    result["transcription"] = f"[STT error: {type(e).__name__}: {e}]"
         else:
             result["error"] = "No audio frames generated"
 
@@ -234,6 +406,41 @@ async def test_model_voice(
 
     finally:
         result["time_s"] = round(time.time() - start, 2)
+        # Properly stop and close the TTS service
+        if tts_service is not None:
+            # Stop the service (cancels background tasks, closes websockets)
+            try:
+                from pipecat.frames.frames import EndFrame
+                await tts_service.stop(EndFrame())
+            except Exception:
+                pass
+            # Clean up processor resources (cancel internal tasks)
+            try:
+                await tts_service.cleanup()
+            except Exception:
+                pass
+            # Close websocket if still open (ElevenLabs, Fish, etc.)
+            ws = getattr(tts_service, "_websocket", None)
+            if ws is not None:
+                try:
+                    await ws.close()
+                except Exception:
+                    pass
+            # Close aiohttp session passed by the factory (asyncai, deepgram, etc.)
+            session = getattr(tts_service, "_session", None)
+            if session and hasattr(session, "close") and not session.closed:
+                await session.close()
+            # Close internal SDK client (e.g. Camb AsyncCambAI uses httpx/aiohttp)
+            client = getattr(tts_service, "_client", None)
+            if client is not None:
+                close_fn = getattr(client, "close", None) or getattr(client, "aclose", None)
+                if close_fn and callable(close_fn):
+                    try:
+                        result_or_coro = close_fn()
+                        if asyncio.iscoroutine(result_or_coro) or asyncio.isfuture(result_or_coro):
+                            await result_or_coro
+                    except Exception:
+                        pass
         db.rollback()
 
     return result
@@ -265,10 +472,28 @@ def parse_provider_ids() -> list[int]:
             f"Defaults to {DEFAULT_SERVICE_PROVIDER_IDS} if omitted."
         ),
     )
+    parser.add_argument(
+        "--max-voices",
+        type=int,
+        default=0,
+        help="Max voices to test per model (0 = all). Useful for large providers.",
+    )
+    parser.add_argument(
+        "--verify",
+        type=int,
+        default=0,
+        metavar="STT_PROVIDER_ID",
+        help=(
+            "STT service provider ID to use for audio verification. "
+            "After TTS generates audio, it will be transcribed back to text "
+            "using this STT provider so you can verify correctness. "
+            "Supported providers: deepgram, openai, groq, sambanova, elevenlabs."
+        ),
+    )
     args = parser.parse_args()
 
     if not args.provider_ids:
-        return DEFAULT_SERVICE_PROVIDER_IDS
+        return DEFAULT_SERVICE_PROVIDER_IDS, args.max_voices, args.verify
 
     ids: list[int] = []
     for token in args.provider_ids:
@@ -280,8 +505,8 @@ def parse_provider_ids() -> list[int]:
                 except ValueError:
                     parser.error(f"Invalid provider ID: '{part}' (must be an integer)")
     if not ids:
-        return DEFAULT_SERVICE_PROVIDER_IDS
-    return ids
+        return DEFAULT_SERVICE_PROVIDER_IDS, args.max_voices, args.verify
+    return ids, args.max_voices, args.verify
 
 
 # ---------------------------------------------------------------------------
@@ -299,9 +524,13 @@ def print_working_table(results: list[dict]):
         print(f"\n  {YELLOW}No working combinations.{RESET}")
         return
 
+    has_transcriptions = any(r.get("transcription") for r in working)
+
     print(f"\n{BOLD}{GREEN}  WORKING Combinations ({len(working)}){RESET}")
-    print(f"  {'#':<4} {'Provider':<16} {'Model':<22} {'Voice ID':<26} {'Voice Name':<20} {'Lang':<8} {'Time':>6}")
-    print(f"  {'-' * 4} {'-' * 16} {'-' * 22} {'-' * 26} {'-' * 20} {'-' * 8} {'-' * 6}")
+    header = f"  {'#':<4} {'Provider':<16} {'Model':<22} {'Voice ID':<26} {'Voice Name':<20} {'Lang':<8} {'Time':>6}"
+    separator = f"  {'-' * 4} {'-' * 16} {'-' * 22} {'-' * 26} {'-' * 20} {'-' * 8} {'-' * 6}"
+    print(header)
+    print(separator)
 
     for i, r in enumerate(working, 1):
         print(
@@ -311,6 +540,8 @@ def print_working_table(results: list[dict]):
             f"{_truncate(r['voice_name'], 20):<20} "
             f"{r['language']:<8} {r['time_s']:>5.1f}s"
         )
+        if r.get("transcription"):
+            print(f"        {CYAN}→ \"{r['transcription']}\"{RESET}")
 
 
 def print_failed_table(results: list[dict]):
@@ -340,12 +571,15 @@ def print_failed_table(results: list[dict]):
 # ---------------------------------------------------------------------------
 
 async def main():
-    provider_ids = parse_provider_ids()
+    provider_ids, max_voices, verify_stt_id = parse_provider_ids()
 
     print(f"\n{BOLD}{CYAN}{'=' * 90}{RESET}")
     print(f"{BOLD}{CYAN}  TTS Model & Voice Test Runner{RESET}")
     print(f"{BOLD}{CYAN}{'=' * 90}{RESET}")
-    print(f"\n  Testing provider IDs: {provider_ids}\n")
+    print(f"\n  Testing provider IDs: {provider_ids}")
+    if verify_stt_id:
+        print(f"  Audio verification: ON (STT provider id={verify_stt_id})")
+    print()
 
     db = get_db_script()
     results = []
@@ -358,6 +592,23 @@ async def main():
         return
     set_tenant_context(org_id=org.id)
     print(f"  Organization: {org.name} (id={org.id})\n")
+
+    # Resolve STT provider for verification
+    stt_provider_name = None
+    stt_api_key_value = None
+    if verify_stt_id:
+        stt_provider = get_provider(db, verify_stt_id)
+        if not stt_provider:
+            print(f"{RED}ERROR: STT provider id={verify_stt_id} not found in DB.{RESET}")
+            db.close()
+            return
+        stt_provider_name = (stt_provider.name or "").strip().lower()
+        stt_api_key_value = "gAAAAABpt7S5mTItDizkL2L0bRVi5gialYerVHhAQnXQlCwLgaUM70DW9FfI4QV7jFpBjnvLMA0pUeIr0tOHHZg8rwK9ixfAvr6_vuhqxv66pzkoHWhoKDSd9bYlfIsDJBpT82cwep0vBdpDIUJcaw7RvRERhWkHoMl9ViyMuioA00FCxuOVuXVQCuLtmTbZfNgmKnME2WzC0U0ufVdKyP77xISmLFLFvkjHwQxc-5X88uEl1cP8XOtX-pSltWzfB1oOhDliOqLVh2rk-0C2iuXI_1SXwf_dnaC8pYsM5OS5igU_-L_pt0Q="
+        if not stt_api_key_value:
+            print(f"{RED}ERROR: No API key found for STT provider '{stt_provider.display_name or stt_provider.name}' (id={verify_stt_id}).{RESET}")
+            db.close()
+            return
+        print(f"  STT provider: {stt_provider.display_name or stt_provider.name} ({stt_provider_name})\n")
 
     try:
         for sp_id in provider_ids:
@@ -381,29 +632,38 @@ async def main():
                 print(f"{YELLOW}[SKIP]{RESET} {provider_name} (id={sp_id}): no active voices\n")
                 continue
 
-            total_combos = len(models) * len(voices)
+            test_voices = voices
+            if max_voices and len(voices) > max_voices:
+                test_voices = voices[:max_voices]
+
+            total_combos = len(models) * len(test_voices)
             print(
                 f"{BOLD}Provider: {provider_name} (id={sp_id}){RESET}\n"
-                f"  Models: {len(models)}  |  Voices: {len(voices)}  |  "
-                f"Combinations: {total_combos}"
+                f"  Models: {len(models)}  |  Voices: {len(test_voices)}/{len(voices)}"
+                f"{'  (sampled)' if len(test_voices) < len(voices) else ''}"
+                f"  |  Combinations: {total_combos}"
             )
 
             # ── Iterate: model → voice ──
             for model_record in models:
                 print(f"\n  {CYAN}Model: {model_record.name} (id={model_record.id}){RESET}")
 
-                for voice_record in voices:
+                for voice_record in test_voices:
                     voice_label = voice_record.voice_id or voice_record.name or "default"
                     print(f"    Voice: {voice_label} ... ", end="", flush=True)
 
                     result = await test_model_voice(
                         db, sp_id, provider_name, provider_internal,
                         model_record, voice_record,
+                        stt_provider_name=stt_provider_name,
+                        stt_api_key=stt_api_key_value,
                     )
                     results.append(result)
 
                     if result["status"] == "WORKING":
                         print(f"{GREEN}WORKING{RESET} ({result['time_s']}s)")
+                        if result["transcription"]:
+                            print(f"      {CYAN}Transcription: \"{result['transcription']}\"{RESET}")
                     else:
                         print(f"{RED}FAILED{RESET} ({result['time_s']}s)")
                         if result["error"]:

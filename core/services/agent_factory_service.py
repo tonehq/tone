@@ -88,7 +88,7 @@ class AgentFactoryService(BaseService):
         try:
             return input_params_class(**filtered)
         except Exception as e:
-            logger.warning("Failed to build InputParams for %s: %s", service_class.__name__, e)
+            logger.warning(f"Failed to build InputParams for {service_class.__name__}: {e}")
             return input_params_class()
 
     def _get_model_name_by_id(self, model_id: Any) -> Optional[str]:
@@ -318,12 +318,14 @@ class AgentFactoryService(BaseService):
         # Resolve model name from model_id in tts_metadata; None if not present
         model = self._get_model_name_by_id(metadata.get("model_id"))
 
+        # Providers that need an aiohttp session
+        _http_providers = {"asyncai_http", "deepgram", "minimax", "neuphonic", "rime", "sarvam", "speechmatics"}
+
         import aiohttp
-        session = aiohttp.ClientSession()
-        # session = None
+        session = aiohttp.ClientSession() if provider_name in _http_providers else None
 
         try:
-            if provider_name == "cartesia":
+            if provider_name == "cartesia": # In code but class is different
                 from pipecat.services.cartesia.tts import CartesiaTTSService
                 voice_kwargs = {}
                 voice_kwargs["voice_id"] = tts_voice_id or "e07c00bc-4134-4eae-9ea4-1a55fb45746b"
@@ -332,7 +334,7 @@ class AgentFactoryService(BaseService):
                     voice_kwargs["language"] = tts_language or "en"
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
                 return CartesiaTTSService(api_key=api_key, params=self._build_input_params(CartesiaTTSService, metadata), **voice_kwargs)
-            if provider_name == "openai":
+            if provider_name == "openai": # In code
                 from pipecat.services.openai.tts import OpenAITTSService
                 voice_kwargs = {}
                 if tts_voice_id is not None:
@@ -349,11 +351,9 @@ class AgentFactoryService(BaseService):
 
                 voice_kwargs["voice_id"] = tts_voice_id or "CwhRBWXzGAHq8TQ4Fs17"
 
-                if tts_language is not None:
-                    voice_kwargs["language"] = tts_language or "en"
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return ElevenLabsTTSService(api_key=api_key, params=self._build_input_params(ElevenLabsTTSService, metadata), **voice_kwargs)
-            if provider_name == "playht":
+                return ElevenLabsTTSService(api_key=api_key, model=model or "eleven_turbo_v2_5", params=self._build_input_params(ElevenLabsTTSService, metadata), **voice_kwargs)
+            if provider_name == "playht": # In code but class is different
                 # To check this fully
                 from pipecat.services.playht.tts import PlayHTTTSService
                 user_id = model_meta.get("user_id") or metadata.get("user_id") or ""
@@ -364,7 +364,7 @@ class AgentFactoryService(BaseService):
                     voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
                 return PlayHTTTSService(api_key=api_key, user_id=user_id, params=self._build_input_params(PlayHTTTSService, metadata), **voice_kwargs)
-            if provider_name == "asyncai_http":
+            if provider_name == "asyncai_http":  # in code
                 # To check languages in this
                 from pipecat.services.asyncai.tts import AsyncAIHttpTTSService
                 voice_kwargs = {}
@@ -376,7 +376,7 @@ class AgentFactoryService(BaseService):
                     voice_kwargs["language"] = None
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
                 return AsyncAIHttpTTSService(api_key=api_key, aiohttp_session=session, params=self._build_input_params(AsyncAIHttpTTSService, metadata), **voice_kwargs)
-            if provider_name == "aws_polly":
+            if provider_name == "aws_polly":  # In code
                 from pipecat.services.aws.tts import AWSPollyTTSService
                 aws_access_key_id = model_meta.get("aws_access_key_id") or metadata.get("aws_access_key_id") or ""
                 region = model_meta.get("region") or metadata.get("region") or "us-east-1"
@@ -387,27 +387,26 @@ class AgentFactoryService(BaseService):
                     voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
                 return AWSPollyTTSService(api_key=api_key, aws_access_key_id=aws_access_key_id, region=region, params=self._build_input_params(AWSPollyTTSService, metadata), **voice_kwargs)
-            if provider_name == "camb":
+            if provider_name == "camb":  # In code
                 from pipecat.services.camb.tts import CambTTSService
                 voice_kwargs = {}
                 if tts_voice_id is not None:
                     voice_kwargs["voice_id"] = tts_voice_id
                 if tts_language is not None:
                     voice_kwargs["language"] = tts_language
+                # Camb uses numeric language IDs (e.g. "1", "35") passed via voice_kwargs,
+                # but InputParams expects locale codes (e.g. "en"). Exclude language from params.
+                camb_metadata = {k: v for k, v in metadata.items() if k != "language"}
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return CambTTSService(api_key=api_key, params=self._build_input_params(CambTTSService, metadata), **voice_kwargs)
-            if provider_name == "deepgram":
+                return CambTTSService(api_key=api_key, params=self._build_input_params(CambTTSService, camb_metadata), **voice_kwargs)
+            if provider_name == "deepgram":  # In code
                 from pipecat.services.deepgram.tts import DeepgramHttpTTSService
-                voice_kwargs = {}
-                if tts_voice_id is not None:
-                    voice_kwargs["voice"] = tts_voice_id
-                if tts_language is not None:
-                    voice_kwargs["language"] = tts_language
-                else:
-                    voice_kwargs["language"] = None
-                print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return DeepgramHttpTTSService(api_key=api_key, aiohttp_session = session, **voice_kwargs)
-            if provider_name == "google_base":
+                # In Deepgram TTS, the model name IS the voice (e.g. "aura-2-thalia-en").
+                # The voice parameter includes the language suffix, so no separate language needed.
+                dg_voice = model or tts_voice_id or "aura-2-helena-en"
+                print(f"[TTS {provider_name}] voice: {dg_voice}")
+                return DeepgramHttpTTSService(api_key=api_key, voice=dg_voice, aiohttp_session=session)
+            if provider_name == "google_base": # In code
                 # To check this fully
                 from pipecat.services.google.tts import GoogleBaseTTSService
                 voice_kwargs = {}
@@ -417,7 +416,7 @@ class AgentFactoryService(BaseService):
                     voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
                 return GoogleBaseTTSService(credentials=api_key, params=self._build_input_params(GoogleBaseTTSService, metadata), **voice_kwargs)
-            if provider_name == "groq":
+            if provider_name == "groq": # In code
                 from pipecat.services.groq.tts import GroqTTSService
                 voice_kwargs = {}
                 if tts_voice_id is not None:
@@ -425,8 +424,8 @@ class AgentFactoryService(BaseService):
                 if tts_language is not None:
                     voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return GroqTTSService(api_key=api_key, params=self._build_input_params(GroqTTSService, metadata), **voice_kwargs)
-            if provider_name == "hathora":
+                return GroqTTSService(api_key=api_key, model_name=model or "canopylabs/orpheus-v1-english", params=self._build_input_params(GroqTTSService, metadata), **voice_kwargs)
+            if provider_name == "hathora": # In code
                 # Need to check this fully
                 from pipecat.services.hathora.tts import HathoraTTSService
                 voice_kwargs = {}
@@ -438,7 +437,7 @@ class AgentFactoryService(BaseService):
                     voice_kwargs["language"] = None
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
                 return HathoraTTSService(api_key=api_key, model=model or "sonic-2025-04-16", params=self._build_input_params(HathoraTTSService, metadata), **voice_kwargs)
-            if provider_name == "minimax":
+            if provider_name == "minimax": # In code
                 # To check group id in this
                 from pipecat.services.minimax.tts import MiniMaxHttpTTSService
                 group_id = model_meta.get("group_id") or metadata.get("group_id") or ""
@@ -449,7 +448,7 @@ class AgentFactoryService(BaseService):
                     voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
                 return MiniMaxHttpTTSService(api_key=api_key, group_id=group_id, aiohttp_session=session, params=self._build_input_params(MiniMaxHttpTTSService, metadata), **voice_kwargs)
-            if provider_name == "neuphonic":
+            if provider_name == "neuphonic": # In code
                 # To check language
                 from pipecat.services.neuphonic.tts import NeuphonicHttpTTSService
                 voice_kwargs = {}
@@ -460,7 +459,7 @@ class AgentFactoryService(BaseService):
                     voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
                 return NeuphonicHttpTTSService(api_key=api_key, aiohttp_session=session, params=self._build_input_params(NeuphonicHttpTTSService, metadata), **voice_kwargs)
-            if provider_name == "nvidia":
+            if provider_name == "nvidia": # In code
                 from pipecat.services.nvidia.tts import NvidiaTTSService
                 server = model_meta.get("server") or metadata.get("server") or "grpc.nvcf.nvidia.com:443"
                 voice_kwargs = {}
@@ -470,25 +469,51 @@ class AgentFactoryService(BaseService):
                     voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
                 return NvidiaTTSService(api_key=api_key, server=server, params=self._build_input_params(NvidiaTTSService, metadata), **voice_kwargs)
-            if provider_name == "rime":
+            if provider_name == "rime": # In code
                 from pipecat.services.rime.tts import RimeHttpTTSService
+                from pipecat.transcriptions.language import Language
                 voice_kwargs = {}
                 voice_kwargs["voice_id"] = tts_voice_id or "albion"
 
-                if tts_language is not None:
-                    voice_kwargs["language"] = tts_language
+                # Map human-readable language name to Language enum for Rime's InputParams.
+                # Rime uses InputParams.language to set the 'lang' field in the API payload.
+                _RIME_LANG_MAP = {
+                    "english": Language.EN,
+                    "german": Language.DE,
+                    "french": Language.FR,
+                    "spanish": Language.ES,
+                    "hindi": Language.HI,
+                }
+                rime_language = None
+                if tts_language:
+                    rime_language = _RIME_LANG_MAP.get(tts_language.strip().lower())
+
+                # Build InputParams, overriding language if we resolved one
+                params = self._build_input_params(RimeHttpTTSService, metadata)
+                if rime_language and params:
+                    params.language = rime_language
+
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return RimeHttpTTSService(api_key=api_key, aiohttp_session=session, params=self._build_input_params(RimeHttpTTSService, metadata), **voice_kwargs)
-            if provider_name == "sarvam":
+                return RimeHttpTTSService(api_key=api_key, model=model or "mistv2", aiohttp_session=session, params=params, **voice_kwargs)
+            if provider_name == "sarvam": # In code
                 from pipecat.services.sarvam.tts import SarvamHttpTTSService
                 voice_kwargs = {}
                 if tts_voice_id is not None:
-                    voice_kwargs["voice_id"] = tts_voice_id
+                    # Sarvam API expects just the speaker name (e.g. "shubh"),
+                    # but DB stores composite voice_ids like "sarvam-shubh-hi-IN".
+                    # Strip the prefix and language suffix if present.
+                    sarvam_voice = tts_voice_id
+                    if sarvam_voice.startswith("sarvam-"):
+                        parts = sarvam_voice.split("-")
+                        # Format: sarvam-{name}-{lang}-{region} → extract name
+                        if len(parts) >= 3:
+                            sarvam_voice = parts[1]
+                    voice_kwargs["voice_id"] = sarvam_voice
                 if tts_language is not None:
                     voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return SarvamHttpTTSService(api_key=api_key, aiohttp_session=session, params=self._build_input_params(SarvamHttpTTSService, metadata), **voice_kwargs)
-            if provider_name == "speechmatics":
+                return SarvamHttpTTSService(api_key=api_key, model=model or "bulbul:v3", aiohttp_session=session, params=self._build_input_params(SarvamHttpTTSService, metadata), **voice_kwargs)
+            if provider_name == "speechmatics": # In code
                 from pipecat.services.speechmatics.tts import SpeechmaticsTTSService
                 voice_kwargs = {}
                 if tts_voice_id is not None:
@@ -498,7 +523,7 @@ class AgentFactoryService(BaseService):
                 else:
                     voice_kwargs["language"] = None
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return SpeechmaticsTTSService(api_key=api_key, aiohttp_session=session, sample_rate=metadata.get("sample_rate"), params=self._build_input_params(SpeechmaticsTTSService, metadata), **voice_kwargs)
+                return SpeechmaticsTTSService(api_key=api_key, aiohttp_session=session, sample_rate=metadata.get("sample_rate") or SpeechmaticsTTSService.SPEECHMATICS_SAMPLE_RATE, params=self._build_input_params(SpeechmaticsTTSService, metadata), **voice_kwargs)
             if provider_name == "azure":
                 from pipecat.services.azure.tts import AzureTTSService
                 region = model_meta.get("region") or metadata.get("region") or "eastus"
