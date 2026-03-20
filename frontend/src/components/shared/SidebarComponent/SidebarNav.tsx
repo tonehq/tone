@@ -38,7 +38,7 @@ export function SidebarNav({ isExpanded, onMenuClick }: SidebarNavProps) {
             </div>
           ) : (
             <>
-              {index > 0 && <div className="mx-1 my-1.5 border-t" />}
+              {index > 0 && <div className="mx-1 my-1.5 border-t border-border" />}
               <div className="flex flex-col items-center gap-0.5">
                 {section.items.map((item: SidebarMenuItem) => (
                   <SidebarItemMenu

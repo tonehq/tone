@@ -1,6 +1,6 @@
 'use client';
 
-import { CustomModal, SelectInput } from '@/components/shared';
+import { CustomModal, PhoneNumberDisplay, SelectInput } from '@/components/shared';
 import { Checkbox } from '@/components/ui/checkbox';
 import { type TwilioPhoneNumber, getTwilioPhoneNumbers } from '@/services/phoneNumberService';
 import { cn } from '@/utils/cn';
@@ -122,7 +122,11 @@ export default function AssignPhoneNumberModal({
                       onCheckedChange={() => toggleNumber(pn.phone_number)}
                       disabled={isAssigned}
                     />
-                    <span className="flex-1">{pn.phone_number}</span>
+                    <PhoneNumberDisplay
+                      phoneNumber={pn.phone_number}
+                      flagSize="sm"
+                      className="flex-1"
+                    />
                     {isAssigned && (
                       <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
                         Assigned

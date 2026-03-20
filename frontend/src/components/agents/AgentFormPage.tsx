@@ -8,7 +8,7 @@ import PromptPage from '@/components/agents/agent-form/promptPage';
 import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 import AssignPhoneNumberModal from '@/components/agents/AssignPhoneNumberModal';
 import type { TabItem } from '@/components/shared';
-import { CustomButton, CustomModal, CustomTab } from '@/components/shared';
+import { CustomButton, CustomModal, CustomTab, PhoneNumberDisplay } from '@/components/shared';
 import { deleteAgent, getAgent, upsertAgent } from '@/services/agentsService';
 import type { AgentFormState } from '@/types/agent';
 import {
@@ -337,13 +337,14 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
                   <div className="divide-y divide-border/40">
                     {formData.phoneNumbers.map((pn) => (
                       <div key={pn.no} className="flex items-center gap-3 py-3">
-                        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50">
-                          <Phone size={15} className="text-emerald-600" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[13px] font-medium text-foreground">{pn.no}</p>
-                          <p className="text-[11px] capitalize text-muted-foreground">{pn.type}</p>
-                        </div>
+                        <PhoneNumberDisplay
+                          phoneNumber={pn.no}
+                          flagSize="md"
+                          className="min-w-0 flex-1 text-[13px] font-medium"
+                        />
+                        <span className="text-[11px] capitalize text-muted-foreground">
+                          {pn.type}
+                        </span>
                         <CustomButton
                           type="default"
                           className="text-[13px]"
@@ -435,10 +436,17 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
           <div className="mt-1 flex items-center gap-2">
             <AgentTypeBadge agentType={agentType} />
             {formData.phoneNumbers?.length > 0 && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                <Phone size={11} />
-                {formData.phoneNumbers[0].no}
-                {formData.phoneNumbers.length > 1 && ` +${formData.phoneNumbers.length - 1}`}
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                <PhoneNumberDisplay
+                  phoneNumber={formData.phoneNumbers[0].no}
+                  flagSize="sm"
+                  className="text-xs"
+                />
+                {formData.phoneNumbers.length > 1 && (
+                  <span className="text-emerald-600 dark:text-emerald-400">
+                    +{formData.phoneNumbers.length - 1}
+                  </span>
+                )}
               </span>
             )}
           </div>

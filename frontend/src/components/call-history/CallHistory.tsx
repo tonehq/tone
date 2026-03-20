@@ -1,7 +1,7 @@
 'use client';
 
 import callLogsAtom, { fetchCallLogs } from '@/atoms/CallLogAtom';
-import { CustomButton, CustomTable } from '@/components/shared';
+import { CustomButton, CustomTable, PhoneNumberDisplay } from '@/components/shared';
 import type { CallLogFilterParam, CallLogQueryParams, CallLogRow } from '@/types/callLog';
 import type { CustomTableColumn } from '@/types/components';
 import { handleApiError } from '@/utils/helpers';
@@ -151,20 +151,29 @@ const CallHistory: React.FC = () => {
       key: 'from_number',
       title: 'Call From Number',
       dataIndex: 'from_number',
-      render: (value) => (value as string) || '-',
+      render: (value) => {
+        const num = value as string | null;
+        return num ? <PhoneNumberDisplay phoneNumber={num} flagSize="sm" /> : '-';
+      },
     },
     {
       key: 'to_number',
       title: 'Call To Number',
       dataIndex: 'to_number',
-      render: (value) => (value as string) || '-',
+      render: (value) => {
+        const num = value as string | null;
+        return num ? <PhoneNumberDisplay phoneNumber={num} flagSize="sm" /> : '-';
+      },
     },
   ];
 
   return (
-    <div className="flex h-full flex-col p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-foreground">Call History</h1>
+    <div className="animate-page flex h-full flex-col p-6">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Call History</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          View and filter your voice agent call logs
+        </p>
       </div>
 
       <div className="mb-4 flex flex-wrap items-end justify-between gap-4">

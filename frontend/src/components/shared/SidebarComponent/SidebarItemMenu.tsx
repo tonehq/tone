@@ -20,10 +20,10 @@ export function SidebarItemMenu({ item, active, isCollapsed, onClick }: SidebarI
       href={path}
       onClick={onClick}
       className={cn(
-        'relative flex items-center rounded-lg no-underline transition-all duration-200',
+        'relative flex items-center rounded-lg no-underline transition-all duration-150',
         isCollapsed ? 'mx-auto h-10 w-10 justify-center' : 'gap-3 px-3 py-2',
         active
-          ? 'bg-sidebar-accent text-foreground before:absolute before:left-0 before:top-1/2 before:h-5 before:-translate-y-1/2 before:w-[3px] before:rounded-r-full before:bg-primary'
+          ? 'bg-primary/10 text-foreground before:absolute before:left-0 before:top-1/2 before:h-5 before:-translate-y-1/2 before:w-[3px] before:rounded-r-full before:bg-primary'
           : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
       )}
     >

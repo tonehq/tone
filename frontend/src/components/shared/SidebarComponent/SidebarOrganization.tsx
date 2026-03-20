@@ -18,9 +18,9 @@ export function SidebarOrganization({ isExpanded }: SidebarOrganizationProps) {
         type="text"
         fullWidth
         htmlType="button"
-        className="flex items-center gap-2.5 rounded-sm px-2 py-2 text-foreground transition-colors hover:bg-sidebar-accent/50"
+        className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-foreground transition-colors hover:bg-muted/60"
       >
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-muted text-[13px] font-semibold text-foreground">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-[13px] font-semibold text-primary">
           M
         </div>
         <span className="flex-1 truncate text-left text-[13px] font-medium text-foreground">
@@ -38,8 +38,8 @@ export function SidebarOrganization({ isExpanded }: SidebarOrganizationProps) {
           type="text"
           htmlType="button"
           className={cn(
-            'mx-auto flex h-8 w-8 items-center justify-center rounded-sm bg-muted',
-            'text-[13px] font-semibold text-foreground transition-colors hover:bg-muted/80',
+            'mx-auto flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10',
+            'text-[13px] font-semibold text-primary transition-colors hover:bg-primary/15',
           )}
         >
           M

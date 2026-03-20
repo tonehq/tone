@@ -20,44 +20,28 @@
       "page_file": "src/app/(dashboard)/settings/page.tsx",
       "impact_type": "transitive",
       "trigger_file": "src/components/settings/AddChannelModal.tsx",
-      "chain": [
-        "AddChannelModal.tsx",
-        "Integrations.tsx",
-        "page.tsx"
-      ]
+      "chain": ["AddChannelModal.tsx", "Integrations.tsx", "page.tsx"]
     },
     {
       "route": "/agents/create/inbound",
       "page_file": "src/app/(dashboard)/agents/create/inbound/page.tsx",
       "impact_type": "transitive",
       "trigger_file": "src/utils/agentFormUtils.ts",
-      "chain": [
-        "agentFormUtils.ts",
-        "AgentFormPage.tsx",
-        "page.tsx"
-      ]
+      "chain": ["agentFormUtils.ts", "AgentFormPage.tsx", "page.tsx"]
     },
     {
       "route": "/agents/edit/[type]/[id]",
       "page_file": "src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx",
       "impact_type": "transitive",
       "trigger_file": "src/utils/agentFormUtils.ts",
-      "chain": [
-        "agentFormUtils.ts",
-        "AgentFormPage.tsx",
-        "page.tsx"
-      ]
+      "chain": ["agentFormUtils.ts", "AgentFormPage.tsx", "page.tsx"]
     },
     {
       "route": "/agents/create/outbound",
       "page_file": "src/app/(dashboard)/agents/create/outbound/page.tsx",
       "impact_type": "transitive",
       "trigger_file": "src/utils/agentFormUtils.ts",
-      "chain": [
-        "agentFormUtils.ts",
-        "AgentFormPage.tsx",
-        "page.tsx"
-      ]
+      "chain": ["agentFormUtils.ts", "AgentFormPage.tsx", "page.tsx"]
     }
   ],
   "layout_impacts": [],

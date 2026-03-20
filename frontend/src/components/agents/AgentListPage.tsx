@@ -4,7 +4,7 @@ import agentsAtom, { deleteAgentAtom, fetchAgentList } from '@/atoms/AgentsAtom'
 import { AgentActionMenu } from '@/components/agents/AgentActionMenu';
 import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 import CreateAgentModal from '@/components/agents/CreateAgentModal';
-import { CustomButton, CustomTable } from '@/components/shared';
+import { CustomButton, CustomTable, PhoneNumberDisplay } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import type { ApiAgent } from '@/types/agent';
 import type { CustomTableColumn } from '@/types/components';
@@ -88,11 +88,11 @@ const AgentListPage: React.FC = () => {
       render: (_value, record) => {
         const hasPhone = record.phone_number && record.phone_number.length > 0;
         return hasPhone ? (
-          <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400">
+          <Badge className="bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15 dark:text-emerald-400">
             Active
           </Badge>
         ) : (
-          <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400">
+          <Badge className="bg-amber-500/15 text-amber-600 hover:bg-amber-500/15 dark:text-amber-400">
             Inactive
           </Badge>
         );
@@ -111,7 +111,13 @@ const AgentListPage: React.FC = () => {
       render: (value) => {
         const phones = value as { type: string; no: string }[] | null | undefined;
         if (!phones || phones.length === 0) return <span className="text-muted-foreground">—</span>;
-        return <span className="text-sm">{phones.map((p) => p.no).join(', ')}</span>;
+        return (
+          <div className="flex flex-col gap-1">
+            {phones.map((p) => (
+              <PhoneNumberDisplay key={p.no} phoneNumber={p.no} flagSize="sm" />
+            ))}
+          </div>
+        );
       },
     },
     {
@@ -141,7 +147,7 @@ const AgentListPage: React.FC = () => {
   ];
 
   return (
-    <div className="flex h-full flex-col p-6">
+    <div className="animate-page flex h-full flex-col p-6">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">

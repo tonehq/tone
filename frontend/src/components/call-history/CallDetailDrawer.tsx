@@ -1,7 +1,7 @@
 'use client';
 
 import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
-import { TextInput } from '@/components/shared';
+import { PhoneNumberDisplay, TextInput } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -62,15 +62,15 @@ function HighlightText({ text, highlight }: { text: string; highlight: string })
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   completed: {
     label: 'Completed',
-    className: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    className: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400',
   },
   in_progress: {
     label: 'In Progress',
-    className: 'border-amber-200 bg-amber-50 text-amber-700',
+    className: 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
   },
   failed: {
     label: 'Failed',
-    className: 'border-red-200 bg-red-50 text-red-700',
+    className: 'bg-red-500/15 text-red-600 dark:text-red-400',
   },
 };
 
@@ -127,7 +127,7 @@ const CallDetailDrawer: React.FC<CallDetailDrawerProps> = ({ open, onClose, call
             <div className="flex flex-wrap items-center gap-2">
               <AgentTypeBadge agentType={callLog.agent_type} />
               {statusConfig && (
-                <Badge variant="outline" className={cn('px-2.5 py-1', statusConfig.className)}>
+                <Badge className={cn('px-2.5 py-1', statusConfig.className)}>
                   {statusConfig.label}
                 </Badge>
               )}
@@ -170,14 +170,22 @@ const CallDetailDrawer: React.FC<CallDetailDrawerProps> = ({ open, onClose, call
                   <Phone className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                   <div>
                     <p className="text-xs text-muted-foreground">From Number</p>
-                    <p className="text-sm">{callLog.from_number || '-'}</p>
+                    {callLog.from_number ? (
+                      <PhoneNumberDisplay phoneNumber={callLog.from_number} flagSize="sm" />
+                    ) : (
+                      <p className="text-sm">-</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
                   <PhoneOff className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                   <div>
                     <p className="text-xs text-muted-foreground">To Number</p>
-                    <p className="text-sm">{callLog.to_number || '-'}</p>
+                    {callLog.to_number ? (
+                      <PhoneNumberDisplay phoneNumber={callLog.to_number} flagSize="sm" />
+                    ) : (
+                      <p className="text-sm">-</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
