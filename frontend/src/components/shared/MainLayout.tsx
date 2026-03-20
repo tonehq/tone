@@ -60,7 +60,7 @@ export default function MainLayout({ children }: MainLayoutProps) {
       )}
 
       <main
-        className="flex-1 h-full overflow-hidden bg-background transition-[margin-left,width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+        className="flex-1 h-full overflow-hidden bg-background shadow-[inset_1px_0_0_0_hsl(var(--border)/0.5)] transition-[margin-left,width] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
         style={{
           width: isMobile ? '100%' : `calc(100% - ${sidebarWidth}px)`,
           marginLeft: isMobile ? 0 : sidebarWidth,

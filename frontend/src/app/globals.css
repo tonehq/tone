@@ -113,6 +113,12 @@ body {
     sans-serif;
 }
 
+/* Selection color */
+::selection {
+  background-color: hsl(var(--primary) / 0.2);
+  color: hsl(var(--foreground));
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 8px;
@@ -123,13 +129,25 @@ body {
   background: #f1f1f1;
 }
 
+.dark ::-webkit-scrollbar-track {
+  background: hsl(240 3.7% 10%);
+}
+
 ::-webkit-scrollbar-thumb {
   background: #c1c1c1;
   border-radius: 4px;
 }
 
+.dark ::-webkit-scrollbar-thumb {
+  background: hsl(240 3.7% 25%);
+}
+
 ::-webkit-scrollbar-thumb:hover {
   background: #a1a1a1;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: hsl(240 3.7% 35%);
 }
 
 /* Custom animations */
@@ -271,4 +289,21 @@ body {
 /* Tab panel transitions */
 [role='tabpanel'] {
   animation: fadeIn 0.2s ease-out;
+}
+
+/* Hover card shadow utility */
+.hover-card-shadow {
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.hover-card-shadow:hover {
+  box-shadow:
+    0 4px 12px -2px rgba(0, 0, 0, 0.08),
+    0 2px 6px -2px rgba(0, 0, 0, 0.04);
+}
+
+.dark .hover-card-shadow:hover {
+  box-shadow:
+    0 4px 12px -2px rgba(0, 0, 0, 0.3),
+    0 2px 6px -2px rgba(0, 0, 0, 0.2);
 }

@@ -23,7 +23,7 @@ export function SidebarContent({
 }: SidebarContentProps) {
   return (
     <div
-      className="flex h-full flex-col overflow-hidden bg-sidebar transition-[width] duration-300"
+      className="flex h-full flex-col overflow-hidden border-r border-border bg-sidebar transition-[width] duration-300"
       style={{
         width: isExpanded ? SIDEBAR_WIDTH_EXPANDED : SIDEBAR_WIDTH_COLLAPSED,
       }}

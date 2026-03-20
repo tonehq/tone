@@ -49,14 +49,14 @@ const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ open, onClose }) =>
             key={option.type}
             type="default"
             onClick={() => handleSelectAgent(option.type)}
-            className="flex h-auto items-start gap-3 rounded-xl border border-border p-4 text-left transition-all hover:border-primary hover:shadow-md hover:-translate-y-0.5"
+            className="flex h-auto items-start gap-3 rounded-xl border border-border p-5 text-left transition-all duration-200 hover:border-primary hover:ring-2 hover:ring-primary/20 hover:shadow-md hover:scale-[1.02]"
           >
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-              <option.icon className="size-5 text-primary" />
+            <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+              <option.icon className="size-6 text-primary" />
             </div>
             <div className="flex-1">
-              <p className="font-semibold text-foreground">{option.title}</p>
-              <p className="mt-0.5 text-sm font-normal text-muted-foreground leading-snug whitespace-normal">
+              <p className="text-[15px] font-semibold text-foreground">{option.title}</p>
+              <p className="mt-1 text-sm font-normal leading-snug text-muted-foreground whitespace-normal">
                 {option.description}
               </p>
             </div>

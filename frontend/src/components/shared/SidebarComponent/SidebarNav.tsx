@@ -21,7 +21,7 @@ export function SidebarNav({ isExpanded, onMenuClick }: SidebarNavProps) {
         <div key={section.heading}>
           {isExpanded ? (
             <div className="mb-4">
-              <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground/70">
                 {section.heading}
               </p>
               <div className="flex flex-col gap-0.5">

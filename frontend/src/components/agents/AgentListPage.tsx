@@ -5,13 +5,14 @@ import { AgentActionMenu } from '@/components/agents/AgentActionMenu';
 import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 import CreateAgentModal from '@/components/agents/CreateAgentModal';
 import { CustomButton, CustomTable } from '@/components/shared';
+import { Badge } from '@/components/ui/badge';
 import type { ApiAgent } from '@/types/agent';
 import type { CustomTableColumn } from '@/types/components';
 import { formatDate } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
-import { Plus } from 'lucide-react';
+import { Bot, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -67,32 +68,63 @@ const AgentListPage: React.FC = () => {
   const columns: CustomTableColumn<ApiAgent>[] = [
     {
       key: 'name',
-      title: 'Agent Name',
+      title: 'Agent',
       dataIndex: 'name',
       sorter: true,
+      render: (_value, record) => (
+        <div className="flex flex-col gap-0.5">
+          <span className="font-semibold text-foreground">{record.name}</span>
+          {record.description && (
+            <span className="max-w-[280px] truncate text-xs text-muted-foreground">
+              {record.description}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      title: 'Status',
+      render: (_value, record) => {
+        const hasPhone = record.phone_number && record.phone_number.length > 0;
+        return hasPhone ? (
+          <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400">
+            Active
+          </Badge>
+        ) : (
+          <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400">
+            Inactive
+          </Badge>
+        );
+      },
+    },
+    {
+      key: 'agent_type',
+      title: 'Type',
+      dataIndex: 'agent_type',
+      render: (_value, record) => <AgentTypeBadge agentType={record.agent_type} />,
     },
     {
       key: 'phone_number',
-      title: 'Phone Number',
+      title: 'Phone',
       dataIndex: 'phone_number',
       render: (value) => {
         const phones = value as { type: string; no: string }[] | null | undefined;
-        if (!phones || phones.length === 0) return '-';
-        return phones.map((p) => p.no).join(', ');
+        if (!phones || phones.length === 0) return <span className="text-muted-foreground">—</span>;
+        return <span className="text-sm">{phones.map((p) => p.no).join(', ')}</span>;
       },
     },
     {
       key: 'updated_at',
-      title: 'Last Edited',
+      title: 'Last Updated',
       dataIndex: 'updated_at',
       sorter: true,
-      render: (value) => (value ? formatDate(value as number) : '-'),
-    },
-    {
-      key: 'agent_type',
-      title: 'Agent Type',
-      dataIndex: 'agent_type',
-      render: (_value, record) => <AgentTypeBadge agentType={record.agent_type} />,
+      render: (value) =>
+        value ? (
+          <span className="text-sm text-muted-foreground">{formatDate(value as number)}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
     },
     {
       key: 'actions',
@@ -100,6 +132,7 @@ const AgentListPage: React.FC = () => {
       align: 'right',
       render: (_value, record) => (
         <AgentActionMenu
+          agentName={record.name}
           onEdit={() => handleEdit(record)}
           onDelete={() => handleDelete(record.id)}
         />
@@ -110,7 +143,17 @@ const AgentListPage: React.FC = () => {
   return (
     <div className="flex h-full flex-col p-6">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-foreground">Agents</h1>
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Agents</h1>
+            {data.agentList.length > 0 && (
+              <Badge variant="secondary" className="text-xs tabular-nums">
+                {data.agentList.length}
+              </Badge>
+            )}
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">Manage your voice agents</p>
+        </div>
         <CustomButton type="primary" icon={<Plus />} onClick={() => setModalOpen(true)}>
           Create Agent
         </CustomButton>
@@ -125,10 +168,18 @@ const AgentListPage: React.FC = () => {
         searchable
         searchPlaceholder="Search agents..."
         emptyState={
-          <div className="flex flex-col items-center gap-3">
-            <p className="text-muted-foreground">No agents yet</p>
+          <div className="flex flex-col items-center gap-4 py-8">
+            <div className="flex size-12 items-center justify-center rounded-xl bg-muted">
+              <Bot className="size-6 text-muted-foreground" />
+            </div>
+            <div className="text-center">
+              <p className="font-semibold text-foreground">No agents yet</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Create your first voice agent to get started
+              </p>
+            </div>
             <CustomButton type="primary" icon={<Plus />} onClick={() => setModalOpen(true)}>
-              Create your first agent
+              Create Agent
             </CustomButton>
           </div>
         }
