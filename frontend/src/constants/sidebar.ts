@@ -1,5 +1,5 @@
 import type { SidebarMenuItem, SidebarSection } from '@/types/sidebar';
-import { Bot, Home, Plug, Users } from 'lucide-react';
+import { Bot, Home, Phone, Plug, Users } from 'lucide-react';
 
 export const SIDEBAR_WIDTH_EXPANDED = 240;
 export const SIDEBAR_WIDTH_COLLAPSED = 72;
@@ -11,7 +11,10 @@ export const SECTION_HEADING_COLOR = '#6b7280';
 export const sidebarSections: SidebarSection[] = [
   {
     heading: 'GENERAL',
-    items: [{ key: 'home', title: 'Home', path: '/home', icon: Home }],
+    items: [
+      { key: 'home', title: 'Home', path: '/home', icon: Home },
+      { key: 'call-history', title: 'Call History', path: '/call-history', icon: Phone },
+    ],
   },
   {
     heading: 'BUILD',

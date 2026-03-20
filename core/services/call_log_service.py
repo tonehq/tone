@@ -1,9 +1,12 @@
+import json
 import time
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
+from sqlalchemy import asc, desc, func
 from sqlalchemy.orm import Session
 
+from core.models.agent import Agent
 from core.models.call_log import CallLog
 from core.services.base import BaseService
 
@@ -66,3 +69,98 @@ class CallLogService(BaseService):
         call_log.ended_at = int(time.time())
         self.db.commit()
         return call_log
+
+    def get_call_logs(
+        self,
+        page_no: int = 1,
+        page_size: int = 10,
+        start_date_time: Optional[int] = None,
+        end_date_time: Optional[int] = None,
+        filters: Optional[List[Dict[str, Any]]] = None,
+        sort_by: Optional[str] = None,
+        sort_order: str = "desc",
+    ) -> Dict[str, Any]:
+        base_query = (
+            self.query(CallLog)
+            .join(Agent, CallLog.agent_id == Agent.id)
+        )
+
+        if start_date_time is not None:
+            base_query = base_query.filter(CallLog.started_at >= start_date_time)
+        if end_date_time is not None:
+            base_query = base_query.filter(CallLog.started_at <= end_date_time)
+
+        allowed_fields = {
+            "status", "transport_type", "from_number", "to_number",
+            "duration_seconds", "started_at", "ended_at",
+        }
+
+        if filters:
+            for f in filters:
+                field = f.get("field")
+                operator = f.get("operator")
+                value = f.get("value")
+
+                if field not in allowed_fields or not hasattr(CallLog, field):
+                    continue
+
+                col = getattr(CallLog, field)
+
+                if operator == "equal_to":
+                    base_query = base_query.filter(col == value)
+                elif operator == "greater_than":
+                    base_query = base_query.filter(col > value)
+                elif operator == "less_than":
+                    base_query = base_query.filter(col < value)
+                elif operator == "between":
+                    if isinstance(value, list) and len(value) == 2:
+                        base_query = base_query.filter(col.between(value[0], value[1]))
+                elif operator == "in":
+                    if isinstance(value, list):
+                        base_query = base_query.filter(col.in_(value))
+                elif operator == "contains":
+                    base_query = base_query.filter(col.ilike(f"%{value}%"))
+
+        total = base_query.count()
+
+        sort_col = getattr(CallLog, sort_by, None) if sort_by and sort_by in allowed_fields else CallLog.started_at
+        order_fn = asc if sort_order == "asc" else desc
+        base_query = base_query.order_by(order_fn(sort_col))
+
+        offset = (page_no - 1) * page_size
+        results = (
+            base_query
+            .add_columns(Agent.name.label("agent_name"), Agent.agent_type.label("agent_type"))
+            .offset(offset)
+            .limit(page_size)
+            .all()
+        )
+
+        data = []
+        for row in results:
+            call_log = row[0]
+            agent_name = row[1]
+            agent_type = row[2]
+
+            data.append({
+                "id": call_log.id,
+                "uuid": str(call_log.uuid),
+                "agent_id": call_log.agent_id,
+                "agent_name": agent_name,
+                "agent_type": agent_type.name if agent_type else None,
+                "started_at": call_log.started_at,
+                "ended_at": call_log.ended_at,
+                "duration_seconds": call_log.duration_seconds,
+                "transcript": call_log.transcript,
+                "from_number": call_log.from_number,
+                "to_number": call_log.to_number,
+                "transport_type": call_log.transport_type,
+                "status": call_log.status,
+            })
+
+        return {
+            "data": data,
+            "total": total,
+            "page_no": page_no,
+            "page_size": page_size,
+        }
