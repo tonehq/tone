@@ -4,12 +4,11 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
-import CustomButton from '../../../components/shared/CustomButton';
-import TextInput from '../../../components/shared/TextInput';
-import { type ForgotPasswordFormData, forgotPasswordSchema } from '../../../schemas/auth';
-import { forgotPassword } from '../../../services/auth/helper';
-import { handleApiError } from '../../../utils/helpers';
-import { showToast } from '../../../utils/toast';
+import { CustomButton, CustomLink, TextInput } from '@/components/shared';
+import { type ForgotPasswordFormData, forgotPasswordSchema } from '@/schemas/auth';
+import { forgotPassword } from '@/services/auth/helper';
+import { handleApiError } from '@/utils/helpers';
+import { showToast } from '@/utils/toast';
 import Container from '../shared/ContainerComponent';
 
 const ForgotPasswordPage = () => {
@@ -36,9 +35,11 @@ const ForgotPasswordPage = () => {
 
   return (
     <Container>
-      <div className="w-full max-w-[400px]">
-        <h4 className="mb-1 text-xl font-semibold">Reset password</h4>
-        <p className="mb-4 text-[15px] text-muted-foreground">
+      <div className="w-full max-w-[400px] animate-page">
+        <h2 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">
+          Reset password
+        </h2>
+        <p className="mb-8 text-sm text-muted-foreground">
           If there&apos;s an account associated with this email, we will send you a link to reset
           your password.
         </p>
@@ -53,13 +54,18 @@ const ForgotPasswordPage = () => {
             isRequired
           />
 
-          <div className="mt-2 flex flex-col gap-2">
+          <div className="space-y-3">
             <CustomButton loading={loader} type="primary" htmlType="submit" fullWidth>
               Reset Password
             </CustomButton>
             <CustomButton type="default" fullWidth onClick={() => window.history.back()}>
               Cancel
             </CustomButton>
+          </div>
+
+          <div className="flex items-center justify-center gap-1">
+            <span className="text-sm text-muted-foreground">Remember your password?</span>
+            <CustomLink href="/auth/login">Log in</CustomLink>
           </div>
         </form>
       </div>

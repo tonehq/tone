@@ -221,31 +221,31 @@ Wraps shadcn `Input` + `Label`. Supports password visibility toggle, loading ske
 
 Standard controlled/uncontrolled input. Renders as a single `<div>` container (label + input + helperText), so `space-y-*` on a parent form adds gaps between fields.
 
-| Prop                     | Type      | Default  | Description                                                     |
-| ------------------------ | --------- | -------- | --------------------------------------------------------------- |
-| name                     | string    | —        | **Required.** Input name and id.                                |
-| type                     | string    | `'text'` | Input type. `'password'` shows show/hide toggle.                |
-| label                    | string    | —        | Label text above input.                                         |
-| isRequired               | boolean   | `false`  | Shows red asterisk `*` next to label.                           |
-| loading                  | boolean   | `false`  | Shows skeleton instead of input.                                |
-| error                    | boolean   | `false`  | Destructive border + ring.                                      |
-| helperText               | string    | —        | Small text below input (red when `error=true`).                 |
-| labelClassName           | string    | —        | Class for the label.                                            |
-| className                | string    | —        | Class for the input.                                            |
+| Prop                     | Type      | Default  | Description                                                    |
+| ------------------------ | --------- | -------- | -------------------------------------------------------------- |
+| name                     | string    | —        | **Required.** Input name and id.                               |
+| type                     | string    | `'text'` | Input type. `'password'` shows show/hide toggle.               |
+| label                    | string    | —        | Label text above input.                                        |
+| isRequired               | boolean   | `false`  | Shows red asterisk `*` next to label.                          |
+| loading                  | boolean   | `false`  | Shows skeleton instead of input.                               |
+| error                    | boolean   | `false`  | Destructive border + ring.                                     |
+| helperText               | string    | —        | Small text below input (red when `error=true`).                |
+| labelClassName           | string    | —        | Class for the label.                                           |
+| className                | string    | —        | Class for the input.                                           |
 | leftIcon                 | ReactNode | —        | Optional icon on the left (e.g. Search). Adds `pl-9` to input. |
-| + all native input props |           |          | placeholder, value, defaultValue, onChange, disabled, etc.      |
+| + all native input props |           |          | placeholder, value, defaultValue, onChange, disabled, etc.     |
 
 ### RHF mode (with `control`)
 
 When `control` is provided, the component wraps itself in an RHF `Controller`. Error state and helperText are auto-derived from `fieldState` but can be overridden via props.
 
-| Prop          | Type                        | Default | Description                                          |
-| ------------- | --------------------------- | ------- | ---------------------------------------------------- |
-| name          | string                      | —       | **Required.** RHF field name.                        |
-| control       | `Control<any>`              | —       | **Required.** RHF `control` from `useForm`.          |
-| rules         | `RegisterOptions`           | —       | RHF validation rules (e.g. `{ required: 'Req.' }`). |
-| onValueChange | `(value: string) => void`   | —       | Side-effect callback on value change.                |
-| + all plain TextInput props (minus `value`, `onChange`, `onBlur`) | | | Forwarded to the underlying input. |
+| Prop                                                              | Type                      | Default | Description                                         |
+| ----------------------------------------------------------------- | ------------------------- | ------- | --------------------------------------------------- |
+| name                                                              | string                    | —       | **Required.** RHF field name.                       |
+| control                                                           | `Control<any>`            | —       | **Required.** RHF `control` from `useForm`.         |
+| rules                                                             | `RegisterOptions`         | —       | RHF validation rules (e.g. `{ required: 'Req.' }`). |
+| onValueChange                                                     | `(value: string) => void` | —       | Side-effect callback on value change.               |
+| + all plain TextInput props (minus `value`, `onChange`, `onBlur`) |                           |         | Forwarded to the underlying input.                  |
 
 **Important:** When using inside a layout that also renders errors (e.g. `FormRow` with `error` prop), do NOT pass the error to both — let `TextInput` handle error display to avoid duplicate messages.
 
@@ -336,7 +336,9 @@ Simple form wrapper that collects native input values and calls `onFinish(values
 ```tsx
 <Form onFinish={handleFinish} layout="vertical">
   <TextInput name="email" label="Email" />
-  <CustomButton type="primary" htmlType="submit">Submit</CustomButton>
+  <CustomButton type="primary" htmlType="submit">
+    Submit
+  </CustomButton>
 </Form>
 ```
 
@@ -355,8 +357,10 @@ const { control, handleSubmit } = useForm<LoginFormData>({
 <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
   <TextInput name="email" control={control} label="Email" isRequired />
   <TextInput name="password" control={control} type="password" label="Password" isRequired />
-  <CustomButton type="primary" htmlType="submit">Continue</CustomButton>
-</form>
+  <CustomButton type="primary" htmlType="submit">
+    Continue
+  </CustomButton>
+</form>;
 ```
 
 ---
@@ -383,13 +387,13 @@ Checkbox + label + optional helper/error. Uses shadcn `Checkbox` and `Label`. **
 
 Uses the `id` prop as the RHF field name. Error state and helperText are auto-derived from `fieldState`.
 
-| Prop            | Type                           | Default | Description                         |
-| --------------- | ------------------------------ | ------- | ----------------------------------- |
-| id              | string                         | —       | **Required.** Checkbox id and RHF field name. |
-| control         | `Control<any>`                 | —       | **Required.** RHF `control`.        |
-| rules           | `RegisterOptions`              | —       | RHF validation rules.               |
-| onCheckedChange | `(checked: boolean) => void`   | —       | Side-effect callback.               |
-| + plain CheckboxField props (minus `checked`, `onCheckedChange`) | | | Forwarded. |
+| Prop                                                             | Type                         | Default | Description                                   |
+| ---------------------------------------------------------------- | ---------------------------- | ------- | --------------------------------------------- |
+| id                                                               | string                       | —       | **Required.** Checkbox id and RHF field name. |
+| control                                                          | `Control<any>`               | —       | **Required.** RHF `control`.                  |
+| rules                                                            | `RegisterOptions`            | —       | RHF validation rules.                         |
+| onCheckedChange                                                  | `(checked: boolean) => void` | —       | Side-effect callback.                         |
+| + plain CheckboxField props (minus `checked`, `onCheckedChange`) |                              |         | Forwarded.                                    |
 
 ### Examples
 
@@ -436,21 +440,23 @@ Single-choice group. Uses shadcn `RadioGroup` + `RadioGroupItem` + `Label` per o
 
 Error state and helperText are auto-derived from `fieldState`.
 
-| Prop           | Type                           | Default | Description                                                       |
-| -------------- | ------------------------------ | ------- | ----------------------------------------------------------------- |
-| name           | string                         | —       | **Required.** RHF field name.                                     |
-| control        | `Control<any>`                 | —       | **Required.** RHF `control`.                                      |
-| rules          | `RegisterOptions`              | —       | RHF validation rules.                                             |
-| onValueChange  | `(value: string) => void`      | —       | Side-effect callback.                                             |
-| transformValue | `(value: string) => unknown`   | —       | Converts the string value before passing to RHF (e.g. to boolean). |
-| + plain RadioGroupField props (minus `value`, `onValueChange`) | | | Forwarded. |
+| Prop                                                           | Type                         | Default | Description                                                        |
+| -------------------------------------------------------------- | ---------------------------- | ------- | ------------------------------------------------------------------ |
+| name                                                           | string                       | —       | **Required.** RHF field name.                                      |
+| control                                                        | `Control<any>`               | —       | **Required.** RHF `control`.                                       |
+| rules                                                          | `RegisterOptions`            | —       | RHF validation rules.                                              |
+| onValueChange                                                  | `(value: string) => void`    | —       | Side-effect callback.                                              |
+| transformValue                                                 | `(value: string) => unknown` | —       | Converts the string value before passing to RHF (e.g. to boolean). |
+| + plain RadioGroupField props (minus `value`, `onValueChange`) |                              |         | Forwarded.                                                         |
 
 **RadioGroupOption:** `{ value: string; label: string; disabled?: boolean }`
 
 ### Examples
 
 ```tsx
-{/* Plain */}
+{
+  /* Plain */
+}
 <RadioGroupField
   name="plan"
   label="Plan"
@@ -461,9 +467,11 @@ Error state and helperText are auto-derived from `fieldState`.
   defaultValue="m"
   onValueChange={setPlan}
   orientation="vertical"
-/>
+/>;
 
-{/* RHF */}
+{
+  /* RHF */
+}
 <RadioGroupField
   name="plan"
   control={control}
@@ -472,9 +480,11 @@ Error state and helperText are auto-derived from `fieldState`.
     { value: 'yearly', label: 'Yearly' },
   ]}
   orientation="horizontal"
-/>
+/>;
 
-{/* RHF with boolean conversion (Yes/No toggle) */}
+{
+  /* RHF with boolean conversion (Yes/No toggle) */
+}
 <RadioGroupField
   name="enabled"
   control={control}
@@ -484,7 +494,7 @@ Error state and helperText are auto-derived from `fieldState`.
   ]}
   orientation="horizontal"
   transformValue={(v) => v === 'true'}
-/>
+/>;
 ```
 
 ---
@@ -518,20 +528,22 @@ Wraps shadcn `Select` + `Label`. Provides loading skeleton, error state, and hel
 
 Error state and helperText are auto-derived from `fieldState`.
 
-| Prop          | Type                        | Default | Description                           |
-| ------------- | --------------------------- | ------- | ------------------------------------- |
-| name          | string                      | —       | **Required.** RHF field name.         |
-| control       | `Control<any>`              | —       | **Required.** RHF `control`.          |
-| rules         | `RegisterOptions`           | —       | RHF validation rules.                 |
-| onValueChange | `(value: string) => void`   | —       | Side-effect callback.                 |
-| + plain SelectInput props (minus `value`, `onValueChange`) | | | Forwarded. |
+| Prop                                                       | Type                      | Default | Description                   |
+| ---------------------------------------------------------- | ------------------------- | ------- | ----------------------------- |
+| name                                                       | string                    | —       | **Required.** RHF field name. |
+| control                                                    | `Control<any>`            | —       | **Required.** RHF `control`.  |
+| rules                                                      | `RegisterOptions`         | —       | RHF validation rules.         |
+| onValueChange                                              | `(value: string) => void` | —       | Side-effect callback.         |
+| + plain SelectInput props (minus `value`, `onValueChange`) |                           |         | Forwarded.                    |
 
 **SelectOption:** `{ value: string; label: string; disabled?: boolean }`
 
 ### Examples
 
 ```tsx
-{/* Plain */}
+{
+  /* Plain */
+}
 <SelectInput
   name="provider"
   label="AI Model"
@@ -540,9 +552,11 @@ Error state and helperText are auto-derived from `fieldState`.
   placeholder="Select a provider"
   options={providers.map((p) => ({ value: String(p.id), label: p.display_name }))}
   loading={isLoading}
-/>
+/>;
 
-{/* RHF */}
+{
+  /* RHF */
+}
 <SelectInput
   name="provider"
   control={control}
@@ -550,7 +564,7 @@ Error state and helperText are auto-derived from `fieldState`.
   options={providerOptions}
   placeholder="Select a provider"
   onValueChange={(v) => handleChange('provider', v)}
-/>
+/>;
 ```
 
 ---
@@ -578,18 +592,20 @@ Wraps shadcn `Textarea` + `Label`. Supports loading skeleton, error state, and h
 
 Error state and helperText are auto-derived from `fieldState`.
 
-| Prop          | Type                        | Default | Description                           |
-| ------------- | --------------------------- | ------- | ------------------------------------- |
-| name          | string                      | —       | **Required.** RHF field name.         |
-| control       | `Control<any>`              | —       | **Required.** RHF `control`.          |
-| rules         | `RegisterOptions`           | —       | RHF validation rules.                 |
-| onValueChange | `(value: string) => void`   | —       | Side-effect callback.                 |
-| + plain TextAreaField props (minus `value`, `onChange`, `onBlur`) | | | Forwarded. |
+| Prop                                                              | Type                      | Default | Description                   |
+| ----------------------------------------------------------------- | ------------------------- | ------- | ----------------------------- |
+| name                                                              | string                    | —       | **Required.** RHF field name. |
+| control                                                           | `Control<any>`            | —       | **Required.** RHF `control`.  |
+| rules                                                             | `RegisterOptions`         | —       | RHF validation rules.         |
+| onValueChange                                                     | `(value: string) => void` | —       | Side-effect callback.         |
+| + plain TextAreaField props (minus `value`, `onChange`, `onBlur`) |                           |         | Forwarded.                    |
 
 ### Examples
 
 ```tsx
-{/* Plain */}
+{
+  /* Plain */
+}
 <TextAreaField
   name="description"
   label="Description"
@@ -597,15 +613,17 @@ Error state and helperText are auto-derived from `fieldState`.
   onChange={(e) => setDescription(e.target.value)}
   rows={4}
   isRequired
-/>
+/>;
 
-{/* RHF */}
+{
+  /* RHF */
+}
 <TextAreaField
   name="description"
   control={control}
   rules={{ maxLength: { value: 500, message: 'Too long' } }}
   rows={4}
-/>
+/>;
 ```
 
 ---
@@ -714,40 +732,42 @@ Multi-value selection field. Two modes: checkbox-based (when `options` provided)
 
 ### Plain mode (no `control`)
 
-| Prop           | Type                            | Default         | Description                                                |
-| -------------- | ------------------------------- | --------------- | ---------------------------------------------------------- |
-| name           | string                          | —               | **Required.** Field name.                                  |
-| options        | `MultiSelectOption[]`           | —               | `{ value, label }[]`. If omitted, renders freeform tags.   |
-| value          | `string[]`                      | `[]`            | Currently selected values.                                 |
-| onChange       | `(value: string[]) => void`     | —               | Called when selection changes.                             |
-| placeholder    | string                          | `'Add <name>'`  | Placeholder for tag input (no-options mode).               |
-| label          | string                          | —               | Label text above the field.                                |
-| isRequired     | boolean                         | `false`         | Shows asterisk on label.                                   |
-| loading        | boolean                         | `false`         | Shows skeleton.                                            |
-| disabled       | boolean                         | `false`         | Disables all inputs.                                       |
-| error          | boolean                         | `false`         | Destructive border/ring.                                   |
-| helperText     | string                          | —               | Small text below field.                                    |
-| labelClassName | string                          | —               | Class for the label.                                       |
-| className      | string                          | —               | Class for the outer wrapper.                               |
+| Prop           | Type                        | Default        | Description                                              |
+| -------------- | --------------------------- | -------------- | -------------------------------------------------------- |
+| name           | string                      | —              | **Required.** Field name.                                |
+| options        | `MultiSelectOption[]`       | —              | `{ value, label }[]`. If omitted, renders freeform tags. |
+| value          | `string[]`                  | `[]`           | Currently selected values.                               |
+| onChange       | `(value: string[]) => void` | —              | Called when selection changes.                           |
+| placeholder    | string                      | `'Add <name>'` | Placeholder for tag input (no-options mode).             |
+| label          | string                      | —              | Label text above the field.                              |
+| isRequired     | boolean                     | `false`        | Shows asterisk on label.                                 |
+| loading        | boolean                     | `false`        | Shows skeleton.                                          |
+| disabled       | boolean                     | `false`        | Disables all inputs.                                     |
+| error          | boolean                     | `false`        | Destructive border/ring.                                 |
+| helperText     | string                      | —              | Small text below field.                                  |
+| labelClassName | string                      | —              | Class for the label.                                     |
+| className      | string                      | —              | Class for the outer wrapper.                             |
 
 ### RHF mode (with `control`)
 
 Error state and helperText are auto-derived from `fieldState`.
 
-| Prop     | Type                        | Default | Description                             |
-| -------- | --------------------------- | ------- | --------------------------------------- |
-| name     | string                      | —       | **Required.** RHF field name.           |
-| control  | `Control<any>`              | —       | **Required.** RHF `control`.            |
-| rules    | `RegisterOptions`           | —       | RHF validation rules.                   |
-| onChange | `(value: string[]) => void` | —       | Side-effect callback.                   |
-| + plain MultiSelectField props (minus `value`, `onChange`) | | | Forwarded. |
+| Prop                                                       | Type                        | Default | Description                   |
+| ---------------------------------------------------------- | --------------------------- | ------- | ----------------------------- |
+| name                                                       | string                      | —       | **Required.** RHF field name. |
+| control                                                    | `Control<any>`              | —       | **Required.** RHF `control`.  |
+| rules                                                      | `RegisterOptions`           | —       | RHF validation rules.         |
+| onChange                                                   | `(value: string[]) => void` | —       | Side-effect callback.         |
+| + plain MultiSelectField props (minus `value`, `onChange`) |                             |         | Forwarded.                    |
 
 **MultiSelectOption:** `{ value: string; label: string }`
 
 ### Examples
 
 ```tsx
-{/* Checkbox mode (with options) */}
+{
+  /* Checkbox mode (with options) */
+}
 <MultiSelectField
   name="languages"
   options={[
@@ -756,23 +776,22 @@ Error state and helperText are auto-derived from `fieldState`.
   ]}
   value={selectedLangs}
   onChange={setSelectedLangs}
-/>
+/>;
 
-{/* Tag input mode (no options) */}
-<MultiSelectField
-  name="tags"
-  value={tags}
-  onChange={setTags}
-  placeholder="Add a tag"
-/>
+{
+  /* Tag input mode (no options) */
+}
+<MultiSelectField name="tags" value={tags} onChange={setTags} placeholder="Add a tag" />;
 
-{/* RHF */}
+{
+  /* RHF */
+}
 <MultiSelectField
   name="languages"
   control={control}
   options={langOptions}
   onChange={(v) => handleChange('languages', v)}
-/>
+/>;
 ```
 
 ---
@@ -783,50 +802,47 @@ Range slider with min/max/current value labels. Wraps shadcn `Slider`. **Unified
 
 ### Plain mode (no `control`)
 
-| Prop           | Type                          | Default | Description                              |
-| -------------- | ----------------------------- | ------- | ---------------------------------------- |
-| name           | string                        | —       | **Required.** Field name.                |
-| value          | number                        | `min`   | Current slider value.                    |
-| onValueChange  | `(value: number) => void`     | —       | Called when slider value changes.        |
-| min            | number                        | `0`     | Minimum value.                           |
-| max            | number                        | `100`   | Maximum value.                           |
-| step           | number                        | `1`     | Step increment.                          |
-| label          | string                        | —       | Label text above slider.                 |
-| isRequired     | boolean                       | `false` | Shows asterisk on label.                 |
-| loading        | boolean                       | `false` | Shows skeleton.                          |
-| disabled       | boolean                       | `false` | Disables the slider.                     |
-| error          | boolean                       | `false` | Error state.                             |
-| helperText     | string                        | —       | Small text below slider.                 |
-| showLabels     | boolean                       | `true`  | Shows min/current/max labels below.      |
-| labelClassName | string                        | —       | Class for the label.                     |
-| className      | string                        | —       | Class for the outer wrapper.             |
+| Prop           | Type                      | Default | Description                         |
+| -------------- | ------------------------- | ------- | ----------------------------------- |
+| name           | string                    | —       | **Required.** Field name.           |
+| value          | number                    | `min`   | Current slider value.               |
+| onValueChange  | `(value: number) => void` | —       | Called when slider value changes.   |
+| min            | number                    | `0`     | Minimum value.                      |
+| max            | number                    | `100`   | Maximum value.                      |
+| step           | number                    | `1`     | Step increment.                     |
+| label          | string                    | —       | Label text above slider.            |
+| isRequired     | boolean                   | `false` | Shows asterisk on label.            |
+| loading        | boolean                   | `false` | Shows skeleton.                     |
+| disabled       | boolean                   | `false` | Disables the slider.                |
+| error          | boolean                   | `false` | Error state.                        |
+| helperText     | string                    | —       | Small text below slider.            |
+| showLabels     | boolean                   | `true`  | Shows min/current/max labels below. |
+| labelClassName | string                    | —       | Class for the label.                |
+| className      | string                    | —       | Class for the outer wrapper.        |
 
 ### RHF mode (with `control`)
 
 Error state and helperText are auto-derived from `fieldState`.
 
-| Prop          | Type                        | Default | Description                           |
-| ------------- | --------------------------- | ------- | ------------------------------------- |
-| name          | string                      | —       | **Required.** RHF field name.         |
-| control       | `Control<any>`              | —       | **Required.** RHF `control`.          |
-| rules         | `RegisterOptions`           | —       | RHF validation rules.                 |
-| onValueChange | `(value: number) => void`   | —       | Side-effect callback.                 |
-| + plain SliderField props (minus `value`, `onValueChange`) | | | Forwarded. |
+| Prop                                                       | Type                      | Default | Description                   |
+| ---------------------------------------------------------- | ------------------------- | ------- | ----------------------------- |
+| name                                                       | string                    | —       | **Required.** RHF field name. |
+| control                                                    | `Control<any>`            | —       | **Required.** RHF `control`.  |
+| rules                                                      | `RegisterOptions`         | —       | RHF validation rules.         |
+| onValueChange                                              | `(value: number) => void` | —       | Side-effect callback.         |
+| + plain SliderField props (minus `value`, `onValueChange`) |                           |         | Forwarded.                    |
 
 ### Examples
 
 ```tsx
-{/* Plain */}
-<SliderField
-  name="temperature"
-  value={temp}
-  onValueChange={setTemp}
-  min={0}
-  max={2}
-  step={0.1}
-/>
+{
+  /* Plain */
+}
+<SliderField name="temperature" value={temp} onValueChange={setTemp} min={0} max={2} step={0.1} />;
 
-{/* RHF */}
+{
+  /* RHF */
+}
 <SliderField
   name="temperature"
   control={control}
@@ -834,7 +850,7 @@ Error state and helperText are auto-derived from `fieldState`.
   max={2}
   step={0.1}
   onValueChange={(v) => handleChange('temperature', v)}
-/>
+/>;
 ```
 
 ---
@@ -846,11 +862,15 @@ All form-field components (`TextInput`, `CheckboxField`, `RadioGroupField`, `Sel
 ### Pattern
 
 ```tsx
-{/* Plain usage — standard controlled/uncontrolled component */}
-<TextInput name="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+{
+  /* Plain usage — standard controlled/uncontrolled component */
+}
+<TextInput name="email" value={email} onChange={(e) => setEmail(e.target.value)} />;
 
-{/* RHF usage — pass control to activate Controller integration */}
-<TextInput name="email" control={control} rules={{ required: 'Email is required' }} />
+{
+  /* RHF usage — pass control to activate Controller integration */
+}
+<TextInput name="email" control={control} rules={{ required: 'Email is required' }} />;
 ```
 
 ### How it works internally
@@ -859,17 +879,17 @@ All form-field components (`TextInput`, `CheckboxField`, `RadioGroupField`, `Sel
 2. **Without `control`** → renders the plain input with standard React props (`value`, `onChange`, etc.)
 3. **With `control`** → wraps the plain input in an RHF `Controller`, auto-connecting `field.value`, `field.onChange`, `field.onBlur`, and deriving `error`/`helperText` from `fieldState`
 
-### Migration from Form* components
+### Migration from Form\* components
 
 The previous separate `Form*` wrapper components (`FormTextInput`, `FormSelectInput`, etc.) have been merged into their base components. To migrate:
 
-| Before                                          | After                                         |
-| ----------------------------------------------- | --------------------------------------------- |
-| `<FormTextInput name="x" control={c} />`        | `<TextInput name="x" control={c} />`          |
-| `<FormSelectInput name="x" control={c} />`      | `<SelectInput name="x" control={c} />`        |
-| `<FormTextAreaField name="x" control={c} />`    | `<TextAreaField name="x" control={c} />`      |
-| `<FormCheckboxField id="x" control={c} />`      | `<CheckboxField id="x" control={c} />`        |
-| `<FormRadioGroupField name="x" control={c} />`  | `<RadioGroupField name="x" control={c} />`    |
+| Before                                         | After                                      |
+| ---------------------------------------------- | ------------------------------------------ |
+| `<FormTextInput name="x" control={c} />`       | `<TextInput name="x" control={c} />`       |
+| `<FormSelectInput name="x" control={c} />`     | `<SelectInput name="x" control={c} />`     |
+| `<FormTextAreaField name="x" control={c} />`   | `<TextAreaField name="x" control={c} />`   |
+| `<FormCheckboxField id="x" control={c} />`     | `<CheckboxField id="x" control={c} />`     |
+| `<FormRadioGroupField name="x" control={c} />` | `<RadioGroupField name="x" control={c} />` |
 
 ### Validation approaches
 

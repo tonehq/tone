@@ -1,5 +1,5 @@
 import type { SidebarMenuItem, SidebarSection } from '@/types/sidebar';
-import { Bot, Home, Plug, Users } from 'lucide-react';
+import { Bot, Home, Phone, Plug, Users } from 'lucide-react';
 
 export const SIDEBAR_WIDTH_EXPANDED = 240;
 export const SIDEBAR_WIDTH_COLLAPSED = 72;
@@ -15,7 +15,10 @@ export const sidebarSections: SidebarSection[] = [
   },
   {
     heading: 'BUILD',
-    items: [{ key: 'agents', title: 'Agent', path: '/agents', icon: Bot }],
+    items: [
+      { key: 'agents', title: 'Agent', path: '/agents', icon: Bot },
+      { key: 'call-history', title: 'Call History', path: '/call-history', icon: Phone },
+    ],
   },
   {
     heading: 'SETTINGS',

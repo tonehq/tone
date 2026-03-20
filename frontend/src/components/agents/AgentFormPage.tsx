@@ -8,7 +8,7 @@ import PromptPage from '@/components/agents/agent-form/promptPage';
 import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 import AssignPhoneNumberModal from '@/components/agents/AssignPhoneNumberModal';
 import type { TabItem } from '@/components/shared';
-import { CustomButton, CustomModal, CustomTab } from '@/components/shared';
+import { CustomButton, CustomModal, CustomTab, PhoneNumberDisplay } from '@/components/shared';
 import { deleteAgent, getAgent, upsertAgent } from '@/services/agentsService';
 import type { AgentFormState } from '@/types/agent';
 import {
@@ -337,13 +337,14 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
                   <div className="divide-y divide-border/40">
                     {formData.phoneNumbers.map((pn) => (
                       <div key={pn.no} className="flex items-center gap-3 py-3">
-                        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-emerald-50">
-                          <Phone size={15} className="text-emerald-600" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[13px] font-medium text-foreground">{pn.no}</p>
-                          <p className="text-[11px] capitalize text-muted-foreground">{pn.type}</p>
-                        </div>
+                        <PhoneNumberDisplay
+                          phoneNumber={pn.no}
+                          flagSize="md"
+                          className="min-w-0 flex-1 text-[13px] font-medium"
+                        />
+                        <span className="text-[11px] capitalize text-muted-foreground">
+                          {pn.type}
+                        </span>
                         <CustomButton
                           type="default"
                           className="text-[13px]"
@@ -367,8 +368,19 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center p-3">
-        <Loader2 className="size-10 animate-spin text-muted-foreground" />
+      <div className="flex h-full flex-col gap-6 p-6">
+        <div className="flex items-center gap-4">
+          <div className="size-11 animate-pulse rounded-xl bg-muted" />
+          <div className="flex-1 space-y-2">
+            <div className="h-5 w-48 animate-pulse rounded-md bg-muted" />
+            <div className="h-4 w-24 animate-pulse rounded-md bg-muted" />
+          </div>
+        </div>
+        <div className="h-10 w-full animate-pulse rounded-lg bg-muted" />
+        <div className="flex-1 space-y-4">
+          <div className="h-32 w-full animate-pulse rounded-xl bg-muted" />
+          <div className="h-32 w-full animate-pulse rounded-xl bg-muted" />
+        </div>
       </div>
     );
   }
@@ -392,7 +404,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       )}
 
       {/* Breadcrumb bar */}
-      <div className="flex shrink-0 items-center justify-between border-b border-border/60 bg-muted/30 px-6 py-2">
+      <div className="flex shrink-0 items-center justify-between border-b border-border/60 bg-muted/30 px-6 py-3">
         <nav className="flex items-center gap-1.5 text-[13px]">
           <CustomButton
             type="link"
@@ -407,19 +419,9 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
             {formData.name || 'Untitled Agent'}
           </span>
         </nav>
-        <div className="flex shrink-0 items-center gap-2">
-          <CustomButton type="default" icon={<Phone size={14} />}>
-            Test Agent
-          </CustomButton>
-          <CustomButton
-            type="primary"
-            icon={saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save size={14} />}
-            onClick={handleSave}
-            loading={saving}
-          >
-            {saving ? 'Saving...' : 'Save Changes'}
-          </CustomButton>
-        </div>
+        <CustomButton type="default" icon={<Phone size={14} />}>
+          Test Agent
+        </CustomButton>
       </div>
 
       {/* Agent identity sub-header */}
@@ -434,10 +436,17 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
           <div className="mt-1 flex items-center gap-2">
             <AgentTypeBadge agentType={agentType} />
             {formData.phoneNumbers?.length > 0 && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                <Phone size={11} />
-                {formData.phoneNumbers[0].no}
-                {formData.phoneNumbers.length > 1 && ` +${formData.phoneNumbers.length - 1}`}
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                <PhoneNumberDisplay
+                  phoneNumber={formData.phoneNumbers[0].no}
+                  flagSize="sm"
+                  className="text-xs"
+                />
+                {formData.phoneNumbers.length > 1 && (
+                  <span className="text-emerald-600 dark:text-emerald-400">
+                    +{formData.phoneNumbers.length - 1}
+                  </span>
+                )}
               </span>
             )}
           </div>
@@ -454,6 +463,18 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
           contentClassName="min-h-0 flex-1 overflow-auto bg-muted/20 px-8 py-6"
           items={configTabItems}
         />
+      </div>
+
+      {/* Sticky save bar */}
+      <div className="sticky bottom-0 z-10 flex shrink-0 items-center justify-end gap-2 border-t border-border bg-background/80 px-6 py-3 backdrop-blur-sm">
+        <CustomButton
+          type="primary"
+          icon={saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save size={14} />}
+          onClick={handleSave}
+          loading={saving}
+        >
+          {saving ? 'Saving...' : 'Save Changes'}
+        </CustomButton>
       </div>
 
       {/* Modals */}
