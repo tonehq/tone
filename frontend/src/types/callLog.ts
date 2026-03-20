@@ -12,6 +12,8 @@ export interface CallLogRow {
   to_number: string | null;
   transport_type: string | null;
   status: string;
+  audio_file_path: string | null;
+  provider_call_id: string | null;
 }
 
 export interface CallLogsState {
@@ -33,5 +35,5 @@ export interface CallLogQueryParams {
   end_date_time?: number;
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
-  filters?: string;
+  filters?: CallLogFilterParam[];
 }

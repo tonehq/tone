@@ -11,14 +11,14 @@ export const SECTION_HEADING_COLOR = '#6b7280';
 export const sidebarSections: SidebarSection[] = [
   {
     heading: 'GENERAL',
-    items: [
-      { key: 'home', title: 'Home', path: '/home', icon: Home },
-      { key: 'call-history', title: 'Call History', path: '/call-history', icon: Phone },
-    ],
+    items: [{ key: 'home', title: 'Home', path: '/home', icon: Home }],
   },
   {
     heading: 'BUILD',
-    items: [{ key: 'agents', title: 'Agent', path: '/agents', icon: Bot }],
+    items: [
+      { key: 'agents', title: 'Agent', path: '/agents', icon: Bot },
+      { key: 'call-history', title: 'Call History', path: '/call-history', icon: Phone },
+    ],
   },
   {
     heading: 'SETTINGS',

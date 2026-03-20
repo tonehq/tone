@@ -3,6 +3,7 @@ import time
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
+from fastapi import HTTPException
 from sqlalchemy import asc, desc, func
 from sqlalchemy.orm import Session
 
@@ -70,6 +71,37 @@ class CallLogService(BaseService):
         self.db.commit()
         return call_log
 
+    def get_filter_values(self, column_name: str) -> Dict[str, Any]:
+        allowed = {
+            "status": CallLog.status,
+            "transport_type": CallLog.transport_type,
+            "from_number": CallLog.from_number,
+            "to_number": CallLog.to_number,
+            "agent_name": None,
+            "agent_type": None,
+        }
+
+        if column_name not in allowed:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid column: {column_name}. Allowed: {', '.join(sorted(allowed.keys()))}",
+            )
+
+        base = self.query(CallLog).join(Agent, CallLog.agent_id == Agent.id)
+
+        if column_name == "agent_name":
+            rows = base.with_entities(Agent.name).distinct().all()
+            values = sorted([r[0] for r in rows if r[0] is not None])
+        elif column_name == "agent_type":
+            rows = base.with_entities(Agent.agent_type).distinct().all()
+            values = sorted([r[0].name for r in rows if r[0] is not None])
+        else:
+            col = allowed[column_name]
+            rows = base.with_entities(col).distinct().all()
+            values = sorted([r[0] for r in rows if r[0] is not None])
+
+        return {"column": column_name, "values": values}
+
     def get_call_logs(
         self,
         page_no: int = 1,
@@ -93,6 +125,7 @@ class CallLogService(BaseService):
         allowed_fields = {
             "status", "transport_type", "from_number", "to_number",
             "duration_seconds", "started_at", "ended_at",
+            "agent_name", "agent_type",
         }
 
         if filters:
@@ -101,10 +134,17 @@ class CallLogService(BaseService):
                 operator = f.get("operator")
                 value = f.get("value")
 
-                if field not in allowed_fields or not hasattr(CallLog, field):
+                if field not in allowed_fields:
                     continue
 
-                col = getattr(CallLog, field)
+                if field == "agent_name":
+                    col = Agent.name
+                elif field == "agent_type":
+                    col = Agent.agent_type
+                elif not hasattr(CallLog, field):
+                    continue
+                else:
+                    col = getattr(CallLog, field)
 
                 if operator == "equal_to":
                     base_query = base_query.filter(col == value)
@@ -156,6 +196,8 @@ class CallLogService(BaseService):
                 "to_number": call_log.to_number,
                 "transport_type": call_log.transport_type,
                 "status": call_log.status,
+                "audio_file_path": call_log.audio_file_path,
+                "provider_call_id": call_log.provider_call_id,
             })
 
         return {
@@ -163,4 +205,38 @@ class CallLogService(BaseService):
             "total": total,
             "page_no": page_no,
             "page_size": page_size,
+        }
+
+    def get_call_log_by_id(self, call_log_id: int) -> Optional[Dict[str, Any]]:
+        result = (
+            self.query(CallLog)
+            .join(Agent, CallLog.agent_id == Agent.id)
+            .add_columns(Agent.name.label("agent_name"), Agent.agent_type.label("agent_type"))
+            .filter(CallLog.id == call_log_id)
+            .first()
+        )
+
+        if not result:
+            return None
+
+        call_log = result[0]
+        agent_name = result[1]
+        agent_type = result[2]
+
+        return {
+            "id": call_log.id,
+            "uuid": str(call_log.uuid),
+            "agent_id": call_log.agent_id,
+            "agent_name": agent_name,
+            "agent_type": agent_type.name if agent_type else None,
+            "started_at": call_log.started_at,
+            "ended_at": call_log.ended_at,
+            "duration_seconds": call_log.duration_seconds,
+            "transcript": call_log.transcript,
+            "from_number": call_log.from_number,
+            "to_number": call_log.to_number,
+            "transport_type": call_log.transport_type,
+            "status": call_log.status,
+            "audio_file_path": call_log.audio_file_path,
+            "provider_call_id": call_log.provider_call_id,
         }

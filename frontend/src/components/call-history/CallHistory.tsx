@@ -6,13 +6,14 @@ import type { CallLogFilterParam, CallLogQueryParams, CallLogRow } from '@/types
 import type { CustomTableColumn } from '@/types/components';
 import { handleApiError } from '@/utils/helpers';
 import { useAtom } from 'jotai';
-import { Filter, Phone } from 'lucide-react';
+import { ArrowUpDown, CalendarDays, Filter, Phone, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 
-import FilterSortModal from './FilterSortModal';
-import TranscriptionModal from './TranscriptionModal';
+import CallDetailDrawer from './CallDetailDrawer';
+import FilterModal from './FilterSortModal';
+import SortModal from './SortModal';
 
 const formatTimestamp = (ts: number | null): string => {
   if (!ts) return '-';
@@ -38,9 +39,11 @@ const CallHistory: React.FC = () => {
   const [sortBy, setSortBy] = useState<string | undefined>(undefined);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [dateApplied, setDateApplied] = useState(false);
 
   const [filterModalOpen, setFilterModalOpen] = useState(false);
-  const [transcriptRow, setTranscriptRow] = useState<CallLogRow | null>(null);
+  const [sortModalOpen, setSortModalOpen] = useState(false);
+  const [selectedCallLog, setSelectedCallLog] = useState<CallLogRow | null>(null);
 
   // Snapshot date values on each fetch trigger so they stay stable in the dep array
   const startRef = useRef(startDateTime);
@@ -67,7 +70,7 @@ const CallHistory: React.FC = () => {
           params.end_date_time = Math.floor(new Date(endRef.current).getTime() / 1000);
         }
         if (filters.length > 0) {
-          params.filters = JSON.stringify(filters);
+          params.filters = filters;
         }
         if (sortBy) {
           params.sort_by = sortBy;
@@ -84,20 +87,29 @@ const CallHistory: React.FC = () => {
   }, [pageNo, pageSize, filters, sortBy, sortOrder, refreshKey, doFetchCallLogs]);
 
   const handleDateFilter = useCallback(() => {
+    if (dateApplied) {
+      setStartDateTime('');
+      setEndDateTime('');
+      setDateApplied(false);
+    } else {
+      setDateApplied(true);
+    }
     setPageNo(1);
     setRefreshKey((k) => k + 1);
+  }, [dateApplied]);
+
+  const handleApplyFilters = useCallback((newFilters: CallLogFilterParam[]) => {
+    setFilters(newFilters);
+    setPageNo(1);
+    setFilterModalOpen(false);
   }, []);
 
-  const handleApplyFilters = useCallback(
-    (newFilters: CallLogFilterParam[], newSortBy?: string, newSortOrder?: 'asc' | 'desc') => {
-      setFilters(newFilters);
-      setSortBy(newSortBy);
-      setSortOrder(newSortOrder ?? 'desc');
-      setPageNo(1);
-      setFilterModalOpen(false);
-    },
-    [],
-  );
+  const handleApplySort = useCallback((newSortBy?: string, newSortOrder?: 'asc' | 'desc') => {
+    setSortBy(newSortBy);
+    setSortOrder(newSortOrder ?? 'desc');
+    setPageNo(1);
+    setSortModalOpen(false);
+  }, []);
 
   const columns: CustomTableColumn<CallLogRow>[] = [
     {
@@ -136,18 +148,6 @@ const CallHistory: React.FC = () => {
       render: (value) => formatDuration(value as number | null),
     },
     {
-      key: 'transcript',
-      title: 'Call Transcription',
-      render: (_value, record) => {
-        if (!record.transcript || record.transcript.length === 0) return '-';
-        return (
-          <CustomButton type="link" size="sm" onClick={() => setTranscriptRow(record)}>
-            Check Transcription
-          </CustomButton>
-        );
-      },
-    },
-    {
       key: 'from_number',
       title: 'Call From Number',
       dataIndex: 'from_number',
@@ -168,43 +168,57 @@ const CallHistory: React.FC = () => {
       </div>
 
       <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="start-datetime" className="text-sm text-muted-foreground">
-              Start Date/Time
-            </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative">
+            <CalendarDays className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
               id="start-datetime"
               type="datetime-local"
               value={startDateTime}
               onChange={(e) => setStartDateTime(e.target.value)}
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
+              placeholder="Start date"
+              className={`h-9 rounded-md border border-input bg-background pl-9 pr-3 text-sm shadow-sm transition-colors placeholder:text-muted-foreground hover:border-ring focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30 ${startDateTime ? 'text-foreground' : 'text-muted-foreground'}`}
             />
           </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="end-datetime" className="text-sm text-muted-foreground">
-              End Date/Time
-            </label>
+          <span className="text-sm text-muted-foreground">to</span>
+          <div className="relative">
+            <CalendarDays className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
               id="end-datetime"
               type="datetime-local"
               value={endDateTime}
               onChange={(e) => setEndDateTime(e.target.value)}
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring/30"
+              placeholder="End date"
+              className={`h-9 rounded-md border border-input bg-background pl-9 pr-3 text-sm shadow-sm transition-colors placeholder:text-muted-foreground hover:border-ring focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30 ${endDateTime ? 'text-foreground' : 'text-muted-foreground'}`}
             />
           </div>
-          <CustomButton type="primary" size="sm" onClick={handleDateFilter}>
-            Apply Date Filter
+          <CustomButton
+            type={dateApplied ? 'danger' : 'primary'}
+            size="sm"
+            icon={dateApplied ? <X className="size-4" /> : undefined}
+            onClick={handleDateFilter}
+          >
+            {dateApplied ? 'Clear Date Filter' : 'Apply Date Filter'}
           </CustomButton>
         </div>
-        <CustomButton
-          type="default"
-          size="sm"
-          icon={<Filter className="size-4" />}
-          onClick={() => setFilterModalOpen(true)}
-        >
-          Filters & Sort
-        </CustomButton>
+        <div className="flex items-end gap-2">
+          <CustomButton
+            type={filters.length > 0 ? 'primary' : 'default'}
+            size="sm"
+            icon={<Filter className="size-4" />}
+            onClick={() => setFilterModalOpen(true)}
+          >
+            Filter
+          </CustomButton>
+          <CustomButton
+            type={sortBy ? 'primary' : 'default'}
+            size="sm"
+            icon={<ArrowUpDown className="size-4" />}
+            onClick={() => setSortModalOpen(true)}
+          >
+            Sort
+          </CustomButton>
+        </div>
       </div>
 
       <CustomTable
@@ -212,6 +226,7 @@ const CallHistory: React.FC = () => {
         dataSource={data.callLogs}
         rowKey="id"
         loading={data.loading}
+        onRowClick={(record) => setSelectedCallLog(record)}
         pagination={{
           current: pageNo,
           pageSize: pageSize,
@@ -229,20 +244,25 @@ const CallHistory: React.FC = () => {
         }
       />
 
-      <FilterSortModal
+      <FilterModal
         open={filterModalOpen}
         onClose={() => setFilterModalOpen(false)}
         onApply={handleApplyFilters}
         currentFilters={filters}
+      />
+
+      <SortModal
+        open={sortModalOpen}
+        onClose={() => setSortModalOpen(false)}
+        onApply={handleApplySort}
         currentSortBy={sortBy}
         currentSortOrder={sortOrder}
       />
 
-      <TranscriptionModal
-        open={!!transcriptRow}
-        onClose={() => setTranscriptRow(null)}
-        transcript={transcriptRow?.transcript ?? null}
-        agentName={transcriptRow?.agent_name ?? ''}
+      <CallDetailDrawer
+        open={!!selectedCallLog}
+        onClose={() => setSelectedCallLog(null)}
+        callLog={selectedCallLog}
       />
     </div>
   );
