@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from core.models.agent import Agent
 from core.models.call_log import CallLog
+from core.models.upload import Upload
 from core.services.base import BaseService
 
 
