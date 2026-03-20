@@ -1,9 +1,0 @@
- ▐▛███▜▌   Claude Code v2.1.78
-▝▜█████▛▘  Sonnet 4.6 · Claude Pro
-  ▘▘ ▝▝    ~/Documents/Projects/tonehq/tone
-
-✻ Conversation compacted (ctrl+o for history)
-
-
-❯ /compact                                                                      
-  ⎿  Compacted (ctrl+o to see full summary)
