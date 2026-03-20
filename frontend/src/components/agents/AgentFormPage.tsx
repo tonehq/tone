@@ -135,7 +135,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
     const channel = formData?.channels?.find((c: any) => c.type === unassignTarget.type);
     setUnassigning(true);
     try {
-      await axiosInstance.post('/channel_phone_number/detach_channel_phone_number', {
+      await axiosInstance.post('/agent_channel_phone_number/detach_channel_phone_number', {
         channel_id: channel?.id,
         phone_number: unassignTarget.no,
         agent_id: agentId ? Number(agentId) : undefined,

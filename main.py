@@ -13,7 +13,8 @@ from core.api.v1 import (
     service_providers, agents, agent_configs,
     agent_channel_phone_numbers, channel_phone_numbers,
     models as models_router,
-    generated_api_keys, channels, voices, call_logs
+    generated_api_keys, channels, voices, call_logs,
+    telephony,
 )
 import core.models
 
@@ -111,6 +112,9 @@ def get_capabilities_endpoint():
 
 
 app.mount("/api/v1", api_v1)
+
+# Public telephony WebSocket — no auth required, mounted at root for provider compatibility
+app.include_router(telephony.router, tags=["telephony"])
 
 
 @app.get("/")
