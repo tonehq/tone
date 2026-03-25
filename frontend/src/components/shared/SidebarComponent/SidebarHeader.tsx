@@ -15,7 +15,7 @@ export function SidebarHeader({ isExpanded, onToggle, isMobile = false }: Sideba
   return (
     <div
       className={cn(
-        'border-b',
+        'border-b border-border',
         isExpanded
           ? 'flex h-14 items-center justify-between px-5'
           : 'flex flex-col items-center justify-start px-2 py-3',
@@ -29,7 +29,7 @@ export function SidebarHeader({ isExpanded, onToggle, isMobile = false }: Sideba
               type="text"
               htmlType="button"
               onClick={onToggle}
-              className="h-7 w-7 rounded-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+              className="h-7 w-7 rounded-lg text-muted-foreground hover:bg-muted/60 hover:text-foreground"
             >
               <PanelLeft size={16} />
             </CustomButton>
@@ -38,13 +38,12 @@ export function SidebarHeader({ isExpanded, onToggle, isMobile = false }: Sideba
       ) : (
         <div className="flex flex-col items-center gap-2">
           <Logo iconOnly />
-          <div className="h-px w-6 bg-white/10" />
           {!isMobile && (
             <CustomButton
               type="text"
               htmlType="button"
               onClick={onToggle}
-              className="h-7 w-7 rounded-sm text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+              className="h-7 w-7 rounded-lg text-muted-foreground hover:bg-muted/60 hover:text-foreground"
             >
               <PanelRight className="h-4 w-4" />
             </CustomButton>

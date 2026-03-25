@@ -5,12 +5,11 @@ import { Suspense, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
-import CustomButton from '../../../components/shared/CustomButton';
-import TextInput from '../../../components/shared/TextInput';
-import { type ResetPasswordFormData, resetPasswordSchema } from '../../../schemas/auth';
-import axiosInstance from '../../../utils/axios';
-import { handleApiError } from '../../../utils/helpers';
-import { showToast } from '../../../utils/toast';
+import { CustomButton, TextInput } from '@/components/shared';
+import { type ResetPasswordFormData, resetPasswordSchema } from '@/schemas/auth';
+import axiosInstance from '@/utils/axios';
+import { handleApiError } from '@/utils/helpers';
+import { showToast } from '@/utils/toast';
 import Container from '../shared/ContainerComponent';
 
 const ResetPasswordContent = () => {
@@ -44,9 +43,11 @@ const ResetPasswordContent = () => {
 
   return (
     <Container>
-      <div className="w-full max-w-[400px]">
-        <h4 className="mb-1 text-xl font-semibold">Reset password</h4>
-        <p className="mb-4 text-[15px] text-muted-foreground">Enter your new password below</p>
+      <div className="w-full max-w-[400px] animate-page">
+        <h2 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">
+          Reset password
+        </h2>
+        <p className="mb-8 text-sm text-muted-foreground">Enter your new password below</p>
 
         <form onSubmit={handleSubmit(onSubmit)} autoComplete="off" className="space-y-5">
           <TextInput
@@ -66,7 +67,7 @@ const ResetPasswordContent = () => {
             isRequired
           />
 
-          <div className="mt-2 flex flex-col gap-2">
+          <div className="space-y-3">
             <CustomButton loading={loader} type="primary" htmlType="submit" fullWidth>
               Reset Password
             </CustomButton>

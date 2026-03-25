@@ -30,55 +30,57 @@
   --radius-xl: calc(var(--radius) + 4px);
 }
 
+/* ── Light Mode (Portkey-inspired) ──────────────────────────────────────────── */
 :root {
   --background: 0 0% 100%;
-  --foreground: 240 10% 3.9%;
+  --foreground: 240 7% 6%;
   --card: 0 0% 100%;
-  --card-foreground: 240 10% 3.9%;
+  --card-foreground: 240 7% 6%;
   --popover: 0 0% 100%;
-  --popover-foreground: 240 10% 3.9%;
-  --primary: 239 84% 67%;
-  --primary-foreground: 0 0% 98%;
-  --secondary: 240 4.8% 95.9%;
-  --secondary-foreground: 240 5.9% 10%;
-  --muted: 240 4.8% 95.9%;
-  --muted-foreground: 240 3.8% 46.1%;
-  --accent: 240 4.8% 95.9%;
-  --accent-foreground: 240 5.9% 10%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 240 5.9% 90%;
-  --input: 240 5.9% 90%;
-  --ring: 239 84% 67%;
+  --popover-foreground: 240 7% 6%;
+  --primary: 268 47% 54%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 240 5% 96%;
+  --secondary-foreground: 240 6% 10%;
+  --muted: 240 5% 96%;
+  --muted-foreground: 240 4% 35%;
+  --accent: 240 5% 96%;
+  --accent-foreground: 240 6% 10%;
+  --destructive: 0 84% 50%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 240 6% 90%;
+  --input: 240 6% 90%;
+  --ring: 268 47% 54%;
   --sidebar: 0 0% 98%;
-  --sidebar-foreground: 240 10% 3.9%;
-  --sidebar-accent: 239 84% 67% / 0.08;
-  --radius: 0.625rem;
+  --sidebar-foreground: 240 7% 6%;
+  --sidebar-accent: 268 47% 54% / 0.08;
+  --radius: 0.5rem;
 }
 
+/* ── Dark Mode (Portkey-inspired) ───────────────────────────────────────────── */
 .dark {
-  --background: 240 10% 3.9%;
+  --background: 240 4% 6%;
   --foreground: 0 0% 98%;
-  --card: 240 10% 3.9%;
+  --card: 240 3% 10%;
   --card-foreground: 0 0% 98%;
-  --popover: 240 10% 3.9%;
+  --popover: 240 3% 10%;
   --popover-foreground: 0 0% 98%;
-  --primary: 239 84% 67%;
-  --primary-foreground: 0 0% 98%;
-  --secondary: 240 3.7% 15.9%;
+  --primary: 268 47% 54%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 240 3% 16%;
   --secondary-foreground: 0 0% 98%;
-  --muted: 240 3.7% 15.9%;
-  --muted-foreground: 240 5% 64.9%;
-  --accent: 240 3.7% 15.9%;
+  --muted: 240 3% 16%;
+  --muted-foreground: 240 4% 64%;
+  --accent: 240 3% 16%;
   --accent-foreground: 0 0% 98%;
-  --destructive: 0 62.8% 30.6%;
+  --destructive: 0 63% 31%;
   --destructive-foreground: 0 0% 98%;
-  --border: 240 3.7% 15.9%;
-  --input: 240 3.7% 15.9%;
-  --ring: 239 84% 67%;
-  --sidebar: 240 10% 5%;
+  --border: 240 3% 16%;
+  --input: 240 3% 16%;
+  --ring: 268 47% 54%;
+  --sidebar: 240 4% 5%;
   --sidebar-foreground: 0 0% 98%;
-  --sidebar-accent: 239 84% 67% / 0.12;
+  --sidebar-accent: 268 47% 54% / 0.12;
 }
 
 @layer base {
@@ -113,6 +115,12 @@ body {
     sans-serif;
 }
 
+/* Selection color */
+::selection {
+  background-color: hsl(var(--primary) / 0.2);
+  color: hsl(var(--foreground));
+}
+
 /* Scrollbar styling */
 ::-webkit-scrollbar {
   width: 8px;
@@ -123,13 +131,25 @@ body {
   background: #f1f1f1;
 }
 
+.dark ::-webkit-scrollbar-track {
+  background: hsl(240 3% 10%);
+}
+
 ::-webkit-scrollbar-thumb {
   background: #c1c1c1;
   border-radius: 4px;
 }
 
+.dark ::-webkit-scrollbar-thumb {
+  background: hsl(240 3% 25%);
+}
+
 ::-webkit-scrollbar-thumb:hover {
   background: #a1a1a1;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: hsl(240 3% 35%);
 }
 
 /* Custom animations */
@@ -210,6 +230,21 @@ body {
   }
 }
 
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.2;
+  }
+  100% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
+}
+
 /* Override MUI defaults for cleaner look */
 .MuiButton-root {
   box-shadow: none !important;
@@ -271,4 +306,23 @@ body {
 /* Tab panel transitions */
 [role='tabpanel'] {
   animation: fadeIn 0.2s ease-out;
+}
+
+/* Hover card shadow utility */
+.hover-card-shadow {
+  transition:
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.hover-card-shadow:hover {
+  box-shadow:
+    0 4px 12px -2px rgba(0, 0, 0, 0.08),
+    0 2px 6px -2px rgba(0, 0, 0, 0.04);
+}
+
+.dark .hover-card-shadow:hover {
+  box-shadow:
+    0 4px 12px -2px rgba(0, 0, 0, 0.3),
+    0 2px 6px -2px rgba(0, 0, 0, 0.2);
 }

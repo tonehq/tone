@@ -169,6 +169,11 @@ def health():
     return {"status": "ok", "edition": edition}
 
 
+@app.get("/ready")
+def ready():
+    return {"ready": True}
+
+
 @app.get("/environment")
 def environment():
     return {"environment": settings.ENVIRONMENT}

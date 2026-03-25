@@ -6,14 +6,14 @@
 
 ## Summary
 
-| Category | Count |
-|----------|-------|
-| Direct route changes | 0 |
-| Transitively impacted routes | 4 |
-| Layout-impacted routes | 0 |
-| Middleware modified | ❌ No |
+| Category                         | Count |
+| -------------------------------- | ----- |
+| Direct route changes             | 0     |
+| Transitively impacted routes     | 4     |
+| Layout-impacted routes           | 0     |
+| Middleware modified              | ❌ No |
 | **Total unique routes affected** | **4** |
-| Files changed | 2 |
+| Files changed                    | 2     |
 
 ---
 
@@ -21,21 +21,21 @@
 
 Routes affected via shared components, atoms, or services.
 
-| Route | File | Via | Impact Chain |
-|-------|------|-----|--------------|
-| `/settings` | `src/app/(dashboard)/settings/page.tsx` | `AddChannelModal.tsx` | AddChannelModal.tsx → Integrations.tsx → page.tsx |
-| `/agents/create/inbound` | `src/app/(dashboard)/agents/create/inbound/page.tsx` | `agentFormUtils.ts` | agentFormUtils.ts → AgentFormPage.tsx → page.tsx |
-| `/agents/edit/[type]/[id]` | `src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx` | `agentFormUtils.ts` | agentFormUtils.ts → AgentFormPage.tsx → page.tsx |
-| `/agents/create/outbound` | `src/app/(dashboard)/agents/create/outbound/page.tsx` | `agentFormUtils.ts` | agentFormUtils.ts → AgentFormPage.tsx → page.tsx |
+| Route                      | File                                                   | Via                   | Impact Chain                                      |
+| -------------------------- | ------------------------------------------------------ | --------------------- | ------------------------------------------------- |
+| `/settings`                | `src/app/(dashboard)/settings/page.tsx`                | `AddChannelModal.tsx` | AddChannelModal.tsx → Integrations.tsx → page.tsx |
+| `/agents/create/inbound`   | `src/app/(dashboard)/agents/create/inbound/page.tsx`   | `agentFormUtils.ts`   | agentFormUtils.ts → AgentFormPage.tsx → page.tsx  |
+| `/agents/edit/[type]/[id]` | `src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx` | `agentFormUtils.ts`   | agentFormUtils.ts → AgentFormPage.tsx → page.tsx  |
+| `/agents/create/outbound`  | `src/app/(dashboard)/agents/create/outbound/page.tsx`  | `agentFormUtils.ts`   | agentFormUtils.ts → AgentFormPage.tsx → page.tsx  |
 
 ---
 
 ## Changed Files by Category
 
-| File | Category | Status | +Lines | -Lines |
-|------|----------|--------|--------|--------|
-| `src/components/settings/AddChannelModal.tsx` | component | modified | +4 | -4 |
-| `src/utils/agentFormUtils.ts` | util | modified | +1 | -1 |
+| File                                          | Category  | Status   | +Lines | -Lines |
+| --------------------------------------------- | --------- | -------- | ------ | ------ |
+| `src/components/settings/AddChannelModal.tsx` | component | modified | +4     | -4     |
+| `src/utils/agentFormUtils.ts`                 | util      | modified | +1     | -1     |
 
 ---
 
