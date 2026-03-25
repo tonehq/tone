@@ -22,6 +22,17 @@ class CallLogService(BaseService):
         from_number: Optional[str] = None,
         to_number: Optional[str] = None,
     ) -> CallLog:
+        # Deduplicate: if a call log with the same provider_call_id already exists
+        # for this agent, return the existing one (prevents duplicates from retries
+        # or warm-to-cold worker fallbacks)
+        if provider_call_id:
+            existing = self.db.query(CallLog).filter(
+                CallLog.provider_call_id == provider_call_id,
+                CallLog.agent_id == agent_id,
+            ).first()
+            if existing:
+                return existing
+
         call_log = CallLog(
             agent_id=agent_id,
             organization_id=organization_id,

@@ -2,6 +2,7 @@
 
 import sys
 import os
+import time as _time
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 
@@ -101,26 +102,228 @@ class AgentFactoryService(BaseService):
         except (TypeError, ValueError):
             return None
 
-    def get_llm_for_agent(self, agent: Any) -> Optional[Any]:
+    def _extract_service_data(self, service_provider_id: Optional[int], service_type: str, metadata: dict) -> Optional[dict]:
+        """Extract raw service data (provider, key, model) into a JSON-serializable dict.
+
+        Used by serialize_agent_bot_data to pre-fetch data for the subprocess.
+        """
+        if not service_provider_id:
+            return None
+        result = self._get_service_and_credentials(service_provider_id, service_type)
+        if not result:
+            return None
+        svc, provider, api_key = result
+        model_meta = (svc.meta_data or {}) if isinstance(getattr(svc, "meta_data", None), dict) else {}
+        model_name = self._get_model_name_by_id(metadata.get("model_id"))
+        return {
+            "provider_name": (provider.name or "").strip().lower(),
+            "api_key": api_key,
+            "model_name": model_name,
+            "metadata": metadata,
+            "model_meta_data": model_meta,
+        }
+
+    def _get_telephony_creds_bulk(self, provider_name: str) -> dict:
+        """Fetch telephony provider credentials in a single query using the existing DB session.
+
+        Avoids the separate ServiceProvider + ApiKey queries that _get_twilio_credentials does.
+        """
+        provider = self.db.query(ServiceProvider).filter(ServiceProvider.name == provider_name).first()
+        if not provider:
+            logger.warning("%s service provider not found in DB", provider_name)
+            return {}
+
+        api_keys = (
+            self.db.query(ApiKey)
+            .filter(ApiKey.service_provider_id == provider.id)
+            .all()
+        )
+
+        creds = {}
+        for ak in api_keys:
+            additional = ak.additional_credentials or {}
+            key_type = additional.get("key_type")
+            if key_type and ak.api_key_encrypted:
+                try:
+                    creds[key_type] = decrypt(ak.api_key_encrypted)
+                except Exception as e:
+                    logger.warning("Failed to decrypt %s key %s: %s", provider_name, ak.id, e)
+        return creds
+
+    def serialize_agent_bot_data(self, agent: Any, transport_type: str = None) -> Optional[dict]:
+        """Pre-fetch all data needed to build LLM/STT/TTS services into a JSON-serializable dict.
+
+        Called in the main process so the subprocess can build services without DB queries.
+        Uses bulk queries to minimize DB round-trips.
+        If transport_type is provided, also fetches telephony credentials in the same DB session.
+        Returns None if config or any required service is missing.
+        """
+        from sqlalchemy import or_, and_
+
+        _t_ser = _time.monotonic()
+
+        # Query 1: Get agent config
+        config = self._get_agent_config(agent)
+        logger.info("[TIMING] serialize: Q1 _get_agent_config (+%.3fs)", _time.monotonic() - _t_ser)
+        if not config or not config.system_prompt:
+            return None
+
+        llm_metadata = (config.llm_metadata or {}) if hasattr(config, "llm_metadata") else {}
+        stt_metadata = (config.stt_metadata or {}) if hasattr(config, "stt_metadata") else {}
+        tts_metadata = (config.tts_metadata or {}) if hasattr(config, "tts_metadata") else {}
+
+        # Collect all service_provider_ids to fetch in bulk
+        service_ids = {
+            "llm": config.llm_service_id,
+            "stt": config.stt_service_id,
+            "tts": config.tts_service_id,
+        }
+        all_sp_ids = [sid for sid in service_ids.values() if sid]
+        if len(all_sp_ids) < 3:
+            return None
+
+        # Collect model_ids for name resolution (needed before Q2)
+        metadata_map = {"llm": llm_metadata, "stt": stt_metadata, "tts": tts_metadata}
+        model_name_ids = set()
+        for stype, meta in metadata_map.items():
+            mid = meta.get("model_id")
+            if mid is not None:
+                model_name_ids.add(int(mid))
+
+        # Query 2: Bulk fetch Models + ServiceProviders + model names (merged Q2+Q4)
+        _t = _time.monotonic()
+        q2_conditions = [and_(Model.service_provider_id.in_(all_sp_ids), Model.status == "active")]
+        if model_name_ids:
+            q2_conditions.append(Model.id.in_(model_name_ids))
+        rows = (
+            self.db.query(Model, ServiceProvider)
+            .join(ServiceProvider, Model.service_provider_id == ServiceProvider.id)
+            .filter(or_(*q2_conditions))
+            .all()
+        )
+        logger.info("[TIMING] serialize: Q2 bulk Models+Providers+names (+%.3fs)", _time.monotonic() - _t)
+
+        # Index by (service_provider_id, service_type) + build model_name_map from same results
+        model_map = {}
+        api_key_ids = set()
+        model_name_map = {}
+        for svc, provider in rows:
+            model_name_map[svc.id] = svc.name
+            key = (svc.service_provider_id, svc.service_type)
+            if key not in model_map:
+                model_map[key] = (svc, provider)
+                if svc.api_key_id:
+                    api_key_ids.add(svc.api_key_id)
+
+        # Query 3: Bulk fetch ApiKeys + telephony keys (merged Q3 + telephony creds)
+        _t = _time.monotonic()
+        api_key_map = {}
+        telephony_creds = {}
+
+        q3_filters = []
+        if api_key_ids:
+            q3_filters.append(ApiKey.id.in_(api_key_ids))
+        if transport_type:
+            # Use subquery to include telephony provider's keys without a separate query
+            telephony_sp_subq = (
+                self.db.query(ServiceProvider.id)
+                .filter(ServiceProvider.name == transport_type)
+                .scalar_subquery()
+            )
+            q3_filters.append(ApiKey.service_provider_id == telephony_sp_subq)
+
+        if q3_filters:
+            all_api_keys = self.db.query(ApiKey).filter(or_(*q3_filters)).all()
+            _t_decrypt = _time.monotonic()
+            logger.info("[TIMING] serialize: Q3 ApiKey+telephony query (+%.3fs)", _t_decrypt - _t)
+            for ak in all_api_keys:
+                if not ak.api_key_encrypted:
+                    continue
+                try:
+                    decrypted = decrypt(ak.api_key_encrypted)
+                    # LLM/STT/TTS service key
+                    if ak.id in api_key_ids:
+                        api_key_map[ak.id] = decrypted
+                    else:
+                        # Telephony key — extract key_type from additional_credentials
+                        additional = ak.additional_credentials or {}
+                        key_type = additional.get("key_type")
+                        if key_type:
+                            telephony_creds[key_type] = decrypted
+                except Exception as e:
+                    logger.warning("Failed to decrypt API key %s: %s", ak.id, e)
+            logger.info("[TIMING] serialize: Q3 decrypt %d keys (+%.3fs)", len(api_key_map) + len(telephony_creds), _time.monotonic() - _t_decrypt)
+
+        logger.info("[TIMING] serialize: TOTAL (+%.3fs)", _time.monotonic() - _t_ser)
+
+        # Build service data dicts
+        def _build_service_data(sp_id, stype, metadata):
+            entry = model_map.get((sp_id, stype))
+            if not entry:
+                return None
+            svc, provider = entry
+            api_key = api_key_map.get(svc.api_key_id) if svc.api_key_id else None
+            if not api_key:
+                return None
+            model_meta = (svc.meta_data or {}) if isinstance(getattr(svc, "meta_data", None), dict) else {}
+            mid = metadata.get("model_id")
+            model_name = model_name_map.get(int(mid)) if mid is not None else None
+            return {
+                "provider_name": (provider.name or "").strip().lower(),
+                "api_key": api_key,
+                "model_name": model_name,
+                "metadata": metadata,
+                "model_meta_data": model_meta,
+            }
+
+        llm_data = _build_service_data(config.llm_service_id, "llm", llm_metadata)
+        stt_data = _build_service_data(config.stt_service_id, "stt", stt_metadata)
+        tts_data = _build_service_data(config.tts_service_id, "tts", tts_metadata)
+
+        if not llm_data or not stt_data or not tts_data:
+            return None
+
+        messages = [{"role": "system", "content": config.system_prompt}]
+        if getattr(config, "first_message", None) and config.first_message.strip():
+            messages.append({"role": "assistant", "content": config.first_message.strip()})
+
+        result = {
+            "llm": llm_data,
+            "stt": stt_data,
+            "tts": tts_data,
+            "messages": messages,
+            "end_call_message": getattr(config, "end_call_message", None),
+        }
+        if telephony_creds:
+            result["_telephony_creds"] = telephony_creds
+        return result
+
+    def get_llm_for_agent(self, agent: Any, config: Any = None, prefetched: dict = None) -> Optional[Any]:
         """
         Build and return the LLM service instance for the given agent.
         Uses agent config's llm_service_id (service_provider) and llm_metadata.
+        If prefetched is provided, skips all DB queries.
         Returns None if config or credentials are missing or provider is unsupported.
         """
-        config = self._get_agent_config(agent)
-
-        if not config or not config.llm_service_id:
-            return None
-        result = self._get_service_and_credentials(config.llm_service_id, "llm")
-        if not result:
-            return None
-
-        svc, provider, api_key = result
-        metadata = (config.llm_metadata or {}) if hasattr(config, "llm_metadata") else {}
-        model_meta = (svc.meta_data or {}) if isinstance(getattr(svc, "meta_data", None), dict) else {}
-        # Resolve model name from model_id in llm_metadata; None if not present
-        model = self._get_model_name_by_id(metadata.get("model_id"))
-        provider_name = (provider.name or "").strip().lower()
+        if prefetched:
+            provider_name = prefetched["provider_name"]
+            api_key = prefetched["api_key"]
+            model = prefetched["model_name"]
+            metadata = prefetched["metadata"]
+            model_meta = prefetched["model_meta_data"]
+        else:
+            if config is None:
+                config = self._get_agent_config(agent)
+            if not config or not config.llm_service_id:
+                return None
+            result = self._get_service_and_credentials(config.llm_service_id, "llm")
+            if not result:
+                return None
+            svc, provider, api_key = result
+            metadata = (config.llm_metadata or {}) if hasattr(config, "llm_metadata") else {}
+            model_meta = (svc.meta_data or {}) if isinstance(getattr(svc, "meta_data", None), dict) else {}
+            model = self._get_model_name_by_id(metadata.get("model_id"))
+            provider_name = (provider.name or "").strip().lower()
 
         try:
             if provider_name == "openai": #done
@@ -187,24 +390,30 @@ class AgentFactoryService(BaseService):
             return None
 
 
-    def get_stt_for_agent(self, agent: Any) -> Optional[Any]:
+    def get_stt_for_agent(self, agent: Any, config: Any = None, prefetched: dict = None) -> Optional[Any]:
         """
         Build and return the STT service instance for the given agent.
-        Uses agent config's stt_service_id and stt_metadata.
-        Returns None if config or credentials are missing or provider is unsupported.
+        If prefetched is provided, skips all DB queries.
         """
-        config = self._get_agent_config(agent)
-        if not config or not config.stt_service_id:
-            return None
-        result = self._get_service_and_credentials(config.stt_service_id, "stt")
-        if not result:
-            return None
-        svc, provider, api_key = result
-        metadata = (config.stt_metadata or {}) if hasattr(config, "stt_metadata") else {}
-        model_meta = (svc.meta_data or {}) if isinstance(getattr(svc, "meta_data", None), dict) else {}
-        # Resolve model name from model_id in stt_metadata; None if not present
-        model = self._get_model_name_by_id(metadata.get("model_id"))
-        provider_name = (provider.name or "").strip().lower()
+        if prefetched:
+            provider_name = prefetched["provider_name"]
+            api_key = prefetched["api_key"]
+            model = prefetched["model_name"]
+            metadata = prefetched["metadata"]
+            model_meta = prefetched["model_meta_data"]
+        else:
+            if config is None:
+                config = self._get_agent_config(agent)
+            if not config or not config.stt_service_id:
+                return None
+            result = self._get_service_and_credentials(config.stt_service_id, "stt")
+            if not result:
+                return None
+            svc, provider, api_key = result
+            metadata = (config.stt_metadata or {}) if hasattr(config, "stt_metadata") else {}
+            model_meta = (svc.meta_data or {}) if isinstance(getattr(svc, "meta_data", None), dict) else {}
+            model = self._get_model_name_by_id(metadata.get("model_id"))
+            provider_name = (provider.name or "").strip().lower()
 
         try:
             if provider_name == "deepgram":
@@ -295,28 +504,33 @@ class AgentFactoryService(BaseService):
             logger.warning("STT provider %s not available: %s", provider_name, e)
             return None
 
-    def get_tts_for_agent(self, agent: Any) -> Optional[Any]:
-        print("into get_tts_for_agent")
+    def get_tts_for_agent(self, agent: Any, config: Any = None, prefetched: dict = None) -> Optional[Any]:
         """
         Build and return the TTS service instance for the given agent.
-        Uses agent config's tts_service_id and tts_metadata.
-        Returns None if config or credentials are missing or provider is unsupported.
+        If prefetched is provided, skips all DB queries.
         """
-        config = self._get_agent_config(agent)
-        if not config or not config.tts_service_id:
-            return None
-        result = self._get_service_and_credentials(config.tts_service_id, "tts")
-        if not result:
-            return None
-        svc, provider, api_key = result
-        metadata = (config.tts_metadata or {}) if hasattr(config, "tts_metadata") else {}
-        model_meta = (svc.meta_data or {}) if isinstance(getattr(svc, "meta_data", None), dict) else {}
+        if prefetched:
+            provider_name = prefetched["provider_name"]
+            api_key = prefetched["api_key"]
+            model = prefetched["model_name"]
+            metadata = prefetched["metadata"]
+            model_meta = prefetched["model_meta_data"]
+        else:
+            if config is None:
+                config = self._get_agent_config(agent)
+            if not config or not config.tts_service_id:
+                return None
+            result = self._get_service_and_credentials(config.tts_service_id, "tts")
+            if not result:
+                return None
+            svc, provider, api_key = result
+            metadata = (config.tts_metadata or {}) if hasattr(config, "tts_metadata") else {}
+            model_meta = (svc.meta_data or {}) if isinstance(getattr(svc, "meta_data", None), dict) else {}
+            model = self._get_model_name_by_id(metadata.get("model_id"))
+            provider_name = (provider.name or "").strip().lower()
+
         tts_voice_id = metadata.get("voice_id")
         tts_language = metadata.get("language")
-        provider_name = (provider.name or "").strip().lower()
-
-        # Resolve model name from model_id in tts_metadata; None if not present
-        model = self._get_model_name_by_id(metadata.get("model_id"))
 
         # Providers that need an aiohttp session
         _http_providers = {"asyncai_http", "deepgram", "minimax", "neuphonic", "rime", "sarvam", "speechmatics"}
@@ -595,29 +809,64 @@ class AgentFactoryService(BaseService):
             logger.warning("TTS provider %s not available: %s", provider_name, e)
             return None
 
-    def get_agent_bot_data(self, agent: Any) -> Optional[dict]:
+    def get_agent_bot_data(self, agent: Any, prefetched: dict = None) -> Optional[dict]:
         """
-        Get all data needed to run the bot for an agent: llm, stt, tts, and messages
-        (system_prompt, optional first_message) from agent config.
+        Get all data needed to run the bot for an agent: llm, stt, tts, and messages.
+        If prefetched is provided (from serialize_agent_bot_data), skips all DB queries.
         Returns None if config or any required service is missing.
         """
-        config = self._get_agent_config(agent)
-        if not config or not config.system_prompt:
-            return None
-        llm = self.get_llm_for_agent(agent)
-        stt = self.get_stt_for_agent(agent)
-        tts = self.get_tts_for_agent(agent)
+        _t0 = _time.monotonic()
+
+        if prefetched:
+            logger.info("[TIMING] using prefetched service data (no DB queries)")
+            _t = _time.monotonic()
+            llm = self.get_llm_for_agent(agent, prefetched=prefetched["llm"])
+            logger.info("[TIMING] get_llm_for_agent prefetched (+%.3fs)", _time.monotonic() - _t)
+
+            _t = _time.monotonic()
+            stt = self.get_stt_for_agent(agent, prefetched=prefetched["stt"])
+            logger.info("[TIMING] get_stt_for_agent prefetched (+%.3fs)", _time.monotonic() - _t)
+
+            _t = _time.monotonic()
+            tts = self.get_tts_for_agent(agent, prefetched=prefetched["tts"])
+            logger.info("[TIMING] get_tts_for_agent prefetched (+%.3fs)", _time.monotonic() - _t)
+
+            messages = prefetched["messages"]
+            end_call_message = prefetched.get("end_call_message")
+        else:
+            config = self._get_agent_config(agent)
+            logger.info("[TIMING] _get_agent_config (+%.3fs)", _time.monotonic() - _t0)
+            if not config or not config.system_prompt:
+                return None
+
+            _t = _time.monotonic()
+            llm = self.get_llm_for_agent(agent, config=config)
+            logger.info("[TIMING] get_llm_for_agent (+%.3fs)", _time.monotonic() - _t)
+
+            _t = _time.monotonic()
+            stt = self.get_stt_for_agent(agent, config=config)
+            logger.info("[TIMING] get_stt_for_agent (+%.3fs)", _time.monotonic() - _t)
+
+            _t = _time.monotonic()
+            tts = self.get_tts_for_agent(agent, config=config)
+            logger.info("[TIMING] get_tts_for_agent (+%.3fs)", _time.monotonic() - _t)
+
+            if not llm or not stt or not tts:
+                return None
+            messages = [{"role": "system", "content": config.system_prompt}]
+            if getattr(config, "first_message", None) and config.first_message.strip():
+                messages.append({"role": "assistant", "content": config.first_message.strip()})
+            end_call_message = getattr(config, "end_call_message", None)
+
         if not llm or not stt or not tts:
             return None
-        messages: List[dict] = [{"role": "system", "content": config.system_prompt}]
-        if getattr(config, "first_message", None) and config.first_message.strip():
-            messages.append({"role": "assistant", "content": config.first_message.strip()})
+        logger.info("[TIMING] get_agent_bot_data total (+%.3fs)", _time.monotonic() - _t0)
         return {
             "llm": llm,
             "stt": stt,
             "tts": tts,
             "messages": messages,
-            "config": config,
+            "end_call_message": end_call_message,
         }
 
     async def run_bot_with_components(
@@ -629,14 +878,16 @@ class AgentFactoryService(BaseService):
         tts: Any,
         messages: List[dict],
         agent: Any = None,
+        end_call_message: str = None,
     ) -> None:
         """
         Run the voice pipeline with the given transport and services.
         Called by run_bot_for_agent or from bot.py with default components.
         """
+        _t_comp_start = _time.monotonic()
         import io
-        import time as _time
 
+        _t = _time.monotonic()
         from pydub import AudioSegment
         from pipecat.processors.aggregators.llm_context import NOT_GIVEN
         from pipecat.processors.aggregators.llm_context import LLMContext
@@ -660,6 +911,7 @@ class AgentFactoryService(BaseService):
         from core.processors.call_end_detector import CallEndDetectorProcessor
         from core.services.call_log_service import CallLogService
         from core.database.session import get_db_context
+        logger.info("[TIMING] run_bot_with_components imports (+%.3fs)", _time.monotonic() - _t)
 
         # Extract call metadata from runner_args
         body = getattr(runner_args, "body", None) or {}
@@ -673,27 +925,42 @@ class AgentFactoryService(BaseService):
         from_number = call_data.get("from", "")
         to_number = call_data.get("to", "")
 
-        # Create call log entry in DB
-        call_log_id = None
+        # Create call log entry in DB (non-blocking — runs in background)
+        import asyncio
+        call_log_state = {"id": None, "done": False}
+        call_log_ready = asyncio.Event()
         audio_buffer = None
         transcript_entries: list[dict] = []
         call_log_updated = {"done": False}
 
+        async def _get_call_log_id() -> int | None:
+            """Await until call_log_id is available, then return it."""
+            await call_log_ready.wait()
+            return call_log_state["id"]
+
         if agent:
-            try:
-                with get_db_context() as db:
-                    call_log = CallLogService(db).create_call_log(
-                        agent_id=agent.id,
-                        organization_id=agent.organization_id,
-                        provider_call_id=provider_call_id,
-                        transport_type=transport_type,
-                        from_number=from_number,
-                        to_number=to_number,
-                    )
-                    call_log_id = call_log.id
-                    logger.info("Created call log: id={} for agent={}", call_log_id, agent.name)
-            except Exception as e:
-                logger.error("Failed to create call log: {}", e)
+            def _create_call_log_in_thread():
+                """Run in a thread so synchronous DB work doesn't block the event loop."""
+                try:
+                    _t = _time.monotonic()
+                    with get_db_context() as db:
+                        call_log = CallLogService(db).create_call_log(
+                            agent_id=agent.id,
+                            organization_id=agent.organization_id,
+                            provider_call_id=provider_call_id,
+                            transport_type=transport_type,
+                            from_number=from_number,
+                            to_number=to_number,
+                        )
+                        call_log_state["id"] = call_log.id
+                        logger.info("[TIMING] create_call_log thread (+%.3fs)", _time.monotonic() - _t)
+                except Exception as e:
+                    logger.error("Failed to create call log: {}", e)
+                finally:
+                    loop.call_soon_threadsafe(call_log_ready.set)
+
+            loop = asyncio.get_event_loop()
+            loop.run_in_executor(None, _create_call_log_in_thread)
 
             # Pipecat's built-in AudioBufferProcessor for recording
             audio_buffer = AudioBufferProcessor(sample_rate=16000, num_channels=1)
@@ -706,6 +973,9 @@ class AgentFactoryService(BaseService):
                 import asyncio
                 # Yield to let pending transcript event handlers complete first
                 await asyncio.sleep(0)
+
+                # Wait for background call log creation to finish
+                call_log_id = await _get_call_log_id()
 
                 if not audio or len(audio) == 0:
                     logger.warning("on_audio_data called with empty audio for call_log_id={}", call_log_id)
@@ -779,7 +1049,10 @@ class AgentFactoryService(BaseService):
                         )
                     except Exception as e:
                         logger.error("Failed to complete call log in on_audio_data: {}", e)
+        else:
+            call_log_ready.set()
 
+        _t = _time.monotonic()
         tools = NOT_GIVEN
         context = LLMContext(messages, tools)
         context_aggregator = LLMContextAggregatorPair(context)
@@ -787,12 +1060,13 @@ class AgentFactoryService(BaseService):
         assistant_aggregator = context_aggregator.assistant()
         llm_text_processor = LLMTextProcessor()
         rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
-        end_call_message = None
-        if agent:
+        # Use passed end_call_message; only query DB if not provided and agent exists
+        if end_call_message is None and agent:
             agent_config = self._get_agent_config(agent)
             if agent_config:
                 end_call_message = agent_config.end_call_message
         call_end_detector = CallEndDetectorProcessor(end_call_message=end_call_message)
+        logger.info("[TIMING] context + aggregators + processors created (+%.3fs)", _time.monotonic() - _t)
 
         # Collect transcripts via Pipecat's built-in aggregator events
         if agent:
@@ -832,6 +1106,7 @@ class AgentFactoryService(BaseService):
         if audio_buffer:
             pipeline_processors.append(audio_buffer)
 
+        _t = _time.monotonic()
         pipeline = Pipeline(pipeline_processors)
 
         task = PipelineTask(
@@ -843,17 +1118,31 @@ class AgentFactoryService(BaseService):
             ),
             observers=[RTVIObserver(rtvi)],
         )
+        logger.info("[TIMING] Pipeline + PipelineTask created (+%.3fs)", _time.monotonic() - _t)
 
-        # Start recording when client connects
+        # Extract first_message from messages to speak via TTS on connect
+        first_message_text = None
+        if len(messages) > 1 and messages[-1].get("role") == "assistant":
+            first_message_text = messages[-1].get("content", "").strip()
+
+        # Start recording and speak first_message when client connects
         if audio_buffer:
             @transport.event_handler("on_client_connected")
             async def on_client_connected(transport, client):
                 logger.info("Client connected — starting audio recording.")
                 await audio_buffer.start_recording()
+                if first_message_text:
+                    from pipecat.frames.frames import TTSSpeakFrame
+                    logger.info("Speaking first_message via TTS: {}", first_message_text)
+                    await task.queue_frame(TTSSpeakFrame(text=first_message_text))
         else:
             @transport.event_handler("on_client_connected")
             async def on_client_connected(transport, client):
                 logger.info("Client connected.")
+                if first_message_text:
+                    from pipecat.frames.frames import TTSSpeakFrame
+                    logger.info("Speaking first_message via TTS: {}", first_message_text)
+                    await task.queue_frame(TTSSpeakFrame(text=first_message_text))
 
         @rtvi.event_handler("on_client_ready")
         async def on_client_ready(rtvi):
@@ -865,11 +1154,13 @@ class AgentFactoryService(BaseService):
             logger.info("Client disconnected: {}", participant)
             await task.cancel()
 
+        logger.info("[TIMING] run_bot_with_components setup complete, total: %.3fs — starting runner.run()", _time.monotonic() - _t_comp_start)
         runner = PipelineRunner(handle_sigint=getattr(runner_args, "handle_sigint", False))
         await runner.run(task)
 
         # Fallback: if on_audio_data didn't update DB (e.g. no audio captured),
         # update the call log here with whatever we have.
+        call_log_id = await _get_call_log_id()
         if call_log_id and agent and not call_log_updated["done"]:
             logger.info("on_audio_data did not complete DB update, running fallback for call_log_id={}", call_log_id)
             try:
@@ -897,12 +1188,18 @@ class AgentFactoryService(BaseService):
         Get all agent data (llm, stt, tts, prompt) from config and run the bot pipeline.
         Raises ValueError if agent has no config or missing services.
         """
-        data = self.get_agent_bot_data(agent)
+        _t0 = _time.monotonic()
+        # Use pre-fetched service data from main process if available (subprocess path)
+        body = getattr(runner_args, "body", None) or {}
+        prefetched = body.get("_prefetched_services")
+        data = self.get_agent_bot_data(agent, prefetched=prefetched)
+        logger.info("[TIMING] run_bot_for_agent: get_agent_bot_data (+%.3fs)", _time.monotonic() - _t0)
         if not data:
             raise ValueError(
                 "Agent has no active config or missing LLM/STT/TTS services. "
                 "Configure the agent and ensure services are set."
             )
+        _t = _time.monotonic()
         await self.run_bot_with_components(
             transport=transport,
             runner_args=runner_args,
@@ -911,7 +1208,9 @@ class AgentFactoryService(BaseService):
             tts=data["tts"],
             messages=data["messages"],
             agent=agent,
+            end_call_message=data.get("end_call_message"),
         )
+        logger.info("[TIMING] run_bot_for_agent: run_bot_with_components (+%.3fs), total: %.3fs", _time.monotonic() - _t, _time.monotonic() - _t0)
 
 
       
