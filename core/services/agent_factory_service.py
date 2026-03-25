@@ -1109,6 +1109,24 @@ class AgentFactoryService(BaseService):
         _t = _time.monotonic()
         pipeline = Pipeline(pipeline_processors)
 
+        # Observers for metrics, latency, and turn tracking
+        from pipecat.observers.loggers.metrics_log_observer import MetricsLogObserver
+        from pipecat.observers.loggers.user_bot_latency_log_observer import UserBotLatencyLogObserver
+        from pipecat.observers.turn_tracking_observer import TurnTrackingObserver
+
+        metrics_observer = MetricsLogObserver()
+        latency_observer = UserBotLatencyLogObserver()
+        turn_observer = TurnTrackingObserver()
+
+        @turn_observer.event_handler("on_turn_started")
+        async def on_turn_started(observer, turn_number):
+            logger.info("Turn {} started", turn_number)
+
+        @turn_observer.event_handler("on_turn_ended")
+        async def on_turn_ended(observer, turn_number, duration, was_interrupted):
+            status = "interrupted" if was_interrupted else "completed"
+            logger.info("Turn {} {} after {:.2f}s", turn_number, status, duration)
+
         task = PipelineTask(
             pipeline,
             params=PipelineParams(
@@ -1116,7 +1134,12 @@ class AgentFactoryService(BaseService):
                 enable_metrics=True,
                 enable_usage_metrics=True,
             ),
-            observers=[RTVIObserver(rtvi)],
+            observers=[
+                RTVIObserver(rtvi),
+                metrics_observer,
+                latency_observer,
+                turn_observer,
+            ],
         )
         logger.info("[TIMING] Pipeline + PipelineTask created (+%.3fs)", _time.monotonic() - _t)
 
