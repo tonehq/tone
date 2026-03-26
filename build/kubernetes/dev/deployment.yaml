@@ -17,7 +17,7 @@ spec:
         kubernetes.io/os: linux
       containers:
         - name: tone-api
-          image: developer390/tone:latest
+          image: developer390/tone:${IMAGE_TAG}
           imagePullPolicy: Always
           ports:
             - containerPort: 8000

@@ -109,6 +109,8 @@ export default function IntegrationsTable({
       onRowClick={(record) => onEdit(record)}
       dataSource={rows}
       rowKey="id"
+      searchable
+      searchPlaceholder="Search Apikey ..."
     />
   );
 }

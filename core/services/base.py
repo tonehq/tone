@@ -29,7 +29,8 @@ class BaseService:
         return q
 
     def upsert(self, model, values: Dict[str, Any], conflict_fields: List[str],
-               update_fields: List[str], extra_update: Optional[Dict[str, Any]] = None):
+               update_fields: List[str], extra_update: Optional[Dict[str, Any]] = None,
+               auto_commit: bool = True):
         if hasattr(model, 'organization_id') and 'organization_id' not in values and self.org_id:
             values['organization_id'] = self.org_id
         stmt = pg_insert(model).values(**values)
@@ -41,4 +42,5 @@ class BaseService:
             set_=update_dict
         )
         self.db.execute(stmt)
-        self.db.commit()
+        if auto_commit:
+            self.db.commit()

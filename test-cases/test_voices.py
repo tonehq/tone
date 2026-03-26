@@ -4,8 +4,11 @@ Source: core/api/v1/voices.py
 """
 
 import pytest
-from unittest.mock import patch, MagicMock
+from uuid import UUID
+from unittest.mock import patch, MagicMock, ANY
 from fastapi import HTTPException
+
+EXPECTED_ORG_ID = UUID("550e8400-e29b-41d4-a716-446655440000")
 
 
 # ─── Fixtures ───
@@ -31,6 +34,7 @@ class TestGetVoices:
         response = client_as_member.get("/api/v1/voice/get_voices")
         assert response.status_code == 200
         assert isinstance(response.json(), list)
+        mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID)
 
     @patch("ee.api.v1.voices.VoiceService")
     def test_get_voices_empty(self, mock_service_cls, client_as_member):
@@ -57,6 +61,7 @@ class TestGetVoiceByProvider:
         response = client_as_member.get("/api/v1/voice/get_voice_by_provider?service_provider_id=1")
         assert response.status_code == 200
         assert isinstance(response.json(), list)
+        mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID)
 
     @patch("ee.api.v1.voices.VoiceService")
     def test_get_voice_by_provider_empty(self, mock_service_cls, client_as_member):
@@ -64,6 +69,14 @@ class TestGetVoiceByProvider:
         response = client_as_member.get("/api/v1/voice/get_voice_by_provider?service_provider_id=1")
         assert response.status_code == 200
         assert response.json() == []
+
+    @patch("ee.api.v1.voices.VoiceService")
+    def test_get_voice_by_provider_service_error(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.get_voices_by_provider_id.side_effect = HTTPException(
+            status_code=500, detail="Internal error"
+        )
+        response = client_as_member.get("/api/v1/voice/get_voice_by_provider?service_provider_id=1")
+        assert response.status_code == 500
 
     def test_get_voice_by_provider_missing_id(self, client_as_member):
         response = client_as_member.get("/api/v1/voice/get_voice_by_provider")
@@ -88,6 +101,7 @@ class TestUpsertVoice:
         mock_service_cls.return_value.upsert_voice.return_value = {"id": 1, **sample_voice_data}
         response = client_as_member.post("/api/v1/voice/upsert_voice", json=sample_voice_data)
         assert response.status_code == 200
+        mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID)
 
     @patch("ee.api.v1.voices.VoiceService")
     def test_upsert_voice_update_success(self, mock_service_cls, client_as_member):
@@ -119,6 +133,7 @@ class TestDeleteVoice:
         mock_service_cls.return_value.delete_voice.return_value = {"message": "deleted"}
         response = client_as_member.delete("/api/v1/voice/delete_voice?voice_id=1")
         assert response.status_code == 200
+        mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID)
 
     def test_delete_voice_missing_id(self, client_as_member):
         response = client_as_member.delete("/api/v1/voice/delete_voice")

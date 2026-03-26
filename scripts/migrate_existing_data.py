@@ -10,7 +10,7 @@ from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
 from core.models.agent_channel import AgentChannel
 from core.models.channel import Channel
-from core.models.channel_phone_numbers import ChannelPhoneNumbers
+from core.models.agent_channel_phone_numbers import AgentChannelPhoneNumbers
 from core.models.member import Member
 from core.models.organization_invite import OrganizationInvite
 from core.models.organization_access_request import OrganizationAccessRequest
@@ -56,7 +56,7 @@ def migrate_existing_data():
             (AgentConfig, "agent_configs"),
             (AgentChannel, "agent_channels"),
             (Channel, "channels"),
-            (ChannelPhoneNumbers, "channel_phone_numbers"),
+            (AgentChannelPhoneNumbers, "agent_channel_phone_numbers"),
             (Member, "members"),
             (OrganizationInvite, "organization_invites"),
             (OrganizationAccessRequest, "organization_access_requests"),

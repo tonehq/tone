@@ -76,16 +76,19 @@ class AgentFactoryService(BaseService):
         Returns None if the service has no InputParams class.
         """
         input_params_class = getattr(service_class, "InputParams", None)
+        # print(f"input_params_class: {input_params_class}")
         if not input_params_class:
             return None
         valid_keys = set(input_params_class.model_fields.keys())
+        # print(f"valid_keys: {valid_keys}")
         filtered = {k: v for k, v in metadata.items() if k in valid_keys and v is not None}
+        # print(f"filtered: {filtered}")
         if not filtered:
             return input_params_class()
         try:
             return input_params_class(**filtered)
         except Exception as e:
-            logger.warning("Failed to build InputParams for %s: %s", service_class.__name__, e)
+            logger.warning(f"Failed to build InputParams for {service_class.__name__}: {e}")
             return input_params_class()
 
     def _get_model_name_by_id(self, model_id: Any) -> Optional[str]:
@@ -125,7 +128,9 @@ class AgentFactoryService(BaseService):
                 return OpenAILLMService(api_key = api_key, model=model or "gpt-4.1", params=self._build_input_params(OpenAILLMService, metadata))
             if provider_name == "anthropic": #done
                 from pipecat.services.anthropic.llm import AnthropicLLMService
-                return AnthropicLLMService(api_key=api_key, model= model or "claude-sonnet-4-5-20250929", params=self._build_input_params(AnthropicLLMService, metadata))
+                params=self._build_input_params(AnthropicLLMService, metadata)
+                print(f"params: {params}")
+                return AnthropicLLMService(api_key=api_key, model= model or "claude-sonnet-4-5-20250929", params=params)
             if provider_name == "groq": #done
                 from pipecat.services.groq.llm import GroqLLMService
                 return GroqLLMService(api_key=api_key, model=model or "llama-3.3-70b-versatile", params=self._build_input_params(GroqLLMService, metadata))
@@ -137,7 +142,9 @@ class AgentFactoryService(BaseService):
                 return AWSBedrockLLMService(api_key=api_key, model=model or "amazon.nova-pro-v1:0", params=self._build_input_params(AWSBedrockLLMService, metadata))
             if provider_name == "google": #Done
                 from pipecat.services.google.llm import GoogleLLMService
-                return GoogleLLMService(api_key=api_key, model=model or "gemini-2.5-flash", params=self._build_input_params(GoogleLLMService, metadata))
+                params=self._build_input_params(GoogleLLMService, metadata)
+                print(f"params: {params}")
+                return GoogleLLMService(api_key=api_key, model=model or "gemini-2.5-flash", params=params)
             if provider_name == "ollama": #done
                 from pipecat.services.ollama.llm import OLLamaLLMService
                 base_url = api_key if api_key else "http://localhost:11434/v1"
@@ -205,10 +212,22 @@ class AgentFactoryService(BaseService):
                 return DeepgramSTTService(api_key=api_key)
             if provider_name == "openai":
                 from pipecat.services.openai.stt import OpenAISTTService
-                return OpenAISTTService(api_key=api_key, model=model or "gpt-4o-transcribe")
+                return OpenAISTTService(
+                    api_key=api_key,
+                    model=model or "gpt-4o-transcribe",
+                    language=metadata.get("language"),
+                    prompt=metadata.get("prompt"),
+                    temperature=metadata.get("temperature"),
+                )
             if provider_name == "groq":
                 from pipecat.services.groq.stt import GroqSTTService
-                return GroqSTTService(api_key=api_key, model=model or "whisper-large-v3-turbo")
+                return GroqSTTService(
+                    api_key=api_key,
+                    model=model or "whisper-large-v3-turbo",
+                    language=metadata.get("language"),
+                    prompt=metadata.get("prompt"),
+                    temperature=metadata.get("temperature"),
+                )
             if provider_name == "azure":
                 from pipecat.services.azure.stt import AzureSTTService
                 region = model_meta.get("region") or metadata.get("region") or "eastus"
@@ -221,22 +240,46 @@ class AgentFactoryService(BaseService):
                 return NvidiaSTTService(api_key=api_key, params=self._build_input_params(NvidiaSTTService, metadata))
             if provider_name == "sarvam":
                 from pipecat.services.sarvam.stt import SarvamSTTService
-                return SarvamSTTService(api_key=api_key, model=model or "saarika:v2.5", params=self._build_input_params(SarvamSTTService, metadata))
+                return SarvamSTTService(
+                    api_key=api_key,
+                    model=model or "saarika:v2.5",
+                    sample_rate=metadata.get("sample_rate"),
+                    params=self._build_input_params(SarvamSTTService, metadata),
+                )
             if provider_name == "speechmatics":
                 from pipecat.services.speechmatics.stt import SpeechmaticsSTTService
-                return SpeechmaticsSTTService(api_key=api_key, params=self._build_input_params(SpeechmaticsSTTService, metadata))
+                return SpeechmaticsSTTService(
+                    api_key=api_key,
+                    sample_rate=metadata.get("sample_rate"),
+                    params=self._build_input_params(SpeechmaticsSTTService, metadata),
+                )
             if provider_name == "assemblyai":
                 from pipecat.services.assemblyai.stt import AssemblyAISTTService
                 return AssemblyAISTTService(api_key=api_key)
             if provider_name == "cartesia":
                 from pipecat.services.cartesia.stt import CartesiaSTTService
-                return CartesiaSTTService(api_key=api_key)
+                from pipecat.services.cartesia.stt import CartesiaLiveOptions
+                live_options = CartesiaLiveOptions(
+                    language=metadata.get("language") or "en",
+                    sample_rate=metadata.get("sample_rate") or 16000,
+                )
+                return CartesiaSTTService(
+                    api_key=api_key,
+                    sample_rate=metadata.get("sample_rate") or 16000,
+                    live_options=live_options,
+                )
             if provider_name == "elevenlabs":
                 from pipecat.services.elevenlabs.stt import ElevenLabsRealtimeSTTService
                 return ElevenLabsRealtimeSTTService(api_key=api_key, model=model or "scribe_v2_realtime", params=self._build_input_params(ElevenLabsRealtimeSTTService, metadata))
             if provider_name == "gladia":
                 from pipecat.services.gladia.stt import GladiaSTTService
-                return GladiaSTTService(api_key=api_key, model=model or "solaria-1", params=self._build_input_params(GladiaSTTService, metadata))
+                return GladiaSTTService(
+                    api_key=api_key,
+                    model=model or "solaria-1",
+                    region=metadata.get("region"),
+                    sample_rate=metadata.get("sample_rate"),
+                    params=self._build_input_params(GladiaSTTService, metadata),
+                )
             if provider_name == "soniox":
                 from pipecat.services.soniox.stt import SonioxSTTService
                 return SonioxSTTService(api_key=api_key, params=self._build_input_params(SonioxSTTService, metadata))
@@ -275,12 +318,14 @@ class AgentFactoryService(BaseService):
         # Resolve model name from model_id in tts_metadata; None if not present
         model = self._get_model_name_by_id(metadata.get("model_id"))
 
+        # Providers that need an aiohttp session
+        _http_providers = {"asyncai_http", "deepgram", "minimax", "neuphonic", "rime", "sarvam", "speechmatics"}
+
         import aiohttp
-        session = aiohttp.ClientSession()
-        # session = None
+        session = aiohttp.ClientSession() if provider_name in _http_providers else None
 
         try:
-            if provider_name == "cartesia":
+            if provider_name == "cartesia": # In code but class is different
                 from pipecat.services.cartesia.tts import CartesiaTTSService
                 voice_kwargs = {}
                 voice_kwargs["voice_id"] = tts_voice_id or "e07c00bc-4134-4eae-9ea4-1a55fb45746b"
@@ -289,7 +334,7 @@ class AgentFactoryService(BaseService):
                     voice_kwargs["language"] = tts_language or "en"
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
                 return CartesiaTTSService(api_key=api_key, params=self._build_input_params(CartesiaTTSService, metadata), **voice_kwargs)
-            if provider_name == "openai":
+            if provider_name == "openai": # In code
                 from pipecat.services.openai.tts import OpenAITTSService
                 voice_kwargs = {}
                 if tts_voice_id is not None:
@@ -306,11 +351,9 @@ class AgentFactoryService(BaseService):
 
                 voice_kwargs["voice_id"] = tts_voice_id or "CwhRBWXzGAHq8TQ4Fs17"
 
-                if tts_language is not None:
-                    voice_kwargs["language"] = tts_language or "en"
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return ElevenLabsTTSService(api_key=api_key, params=self._build_input_params(ElevenLabsTTSService, metadata), **voice_kwargs)
-            if provider_name == "playht":
+                return ElevenLabsTTSService(api_key=api_key, model=model or "eleven_turbo_v2_5", params=self._build_input_params(ElevenLabsTTSService, metadata), **voice_kwargs)
+            if provider_name == "playht": # In code but class is different
                 # To check this fully
                 from pipecat.services.playht.tts import PlayHTTTSService
                 user_id = model_meta.get("user_id") or metadata.get("user_id") or ""
@@ -321,7 +364,7 @@ class AgentFactoryService(BaseService):
                     voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
                 return PlayHTTTSService(api_key=api_key, user_id=user_id, params=self._build_input_params(PlayHTTTSService, metadata), **voice_kwargs)
-            if provider_name == "asyncai_http":
+            if provider_name == "asyncai_http":  # in code
                 # To check languages in this
                 from pipecat.services.asyncai.tts import AsyncAIHttpTTSService
                 voice_kwargs = {}
@@ -333,7 +376,7 @@ class AgentFactoryService(BaseService):
                     voice_kwargs["language"] = None
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
                 return AsyncAIHttpTTSService(api_key=api_key, aiohttp_session=session, params=self._build_input_params(AsyncAIHttpTTSService, metadata), **voice_kwargs)
-            if provider_name == "aws_polly":
+            if provider_name == "aws_polly":  # In code
                 from pipecat.services.aws.tts import AWSPollyTTSService
                 aws_access_key_id = model_meta.get("aws_access_key_id") or metadata.get("aws_access_key_id") or ""
                 region = model_meta.get("region") or metadata.get("region") or "us-east-1"
@@ -344,27 +387,26 @@ class AgentFactoryService(BaseService):
                     voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
                 return AWSPollyTTSService(api_key=api_key, aws_access_key_id=aws_access_key_id, region=region, params=self._build_input_params(AWSPollyTTSService, metadata), **voice_kwargs)
-            if provider_name == "camb":
+            if provider_name == "camb":  # In code
                 from pipecat.services.camb.tts import CambTTSService
                 voice_kwargs = {}
                 if tts_voice_id is not None:
                     voice_kwargs["voice_id"] = tts_voice_id
                 if tts_language is not None:
                     voice_kwargs["language"] = tts_language
+                # Camb uses numeric language IDs (e.g. "1", "35") passed via voice_kwargs,
+                # but InputParams expects locale codes (e.g. "en"). Exclude language from params.
+                camb_metadata = {k: v for k, v in metadata.items() if k != "language"}
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return CambTTSService(api_key=api_key, params=self._build_input_params(CambTTSService, metadata), **voice_kwargs)
-            if provider_name == "deepgram":
+                return CambTTSService(api_key=api_key, params=self._build_input_params(CambTTSService, camb_metadata), **voice_kwargs)
+            if provider_name == "deepgram":  # In code
                 from pipecat.services.deepgram.tts import DeepgramHttpTTSService
-                voice_kwargs = {}
-                if tts_voice_id is not None:
-                    voice_kwargs["voice"] = tts_voice_id
-                if tts_language is not None:
-                    voice_kwargs["language"] = tts_language
-                else:
-                    voice_kwargs["language"] = None
-                print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return DeepgramHttpTTSService(api_key=api_key, aiohttp_session = session, **voice_kwargs)
-            if provider_name == "google_base":
+                # In Deepgram TTS, the model name IS the voice (e.g. "aura-2-thalia-en").
+                # The voice parameter includes the language suffix, so no separate language needed.
+                dg_voice = model or tts_voice_id or "aura-2-helena-en"
+                print(f"[TTS {provider_name}] voice: {dg_voice}")
+                return DeepgramHttpTTSService(api_key=api_key, voice=dg_voice, aiohttp_session=session)
+            if provider_name == "google_base": # In code
                 # To check this fully
                 from pipecat.services.google.tts import GoogleBaseTTSService
                 voice_kwargs = {}
@@ -374,7 +416,7 @@ class AgentFactoryService(BaseService):
                     voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
                 return GoogleBaseTTSService(credentials=api_key, params=self._build_input_params(GoogleBaseTTSService, metadata), **voice_kwargs)
-            if provider_name == "groq":
+            if provider_name == "groq": # In code
                 from pipecat.services.groq.tts import GroqTTSService
                 voice_kwargs = {}
                 if tts_voice_id is not None:
@@ -382,8 +424,8 @@ class AgentFactoryService(BaseService):
                 if tts_language is not None:
                     voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return GroqTTSService(api_key=api_key, params=self._build_input_params(GroqTTSService, metadata), **voice_kwargs)
-            if provider_name == "hathora":
+                return GroqTTSService(api_key=api_key, model_name=model or "canopylabs/orpheus-v1-english", params=self._build_input_params(GroqTTSService, metadata), **voice_kwargs)
+            if provider_name == "hathora": # In code
                 # Need to check this fully
                 from pipecat.services.hathora.tts import HathoraTTSService
                 voice_kwargs = {}
@@ -395,7 +437,7 @@ class AgentFactoryService(BaseService):
                     voice_kwargs["language"] = None
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
                 return HathoraTTSService(api_key=api_key, model=model or "sonic-2025-04-16", params=self._build_input_params(HathoraTTSService, metadata), **voice_kwargs)
-            if provider_name == "minimax":
+            if provider_name == "minimax": # In code
                 # To check group id in this
                 from pipecat.services.minimax.tts import MiniMaxHttpTTSService
                 group_id = model_meta.get("group_id") or metadata.get("group_id") or ""
@@ -406,7 +448,7 @@ class AgentFactoryService(BaseService):
                     voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
                 return MiniMaxHttpTTSService(api_key=api_key, group_id=group_id, aiohttp_session=session, params=self._build_input_params(MiniMaxHttpTTSService, metadata), **voice_kwargs)
-            if provider_name == "neuphonic":
+            if provider_name == "neuphonic": # In code
                 # To check language
                 from pipecat.services.neuphonic.tts import NeuphonicHttpTTSService
                 voice_kwargs = {}
@@ -417,7 +459,7 @@ class AgentFactoryService(BaseService):
                     voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
                 return NeuphonicHttpTTSService(api_key=api_key, aiohttp_session=session, params=self._build_input_params(NeuphonicHttpTTSService, metadata), **voice_kwargs)
-            if provider_name == "nvidia":
+            if provider_name == "nvidia": # In code
                 from pipecat.services.nvidia.tts import NvidiaTTSService
                 server = model_meta.get("server") or metadata.get("server") or "grpc.nvcf.nvidia.com:443"
                 voice_kwargs = {}
@@ -427,25 +469,51 @@ class AgentFactoryService(BaseService):
                     voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
                 return NvidiaTTSService(api_key=api_key, server=server, params=self._build_input_params(NvidiaTTSService, metadata), **voice_kwargs)
-            if provider_name == "rime":
+            if provider_name == "rime": # In code
                 from pipecat.services.rime.tts import RimeHttpTTSService
+                from pipecat.transcriptions.language import Language
                 voice_kwargs = {}
                 voice_kwargs["voice_id"] = tts_voice_id or "albion"
 
-                if tts_language is not None:
-                    voice_kwargs["language"] = tts_language
+                # Map human-readable language name to Language enum for Rime's InputParams.
+                # Rime uses InputParams.language to set the 'lang' field in the API payload.
+                _RIME_LANG_MAP = {
+                    "english": Language.EN,
+                    "german": Language.DE,
+                    "french": Language.FR,
+                    "spanish": Language.ES,
+                    "hindi": Language.HI,
+                }
+                rime_language = None
+                if tts_language:
+                    rime_language = _RIME_LANG_MAP.get(tts_language.strip().lower())
+
+                # Build InputParams, overriding language if we resolved one
+                params = self._build_input_params(RimeHttpTTSService, metadata)
+                if rime_language and params:
+                    params.language = rime_language
+
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return RimeHttpTTSService(api_key=api_key, aiohttp_session=session, params=self._build_input_params(RimeHttpTTSService, metadata), **voice_kwargs)
-            if provider_name == "sarvam":
+                return RimeHttpTTSService(api_key=api_key, model=model or "mistv2", aiohttp_session=session, params=params, **voice_kwargs)
+            if provider_name == "sarvam": # In code
                 from pipecat.services.sarvam.tts import SarvamHttpTTSService
                 voice_kwargs = {}
                 if tts_voice_id is not None:
-                    voice_kwargs["voice_id"] = tts_voice_id
+                    # Sarvam API expects just the speaker name (e.g. "shubh"),
+                    # but DB stores composite voice_ids like "sarvam-shubh-hi-IN".
+                    # Strip the prefix and language suffix if present.
+                    sarvam_voice = tts_voice_id
+                    if sarvam_voice.startswith("sarvam-"):
+                        parts = sarvam_voice.split("-")
+                        # Format: sarvam-{name}-{lang}-{region} → extract name
+                        if len(parts) >= 3:
+                            sarvam_voice = parts[1]
+                    voice_kwargs["voice_id"] = sarvam_voice
                 if tts_language is not None:
                     voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return SarvamHttpTTSService(api_key=api_key, aiohttp_session=session, params=self._build_input_params(SarvamHttpTTSService, metadata), **voice_kwargs)
-            if provider_name == "speechmatics":
+                return SarvamHttpTTSService(api_key=api_key, model=model or "bulbul:v3", aiohttp_session=session, params=self._build_input_params(SarvamHttpTTSService, metadata), **voice_kwargs)
+            if provider_name == "speechmatics": # In code
                 from pipecat.services.speechmatics.tts import SpeechmaticsTTSService
                 voice_kwargs = {}
                 if tts_voice_id is not None:
@@ -455,7 +523,7 @@ class AgentFactoryService(BaseService):
                 else:
                     voice_kwargs["language"] = None
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return SpeechmaticsTTSService(api_key=api_key, aiohttp_session=session, params=self._build_input_params(SpeechmaticsTTSService, metadata), **voice_kwargs)
+                return SpeechmaticsTTSService(api_key=api_key, aiohttp_session=session, sample_rate=metadata.get("sample_rate") or SpeechmaticsTTSService.SPEECHMATICS_SAMPLE_RATE, params=self._build_input_params(SpeechmaticsTTSService, metadata), **voice_kwargs)
             if provider_name == "azure":
                 from pipecat.services.azure.tts import AzureTTSService
                 region = model_meta.get("region") or metadata.get("region") or "eastus"
@@ -479,9 +547,6 @@ class AgentFactoryService(BaseService):
             if provider_name == "hume":
                 from pipecat.services.hume.tts import HumeTTSService
                 voice_kwargs = {}
-                # if tts_voice_id is not None:
-                    # voice_kwargs["voice_id"] = tts_voice_id or "d8ab67c6-953d-4bd8-9370-8fa53a0f1453"
-
                 voice_kwargs["voice_id"] = tts_voice_id or "d8ab67c6-953d-4bd8-9370-8fa53a0f1453"
 
                 if tts_language is not None:
@@ -563,16 +628,22 @@ class AgentFactoryService(BaseService):
         stt: Any,
         tts: Any,
         messages: List[dict],
+        agent: Any = None,
     ) -> None:
         """
         Run the voice pipeline with the given transport and services.
         Called by run_bot_for_agent or from bot.py with default components.
         """
+        import io
+        import time as _time
 
+        from pydub import AudioSegment
         from pipecat.processors.aggregators.llm_context import NOT_GIVEN
         from pipecat.processors.aggregators.llm_context import LLMContext
         from pipecat.processors.aggregators.llm_response_universal import (
             LLMContextAggregatorPair,
+            UserTurnStoppedMessage,
+            AssistantTurnStoppedMessage,
         )
         from pipecat.processors.aggregators.llm_text_processor import (
             LLMTextProcessor,
@@ -582,32 +653,186 @@ class AgentFactoryService(BaseService):
             RTVIObserver,
             RTVIProcessor,
         )
+        from pipecat.processors.audio.audio_buffer_processor import AudioBufferProcessor
         from pipecat.pipeline.pipeline import Pipeline
         from pipecat.pipeline.runner import PipelineRunner
         from pipecat.pipeline.task import PipelineParams, PipelineTask
+        from core.processors.call_end_detector import CallEndDetectorProcessor
+        from core.services.call_log_service import CallLogService
+        from core.database.session import get_db_context
 
+        # Extract call metadata from runner_args
+        body = getattr(runner_args, "body", None) or {}
+        call_data = body.get("call_data", {})
+        transport_type = body.get("transport_type", "unknown")
+        provider_call_id = (
+            call_data.get("call_id")
+            or call_data.get("call_control_id")
+            or call_data.get("stream_id", "")
+        )
+        from_number = call_data.get("from", "")
+        to_number = call_data.get("to", "")
+
+        # Create call log entry in DB
+        call_log_id = None
+        audio_buffer = None
+        transcript_entries: list[dict] = []
+        call_log_updated = {"done": False}
+
+        if agent:
+            try:
+                with get_db_context() as db:
+                    call_log = CallLogService(db).create_call_log(
+                        agent_id=agent.id,
+                        organization_id=agent.organization_id,
+                        provider_call_id=provider_call_id,
+                        transport_type=transport_type,
+                        from_number=from_number,
+                        to_number=to_number,
+                    )
+                    call_log_id = call_log.id
+                    logger.info("Created call log: id={} for agent={}", call_log_id, agent.name)
+            except Exception as e:
+                logger.error("Failed to create call log: {}", e)
+
+            # Pipecat's built-in AudioBufferProcessor for recording
+            audio_buffer = AudioBufferProcessor(sample_rate=16000, num_channels=1)
+
+            # Save audio + update DB inside this event handler.
+            # This runs DURING pipeline lifecycle (before cleanup() returns),
+            # guaranteeing completion before the subprocess can be terminated.
+            @audio_buffer.event_handler("on_audio_data")
+            async def on_audio_data(processor, audio, sample_rate, num_channels):
+                import asyncio
+                # Yield to let pending transcript event handlers complete first
+                await asyncio.sleep(0)
+
+                if not audio or len(audio) == 0:
+                    logger.warning("on_audio_data called with empty audio for call_log_id={}", call_log_id)
+                    return
+
+                logger.info("on_audio_data: {} bytes, {}Hz, {}ch", len(audio), sample_rate, num_channels)
+
+                # Convert raw audio to MP3
+                audio_bytes = None
+                file_name = None
+                try:
+                    audio_segment = AudioSegment(
+                        data=audio,
+                        sample_width=2,
+                        frame_rate=sample_rate,
+                        channels=num_channels,
+                    )
+                    agent_uuid_str = str(agent.uuid) if hasattr(agent, 'uuid') else str(agent.id)
+                    call_id_str = provider_call_id or str(int(_time.time()))
+                    file_name = f"{call_id_str}.mp3"
+
+                    mp3_buffer = io.BytesIO()
+                    audio_segment.export(mp3_buffer, format="mp3")
+                    audio_bytes = mp3_buffer.getvalue()
+                    logger.info("Encoded call recording: {} ({:.1f}s, {} bytes)", file_name, len(audio_segment) / 1000, len(audio_bytes))
+                except Exception as e:
+                    logger.error("Failed to encode call recording: {}", e)
+
+                # Upload to Cloudflare R2 and update DB
+                if call_log_id:
+                    upload_id = None
+                    r2_object_key = None
+                    if audio_bytes and file_name:
+                        try:
+                            from core.services.r2_storage_service import R2StorageService
+                            r2 = R2StorageService()
+                            r2_object_key = f"{agent_uuid_str}/{file_name}"
+                            r2.upload_file(audio_bytes, r2_object_key, content_type="audio/mpeg")
+
+                            with get_db_context() as db:
+                                upload = CallLogService(db).create_upload(
+                                    r2_object_key=r2_object_key,
+                                    agent_id=agent.id,
+                                    organization_id=agent.organization_id,
+                                    call_log_id=call_log_id,
+                                    file_name=file_name,
+                                    content_type="audio/mpeg",
+                                    file_size_bytes=len(audio_bytes),
+                                )
+                                upload_id = upload.id
+                            logger.info("Audio uploaded to R2: key={} upload_id={}", r2_object_key, upload_id)
+                        except Exception as e:
+                            logger.error("Failed to upload audio to R2: {}", e)
+
+                    try:
+                        transcript_data = transcript_entries if transcript_entries else None
+
+                        with get_db_context() as db:
+                            CallLogService(db).complete_call(
+                                call_log_id=call_log_id,
+                                audio_file_path=r2_object_key,
+                                upload_id=upload_id,
+                                transcript=transcript_data,
+                            )
+                        call_log_updated["done"] = True
+                        logger.info(
+                            "Call log completed: id={} r2_key={} transcript_entries={}",
+                            call_log_id,
+                            r2_object_key,
+                            len(transcript_data) if transcript_data else 0,
+                        )
+                    except Exception as e:
+                        logger.error("Failed to complete call log in on_audio_data: {}", e)
 
         tools = NOT_GIVEN
         context = LLMContext(messages, tools)
         context_aggregator = LLMContextAggregatorPair(context)
+        user_aggregator = context_aggregator.user()
+        assistant_aggregator = context_aggregator.assistant()
         llm_text_processor = LLMTextProcessor()
         rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
+        end_call_message = None
+        if agent:
+            agent_config = self._get_agent_config(agent)
+            if agent_config:
+                end_call_message = agent_config.end_call_message
+        call_end_detector = CallEndDetectorProcessor(end_call_message=end_call_message)
 
+        # Collect transcripts via Pipecat's built-in aggregator events
+        if agent:
+            @user_aggregator.event_handler("on_user_turn_stopped")
+            async def on_user_turn_stopped(aggregator, strategy, message: UserTurnStoppedMessage):
+                transcript_entries.append({
+                    "role": "user",
+                    "text": message.content,
+                    "timestamp": message.timestamp,
+                })
 
-        pipeline = Pipeline(
-            [
-                transport.input(),
-                rtvi,
-                stt,
-                context_aggregator.user(),
-                llm,
-                llm_text_processor,
-                tts,
-                transport.output(),
-                context_aggregator.assistant(),
-            ]
-        )
+            @assistant_aggregator.event_handler("on_assistant_turn_stopped")
+            async def on_assistant_turn_stopped(aggregator, message: AssistantTurnStoppedMessage):
+                transcript_entries.append({
+                    "role": "assistant",
+                    "text": message.content,
+                    "timestamp": message.timestamp,
+                })
 
+        # Build pipeline
+        pipeline_processors = [transport.input()]
+
+        pipeline_processors.extend([
+            rtvi,
+            stt,
+            call_end_detector,
+            user_aggregator,
+            llm,
+            llm_text_processor,
+            tts,
+            transport.output(),
+            assistant_aggregator,
+        ])
+
+        # AudioBufferProcessor sees both InputAudioRawFrame and OutputAudioRawFrame
+        # when placed at the end of the pipeline
+        if audio_buffer:
+            pipeline_processors.append(audio_buffer)
+
+        pipeline = Pipeline(pipeline_processors)
 
         task = PipelineTask(
             pipeline,
@@ -619,14 +844,21 @@ class AgentFactoryService(BaseService):
             observers=[RTVIObserver(rtvi)],
         )
 
+        # Start recording when client connects
+        if audio_buffer:
+            @transport.event_handler("on_client_connected")
+            async def on_client_connected(transport, client):
+                logger.info("Client connected — starting audio recording.")
+                await audio_buffer.start_recording()
+        else:
+            @transport.event_handler("on_client_connected")
+            async def on_client_connected(transport, client):
+                logger.info("Client connected.")
+
         @rtvi.event_handler("on_client_ready")
         async def on_client_ready(rtvi):
             logger.debug("Client ready event received")
             await rtvi.set_bot_ready()
-
-        @transport.event_handler("on_client_connected")
-        async def on_client_connected(transport, client):
-            logger.info("Client connected.")
 
         @transport.event_handler("on_client_disconnected")
         async def on_client_disconnected(transport, participant):
@@ -635,6 +867,28 @@ class AgentFactoryService(BaseService):
 
         runner = PipelineRunner(handle_sigint=getattr(runner_args, "handle_sigint", False))
         await runner.run(task)
+
+        # Fallback: if on_audio_data didn't update DB (e.g. no audio captured),
+        # update the call log here with whatever we have.
+        if call_log_id and agent and not call_log_updated["done"]:
+            logger.info("on_audio_data did not complete DB update, running fallback for call_log_id={}", call_log_id)
+            try:
+                transcript_data = transcript_entries if transcript_entries else None
+
+                with get_db_context() as db:
+                    CallLogService(db).complete_call(
+                        call_log_id=call_log_id,
+                        audio_file_path=None,
+                        transcript=transcript_data,
+                    )
+                logger.info("Call log completed (fallback): id={}", call_log_id)
+            except Exception as e:
+                logger.error("Failed to complete call log id={}: {}", call_log_id, e)
+                try:
+                    with get_db_context() as db:
+                        CallLogService(db).fail_call(call_log_id)
+                except Exception:
+                    pass
 
     async def run_bot_for_agent(
         self, agent: Any, transport: Any, runner_args: Any
@@ -656,13 +910,8 @@ class AgentFactoryService(BaseService):
             stt=data["stt"],
             tts=data["tts"],
             messages=data["messages"],
+            agent=agent,
         )
 
 
-
-
-
-
-
-
-# Cartesia:  Voice id ->         
+      

@@ -1,13 +1,13 @@
 'use client';
 
+import { CheckCircle } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 
-import { useRouter, useSearchParams } from 'next/navigation';
-import CustomButton from '../../../components/shared/CustomButton';
-import { Form } from '../../../components/shared/Form';
-import axios from '../../../utils/axios';
-import { handleApiError } from '../../../utils/helpers';
-import { showToast } from '../../../utils/toast';
+import { CustomButton } from '@/components/shared';
+import axios from '@/utils/axios';
+import { handleApiError } from '@/utils/helpers';
+import { showToast } from '@/utils/toast';
 import Container from '../shared/ContainerComponent';
 
 const EmailVerificationContent = () => {
@@ -41,20 +41,22 @@ const EmailVerificationContent = () => {
 
   return (
     <Container>
-      <div className="w-full max-w-[400px]">
-        <h2 className="mb-4 text-3xl font-semibold text-foreground">Email Verification</h2>
-        <Form onFinish={handleSubmit} layout="vertical" autoComplete="off">
-          <div className="mb-6">
-            <p className="text-[15px] text-foreground">
-              To complete the verification process, please click the button below:
-            </p>
-          </div>
-          <div className="mt-2 flex flex-col gap-2">
-            <CustomButton loading={loader} type="primary" htmlType="submit" fullWidth>
-              Accept
-            </CustomButton>
-          </div>
-        </Form>
+      <div className="w-full max-w-[400px] animate-page text-center">
+        {/* Icon */}
+        <div className="mx-auto mb-6 flex size-16 items-center justify-center rounded-2xl bg-primary/10">
+          <CheckCircle className="size-8 text-primary" />
+        </div>
+
+        <h2 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">
+          Email Verification
+        </h2>
+        <p className="mb-8 text-sm text-muted-foreground">
+          To complete the verification process, please click the button below:
+        </p>
+
+        <CustomButton loading={loader} type="primary" onClick={handleSubmit} fullWidth>
+          Verify Email
+        </CustomButton>
       </div>
     </Container>
   );

@@ -1,5 +1,6 @@
 import ActionMenu from './ActionMenu';
 import CheckboxField from './CheckboxField';
+import { PhoneNumberDisplay } from './PhoneNumberDisplay';
 import CustomButton from './CustomButton';
 import CustomLink from './CustomLink';
 import CustomModal from './CustomModal';
@@ -55,6 +56,7 @@ export {
   Form,
   Logo,
   MultiSelectField,
+  PhoneNumberDisplay,
   RadioGroupField,
   SearchableSelect,
   SelectInput,

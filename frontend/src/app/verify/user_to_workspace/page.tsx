@@ -1,8 +1,7 @@
 'use client';
 
-import CustomButton from '@/components/shared/CustomButton';
+import { CustomButton, TextInput } from '@/components/shared';
 import { Form } from '@/components/shared/Form';
-import TextInput from '@/components/shared/TextInput';
 import { acceptInvitationWithPassword, validateInvitation } from '@/services/userService';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
@@ -49,7 +48,7 @@ function AcceptInvitationContent() {
         return;
       }
       setInviteInfo(result);
-    } catch (err) {
+    } catch {
       setError('This invitation is invalid or has expired.');
     } finally {
       setValidating(false);
@@ -108,9 +107,11 @@ function AcceptInvitationContent() {
   if (error) {
     return (
       <Container>
-        <div className="w-full max-w-[400px] text-center">
-          <h4 className="mb-2 text-xl font-semibold">Invalid Invitation</h4>
-          <p className="mb-4 text-[15px] text-muted-foreground">{error}</p>
+        <div className="w-full max-w-[400px] animate-page text-center">
+          <h2 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">
+            Invalid Invitation
+          </h2>
+          <p className="mb-6 text-sm text-muted-foreground">{error}</p>
           <CustomButton type="primary" onClick={() => router.push('/auth/login')} fullWidth>
             Go to Login
           </CustomButton>
@@ -121,30 +122,32 @@ function AcceptInvitationContent() {
 
   return (
     <Container>
-      <div className="w-full max-w-[400px]">
-        <h4 className="mb-1 text-xl font-semibold">Set Your Password</h4>
-        <p className="mb-4 text-[15px] text-muted-foreground">
+      <div className="w-full max-w-[400px] animate-page">
+        <h2 className="mb-2 text-2xl font-semibold tracking-tight text-foreground">
+          Set Your Password
+        </h2>
+        <p className="mb-8 text-sm text-muted-foreground">
           Welcome, {inviteInfo?.name}! Set a password to create your account and join as{' '}
           <span className="font-medium capitalize">{inviteInfo?.role}</span>.
         </p>
 
         <Form onFinish={handleSubmit} layout="vertical" autoComplete="off">
-          <TextInput
-            name="password"
-            type="password"
-            label="Password"
-            placeholder="Enter password"
-            isRequired
-          />
-          <TextInput
-            name="confirm_password"
-            type="password"
-            label="Confirm Password"
-            placeholder="Confirm password"
-            isRequired
-          />
+          <div className="space-y-5">
+            <TextInput
+              name="password"
+              type="password"
+              label="Password"
+              placeholder="Enter password"
+              isRequired
+            />
+            <TextInput
+              name="confirm_password"
+              type="password"
+              label="Confirm Password"
+              placeholder="Confirm password"
+              isRequired
+            />
 
-          <div className="mt-2 flex flex-col gap-2">
             <CustomButton loading={loader} type="primary" htmlType="submit" fullWidth>
               Create Account
             </CustomButton>

@@ -13,9 +13,10 @@ class Channel(OrgScopedModel):
 
     uuid = Column[UUID](UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
     name = Column[str](String, nullable=False)
-    type = Column(Enum(ChannelType, name="channeltype", values_callable=lambda e: [i.name for i in e]), nullable=False)
+    type = Column(Enum(ChannelType, name="channeltype", values_callable=lambda e: [i.value for i in e]), nullable=False)
     created_by = Column(BigInteger, nullable=True)
     meta_data = Column(JSONB, nullable=True, default={})
 
-    phone_numbers = relationship("ChannelPhoneNumbers", back_populates="channel")
+    phone_numbers = relationship("ChannelPhoneNumber", back_populates="channel")
+    agent_phone_numbers = relationship("AgentChannelPhoneNumbers", back_populates="channel")
     agents = relationship("Agent", secondary="agent_channels", back_populates="channels")

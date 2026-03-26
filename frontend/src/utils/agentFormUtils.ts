@@ -108,7 +108,7 @@ export function formStateToUpsertPayload(
     stt_service_id: form.sttProvider,
     voice_id: form.ttsMetaData?.voice_id ?? null,
     channel: {
-      type: 'TWILIO',
+      type: 'twilio',
     },
     llm_meta_data: Object.keys(form.llmMetaData).length ? form.llmMetaData : null,
     tts_meta_data: Object.keys(form.ttsMetaData).length ? form.ttsMetaData : null,

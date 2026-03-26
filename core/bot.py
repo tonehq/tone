@@ -20,8 +20,11 @@ from pipecat.transports.daily.transport import DailyParams, DailyTransport
 from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
 from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
 
-#Twilio
+#Telephony serializers
 from pipecat.serializers.twilio import TwilioFrameSerializer
+from pipecat.serializers.telnyx import TelnyxFrameSerializer
+from pipecat.serializers.exotel import ExotelFrameSerializer
+from pipecat.serializers.plivo import PlivoFrameSerializer
 from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketParams,
     FastAPIWebsocketTransport,
@@ -68,12 +71,78 @@ def _get_twilio_credentials() -> dict:
         for ak in api_keys:
             additional = ak.additional_credentials or {}
             key_type = additional.get("key_type")
-            if key_type == "sid":
+            if key_type == "account_sid":
                 creds["account_sid"] = decrypt(ak.api_key_encrypted)
             elif key_type == "auth_token":
                 creds["auth_token"] = decrypt(ak.api_key_encrypted)
 
         return creds
+
+
+def _get_plivo_credentials() -> dict:
+    """Fetch Plivo auth_id and auth_token from the DB (api_keys table).
+
+    Queries service_providers for name='plivo', then finds the two api_keys
+    rows whose additional_credentials->key_type is 'auth_id' or 'auth_token'.
+    Returns {"auth_id": ..., "auth_token": ...}.
+    """
+    from core.database.session import get_db_context
+    from core.models.service_provider import ServiceProvider
+    from core.models.api_key import ApiKey
+    from core.utils.encryption import decrypt
+
+    with get_db_context() as db:
+        provider = db.query(ServiceProvider).filter(ServiceProvider.name == "plivo").first()
+        if not provider:
+            logger.warning("Plivo service provider not found in DB")
+            return {}
+
+        api_keys = (
+            db.query(ApiKey)
+            .filter(ApiKey.service_provider_id == provider.id)
+            .all()
+        )
+
+        creds = {}
+        for ak in api_keys:
+            additional = ak.additional_credentials or {}
+            key_type = additional.get("key_type")
+            if key_type == "auth_id":
+                creds["auth_id"] = decrypt(ak.api_key_encrypted)
+            elif key_type == "auth_token":
+                creds["auth_token"] = decrypt(ak.api_key_encrypted)
+
+        return creds
+
+
+def _get_telnyx_api_key() -> str:
+    """Fetch Telnyx API key from the DB.
+
+    Queries service_providers for name='telnyx', then retrieves the first
+    active api_key and decrypts it.
+    Returns the decrypted key or empty string if not found.
+    """
+    from core.database.session import get_db_context
+    from core.models.service_provider import ServiceProvider
+    from core.models.api_key import ApiKey
+    from core.utils.encryption import decrypt
+
+    with get_db_context() as db:
+        provider = db.query(ServiceProvider).filter(ServiceProvider.name == "telnyx").first()
+        if not provider:
+            logger.warning("Telnyx service provider not found in DB")
+            return ""
+
+        api_key = (
+            db.query(ApiKey)
+            .filter(ApiKey.service_provider_id == provider.id, ApiKey.status == "active")
+            .first()
+        )
+        if not api_key:
+            logger.warning("No active API key found for Telnyx")
+            return ""
+
+        return decrypt(api_key.api_key_encrypted)
 
 
 def _get_provider_api_key(name: str, provider_type: str) -> str:
@@ -224,7 +293,53 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
 #         raise
 
 
-#For twilio
+def _create_serializer(transport_type: str, call_data: dict):
+    """Create the appropriate frame serializer based on the transport type.
+
+    Args:
+        transport_type: The detected telephony provider ("twilio", "telnyx", "exotel", "plivo").
+        call_data: Provider-specific call data from parse_telephony_websocket.
+
+    Returns:
+        A FrameSerializer instance for the given provider.
+    """
+    if transport_type == "twilio":
+        twilio_creds = _get_twilio_credentials()
+        return TwilioFrameSerializer(
+            stream_sid=call_data["stream_id"],
+            call_sid=call_data["call_id"],
+            account_sid=twilio_creds.get("account_sid", ""),
+            auth_token=twilio_creds.get("auth_token", ""),
+        )
+    elif transport_type == "telnyx":
+        telnyx_api_key = _get_telnyx_api_key()
+        return TelnyxFrameSerializer(
+            stream_id=call_data["stream_id"],
+            call_control_id=call_data.get("call_control_id"),
+            outbound_encoding=call_data.get("outbound_encoding", "PCMU"),
+            inbound_encoding="PCMU",
+            api_key=telnyx_api_key,
+        )
+    elif transport_type == "exotel":
+        return ExotelFrameSerializer(
+            stream_sid=call_data["stream_id"],
+            call_sid=call_data.get("call_id"),
+        )
+    elif transport_type == "plivo":
+        plivo_creds = _get_plivo_credentials()
+        return PlivoFrameSerializer(
+            stream_id=call_data["stream_id"],
+            call_id=call_data.get("call_id"),
+            auth_id=plivo_creds.get("auth_id", ""),
+            auth_token=plivo_creds.get("auth_token", ""),
+        )
+    else:
+        raise ValueError(
+            f"Unsupported telephony provider: {transport_type}. "
+            f"Supported providers: twilio, telnyx, exotel, plivo"
+        )
+
+
 async def bot(runner_args: RunnerArguments, call_type: str = None):
     """Main bot entry point compatible with Pipecat Cloud."""
     logger.info(f"Starting the bot, received body: 0.3 {runner_args.body}")
@@ -237,22 +352,25 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
         agent = body.get("agent")
 
         if call_data is None or transport_type is None:
-            _, call_data = await parse_telephony_websocket(runner_args.websocket)
-            transport_type = "twilio"
+            transport_type, call_data = await parse_telephony_websocket(runner_args.websocket)
 
-        call_info = await get_call_info(call_data.get("call_id", ""))
-        if call_info:
-            logger.info(f"Call from: {call_info.get('from_number')} to: {call_info.get('to_number')}")
+        if transport_type == "twilio":
+            call_info = await get_call_info(transport_type, call_data.get("call_id", ""))
+            if call_info:
+                call_data["from"] = call_info.get("from_number", "")
+                call_data["to"] = call_info.get("to_number", "")
+                logger.info(f"Call from: {call_data['from']} to: {call_data['to']}")
+        elif transport_type in ("telnyx", "exotel"):
+            # Telnyx and Exotel provide from/to in the call_data directly
+            from_number = call_data.get("from", "")
+            to_number = call_data.get("to", "")
+            if from_number or to_number:
+                logger.info(f"Call from: {from_number} to: {to_number}")
+
         if agent:
             logger.info(f"Resolved agent for this call: id={agent.id} name={agent.name}")
 
-        twilio_creds = _get_twilio_credentials()
-        serializer = TwilioFrameSerializer(
-            stream_sid=call_data["stream_id"],
-            call_sid=call_data["call_id"],
-            account_sid=twilio_creds.get("account_sid", ""),
-            auth_token=twilio_creds.get("auth_token", ""),
-        )
+        serializer = _create_serializer(transport_type, call_data)
 
         transport = FastAPIWebsocketTransport(
             websocket=runner_args.websocket,
@@ -261,9 +379,9 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
                 audio_out_enabled=True,
                 add_wav_header=False,
                 vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=0.2)),
-            serializer=serializer,
-        ),
-    )
+                serializer=serializer,
+            ),
+        )
 
     elif isinstance(runner_args, SmallWebRTCRunnerArguments):
         webrtc_connection: SmallWebRTCConnection = runner_args.webrtc_connection
@@ -307,16 +425,25 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
     print("runner_args.body ===========:", runner_args.body)
     await run_bot(transport, runner_args)
 
-async def get_call_info(call_sid: str) -> dict:
-    """Fetch call information from Twilio REST API using aiohttp.
+async def get_call_info(transport_type: str, call_sid: str) -> dict:
+    """Fetch call information from the telephony provider's REST API.
+
+    Currently only Twilio is supported for call info lookup via REST API.
+    Telnyx and Exotel provide from/to in the WebSocket start message directly.
+    Plivo call info lookup is not implemented yet.
 
     Args:
-        call_sid: The Twilio call SID
+        transport_type: The telephony provider type ("twilio", "telnyx", "exotel", "plivo").
+        call_sid: The provider-specific call ID.
 
     Returns:
-        Dictionary containing call information including from_number, to_number, status, etc.
+        Dictionary containing call information including from_number, to_number, etc.
     """
+    if transport_type != "twilio":
+        return {}
+
     twilio_creds = _get_twilio_credentials()
+    print("twilio_credsss", twilio_creds)
     account_sid = twilio_creds.get("account_sid")
     auth_token = twilio_creds.get("auth_token")
 

@@ -132,11 +132,11 @@ All date formatting must go through `@/utils/date`. This ensures a consistent da
 
 ### Required usage
 
-| Need                                | Use                                          | Do NOT use                                                             |
-| ----------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------- |
-| Format a timestamp for display      | `formatDate(ts)` from `@/utils/date` | `dayjs.unix(ts).format(...)`, `dayjs.utc(s).format(...)`, `new Date(ts).toLocaleString()` |
-| Format current date/time            | `formatNow()` from `@/utils/date`            | `new Date().toLocaleString(...)`, `dayjs().format(...)`                |
-| Reference the standard format       | `DATE_FORMAT` from `@/utils/date`            | Inline format strings like `'DD MMM YYYY, HH:mm, A'`                      |
+| Need                           | Use                                  | Do NOT use                                                                                |
+| ------------------------------ | ------------------------------------ | ----------------------------------------------------------------------------------------- |
+| Format a timestamp for display | `formatDate(ts)` from `@/utils/date` | `dayjs.unix(ts).format(...)`, `dayjs.utc(s).format(...)`, `new Date(ts).toLocaleString()` |
+| Format current date/time       | `formatNow()` from `@/utils/date`    | `new Date().toLocaleString(...)`, `dayjs().format(...)`                                   |
+| Reference the standard format  | `DATE_FORMAT` from `@/utils/date`    | Inline format strings like `'DD MMM YYYY, HH:mm, A'`                                      |
 
 ### Rules
 
@@ -220,15 +220,15 @@ Keep code organized by responsibility. Every new file must land in the correct d
 
 ### Directory structure
 
-| Directory                | Contents                                        | Examples                                                                                                 |
-| ------------------------ | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `src/types/`             | TypeScript interfaces and type aliases          | `agent.ts`, `provider.ts`, `components.ts`, `integration.ts`, `sidebar.ts`                               |
-| `src/constants/`         | Static values, config objects, enums            | `index.ts` (cookie keys, URLs), `sidebar.ts` (nav config, widths), `settings.ts`                         |
+| Directory                | Contents                                        | Examples                                                                                                                              |
+| ------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/types/`             | TypeScript interfaces and type aliases          | `agent.ts`, `provider.ts`, `components.ts`, `integration.ts`, `sidebar.ts`                                                            |
+| `src/constants/`         | Static values, config objects, enums            | `index.ts` (cookie keys, URLs), `sidebar.ts` (nav config, widths), `settings.ts`                                                      |
 | `src/utils/`             | Pure helper functions and utilities             | `helpers.ts` (generateUUID), `date.ts` (date formatting), `agentFormUtils.ts` (form state transforms), `axios.ts`, `notification.tsx` |
-| `src/services/`          | API call functions (thin wrappers around axios) | `agentsService.ts`, `channelService.ts`, `providerService.ts`                                            |
-| `src/atoms/`             | Jotai atoms (state + write actions)             | `AgentsAtom.tsx`, `AuthAtom.tsx`, `ProviderAtom.tsx`                                                     |
-| `src/components/shared/` | Reusable UI components                          | `CustomTable.tsx`, `CustomModal.tsx`, `CustomButton.tsx`                                                 |
-| `src/components/ui/`     | Raw shadcn primitives (not imported by pages)   | `button.tsx`, `dialog.tsx`, `table.tsx`                                                                  |
+| `src/services/`          | API call functions (thin wrappers around axios) | `agentsService.ts`, `channelService.ts`, `providerService.ts`                                                                         |
+| `src/atoms/`             | Jotai atoms (state + write actions)             | `AgentsAtom.tsx`, `AuthAtom.tsx`, `ProviderAtom.tsx`                                                                                  |
+| `src/components/shared/` | Reusable UI components                          | `CustomTable.tsx`, `CustomModal.tsx`, `CustomButton.tsx`                                                                              |
+| `src/components/ui/`     | Raw shadcn primitives (not imported by pages)   | `button.tsx`, `dialog.tsx`, `table.tsx`                                                                                               |
 
 ### Rules
 
