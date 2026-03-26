@@ -1,7 +1,7 @@
 'use client';
 
 import callLogsAtom, { fetchCallLogs } from '@/atoms/CallLogAtom';
-import { CustomButton, CustomTable, PhoneNumberDisplay } from '@/components/shared';
+import { CustomButton, CustomTable, CustomTooltip, PhoneNumberDisplay } from '@/components/shared';
 import type { CallLogFilterParam, CallLogQueryParams, CallLogRow } from '@/types/callLog';
 import type { CustomTableColumn } from '@/types/components';
 import { handleApiError } from '@/utils/helpers';
@@ -178,41 +178,31 @@ const CallHistory: React.FC = () => {
       },
     },
     {
-      key: 'transcript',
-      title: 'Transcription',
-      dataIndex: 'transcript',
+      key: 'actions',
+      title: 'Quick View',
       render: (_value, record) => (
-        <CustomButton
-          type="default"
-          size="xs"
-          icon={<MessageSquareText className="size-3.5" />}
-          disabled={!(record.transcript && record.transcript.length > 0)}
-          onClick={(e) => {
-            e.stopPropagation();
-            setTranscriptionCallLog(record);
-          }}
-        >
-          View
-        </CustomButton>
-      ),
-    },
-    {
-      key: 'metrics',
-      title: 'Metrics',
-      dataIndex: 'metrics',
-      render: (_value, record) => (
-        <CustomButton
-          type="default"
-          size="xs"
-          icon={<ChartNoAxesCombined className="size-3.5" />}
-          disabled={!record.metrics}
-          onClick={(e) => {
-            e.stopPropagation();
-            setMetricsCallLog(record);
-          }}
-        >
-          View
-        </CustomButton>
+        <div className="flex items-center justify-center gap-1.5">
+          <CustomTooltip content="Transcription">
+            <CustomButton
+              type="default"
+              size="icon-xs"
+              disabled={!(record.transcript && record.transcript.length > 0)}
+              onClick={() => setTranscriptionCallLog(record)}
+            >
+              <MessageSquareText className="size-3.5" />
+            </CustomButton>
+          </CustomTooltip>
+          <CustomTooltip content="Metrics">
+            <CustomButton
+              type="default"
+              size="icon-xs"
+              disabled={!record.metrics}
+              onClick={() => setMetricsCallLog(record)}
+            >
+              <ChartNoAxesCombined className="size-3.5" />
+            </CustomButton>
+          </CustomTooltip>
+        </div>
       ),
     },
   ];
