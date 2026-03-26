@@ -27,6 +27,8 @@ headers = [
     "voice_id",
     "voice_name",
     "status",
+    "call_log_id",
+    "to_number",
 ]
 
 header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
@@ -75,6 +77,8 @@ for provider in tts_providers:
             ws.cell(row=row, column=5, value=voice_id).border = thin_border
             ws.cell(row=row, column=6, value=voice_name).border = thin_border
             ws.cell(row=row, column=7, value="").border = thin_border  # status - empty
+            ws.cell(row=row, column=8, value="").border = thin_border  # call_log_id - empty
+            ws.cell(row=row, column=9, value="").border = thin_border  # to_number - empty
 
             row += 1
 
@@ -91,7 +95,7 @@ for col in range(1, len(headers) + 1):
 ws.freeze_panes = "A2"
 
 # Auto-filter
-ws.auto_filter.ref = f"A1:G{row - 1}"
+ws.auto_filter.ref = f"A1:I{row - 1}"
 
 output_file = "TTS_Test_Configurations.xlsx"
 wb.save(output_file)

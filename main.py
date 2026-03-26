@@ -117,6 +117,44 @@ app.mount("/api/v1", api_v1)
 app.include_router(telephony.router, tags=["telephony"])
 
 
+@app.on_event("startup")
+def warm_db_pool():
+    """Warm up the DB connection pool at server start so the first request is fast."""
+    from sqlalchemy import text
+    from core.database.session import get_db_context
+    try:
+        with get_db_context() as db:
+            db.execute(text("SELECT 1"))
+        print("DB connection pool warmed up")
+    except Exception as e:
+        print(f"Warning: Failed to warm DB pool: {e}")
+
+
+@app.on_event("startup")
+async def warm_worker_pool_startup():
+    """Pre-spawn bot worker subprocesses so the first call starts instantly."""
+    use_subprocess = os.environ.get("USE_SUBPROCESS_BOT", "false").lower() == "true"
+    use_warm_pool = os.environ.get("USE_WARM_POOL", "false").lower() == "true"
+    if use_subprocess and use_warm_pool:
+        pool_size = int(os.environ.get("WARM_POOL_SIZE", "2"))
+        from core.services.warm_worker_pool import WarmWorkerPool
+        pool = WarmWorkerPool.get_instance(pool_size=pool_size)
+        await pool.start()
+    else:
+        print("Warm worker pool disabled (set USE_SUBPROCESS_BOT=true and USE_WARM_POOL=true to enable)")
+
+
+@app.on_event("shutdown")
+async def warm_worker_pool_shutdown():
+    """Shut down any idle warm workers on server exit."""
+    try:
+        from core.services.warm_worker_pool import WarmWorkerPool
+        pool = WarmWorkerPool.get_instance()
+        await pool.shutdown()
+    except Exception:
+        pass
+
+
 @app.get("/")
 def root():
     return {
