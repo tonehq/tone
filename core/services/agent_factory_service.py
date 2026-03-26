@@ -909,6 +909,7 @@ class AgentFactoryService(BaseService):
         from pipecat.pipeline.runner import PipelineRunner
         from pipecat.pipeline.task import PipelineParams, PipelineTask
         from core.processors.call_end_detector import CallEndDetectorProcessor
+        from core.processors.metrics_collector import MetricsCollectorProcessor
         from core.services.call_log_service import CallLogService
         from core.database.session import get_db_context
         logger.info("[TIMING] run_bot_with_components imports (+%.3fs)", _time.monotonic() - _t)
@@ -1033,19 +1034,26 @@ class AgentFactoryService(BaseService):
                     try:
                         transcript_data = transcript_entries if transcript_entries else None
 
+                        collected_metrics = metrics_collector.get_collected_metrics()
+                        collected_metrics["user_bot_latency"] = [
+                            {"latency": round(l, 3)} for l in latency_observer._latencies
+                        ]
+                        collected_metrics["turns"] = turn_entries
                         with get_db_context() as db:
                             CallLogService(db).complete_call(
                                 call_log_id=call_log_id,
                                 audio_file_path=r2_object_key,
                                 upload_id=upload_id,
                                 transcript=transcript_data,
+                                metrics=collected_metrics,
                             )
                         call_log_updated["done"] = True
                         logger.info(
-                            "Call log completed: id={} r2_key={} transcript_entries={}",
+                            "Call log completed: id={} r2_key={} transcript_entries={} metrics_collected={}",
                             call_log_id,
                             r2_object_key,
                             len(transcript_data) if transcript_data else 0,
+                            {k: len(v) for k, v in collected_metrics.items()},
                         )
                     except Exception as e:
                         logger.error("Failed to complete call log in on_audio_data: {}", e)
@@ -1101,6 +1109,10 @@ class AgentFactoryService(BaseService):
             assistant_aggregator,
         ])
 
+        # MetricsCollectorProcessor collects metrics for DB storage
+        metrics_collector = MetricsCollectorProcessor()
+        pipeline_processors.append(metrics_collector)
+
         # AudioBufferProcessor sees both InputAudioRawFrame and OutputAudioRawFrame
         # when placed at the end of the pipeline
         if audio_buffer:
@@ -1109,6 +1121,30 @@ class AgentFactoryService(BaseService):
         _t = _time.monotonic()
         pipeline = Pipeline(pipeline_processors)
 
+        # Observers for metrics, latency, and turn tracking
+        from pipecat.observers.loggers.metrics_log_observer import MetricsLogObserver
+        from pipecat.observers.loggers.user_bot_latency_log_observer import UserBotLatencyLogObserver
+        from pipecat.observers.turn_tracking_observer import TurnTrackingObserver
+
+        metrics_observer = MetricsLogObserver()
+        latency_observer = UserBotLatencyLogObserver()
+        turn_observer = TurnTrackingObserver()
+        turn_entries: list[dict] = []
+
+        @turn_observer.event_handler("on_turn_started")
+        async def on_turn_started(observer, turn_number):
+            logger.info("Turn {} started", turn_number)
+
+        @turn_observer.event_handler("on_turn_ended")
+        async def on_turn_ended(observer, turn_number, duration, was_interrupted):
+            status = "interrupted" if was_interrupted else "completed"
+            logger.info("Turn {} {} after {:.2f}s", turn_number, status, duration)
+            turn_entries.append({
+                "turn": turn_number,
+                "duration": round(duration, 3),
+                "status": status,
+            })
+
         task = PipelineTask(
             pipeline,
             params=PipelineParams(
@@ -1116,7 +1152,12 @@ class AgentFactoryService(BaseService):
                 enable_metrics=True,
                 enable_usage_metrics=True,
             ),
-            observers=[RTVIObserver(rtvi)],
+            observers=[
+                RTVIObserver(rtvi),
+                metrics_observer,
+                latency_observer,
+                turn_observer,
+            ],
         )
         logger.info("[TIMING] Pipeline + PipelineTask created (+%.3fs)", _time.monotonic() - _t)
 
@@ -1166,11 +1207,13 @@ class AgentFactoryService(BaseService):
             try:
                 transcript_data = transcript_entries if transcript_entries else None
 
+                collected_metrics = metrics_collector.get_collected_metrics()
                 with get_db_context() as db:
                     CallLogService(db).complete_call(
                         call_log_id=call_log_id,
                         audio_file_path=None,
                         transcript=transcript_data,
+                        metrics=collected_metrics,
                     )
                 logger.info("Call log completed (fallback): id={}", call_log_id)
             except Exception as e:

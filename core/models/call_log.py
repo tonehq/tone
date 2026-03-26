@@ -22,3 +22,4 @@ class CallLog(OrgScopedModel):
     started_at = Column(BigInteger, nullable=False)
     ended_at = Column(BigInteger, nullable=True)
     duration_seconds = Column(Integer, nullable=True)
+    metrics = Column(JSONB, nullable=True)
