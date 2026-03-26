@@ -34,6 +34,7 @@ const CustomModal: React.FC<CustomModalProps> = ({
   hideFooter = false,
   width,
   className,
+  contentClassName,
   showCloseButton = true,
 }) => {
   const handleCancel = () => {
@@ -70,7 +71,7 @@ const CustomModal: React.FC<CustomModalProps> = ({
           </DialogHeader>
         )}
 
-        {children && <div className="px-6 py-4">{children}</div>}
+        {children && <div className={cn('py-4 pl-6 pr-6', contentClassName)}>{children}</div>}
 
         {showFooter && (
           <DialogFooter className="bg-muted/30 px-6 py-4">

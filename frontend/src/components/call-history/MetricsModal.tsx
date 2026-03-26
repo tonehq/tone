@@ -58,8 +58,9 @@ const MetricsModal: React.FC<MetricsModalProps> = ({ open, onClose, metrics, age
       title={`Metrics${agentName ? ` — ${agentName}` : ''}`}
       width="md:max-w-2xl"
       hideFooter
+      contentClassName="max-h-[70vh] overflow-y-auto pr-0"
     >
-      <div className="flex max-h-[70vh] flex-col gap-5 overflow-y-auto">
+      <div className="flex flex-col gap-5 pr-6">
         {/* Overview Cards */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <StatCard
