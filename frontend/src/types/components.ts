@@ -233,5 +233,6 @@ export interface CustomModalProps {
   hideFooter?: boolean;
   width?: string;
   className?: string;
+  contentClassName?: string;
   showCloseButton?: boolean;
 }

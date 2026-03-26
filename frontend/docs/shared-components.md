@@ -898,9 +898,36 @@ The previous separate `Form*` wrapper components (`FormTextInput`, `FormSelectIn
 
 ---
 
+## CustomTooltip
+
+Wrapper around Radix `Tooltip` primitives. Provides a simple API for hover tooltips without needing to compose `TooltipProvider`, `Tooltip`, `TooltipTrigger`, and `TooltipContent` manually.
+
+### Props
+
+| Prop     | Type              | Default    | Description                        |
+| -------- | ----------------- | ---------- | ---------------------------------- |
+| content  | `React.ReactNode` | —          | **Required.** Tooltip text/content |
+| side     | `'top' \| 'bottom' \| 'left' \| 'right'` | `'bottom'` | Tooltip placement |
+| children | `React.ReactNode` | —          | **Required.** Trigger element      |
+
+### Usage
+
+```tsx
+import { CustomButton, CustomTooltip } from '@/components/shared';
+import { Trash2 } from 'lucide-react';
+
+<CustomTooltip content="Delete item">
+  <CustomButton type="danger" size="icon-xs">
+    <Trash2 className="size-3.5" />
+  </CustomButton>
+</CustomTooltip>
+```
+
+---
+
 ## Exports from `@/components/shared`
 
-- **Components:** `ActionMenu`, `CheckboxField`, `CustomButton`, `CustomLink`, `CustomModal`, `CustomTab`, `CustomTable`, `Divider`, `Form`, `Logo`, `MultiSelectField`, `RadioGroupField`, `SearchableSelect`, `SelectInput`, `SliderField`, `TextAreaField`, `TextInput`
+- **Components:** `ActionMenu`, `CheckboxField`, `CustomButton`, `CustomLink`, `CustomModal`, `CustomTab`, `CustomTable`, `CustomTooltip`, `Divider`, `Form`, `Logo`, `MultiSelectField`, `RadioGroupField`, `SearchableSelect`, `SelectInput`, `SliderField`, `TextAreaField`, `TextInput`
 - **Types:** `ActionMenuProps`, `CheckboxFieldBaseProps`, `CustomModalProps`, `CustomTableColumn`, `CustomTablePagination`, `CustomTableProps`, `FormCheckboxFieldProps`, `FormMultiSelectFieldProps`, `FormRadioGroupFieldProps`, `FormSelectInputProps`, `FormSliderFieldProps`, `FormTextAreaFieldProps`, `FormTextInputProps`, `MultiSelectFieldBaseProps`, `MultiSelectOption`, `RadioGroupOption`, `SearchableSelectOption`, `SelectInputBaseProps`, `SelectOption`, `SliderFieldBaseProps`, `TabItem`, `TextAreaFieldBaseProps`, `TextInputBaseProps`
 
 ---

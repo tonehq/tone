@@ -92,9 +92,10 @@ test.describe('Create Outbound Agent Page', () => {
 
   // ── 2. Form Tabs ───────────────────────────────────────────────────────────
   test.describe('Form Tabs', () => {
-    test('shows all four form tabs including Assign Number', async ({ page }) => {
+    test('shows all five form tabs', async ({ page }) => {
       await expect(page.getByRole('tab', { name: /general/i })).toBeVisible();
       await expect(page.getByRole('tab', { name: /voice/i })).toBeVisible();
+      await expect(page.getByRole('tab', { name: /prompt/i })).toBeVisible();
       await expect(page.getByRole('tab', { name: /call configuration/i })).toBeVisible();
       await expect(page.getByRole('tab', { name: /assign number/i })).toBeVisible();
     });
@@ -107,16 +108,25 @@ test.describe('Create Outbound Agent Page', () => {
     });
 
     test('shows all General tab form row labels', async ({ page }) => {
+      // Agent Identity section
+      await expect(page.getByRole('heading', { name: 'Agent Identity' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Agent Name' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Agent Identity' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Agent Identity' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'description' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'End Call Message' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Agent Description' })).toBeVisible();
 
+      // AI Configuration section
       await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       await expect(page.getByRole('heading', { name: 'AI Configuration' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Filter Words' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Use Realistic Filler Words' })).toBeVisible();
+
+      // Messages section
+      await page.getByText('Messages').first().scrollIntoViewIfNeeded();
+      await expect(page.getByRole('heading', { name: 'Messages' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'First Message' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'End Call Message' })).toBeVisible();
+
+      // Danger Zone section
+      await page.getByText('Danger Zone').scrollIntoViewIfNeeded();
+      await expect(page.getByRole('heading', { name: 'Danger Zone' })).toBeVisible();
     });
 
     test('shows default empty values for text fields', async ({ page }) => {
@@ -155,28 +165,6 @@ test.describe('Create Outbound Agent Page', () => {
       const endCallTextarea = page.locator('textarea[name="end_call_message"]');
       await endCallTextarea.fill('Thank you for your time. Goodbye!');
       await expect(endCallTextarea).toHaveValue('Thank you for your time. Goodbye!');
-    });
-
-    test('allows adding and deleting custom vocabulary', async ({ page }) => {
-      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
-      const vocabInput = page.locator('input[name="vocabularyInput"]');
-      await vocabInput.fill('ToneHQ');
-      await vocabInput.press('Enter');
-      await expect(page.getByText('ToneHQ', { exact: true })).toBeVisible();
-
-      await page.getByText('ToneHQ', { exact: true }).getByRole('button').click();
-      await expect(page.getByText('ToneHQ', { exact: true })).not.toBeVisible();
-    });
-
-    test('allows adding and deleting filter words', async ({ page }) => {
-      await page.getByText('Filter Words').scrollIntoViewIfNeeded();
-      const filterInput = page.locator('input[name="filterWordsInput"]');
-      await filterInput.fill('offensive');
-      await filterInput.press('Enter');
-      await expect(page.getByText('offensive', { exact: true })).toBeVisible();
-
-      await page.getByText('offensive', { exact: true }).getByRole('button').click();
-      await expect(page.getByText('offensive', { exact: true })).not.toBeVisible();
     });
 
     test('allows toggling filler words switch', async ({ page }) => {
@@ -380,21 +368,16 @@ test.describe('Create Outbound Agent Page', () => {
       // ── General Tab ──
       await page.locator('input[name="name"]').fill('E2E Outbound Agent');
       await page.locator('textarea[name="description"]').fill('Outbound test agent');
-      await page.locator('textarea[name="first_message"]').fill('Hi, this is a test call.');
-      await page.locator('textarea[name="end_call_message"]').fill('Thanks for your time!');
 
+      // Enable filler words
       await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
-      const vocabInput = page.locator('input[name="vocabularyInput"]');
-      await vocabInput.fill('SalesForce');
-      await vocabInput.press('Enter');
-
-      await page.getByText('Filter Words').scrollIntoViewIfNeeded();
-      const filterInput = page.locator('input[name="filterWordsInput"]');
-      await filterInput.fill('spam');
-      await filterInput.press('Enter');
-
       const fillerRow = page.getByText('Use Realistic Filler Words').locator('..').locator('..');
       await fillerRow.getByRole('switch').click();
+
+      // Messages
+      await page.getByText('Messages').first().scrollIntoViewIfNeeded();
+      await page.locator('textarea[name="first_message"]').fill('Hi, this is a test call.');
+      await page.locator('textarea[name="end_call_message"]').fill('Thanks for your time!');
 
       // ── Voice Tab ──
       await page.getByRole('tab', { name: /voice/i }).click();
@@ -433,9 +416,9 @@ test.describe('Create Outbound Agent Page', () => {
         speech_recognition: 'accurate',
         call_recording: true,
         call_transcription: true,
+        custom_vocabulary: null,
+        filter_words: null,
       });
-      expect(JSON.parse(payload.custom_vocabulary as string)).toEqual(['SalesForce']);
-      expect(JSON.parse(payload.filter_words as string)).toEqual(['spam']);
       expect(payload.system_prompt).toContain('You are an outbound sales agent.');
     });
 
@@ -480,31 +463,30 @@ test.describe('Create Outbound Agent Page', () => {
       const agentName = `E2E Outbound ${Date.now()}`;
       await page.locator('input[name="name"]').fill(agentName);
 
-      // Start listening for the agent list response BEFORE clicking save,
-      // so we don't miss it if the navigation + fetch happen quickly.
-      const agentListResponse = page.waitForResponse(
-        (resp) => resp.url().includes('/agent/get_all_agents'),
-        { timeout: 60_000 },
+      const saveResponse = page.waitForResponse(
+        (resp) => resp.url().includes('/agent/upsert_agent') && resp.ok(),
+        { timeout: 30_000 },
       );
-
       await page.getByRole('button', { name: /save changes/i }).click();
-      await expect(page).toHaveURL(/\/agents(?:\?|$)/, { timeout: 15_000 });
-
-      // Wait for the agent list API to respond
-      await agentListResponse;
+      await saveResponse;
+      await expect(page).toHaveURL(/\/agents(?:\?|$)/, { timeout: 30_000 });
 
       // Wait for the agent list to finish loading (skeletons disappear)
       await page.waitForFunction(
         () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
         null,
-        { timeout: 10_000 },
+        { timeout: 15_000 },
       );
 
       // Search for the created agent (it may be on a later pagination page)
-      await page.getByPlaceholder('Search agents...').fill(agentName);
+      const searchInput = page.getByPlaceholder('Search agents...');
+      await expect(searchInput).toBeVisible({ timeout: 5_000 });
+      await searchInput.fill(agentName);
 
-      await expect(page.getByText(agentName).first()).toBeVisible({ timeout: 10_000 });
-      await expect(page.locator('tbody').getByText('Outbound').first()).toBeVisible();
+      await expect(page.getByText(agentName).first()).toBeVisible({ timeout: 15_000 });
+      await expect(
+        page.locator('tbody').getByText('Outbound', { exact: true }).first(),
+      ).toBeVisible();
 
       // Navigate back to create page so subsequent tests aren't affected
       await page.goto('/agents/create/outbound');

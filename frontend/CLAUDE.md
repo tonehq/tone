@@ -2,6 +2,29 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## IMPORTANT: Read RULES.md First
+
+**Before reading any source files, always check `docs/RULES.md` for the feature-to-documentation mapping.** The `docs/` folder contains comprehensive documentation (~2,500+ lines) covering the codebase. Reading the relevant doc first reduces token usage by ~90%.
+
+### Quick Reference
+
+| Feature Area | Documentation File |
+|-------------|-------------------|
+| Auth (login, signup, password reset, tokens) | `docs/AUTH_FLOW_DOCUMENTATION.md` |
+| Settings (API keys, members, integrations) | `docs/features/settings-page.md` |
+| Shared UI Components (CustomTable, TextInput, etc.) | `docs/shared-components.md` |
+| Design System (theme, colors, spacing) | `docs/design.md` |
+
+### Workflow
+
+1. **Every request:** Read `docs/RULES.md` → identify relevant doc → read doc → then read only the source file being edited
+2. **After code changes:** If behavior changed, update the relevant doc (see Rule 3 in `docs/RULES.md`)
+3. **Cross-feature changes:** Check the cross-feature table in `docs/RULES.md` Rule 6
+
+### Documentation Generation
+
+Use `/generate-feature-docs` skill to create comprehensive feature docs. See `docs/RULES.md` for the complete mapping and coverage gaps. Always update docs after behavioral code changes.
+
 ---
 
 ## Commands

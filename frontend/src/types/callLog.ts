@@ -1,3 +1,48 @@
+export interface CallMetricsTTFB {
+  model: string | null;
+  value: number;
+  processor: string;
+}
+
+export interface CallMetricsTurn {
+  turn: number;
+  status: string;
+  duration: number;
+}
+
+export interface CallMetricsLLMUsage {
+  model: string;
+  processor: string;
+  total_tokens: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+}
+
+export interface CallMetricsTTSUsage {
+  model: string;
+  processor: string;
+  characters: number;
+}
+
+export interface CallMetricsProcessing {
+  model: string | null;
+  value: number;
+  processor: string;
+}
+
+export interface CallMetricsLatency {
+  latency: number;
+}
+
+export interface CallMetrics {
+  ttfb: CallMetricsTTFB[];
+  turns: CallMetricsTurn[];
+  llm_usage: CallMetricsLLMUsage[];
+  tts_usage: CallMetricsTTSUsage[];
+  processing: CallMetricsProcessing[];
+  user_bot_latency: CallMetricsLatency[];
+}
+
 export interface CallLogRow {
   id: number;
   uuid: string;
@@ -14,6 +59,7 @@ export interface CallLogRow {
   status: string;
   audio_file_path: string | null;
   provider_call_id: string | null;
+  metrics: CallMetrics | null;
 }
 
 export interface CallLogsState {
