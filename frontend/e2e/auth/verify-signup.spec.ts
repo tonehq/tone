@@ -127,16 +127,25 @@ test.describe('Email Verification Page', () => {
   // ── 3. Loading State ───────────────────────────────────────────────────────
   test.describe('Loading State', () => {
     test('shows loading state on the "Verify Email" button', async ({ page }) => {
+      // Clear any previously registered routes to avoid conflicts
+      await page.unrouteAll({ behavior: 'wait' });
+
+      let resolveRoute: (() => void) | null = null;
       await page.route('**/auth/verify_user_email**', async (route) => {
-        await new Promise((resolve) => setTimeout(resolve, 2_000));
+        await new Promise<void>((resolve) => {
+          resolveRoute = resolve;
+        });
         await route.abort('failed');
       });
 
       await page.getByRole('button', { name: 'Verify Email' }).click();
 
       const verifyBtn = page.getByRole('button', { name: 'Verify Email' });
-      await expect(verifyBtn).toBeDisabled({ timeout: 1_000 });
-      await expect(page.locator('[class*="animate-spin"]')).toBeVisible({ timeout: 1_000 });
+      await expect(verifyBtn).toBeDisabled({ timeout: 3_000 });
+      await expect(page.locator('[class*="animate-spin"]')).toBeVisible({ timeout: 3_000 });
+
+      // Release the pending route so cleanup doesn't hang
+      resolveRoute?.();
     });
   });
 });
