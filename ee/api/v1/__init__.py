@@ -13,4 +13,6 @@ from ee.api.v1 import (
     generated_api_keys,
     channels,
     voices,
+    call_logs,
+    telephony,
 )

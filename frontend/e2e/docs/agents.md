@@ -280,8 +280,8 @@ The Voice tab has 3 `SectionCard` sections:
 - [ ] Assigned phones listed with: phone icon (emerald), phone number, type label, "Unassign" button
 - [ ] Clicking "Assign Number" opens `AssignPhoneNumberModal`
 - [ ] Clicking "Unassign" opens a `CustomModal` confirmation: "Are you sure you want to unassign {number}?"
-- [ ] Assign calls POST `/channel_phone_number/upsert_channel_phone_number` with Twilio channel info
-- [ ] Unassign calls POST `/channel_phone_number/detach_channel_phone_number`
+- [ ] Assign calls POST `/agent_channel_phone_number/upsert_channel_phone_number` with Twilio channel info
+- [ ] Unassign calls POST `/agent_channel_phone_number/detach_channel_phone_number`
 
 ### US-9: Save agent
 
@@ -410,8 +410,8 @@ The Voice tab has 3 `SectionCard` sections:
 | `/agent/get_all_agents?agent_id=N`                  | GET    | query param `agent_id`                   | `Agent[]` (single item)          | `{ detail: "..." }` |
 | `/agent/upsert_agent`                               | POST   | See payload shape below                  | `Agent`                          | `{ detail: "..." }` |
 | `/agent/delete_agent?agent_id=N`                    | DELETE | query param `agent_id`                   | —                                | `{ detail: "..." }` |
-| `/channel_phone_number/upsert_channel_phone_number` | POST   | Phone number assignment payload          | —                                | `{ detail: "..." }` |
-| `/channel_phone_number/detach_channel_phone_number` | POST   | `{ channel_id, phone_number, agent_id }` | —                                | `{ detail: "..." }` |
+| `/agent_channel_phone_number/upsert_channel_phone_number` | POST   | Phone number assignment payload          | —                                | `{ detail: "..." }` |
+| `/agent_channel_phone_number/detach_channel_phone_number` | POST   | `{ channel_id, phone_number, agent_id }` | —                                | `{ detail: "..." }` |
 | Voice service: provider-specific                    | GET    | provider id                              | `{ voices: VoiceItem[] }`        | `{ detail: "..." }` |
 
 ### Agent response shape (from API)
