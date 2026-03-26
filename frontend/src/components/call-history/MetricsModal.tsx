@@ -12,7 +12,7 @@ import { ProcessingTimesSection } from './metrics/ProcessingTimesSection';
 import { SectionHeader } from './metrics/SectionHeader';
 import { StatCard } from './metrics/StatCard';
 import { TTSUsageSection } from './metrics/TTSUsageSection';
-import { extractProcessorName, formatMs } from './metrics/utils';
+import { BAR_CHART_MAX_HEIGHT, extractProcessorName, formatMs } from './metrics/utils';
 
 interface MetricsModalProps {
   open: boolean;
@@ -136,7 +136,7 @@ const MetricsModal: React.FC<MetricsModalProps> = ({ open, onClose, metrics, age
                     <BarChart
                       values={entries.map((e) => e.value)}
                       maxValue={max}
-                      maxHeight={32}
+                      maxHeight={BAR_CHART_MAX_HEIGHT}
                       color="bg-primary/60 hover:bg-primary"
                       getTooltip={(v) => formatMs(v)}
                     />

@@ -3,6 +3,7 @@ import { Mic } from 'lucide-react';
 
 import { BarChart } from './BarChart';
 import { SectionHeader } from './SectionHeader';
+import { BAR_CHART_MAX_HEIGHT } from './utils';
 
 interface TTSUsageSectionProps {
   ttsUsage: CallMetricsTTSUsage[];
@@ -26,7 +27,7 @@ export function TTSUsageSection({ ttsUsage, totalChars }: TTSUsageSectionProps) 
         <BarChart
           values={displayChunks.map((u) => u.characters)}
           maxValue={maxChars}
-          maxHeight={40}
+          maxHeight={BAR_CHART_MAX_HEIGHT}
           color="bg-amber-500/70 hover:bg-amber-500"
           getTooltip={(v) => `${v} chars`}
         />

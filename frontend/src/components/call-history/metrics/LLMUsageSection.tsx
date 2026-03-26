@@ -3,6 +3,7 @@ import { BrainCircuit } from 'lucide-react';
 
 import { BarChart } from './BarChart';
 import { SectionHeader } from './SectionHeader';
+import { BAR_CHART_MAX_HEIGHT } from './utils';
 
 interface LLMUsageSectionProps {
   llmUsage: CallMetricsLLMUsage[];
@@ -66,7 +67,7 @@ export function LLMUsageSection({ llmUsage, totalTokens }: LLMUsageSectionProps)
             <BarChart
               values={llmUsage.map((u) => u.total_tokens)}
               maxValue={Math.max(...llmUsage.map((u) => u.total_tokens))}
-              maxHeight={36}
+              maxHeight={BAR_CHART_MAX_HEIGHT}
               color="bg-emerald-500/60 hover:bg-emerald-500"
               getTooltip={(v, i) => `Call ${i + 1}: ${v.toLocaleString()} tokens`}
             />

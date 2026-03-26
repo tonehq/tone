@@ -1,5 +1,7 @@
 import type { CallMetricsProcessing } from '@/types/callLog';
 
+export const BAR_CHART_MAX_HEIGHT = 50;
+
 export interface ProcessorGroup {
   model: string;
   entries: number[];
