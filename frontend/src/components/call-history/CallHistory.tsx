@@ -6,14 +6,24 @@ import type { CallLogFilterParam, CallLogQueryParams, CallLogRow } from '@/types
 import type { CustomTableColumn } from '@/types/components';
 import { handleApiError } from '@/utils/helpers';
 import { useAtom } from 'jotai';
-import { ArrowUpDown, CalendarDays, Filter, Phone, X } from 'lucide-react';
+import {
+  ArrowUpDown,
+  CalendarDays,
+  ChartNoAxesCombined,
+  Filter,
+  MessageSquareText,
+  Phone,
+  X,
+} from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 
 import CallDetailDrawer from './CallDetailDrawer';
 import FilterModal from './FilterSortModal';
+import MetricsModal from './MetricsModal';
 import SortModal from './SortModal';
+import TranscriptionModal from './TranscriptionModal';
 
 const formatTimestamp = (ts: number | null): string => {
   if (!ts) return '-';
@@ -44,6 +54,8 @@ const CallHistory: React.FC = () => {
   const [filterModalOpen, setFilterModalOpen] = useState(false);
   const [sortModalOpen, setSortModalOpen] = useState(false);
   const [selectedCallLog, setSelectedCallLog] = useState<CallLogRow | null>(null);
+  const [transcriptionCallLog, setTranscriptionCallLog] = useState<CallLogRow | null>(null);
+  const [metricsCallLog, setMetricsCallLog] = useState<CallLogRow | null>(null);
 
   // Snapshot date values on each fetch trigger so they stay stable in the dep array
   const startRef = useRef(startDateTime);
@@ -165,6 +177,44 @@ const CallHistory: React.FC = () => {
         return num ? <PhoneNumberDisplay phoneNumber={num} flagSize="sm" /> : '-';
       },
     },
+    {
+      key: 'transcript',
+      title: 'Transcription',
+      dataIndex: 'transcript',
+      render: (_value, record) => (
+        <CustomButton
+          type="default"
+          size="xs"
+          icon={<MessageSquareText className="size-3.5" />}
+          disabled={!(record.transcript && record.transcript.length > 0)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setTranscriptionCallLog(record);
+          }}
+        >
+          View
+        </CustomButton>
+      ),
+    },
+    {
+      key: 'metrics',
+      title: 'Metrics',
+      dataIndex: 'metrics',
+      render: (_value, record) => (
+        <CustomButton
+          type="default"
+          size="xs"
+          icon={<ChartNoAxesCombined className="size-3.5" />}
+          disabled={!record.metrics}
+          onClick={(e) => {
+            e.stopPropagation();
+            setMetricsCallLog(record);
+          }}
+        >
+          View
+        </CustomButton>
+      ),
+    },
   ];
 
   return (
@@ -272,6 +322,20 @@ const CallHistory: React.FC = () => {
         open={!!selectedCallLog}
         onClose={() => setSelectedCallLog(null)}
         callLog={selectedCallLog}
+      />
+
+      <TranscriptionModal
+        open={!!transcriptionCallLog}
+        onClose={() => setTranscriptionCallLog(null)}
+        transcript={transcriptionCallLog?.transcript ?? null}
+        agentName={transcriptionCallLog?.agent_name ?? ''}
+      />
+
+      <MetricsModal
+        open={!!metricsCallLog}
+        onClose={() => setMetricsCallLog(null)}
+        metrics={metricsCallLog?.metrics ?? null}
+        agentName={metricsCallLog?.agent_name ?? ''}
       />
     </div>
   );

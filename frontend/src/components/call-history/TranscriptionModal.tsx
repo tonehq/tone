@@ -27,7 +27,7 @@ const TranscriptionModal: React.FC<TranscriptionModalProps> = ({
     open={open}
     onClose={onClose}
     title={`Transcription${agentName ? ` — ${agentName}` : ''}`}
-    width="md:max-w-xl"
+    width="md:max-w-3xl"
     hideFooter
   >
     <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">

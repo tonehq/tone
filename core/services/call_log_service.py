@@ -248,6 +248,7 @@ class CallLogService(BaseService):
                 "status": call_log.status,
                 "audio_file_path": call_log.audio_file_path,
                 "provider_call_id": call_log.provider_call_id,
+                "metrics": call_log.metrics,
             })
 
         return {
@@ -289,4 +290,5 @@ class CallLogService(BaseService):
             "status": call_log.status,
             "audio_file_path": call_log.audio_file_path,
             "provider_call_id": call_log.provider_call_id,
+            "metrics": call_log.metrics,
         }
