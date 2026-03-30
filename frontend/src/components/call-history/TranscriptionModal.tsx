@@ -27,10 +27,11 @@ const TranscriptionModal: React.FC<TranscriptionModalProps> = ({
     open={open}
     onClose={onClose}
     title={`Transcription${agentName ? ` — ${agentName}` : ''}`}
-    width="md:max-w-xl"
+    width="md:max-w-3xl"
     hideFooter
+    contentClassName="max-h-[60vh] overflow-y-auto pr-0"
   >
-    <div className="flex max-h-[60vh] flex-col gap-3 overflow-y-auto">
+    <div className="flex flex-col gap-3 pr-6">
       {!transcript || transcript.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">No transcription available</p>
       ) : (

@@ -47,16 +47,17 @@ test.describe('Call History Page', () => {
     });
 
     test('shows date filter inputs', async ({ page }) => {
-      await expect(page.locator('#start-datetime')).toBeVisible();
-      await expect(page.locator('#end-datetime')).toBeVisible();
+      await expect(page.getByPlaceholder('Start date')).toBeVisible();
+      await expect(page.getByPlaceholder('End date')).toBeVisible();
     });
 
     test('shows "Apply Date Filter" button', async ({ page }) => {
       await expect(page.getByRole('button', { name: 'Apply Date Filter' })).toBeVisible();
     });
 
-    test('shows "Filters & Sort" button', async ({ page }) => {
-      await expect(page.getByRole('button', { name: 'Filters & Sort' })).toBeVisible();
+    test('shows Filter and Sort buttons', async ({ page }) => {
+      await expect(page.getByRole('button', { name: 'Filter', exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Sort' })).toBeVisible();
     });
 
     test('shows the data table', async ({ page }) => {
@@ -64,40 +65,44 @@ test.describe('Call History Page', () => {
     });
   });
 
-  // ── 2. Filter/Sort Modal ───────────────────────────────────────────────────
-  test.describe('Filter/Sort Modal', () => {
-    test('opens modal when clicking "Filters & Sort"', async ({ page }) => {
-      await page.getByRole('button', { name: 'Filters & Sort' }).click();
-      await expect(page.getByRole('dialog')).toBeVisible();
-      await expect(page.getByText('Filters & Sort').first()).toBeVisible();
+  // ── 2. Filter Modal ──────────────────────────────────────────────────────
+  test.describe('Filter Modal', () => {
+    test.afterEach(async ({ page }) => {
+      // Close any open dialog to prevent state leakage
+      if (await page.getByRole('dialog').isVisible().catch(() => false)) {
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('dialog')).not.toBeVisible();
+      }
     });
 
-    test('modal contains filter field, operator, and value inputs', async ({ page }) => {
-      await page.getByRole('button', { name: 'Filters & Sort' }).click();
+    test('opens modal when clicking Filter', async ({ page }) => {
+      await page.getByRole('button', { name: 'Filter', exact: true }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await expect(page.getByText('Filters').first()).toBeVisible();
+    });
+
+    test('modal contains filter field inputs', async ({ page }) => {
+      await page.getByRole('button', { name: 'Filter', exact: true }).click();
       const dialog = page.getByRole('dialog');
       await expect(dialog).toBeVisible();
 
       // Filter section heading
       await expect(dialog.getByText('Filters').first()).toBeVisible();
-      // Sort section heading
-      await expect(dialog.getByText('Sort')).toBeVisible();
     });
 
     test('can add a new filter row', async ({ page }) => {
-      await page.getByRole('button', { name: 'Filters & Sort' }).click();
+      await page.getByRole('button', { name: 'Filter', exact: true }).click();
       const dialog = page.getByRole('dialog');
 
       await dialog.getByRole('button', { name: 'Add Filter' }).click();
 
-      // Should now have 2 trash buttons (one per row, both enabled since rows > 1)
-      const trashButtons = dialog.locator('button:has(svg)').filter({ hasText: '' });
-      // Verify we can see the two filter rows by counting field select triggers
+      // Should now have 2 filter rows by counting field select triggers
       const fieldTriggers = dialog.locator('[id^="filter-field-"]');
       await expect(fieldTriggers).toHaveCount(2);
     });
 
     test('modal closes when clicking Cancel', async ({ page }) => {
-      await page.getByRole('button', { name: 'Filters & Sort' }).click();
+      await page.getByRole('button', { name: 'Filter', exact: true }).click();
       await expect(page.getByRole('dialog')).toBeVisible();
 
       await page.getByRole('button', { name: 'Cancel' }).click();
@@ -105,7 +110,7 @@ test.describe('Call History Page', () => {
     });
 
     test('modal closes when clicking Apply', async ({ page }) => {
-      await page.getByRole('button', { name: 'Filters & Sort' }).click();
+      await page.getByRole('button', { name: 'Filter', exact: true }).click();
       await expect(page.getByRole('dialog')).toBeVisible();
 
       await page.getByRole('button', { name: 'Apply' }).click();
@@ -113,7 +118,39 @@ test.describe('Call History Page', () => {
     });
   });
 
-  // ── 3. Sidebar Navigation ─────────────────────────────────────────────────
+  // ── 3. Sort Modal ────────────────────────────────────────────────────────
+  test.describe('Sort Modal', () => {
+    test.afterEach(async ({ page }) => {
+      if (await page.getByRole('dialog').isVisible().catch(() => false)) {
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('dialog')).not.toBeVisible();
+      }
+    });
+
+    test('opens modal when clicking Sort', async ({ page }) => {
+      await page.getByRole('button', { name: 'Sort' }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await expect(page.getByText('Sort').first()).toBeVisible();
+    });
+
+    test('modal closes when clicking Cancel', async ({ page }) => {
+      await page.getByRole('button', { name: 'Sort' }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+
+      await page.getByRole('button', { name: 'Cancel' }).click();
+      await expect(page.getByRole('dialog')).toBeHidden();
+    });
+
+    test('modal closes when clicking Apply', async ({ page }) => {
+      await page.getByRole('button', { name: 'Sort' }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+
+      await page.getByRole('button', { name: 'Apply' }).click();
+      await expect(page.getByRole('dialog')).toBeHidden();
+    });
+  });
+
+  // ── 4. Sidebar Navigation ─────────────────────────────────────────────────
   test.describe('Sidebar Navigation', () => {
     test('sidebar has "Call History" link', async ({ page }) => {
       await expect(page.locator('a[href="/call-history"]')).toBeVisible();

@@ -1,19 +1,29 @@
 'use client';
 
 import callLogsAtom, { fetchCallLogs } from '@/atoms/CallLogAtom';
-import { CustomButton, CustomTable, PhoneNumberDisplay } from '@/components/shared';
+import { CustomButton, CustomTable, CustomTooltip, PhoneNumberDisplay } from '@/components/shared';
 import type { CallLogFilterParam, CallLogQueryParams, CallLogRow } from '@/types/callLog';
 import type { CustomTableColumn } from '@/types/components';
 import { handleApiError } from '@/utils/helpers';
 import { useAtom } from 'jotai';
-import { ArrowUpDown, CalendarDays, Filter, Phone, X } from 'lucide-react';
+import {
+  ArrowUpDown,
+  CalendarDays,
+  ChartNoAxesCombined,
+  Filter,
+  MessageSquareText,
+  Phone,
+  X,
+} from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 
 import CallDetailDrawer from './CallDetailDrawer';
 import FilterModal from './FilterSortModal';
+import MetricsModal from './MetricsModal';
 import SortModal from './SortModal';
+import TranscriptionModal from './TranscriptionModal';
 
 const formatTimestamp = (ts: number | null): string => {
   if (!ts) return '-';
@@ -44,6 +54,8 @@ const CallHistory: React.FC = () => {
   const [filterModalOpen, setFilterModalOpen] = useState(false);
   const [sortModalOpen, setSortModalOpen] = useState(false);
   const [selectedCallLog, setSelectedCallLog] = useState<CallLogRow | null>(null);
+  const [transcriptionCallLog, setTranscriptionCallLog] = useState<CallLogRow | null>(null);
+  const [metricsCallLog, setMetricsCallLog] = useState<CallLogRow | null>(null);
 
   // Snapshot date values on each fetch trigger so they stay stable in the dep array
   const startRef = useRef(startDateTime);
@@ -165,6 +177,34 @@ const CallHistory: React.FC = () => {
         return num ? <PhoneNumberDisplay phoneNumber={num} flagSize="sm" /> : '-';
       },
     },
+    {
+      key: 'actions',
+      title: 'Quick View',
+      render: (_value, record) => (
+        <div className="flex items-center justify-center gap-1.5">
+          <CustomTooltip content="Transcription">
+            <CustomButton
+              type="default"
+              size="icon-xs"
+              disabled={!(record.transcript && record.transcript.length > 0)}
+              onClick={() => setTranscriptionCallLog(record)}
+            >
+              <MessageSquareText className="size-3.5" />
+            </CustomButton>
+          </CustomTooltip>
+          <CustomTooltip content="Metrics">
+            <CustomButton
+              type="default"
+              size="icon-xs"
+              disabled={!record.metrics}
+              onClick={() => setMetricsCallLog(record)}
+            >
+              <ChartNoAxesCombined className="size-3.5" />
+            </CustomButton>
+          </CustomTooltip>
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -272,6 +312,20 @@ const CallHistory: React.FC = () => {
         open={!!selectedCallLog}
         onClose={() => setSelectedCallLog(null)}
         callLog={selectedCallLog}
+      />
+
+      <TranscriptionModal
+        open={!!transcriptionCallLog}
+        onClose={() => setTranscriptionCallLog(null)}
+        transcript={transcriptionCallLog?.transcript ?? null}
+        agentName={transcriptionCallLog?.agent_name ?? ''}
+      />
+
+      <MetricsModal
+        open={!!metricsCallLog}
+        onClose={() => setMetricsCallLog(null)}
+        metrics={metricsCallLog?.metrics ?? null}
+        agentName={metricsCallLog?.agent_name ?? ''}
       />
     </div>
   );

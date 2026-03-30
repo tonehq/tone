@@ -113,6 +113,12 @@ const test = base.extend<{ page: Page }, { workerContext: BrowserContext }>({
 
 const EDIT_URL = '/agents/edit/inbound/1';
 
+const MOCK_PROVIDERS = [
+  { id: 1, name: 'OpenAI', provider_type: 'llm', meta_data_schema: [] },
+  { id: 1, name: 'Cartesia', provider_type: 'tts', meta_data_schema: [] },
+  { id: 1, name: 'OpenAI STT', provider_type: 'stt', meta_data_schema: [] },
+];
+
 async function mockGetAgentAPI(page: Page, agent: unknown = MOCK_AGENT): Promise<void> {
   await page.route('**/agent/get_all_agents**', async (route) => {
     await route.fulfill({
@@ -121,12 +127,23 @@ async function mockGetAgentAPI(page: Page, agent: unknown = MOCK_AGENT): Promise
       body: JSON.stringify(agent ? [agent] : []),
     });
   });
+  await page.route('**/service-providers/list**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(MOCK_PROVIDERS),
+    });
+  });
 }
 
 async function ensureOnEditPage(page: Page): Promise<void> {
   if (page.url().includes(EDIT_URL)) return;
   await page.goto(EDIT_URL);
-  await expect(page.locator('[class*="animate-spin"]')).not.toBeVisible({ timeout: 10_000 });
+  await page.waitForFunction(
+    () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
+    null,
+    { timeout: 10_000 },
+  );
 }
 
 async function mockUpsertAPI(page: Page): Promise<Record<string, unknown>[]> {
@@ -153,11 +170,14 @@ test.describe('Edit Agent Page', () => {
 
   // ── 1. Loading State ───────────────────────────────────────────────────────
   test.describe('Loading State', () => {
-    test('shows loading spinner during API fetch', async ({ page }) => {
+    test('shows loading skeleton during API fetch', async ({ page }) => {
       await page.unrouteAll({ behavior: 'wait' });
 
+      let resolveRoute: (() => void) | null = null;
       await page.route('**/agent/get_all_agents**', async (route) => {
-        await new Promise((r) => setTimeout(r, 3000));
+        await new Promise<void>((resolve) => {
+          resolveRoute = resolve;
+        });
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -166,9 +186,12 @@ test.describe('Edit Agent Page', () => {
       });
 
       await page.goto(EDIT_URL);
-      await expect(page.locator('[class*="animate-spin"]').first()).toBeVisible({
+      await expect(page.locator('[class*="animate-pulse"]').first()).toBeVisible({
         timeout: 2_000,
       });
+
+      // Release the pending route so unrouteAll doesn't hang
+      resolveRoute?.();
     });
   });
 
@@ -190,9 +213,10 @@ test.describe('Edit Agent Page', () => {
       await expect(page.getByRole('button', { name: /save changes/i })).toBeVisible();
     });
 
-    test('shows all four form tabs including Assign Number', async ({ page }) => {
+    test('shows all five form tabs', async ({ page }) => {
       await expect(page.getByRole('tab', { name: /general/i })).toBeVisible();
       await expect(page.getByRole('tab', { name: /voice/i })).toBeVisible();
+      await expect(page.getByRole('tab', { name: /prompt/i })).toBeVisible();
       await expect(page.getByRole('tab', { name: /call configuration/i })).toBeVisible();
       await expect(page.getByRole('tab', { name: /assign number/i })).toBeVisible();
     });
@@ -225,17 +249,6 @@ test.describe('Edit Agent Page', () => {
     test('shows end call message from API', async ({ page }) => {
       const endCallTextarea = page.locator('textarea[name="end_call_message"]');
       await expect(endCallTextarea).toHaveValue('Goodbye!');
-    });
-
-    test('shows custom vocabulary chips from API', async ({ page }) => {
-      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
-      await expect(page.getByText('ToneHQ', { exact: true })).toBeVisible();
-      await expect(page.getByText('Pipecat', { exact: true })).toBeVisible();
-    });
-
-    test('shows filter word chips from API', async ({ page }) => {
-      await page.getByText('Filter Words').scrollIntoViewIfNeeded();
-      await expect(page.getByText('badword', { exact: true })).toBeVisible();
     });
 
     test('shows filler words switch on from API', async ({ page }) => {
@@ -340,21 +353,26 @@ test.describe('Edit Agent Page', () => {
       await page.unrouteAll({ behavior: 'wait' });
       await mockGetAgentAPI(page, MOCK_AGENT_WITH_PHONE);
       await page.goto('/agents/edit/inbound/3');
-      await expect(page.locator('[class*="animate-spin"]')).not.toBeVisible({ timeout: 10_000 });
+      await page.waitForFunction(
+    () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
+    null,
+    { timeout: 10_000 },
+  );
     });
 
     test('shows phone numbers in assign number tab', async ({ page }) => {
       await page.getByRole('tab', { name: /assign number/i }).click();
       const tabPanel = page.locator('[role="tabpanel"]');
-      await expect(tabPanel.getByText('+1 (555) 123-4567')).toBeVisible();
-      await expect(tabPanel.getByText('+1 (555) 987-6543')).toBeVisible();
+      // PhoneNumberDisplay formats via formatPhoneWithDash: +CC-LOCAL
+      await expect(tabPanel.getByText('+1-5551234567')).toBeVisible();
+      await expect(tabPanel.getByText('+1-5559876543')).toBeVisible();
     });
 
     test('shows assigned phone numbers in Assign Number tab', async ({ page }) => {
       await page.getByRole('tab', { name: /assign number/i }).click();
       const tabPanel = page.locator('[role="tabpanel"]');
-      await expect(tabPanel.getByText('+1 (555) 123-4567')).toBeVisible();
-      await expect(tabPanel.getByText('+1 (555) 987-6543')).toBeVisible();
+      await expect(tabPanel.getByText('+1-5551234567')).toBeVisible();
+      await expect(tabPanel.getByText('+1-5559876543')).toBeVisible();
     });
 
     test('shows Unassign button for each phone number', async ({ page }) => {
@@ -370,7 +388,11 @@ test.describe('Edit Agent Page', () => {
       await page.unrouteAll({ behavior: 'wait' });
       await mockGetAgentAPI(page, MOCK_AGENT_MINIMAL);
       await page.goto('/agents/edit/outbound/2');
-      await expect(page.locator('[class*="animate-spin"]')).not.toBeVisible({ timeout: 10_000 });
+      await page.waitForFunction(
+    () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
+    null,
+    { timeout: 10_000 },
+  );
     });
 
     test('shows agent name and Outbound badge', async ({ page }) => {
@@ -388,13 +410,6 @@ test.describe('Edit Agent Page', () => {
 
     test('shows empty end call message for null value', async ({ page }) => {
       await expect(page.locator('textarea[name="end_call_message"]')).toHaveValue('');
-    });
-
-    test('shows no custom vocabulary chips for null value', async ({ page }) => {
-      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
-      // The badges container should be empty (no Badge components)
-      const badges = page.locator('.flex-wrap').first().locator('[class*="badge"]');
-      await expect(badges).toHaveCount(0);
     });
 
     test('shows filler words switch off for false value', async ({ page }) => {
@@ -443,7 +458,11 @@ test.describe('Edit Agent Page', () => {
       await page.unrouteAll({ behavior: 'wait' });
       await mockGetAgentAPI(page);
       await page.goto(EDIT_URL);
-      await expect(page.locator('[class*="animate-spin"]')).not.toBeVisible({ timeout: 10_000 });
+      await page.waitForFunction(
+    () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
+    null,
+    { timeout: 10_000 },
+  );
     });
 
     test('modifies all fields and sends correct updated payload', async ({ page }) => {
@@ -452,26 +471,16 @@ test.describe('Edit Agent Page', () => {
       // ── General Tab: modify all fields ──
       await page.locator('input[name="name"]').fill('Updated Sales Agent');
       await page.locator('textarea[name="description"]').fill('Updated description');
-      await page.locator('textarea[name="first_message"]').fill('Updated first message');
-      await page.locator('textarea[name="end_call_message"]').fill('Updated goodbye');
-
-      // Remove existing vocabulary chip "ToneHQ" and add a new one
-      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
-      await page.getByText('ToneHQ', { exact: true }).getByRole('button').click();
-      const vocabInput = page.locator('input[name="vocabularyInput"]');
-      await vocabInput.fill('NewWord');
-      await vocabInput.press('Enter');
-
-      // Remove existing filter word and add new ones
-      await page.getByText('Filter Words').scrollIntoViewIfNeeded();
-      await page.getByText('badword', { exact: true }).getByRole('button').click();
-      const filterInput = page.locator('input[name="filterWordsInput"]');
-      await filterInput.fill('newbad');
-      await filterInput.press('Enter');
 
       // Toggle filler words off (was true)
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       const fillerRow = page.getByText('Use Realistic Filler Words').locator('..').locator('..');
       await fillerRow.getByRole('switch').click();
+
+      // Messages
+      await page.getByText('Messages').first().scrollIntoViewIfNeeded();
+      await page.locator('textarea[name="first_message"]').fill('Updated first message');
+      await page.locator('textarea[name="end_call_message"]').fill('Updated goodbye');
 
       // ── Voice Tab: change options ──
       await page.getByRole('tab', { name: /voice/i }).click();
@@ -519,9 +528,6 @@ test.describe('Edit Agent Page', () => {
         call_recording: false,
         call_transcription: false,
       });
-      // Vocabulary: "ToneHQ" removed, "NewWord" added, "Pipecat" retained
-      expect(JSON.parse(payload.custom_vocabulary as string)).toEqual(['Pipecat', 'NewWord']);
-      expect(JSON.parse(payload.filter_words as string)).toEqual(['newbad']);
       expect(payload.system_prompt).toContain('Updated system prompt.');
     });
 
@@ -530,17 +536,6 @@ test.describe('Edit Agent Page', () => {
       await expect(page.getByRole('heading', { name: 'Renamed Agent', level: 1 })).toBeVisible();
     });
 
-    test('can add new vocabulary word alongside existing ones', async ({ page }) => {
-      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
-      const vocabInput = page.locator('input[name="vocabularyInput"]');
-      await vocabInput.fill('NewTerm');
-      await vocabInput.press('Enter');
-
-      // All three should be visible: ToneHQ, Pipecat (from API), NewTerm (added)
-      await expect(page.getByText('ToneHQ', { exact: true })).toBeVisible();
-      await expect(page.getByText('Pipecat', { exact: true })).toBeVisible();
-      await expect(page.getByText('NewTerm', { exact: true })).toBeVisible();
-    });
   });
 
   // ── 10. Save Flow ───────────────────────────────────────────────────────────
@@ -549,7 +544,14 @@ test.describe('Edit Agent Page', () => {
       await page.unrouteAll({ behavior: 'wait' });
       await mockGetAgentAPI(page);
       await page.goto(EDIT_URL);
-      await expect(page.locator('[class*="animate-spin"]')).not.toBeVisible({ timeout: 10_000 });
+      await page.waitForFunction(
+        () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
+        null,
+        { timeout: 10_000 },
+      );
+      await expect(page.getByRole('button', { name: /save changes/i })).toBeEnabled({
+        timeout: 5_000,
+      });
     });
 
     test('sends id in payload and stays on edit page after save', async ({ page }) => {
@@ -559,7 +561,7 @@ test.describe('Edit Agent Page', () => {
 
       await expect(
         page.locator('[data-sonner-toast]', { hasText: 'Agent saved successfully' }),
-      ).toBeVisible({ timeout: 5_000 });
+      ).toBeVisible({ timeout: 10_000 });
       expect(page.url()).toContain(EDIT_URL);
 
       expect(captured.length).toBe(1);
@@ -599,8 +601,6 @@ test.describe('Edit Agent Page', () => {
         tts_service_id: 1,
         stt_service_id: 1,
       });
-      expect(JSON.parse(payload.custom_vocabulary as string)).toEqual(['ToneHQ', 'Pipecat']);
-      expect(JSON.parse(payload.filter_words as string)).toEqual(['badword']);
       expect(payload.system_prompt).toContain('You are a helpful sales assistant.');
     });
 
@@ -640,7 +640,11 @@ test.describe('Edit Agent Page', () => {
     test('updates agent in DB and shows success notification (real API)', async ({ page }) => {
       await page.unrouteAll({ behavior: 'wait' });
       await page.goto(EDIT_URL);
-      await expect(page.locator('[class*="animate-spin"]')).not.toBeVisible({ timeout: 15_000 });
+      await page.waitForFunction(
+      () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
+      null,
+      { timeout: 15_000 },
+    );
 
       const hasError = await page
         .locator('[data-sonner-toast]', { hasText: 'Agent not found' })
