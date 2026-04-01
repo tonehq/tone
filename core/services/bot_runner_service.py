@@ -26,6 +26,7 @@ class BotRunnerService(BaseService):
         """Find the agent (bot) associated with the given phone number (the number the call came to).
 
         Uses a single JOIN query instead of separate lookups.
+        Results are cached in Redis keyed by phone number.
 
         Args:
             phone_number: The 'To' number (our number that received the call).
@@ -33,10 +34,21 @@ class BotRunnerService(BaseService):
         Returns:
             The Agent for that phone number, or None if not found.
         """
+        from core.services.redis_service import cache_get, cache_set
+
         normalized = self._normalize_phone_number(phone_number)
         print("normalized in bot_runner_service.py file ===========", normalized)
         if not normalized:
             return None
+
+        # Check Redis cache first
+        cache_key = f"phone_to_agent:{normalized}"
+        cached_agent_id = cache_get(cache_key)
+        if cached_agent_id is not None:
+            logger.info("[TIMING] phone_to_agent CACHE HIT: %s -> agent_id=%s", normalized, cached_agent_id)
+            agent = self.db.query(Agent).filter(Agent.id == cached_agent_id).first()
+            if agent:
+                return agent
 
         # Single JOIN: phone_number → agent (avoids 2 separate queries)
         result = (
@@ -45,17 +57,19 @@ class BotRunnerService(BaseService):
             .filter(AgentChannelPhoneNumbers.phone_number == normalized)
             .first()
         )
-        if result:
-            return result
+        if not result:
+            # Fallback to channel-based lookup for legacy records without agent_id
+            result = (
+                self.db.query(Agent)
+                .join(AgentChannel, AgentChannel.agent_id == Agent.id)
+                .join(AgentChannelPhoneNumbers, AgentChannelPhoneNumbers.channel_id == AgentChannel.channel_id)
+                .filter(AgentChannelPhoneNumbers.phone_number == normalized)
+                .first()
+            )
 
-        # Fallback to channel-based lookup for legacy records without agent_id
-        result = (
-            self.db.query(Agent)
-            .join(AgentChannel, AgentChannel.agent_id == Agent.id)
-            .join(AgentChannelPhoneNumbers, AgentChannelPhoneNumbers.channel_id == AgentChannel.channel_id)
-            .filter(AgentChannelPhoneNumbers.phone_number == normalized)
-            .first()
-        )
+        if result:
+            cache_set(cache_key, result.id, ttl_seconds=1800)
+
         return result
 
     def _get_twilio_credentials(self) -> dict:

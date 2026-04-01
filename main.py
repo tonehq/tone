@@ -131,6 +131,13 @@ def warm_db_pool():
 
 
 @app.on_event("startup")
+def init_redis_pool():
+    """Initialize Redis connection at server start."""
+    from core.services.redis_service import init_redis
+    init_redis(settings.REDIS_URL)
+
+
+@app.on_event("startup")
 async def warm_worker_pool_startup():
     """Pre-spawn bot worker subprocesses so the first call starts instantly."""
     use_subprocess = os.environ.get("USE_SUBPROCESS_BOT", "false").lower() == "true"
