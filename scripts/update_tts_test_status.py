@@ -23,11 +23,11 @@ from sqlalchemy import create_engine, text
 # Configuration — fill these in
 # ---------------------------------------------------------------------------
 
-EXCEL_PATH = "/Users/thilak/Documents/Tone/scripts/TTS_Test_Configurations.xlsx"
+EXCEL_PATH = "/Users/thilak/Documents/Tone/scripts/Voice_Test_Matrix.xlsx"
 DATABASE_URL = "postgresql://neondb_owner:npg_iNWhZLF0gHt7@ep-holy-wind-ad79pdco-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 
 API_BASE_URL = "http://localhost:8000/api/v1"
-JWT_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJlbWFpbCI6InRoaWxhay5ndW5hc2VrYXJhbkBwcm9kdWN0ZnVzaW9uLmNvIiwib3JnX2lkIjoiYTc5MDUyZWEtNWFlYS00NzRkLWJlY2MtNTU4ZjY2ZWQ5ZGU0Iiwicm9sZSI6Im93bmVyIiwiaWF0IjoxNzc0MzQ1NjgyLCJleHAiOjE3NzQ0MzIwODJ9.4Jv4P4MnthtOQMH-CFK2nUOztWukvfrCjJxdsRrn0ng"
+JWT_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJlbWFpbCI6InRoaWxhay5ndW5hc2VrYXJhbkBwcm9kdWN0ZnVzaW9uLmNvIiwib3JnX2lkIjoiYTc5MDUyZWEtNWFlYS00NzRkLWJlY2MtNTU4ZjY2ZWQ5ZGU0Iiwicm9sZSI6Im93bmVyIiwiaWF0IjoxNzc0NTIzNjg3LCJleHAiOjE3NzQ2MTAwODd9.HmvbX08yA7QyWt9VypXwx6Dn92ERn_kaxtlew9vmkGE"
 
 # 10 agent IDs — one per concurrent test slot
 AGENT_IDS = [52, 248, 10891, 10892, 10893, 10894, 10895, 10899, 10897, 10898]
@@ -74,7 +74,7 @@ REFERENCE_AGENT_CONFIG_QUERY = text("""
 
 # Check for completed calls after a given timestamp
 CALL_COMPLETE_QUERY = text("""
-    SELECT agent_id, transcript, id, to_number
+    SELECT agent_id, transcript, id, to_number, started_at, ended_at
     FROM call_logs
     WHERE agent_id = ANY(:agent_ids)
       AND started_at >= :since
@@ -192,6 +192,8 @@ def poll_for_completed_calls(conn, agent_ids, since_ts, agent_info=None):
                     "transcript": row[1],
                     "call_log_id": row[2],
                     "to_number": row[3],
+                    "started_at": row[4],
+                    "ended_at": row[5],
                 }
                 results[aid] = call_data
                 pending.discard(aid)
@@ -223,6 +225,7 @@ def has_valid_transcript(transcript):
         return False
     t = str(transcript).strip()
     return t not in ("", "null", "[]", "{}", "None")
+
 
 
 def main():

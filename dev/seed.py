@@ -332,7 +332,15 @@ def seed_from_configs(db, org_name, email, password):
                 Model.status == "active",
             ).update({Model.api_key_id: api_key_id}, synchronize_session=False)
 
-        # 4. Voices: if voices defined for this provider, get or create Voice records
+        # 4. Build model_name → model_id lookup for this provider
+        provider_models = (
+            db.query(Model)
+            .filter(Model.service_provider_id == provider.id)
+            .all()
+        )
+        model_name_to_id = {m.name: m.id for m in provider_models}
+
+        # 5. Voices: if voices defined for this provider, get or create Voice records
         voices_spec = config.get("voices") or []
         seen_voice_ids = set()
         for voice_spec in voices_spec:
@@ -350,9 +358,15 @@ def seed_from_configs(db, org_name, email, password):
                 .first()
             )
             if not existing_voice:
+                # Resolve model_id from model_name if provided
+                voice_model_id = None
+                voice_model_name = voice_spec.get("model_name")
+                if voice_model_name:
+                    voice_model_id = model_name_to_id.get(voice_model_name)
+
                 voice = Voice(
                     service_provider_id=provider.id,
-                    # model_id=None,
+                    model_id=voice_model_id,
                     voice_id=voice_id,
                     name=voice_spec.get("name"),
                     language=voice_spec.get("language") or "",
