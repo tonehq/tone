@@ -74,6 +74,10 @@ class ApiKeyService(BaseService):
         record_uuid = values["uuid"]
         api_key = self.db.query(ApiKey).filter(ApiKey.uuid == record_uuid).first()
 
+        # API key change can affect any agent — invalidate all cached agent bot data
+        from core.services.redis_service import cache_delete_pattern
+        cache_delete_pattern("agent_bot_data:*")
+
         return {
             "id": api_key.id,
             "uuid": str(api_key.uuid),
@@ -160,6 +164,10 @@ class ApiKeyService(BaseService):
 
         self.db.delete(key)
         self.db.commit()
+
+        # API key deleted — invalidate all cached agent bot data
+        from core.services.redis_service import cache_delete_pattern
+        cache_delete_pattern("agent_bot_data:*")
 
         return {"message": "API key deleted successfully"}
 

@@ -157,10 +157,21 @@ class AgentFactoryService(BaseService):
         Uses bulk queries to minimize DB round-trips.
         If transport_type is provided, also fetches telephony credentials in the same DB session.
         Returns None if config or any required service is missing.
+
+        Results are cached in Redis keyed by agent_id + transport_type.
         """
         from sqlalchemy import or_, and_
+        from core.services.redis_service import cache_get, cache_set
 
         _t_ser = _time.monotonic()
+
+        # Check Redis cache first
+        agent_id = agent.id if hasattr(agent, "id") else agent
+        cache_key = f"agent_bot_data:{agent_id}:{transport_type or 'none'}"
+        cached = cache_get(cache_key)
+        if cached is not None:
+            logger.info("[TIMING] serialize: CACHE HIT for agent_id=%s (+%.3fs)", agent_id, _time.monotonic() - _t_ser)
+            return cached
 
         # Query 1: Get agent config
         config = self._get_agent_config(agent)
@@ -296,6 +307,11 @@ class AgentFactoryService(BaseService):
         }
         if telephony_creds:
             result["_telephony_creds"] = telephony_creds
+
+        # Cache the result in Redis (TTL: 30 minutes)
+        cache_set(cache_key, result, ttl_seconds=1800)
+        logger.info("[TIMING] serialize: CACHE MISS — stored in Redis for agent_id=%s (+%.3fs)", agent_id, _time.monotonic() - _t_ser)
+
         return result
 
     def get_llm_for_agent(self, agent: Any, config: Any = None, prefetched: dict = None) -> Optional[Any]:
