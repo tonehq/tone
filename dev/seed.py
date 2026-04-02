@@ -370,6 +370,7 @@ def seed_from_configs(db, org_name, email, password):
                     voice_id=voice_id,
                     name=voice_spec.get("name"),
                     language=voice_spec.get("language") or "",
+                    language_list=voice_spec.get("language_list"),
                     gender=voice_spec.get("gender"),
                     accent=voice_spec.get("accent"),
                     description=voice_spec.get("description"),
