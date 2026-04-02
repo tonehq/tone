@@ -27,7 +27,7 @@ EXCEL_PATH = "/Users/thilak/Documents/Tone/scripts/Voice_Test_Matrix.xlsx"
 DATABASE_URL = "postgresql://neondb_owner:npg_iNWhZLF0gHt7@ep-holy-wind-ad79pdco-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 
 API_BASE_URL = "http://localhost:8000/api/v1"
-JWT_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJlbWFpbCI6InRoaWxhay5ndW5hc2VrYXJhbkBwcm9kdWN0ZnVzaW9uLmNvIiwib3JnX2lkIjoiYTc5MDUyZWEtNWFlYS00NzRkLWJlY2MtNTU4ZjY2ZWQ5ZGU0Iiwicm9sZSI6Im93bmVyIiwiaWF0IjoxNzc0NTIzNjg3LCJleHAiOjE3NzQ2MTAwODd9.HmvbX08yA7QyWt9VypXwx6Dn92ERn_kaxtlew9vmkGE"
+JWT_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJlbWFpbCI6InRoaWxhay5ndW5hc2VrYXJhbkBwcm9kdWN0ZnVzaW9uLmNvIiwib3JnX2lkIjoiYTc5MDUyZWEtNWFlYS00NzRkLWJlY2MtNTU4ZjY2ZWQ5ZGU0Iiwicm9sZSI6Im93bmVyIiwiaWF0IjoxNzc1MTE3MTkzLCJleHAiOjE3NzUyMDM1OTN9.jSvWFJQa7yfi9T9UbQsWrhgw8agBRAQvvqB0v1haEF4"
 
 # 10 agent IDs — one per concurrent test slot
 AGENT_IDS = [52, 248, 10891, 10892, 10893, 10894, 10895, 10899, 10897, 10898]
@@ -74,7 +74,7 @@ REFERENCE_AGENT_CONFIG_QUERY = text("""
 
 # Check for completed calls after a given timestamp
 CALL_COMPLETE_QUERY = text("""
-    SELECT agent_id, transcript, id, to_number, started_at, ended_at
+    SELECT agent_id, transcript, id, to_number, started_at, ended_at, status, metrics
     FROM call_logs
     WHERE agent_id = ANY(:agent_ids)
       AND started_at >= :since
@@ -194,6 +194,8 @@ def poll_for_completed_calls(conn, agent_ids, since_ts, agent_info=None):
                     "to_number": row[3],
                     "started_at": row[4],
                     "ended_at": row[5],
+                    "call_status": row[6],
+                    "metrics": row[7],
                 }
                 results[aid] = call_data
                 pending.discard(aid)
@@ -225,6 +227,62 @@ def has_valid_transcript(transcript):
         return False
     t = str(transcript).strip()
     return t not in ("", "null", "[]", "{}", "None")
+
+
+def get_error_reason(call_data):
+    """Determine the error reason for a failed call by inspecting metrics.
+
+    Checks (in order):
+    1. Call status — if DB status is 'failed', the pipeline itself crashed.
+    2. Metrics missing — call ended before pipeline could collect anything.
+    3. TTS usage — if no TTS characters were generated, TTS never produced audio.
+    4. LLM usage — if no LLM tokens, LLM never responded.
+    5. Turns — if only 1 turn with no real conversation, call connected but
+       TTS audio was likely silent/garbled so the other side hung up.
+    6. Transcript — empty despite turns existing means aggregator events
+       didn't fire (possible STT or pipeline issue).
+    """
+    if not call_data:
+        return "No call data"
+
+    call_status = call_data.get("call_status", "")
+    metrics = call_data.get("metrics")
+    transcript = call_data.get("transcript")
+
+    # 1. Pipeline crash
+    if call_status == "failed":
+        return "Pipeline crashed (status=failed)"
+
+    # 2. No metrics at all
+    if not metrics or not isinstance(metrics, dict):
+        return "No metrics collected — pipeline may not have started"
+
+    turns = metrics.get("turns") or []
+    tts_usage = metrics.get("tts_usage") or []
+    llm_usage = metrics.get("llm_usage") or []
+    ttfb = metrics.get("ttfb") or []
+
+    # 3. TTS never produced audio
+    if not tts_usage:
+        return "TTS produced no audio (0 tts_usage entries)"
+
+    # 4. LLM never responded
+    if not llm_usage:
+        tts_chars = sum(t.get("characters", 0) for t in tts_usage)
+        if tts_chars <= 10:
+            return f"LLM never responded, TTS only produced {tts_chars} chars (greeting only)"
+        return "LLM never responded (0 llm_usage entries)"
+
+    # 5. Only 1 turn — call connected but ended immediately
+    if len(turns) <= 1:
+        tts_chars = sum(t.get("characters", 0) for t in tts_usage)
+        return f"Only {len(turns)} turn(s), {tts_chars} TTS chars — call ended early (possible TTS audio issue)"
+
+    # 6. Transcript empty despite conversation happening
+    if transcript is None or str(transcript).strip() in ("", "null", "[]", "{}", "None"):
+        return f"{len(turns)} turns completed but transcript is empty — possible STT/aggregator issue"
+
+    return "Unknown error"
 
 
 
@@ -355,6 +413,7 @@ def main():
 
         call_log_id_col = headers["call_log_id"]
         to_number_col = headers["to_number"]
+        error_col = headers.get("error")
 
         pass_count = 0
         fail_count = 0
@@ -369,12 +428,17 @@ def main():
 
             if has_valid_transcript(transcript):
                 ws.cell(row=row_idx, column=status_col).value = "pass"
+                if error_col:
+                    ws.cell(row=row_idx, column=error_col).value = None
                 pass_count += 1
                 print(f"  {GREEN}Row {row_idx}: pass (call_log_id={call_log_id}){RESET}")
             else:
                 ws.cell(row=row_idx, column=status_col).value = "fail"
+                error_reason = get_error_reason(call_data)
+                if error_col:
+                    ws.cell(row=row_idx, column=error_col).value = error_reason
                 fail_count += 1
-                print(f"  {RED}Row {row_idx}: fail (call_log_id={call_log_id}){RESET}")
+                print(f"  {RED}Row {row_idx}: fail (call_log_id={call_log_id}) — {error_reason}{RESET}")
 
         wb.save(EXCEL_PATH)
         print(f"\n  Batch {batch_num} done — {GREEN}Pass: {pass_count}{RESET}, {RED}Fail: {fail_count}{RESET}")
