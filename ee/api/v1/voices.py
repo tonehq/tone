@@ -27,6 +27,25 @@ def get_voice(
     return VoiceService(db, org_id=UUID(claims.org_id)).get_voices_by_provider_id(service_provider_id)
 
 
+@router.get("/get_languages_by_provider")
+def get_languages_by_provider(
+    service_provider_id: int = Query(...),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db)
+):
+    return VoiceService(db, org_id=UUID(claims.org_id)).get_languages_by_provider_id(service_provider_id)
+
+
+@router.get("/get_voices_by_language")
+def get_voices_by_language(
+    service_provider_id: int = Query(...),
+    language: str = Query(...),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db)
+):
+    return VoiceService(db, org_id=UUID(claims.org_id)).get_voices_by_language(service_provider_id, language)
+
+
 @router.post("/upsert_voice")
 def upsert_voice(
     data: Dict[str, Any] = Body(...),
