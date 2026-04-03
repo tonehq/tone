@@ -62,7 +62,7 @@ AGENT_CONFIG_QUERY = text("""
     LIMIT 1
 """)
 
-# Get full agent config for reference agent (agent_id=52) to preserve all fields
+# Get full agent config for reference agent (agent_id=10932) to preserve all fields
 REFERENCE_AGENT_CONFIG_QUERY = text("""
     SELECT id, uuid, system_prompt, llm_service_id, tts_service_id, stt_service_id,
            first_message, end_call_message, voicemail_message, html_prompt, status,
@@ -121,7 +121,7 @@ def get_agent_config(conn, agent_id):
     return result.fetchone()
 
 
-def get_reference_agent_config(conn, agent_id=52):
+def get_reference_agent_config(conn, agent_id=10932):
     """Fetch full config from the reference agent to use as base for all upserts."""
     result = conn.execute(REFERENCE_AGENT_CONFIG_QUERY, {"agent_id": agent_id})
     row = result.fetchone()
@@ -307,14 +307,14 @@ def main():
     voice_col = headers["voice_id"]
     status_col = headers["status"]
 
-    # Fetch reference agent config (agent_id=52) once — used as base for all upserts
+    # Fetch reference agent config (agent_id=10932) once — used as base for all upserts
     with engine.connect() as conn:
-        ref_config = get_reference_agent_config(conn, agent_id=52)
+        ref_config = get_reference_agent_config(conn, agent_id=10932)
     if not ref_config:
-        print(f"{RED}Error: No agent_config found for reference agent_id=52.{RESET}")
+        print(f"{RED}Error: No agent_config found for reference agent_id=10932.{RESET}")
         wb.close()
         return
-    print(f"  {GREEN}Loaded reference config from agent_id=52{RESET}")
+    print(f"  {GREEN}Loaded reference config from agent_id=10932{RESET}")
 
     total_rows = ws.max_row - 1
     batch_num = 0
