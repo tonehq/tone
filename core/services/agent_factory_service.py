@@ -745,7 +745,7 @@ class AgentFactoryService(BaseService):
                 else:
                     voice_kwargs["language"] = None
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return HathoraTTSService(api_key=api_key, model=model or "sonic-2025-04-16", params=self._build_input_params(HathoraTTSService, metadata), **voice_kwargs)
+                return HathoraTTSService(api_key=api_key, model=model or "hexgrad-kokoro-82m", params=self._build_input_params(HathoraTTSService, metadata), **voice_kwargs)
             if provider_name == "minimax": # In code
                 # To check group id in this
                 from pipecat.services.minimax.tts import MiniMaxHttpTTSService
@@ -1242,12 +1242,17 @@ class AgentFactoryService(BaseService):
                 "status": status,
             })
 
+        # Use the TTS service's native sample rate so the output transport
+        # tags audio frames correctly for the serializer (e.g. Hume @ 48 kHz).
+        tts_sample_rate = getattr(tts, "_init_sample_rate", None) or 24000
+
         task = PipelineTask(
             pipeline,
             params=PipelineParams(
                 allow_interruptions=True,
                 enable_metrics=True,
                 enable_usage_metrics=True,
+                audio_out_sample_rate=tts_sample_rate,
             ),
             observers=[
                 RTVIObserver(rtvi),
