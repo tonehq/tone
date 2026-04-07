@@ -10,6 +10,10 @@ Tone is an open-source AI Voice Agent Builder (alternative to Retell, Synthflow,
 
 ### Backend
 ```bash
+# Auth for the private tone-pipecat package (Cloudsmith PyPI).
+# Get this URL from Cloudsmith → entitlement token for the tonehq/tone repo.
+export PIP_EXTRA_INDEX_URL="https://<user>:<token>@dl.cloudsmith.io/<entitlement>/tonehq/tone/python/simple/"
+
 # Install dependencies
 pip install -r requirements.txt
 
