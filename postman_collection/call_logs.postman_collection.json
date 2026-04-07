@@ -1,0 +1,244 @@
+{
+  "info": {
+    "name": "Call Logs API",
+    "description": "Auto-generated from core/api/v1/call_logs.py",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/api/v1" },
+    { "key": "authToken", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{authToken}}" }]
+  },
+  "item": [
+    {
+      "name": "Get Filter Values",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/call-log/filter-values?column_name=agent_name",
+          "host": ["{{baseUrl}}"],
+          "path": ["call-log", "filter-values"],
+          "query": [
+            { "key": "column_name", "value": "agent_name", "description": "The column name to get distinct filter values for" }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Get Filter Values - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/call-log/filter-values?column_name=agent_name",
+              "host": ["{{baseUrl}}"],
+              "path": ["call-log", "filter-values"],
+              "query": [
+                { "key": "column_name", "value": "agent_name" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "[\n  \"Customer Support Agent\",\n  \"Sales Agent\",\n  \"Technical Support Agent\"\n]"
+        }
+      ]
+    },
+    {
+      "name": "List Call Logs",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/call-log/list",
+          "host": ["{{baseUrl}}"],
+          "path": ["call-log", "list"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"page_no\": 1,\n  \"page_size\": 10,\n  \"start_date_time\": \"2024-01-01T00:00:00Z\",\n  \"end_date_time\": \"2024-12-31T23:59:59Z\",\n  \"filters\": {},\n  \"sort_by\": \"created_at\",\n  \"sort_order\": \"desc\"\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      },
+      "response": [
+        {
+          "name": "List Call Logs - Success",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/call-log/list",
+              "host": ["{{baseUrl}}"],
+              "path": ["call-log", "list"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"page_no\": 1,\n  \"page_size\": 10,\n  \"sort_order\": \"desc\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"total\": 25,\n  \"page_no\": 1,\n  \"page_size\": 10,\n  \"data\": [\n    {\n      \"id\": 1,\n      \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n      \"agent_id\": 1,\n      \"agent_name\": \"Customer Support Agent\",\n      \"phone_number\": \"+15551234567\",\n      \"direction\": \"inbound\",\n      \"duration\": 180,\n      \"status\": \"completed\",\n      \"audio_file_path\": \"recordings/call_1.wav\",\n      \"transcript\": \"Hello, how can I help you today?...\",\n      \"created_at\": 1710201600,\n      \"updated_at\": 1710201600\n    }\n  ]\n}"
+        },
+        {
+          "name": "List Call Logs - With Filters",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/call-log/list",
+              "host": ["{{baseUrl}}"],
+              "path": ["call-log", "list"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"page_no\": 1,\n  \"page_size\": 10,\n  \"start_date_time\": \"2024-01-01T00:00:00Z\",\n  \"end_date_time\": \"2024-12-31T23:59:59Z\",\n  \"filters\": {\"agent_name\": \"Customer Support Agent\"},\n  \"sort_by\": \"duration\",\n  \"sort_order\": \"asc\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"total\": 5,\n  \"page_no\": 1,\n  \"page_size\": 10,\n  \"data\": [\n    {\n      \"id\": 3,\n      \"uuid\": \"d4e5f6a7-b8c9-0123-defg-456789012345\",\n      \"agent_id\": 1,\n      \"agent_name\": \"Customer Support Agent\",\n      \"phone_number\": \"+15551234567\",\n      \"direction\": \"inbound\",\n      \"duration\": 60,\n      \"status\": \"completed\",\n      \"created_at\": 1710201600,\n      \"updated_at\": 1710201600\n    }\n  ]\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get Call Log By ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/call-log/1",
+          "host": ["{{baseUrl}}"],
+          "path": ["call-log", "1"]
+        }
+      },
+      "response": [
+        {
+          "name": "Get Call Log By ID - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/call-log/1",
+              "host": ["{{baseUrl}}"],
+              "path": ["call-log", "1"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"agent_id\": 1,\n  \"agent_name\": \"Customer Support Agent\",\n  \"phone_number\": \"+15551234567\",\n  \"direction\": \"inbound\",\n  \"duration\": 180,\n  \"status\": \"completed\",\n  \"audio_file_path\": \"recordings/call_1.wav\",\n  \"transcript\": \"Hello, how can I help you today?...\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Get Call Log By ID - Not Found",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/call-log/999",
+              "host": ["{{baseUrl}}"],
+              "path": ["call-log", "999"]
+            }
+          },
+          "status": "Not Found",
+          "code": 404,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Call log not found\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get Audio URL",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/call-log/1/audio-url",
+          "host": ["{{baseUrl}}"],
+          "path": ["call-log", "1", "audio-url"]
+        }
+      },
+      "response": [
+        {
+          "name": "Get Audio URL - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/call-log/1/audio-url",
+              "host": ["{{baseUrl}}"],
+              "path": ["call-log", "1", "audio-url"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"url\": \"https://storage.example.com/recordings/call_1.wav?X-Amz-Signature=abc123&X-Amz-Expires=3600\"\n}"
+        },
+        {
+          "name": "Get Audio URL - Call Not Found",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/call-log/999/audio-url",
+              "host": ["{{baseUrl}}"],
+              "path": ["call-log", "999", "audio-url"]
+            }
+          },
+          "status": "Not Found",
+          "code": 404,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Call log not found\"\n}"
+        },
+        {
+          "name": "Get Audio URL - No Recording",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/call-log/2/audio-url",
+              "host": ["{{baseUrl}}"],
+              "path": ["call-log", "2", "audio-url"]
+            }
+          },
+          "status": "Not Found",
+          "code": 404,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"No audio recording for this call\"\n}"
+        }
+      ]
+    }
+  ]
+}

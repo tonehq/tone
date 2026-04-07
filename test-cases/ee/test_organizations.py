@@ -1,0 +1,398 @@
+"""Tests for Organization API endpoints.
+
+Source: core/api/v1/organizations.py
+"""
+
+import pytest
+from unittest.mock import patch, MagicMock
+from fastapi import HTTPException
+
+
+# ─── POST /api/v1/organization/invite_user_to_organization ───
+
+class TestInviteUserToOrganization:
+    """Tests for POST /api/v1/organization/invite_user_to_organization"""
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_invite_user_success(self, mock_service_cls, client_as_admin):
+        mock_service_cls.return_value.invite_user_to_organization.return_value = {"message": "invited"}
+        response = client_as_admin.post("/api/v1/organization/invite_user_to_organization", json={
+            "name": "New User",
+            "email": "newuser@example.com",
+            "role": "member"
+        })
+        assert response.status_code == 200
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_invite_user_missing_name(self, mock_service_cls, client_as_admin):
+        response = client_as_admin.post("/api/v1/organization/invite_user_to_organization", json={
+            "email": "newuser@example.com",
+            "role": "member"
+        })
+        assert response.status_code == 400
+        assert "Name, email, and role are required" in response.json()["detail"]
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_invite_user_missing_email(self, mock_service_cls, client_as_admin):
+        response = client_as_admin.post("/api/v1/organization/invite_user_to_organization", json={
+            "name": "New User",
+            "role": "member"
+        })
+        assert response.status_code == 400
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_invite_user_missing_role(self, mock_service_cls, client_as_admin):
+        response = client_as_admin.post("/api/v1/organization/invite_user_to_organization", json={
+            "name": "New User",
+            "email": "newuser@example.com"
+        })
+        assert response.status_code == 400
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_invite_user_empty_body(self, mock_service_cls, client_as_admin):
+        response = client_as_admin.post("/api/v1/organization/invite_user_to_organization", json={})
+        assert response.status_code == 400
+
+    def test_invite_user_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.post("/api/v1/organization/invite_user_to_organization", json={
+            "name": "Test", "email": "test@example.com", "role": "member"
+        })
+        assert response.status_code in (401, 403)
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_invite_user_duplicate_email(self, mock_service_cls, client_as_admin):
+        mock_service_cls.return_value.invite_user_to_organization.side_effect = HTTPException(
+            status_code=409, detail="User already invited"
+        )
+        response = client_as_admin.post("/api/v1/organization/invite_user_to_organization", json={
+            "name": "Dup User", "email": "dup@example.com", "role": "member"
+        })
+        assert response.status_code == 409
+
+# ─── GET /api/v1/organization/accept_invitation ───
+
+class TestAcceptInvitation:
+    """Tests for GET /api/v1/organization/accept_invitation"""
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_accept_invitation_success(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.accept_invitation.return_value = {"message": "accepted"}
+        response = client_as_member.get(
+            "/api/v1/organization/accept_invitation?email=test@example.com&code=invite-code&user_tenant_id=550e8400-e29b-41d4-a716-446655440000"
+        )
+        assert response.status_code == 200
+
+    def test_accept_invitation_missing_email(self, client_as_member):
+        response = client_as_member.get("/api/v1/organization/accept_invitation?code=invite-code&user_tenant_id=550e8400-e29b-41d4-a716-446655440000")
+        assert response.status_code == 422
+
+    def test_accept_invitation_missing_code(self, client_as_member):
+        response = client_as_member.get("/api/v1/organization/accept_invitation?email=test@example.com&user_tenant_id=550e8400-e29b-41d4-a716-446655440000")
+        assert response.status_code == 422
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_accept_invitation_invalid_code(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.accept_invitation.side_effect = HTTPException(
+            status_code=400, detail="Invalid invitation code"
+        )
+        response = client_as_member.get(
+            "/api/v1/organization/accept_invitation?email=test@example.com&code=bad-code&user_tenant_id=550e8400-e29b-41d4-a716-446655440000"
+        )
+        assert response.status_code == 400
+
+
+# ─── DELETE /api/v1/organization/remove_user_from_organization ───
+
+class TestRemoveUserFromOrganization:
+    """Tests for DELETE /api/v1/organization/remove_user_from_organization"""
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_remove_user_success(self, mock_service_cls, client_as_admin):
+        mock_service_cls.return_value.remove_user_from_organization.return_value = {"message": "removed"}
+        response = client_as_admin.delete("/api/v1/organization/remove_user_from_organization?user_id=2")
+        assert response.status_code == 200
+
+    def test_remove_user_missing_user_id(self, client_as_admin):
+        response = client_as_admin.delete("/api/v1/organization/remove_user_from_organization")
+        assert response.status_code == 422
+
+    def test_remove_user_invalid_user_id(self, client_as_admin):
+        response = client_as_admin.delete("/api/v1/organization/remove_user_from_organization?user_id=abc")
+        assert response.status_code == 422
+
+    def test_remove_user_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.delete("/api/v1/organization/remove_user_from_organization?user_id=2")
+        assert response.status_code in (401, 403)
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_remove_user_not_found(self, mock_service_cls, client_as_admin):
+        mock_service_cls.return_value.remove_user_from_organization.side_effect = HTTPException(
+            status_code=404, detail="User not found"
+        )
+        response = client_as_admin.delete("/api/v1/organization/remove_user_from_organization?user_id=999")
+        assert response.status_code == 404
+
+
+# ─── POST /api/v1/organization/update_member_role ───
+
+class TestUpdateMemberRole:
+    """Tests for POST /api/v1/organization/update_member_role"""
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_update_role_success(self, mock_service_cls, client_as_admin):
+        mock_service_cls.return_value.update_member_role.return_value = {"message": "updated"}
+        response = client_as_admin.post("/api/v1/organization/update_member_role?member_id=2&role=admin")
+        assert response.status_code == 200
+
+    def test_update_role_missing_member_id(self, client_as_admin):
+        response = client_as_admin.post("/api/v1/organization/update_member_role?role=admin")
+        assert response.status_code == 422
+
+    def test_update_role_missing_role(self, client_as_admin):
+        response = client_as_admin.post("/api/v1/organization/update_member_role?member_id=2")
+        assert response.status_code == 422
+
+    def test_update_role_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.post("/api/v1/organization/update_member_role?member_id=2&role=admin")
+        assert response.status_code in (401, 403)
+
+
+# ─── GET /api/v1/organization/settings ───
+
+class TestGetOrganizationSettings:
+    """Tests for GET /api/v1/organization/settings"""
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_get_settings_success(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.get_organization_settings.return_value = {"timezone": "UTC"}
+        response = client_as_member.get("/api/v1/organization/settings")
+        assert response.status_code == 200
+
+    def test_get_settings_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get("/api/v1/organization/settings")
+        assert response.status_code in (401, 403)
+
+
+# ─── PUT /api/v1/organization/settings ───
+
+class TestUpdateOrganizationSettings:
+    """Tests for PUT /api/v1/organization/settings"""
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_update_settings_success(self, mock_service_cls, client_as_admin):
+        mock_service_cls.return_value.update_organization_settings.return_value = {"message": "updated"}
+        response = client_as_admin.put("/api/v1/organization/settings", json={"timezone": "US/Pacific"})
+        assert response.status_code == 200
+
+    def test_update_settings_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.put("/api/v1/organization/settings", json={"timezone": "UTC"})
+        assert response.status_code in (401, 403)
+
+
+# ─── GET /api/v1/organization/access_requests ───
+
+class TestGetAccessRequests:
+    """Tests for GET /api/v1/organization/access_requests"""
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_get_access_requests_success(self, mock_service_cls, client_as_admin):
+        mock_service_cls.return_value.get_access_requests.return_value = []
+        response = client_as_admin.get("/api/v1/organization/access_requests")
+        assert response.status_code == 200
+
+    def test_get_access_requests_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get("/api/v1/organization/access_requests")
+        assert response.status_code in (401, 403)
+
+
+# ─── POST /api/v1/organization/handle_access_request ───
+
+class TestHandleAccessRequest:
+    """Tests for POST /api/v1/organization/handle_access_request"""
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_handle_request_approve_success(self, mock_service_cls, client_as_admin):
+        mock_service_cls.return_value.handle_access_request.return_value = {"message": "approved"}
+        response = client_as_admin.post("/api/v1/organization/handle_access_request", json={
+            "request_id": 1, "action": "approve"
+        })
+        assert response.status_code == 200
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_handle_request_reject_success(self, mock_service_cls, client_as_admin):
+        mock_service_cls.return_value.handle_access_request.return_value = {"message": "rejected"}
+        response = client_as_admin.post("/api/v1/organization/handle_access_request", json={
+            "request_id": 1, "action": "reject"
+        })
+        assert response.status_code == 200
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_handle_request_missing_request_id(self, mock_service_cls, client_as_admin):
+        response = client_as_admin.post("/api/v1/organization/handle_access_request", json={
+            "action": "approve"
+        })
+        assert response.status_code == 400
+        assert "Request ID and action are required" in response.json()["detail"]
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_handle_request_missing_action(self, mock_service_cls, client_as_admin):
+        response = client_as_admin.post("/api/v1/organization/handle_access_request", json={
+            "request_id": 1
+        })
+        assert response.status_code == 400
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_handle_request_empty_body(self, mock_service_cls, client_as_admin):
+        response = client_as_admin.post("/api/v1/organization/handle_access_request", json={})
+        assert response.status_code == 400
+
+    def test_handle_request_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.post("/api/v1/organization/handle_access_request", json={
+            "request_id": 1, "action": "approve"
+        })
+        assert response.status_code in (401, 403)
+
+
+# ─── GET /api/v1/organization/roles ───
+
+class TestGetRoles:
+    """Tests for GET /api/v1/organization/roles"""
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_get_roles_success(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.get_roles_by_scope.return_value = [
+            {"id": 1, "name": "owner"}, {"id": 2, "name": "admin"}, {"id": 3, "name": "member"}
+        ]
+        response = client_as_member.get("/api/v1/organization/roles")
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+
+    def test_get_roles_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get("/api/v1/organization/roles")
+        assert response.status_code in (401, 403)
+
+
+# ─── GET /api/v1/organization/get_associated_tenants — Get Associated Tenants (EE) ───
+
+class TestGetAssociatedTenants:
+    """Tests for GET /api/v1/organization/get_associated_tenants"""
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_get_associated_tenants_success(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.get_associated_organizations.return_value = [
+            {"id": "550e8400-e29b-41d4-a716-446655440000", "name": "Org1"}
+        ]
+        response = client_as_member.get("/api/v1/organization/get_associated_tenants")
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_get_associated_tenants_empty(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.get_associated_organizations.return_value = []
+        response = client_as_member.get("/api/v1/organization/get_associated_tenants")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_get_associated_tenants_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get("/api/v1/organization/get_associated_tenants")
+        assert response.status_code in (401, 403)
+
+
+# ─── POST /api/v1/organization/create_tenants — Create Tenant (EE) ───
+
+class TestCreateTenants:
+    """Tests for POST /api/v1/organization/create_tenants"""
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_create_tenant_success(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.create_organization.return_value = {
+            "id": "new-org-uuid", "name": "New Org"
+        }
+        response = client_as_member.post("/api/v1/organization/create_tenants?name=New%20Org")
+        assert response.status_code == 200
+
+    def test_create_tenant_missing_name(self, client_as_member):
+        response = client_as_member.post("/api/v1/organization/create_tenants")
+        assert response.status_code == 422
+
+    def test_create_tenant_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.post("/api/v1/organization/create_tenants?name=Test")
+        assert response.status_code in (401, 403)
+
+
+# ─── POST /api/v1/organization/request_access — Request Access (EE) ───
+
+class TestRequestAccess:
+    """Tests for POST /api/v1/organization/request_access"""
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_request_access_success(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.request_organization_access.return_value = {"message": "requested"}
+        response = client_as_member.post("/api/v1/organization/request_access", json={
+            "org_id": "550e8400-e29b-41d4-a716-446655440000",
+            "message": "Please add me"
+        })
+        assert response.status_code == 200
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_request_access_missing_org_id(self, mock_service_cls, client_as_member):
+        response = client_as_member.post("/api/v1/organization/request_access", json={
+            "message": "Please add me"
+        })
+        assert response.status_code == 400
+
+    def test_request_access_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.post("/api/v1/organization/request_access", json={
+            "org_id": "550e8400-e29b-41d4-a716-446655440000"
+        })
+        assert response.status_code in (401, 403)
+
+
+# ─── GET /api/v1/organization/members — Get Members (EE) ───
+
+class TestGetMembers:
+    """Tests for GET /api/v1/organization/members"""
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_get_members_success(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.get_all_users_for_organization.return_value = [
+            {"id": 1, "email": "user@example.com", "role": "member"}
+        ]
+        response = client_as_member.get("/api/v1/organization/members")
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_get_members_empty(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.get_all_users_for_organization.return_value = []
+        response = client_as_member.get("/api/v1/organization/members")
+        assert response.status_code == 200
+
+    def test_get_members_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get("/api/v1/organization/members")
+        assert response.status_code in (401, 403)
+
+
+# ─── GET /api/v1/organization/invited_users — Get Invited Users (EE) ───
+
+class TestGetInvitedUsers:
+    """Tests for GET /api/v1/organization/invited_users"""
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_get_invited_users_success(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.get_all_invited_users_for_organization.return_value = [
+            {"email": "invited@example.com", "status": "pending"}
+        ]
+        response = client_as_member.get("/api/v1/organization/invited_users")
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+
+    @patch("ee.api.v1.organizations.EEAuthService")
+    def test_get_invited_users_empty(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.get_all_invited_users_for_organization.return_value = []
+        response = client_as_member.get("/api/v1/organization/invited_users")
+        assert response.status_code == 200
+
+    def test_get_invited_users_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get("/api/v1/organization/invited_users")
+        assert response.status_code in (401, 403)

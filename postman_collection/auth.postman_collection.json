@@ -8,6 +8,10 @@
     { "key": "baseUrl", "value": "http://localhost:8000/api/v1" },
     { "key": "authToken", "value": "" }
   ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{authToken}}" }]
+  },
   "item": [
     {
       "name": "Signup",
@@ -356,6 +360,137 @@
             { "key": "Content-Type", "value": "application/json" }
           ],
           "body": "{\n  \"message\": \"Password reset successfully.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "[EE] Check Organization Exists",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/auth/check_organization_exists?name=My Organization",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "check_organization_exists"],
+          "query": [
+            { "key": "name", "value": "My Organization", "description": "Organization name to check" }
+          ]
+        },
+        "auth": { "type": "noauth" }
+      },
+      "response": [
+        {
+          "name": "[EE] Check Organization Exists - Found",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/check_organization_exists?name=My Organization",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "check_organization_exists"],
+              "query": [
+                { "key": "name", "value": "My Organization" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"exists\": true,\n  \"organization\": {\n    \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"name\": \"My Organization\"\n  }\n}"
+        },
+        {
+          "name": "[EE] Check Organization Exists - Not Found",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/check_organization_exists?name=Nonexistent Org",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "check_organization_exists"],
+              "query": [
+                { "key": "name", "value": "Nonexistent Org" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"exists\": false\n}"
+        }
+      ]
+    },
+    {
+      "name": "[EE] Switch Organization",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/auth/switch_organization",
+          "host": ["{{baseUrl}}"],
+          "path": ["auth", "switch_organization"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\"\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      },
+      "response": [
+        {
+          "name": "[EE] Switch Organization - Success",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/switch_organization",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "switch_organization"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n  \"token_type\": \"bearer\",\n  \"organization\": {\n    \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"name\": \"My Organization\",\n    \"role\": \"OWNER\"\n  }\n}"
+        },
+        {
+          "name": "[EE] Switch Organization - Missing Organization ID",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/switch_organization",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "switch_organization"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Organization ID is required\"\n}"
         }
       ]
     }

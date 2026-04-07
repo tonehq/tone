@@ -63,8 +63,15 @@ The user provides:
 
 5. IF ee/ directory exists, also READ ee/middleware/auth.py for:
    - EE auth dependencies: get_ee_jwt_claims, get_ee_current_user, require_ee_org_member,
-     require_ee_admin_or_owner, require_ee_owner
+     require_ee_admin_or_owner, require_ee_owner, get_optional_ee_jwt_claims
+   - EEJWTClaims is aliased to JWTClaims (same model, just re-exported)
+   - get_ee_current_user accepts an optional `tenant_id` header (Header alias) — if a
+     valid UUID is provided, it overrides claims.org_id and updates TenantContext. This
+     enables multi-tenant org switching in EE.
+   - require_ee_org_member validates that org_id is a valid UUID (stricter than core)
    - These must also be overridden in test fixtures when EE is enabled
+   - IMPORTANT: EE controllers pass `org_id=UUID(claims.org_id)` explicitly to services,
+     while core controllers rely on TenantContext fallback. Tests must account for this.
 
 6. READ core/services/base.py to understand:
    - BaseService.__init__(db, user_id, org_id) — services receive db session, user_id, org_id
@@ -92,33 +99,68 @@ The user provides:
 
 ## Step 1: Set Up Test Infrastructure (First Run Only)
 
-If `test-cases/conftest.py` does not exist, create it with:
+Tests are split into **two directories** — one for Core edition, one for EE edition — each with its own
+conftest that overrides the correct auth dependencies. Shared helpers live in the root `test-cases/conftest.py`.
+
+### Directory Structure
+
+```
+test-cases/
+├── __init__.py
+├── conftest.py                           # Shared fixtures (mock_db, make_claims, auth_headers)
+├── core/
+│   ├── __init__.py
+│   ├── conftest.py                       # Core auth overrides (require_org_member, etc.)
+│   ├── test_agents.py                    # Patches core.api.v1.agents
+│   ├── test_agent_configs.py
+│   ├── test_agent_channel_phone_numbers.py
+│   ├── test_auth.py
+│   ├── test_users.py
+│   ├── test_organizations.py
+│   ├── test_channels.py
+│   ├── test_channel_phone_numbers.py
+│   ├── test_call_logs.py
+│   ├── test_api_keys.py
+│   ├── test_services.py
+│   ├── test_service_providers.py
+│   ├── test_models.py
+│   ├── test_voices.py
+│   ├── test_generated_api_keys.py
+│   └── test_telephony.py                # WebSocket, no auth
+├── ee/
+│   ├── __init__.py
+│   ├── conftest.py                       # EE auth overrides (require_ee_org_member, etc.)
+│   ├── test_agents.py                    # Patches ee.api.v1.agents
+│   ├── test_agent_configs.py
+│   ├── test_agent_channel_phone_numbers.py
+│   ├── test_auth.py
+│   ├── test_users.py
+│   ├── test_organizations.py            # Includes EE-only endpoints (tenants, access requests)
+│   ├── test_channels.py
+│   ├── test_channel_phone_numbers.py
+│   ├── test_call_logs.py
+│   ├── test_api_keys.py
+│   ├── test_services.py
+│   ├── test_service_providers.py
+│   ├── test_models.py
+│   ├── test_voices.py
+│   ├── test_generated_api_keys.py
+│   └── test_telephony.py                # WebSocket, same as core (re-exported)
+```
+
+### Root conftest: `test-cases/conftest.py`
+
+Shared fixtures used by both Core and EE tests:
 
 ```python
-"""Shared fixtures for all API test cases."""
+"""Shared fixtures for all API test cases (Core and EE)."""
 
 import pytest
 import time
-from unittest.mock import MagicMock, patch
-from fastapi.testclient import TestClient
+from unittest.mock import MagicMock
 from fastapi.security import HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
 
-from main import app, api_v1
-from core.middleware.auth import JWTClaims, get_jwt_claims, require_org_member, require_admin_or_owner, security
-from core.internal.capabilities import is_ee_enabled
-
-try:
-    from ee.middleware.auth import (
-        get_ee_jwt_claims,
-        get_ee_current_user,
-        require_ee_org_member,
-        require_ee_admin_or_owner,
-        require_ee_owner,
-    )
-    EE_AVAILABLE = True
-except ImportError:
-    EE_AVAILABLE = False
+from core.middleware.auth import JWTClaims
 
 
 def make_claims(
@@ -140,7 +182,7 @@ def make_claims(
 
 
 # ---------------------------------------------------------------------------
-# Fixtures
+# Shared Fixtures
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
@@ -193,25 +235,35 @@ def _override_auth(claims: JWTClaims):
     def _override():
         return claims
     return _override
+```
+
+### Core conftest: `test-cases/core/conftest.py`
+
+Overrides **Core** auth dependencies only:
+
+```python
+"""Core edition test fixtures — overrides core auth dependencies."""
+
+import pytest
+from fastapi.testclient import TestClient
+
+from main import app, api_v1
+from core.middleware.auth import get_jwt_claims, require_org_member, require_admin_or_owner, require_owner, security
+from core.database.session import get_db
+
+# Import shared helpers from parent conftest
+from conftest import _fake_security, _override_auth
 
 
 @pytest.fixture
 def client_as_member(mock_db, member_claims):
-    """TestClient authenticated as a regular org member."""
-    from core.database.session import get_db
-
+    """TestClient authenticated as a regular org member (Core auth)."""
     api_v1.dependency_overrides[security] = _fake_security
     api_v1.dependency_overrides[get_db] = lambda: mock_db
     api_v1.dependency_overrides[get_jwt_claims] = _override_auth(member_claims)
     api_v1.dependency_overrides[require_org_member] = _override_auth(member_claims)
     api_v1.dependency_overrides[require_admin_or_owner] = _override_auth(member_claims)
-
-    if EE_AVAILABLE and is_ee_enabled():
-        api_v1.dependency_overrides[get_ee_jwt_claims] = _override_auth(member_claims)
-        api_v1.dependency_overrides[get_ee_current_user] = _override_auth(member_claims)
-        api_v1.dependency_overrides[require_ee_org_member] = _override_auth(member_claims)
-        api_v1.dependency_overrides[require_ee_admin_or_owner] = _override_auth(member_claims)
-        api_v1.dependency_overrides[require_ee_owner] = _override_auth(member_claims)
+    api_v1.dependency_overrides[require_owner] = _override_auth(member_claims)
 
     client = TestClient(app)
     yield client
@@ -220,21 +272,28 @@ def client_as_member(mock_db, member_claims):
 
 @pytest.fixture
 def client_as_admin(mock_db, admin_claims):
-    """TestClient authenticated as an admin."""
-    from core.database.session import get_db
-
+    """TestClient authenticated as an admin (Core auth)."""
     api_v1.dependency_overrides[security] = _fake_security
     api_v1.dependency_overrides[get_db] = lambda: mock_db
     api_v1.dependency_overrides[get_jwt_claims] = _override_auth(admin_claims)
     api_v1.dependency_overrides[require_org_member] = _override_auth(admin_claims)
     api_v1.dependency_overrides[require_admin_or_owner] = _override_auth(admin_claims)
+    api_v1.dependency_overrides[require_owner] = _override_auth(admin_claims)
 
-    if EE_AVAILABLE and is_ee_enabled():
-        api_v1.dependency_overrides[get_ee_jwt_claims] = _override_auth(admin_claims)
-        api_v1.dependency_overrides[get_ee_current_user] = _override_auth(admin_claims)
-        api_v1.dependency_overrides[require_ee_org_member] = _override_auth(admin_claims)
-        api_v1.dependency_overrides[require_ee_admin_or_owner] = _override_auth(admin_claims)
-        api_v1.dependency_overrides[require_ee_owner] = _override_auth(admin_claims)
+    client = TestClient(app)
+    yield client
+    api_v1.dependency_overrides.clear()
+
+
+@pytest.fixture
+def client_as_owner(mock_db, owner_claims):
+    """TestClient authenticated as an owner (Core auth)."""
+    api_v1.dependency_overrides[security] = _fake_security
+    api_v1.dependency_overrides[get_db] = lambda: mock_db
+    api_v1.dependency_overrides[get_jwt_claims] = _override_auth(owner_claims)
+    api_v1.dependency_overrides[require_org_member] = _override_auth(owner_claims)
+    api_v1.dependency_overrides[require_admin_or_owner] = _override_auth(owner_claims)
+    api_v1.dependency_overrides[require_owner] = _override_auth(owner_claims)
 
     client = TestClient(app)
     yield client
@@ -244,22 +303,108 @@ def client_as_admin(mock_db, admin_claims):
 @pytest.fixture
 def client_unauthenticated(mock_db):
     """TestClient with DB mocked but NO auth override — auth should reject."""
-    from core.database.session import get_db
-
     api_v1.dependency_overrides[get_db] = lambda: mock_db
-    # Remove any leftover auth overrides
     api_v1.dependency_overrides.pop(get_jwt_claims, None)
     api_v1.dependency_overrides.pop(require_org_member, None)
     api_v1.dependency_overrides.pop(require_admin_or_owner, None)
+    api_v1.dependency_overrides.pop(require_owner, None)
 
     client = TestClient(app)
     yield client
     api_v1.dependency_overrides.clear()
 ```
 
-Adapt the conftest based on what you discover in Step 0 about auth patterns and DB dependencies.
+### EE conftest: `test-cases/ee/conftest.py`
 
-Also create `test-cases/__init__.py` if it doesn't exist.
+Overrides **EE** auth dependencies:
+
+```python
+"""EE edition test fixtures — overrides EE auth dependencies."""
+
+import pytest
+from fastapi.testclient import TestClient
+
+from main import app, api_v1
+from ee.middleware.auth import (
+    get_ee_jwt_claims,
+    get_ee_current_user,
+    require_ee_org_member,
+    require_ee_admin_or_owner,
+    require_ee_owner,
+)
+from core.middleware.auth import security
+from core.database.session import get_db
+
+# Import shared helpers from parent conftest
+from conftest import _fake_security, _override_auth
+
+
+@pytest.fixture
+def client_as_member(mock_db, member_claims):
+    """TestClient authenticated as a regular org member (EE auth)."""
+    api_v1.dependency_overrides[security] = _fake_security
+    api_v1.dependency_overrides[get_db] = lambda: mock_db
+    api_v1.dependency_overrides[get_ee_jwt_claims] = _override_auth(member_claims)
+    api_v1.dependency_overrides[get_ee_current_user] = _override_auth(member_claims)
+    api_v1.dependency_overrides[require_ee_org_member] = _override_auth(member_claims)
+    api_v1.dependency_overrides[require_ee_admin_or_owner] = _override_auth(member_claims)
+    api_v1.dependency_overrides[require_ee_owner] = _override_auth(member_claims)
+
+    client = TestClient(app)
+    yield client
+    api_v1.dependency_overrides.clear()
+
+
+@pytest.fixture
+def client_as_admin(mock_db, admin_claims):
+    """TestClient authenticated as an admin (EE auth)."""
+    api_v1.dependency_overrides[security] = _fake_security
+    api_v1.dependency_overrides[get_db] = lambda: mock_db
+    api_v1.dependency_overrides[get_ee_jwt_claims] = _override_auth(admin_claims)
+    api_v1.dependency_overrides[get_ee_current_user] = _override_auth(admin_claims)
+    api_v1.dependency_overrides[require_ee_org_member] = _override_auth(admin_claims)
+    api_v1.dependency_overrides[require_ee_admin_or_owner] = _override_auth(admin_claims)
+    api_v1.dependency_overrides[require_ee_owner] = _override_auth(admin_claims)
+
+    client = TestClient(app)
+    yield client
+    api_v1.dependency_overrides.clear()
+
+
+@pytest.fixture
+def client_as_owner(mock_db, owner_claims):
+    """TestClient authenticated as an owner (EE auth)."""
+    api_v1.dependency_overrides[security] = _fake_security
+    api_v1.dependency_overrides[get_db] = lambda: mock_db
+    api_v1.dependency_overrides[get_ee_jwt_claims] = _override_auth(owner_claims)
+    api_v1.dependency_overrides[get_ee_current_user] = _override_auth(owner_claims)
+    api_v1.dependency_overrides[require_ee_org_member] = _override_auth(owner_claims)
+    api_v1.dependency_overrides[require_ee_admin_or_owner] = _override_auth(owner_claims)
+    api_v1.dependency_overrides[require_ee_owner] = _override_auth(owner_claims)
+
+    client = TestClient(app)
+    yield client
+    api_v1.dependency_overrides.clear()
+
+
+@pytest.fixture
+def client_unauthenticated(mock_db):
+    """TestClient with DB mocked but NO auth override — EE auth should reject."""
+    api_v1.dependency_overrides[get_db] = lambda: mock_db
+    api_v1.dependency_overrides.pop(get_ee_jwt_claims, None)
+    api_v1.dependency_overrides.pop(get_ee_current_user, None)
+    api_v1.dependency_overrides.pop(require_ee_org_member, None)
+    api_v1.dependency_overrides.pop(require_ee_admin_or_owner, None)
+    api_v1.dependency_overrides.pop(require_ee_owner, None)
+
+    client = TestClient(app)
+    yield client
+    api_v1.dependency_overrides.clear()
+```
+
+Adapt each conftest based on what you discover in Step 0 about auth patterns and DB dependencies.
+
+Also create `test-cases/__init__.py`, `test-cases/core/__init__.py`, and `test-cases/ee/__init__.py` if they don't exist.
 
 ---
 
@@ -285,16 +430,15 @@ Read `APIs.md` and extract for EVERY documented route:
 
 ## Step 3: Trace Source Code for Each Endpoint
 
-For each endpoint extracted from APIs.md, READ the actual source code to discover:
+For each endpoint extracted from APIs.md, READ the actual source code for **BOTH** editions to discover:
 
 ```
-1. DETERMINE which router module is active:
-   - If EE is enabled: the endpoint is served by ee/api/v1/{controller}.py
-   - If Core only: the endpoint is served by core/api/v1/{controller}.py
-   - READ the ACTIVE module — this is what you'll patch in tests
+1. READ BOTH the core and ee router modules for each controller:
+   - Core: core/api/v1/{controller}.py
+   - EE: ee/api/v1/{controller}.py
    - IMPORTANT: When patching services, use the module path where the service is IMPORTED.
-     For EE: patch("ee.api.v1.agents.AgentService")
-     For Core: patch("core.api.v1.agents.AgentService")
+     For EE tests: patch("ee.api.v1.agents.AgentService")
+     For Core tests: patch("core.api.v1.agents.AgentService")
 
 2. READ the controller function
    - Identify exact parameter names and types
@@ -340,10 +484,10 @@ For EVERY endpoint, generate test cases in these categories:
 - Request with wrong role — e.g., member accessing admin-only endpoint
 - Request for resource in different org (if multi-tenant / OrgScopedModel) → 403/404
 - **Auth dependency mapping:**
-  - `require_org_member` → any authenticated user passes
-  - `require_admin_or_owner` → use `client_as_admin` for success tests
-  - `require_owner` → only owner role passes
-  - `get_jwt_claims` → basic auth, no role check
+  - `require_org_member` / `require_ee_org_member` → any authenticated user passes, use `client_as_member`
+  - `require_admin_or_owner` / `require_ee_admin_or_owner` → use `client_as_admin` for success tests
+  - `require_owner` / `require_ee_owner` → only owner role passes, use `client_as_owner` for success tests
+  - `get_jwt_claims` / `get_ee_jwt_claims` → basic auth, no role check
   - No auth dependency → public endpoint, skip auth tests
 
 ### Category 3: Validation Errors
@@ -384,35 +528,63 @@ class TestGetAllAgents:
 
 ### File Structure
 
-One test file per controller, in the `test-cases/` directory:
+One test file per controller per edition, in `test-cases/core/` and `test-cases/ee/`:
 
 ```
 test-cases/
 ├── __init__.py
-├── conftest.py
-├── test_agents.py              # Tests for core/api/v1/agents.py
-├── test_agent_configs.py       # Tests for core/api/v1/agent_configs.py
-├── test_auth.py                # Tests for core/api/v1/auth.py
-├── test_users.py               # Tests for core/api/v1/users.py
-├── test_organizations.py       # Tests for core/api/v1/organizations.py
-├── test_channels.py            # Tests for core/api/v1/channels.py
-├── test_channel_phone_numbers.py # Tests for core/api/v1/channel_phone_numbers.py
-├── test_api_keys.py            # Tests for core/api/v1/api_keys.py
-├── test_services.py            # Tests for core/api/v1/services.py
-├── test_service_providers.py   # Tests for core/api/v1/service_providers.py
-├── test_models.py              # Tests for core/api/v1/models.py
-├── test_voices.py              # Tests for core/api/v1/voices.py
-└── test_generated_api_keys.py  # Tests for core/api/v1/generated_api_keys.py
+├── conftest.py                           # Shared fixtures (mock_db, make_claims, helpers)
+├── core/
+│   ├── __init__.py
+│   ├── conftest.py                       # Core auth overrides
+│   ├── test_agents.py                    # Patches core.api.v1.agents
+│   ├── test_agent_configs.py
+│   ├── test_agent_channel_phone_numbers.py
+│   ├── test_auth.py
+│   ├── test_users.py
+│   ├── test_organizations.py             # Core-specific logic (member limits, capability checks)
+│   ├── test_channels.py
+│   ├── test_channel_phone_numbers.py
+│   ├── test_call_logs.py
+│   ├── test_api_keys.py
+│   ├── test_services.py
+│   ├── test_service_providers.py
+│   ├── test_models.py
+│   ├── test_voices.py
+│   ├── test_generated_api_keys.py
+│   └── test_telephony.py                # WebSocket, no auth
+├── ee/
+│   ├── __init__.py
+│   ├── conftest.py                       # EE auth overrides
+│   ├── test_agents.py                    # Patches ee.api.v1.agents
+│   ├── test_agent_configs.py
+│   ├── test_agent_channel_phone_numbers.py
+│   ├── test_auth.py
+│   ├── test_users.py
+│   ├── test_organizations.py             # EE-specific endpoints (tenants, access requests)
+│   ├── test_channels.py
+│   ├── test_channel_phone_numbers.py
+│   ├── test_call_logs.py
+│   ├── test_api_keys.py
+│   ├── test_services.py
+│   ├── test_service_providers.py
+│   ├── test_models.py
+│   ├── test_voices.py
+│   ├── test_generated_api_keys.py
+│   └── test_telephony.py                # WebSocket (re-exports core, same tests)
 ```
 
 ### Test File Template
 
-Each test file follows this structure:
+Each test file follows this structure. The **only difference** between core/ and ee/ versions is the
+patch path and service instantiation assertions:
+
+**Core test file** (`test-cases/core/test_agents.py`):
 
 ```python
-"""Tests for {Controller Name} API endpoints.
+"""Tests for Agents API endpoints (Core edition).
 
-Source: core/api/v1/{controller}.py
+Source: core/api/v1/agents.py
 Generated from APIs.md by test-cases skill.
 """
 
@@ -429,7 +601,6 @@ def sample_agent_data():
     return {
         "name": "Test Agent",
         "description": "A test voice agent",
-        # ... all required fields with realistic values
     }
 
 
@@ -450,54 +621,76 @@ def mock_agent_response():
 class TestGetAllAgents:
     """Tests for GET /api/v1/agent/get_all_agents"""
 
-    @patch("ee.api.v1.agents.AgentService")  # Patch where service is IMPORTED
+    @patch("core.api.v1.agents.AgentService")  # Core: patch core module
     def test_get_all_agents_success(self, mock_service_cls, client_as_member, mock_agent_response):
         mock_service_cls.return_value.get_all_agents.return_value = [mock_agent_response]
         response = client_as_member.get("/api/v1/agent/get_all_agents")
         assert response.status_code == 200
         assert isinstance(response.json(), list)
+        # Core: service instantiated WITHOUT org_id
+        mock_service_cls.assert_called_once_with(mock_service_cls.call_args[0][0])
 
     def test_get_all_agents_unauthenticated(self, client_unauthenticated):
         response = client_unauthenticated.get("/api/v1/agent/get_all_agents")
         assert response.status_code in (401, 403)
-
-    # ... more tests for this endpoint
-
-
-# ─── POST /api/v1/agent/upsert_agent — Upsert Agent ───
-
-class TestUpsertAgent:
-    """Tests for POST /api/v1/agent/upsert_agent"""
-
-    @patch("ee.api.v1.agents.AgentService")
-    def test_upsert_agent_create_success(self, mock_service_cls, client_as_member, sample_agent_data):
-        mock_service_cls.return_value.upsert_agent.return_value = {"id": 1, **sample_agent_data}
-        response = client_as_member.post("/api/v1/agent/upsert_agent", json=sample_agent_data)
-        assert response.status_code == 200
-
-    @patch("ee.api.v1.agents.AgentService")
-    def test_upsert_agent_missing_name(self, mock_service_cls, client_as_member):
-        response = client_as_member.post("/api/v1/agent/upsert_agent", json={"description": "no name"})
-        assert response.status_code == 400
-        assert "name is required" in response.json()["detail"]
-
-    def test_upsert_agent_unauthenticated(self, client_unauthenticated):
-        response = client_unauthenticated.post("/api/v1/agent/upsert_agent", json={"name": "Test"})
-        assert response.status_code in (401, 403)
-
-    @patch("ee.api.v1.agents.AgentService")
-    def test_upsert_agent_service_error(self, mock_service_cls, client_as_member, sample_agent_data):
-        mock_service_cls.return_value.upsert_agent.side_effect = HTTPException(
-            status_code=500, detail="Internal error"
-        )
-        response = client_as_member.post("/api/v1/agent/upsert_agent", json=sample_agent_data)
-        assert response.status_code == 500
-
-    # ... more tests
-
-
-# ─── (EVERY endpoint gets its own test class) ───
 ```
+
+**EE test file** (`test-cases/ee/test_agents.py`):
+
+```python
+"""Tests for Agents API endpoints (EE edition).
+
+Source: ee/api/v1/agents.py
+Generated from APIs.md by test-cases skill.
+"""
+
+import pytest
+from uuid import UUID
+from unittest.mock import patch, MagicMock, ANY
+from fastapi import HTTPException
+
+EXPECTED_ORG_ID = UUID("550e8400-e29b-41d4-a716-446655440000")
+
+
+# ─── Fixtures specific to this controller ───
+
+@pytest.fixture
+def sample_agent_data():
+    """Valid agent creation payload."""
+    return {
+        "name": "Test Agent",
+        "description": "A test voice agent",
+    }
+
+
+# ─── GET /api/v1/agent/get_all_agents — Get All Agents ───
+
+class TestGetAllAgents:
+    """Tests for GET /api/v1/agent/get_all_agents"""
+
+    @patch("ee.api.v1.agents.AgentService")  # EE: patch ee module
+    def test_get_all_agents_success(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.get_all_agents.return_value = [{"id": 1}]
+        response = client_as_member.get("/api/v1/agent/get_all_agents")
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+        # EE: service instantiated WITH org_id
+        mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID)
+
+    def test_get_all_agents_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get("/api/v1/agent/get_all_agents")
+        assert response.status_code in (401, 403)
+```
+
+**Key differences between Core and EE test files:**
+
+| Aspect | Core tests | EE tests |
+|---|---|---|
+| Patch path | `@patch("core.api.v1.{controller}.ServiceClass")` | `@patch("ee.api.v1.{controller}.ServiceClass")` |
+| Service assertion | `mock_service_cls.assert_called_once_with(ANY)` | `mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID)` |
+| Auth fixtures | From `test-cases/core/conftest.py` (core auth) | From `test-cases/ee/conftest.py` (EE auth) |
+| Extra endpoints | Core organizations: member limits, capability checks | EE organizations: tenants, access requests |
+| Docstring Source | `Source: core/api/v1/{controller}.py` | `Source: ee/api/v1/{controller}.py` |
 
 ### Mock Strategy
 
@@ -505,34 +698,41 @@ class TestUpsertAgent:
 1. OVERRIDE dependencies on `api_v1` (the sub-app), NOT on `app` (the outer app)
    - api_v1.dependency_overrides[get_db] = lambda: mock_db
    - api_v1.dependency_overrides[security] = _fake_security
-   - This is handled by the conftest client fixtures (client_as_member, client_as_admin, etc.)
+   - This is handled by the edition-specific conftest client fixtures
 
 2. PATCH service classes using unittest.mock.patch
    - Patch at the module where the service is IMPORTED, not where it's defined
-   - Determine the active module based on EE status:
-     - If EE is enabled: patch("ee.api.v1.agents.AgentService")
-     - If Core only: patch("core.api.v1.agents.AgentService")
-   - IMPORTANT: Check which module is active at runtime. If EE routes are loaded,
-     you MUST patch the ee module path. The conftest handles auth overrides for both.
+   - Core tests: ALWAYS patch "core.api.v1.{controller}.ServiceClass"
+   - EE tests: ALWAYS patch "ee.api.v1.{controller}.ServiceClass"
+   - This is deterministic — no runtime EE detection needed
 
-3. OVERRIDE auth dependencies in conftest fixtures
-   - security (HTTPBearer) → _fake_security() bypass
-   - get_jwt_claims → returns mock JWTClaims
-   - require_org_member → returns mock JWTClaims
-   - require_admin_or_owner → returns mock JWTClaims
-   - If EE: also override get_ee_jwt_claims, get_ee_current_user, require_ee_org_member,
-     require_ee_admin_or_owner, require_ee_owner
+3. OVERRIDE auth dependencies in edition-specific conftest fixtures
+   - Core conftest overrides: security, get_jwt_claims, require_org_member,
+     require_admin_or_owner, require_owner
+   - EE conftest overrides: security, get_ee_jwt_claims, get_ee_current_user,
+     require_ee_org_member, require_ee_admin_or_owner, require_ee_owner
    - For unauthenticated tests: use client_unauthenticated which does NOT override auth
 
-4. DO NOT mock Pydantic validation — let FastAPI's real validation run for query params
+4. ASSERT service instantiation patterns
+   - Core: services are called as ServiceClass(db) — no org_id parameter
+   - EE: services are called as ServiceClass(db, org_id=UUID(claims.org_id))
+   - Use EXPECTED_ORG_ID constant in EE tests to verify org_id is passed
+
+5. DO NOT mock Pydantic validation — let FastAPI's real validation run for query params
    - This catches actual 422 errors from invalid query parameters
    - Note: most request bodies use Dict[str, Any], so body validation happens in the
      service layer and returns 400, not 422
 
-5. USE role-appropriate client fixtures:
-   - client_as_member for endpoints using require_org_member or get_jwt_claims
-   - client_as_admin for endpoints using require_admin_or_owner
+6. USE role-appropriate client fixtures:
+   - client_as_member for endpoints using require_org_member / require_ee_org_member
+   - client_as_admin for endpoints using require_admin_or_owner / require_ee_admin_or_owner
+   - client_as_owner for endpoints using require_owner / require_ee_owner
    - client_unauthenticated for auth failure tests
+
+7. HANDLE telephony specially:
+   - telephony is a WebSocket endpoint at /ws, NOT under /api/v1/ — use TestClient.websocket_connect("/ws")
+     and test the WebSocket handshake, not HTTP methods
+   - EE telephony re-exports the core router, so tests are identical in both editions
 ```
 
 ---
@@ -540,18 +740,34 @@ class TestUpsertAgent:
 ## Step 6: Write the Test Files
 
 ```
-1. For each controller, WRITE the complete test file using the Write tool
-2. After writing each file:
-   - Verify the file was created by reading it back
-   - Confirm all endpoints from APIs.md are covered
-3. Update test-cases/.last_run with current timestamp and git SHA
+1. For each controller, WRITE TWO test files — one in core/, one in ee/:
+   - test-cases/core/test_{controller}.py — patches core.api.v1.{controller}
+   - test-cases/ee/test_{controller}.py — patches ee.api.v1.{controller}
 
-4. REPORT to user:
+2. Key differences per edition:
+   - Core tests: service instantiated as ServiceClass(db) — no org_id
+   - EE tests: service instantiated as ServiceClass(db, org_id=UUID(claims.org_id))
+   - EE organizations: include extra endpoints (tenants, access requests, members)
+   - Core organizations: include member limit and capability check tests
+   - Telephony: identical in both (EE re-exports core router)
+
+3. After writing each file:
+   - Verify the file was created by reading it back
+   - Confirm all endpoints from APIs.md are covered in BOTH editions
+
+4. Update test-cases/.last_run with current timestamp and git SHA
+
+5. REPORT to user:
    Test files generated:
-   - test-cases/test_agents.py — 24 tests (4 endpoints × ~6 cases each)
-   - test-cases/test_auth.py — 18 tests (7 endpoints × ~3 cases each)
+   Core edition (test-cases/core/):
+   - test_agents.py — 24 tests (4 endpoints × ~6 cases each)
+   - test_auth.py — 18 tests (7 endpoints × ~3 cases each)
    - ...
-   Total: {N} test cases across {M} files
+   EE edition (test-cases/ee/):
+   - test_agents.py — 24 tests (4 endpoints × ~6 cases each)
+   - test_organizations.py — 30 tests (includes EE-only endpoints)
+   - ...
+   Total: {N} test cases across {M} files ({X} core + {Y} ee)
 ```
 
 ---
@@ -698,21 +914,32 @@ This skill is designed to work in a pipeline with other skills. Here's how they 
 
 ### Controllers & Route Prefixes
 
-| Controller File | Route Prefix | Auth Pattern |
+**Note:** Route prefixes are the same in both Core and EE editions. Auth dependencies differ (Core uses `require_org_member` etc., EE uses `require_ee_org_member` etc.).
+
+| Controller File | Route Prefix | Auth Pattern (Core / EE) |
 |---|---|---|
-| `agents.py` | `/api/v1/agent/` | `require_org_member` |
-| `agent_configs.py` | `/api/v1/agent_config/` | `require_org_member` |
+| `agents.py` | `/api/v1/agent/` | `require_org_member` / `require_ee_org_member` |
+| `agent_configs.py` | `/api/v1/agent_config/` | `require_org_member` / `require_ee_org_member` |
+| `agent_channel_phone_numbers.py` | `/api/v1/agent_channel_phone_number/` | `require_org_member` / `require_ee_org_member` |
 | `auth.py` | `/api/v1/auth/` | None (public) |
-| `users.py` | `/api/v1/user/` | `require_org_member` |
+| `users.py` | `/api/v1/user/` | `require_org_member` / `require_ee_org_member` |
 | `organizations.py` | `/api/v1/organization/` | Mixed (`require_admin_or_owner`, `require_org_member`, `get_jwt_claims`, public) |
 | `channels.py` | `/api/v1/channel/` | Mixed (`require_org_member`, `require_admin_or_owner`, public) |
 | `channel_phone_numbers.py` | `/api/v1/channel_phone_number/` | Mixed (`require_org_member`, public) |
+| `call_logs.py` | `/api/v1/call-log/` | `require_org_member` |
 | `api_keys.py` | `/api/v1/api-keys/` | Mixed (`require_admin_or_owner`, `get_jwt_claims`) |
 | `services.py` | `/api/v1/services/` | Mixed (`require_admin_or_owner`, `get_jwt_claims`) |
 | `service_providers.py` | `/api/v1/service-providers/` | Mixed (`require_admin_or_owner`, `get_jwt_claims`) |
-| `models.py` | `/api/v1/model/` | `require_org_member` |
-| `voices.py` | `/api/v1/voice/` | `require_org_member` |
+| `models.py` | `/api/v1/model/` | `require_org_member` / `require_ee_org_member` |
+| `voices.py` | `/api/v1/voice/` | `require_org_member` / `require_ee_org_member` |
 | `generated_api_keys.py` | `/api/v1/generated-api-keys/` | Mixed (`require_admin_or_owner`, `get_jwt_claims`) |
+| `telephony.py` | `/ws` (on `app`, not `api_v1`) | None (public WebSocket) |
+
+**Special cases:**
+- **`call_logs.py`** — Exists in both `core/api/v1/` and `ee/api/v1/`. The EE version uses `require_ee_org_member` and passes `org_id=UUID(claims.org_id)` to `CallLogService`. Core version uses `require_org_member` without explicit org_id.
+- **`telephony.py`** — Core has the full implementation. EE version (`ee/api/v1/telephony.py`) re-exports the core router since telephony providers don't send auth tokens. It is a **WebSocket** endpoint mounted on `app` directly (not under `api_v1`), so it lives at `/ws`. No auth required. Test with `TestClient.websocket_connect()`.
+- **Root-level endpoints** — `app` directly mounts `/` (root), `/health`, `/ready`, and `/environment`. These are edition-agnostic, no auth required, mounted on `app` not `api_v1`.
+- **Capabilities endpoint** — `GET /api/v1/capabilities` is defined inline in `main.py` on `api_v1`. No auth required. Returns `{"capabilities": ..., "edition": ..., "ee_enabled": ...}`.
 
 ### Model Enums (from `core/models/enums.py`)
 
@@ -729,13 +956,28 @@ This skill is designed to work in a pipeline with other skills. Here's how they 
 
 ### Auth Dependency Functions
 
+**Core auth** (`core/middleware/auth.py`):
+
 | Function | Behavior | Failure Code |
 |---|---|---|
-| `get_jwt_claims` | Validates JWT, sets TenantContext, returns JWTClaims | 401 |
+| `get_jwt_claims` | Validates JWT, sets TenantContext (uses `DEFAULT_ORG_ID` in core), returns JWTClaims | 401 |
 | `get_optional_jwt_claims` | Same but returns None if no token | — |
-| `require_org_member` | Validates user_id exists in claims | 400 |
-| `require_admin_or_owner` | Validates user_id exists in claims | 403 |
-| `require_owner` | Validates role == "owner" | 403 |
+| `require_org_member` | Depends on `get_jwt_claims`, validates user_id exists | 400 |
+| `require_admin_or_owner` | Depends on `get_jwt_claims`, validates user_id exists | 403 |
+| `require_owner` | Depends on `get_jwt_claims`, validates role == "owner" | 403 |
+
+**EE auth** (`ee/middleware/auth.py`):
+
+| Function | Behavior | Failure Code |
+|---|---|---|
+| `get_ee_jwt_claims` | Validates JWT, sets TenantContext with org_id from JWT | 401 |
+| `get_optional_ee_jwt_claims` | Same but returns None if no token | — |
+| `get_ee_current_user` | Depends on `get_ee_jwt_claims`, accepts optional `tenant_id` header to override org_id | 401 |
+| `require_ee_org_member` | Depends on `get_ee_current_user`, validates user_id + org_id is valid UUID | 400 |
+| `require_ee_admin_or_owner` | Depends on `get_ee_current_user`, validates user_id + org_id UUID + role in (admin, owner) | 403 |
+| `require_ee_owner` | Depends on `get_ee_current_user`, validates role == "owner" | 403 |
+
+**Key difference:** EE controllers pass `org_id=UUID(claims.org_id)` explicitly to service constructors, while core controllers don't (they rely on TenantContext fallback in `BaseService`).
 
 ### JWTClaims Structure
 
@@ -783,8 +1025,14 @@ class JWTClaims(BaseModel):
 
 11. **Override on `api_v1`, not `app`.** Dependency overrides must be set on the `api_v1` sub-app (from `main import api_v1`) because that's where routers are mounted. Using `app.dependency_overrides` will NOT work.
 
-12. **Handle EE/Core routing.** When EE is enabled, routes are served by `ee/api/v1/` modules. Patch paths must match the active module. The conftest handles auth overrides for both editions automatically.
+12. **Generate tests for BOTH editions.** Every controller gets two test files: one in `test-cases/core/` (patching `core.api.v1.*`), one in `test-cases/ee/` (patching `ee.api.v1.*`). Each edition has its own conftest with the correct auth overrides.
 
-13. **Use `client_as_member`/`client_as_admin` fixtures.** Do not create ad-hoc TestClient instances. The conftest fixtures properly set up all dependency overrides including EE support.
+13. **Use `client_as_member`/`client_as_admin`/`client_as_owner` fixtures.** Do not create ad-hoc TestClient instances. Use the edition-specific conftest fixtures from `test-cases/core/conftest.py` or `test-cases/ee/conftest.py`.
 
-14. **Test directory is `test-cases/`.** Not `tests/`. All test files go in the `test-cases/` directory at the project root.
+14. **Test directory is `test-cases/`.** Not `tests/`. Test files go in `test-cases/core/` and `test-cases/ee/` subdirectories. Shared fixtures go in `test-cases/conftest.py`.
+
+15. **Route prefix consistency.** All controllers use the same route prefix in both Core and EE editions. Always verify against `main.py` if unsure.
+
+16. **Assert org_id handling.** In EE tests, verify services are called with `org_id=UUID(claims.org_id)`. In Core tests, verify services are called WITHOUT explicit org_id. This is the primary behavioral difference between editions.
+
+17. **Telephony is WebSocket.** `telephony.py` provides a WebSocket endpoint at `/ws` mounted on `app` (not `api_v1`). It has no auth. EE re-exports the core router. Test with `TestClient.websocket_connect("/ws")` — do NOT use HTTP methods. Mock `BotRunnerService` and `bot()` since they require actual voice pipeline infrastructure.
