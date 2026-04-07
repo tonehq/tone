@@ -1,0 +1,14 @@
+{
+  "tested": 1,
+  "passed": 0,
+  "failed": 1,
+  "skipped": 0,
+  "results": [
+    {
+      "provider": "hathora",
+      "model": "parakeet",
+      "status": "FAIL",
+      "detail": "Hathora API endpoint returned 404 \u2014 service may be down or URL changed (same URL used in Pipecat pipeline)"
+    }
+  ]
+}
