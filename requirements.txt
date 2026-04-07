@@ -162,11 +162,7 @@ PasteDeploy==3.0.1
 pathspec==0.11.2
 phonenumbers==8.12.48
 pillow==11.3.0
-# tone-pipecat is published from tonehq/pipecat to a private Cloudsmith PyPI.
-# The branch slug below MUST match the current branch name (slashes/underscores -> dashes).
-# Configure auth via PIP_EXTRA_INDEX_URL, e.g.
-#   export PIP_EXTRA_INDEX_URL="https://<user>:<token>@dl.cloudsmith.io/<entitlement>/tonehq/tone/python/simple/"
-tone-pipecat==0.0.74+dev.*
+tone-pipecat==0.0.74+dev.4
 pipecat-ai-small-webrtc-prebuilt==2.0.4
 pkce==1.0.3
 plaster==1.1.2
