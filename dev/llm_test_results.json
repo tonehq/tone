@@ -1,0 +1,200 @@
+{
+  "tested": 32,
+  "passed": 0,
+  "failed": 32,
+  "skipped": 0,
+  "results": [
+    {
+      "provider": "nvidia_nim",
+      "model": "deepseek-ai/deepseek-r1",
+      "status": "FAIL",
+      "detail": "Error code: 410 - {'type': 'about:blank', 'title': 'Gone', 'status': 410, 'detail': \"The model 'deepseek-ai/deepseek-r1' has reached its end of life on 2026-01-26T00:00:00Z and is no longer available.\"}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "deepseek-ai/deepseek-r1-distill-llama-8b",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "deepseek-ai/deepseek-r1-distill-llama-70b",
+      "status": "FAIL",
+      "detail": "404 page not found"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "deepseek-ai/deepseek-r1-distill-qwen-7b",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "deepseek-ai/deepseek-r1-distill-qwen-14b",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "deepseek-ai/deepseek-r1-distill-qwen-32b",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "deepseek-ai/deepseek-v3.1-terminus",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "google/gemma-2-2b-instruct",
+      "status": "FAIL",
+      "detail": "404 page not found"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "google/gemma-2-9b-it",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "google/gemma-3-1b-it",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "meta/llama3-8b-instruct",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "meta/llama3-70b-instruct",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "meta/llama-3.1-8b-instruct",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "meta/llama-3.1-70b-instruct",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "meta/llama-3.1-405b-instruct",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "meta/llama-3.2-1b-instruct",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "meta/llama-3.2-3b-instruct",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "meta/llama-3.3-70b-instruct",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "mistralai/mistral-7b-instruct-v0.3",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "mistralai/mistral-small-24b-instruct-2501",
+      "status": "FAIL",
+      "detail": "404 page not found"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "mistralai/mixtral-8x7b-instruct-v0-1",
+      "status": "FAIL",
+      "detail": "404 page not found"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "mistralai/mixtral-8x22b-instruct-v01",
+      "status": "FAIL",
+      "detail": "404 page not found"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "nvidia/nemotron-4-340b-instruct",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "nvidia/nvidia-nemotron-nano-9b-v2",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "nvidia/llama-3.1-nemotron-70b-instruct",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "openai/gpt-oss-20b",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "openai/gpt-oss-120b",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "qwen/qwen-2.5-7b-instruct",
+      "status": "FAIL",
+      "detail": "404 page not found"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "qwen/qwen-2.5-72b-instruct",
+      "status": "FAIL",
+      "detail": "404 page not found"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "qwen/qwen2.5-coder-32b-instruct",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "qwen/qwen3-next-80b-a3b-instruct",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    },
+    {
+      "provider": "nvidia_nim",
+      "model": "qwen/qwen3-next-80b-a3b-thinking",
+      "status": "FAIL",
+      "detail": "Error code: 403 - {'status': 403, 'title': 'Forbidden', 'detail': 'Authorization failed'}"
+    }
+  ]
+}

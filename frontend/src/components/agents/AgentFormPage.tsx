@@ -9,6 +9,7 @@ import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 import AssignPhoneNumberModal from '@/components/agents/AssignPhoneNumberModal';
 import type { TabItem } from '@/components/shared';
 import { CustomButton, CustomModal, CustomTab, PhoneNumberDisplay } from '@/components/shared';
+import { Badge } from '@/components/ui/badge';
 import { deleteAgent, getAgent, upsertAgent } from '@/services/agentsService';
 import type { AgentFormState } from '@/types/agent';
 import {
@@ -435,20 +436,16 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
           </h1>
           <div className="mt-1 flex items-center gap-2">
             <AgentTypeBadge agentType={agentType} />
-            {formData.phoneNumbers?.length > 0 && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                <PhoneNumberDisplay
-                  phoneNumber={formData.phoneNumbers[0].no}
-                  flagSize="sm"
-                  className="text-xs"
-                />
-                {formData.phoneNumbers.length > 1 && (
-                  <span className="text-emerald-600 dark:text-emerald-400">
-                    +{formData.phoneNumbers.length - 1}
-                  </span>
-                )}
-              </span>
-            )}
+            {formData.phoneNumbers?.length > 0 &&
+              formData.phoneNumbers.map((pn) => (
+                <Badge
+                  key={pn.no}
+                  className="bg-primary/15 px-2.5 py-1 text-primary dark:text-primary"
+                >
+                  <Phone className="size-3.5" />
+                  <PhoneNumberDisplay phoneNumber={pn.no} flagSize="sm" className="text-xs" />
+                </Badge>
+              ))}
           </div>
         </div>
       </div>
