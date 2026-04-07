@@ -173,7 +173,7 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "edition": edition}
+    return {"status": "ok", "edition": edition, "deployed": True}
 
 
 @app.get("/ready")
