@@ -276,6 +276,23 @@ class AgentFactoryService(BaseService):
             )
             q3_filters.append(ApiKey.service_provider_id == telephony_sp_subq)
 
+        # Try channels table first for telephony creds (org-scoped)
+        if transport_type == "twilio" and hasattr(agent, "organization_id") and agent.organization_id:
+            from core.models.channel import Channel
+            from core.models.enums import ChannelType
+
+            channel = (
+                self.db.query(Channel)
+                .filter(Channel.type == ChannelType.TWILIO, Channel.organization_id == agent.organization_id)
+                .first()
+            )
+            if channel and channel.meta_data:
+                meta = channel.meta_data
+                account_sid = meta.get("account_sid")
+                auth_token = meta.get("auth_token")
+                if account_sid and auth_token:
+                    telephony_creds = {"account_sid": account_sid, "auth_token": auth_token}
+
         if q3_filters:
             all_api_keys = self.db.query(ApiKey).filter(or_(*q3_filters)).all()
             _t_decrypt = _time.monotonic()
@@ -288,8 +305,8 @@ class AgentFactoryService(BaseService):
                     # LLM/STT/TTS service key
                     if ak.id in api_key_ids:
                         api_key_map[ak.id] = decrypted
-                    else:
-                        # Telephony key — extract key_type from additional_credentials
+                    elif not telephony_creds:
+                        # Telephony key — only use api_keys if channels didn't provide creds
                         additional = ak.additional_credentials or {}
                         key_type = additional.get("key_type")
                         if key_type:

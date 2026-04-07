@@ -44,19 +44,38 @@ from pipecat.runner.types import (
 load_dotenv(override=True)
 
 
-def _get_twilio_credentials() -> dict:
-    """Fetch Twilio account_sid and auth_token from the DB (api_keys table).
+def _get_twilio_credentials(org_id=None) -> dict:
+    """Fetch Twilio account_sid and auth_token.
 
-    Queries service_providers for name='twilio', then finds the two api_keys
-    rows whose additional_credentials->key_type is 'sid' or 'auth_token'.
+    Tries the channels table first (org-scoped), then falls back to
+    the api_keys table (global).
     Returns {"account_sid": ..., "auth_token": ...}.
     """
     from core.database.session import get_db_context
-    from core.models.service_provider import ServiceProvider
-    from core.models.api_key import ApiKey
-    from core.utils.encryption import decrypt
 
     with get_db_context() as db:
+        # Try channels table first (per-org credentials)
+        if org_id:
+            from core.models.channel import Channel
+            from core.models.enums import ChannelType
+
+            channel = (
+                db.query(Channel)
+                .filter(Channel.type == ChannelType.TWILIO, Channel.organization_id == org_id)
+                .first()
+            )
+            if channel and channel.meta_data:
+                meta = channel.meta_data
+                account_sid = meta.get("account_sid")
+                auth_token = meta.get("auth_token")
+                if account_sid and auth_token:
+                    return {"account_sid": account_sid, "auth_token": auth_token}
+
+        # Fallback: api_keys table (legacy, global)
+        from core.models.service_provider import ServiceProvider
+        from core.models.api_key import ApiKey
+        from core.utils.encryption import decrypt
+
         provider = db.query(ServiceProvider).filter(ServiceProvider.name == "twilio").first()
         if not provider:
             logger.warning("Twilio service provider not found in DB")
@@ -308,7 +327,7 @@ def _create_serializer(transport_type: str, call_data: dict):
     """
     if transport_type == "twilio":
         # Reuse credentials cached by BotRunnerService if available
-        twilio_creds = call_data.get("_twilio_creds") or _get_twilio_credentials()
+        twilio_creds = call_data.get("_twilio_creds") or _get_twilio_credentials(org_id=call_data.get("_org_id"))
         return TwilioFrameSerializer(
             stream_sid=call_data["stream_id"],
             call_sid=call_data["call_id"],
