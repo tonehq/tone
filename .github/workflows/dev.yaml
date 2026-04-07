@@ -27,6 +27,8 @@ jobs:
             developer390/tone:${{ github.sha }}
           cache-from: type=registry,ref=developer390/tone:buildcache
           cache-to: type=registry,ref=developer390/tone:buildcache,mode=max
+          secrets: |
+            pip_extra_index=${{ secrets.PIP_EXTRA_INDEX_URL }}
 
       - uses: azure/k8s-set-context@v4
         with:
