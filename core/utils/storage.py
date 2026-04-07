@@ -1,3 +1,5 @@
+from typing import Optional
+
 import boto3
 from botocore.config import Config
 
@@ -25,3 +27,27 @@ def generate_presigned_url(object_key: str, expires_in: int = 3600) -> str:
         },
         ExpiresIn=expires_in,
     )
+
+
+def get_r2_object(object_key: str, range_header: Optional[str] = None) -> dict:
+    """Fetch an object (or byte range) from R2.
+
+    Returns a dict with 'Body' (streaming body), 'ContentLength', 'ContentType',
+    'ContentRange' (if range request), and 'StatusCode'.
+    """
+    client = get_r2_client()
+    params = {"Bucket": settings.R2_BUCKET_NAME, "Key": object_key}
+    if range_header:
+        params["Range"] = range_header
+
+    response = client.get_object(**params)
+
+    result = {
+        "Body": response["Body"],
+        "ContentLength": response["ContentLength"],
+        "ContentType": response.get("ContentType", "audio/mpeg"),
+        "StatusCode": response["ResponseMetadata"]["HTTPStatusCode"],
+    }
+    if "ContentRange" in response:
+        result["ContentRange"] = response["ContentRange"]
+    return result

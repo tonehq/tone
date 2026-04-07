@@ -71,6 +71,65 @@ class VoiceService(BaseService):
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
+    def get_languages_by_provider_id(self, provider_id: int):
+        try:
+            voices = (
+                self.db.query(Voice)
+                .filter(Voice.service_provider_id == provider_id)
+                .all()
+            )
+
+            languages = set()
+            for voice in voices:
+                if voice.language_list:
+                    languages.update(voice.language_list)
+
+            return {"languages": sorted(languages)}
+
+        except Exception as e:
+            logger.error(f"Error getting languages by provider id: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(e),
+            )
+
+    def get_voices_by_language(self, provider_id: int, language: str):
+        try:
+            voices = (
+                self.db.query(Voice)
+                .filter(
+                    Voice.service_provider_id == provider_id,
+                    Voice.language_list.contains([language]),
+                )
+                .all()
+            )
+
+            seen = set()
+            result = []
+            for voice in voices:
+                if voice.voice_id in seen:
+                    continue
+                seen.add(voice.voice_id)
+                result.append({
+                    "id": voice.id,
+                    "uuid": str(voice.uuid),
+                    "voice_id": voice.voice_id,
+                    "name": voice.name,
+                    "gender": voice.gender,
+                    "accent": voice.accent,
+                    "description": voice.description,
+                    "sample_url": voice.sample_url,
+                })
+
+            return {"voices": result}
+
+        except Exception as e:
+            logger.error(f"Error getting voices by language: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(e),
+            )
+
     def upsert_voice(self, data: Dict[str, Any]):
         try:
             voice = Voice(

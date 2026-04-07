@@ -56,12 +56,6 @@
           }
         },
         {
-          "name": "gpt-5-pro",
-          "meta_data": {
-            "model": "gpt-5-pro"
-          }
-        },
-        {
           "name": "gpt-5.1",
           "meta_data": {
             "model": "gpt-5.1"
@@ -74,21 +68,9 @@
           }
         },
         {
-          "name": "gpt-5.2-pro",
-          "meta_data": {
-            "model": "gpt-5.2-pro"
-          }
-        },
-        {
           "name": "o1",
           "meta_data": {
             "model": "o1"
-          }
-        },
-        {
-          "name": "o1-pro",
-          "meta_data": {
-            "model": "o1-pro"
           }
         },
         {
@@ -116,8 +98,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -125,8 +110,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -134,8 +122,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 0
+          },
+          "required": 0,
           "description": "Seed for deterministic generation. Min: 0"
         },
         {
@@ -143,8 +133,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Controls randomness in output. Range: 0.0 to 2.0"
         },
         {
@@ -152,8 +145,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
         },
         {
@@ -161,8 +157,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of completion tokens to generate. Min: 1"
         }
       ]
@@ -217,8 +215,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -226,8 +227,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -235,8 +239,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 0
+          },
+          "required": 0,
           "description": "Seed for deterministic generation. Min: 0"
         },
         {
@@ -244,8 +250,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Controls randomness in output. Range: 0.0 to 2.0"
         },
         {
@@ -253,8 +262,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
         },
         {
@@ -262,8 +274,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of completion tokens to generate. Min: 1"
         }
       ]
@@ -306,15 +320,15 @@
           }
         },
         {
-          "name": "claude-opus-4",
+          "name": "claude-opus-4-20250514",
           "meta_data": {
-            "model": "claude-opus-4"
+            "model": "claude-opus-4-20250514"
           }
         },
         {
-          "name": "claude-sonnet-4",
+          "name": "claude-sonnet-4-20250514",
           "meta_data": {
-            "model": "claude-sonnet-4"
+            "model": "claude-sonnet-4-20250514"
           }
         },
         {
@@ -331,7 +345,7 @@
           "type": "radio",
           "format": "boolean",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Enable Anthropic prompt caching to reduce costs on repeated prompts"
         },
         {
@@ -339,8 +353,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of tokens to generate. Default: 4096. Min: 1"
         },
         {
@@ -348,8 +364,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
           "description": "Controls randomness in output. Range: 0.0 to 1.0"
         },
         {
@@ -357,8 +376,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 0
+          },
+          "required": 0,
           "description": "Top-K sampling parameter. Min: 0"
         },
         {
@@ -366,8 +387,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
         }
       ]
@@ -404,8 +428,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of tokens to generate. Default: 4096. Min: 1"
         },
         {
@@ -413,8 +439,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Controls randomness in output. Range: 0.0 to 2.0"
         },
         {
@@ -422,8 +451,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 0
+          },
+          "required": 0,
           "description": "Top-K sampling parameter. Min: 0"
         },
         {
@@ -431,8 +462,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
         }
       ]
@@ -1261,8 +1295,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -1270,8 +1307,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -1279,8 +1319,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 0
+          },
+          "required": 0,
           "description": "Seed for deterministic generation. Min: 0"
         },
         {
@@ -1288,8 +1330,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Controls randomness in output. Range: 0.0 to 2.0"
         },
         {
@@ -1297,8 +1342,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
         },
         {
@@ -1306,8 +1354,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of tokens to generate. Min: 1"
         },
         {
@@ -1315,8 +1365,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of completion tokens to generate. Min: 1"
         }
       ]
@@ -1335,21 +1387,9 @@
           }
         },
         {
-          "name": "gpt-oss-120b",
-          "meta_data": {
-            "model": "gpt-oss-120b"
-          }
-        },
-        {
           "name": "qwen-3-235b-a22b-instruct-2507",
           "meta_data": {
             "model": "qwen-3-235b-a22b-instruct-2507"
-          }
-        },
-        {
-          "name": "zai-glm-4.7",
-          "meta_data": {
-            "model": "zai-glm-4.7"
           }
         }
       ],
@@ -1359,8 +1399,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -1368,8 +1411,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -1377,8 +1423,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 0
+          },
+          "required": 0,
           "description": "Seed for deterministic generation. Min: 0"
         },
         {
@@ -1386,8 +1434,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Controls randomness in output. Range: 0.0 to 2.0"
         },
         {
@@ -1395,8 +1446,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
         },
         {
@@ -1404,8 +1458,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of tokens to generate. Min: 1"
         },
         {
@@ -1413,8 +1469,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of completion tokens to generate. Min: 1"
         }
       ]
@@ -1445,8 +1503,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -1454,8 +1515,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -1463,8 +1527,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 0
+          },
+          "required": 0,
           "description": "Seed for deterministic generation. Min: 0"
         },
         {
@@ -1472,8 +1538,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Controls randomness in output. Range: 0.0 to 2.0"
         },
         {
@@ -1481,8 +1550,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
         },
         {
@@ -1490,8 +1562,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of tokens to generate. Min: 1"
         },
         {
@@ -1499,8 +1573,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of completion tokens to generate. Min: 1"
         }
       ]
@@ -1531,8 +1607,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -1540,8 +1619,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -1549,8 +1631,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 0
+          },
+          "required": 0,
           "description": "Seed for deterministic generation. Min: 0"
         },
         {
@@ -1558,8 +1642,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Controls randomness in output. Range: 0.0 to 2.0"
         },
         {
@@ -1567,8 +1654,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
         },
         {
@@ -1576,8 +1666,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of tokens to generate. Min: 1"
         },
         {
@@ -1585,8 +1677,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of completion tokens to generate. Min: 1"
         }
       ]
@@ -1635,8 +1729,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -1644,8 +1741,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -1653,8 +1753,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 0
+          },
+          "required": 0,
           "description": "Seed for deterministic generation. Min: 0"
         },
         {
@@ -1662,8 +1764,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Controls randomness in output. Range: 0.0 to 2.0"
         },
         {
@@ -1671,8 +1776,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
         },
         {
@@ -1680,8 +1788,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of tokens to generate. Min: 1"
         },
         {
@@ -1689,8 +1799,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of completion tokens to generate. Min: 1"
         }
       ]
@@ -1829,8 +1941,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -1838,8 +1953,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -1847,8 +1965,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 0
+          },
+          "required": 0,
           "description": "Seed for deterministic generation. Min: 0"
         },
         {
@@ -1856,8 +1976,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Controls randomness in output. Range: 0.0 to 2.0"
         },
         {
@@ -1865,8 +1988,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
         },
         {
@@ -1874,8 +2000,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of tokens to generate. Min: 1"
         },
         {
@@ -1883,8 +2011,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of completion tokens to generate. Min: 1"
         }
       ]
@@ -1939,8 +2069,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -1948,8 +2081,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -1957,8 +2093,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 0
+          },
+          "required": 0,
           "description": "Seed for deterministic generation. Min: 0"
         },
         {
@@ -1966,8 +2104,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Controls randomness in output. Range: 0.0 to 2.0"
         },
         {
@@ -1975,8 +2116,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
         },
         {
@@ -1984,8 +2128,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of tokens to generate. Min: 1"
         },
         {
@@ -1993,8 +2139,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of completion tokens to generate. Min: 1"
         }
       ]
@@ -2097,8 +2245,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -2106,8 +2257,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -2115,8 +2269,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 0
+          },
+          "required": 0,
           "description": "Seed for deterministic generation. Min: 0"
         },
         {
@@ -2124,8 +2280,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Controls randomness in output. Range: 0.0 to 2.0"
         },
         {
@@ -2133,8 +2292,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
         },
         {
@@ -2142,8 +2304,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of tokens to generate. Min: 1"
         },
         {
@@ -2151,8 +2315,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of completion tokens to generate. Min: 1"
         }
       ]
@@ -2204,12 +2370,6 @@
           "name": "gpt-5",
           "meta_data": {
             "model": "gpt-5"
-          }
-        },
-        {
-          "name": "gpt-5-pro",
-          "meta_data": {
-            "model": "gpt-5-pro"
           }
         },
         {
@@ -2501,8 +2661,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -2510,8 +2673,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -2519,8 +2685,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 0
+          },
+          "required": 0,
           "description": "Seed for deterministic generation. Min: 0"
         },
         {
@@ -2528,8 +2696,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Controls randomness in output. Range: 0.0 to 2.0"
         },
         {
@@ -2537,8 +2708,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
         },
         {
@@ -2546,8 +2720,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of tokens to generate. Min: 1"
         },
         {
@@ -2555,8 +2731,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of completion tokens to generate. Min: 1"
         }
       ]
@@ -2767,8 +2945,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -2776,8 +2957,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -2785,8 +2969,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 0
+          },
+          "required": 0,
           "description": "Seed for deterministic generation. Min: 0"
         },
         {
@@ -2794,8 +2980,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Controls randomness in output. Range: 0.0 to 2.0"
         },
         {
@@ -2803,8 +2992,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
         },
         {
@@ -2812,8 +3004,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of tokens to generate. Min: 1"
         },
         {
@@ -2821,8 +3015,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of completion tokens to generate. Min: 1"
         }
       ]
@@ -2835,105 +3031,45 @@
       "api_key_env": "FIREWORKS_API_KEY",
       "models": [
         {
-          "name": "qwen/Qwen1.5 72B Chat",
+          "name": "accounts/fireworks/models/llama-v3p3-70b-instruct",
           "meta_data": {
-            "model": "qwen/Qwen1.5 72B Chat"
+            "model": "accounts/fireworks/models/llama-v3p3-70b-instruct"
           }
         },
         {
-          "name": "qwen/Qwen2 72B Instruct",
+          "name": "accounts/fireworks/models/deepseek-v3p1",
           "meta_data": {
-            "model": "qwen/Qwen2 72B Instruct"
+            "model": "accounts/fireworks/models/deepseek-v3p1"
           }
         },
         {
-          "name": "qwen/Qwen2.5 72B Instruct",
+          "name": "accounts/fireworks/models/deepseek-v3p2",
           "meta_data": {
-            "model": "qwen/Qwen2.5 72B Instruct"
+            "model": "accounts/fireworks/models/deepseek-v3p2"
           }
         },
         {
-          "name": "meta/Llama 3 8B Instruct",
+          "name": "accounts/fireworks/models/mixtral-8x22b-instruct",
           "meta_data": {
-            "model": "meta/Llama 3 8B Instruct"
+            "model": "accounts/fireworks/models/mixtral-8x22b-instruct"
           }
         },
         {
-          "name": "meta/Llama 3.1 8B Instruct",
+          "name": "accounts/fireworks/models/gpt-oss-20b",
           "meta_data": {
-            "model": "meta/Llama 3.1 8B Instruct"
+            "model": "accounts/fireworks/models/gpt-oss-20b"
           }
         },
         {
-          "name": "meta/Llama 3.2 3B Instruct",
+          "name": "accounts/fireworks/models/gpt-oss-120b",
           "meta_data": {
-            "model": "meta/Llama 3.2 3B Instruct"
+            "model": "accounts/fireworks/models/gpt-oss-120b"
           }
         },
         {
-          "name": "meta/Llama 3.3 70B Instruct",
+          "name": "accounts/fireworks/models/kimi-k2-thinking",
           "meta_data": {
-            "model": "meta/Llama 3.3 70B Instruct"
-          }
-        },
-        {
-          "name": "deepseek/DeepSeek-V3.1",
-          "meta_data": {
-            "model": "deepseek/DeepSeek-V3.1"
-          }
-        },
-        {
-          "name": "deepseek/DeepSeek-V3.2",
-          "meta_data": {
-            "model": "deepseek/DeepSeek-V3.2"
-          }
-        },
-        {
-          "name": "mistralai/Mistral 7B Instruct",
-          "meta_data": {
-            "model": "mistralai/Mistral 7B Instruct"
-          }
-        },
-        {
-          "name": "mistralai/Mixtral 8x7B Instruct",
-          "meta_data": {
-            "model": "mistralai/Mixtral 8x7B Instruct"
-          }
-        },
-        {
-          "name": "mistralai/Mixtral MoE 8x22B Instruct",
-          "meta_data": {
-            "model": "mistralai/Mixtral MoE 8x22B Instruct"
-          }
-        },
-        {
-          "name": "openai/GPT-OSS-20B",
-          "meta_data": {
-            "model": "openai/GPT-OSS-20B"
-          }
-        },
-        {
-          "name": "openai/GPT-OSS-120B",
-          "meta_data": {
-            "model": "openai/GPT-OSS-120B"
-          }
-        },
-        {
-          "name": "moonshotai/Kimi K2 Instruct 0905",
-          "meta_data": {
-            "model": "moonshotai/Kimi K2 Instruct 0905"
-          }
-        },
-        {
-          "name": "moonshotai/Kimi K2 Thinking",
-          "meta_data": {
-            "model": "moonshotai/Kimi K2 Thinking"
-          }
-        },
-        {
-          "name": "microsoft/Phi-3 Mini 128k Instruct",
-          "meta_data": {
-            "model": "microsoft/Phi-3 Mini 128k Instruct"
+            "model": "accounts/fireworks/models/kimi-k2-thinking"
           }
         }
       ],
@@ -2943,8 +3079,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -2952,8 +3091,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -2961,8 +3103,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 0
+          },
+          "required": 0,
           "description": "Seed for deterministic generation. Min: 0"
         },
         {
@@ -2970,8 +3114,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Controls randomness in output. Range: 0.0 to 2.0"
         },
         {
@@ -2979,8 +3126,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
         },
         {
@@ -2988,8 +3138,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of tokens to generate. Min: 1"
         },
         {
@@ -2997,8 +3149,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of completion tokens to generate. Min: 1"
         }
       ]
@@ -3137,8 +3291,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -3146,8 +3303,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
         },
         {
@@ -3155,8 +3315,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 0
+          },
+          "required": 0,
           "description": "Seed for deterministic generation. Min: 0"
         },
         {
@@ -3164,8 +3326,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
           "description": "Controls randomness in output. Range: 0.0 to 2.0"
         },
         {
@@ -3173,8 +3338,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
         },
         {
@@ -3182,8 +3350,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of tokens to generate. Min: 1"
         },
         {
@@ -3191,8 +3361,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of completion tokens to generate. Min: 1"
         }
       ]
@@ -3554,7 +3726,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "AWS access key for authentication"
         },
         {
@@ -3563,7 +3735,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "AWS secret key for authentication"
         },
         {
@@ -3572,7 +3744,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "AWS session token for temporary credentials"
         },
         {
@@ -3581,7 +3753,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "AWS region for the Bedrock service"
         },
         {
@@ -3589,8 +3761,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": "min_validator",
-          "required": 1,
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
           "description": "Maximum number of tokens to generate. Min: 1"
         },
         {
@@ -3598,8 +3772,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
           "description": "Controls randomness in output. Range: 0.0 to 1.0"
         },
         {
@@ -3607,8 +3784,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
         }
       ]
@@ -3622,12 +3802,6 @@
       "description": "Deepgram STT",
       "api_key_env": "DEEPGRAM_API_KEY",
       "models": [
-        {
-          "name": "Flux",
-          "meta_data": {
-            "model": "Flux"
-          }
-        },
         {
           "name": "nova-3",
           "meta_data": {
@@ -3714,7 +3888,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Audio sample rate in Hz"
         },
         {
@@ -3723,7 +3897,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for transcription"
         }
       ]
@@ -3773,7 +3947,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for transcription. Default: en"
         },
         {
@@ -3782,7 +3956,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Optional prompt to guide transcription style"
         },
         {
@@ -3791,7 +3965,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Controls randomness in transcription"
         }
       ]
@@ -3823,7 +3997,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for transcription. Default: en"
         },
         {
@@ -3832,7 +4006,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Optional prompt to guide transcription style"
         },
         {
@@ -3841,7 +4015,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Controls randomness in transcription"
         }
       ]
@@ -3854,9 +4028,9 @@
       "api_key_env": "SARVAM_API_KEY",
       "models": [
         {
-          "name": "Saaras",
+          "name": "saarika:v2.5",
           "meta_data": {
-            "model": "Saaras"
+            "model": "saarika:v2.5"
           }
         }
       ],
@@ -3867,7 +4041,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Audio sample rate in Hz"
         },
         {
@@ -3876,7 +4050,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for transcription"
         },
         {
@@ -3885,7 +4059,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Optional prompt to guide transcription"
         }
       ]
@@ -3923,7 +4097,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for transcription. Default: en"
         },
         {
@@ -3932,7 +4106,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Audio sample rate in Hz. Default: 16000"
         },
         {
@@ -3941,7 +4115,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Max wait time in ms for word finalization"
         },
         {
@@ -3950,7 +4124,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Confidence threshold for end of turn detection"
         },
         {
@@ -3959,7 +4133,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Speech model to use. Default: universal-streaming-english"
         }
       ]
@@ -3991,7 +4165,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Audio sample rate in Hz. Default: 16000"
         },
         {
@@ -4000,7 +4174,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for transcription. Default: en"
         }
       ]
@@ -4044,7 +4218,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Audio sample rate in Hz"
         },
         {
@@ -4053,7 +4227,7 @@
           "type": "multiselect",
           "format": "array",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language hints for transcription"
         },
         {
@@ -4062,7 +4236,7 @@
           "type": "radio",
           "format": "boolean",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Enable speaker diarization. Default: false"
         },
         {
@@ -4071,7 +4245,7 @@
           "type": "radio",
           "format": "boolean",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Enable automatic language identification. Default: false"
         }
       ]
@@ -4084,15 +4258,15 @@
       "api_key_env": "ELEVENLABS_API_KEY",
       "models": [
         {
-          "name": "Scribe v2",
+          "name": "scribe_v2",
           "meta_data": {
-            "model": "Scribe v2"
+            "model": "scribe_v2"
           }
         },
         {
-          "name": "Scribe v2 Realtime",
+          "name": "scribe_v2_realtime",
           "meta_data": {
-            "model": "Scribe v2 Realtime"
+            "model": "scribe_v2_realtime"
           }
         }
       ],
@@ -4103,7 +4277,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Audio sample rate in Hz"
         },
         {
@@ -4112,7 +4286,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for transcription"
         },
         {
@@ -4121,7 +4295,7 @@
           "type": "radio",
           "format": "boolean",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Tag audio events in transcription. Default: true"
         }
       ]
@@ -4147,7 +4321,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "API region: us-west or eu-west"
         },
         {
@@ -4156,7 +4330,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Audio sample rate in Hz"
         },
         {
@@ -4165,7 +4339,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for transcription"
         },
         {
@@ -4174,7 +4348,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Endpointing duration in seconds"
         },
         {
@@ -4183,7 +4357,7 @@
           "type": "radio",
           "format": "boolean",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Enable Voice Activity Detection. Default: false"
         }
       ]
@@ -4329,7 +4503,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "gRPC server address. Default: grpc.nvcf.nvidia.com:443"
         },
         {
@@ -4338,7 +4512,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Audio sample rate in Hz"
         },
         {
@@ -4347,7 +4521,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for transcription. Default: en-US"
         }
       ]
@@ -4433,7 +4607,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Audio sample rate in Hz"
         },
         {
@@ -4442,7 +4616,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Domain for speech recognition optimization"
         },
         {
@@ -4451,7 +4625,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for transcription. Default: en"
         },
         {
@@ -4460,7 +4634,7 @@
           "type": "radio",
           "format": "boolean",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Enable speaker diarization. Default: false"
         },
         {
@@ -4469,7 +4643,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Maximum number of speakers for diarization"
         },
         {
@@ -4478,7 +4652,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Maximum transcription delay in seconds"
         },
         {
@@ -4487,7 +4661,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Silence duration to trigger end of utterance in seconds"
         }
       ]
@@ -4537,7 +4711,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Google Cloud credentials JSON string"
         },
         {
@@ -4546,7 +4720,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Path to Google Cloud credentials file"
         },
         {
@@ -4555,7 +4729,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Google Cloud location. Default: global"
         },
         {
@@ -4564,7 +4738,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Audio sample rate in Hz"
         },
         {
@@ -4573,7 +4747,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language(s) for transcription. Default: en-US"
         },
         {
@@ -4582,7 +4756,7 @@
           "type": "radio",
           "format": "boolean",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Enable automatic punctuation. Default: true"
         },
         {
@@ -4591,7 +4765,7 @@
           "type": "radio",
           "format": "boolean",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Enable spoken punctuation. Default: false"
         },
         {
@@ -4600,7 +4774,7 @@
           "type": "radio",
           "format": "boolean",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Enable profanity filtering. Default: false"
         },
         {
@@ -4609,7 +4783,7 @@
           "type": "radio",
           "format": "boolean",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Enable word-level timestamps. Default: false"
         },
         {
@@ -4618,7 +4792,7 @@
           "type": "radio",
           "format": "boolean",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Enable word-level confidence scores. Default: false"
         }
       ]
@@ -4671,7 +4845,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for transcription. Default: en-US"
         },
         {
@@ -4680,7 +4854,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Audio sample rate in Hz"
         },
         {
@@ -4689,7 +4863,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Custom endpoint ID for Azure custom speech models"
         }
       ]
@@ -4729,7 +4903,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for speech synthesis. Default: en"
         },
         {
@@ -4738,7 +4912,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Speech speed: slow, normal, or fast"
         },
         {
@@ -4747,7 +4921,7 @@
           "type": "multiselect",
           "format": "array",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "List of emotion tags to apply to speech"
         }
       ],
@@ -5987,7 +6161,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for speech synthesis. Default: en"
         },
         {
@@ -5996,7 +6170,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Speech speed multiplier. Default: 1.0"
         },
         {
@@ -6005,7 +6179,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Seed for deterministic generation"
         }
       ],
@@ -6038,7 +6212,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Audio sample rate in Hz"
         }
       ],
@@ -7313,7 +7487,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for speech synthesis. Default: en"
         },
         {
@@ -7322,7 +7496,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Speech speed multiplier. Default: 1.0"
         }
       ],
@@ -7457,9 +7631,9 @@
       "api_key_env": "HATHORA_API_KEY",
       "models": [
         {
-          "name": "kokoro",
+          "name": "hexgrad-kokoro-82m",
           "meta_data": {
-            "model": "kokoro"
+            "model": "hexgrad-kokoro-82m"
           }
         },
         {
@@ -7482,7 +7656,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Speech speed multiplier"
         }
       ],
@@ -7490,7 +7664,7 @@
         {
           "name": "Heart",
           "voice_id": "af_heart",
-          "description": "Best overall \u2014 A grade, top recommended",
+          "description": "Best overall — A grade, top recommended",
           "gender": "female",
           "language": "en",
           "sample_url": null,
@@ -7502,7 +7676,7 @@
         {
           "name": "Bella",
           "voice_id": "af_bella",
-          "description": "High quality \u2014 A- grade, fire emoji rated",
+          "description": "High quality — A- grade, fire emoji rated",
           "gender": "female",
           "language": "en",
           "sample_url": null,
@@ -7514,7 +7688,7 @@
         {
           "name": "Nicole",
           "voice_id": "af_nicole",
-          "description": "Headphone style \u2014 B- grade",
+          "description": "Headphone style — B- grade",
           "gender": "female",
           "language": "en",
           "sample_url": null,
@@ -7730,7 +7904,7 @@
         {
           "name": "Emma",
           "voice_id": "bf_emma",
-          "description": "B- grade \u2014 best British female",
+          "description": "B- grade — best British female",
           "gender": "female",
           "language": "en",
           "sample_url": null,
@@ -7826,7 +8000,7 @@
         {
           "name": "Alpha",
           "voice_id": "jf_alpha",
-          "description": "C+ grade \u2014 native Japanese",
+          "description": "C+ grade — native Japanese",
           "gender": "female",
           "language": "ja",
           "sample_url": null,
@@ -8018,7 +8192,7 @@
         {
           "name": "Siwis",
           "voice_id": "ff_siwis",
-          "description": "B- grade \u2014 only French voice",
+          "description": "B- grade — only French voice",
           "gender": "female",
           "language": "fr",
           "sample_url": null,
@@ -8030,7 +8204,7 @@
         {
           "name": "Alpha",
           "voice_id": "hf_alpha",
-          "description": "C grade \u2014 Hindi female",
+          "description": "C grade — Hindi female",
           "gender": "female",
           "language": "hi",
           "sample_url": null,
@@ -8042,7 +8216,7 @@
         {
           "name": "Beta",
           "voice_id": "hf_beta",
-          "description": "C grade \u2014 Hindi female",
+          "description": "C grade — Hindi female",
           "gender": "female",
           "language": "hi",
           "sample_url": null,
@@ -8054,7 +8228,7 @@
         {
           "name": "Omega",
           "voice_id": "hm_omega",
-          "description": "C grade \u2014 Hindi male",
+          "description": "C grade — Hindi male",
           "gender": "male",
           "language": "hi",
           "sample_url": null,
@@ -8066,7 +8240,7 @@
         {
           "name": "Psi",
           "voice_id": "hm_psi",
-          "description": "C grade \u2014 Hindi male",
+          "description": "C grade — Hindi male",
           "gender": "male",
           "language": "hi",
           "sample_url": null,
@@ -8078,7 +8252,7 @@
         {
           "name": "Sara",
           "voice_id": "if_sara",
-          "description": "C grade \u2014 Italian female",
+          "description": "C grade — Italian female",
           "gender": "female",
           "language": "it",
           "sample_url": null,
@@ -8090,7 +8264,7 @@
         {
           "name": "Nicola",
           "voice_id": "im_nicola",
-          "description": "C grade \u2014 Italian male",
+          "description": "C grade — Italian male",
           "gender": "male",
           "language": "it",
           "sample_url": null,
@@ -8653,7 +8827,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for speech synthesis. Default: en"
         },
         {
@@ -8662,7 +8836,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Speech speed multiplier. Default: 1.0"
         },
         {
@@ -8671,7 +8845,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Volume level. Default: 1.0"
         },
         {
@@ -8680,7 +8854,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Pitch adjustment. Default: 0"
         },
         {
@@ -8689,7 +8863,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Emotion style for speech"
         }
       ],
@@ -13490,7 +13664,7 @@
         },
         {
           "name": "Professional Female Host",
-          "voice_id": "Cantonese_ProfessionalHost\uff08F)",
+          "voice_id": "Cantonese_ProfessionalHost（F)",
           "description": "A neutral and professional adult female host in Cantonese.",
           "gender": null,
           "language": null,
@@ -13592,7 +13766,7 @@
         },
         {
           "name": "Professional Male Host",
-          "voice_id": "Cantonese_ProfessionalHost\uff08M)",
+          "voice_id": "Cantonese_ProfessionalHost（M)",
           "description": "A neutral and professional adult male host in Cantonese.",
           "gender": null,
           "language": null,
@@ -25661,7 +25835,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for speech synthesis. Default: en"
         },
         {
@@ -25670,7 +25844,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Speed control factor. Default: 1.0"
         },
         {
@@ -25679,7 +25853,7 @@
           "type": "radio",
           "format": "boolean",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Enable reduced latency mode. Default: false"
         },
         {
@@ -25688,7 +25862,7 @@
           "type": "radio",
           "format": "boolean",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Insert pauses at bracketed text. Default: false"
         },
         {
@@ -25697,7 +25871,7 @@
           "type": "radio",
           "format": "boolean",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Phonemize text between brackets. Default: false"
         }
       ],
@@ -32582,7 +32756,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for speech synthesis. Default: en"
         },
         {
@@ -32590,8 +32764,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": -0.75,
+            "max": 0.75
+          },
+          "required": 0,
           "description": "Pitch adjustment. Range: -0.75 to 0.75. Default: 0.0"
         },
         {
@@ -32599,8 +32776,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.3,
+            "max": 3.0
+          },
+          "required": 0,
           "description": "Speech pace multiplier. Range: 0.3 to 3.0. Default: 1.0"
         },
         {
@@ -32608,8 +32788,11 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
-          "required": 1,
+          "validator": {
+            "min": 0.1,
+            "max": 3.0
+          },
+          "required": 0,
           "description": "Loudness level. Range: 0.1 to 3.0. Default: 1.0"
         },
         {
@@ -32618,7 +32801,7 @@
           "type": "radio",
           "format": "boolean",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Enable text preprocessing. Default: false"
         },
         {
@@ -32627,7 +32810,7 @@
           "type": "input number",
           "format": "float",
           "validator": "range_validator",
-          "required": 1,
+          "required": 0,
           "description": "Temperature for generation. Range: 0.01 to 1.0. Default: 0.6"
         }
       ],
@@ -39245,7 +39428,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for speech synthesis. Default: en"
         },
         {
@@ -39254,7 +39437,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Latency mode: normal or low. Default: normal"
         },
         {
@@ -39263,7 +39446,7 @@
           "type": "radio",
           "format": "boolean",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Enable text normalization. Default: true"
         },
         {
@@ -39272,7 +39455,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Prosody speed multiplier. Default: 1.0"
         },
         {
@@ -39281,7 +39464,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Prosody volume adjustment. Default: 0"
         }
       ],
@@ -39423,7 +39606,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Controls variation in speech generation"
         },
         {
@@ -39432,14 +39615,14 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Speaking rate multiplier"
         }
       ],
       "voices": [
         {
           "name": "Ashley",
-          "voice_id": "ashley",
+          "voice_id": "Ashley",
           "description": "Warm, natural American female (default)",
           "gender": "female",
           "language": "en",
@@ -39451,7 +39634,7 @@
         },
         {
           "name": "Alex",
-          "voice_id": "alex",
+          "voice_id": "Alex",
           "description": "Conversational American male",
           "gender": "male",
           "language": "en",
@@ -39463,7 +39646,7 @@
         },
         {
           "name": "Blake",
-          "voice_id": "blake",
+          "voice_id": "Blake",
           "description": "Audiobook narrator",
           "gender": "male",
           "language": "en",
@@ -39475,7 +39658,7 @@
         },
         {
           "name": "Carter",
-          "voice_id": "carter",
+          "voice_id": "Carter",
           "description": "Radio announcer, ads",
           "gender": "male",
           "language": "en",
@@ -39487,7 +39670,7 @@
         },
         {
           "name": "Craig",
-          "voice_id": "craig",
+          "voice_id": "Craig",
           "description": "American male",
           "gender": "male",
           "language": "en",
@@ -39499,7 +39682,7 @@
         },
         {
           "name": "Deborah",
-          "voice_id": "deborah",
+          "voice_id": "Deborah",
           "description": "American female",
           "gender": "female",
           "language": "en",
@@ -39511,7 +39694,7 @@
         },
         {
           "name": "Dennis",
-          "voice_id": "dennis",
+          "voice_id": "Dennis",
           "description": "Warm conversationalist",
           "gender": "male",
           "language": "en",
@@ -39523,7 +39706,7 @@
         },
         {
           "name": "Diego",
-          "voice_id": "diego",
+          "voice_id": "Diego",
           "description": "Soothing, gentle Mexican male",
           "gender": "male",
           "language": "en",
@@ -39535,7 +39718,7 @@
         },
         {
           "name": "Dominus",
-          "voice_id": "dominus",
+          "voice_id": "Dominus",
           "description": "Character voice",
           "gender": "male",
           "language": "en",
@@ -39547,7 +39730,7 @@
         },
         {
           "name": "Edward",
-          "voice_id": "edward",
+          "voice_id": "Edward",
           "description": "Fast-talking, emphatic American male",
           "gender": "male",
           "language": "en",
@@ -39559,7 +39742,7 @@
         },
         {
           "name": "Elizabeth",
-          "voice_id": "elizabeth",
+          "voice_id": "Elizabeth",
           "description": "Professional narrator",
           "gender": "female",
           "language": "en",
@@ -39571,7 +39754,7 @@
         },
         {
           "name": "Hades",
-          "voice_id": "hades",
+          "voice_id": "Hades",
           "description": "Character voice",
           "gender": "male",
           "language": "en",
@@ -39583,7 +39766,7 @@
         },
         {
           "name": "Heitor",
-          "voice_id": "heitor",
+          "voice_id": "Heitor",
           "description": "Brazilian male",
           "gender": "male",
           "language": "en",
@@ -39595,7 +39778,7 @@
         },
         {
           "name": "Julia",
-          "voice_id": "julia",
+          "voice_id": "Julia",
           "description": "American female",
           "gender": "female",
           "language": "en",
@@ -39607,7 +39790,7 @@
         },
         {
           "name": "Luna",
-          "voice_id": "luna",
+          "voice_id": "Luna",
           "description": "Meditation / calm",
           "gender": "female",
           "language": "en",
@@ -39619,7 +39802,7 @@
         },
         {
           "name": "Maite",
-          "voice_id": "maite",
+          "voice_id": "Maite",
           "description": "Brazilian female",
           "gender": "female",
           "language": "en",
@@ -39631,7 +39814,7 @@
         },
         {
           "name": "Mark",
-          "voice_id": "mark",
+          "voice_id": "Mark",
           "description": "American male",
           "gender": "male",
           "language": "en",
@@ -39643,7 +39826,7 @@
         },
         {
           "name": "Olivia",
-          "voice_id": "olivia",
+          "voice_id": "Olivia",
           "description": "Upbeat, friendly British female",
           "gender": "female",
           "language": "en",
@@ -39655,7 +39838,7 @@
         },
         {
           "name": "Pixie",
-          "voice_id": "pixie",
+          "voice_id": "Pixie",
           "description": "Character voice",
           "gender": "female",
           "language": "en",
@@ -39667,7 +39850,7 @@
         },
         {
           "name": "Priya",
-          "voice_id": "priya",
+          "voice_id": "Priya",
           "description": "South Asian female",
           "gender": "female",
           "language": "en",
@@ -39679,7 +39862,7 @@
         },
         {
           "name": "Ronald",
-          "voice_id": "ronald",
+          "voice_id": "Ronald",
           "description": "American male",
           "gender": "male",
           "language": "en",
@@ -39691,7 +39874,7 @@
         },
         {
           "name": "Sarah",
-          "voice_id": "sarah",
+          "voice_id": "Sarah",
           "description": "American female",
           "gender": "female",
           "language": "en",
@@ -39703,7 +39886,7 @@
         },
         {
           "name": "Shaun",
-          "voice_id": "shaun",
+          "voice_id": "Shaun",
           "description": "American male",
           "gender": "male",
           "language": "en",
@@ -39715,7 +39898,7 @@
         },
         {
           "name": "Svetlana",
-          "voice_id": "svetlana",
+          "voice_id": "Svetlana",
           "description": "Soft, breathy (ASMR)",
           "gender": "female",
           "language": "en",
@@ -39727,7 +39910,7 @@
         },
         {
           "name": "Theodore",
-          "voice_id": "theodore",
+          "voice_id": "Theodore",
           "description": "American male",
           "gender": "male",
           "language": "en",
@@ -39739,7 +39922,7 @@
         },
         {
           "name": "Timothy",
-          "voice_id": "timothy",
+          "voice_id": "Timothy",
           "description": "American male",
           "gender": "male",
           "language": "en",
@@ -39751,7 +39934,7 @@
         },
         {
           "name": "Wendy",
-          "voice_id": "wendy",
+          "voice_id": "Wendy",
           "description": "American female",
           "gender": "female",
           "language": "en",
@@ -40124,7 +40307,7 @@
         {
           "name": "Voice 1",
           "voice_id": "hi_1",
-          "description": "Hindi female \u2014 tts-1.5 only",
+          "description": "Hindi female — tts-1.5 only",
           "gender": "female",
           "language": "hi",
           "sample_url": null,
@@ -40136,7 +40319,7 @@
         {
           "name": "Voice 2",
           "voice_id": "hi_2",
-          "description": "Hindi male \u2014 tts-1.5 only",
+          "description": "Hindi male — tts-1.5 only",
           "gender": "male",
           "language": "hi",
           "sample_url": null,
@@ -40148,7 +40331,7 @@
         {
           "name": "Voice 1",
           "voice_id": "ar_1",
-          "description": "Arabic female \u2014 tts-1.5 only",
+          "description": "Arabic female — tts-1.5 only",
           "gender": "female",
           "language": "ar",
           "sample_url": null,
@@ -40160,7 +40343,7 @@
         {
           "name": "Voice 2",
           "voice_id": "ar_2",
-          "description": "Arabic male \u2014 tts-1.5 only",
+          "description": "Arabic male — tts-1.5 only",
           "gender": "male",
           "language": "ar",
           "sample_url": null,
@@ -40172,7 +40355,7 @@
         {
           "name": "Voice 1",
           "voice_id": "he_1",
-          "description": "Hebrew female \u2014 tts-1.5 only",
+          "description": "Hebrew female — tts-1.5 only",
           "gender": "female",
           "language": "he",
           "sample_url": null,
@@ -40184,7 +40367,7 @@
         {
           "name": "Voice 2",
           "voice_id": "he_2",
-          "description": "Hebrew male \u2014 tts-1.5 only",
+          "description": "Hebrew male — tts-1.5 only",
           "gender": "male",
           "language": "he",
           "sample_url": null,
@@ -40228,7 +40411,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Instructions to guide TTS voice style and behavior"
         },
         {
@@ -40237,7 +40420,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Speech speed multiplier"
         }
       ],
@@ -41155,7 +41338,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Audio sample rate in Hz. Default: 22050"
         }
       ],
@@ -41218,7 +41401,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "gRPC server address. Default: grpc.nvcf.nvidia.com:443"
         },
         {
@@ -41227,7 +41410,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for speech synthesis. Default: en-US"
         },
         {
@@ -41236,7 +41419,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Audio quality setting. Default: 20"
         }
       ],
@@ -42380,7 +42563,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for speech synthesis. Default: en"
         },
         {
@@ -42389,7 +42572,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Speech speed multiplier. Default: 1.0"
         }
       ],
@@ -42455,7 +42638,7 @@
           ]
         },
         {
-          "name": "Alexei (\u0410\u043b\u0435\u043a\u0441\u0435\u0439) ",
+          "name": "Alexei (Алексей) ",
           "voice_id": "d4a01414-c3e2-4eb5-8a15-4833ba691e60",
           "description": null,
           "gender": "Male",
@@ -42551,7 +42734,7 @@
           ]
         },
         {
-          "name": "Chae-won (\ucc44\uc6d0)",
+          "name": "Chae-won (채원)",
           "voice_id": "bb044b55-eefb-422c-b79a-606bcc9e94bc",
           "description": null,
           "gender": null,
@@ -42599,7 +42782,7 @@
           ]
         },
         {
-          "name": "Do-yun (\ub3c4\uc724)",
+          "name": "Do-yun (도윤)",
           "voice_id": "1b3e6ef8-0dda-4570-92c9-34cf80b139e2",
           "description": null,
           "gender": null,
@@ -42659,7 +42842,7 @@
           ]
         },
         {
-          "name": "Fahad (\u0641\u0647\u062f)",
+          "name": "Fahad (فهد)",
           "voice_id": "01333576-651c-4f7e-add6-03c72512e1be",
           "description": null,
           "gender": "MSA",
@@ -42731,7 +42914,7 @@
           ]
         },
         {
-          "name": "Ha-yoon (\ud558\uc724)",
+          "name": "Ha-yoon (하윤)",
           "voice_id": "05198625-352c-419d-ae9c-ef554bf0d8b8",
           "description": null,
           "gender": null,
@@ -42755,7 +42938,7 @@
           ]
         },
         {
-          "name": "Hikaru (\u3072\u304b\u308b)",
+          "name": "Hikaru (ひかる)",
           "voice_id": "17d48fcc-e563-4119-ba91-2cc97c212135",
           "description": null,
           "gender": null,
@@ -42767,7 +42950,7 @@
           ]
         },
         {
-          "name": "Hiroto (\u5927\u7fd4)",
+          "name": "Hiroto (大翔)",
           "voice_id": "469fc9fc-a445-471a-a67a-e37f5390a89a",
           "description": null,
           "gender": "Japanese",
@@ -42839,7 +43022,7 @@
           ]
         },
         {
-          "name": "Jo\u00e3o",
+          "name": "João",
           "voice_id": "32cac707-e77b-48b1-bb3d-0933efdfefa1",
           "description": null,
           "gender": "Male",
@@ -42911,7 +43094,7 @@
           ]
         },
         {
-          "name": "Mei (\u3081\u3044)",
+          "name": "Mei (めい)",
           "voice_id": "8488b90d-7b36-4da4-9ae1-4213263a539e",
           "description": null,
           "gender": "Calm",
@@ -42935,7 +43118,7 @@
           ]
         },
         {
-          "name": "Min-seo (\ubbfc\uc11c)",
+          "name": "Min-seo (민서)",
           "voice_id": "953a2ca8-4ea7-4dcb-8729-a4c4e4cff905",
           "description": null,
           "gender": null,
@@ -43007,7 +43190,7 @@
           ]
         },
         {
-          "name": "Sakura (\u3055\u304f\u3089)",
+          "name": "Sakura (さくら)",
           "voice_id": "019a2af5-6d97-4be8-a459-f4f46fda1949",
           "description": null,
           "gender": "Bright",
@@ -43031,7 +43214,7 @@
           ]
         },
         {
-          "name": "Seo-jun\t(\uc11c\uc900)",
+          "name": "Seo-jun\t(서준)",
           "voice_id": "96071f6b-798f-4475-9fe0-2d3382e57756",
           "description": null,
           "gender": null,
@@ -43043,7 +43226,7 @@
           ]
         },
         {
-          "name": "Seo-yeon (\uc11c\uc5f0)",
+          "name": "Seo-yeon (서연)",
           "voice_id": "ea418300-6e49-4770-b92a-6fd6473f49bd",
           "description": null,
           "gender": "Korean",
@@ -43091,7 +43274,7 @@
           ]
         },
         {
-          "name": "Vihaan (\u0935\u093f\u0939\u093e\u0928)",
+          "name": "Vihaan (विहान)",
           "voice_id": "2948b198-a403-4a9b-bd57-0e96396e179e",
           "description": null,
           "gender": "Hindi",
@@ -43115,7 +43298,7 @@
           ]
         },
         {
-          "name": "Yueyue (\u6708\u6708) ",
+          "name": "Yueyue (月月) ",
           "voice_id": "196867bb-cf33-4764-b2f1-0035bb470147",
           "description": null,
           "gender": "Female",
@@ -43127,7 +43310,7 @@
           ]
         },
         {
-          "name": "\u82e5\u66e6 (Ru\u00f2x\u012b)",
+          "name": "若曦 (Ruòxī)",
           "voice_id": "74034e7c-1e48-4306-83c0-fdd1005808a5",
           "description": null,
           "gender": "Chinese",
@@ -43161,7 +43344,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for speech synthesis. Default: en"
         }
       ],
@@ -43291,7 +43474,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Voice description to guide emotional tone"
         },
         {
@@ -43300,7 +43483,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Speech speed multiplier"
         },
         {
@@ -43309,7 +43492,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Trailing silence duration in seconds"
         }
       ],
@@ -44803,7 +44986,7 @@
           ]
         },
         {
-          "name": "A Voz do Sil\u00eancio",
+          "name": "A Voz do Silêncio",
           "voice_id": "022b3a94-5b3b-4f31-bc1b-049474d0df06",
           "description": null,
           "gender": "female",
@@ -45265,7 +45448,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for speech synthesis"
         },
         {
@@ -45274,7 +45457,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Voice stability setting"
         },
         {
@@ -45283,7 +45466,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Voice similarity boost setting"
         },
         {
@@ -45292,7 +45475,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Style exaggeration setting"
         },
         {
@@ -45301,7 +45484,7 @@
           "type": "radio",
           "format": "boolean",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Enable speaker boost for clarity"
         },
         {
@@ -45310,7 +45493,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Speech speed multiplier"
         },
         {
@@ -45319,7 +45502,7 @@
           "type": "radio",
           "format": "boolean",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Enable auto mode for voice settings. Default: true"
         },
         {
@@ -45328,7 +45511,7 @@
           "type": "radio",
           "format": "boolean",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Enable SSML parsing in input text"
         }
       ],
@@ -47159,7 +47342,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for speech synthesis. Default: en"
         },
         {
@@ -47168,7 +47351,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Custom instructions for voice generation. Max 1000 characters"
         }
       ],
@@ -47178,11 +47361,11 @@
           "voice_id": "147319",
           "description": "A rough, charismatic pirate captain with a booming voice and a mischievous laugh, full of sea slang and swagger.",
           "gender": null,
-          "language": 1,
+          "language": "English (US)",
           "sample_url": null,
           "accent": null,
           "language_list": [
-            1
+            "English (US)"
           ]
         },
         {
@@ -47190,11 +47373,11 @@
           "voice_id": "147320",
           "description": "A polite, refined British butler with impeccable diction and a dry wit, speaking calmly and respectfully.",
           "gender": null,
-          "language": 35,
+          "language": "English (GB)",
           "sample_url": null,
           "accent": null,
           "language_list": [
-            35
+            "English (GB)"
           ]
         },
         {
@@ -47202,11 +47385,11 @@
           "voice_id": "147321",
           "description": "A flamboyant cartoon villain with dramatic flair, gleefully evil but funny, with exaggerated intonation.",
           "gender": null,
-          "language": 1,
+          "language": "English (US)",
           "sample_url": null,
           "accent": null,
           "language_list": [
-            1
+            "English (US)"
           ]
         },
         {
@@ -47214,11 +47397,11 @@
           "voice_id": "147323",
           "description": "A noble knight with a deep, commanding voice and chivalric honor, speaking with high medieval grandeur",
           "gender": null,
-          "language": 1,
+          "language": "English (US)",
           "sample_url": null,
           "accent": null,
           "language_list": [
-            1
+            "English (US)"
           ]
         },
         {
@@ -47226,11 +47409,11 @@
           "voice_id": "147324",
           "description": "A cheerful young cartoon hero, full of energy, optimism, and slightly exaggerated speech patterns with young voice.",
           "gender": null,
-          "language": 1,
+          "language": "English (US)",
           "sample_url": null,
           "accent": null,
           "language_list": [
-            1
+            "English (US)"
           ]
         },
         {
@@ -47238,11 +47421,11 @@
           "voice_id": "147325",
           "description": "A disciplined, fearless space commander. Firm tone, tactical phrasing, bold and reassuring. Resolute but inspiring.",
           "gender": null,
-          "language": 1,
+          "language": "English (US)",
           "sample_url": null,
           "accent": null,
           "language_list": [
-            1
+            "English (US)"
           ]
         },
         {
@@ -47250,23 +47433,23 @@
           "voice_id": "147328",
           "description": "A lively radio DJ with charisma and rhythm. Smooth transitions, upbeat pacing, and a smile audible through every word.",
           "gender": null,
-          "language": 1,
+          "language": "English (US)",
           "sample_url": null,
           "accent": null,
           "language_list": [
-            1
+            "English (US)"
           ]
         },
         {
           "name": "Noir Detective",
           "voice_id": "147331",
-          "description": "A weary detective with a gravelly voice and slow drawl. Cynical but sharp, like a man who\u2019s seen too much and trusts too little.",
+          "description": "A weary detective with a gravelly voice and slow drawl. Cynical but sharp, like a man who’s seen too much and trusts too little.",
           "gender": null,
-          "language": 1,
+          "language": "English (US)",
           "sample_url": null,
           "accent": null,
           "language_list": [
-            1
+            "English (US)"
           ]
         },
         {
@@ -47274,11 +47457,11 @@
           "voice_id": "147332",
           "description": "A deep, cinematic trailer narrator. Resonant voice with perfect pacing, bold emphasis, and rising suspense. Speaks with awe and gravity.",
           "gender": null,
-          "language": 1,
+          "language": "English (US)",
           "sample_url": null,
           "accent": null,
           "language_list": [
-            1
+            "English (US)"
           ]
         },
         {
@@ -47286,11 +47469,11 @@
           "voice_id": "147334",
           "description": "A booming, theatrical supervillain voice. Grand, mocking, filled with gleeful menace and unstoppable arrogance.",
           "gender": null,
-          "language": 1,
+          "language": "English (US)",
           "sample_url": null,
           "accent": null,
           "language_list": [
-            1
+            "English (US)"
           ]
         },
         {
@@ -47298,11 +47481,11 @@
           "voice_id": "147337",
           "description": "An excited sports announcer with sharp articulation and electric energy. Full of momentum, cheering tone, and lively reactions.",
           "gender": null,
-          "language": 1,
+          "language": "English (US)",
           "sample_url": null,
           "accent": null,
           "language_list": [
-            1
+            "English (US)"
           ]
         },
         {
@@ -47310,11 +47493,11 @@
           "voice_id": "147338",
           "description": "A soft, breathy ASMR voice. Gentle enunciation, calm pauses, and whispering rhythm to create a deeply relaxing tone.",
           "gender": null,
-          "language": 1,
+          "language": "English (US)",
           "sample_url": null,
           "accent": null,
           "language_list": [
-            1
+            "English (US)"
           ]
         },
         {
@@ -47322,11 +47505,11 @@
           "voice_id": "147339",
           "description": "A clear, professional news anchor voice. Balanced pacing, confident tone, and neutral warmth suited for global audiences.",
           "gender": null,
-          "language": 1,
+          "language": "English (US)",
           "sample_url": null,
           "accent": null,
           "language_list": [
-            1
+            "English (US)"
           ]
         },
         {
@@ -47334,11 +47517,11 @@
           "voice_id": "147342",
           "description": "A cheerful, determined teenage anime heroine with bright energy and emotional range. Slightly high-pitched, passionate, and expressive.",
           "gender": null,
-          "language": 1,
+          "language": "English (US)",
           "sample_url": null,
           "accent": null,
           "language_list": [
-            1
+            "English (US)"
           ]
         },
         {
@@ -47346,11 +47529,11 @@
           "voice_id": "147474",
           "description": "A powerful, booming voice that commands instant attention. The texture is rough, gravelly, and projects with intense volume and clipped, sharp enunciation. Every syllable is delivered with aggressive authority, designed to motivate through intimidation. The pace is rapid, leaving no room for hesitation, conveying urgency and unwavering discipline. The overall impression is one of absolute control",
           "gender": null,
-          "language": 1,
+          "language": "English (US)",
           "sample_url": null,
           "accent": null,
           "language_list": [
-            1
+            "English (US)"
           ]
         },
         {
@@ -47358,11 +47541,11 @@
           "voice_id": "148859",
           "description": "An eccentric, manic scientist, male or female, speaking fast with bursts of energy, laughter, and excitement. Tone conveys chaotic genius, curiosity, and obsessive passion. Words tumble over one another, filled with dramatic highs and occasional self-amusement. Perfect for humorous, intense, or imaginative scenarios.",
           "gender": null,
-          "language": 1,
+          "language": "English (US)",
           "sample_url": null,
           "accent": null,
           "language_list": [
-            1
+            "English (US)"
           ]
         },
         {
@@ -47370,11 +47553,11 @@
           "voice_id": "144295",
           "description": "Smooth international voice for multilingual videos",
           "gender": null,
-          "language": 35,
+          "language": "English (GB)",
           "sample_url": null,
           "accent": null,
           "language_list": [
-            35
+            "English (GB)"
           ]
         }
       ]
@@ -47400,7 +47583,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for speech synthesis"
         }
       ],
@@ -47414,7 +47597,16 @@
           "sample_url": null,
           "accent": "British (UK)",
           "language_list": [
-            "en,fr,es,it,de,pt,ru,ro,hy,he"
+            "en",
+            "fr",
+            "es",
+            "it",
+            "de",
+            "pt",
+            "ru",
+            "ro",
+            "hy",
+            "he"
           ]
         },
         {
@@ -47426,7 +47618,15 @@
           "sample_url": null,
           "accent": "American (US)",
           "language_list": [
-            "en,fr,es,it,de,pt,hy,ar,ru"
+            "en",
+            "fr",
+            "es",
+            "it",
+            "de",
+            "pt",
+            "hy",
+            "ar",
+            "ru"
           ]
         },
         {
@@ -47438,7 +47638,16 @@
           "sample_url": null,
           "accent": "British (UK)",
           "language_list": [
-            "en,fr,es,it,de,pt,hy,ro,he,hi"
+            "en",
+            "fr",
+            "es",
+            "it",
+            "de",
+            "pt",
+            "hy",
+            "ro",
+            "he",
+            "hi"
           ]
         },
         {
@@ -47450,7 +47659,14 @@
           "sample_url": null,
           "accent": "American (US)",
           "language_list": [
-            "en,fr,es,it,de,pt,ru,hy"
+            "en",
+            "fr",
+            "es",
+            "it",
+            "de",
+            "pt",
+            "ru",
+            "hy"
           ]
         },
         {
@@ -47462,7 +47678,13 @@
           "sample_url": null,
           "accent": "Australian (AU)",
           "language_list": [
-            "en,fr,es,it,de,pt,ar"
+            "en",
+            "fr",
+            "es",
+            "it",
+            "de",
+            "pt",
+            "ar"
           ]
         },
         {
@@ -47474,7 +47696,17 @@
           "sample_url": null,
           "accent": "Indian (IN)",
           "language_list": [
-            "en,fr,es,it,de,pt,ru,ar,ro,he,hi"
+            "en",
+            "fr",
+            "es",
+            "it",
+            "de",
+            "pt",
+            "ru",
+            "ar",
+            "ro",
+            "he",
+            "hi"
           ]
         },
         {
@@ -47486,7 +47718,17 @@
           "sample_url": null,
           "accent": "British (UK)",
           "language_list": [
-            "en,fr,es,de,pt,it,ar,ru,hy,hi,he"
+            "en",
+            "fr",
+            "es",
+            "de",
+            "pt",
+            "it",
+            "ar",
+            "ru",
+            "hy",
+            "hi",
+            "he"
           ]
         },
         {
@@ -47498,7 +47740,16 @@
           "sample_url": null,
           "accent": "British (UK)",
           "language_list": [
-            "en,hy,de,es,it,pt,ar,ru,ro,hi"
+            "en",
+            "hy",
+            "de",
+            "es",
+            "it",
+            "pt",
+            "ar",
+            "ru",
+            "ro",
+            "hi"
           ]
         },
         {
@@ -47510,7 +47761,15 @@
           "sample_url": null,
           "accent": "British (UK)",
           "language_list": [
-            "en,it,es,fr,de,pt,ru,ro,hy"
+            "en",
+            "it",
+            "es",
+            "fr",
+            "de",
+            "pt",
+            "ru",
+            "ro",
+            "hy"
           ]
         },
         {
@@ -47522,7 +47781,17 @@
           "sample_url": null,
           "accent": "American (US)",
           "language_list": [
-            "en,fr,it,es,de,pt,ar,ru,ro,hy,hi"
+            "en",
+            "fr",
+            "it",
+            "es",
+            "de",
+            "pt",
+            "ar",
+            "ru",
+            "ro",
+            "hy",
+            "hi"
           ]
         }
       ]
@@ -47566,7 +47835,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "AWS access key ID for authentication"
         },
         {
@@ -47575,7 +47844,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "AWS session token for temporary credentials"
         },
         {
@@ -47584,7 +47853,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "AWS region for the Polly service"
         },
         {
@@ -47593,7 +47862,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Polly voice engine type"
         },
         {
@@ -47602,7 +47871,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for speech synthesis. Default: en"
         },
         {
@@ -47611,7 +47880,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Voice pitch adjustment"
         },
         {
@@ -47620,7 +47889,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Speech rate adjustment"
         },
         {
@@ -47629,7 +47898,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Volume adjustment"
         }
       ],
@@ -48031,7 +48300,7 @@
           ]
         },
         {
-          "name": "C\u00e9line",
+          "name": "Céline",
           "voice_id": "Celine",
           "description": null,
           "gender": "Female",
@@ -48043,7 +48312,7 @@
           ]
         },
         {
-          "name": "L\u00e9a",
+          "name": "Léa",
           "voice_id": "Lea",
           "description": null,
           "gender": "Female",
@@ -48055,7 +48324,7 @@
           ]
         },
         {
-          "name": "R\u00e9mi",
+          "name": "Rémi",
           "voice_id": "Remi",
           "description": null,
           "gender": "Male",
@@ -48295,7 +48564,7 @@
           ]
         },
         {
-          "name": "Vit\u00f3ria",
+          "name": "Vitória",
           "voice_id": "Vitoria",
           "description": null,
           "gender": "Female",
@@ -48319,7 +48588,7 @@
           ]
         },
         {
-          "name": "In\u00eas",
+          "name": "Inês",
           "voice_id": "Ines",
           "description": null,
           "gender": "Female",
@@ -48367,7 +48636,7 @@
           ]
         },
         {
-          "name": "Andr\u00e9s",
+          "name": "Andrés",
           "voice_id": "Andres",
           "description": null,
           "gender": "Male",
@@ -48503,7 +48772,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Google Cloud credentials JSON string"
         },
         {
@@ -48512,7 +48781,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Path to Google Cloud credentials file"
         },
         {
@@ -48521,7 +48790,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Google Cloud location"
         },
         {
@@ -48530,7 +48799,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for speech synthesis. Default: en"
         },
         {
@@ -48539,7 +48808,7 @@
           "type": "input number",
           "format": "float",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Speaking rate multiplier"
         }
       ],
@@ -49020,7 +49289,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Speech emphasis level"
         },
         {
@@ -49029,7 +49298,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Language for speech synthesis. Default: en-US"
         },
         {
@@ -49038,7 +49307,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Voice pitch adjustment"
         },
         {
@@ -49047,7 +49316,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Speech rate adjustment"
         },
         {
@@ -49056,7 +49325,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Speaking role for voice style"
         },
         {
@@ -49065,7 +49334,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Voice style preset"
         },
         {
@@ -49074,7 +49343,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Degree of style application"
         },
         {
@@ -49083,7 +49352,7 @@
           "type": "input",
           "format": "string",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Volume adjustment"
         }
       ],
@@ -49652,7 +49921,7 @@
           "type": "input number",
           "format": "integer",
           "validator": null,
-          "required": 1,
+          "required": 0,
           "description": "Audio sample rate in Hz. Default: 16000"
         }
       ],

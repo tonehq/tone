@@ -36,3 +36,20 @@ export const getVoicesByProvider = async (
   );
   return data;
 };
+
+export const getLanguagesByProvider = async (serviceProviderId: number): Promise<string[]> => {
+  const { data } = await axiosInstance.get('/voice/get_languages_by_provider', {
+    params: { service_provider_id: serviceProviderId },
+  });
+  return Array.isArray(data) ? data : (data?.languages ?? []);
+};
+
+export const getVoicesByLanguage = async (
+  serviceProviderId: number,
+  language: string,
+): Promise<VoiceItem[]> => {
+  const { data } = await axiosInstance.get('/voice/get_voices_by_language', {
+    params: { service_provider_id: serviceProviderId, language },
+  });
+  return Array.isArray(data) ? data : (data?.voices ?? []);
+};

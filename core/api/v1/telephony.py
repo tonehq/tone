@@ -109,8 +109,9 @@ async def telephony_websocket(websocket: WebSocket):
         }
 
     except Exception as e:
+        import traceback
         logger.warning(
-            "Bot runner service failed, calling bot without pre-parsed data: %s", e
+            f"Bot runner service failed, calling bot without pre-parsed data: {e}\n{traceback.format_exc()}"
         )
 
     # Import pipecat + bot only for in-process mode (not needed for subprocess path)
