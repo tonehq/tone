@@ -72,14 +72,44 @@ class BotRunnerService(BaseService):
 
         return result
 
-    def _get_twilio_credentials(self) -> dict:
-        """Fetch Twilio account_sid and auth_token from the DB (api_keys table)."""
+    def _get_twilio_credentials_from_channel(self, org_id=None) -> dict:
+        """Fetch Twilio account_sid and auth_token from the channels table (org-scoped).
+
+        Looks up the Twilio channel for the given org_id and extracts credentials
+        from channel.meta_data. This is the preferred method as it supports
+        per-organization Twilio accounts.
+
+        Falls back to _get_twilio_credentials_from_api_keys() if no channel found.
+        """
+        from core.models.channel import Channel
+        from core.models.enums import ChannelType
+
+        if org_id:
+            channel = (
+                self.db.query(Channel)
+                .filter(Channel.type == ChannelType.TWILIO, Channel.organization_id == org_id)
+                .first()
+            )
+            if channel and channel.meta_data:
+                meta = channel.meta_data
+                account_sid = meta.get("account_sid")
+                auth_token = meta.get("auth_token")
+                if account_sid and auth_token:
+                    return {"account_sid": account_sid, "auth_token": auth_token}
+
+        # Fallback: try api_keys table
+        return self._get_twilio_credentials_from_api_keys()
+
+    def _get_twilio_credentials_from_api_keys(self) -> dict:
+        """Fetch Twilio account_sid and auth_token from the DB (api_keys table).
+
+        Legacy method — queries globally without org scoping.
+        """
         from core.models.service_provider import ServiceProvider
         from core.models.api_key import ApiKey
         from core.utils.encryption import decrypt
 
         provider = self.db.query(ServiceProvider).filter(ServiceProvider.name == "twilio").first()
-        print("provider_idd", provider.id)
         if not provider:
             logger.warning("Twilio service provider not found in DB")
             return {}
@@ -90,20 +120,20 @@ class BotRunnerService(BaseService):
             .all()
         )
 
-        print("api_keyss", api_keys)
-
         creds = {}
         for ak in api_keys:
             additional = ak.additional_credentials or {}
             key_type = additional.get("key_type")
-            print("key_typee", key_type)
             if key_type == "account_sid":
                 creds["account_sid"] = decrypt(ak.api_key_encrypted)
             if key_type == "auth_token":
                 creds["auth_token"] = decrypt(ak.api_key_encrypted)
 
-        print("credssss", creds)
         return creds
+
+    def _get_twilio_credentials(self) -> dict:
+        """Fetch Twilio credentials — tries channels table first, then api_keys."""
+        return self._get_twilio_credentials_from_channel(org_id=self.org_id)
 
     async def _fetch_twilio_call_info(self, call_sid: str, call_data: Dict[str, Any]) -> Optional[str]:
         """Fetch call info from Twilio REST API and enrich call_data with from/to and credentials.
