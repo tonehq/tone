@@ -108,6 +108,7 @@ async def telephony_websocket(websocket: WebSocket):
             "transport_type": transport_type,
             "agent_id": agent.id if agent else None,
             "agent": agent,
+            "_prefetched_services": prefetched_services,
         }
 
     except Exception as e:
