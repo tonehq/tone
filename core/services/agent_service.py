@@ -127,6 +127,7 @@ class AgentService(BaseService):
             "name": agent_data["name"],
             "description": agent_data.get("description"),
             "created_by": created_by,
+            "organization_id": self.org_id,
             "created_at": now,
             "updated_at": now,
         }
