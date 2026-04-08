@@ -91,7 +91,7 @@ class AgentConfigService(BaseService):
             self.upsert(
                 model=AgentConfig,
                 values=values,
-                conflict_fields=["uuid"],
+                conflict_fields=["agent_id", "organization_id"],
                 update_fields=list(self.UPDATABLE_ATTRS),
                 extra_update={"updated_at": now},
                 auto_commit=auto_commit,
