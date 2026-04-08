@@ -5,6 +5,7 @@ from typing import Dict, Any
 import time
 import uuid as uuid_lib
 from uuid import UUID
+import traceback
 
 from fastapi import HTTPException, status
 
@@ -143,6 +144,7 @@ class AgentService(BaseService):
             if key in values:
                 update_fields.append(key)
         try:
+            print("into agent try")
             # Use auto_commit=False for all operations so we can commit
             # everything atomically — if any step fails, nothing is persisted.
             self.upsert(
@@ -209,6 +211,7 @@ class AgentService(BaseService):
             # All steps succeeded — commit the entire transaction atomically
             self.db.commit()
         except IntegrityError as e:
+            print(traceback.format_exc())
             self.db.rollback()
             detail = _agent_unique_constraint_detail(e)
             raise HTTPException(
@@ -216,9 +219,11 @@ class AgentService(BaseService):
                 detail=detail,
             ) from e
         except HTTPException:
+            print(traceback.format_exc())
             self.db.rollback()
             raise
         except Exception:
+            print(traceback.format_exc())
             self.db.rollback()
             raise
 
