@@ -931,6 +931,19 @@ class AgentFactoryService(BaseService):
         """
         _t0 = _time.monotonic()
 
+        # If no prefetched data provided, try Redis cache before hitting DB
+        if not prefetched:
+            from core.services.redis_service import cache_get
+            agent_id = agent.id if hasattr(agent, "id") else agent
+            # Try transport-specific cache keys first, then fall back to 'none'
+            for transport_suffix in ("twilio", "telnyx", "plivo", "exotel", "none"):
+                cache_key = f"agent_bot_data:{agent_id}:{transport_suffix}"
+                cached = cache_get(cache_key)
+                if cached is not None:
+                    logger.info("[TIMING] using Redis-cached service data from key=%s (no DB queries)", cache_key)
+                    prefetched = cached
+                    break
+
         if prefetched:
             logger.info("[TIMING] using prefetched service data (no DB queries)")
             _t = _time.monotonic()
