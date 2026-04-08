@@ -1,8 +1,11 @@
 """Process lifecycle manager for subprocess-based telephony bot isolation.
 
-Spawns each telephony call as a separate OS process and proxies WebSocket
+Spawns each telephony call as a separate OS process and relays WebSocket
 frames between the telephony provider's WebSocket and the subprocess's
-local WebSocket.
+stdin/stdout pipes using a lightweight binary framing protocol.
+
+No internal WebSocket proxy or FastAPI/uvicorn in the subprocess —
+communication uses pipe IPC (see core.services.pipe_ipc).
 
 Supports warm worker pool: if USE_WARM_POOL=true, pre-spawned workers
 are used for instant startup (~0.1s vs ~2.9s cold spawn).
@@ -10,7 +13,6 @@ are used for instant startup (~0.1s vs ~2.9s cold spawn).
 
 import asyncio
 import json
-import socket
 import sys
 import time as _time
 from typing import Any, Dict, Optional
@@ -22,12 +24,10 @@ class SubprocessBotManager:
     """Manages subprocess lifecycle for isolated bot execution.
 
     Data flow:
-        Telephony Provider <-WS-> Main Process (proxy) <-WS (127.0.0.1)-> Subprocess (bot_worker.py)
+        Telephony Provider <-WS-> Main Process (pipe relay) <-stdin/stdout-> Subprocess (bot_worker.py)
     """
 
-    READY_TIMEOUT = 30  # seconds to wait for WORKER_READY signal
-    CONNECT_TIMEOUT = 15  # seconds to wait for subprocess WS connection
-    CONNECT_RETRY_INTERVAL = 0.3  # seconds between connection retries
+    READY_TIMEOUT = 30  # seconds to wait for PIPE_READY signal
 
     @classmethod
     async def launch(
@@ -76,7 +76,6 @@ class SubprocessBotManager:
                 return False
 
             proc = worker["proc"]
-            port = worker["port"]
             _t = _time.monotonic()
 
             # Send call data to the warm worker via stdin
@@ -90,22 +89,22 @@ class SubprocessBotManager:
             await proc.stdin.drain()
 
             logger.info(
-                "[TIMING] warm worker: sent call data to pid=%d port=%d (+%.3fs)",
-                proc.pid, port, _time.monotonic() - _t,
+                "[TIMING] warm worker: sent call data to pid=%d (+%.3fs)",
+                proc.pid, _time.monotonic() - _t,
             )
 
-            # Wait for WORKER_READY (uvicorn started after receiving call data)
-            await cls._wait_for_ready(proc, port)
+            # Wait for PIPE_READY (subprocess ready to receive frames)
+            await cls._wait_for_signal(proc, "PIPE_READY")
             logger.info(
                 "[TIMING] warm worker: total ready time (+%.3fs)",
                 _time.monotonic() - _t,
             )
 
             try:
-                await cls._proxy_websocket(websocket, port, proc)
+                await cls._proxy_pipes(websocket, proc)
             except Exception:
                 logger.exception(
-                    "SubprocessBotManager (warm) error for agent_id={} port={}", agent_id, port
+                    "SubprocessBotManager (warm) error for agent_id={}", agent_id
                 )
             finally:
                 await cls._cleanup(proc)
@@ -113,7 +112,7 @@ class SubprocessBotManager:
 
         except Exception as e:
             # Clean up the warm worker process if it was acquired but failed
-            # to launch (e.g. _wait_for_ready timed out). Without this, the
+            # to launch (e.g. _wait_for_signal timed out). Without this, the
             # orphaned process could keep running in the background.
             if proc:
                 try:
@@ -132,29 +131,21 @@ class SubprocessBotManager:
         call_data: Dict[str, Any],
         agent_data: Optional[Dict[str, Any]] = None,
     ):
-        """Original cold-spawn path (unchanged logic)."""
-        print(f"[SubprocessBotManager] Cold launching for agent_id={agent_id}")
-        port = cls._find_free_port()
+        """Cold-spawn path: spawn subprocess, wait for pipe ready, relay frames."""
+        logger.info("[SubprocessBotManager] Cold launching for agent_id={}", agent_id)
         proc = None
 
         try:
-            proc = await cls._spawn_worker(agent_id, transport_type, call_data, port, agent_data=agent_data)
-            await cls._wait_for_ready(proc, port)
-            await cls._proxy_websocket(websocket, port, proc)
+            proc = await cls._spawn_worker(agent_id, transport_type, call_data, agent_data=agent_data)
+            await cls._wait_for_signal(proc, "PIPE_READY")
+            await cls._proxy_pipes(websocket, proc)
         except Exception:
             logger.exception(
-                "SubprocessBotManager error for agent_id={} port={}", agent_id, port
+                "SubprocessBotManager error for agent_id={}", agent_id
             )
         finally:
             if proc:
                 await cls._cleanup(proc)
-
-    @staticmethod
-    def _find_free_port() -> int:
-        """Find an available TCP port on localhost."""
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind(("127.0.0.1", 0))
-            return s.getsockname()[1]
 
     @classmethod
     async def _spawn_worker(
@@ -162,12 +153,12 @@ class SubprocessBotManager:
         agent_id: str,
         transport_type: str,
         call_data: Dict[str, Any],
-        port: int,
         agent_data: Optional[Dict[str, Any]] = None,
     ) -> asyncio.subprocess.Process:
         """Spawn the bot_worker subprocess.
 
-        stdout is piped so we can read the WORKER_READY signal.
+        stdin is piped for sending frames to the subprocess.
+        stdout is piped for receiving PIPE_READY signal and frames from subprocess.
         stderr is inherited (None) so subprocess errors print to terminal.
         """
         call_data_json = json.dumps(call_data)
@@ -181,189 +172,136 @@ class SubprocessBotManager:
             transport_type,
             "--call_data",
             call_data_json,
-            "--port",
-            str(port),
         ]
         if agent_data:
             cmd.extend(["--agent_data", json.dumps(agent_data)])
         proc = await asyncio.create_subprocess_exec(
             *cmd,
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=None,  # Inherit parent stderr so subprocess errors are visible
         )
         logger.info(
-            "Spawned bot worker subprocess pid={} port={} agent_id={}",
+            "Spawned bot worker subprocess pid={} agent_id={}",
             proc.pid,
-            port,
             agent_id,
         )
         return proc
 
     @classmethod
-    async def _wait_for_ready(cls, proc: asyncio.subprocess.Process, port: int):
-        """Wait for the subprocess to signal readiness via stdout."""
-        ready_signal = f"WORKER_READY:{port}"
+    async def _wait_for_signal(cls, proc: asyncio.subprocess.Process, signal: str):
+        """Wait for the subprocess to send a text-line signal via stdout."""
 
         async def _read_stdout():
             while True:
                 line = await proc.stdout.readline()
                 if not line:
                     raise RuntimeError(
-                        f"Bot worker subprocess exited before signaling ready (pid={proc.pid})"
+                        f"Bot worker subprocess exited before signaling {signal} (pid={proc.pid})"
                     )
                 decoded = line.decode().strip()
                 logger.debug("Bot worker stdout: {}", decoded)
-                if decoded == ready_signal:
+                if decoded == signal:
                     return
 
         try:
             await asyncio.wait_for(_read_stdout(), timeout=cls.READY_TIMEOUT)
-            logger.info("Bot worker ready on port {} (pid={})", port, proc.pid)
+            logger.info("Bot worker signaled {} (pid={})", signal, proc.pid)
         except asyncio.TimeoutError:
             raise RuntimeError(
-                f"Bot worker subprocess did not signal ready within {cls.READY_TIMEOUT}s (pid={proc.pid})"
+                f"Bot worker subprocess did not signal {signal} within {cls.READY_TIMEOUT}s (pid={proc.pid})"
             )
 
     @classmethod
-    async def _proxy_websocket(cls, telephony_ws: Any, subprocess_port: int, proc: asyncio.subprocess.Process):
-        """Bidirectional WebSocket proxy between telephony WS and subprocess WS.
+    async def _proxy_pipes(cls, telephony_ws: Any, proc: asyncio.subprocess.Process):
+        """Bidirectional relay between telephony WS and subprocess stdin/stdout pipes.
 
-        Uses the websockets library (already a dependency via pipecat/uvicorn).
+        Uses the binary framing protocol from core.services.pipe_ipc.
+        No internal WebSocket connection — frames go directly through OS pipes.
         """
-        import websockets
+        from core.services.pipe_ipc import FrameType, read_frame, write_frame
 
-        subprocess_url = f"ws://127.0.0.1:{subprocess_port}/ws"
+        async def telephony_to_subprocess():
+            """Read from telephony WS, write framed messages to subprocess stdin.
 
-        # Retry connection — WORKER_READY fires in on_startup before uvicorn
-        # actually binds the port, so there's a brief window where connect fails.
-        sub_ws = None
-        deadline = asyncio.get_event_loop().time() + cls.CONNECT_TIMEOUT
-        last_error = None
-        while asyncio.get_event_loop().time() < deadline:
+            First drains stale buffered audio (media events queued during setup),
+            then forwards all messages in real-time.
+            """
             try:
-                sub_ws = await websockets.connect(
-                    subprocess_url,
-                    open_timeout=cls.CONNECT_TIMEOUT,
-                )
-                break
-            except (ConnectionRefusedError, OSError) as e:
-                # Port not ready yet — retry
-                last_error = e
-                await asyncio.sleep(cls.CONNECT_RETRY_INTERVAL)
-            except Exception as e:
-                last_error = e
-                await asyncio.sleep(cls.CONNECT_RETRY_INTERVAL)
-
-        if sub_ws is None:
-            raise RuntimeError(
-                f"Could not connect to subprocess WebSocket at {subprocess_url} "
-                f"after {cls.CONNECT_TIMEOUT}s: {last_error}"
-            )
-
-        logger.info("Connected to subprocess WebSocket at {}", subprocess_url)
-
-        try:
-            async def telephony_to_subprocess():
-                """Forward frames from telephony provider to subprocess.
-
-                First drains stale buffered audio (media events queued during setup),
-                then forwards all messages in real-time.
-                """
-                try:
-                    # Phase 1: Drain stale buffered audio
-                    drained = 0
-                    while True:
-                        try:
-                            msg = await asyncio.wait_for(telephony_ws.receive(), timeout=0.05)
-                            msg_type = msg.get("type", "")
-                            if msg_type == "websocket.disconnect":
-                                logger.info("Telephony WebSocket disconnected during drain")
-                                return
-                            if "text" in msg:
-                                try:
-                                    payload = json.loads(msg["text"])
-                                    event = payload.get("event", "")
-                                    if event == "media":
-                                        drained += 1
-                                        continue
-                                except (json.JSONDecodeError, TypeError):
-                                    pass
-                                # Forward non-media messages (control events)
-                                await sub_ws.send(msg["text"])
-                            elif "bytes" in msg:
-                                drained += 1
-                        except asyncio.TimeoutError:
-                            break
-                    if drained:
-                        logger.info("Drained {} stale audio messages from telephony WS buffer", drained)
-
-                    # Phase 2: Forward all messages in real-time
-                    while True:
-                        msg = await telephony_ws.receive()
+                # Phase 1: Drain stale buffered audio
+                drained = 0
+                while True:
+                    try:
+                        msg = await asyncio.wait_for(telephony_ws.receive(), timeout=0.05)
                         msg_type = msg.get("type", "")
                         if msg_type == "websocket.disconnect":
-                            logger.info("Telephony WebSocket disconnected")
-                            break
+                            logger.info("Telephony WebSocket disconnected during drain")
+                            await write_frame(proc.stdin, FrameType.DISCONNECT)
+                            return
                         if "text" in msg:
-                            await sub_ws.send(msg["text"])
+                            try:
+                                payload = json.loads(msg["text"])
+                                event = payload.get("event", "")
+                                if event == "media":
+                                    drained += 1
+                                    continue
+                            except (json.JSONDecodeError, TypeError):
+                                pass
+                            # Forward non-media messages (control events)
+                            await write_frame(proc.stdin, FrameType.TEXT, msg["text"].encode("utf-8"))
                         elif "bytes" in msg:
-                            await sub_ws.send(msg["bytes"])
-                except Exception as e:
-                    logger.info("Telephony->subprocess proxy ended: {} ({})", type(e).__name__, e)
+                            drained += 1
+                    except asyncio.TimeoutError:
+                        break
+                if drained:
+                    logger.info("Drained {} stale audio messages from telephony WS buffer", drained)
 
-            async def subprocess_to_telephony():
-                """Forward frames from subprocess to telephony provider."""
-                try:
-                    async for message in sub_ws:
-                        if isinstance(message, str):
-                            await telephony_ws.send_text(message)
-                        elif isinstance(message, bytes):
-                            await telephony_ws.send_bytes(message)
-                except Exception as e:
-                    logger.info("Subprocess->telephony proxy ended: {} ({})", type(e).__name__, e)
+                # Phase 2: Forward all messages in real-time
+                while True:
+                    msg = await telephony_ws.receive()
+                    msg_type = msg.get("type", "")
+                    if msg_type == "websocket.disconnect":
+                        logger.info("Telephony WebSocket disconnected")
+                        await write_frame(proc.stdin, FrameType.DISCONNECT)
+                        break
+                    if "text" in msg:
+                        await write_frame(proc.stdin, FrameType.TEXT, msg["text"].encode("utf-8"))
+                    elif "bytes" in msg:
+                        await write_frame(proc.stdin, FrameType.BINARY, msg["bytes"])
+            except Exception as e:
+                logger.info("Telephony->subprocess pipe ended: {} ({})", type(e).__name__, e)
 
-            async def _drain_stdout():
-                """Keep reading subprocess stdout so the pipe buffer doesn't fill
-                up and block the subprocess (classic pipe deadlock)."""
-                try:
-                    while True:
-                        line = await proc.stdout.readline()
-                        if not line:
-                            break
-                        logger.debug("Bot worker: {}", line.decode().strip())
-                except Exception:
-                    pass
-
-            # Start output proxy + stdout drain IMMEDIATELY so bot audio
-            # reaches Twilio without waiting for the input drain to finish
-            drain_task = asyncio.create_task(_drain_stdout())
-            output_task = asyncio.create_task(subprocess_to_telephony())
-
-            # Run input proxy concurrently with the already-running output proxy
-            proxy_tasks = [
-                asyncio.create_task(telephony_to_subprocess()),
-                output_task,
-            ]
-            done, pending = await asyncio.wait(
-                proxy_tasks, return_when=asyncio.FIRST_COMPLETED
-            )
-            for task in pending:
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-
-            drain_task.cancel()
+        async def subprocess_to_telephony():
+            """Read framed messages from subprocess stdout, write to telephony WS."""
             try:
-                await drain_task
+                while True:
+                    ftype, data = await read_frame(proc.stdout)
+                    if ftype == FrameType.TEXT:
+                        await telephony_ws.send_text(data.decode("utf-8"))
+                    elif ftype == FrameType.BINARY:
+                        await telephony_ws.send_bytes(data)
+                    elif ftype == FrameType.DISCONNECT:
+                        logger.info("Subprocess signaled disconnect")
+                        break
+            except asyncio.IncompleteReadError:
+                logger.info("Subprocess stdout EOF (process exited)")
+            except Exception as e:
+                logger.info("Subprocess->telephony pipe ended: {} ({})", type(e).__name__, e)
+
+        # Start output relay IMMEDIATELY so bot audio reaches the telephony
+        # provider without waiting for the input drain to finish
+        output_task = asyncio.create_task(subprocess_to_telephony())
+        input_task = asyncio.create_task(telephony_to_subprocess())
+
+        proxy_tasks = [input_task, output_task]
+        done, pending = await asyncio.wait(
+            proxy_tasks, return_when=asyncio.FIRST_COMPLETED
+        )
+        for task in pending:
+            task.cancel()
+            try:
+                await task
             except asyncio.CancelledError:
-                pass
-
-        finally:
-            try:
-                await sub_ws.close()
-            except Exception:
                 pass
 
     @staticmethod
