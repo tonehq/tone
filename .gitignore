@@ -141,3 +141,4 @@ Thumbs.db
 .env_backend
 
 .claude/settings.local.json
+.gitnexus
