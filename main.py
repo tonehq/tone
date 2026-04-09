@@ -58,6 +58,14 @@ app.add_middleware(
 
 api_v1 = FastAPI()
 
+api_v1.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 if ee_enabled:
     from ee.api.v1 import (
         auth as ee_auth,
