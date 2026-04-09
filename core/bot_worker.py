@@ -1,18 +1,20 @@
 """Subprocess entry point for isolated telephony bot execution.
 
-Receives agent_id, transport_type, call_data, and port as CLI args.
-Starts a minimal FastAPI/uvicorn server on the given port with a /ws endpoint.
-On WebSocket connection: constructs WebSocketRunnerArguments and calls bot().
+Receives agent_id, transport_type, call_data as CLI args.
+Communicates with the parent process via stdin/stdout pipes using a
+lightweight binary framing protocol (see core.services.pipe_ipc).
 
-All heavy imports happen BEFORE signaling WORKER_READY so that
-the WebSocket handler responds instantly without blocking the event loop.
+No FastAPI or uvicorn — the PipeWebSocket adapter provides the same
+interface that FastAPIWebsocketTransport expects.
 
 If --agent_data is provided, the Agent object is reconstructed from it
 without any DB query — saving ~4-5s of subprocess DB connection time.
 """
 
 import argparse
+import asyncio
 import json
+import os
 import time as _time
 import uuid as _uuid
 
@@ -47,22 +49,57 @@ def _reconstruct_agent(agent_data: dict):
     return agent
 
 
+async def _async_main(bot_fn, WSRunnerArgs, agent, agent_id, transport_type, call_data, prefetched_services, ipc_write_fd):
+    """Run the bot pipeline using pipe-based IPC instead of FastAPI/uvicorn."""
+    from core.services.pipe_ipc import PipeWebSocket, create_stdin_reader, signal_pipe_ready
+
+    reader = await create_stdin_reader()
+    pipe_ws = PipeWebSocket(reader, ipc_write_fd)
+
+    # Signal ready to parent — parent starts relaying frames after this
+    signal_pipe_ready(ipc_write_fd)
+    logger.info(
+        "Bot worker pipe ready: agent_id=%s transport_type=%s",
+        agent_id,
+        transport_type,
+    )
+
+    try:
+        body = {
+            "call_data": call_data,
+            "transport_type": transport_type,
+            "agent_id": agent_id,
+            "agent": agent,
+            "_prefetched_services": prefetched_services,
+        }
+        runner_args = WSRunnerArgs(websocket=pipe_ws, body=body)
+        await bot_fn(runner_args)
+    except Exception:
+        logger.exception("Bot worker pipe error")
+    finally:
+        try:
+            os.close(ipc_write_fd)
+        except OSError:
+            pass
+        logger.info("Bot worker subprocess finished: agent_id=%s", agent_id)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Bot Worker Subprocess")
     parser.add_argument("--agent_id", type=str, required=True, help="Agent UUID")
     parser.add_argument("--transport_type", type=str, required=True, help="Telephony provider type")
     parser.add_argument("--call_data", type=str, required=True, help="JSON-encoded call data")
-    parser.add_argument("--port", type=int, required=True, help="Local WebSocket port")
     parser.add_argument("--agent_data", type=str, required=False, help="JSON-encoded agent fields (skips DB query)")
     args = parser.parse_args()
 
     call_data = json.loads(args.call_data)
 
-    # --- Heavy imports upfront (before uvicorn starts) ---
-    _t = _time.monotonic()
-    import uvicorn
-    from fastapi import FastAPI, WebSocket
+    # --- Redirect stdout to stderr FIRST (before any imports that might print) ---
+    from core.services.pipe_ipc import setup_subprocess_ipc
+    ipc_write_fd = setup_subprocess_ipc()
 
+    # --- Heavy imports (safe — any print() goes to stderr now) ---
+    _t = _time.monotonic()
     from pipecat.runner.types import WebSocketRunnerArguments
     from core.bot import bot
     logger.info("[TIMING] bot_worker imports done (+%.3fs)", _time.monotonic() - _t)
@@ -87,49 +124,17 @@ def main():
 
     if not agent:
         logger.error("Agent not found: %s — subprocess exiting", args.agent_id)
+        os.close(ipc_write_fd)
         return
 
-    app = FastAPI()
-    _ws_connected = False
-
-    @app.websocket("/ws")
-    async def ws_endpoint(websocket: WebSocket):
-        nonlocal _ws_connected
-        await websocket.accept()
-        if _ws_connected:
-            logger.warning("Rejecting duplicate WS connection for agent_id=%s", args.agent_id)
-            await websocket.close(code=1013, reason="Already connected")
-            return
-        _ws_connected = True
-        logger.info(
-            "Bot worker subprocess connected: agent_id=%s transport_type=%s port=%d",
-            args.agent_id,
-            args.transport_type,
-            args.port,
+    # --- Run bot with pipe IPC (no FastAPI/uvicorn needed) ---
+    asyncio.run(
+        _async_main(
+            bot, WebSocketRunnerArguments, agent,
+            args.agent_id, args.transport_type, call_data,
+            prefetched_services, ipc_write_fd,
         )
-
-        try:
-            body = {
-                "call_data": call_data,
-                "transport_type": args.transport_type,
-                "agent_id": args.agent_id,
-                "agent": agent,
-                "_prefetched_services": prefetched_services,
-            }
-
-            runner_args = WebSocketRunnerArguments(websocket=websocket, body=body)
-            await bot(runner_args)
-        except Exception:
-            logger.exception("Bot worker subprocess error")
-        finally:
-            _ws_connected = False
-            logger.info("Bot worker subprocess finished: agent_id=%s", args.agent_id)
-
-    @app.on_event("startup")
-    async def on_startup():
-        print(f"WORKER_READY:{args.port}", flush=True)
-
-    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
+    )
 
 
 if __name__ == "__main__":

@@ -45,6 +45,8 @@ async def telephony_websocket(websocket: WebSocket):
             # Pre-fetch service config + credentials + telephony creds in one DB session
             # so the subprocess doesn't need to establish its own DB connection
             if agent:
+                # Store org_id in call_data so downstream code can fetch org-scoped creds
+                call_data["_org_id"] = str(agent.organization_id) if agent.organization_id else None
                 _t_prefetch = _time.monotonic()
                 from core.services.agent_factory_service import AgentFactoryService
                 factory = AgentFactoryService(db)
@@ -106,6 +108,7 @@ async def telephony_websocket(websocket: WebSocket):
             "transport_type": transport_type,
             "agent_id": agent.id if agent else None,
             "agent": agent,
+            "_prefetched_services": prefetched_services,
         }
 
     except Exception as e:

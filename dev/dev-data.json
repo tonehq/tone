@@ -3792,6 +3792,111 @@
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
         }
       ]
+    },
+    {
+      "name": "openai_realtime",
+      "provider_type": "llm",
+      "display_name": "OpenAI Realtime",
+      "description": "OpenAI Realtime Speech-to-Speech LLM",
+      "api_key_env": "OPENAI_API_KEY",
+      "meta_data": {
+        "is_s2s": true
+      },
+      "models": [
+        {
+          "name": "gpt-4o-realtime-preview",
+          "meta_data": {
+            "model": "gpt-4o-realtime-preview",
+            "is_s2s": true
+          }
+        },
+        {
+          "name": "gpt-4o-mini-realtime-preview",
+          "meta_data": {
+            "model": "gpt-4o-mini-realtime-preview",
+            "is_s2s": true
+          }
+        },
+        {
+          "name": "gpt-realtime",
+          "meta_data": {
+            "model": "gpt-realtime",
+            "is_s2s": true
+          }
+        }
+      ],
+      "meta_data_schema": [
+        {
+          "name": "voice_id",
+          "data_type": "string",
+          "type": "select",
+          "format": "string",
+          "options": ["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"],
+          "required": 0,
+          "description": "Voice for the realtime model response"
+        },
+        {
+          "name": "temperature",
+          "data_type": "float",
+          "type": "input number",
+          "format": "float",
+          "validator": {
+            "min": 0.6,
+            "max": 1.2
+          },
+          "required": 0,
+          "description": "Sampling temperature. Range: 0.6 to 1.2"
+        }
+      ]
+    },
+    {
+      "name": "gemini_live",
+      "provider_type": "llm",
+      "display_name": "Gemini Live",
+      "description": "Google Gemini Live Speech-to-Speech LLM",
+      "api_key_env": "GOOGLE_API_KEY",
+      "meta_data": {
+        "is_s2s": true
+      },
+      "models": [
+        {
+          "name": "gemini-2.0-flash-live",
+          "meta_data": {
+            "model": "models/gemini-2.0-flash-live-001",
+            "is_s2s": true
+          }
+        },
+        {
+          "name": "gemini-2.5-flash-native-audio",
+          "meta_data": {
+            "model": "models/gemini-2.5-flash-native-audio-preview-12-2025",
+            "is_s2s": true
+          }
+        }
+      ],
+      "meta_data_schema": [
+        {
+          "name": "voice_id",
+          "data_type": "string",
+          "type": "select",
+          "format": "string",
+          "options": ["Aoede", "Charon", "Fenrir", "Kore", "Puck"],
+          "required": 0,
+          "description": "Voice for the Gemini Live model response"
+        },
+        {
+          "name": "temperature",
+          "data_type": "float",
+          "type": "input number",
+          "format": "float",
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
+          "description": "Sampling temperature. Range: 0.0 to 2.0"
+        }
+      ]
     }
   ],
   "stt_providers": [

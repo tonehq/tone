@@ -216,6 +216,14 @@ class AgentFactoryService(BaseService):
         stt_metadata = (config.stt_metadata or {}) if hasattr(config, "stt_metadata") else {}
         tts_metadata = (config.tts_metadata or {}) if hasattr(config, "tts_metadata") else {}
 
+        # Detect S2S: check if llm_metadata flags this as a speech-to-speech model
+        is_s2s = bool(llm_metadata.get("is_s2s"))
+
+        # For S2S, inject system_prompt into llm_metadata so the LLM builder can use it
+        if is_s2s and config.system_prompt:
+            llm_metadata = dict(llm_metadata)  # don't mutate the original
+            llm_metadata["system_prompt"] = config.system_prompt
+
         # Collect all service_provider_ids to fetch in bulk
         service_ids = {
             "llm": config.llm_service_id,
@@ -223,7 +231,10 @@ class AgentFactoryService(BaseService):
             "tts": config.tts_service_id,
         }
         all_sp_ids = [sid for sid in service_ids.values() if sid]
-        if len(all_sp_ids) < 3:
+        # S2S only needs LLM; standard pipeline needs all 3
+        if not config.llm_service_id:
+            return None
+        if not is_s2s and len(all_sp_ids) < 3:
             return None
 
         # Collect model_ids for name resolution (needed before Q2)
@@ -276,6 +287,23 @@ class AgentFactoryService(BaseService):
             )
             q3_filters.append(ApiKey.service_provider_id == telephony_sp_subq)
 
+        # Try channels table first for telephony creds (org-scoped)
+        if transport_type == "twilio" and hasattr(agent, "organization_id") and agent.organization_id:
+            from core.models.channel import Channel
+            from core.models.enums import ChannelType
+
+            channel = (
+                self.db.query(Channel)
+                .filter(Channel.type == ChannelType.TWILIO, Channel.organization_id == agent.organization_id)
+                .first()
+            )
+            if channel and channel.meta_data:
+                meta = channel.meta_data
+                account_sid = meta.get("account_sid")
+                auth_token = meta.get("auth_token")
+                if account_sid and auth_token:
+                    telephony_creds = {"account_sid": account_sid, "auth_token": auth_token}
+
         if q3_filters:
             all_api_keys = self.db.query(ApiKey).filter(or_(*q3_filters)).all()
             _t_decrypt = _time.monotonic()
@@ -288,8 +316,8 @@ class AgentFactoryService(BaseService):
                     # LLM/STT/TTS service key
                     if ak.id in api_key_ids:
                         api_key_map[ak.id] = decrypted
-                    else:
-                        # Telephony key — extract key_type from additional_credentials
+                    elif not telephony_creds:
+                        # Telephony key — only use api_keys if channels didn't provide creds
                         additional = ak.additional_credentials or {}
                         key_type = additional.get("key_type")
                         if key_type:
@@ -321,10 +349,12 @@ class AgentFactoryService(BaseService):
             }
 
         llm_data = _build_service_data(config.llm_service_id, "llm", llm_metadata)
-        stt_data = _build_service_data(config.stt_service_id, "stt", stt_metadata)
-        tts_data = _build_service_data(config.tts_service_id, "tts", tts_metadata)
+        stt_data = _build_service_data(config.stt_service_id, "stt", stt_metadata) if config.stt_service_id else None
+        tts_data = _build_service_data(config.tts_service_id, "tts", tts_metadata) if config.tts_service_id else None
 
-        if not llm_data or not stt_data or not tts_data:
+        if not llm_data:
+            return None
+        if not is_s2s and (not stt_data or not tts_data):
             return None
 
         messages = [{"role": "system", "content": config.system_prompt}]
@@ -335,6 +365,7 @@ class AgentFactoryService(BaseService):
             "llm": llm_data,
             "stt": stt_data,
             "tts": tts_data,
+            "is_s2s": is_s2s,
             "messages": messages,
             "end_call_message": getattr(config, "end_call_message", None),
         }
@@ -373,6 +404,10 @@ class AgentFactoryService(BaseService):
             model_meta = (svc.meta_data or {}) if isinstance(getattr(svc, "meta_data", None), dict) else {}
             model = self._get_model_name_by_id(metadata.get("model_id"))
             provider_name = (provider.name or "").strip().lower()
+            # For S2S, inject system_prompt so the LLM builder can use it
+            if metadata.get("is_s2s") and config.system_prompt:
+                metadata = dict(metadata)
+                metadata["system_prompt"] = config.system_prompt
 
         try:
             if provider_name == "openai": #done
@@ -433,6 +468,38 @@ class AgentFactoryService(BaseService):
                     base_url = default_base_urls.get(provider_name)
                 default_model = default_models.get(provider_name, "gpt-4o")
                 return BaseOpenAILLMService(api_key=api_key, model=model or default_model, base_url=base_url, params=self._build_input_params(BaseOpenAILLMService, metadata))
+            if provider_name == "openai_realtime":
+                from pipecat.services.openai.realtime.llm import OpenAIRealtimeLLMService
+                from pipecat.services.openai.realtime.events import (
+                    SessionProperties, AudioConfiguration, AudioInput, AudioOutput,
+                    InputAudioTranscription, SemanticTurnDetection,
+                )
+                voice_id = metadata.get("voice_id")
+                system_prompt = metadata.get("system_prompt")
+                session_props = SessionProperties(
+                    audio=AudioConfiguration(
+                        input=AudioInput(
+                            transcription=InputAudioTranscription(),
+                            turn_detection=SemanticTurnDetection(),
+                        ),
+                        output=AudioOutput(voice=voice_id) if voice_id else None,
+                    ),
+                    instructions=system_prompt,
+                )
+                return OpenAIRealtimeLLMService(
+                    api_key=api_key,
+                    model=model or "gpt-4o-realtime-preview",
+                    session_properties=session_props,
+                )
+            if provider_name == "gemini_live":
+                from pipecat.services.google.gemini_live.llm import GeminiLiveLLMService
+                voice_id = metadata.get("voice_id") or "Puck"
+                return GeminiLiveLLMService(
+                    api_key=api_key,
+                    model=model or "models/gemini-2.5-flash-native-audio-preview-12-2025",
+                    voice_id=voice_id,
+                    system_instruction=metadata.get("system_instruction"),
+                )
             return None
         except ImportError as e:
             logger.exception("LLM provider %s not available", provider_name)
@@ -914,19 +981,37 @@ class AgentFactoryService(BaseService):
         """
         _t0 = _time.monotonic()
 
+        # If no prefetched data provided, try Redis cache before hitting DB
+        if not prefetched:
+            from core.services.redis_service import cache_get
+            agent_id = agent.id if hasattr(agent, "id") else agent
+            # Try transport-specific cache keys first, then fall back to 'none'
+            for transport_suffix in ("twilio", "telnyx", "plivo", "exotel", "none"):
+                cache_key = f"agent_bot_data:{agent_id}:{transport_suffix}"
+                cached = cache_get(cache_key)
+                if cached is not None:
+                    logger.info("[TIMING] using Redis-cached service data from key=%s (no DB queries)", cache_key)
+                    prefetched = cached
+                    break
+
         if prefetched:
             logger.info("[TIMING] using prefetched service data (no DB queries)")
+            is_s2s = bool(prefetched.get("is_s2s"))
+
             _t = _time.monotonic()
             llm = self.get_llm_for_agent(agent, prefetched=prefetched["llm"])
             logger.info("[TIMING] get_llm_for_agent prefetched (+%.3fs)", _time.monotonic() - _t)
 
-            _t = _time.monotonic()
-            stt = self.get_stt_for_agent(agent, prefetched=prefetched["stt"])
-            logger.info("[TIMING] get_stt_for_agent prefetched (+%.3fs)", _time.monotonic() - _t)
+            stt = None
+            tts = None
+            if not is_s2s:
+                _t = _time.monotonic()
+                stt = self.get_stt_for_agent(agent, prefetched=prefetched["stt"])
+                logger.info("[TIMING] get_stt_for_agent prefetched (+%.3fs)", _time.monotonic() - _t)
 
-            _t = _time.monotonic()
-            tts = self.get_tts_for_agent(agent, prefetched=prefetched["tts"])
-            logger.info("[TIMING] get_tts_for_agent prefetched (+%.3fs)", _time.monotonic() - _t)
+                _t = _time.monotonic()
+                tts = self.get_tts_for_agent(agent, prefetched=prefetched["tts"])
+                logger.info("[TIMING] get_tts_for_agent prefetched (+%.3fs)", _time.monotonic() - _t)
 
             messages = prefetched["messages"]
             end_call_message = prefetched.get("end_call_message")
@@ -936,32 +1021,43 @@ class AgentFactoryService(BaseService):
             if not config or not config.system_prompt:
                 return None
 
+            llm_metadata = (config.llm_metadata or {}) if hasattr(config, "llm_metadata") else {}
+            is_s2s = bool(llm_metadata.get("is_s2s"))
+
             _t = _time.monotonic()
             llm = self.get_llm_for_agent(agent, config=config)
             logger.info("[TIMING] get_llm_for_agent (+%.3fs)", _time.monotonic() - _t)
 
-            _t = _time.monotonic()
-            stt = self.get_stt_for_agent(agent, config=config)
-            logger.info("[TIMING] get_stt_for_agent (+%.3fs)", _time.monotonic() - _t)
+            stt = None
+            tts = None
+            if not is_s2s:
+                _t = _time.monotonic()
+                stt = self.get_stt_for_agent(agent, config=config)
+                logger.info("[TIMING] get_stt_for_agent (+%.3fs)", _time.monotonic() - _t)
 
-            _t = _time.monotonic()
-            tts = self.get_tts_for_agent(agent, config=config)
-            logger.info("[TIMING] get_tts_for_agent (+%.3fs)", _time.monotonic() - _t)
+                _t = _time.monotonic()
+                tts = self.get_tts_for_agent(agent, config=config)
+                logger.info("[TIMING] get_tts_for_agent (+%.3fs)", _time.monotonic() - _t)
 
-            if not llm or not stt or not tts:
+            if not llm:
+                return None
+            if not is_s2s and (not stt or not tts):
                 return None
             messages = [{"role": "system", "content": config.system_prompt}]
             if getattr(config, "first_message", None) and config.first_message.strip():
                 messages.append({"role": "assistant", "content": config.first_message.strip()})
             end_call_message = getattr(config, "end_call_message", None)
 
-        if not llm or not stt or not tts:
+        if not llm:
+            return None
+        if not is_s2s and (not stt or not tts):
             return None
         logger.info("[TIMING] get_agent_bot_data total (+%.3fs)", _time.monotonic() - _t0)
         return {
             "llm": llm,
             "stt": stt,
             "tts": tts,
+            "is_s2s": is_s2s,
             "messages": messages,
             "end_call_message": end_call_message,
         }
@@ -976,6 +1072,7 @@ class AgentFactoryService(BaseService):
         messages: List[dict],
         agent: Any = None,
         end_call_message: str = None,
+        is_s2s: bool = False,
     ) -> None:
         """
         Run the voice pipeline with the given transport and services.
@@ -1158,53 +1255,100 @@ class AgentFactoryService(BaseService):
             call_log_ready.set()
 
         _t = _time.monotonic()
-        tools = NOT_GIVEN
-        context = LLMContext(messages, tools)
-        context_aggregator = LLMContextAggregatorPair(context)
-        user_aggregator = context_aggregator.user()
-        assistant_aggregator = context_aggregator.assistant()
-        llm_text_processor = LLMTextProcessor()
         rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
-        # Use passed end_call_message; only query DB if not provided and agent exists
-        if end_call_message is None and agent:
-            agent_config = self._get_agent_config(agent)
-            if agent_config:
-                end_call_message = agent_config.end_call_message
-        call_end_detector = CallEndDetectorProcessor(end_call_message=end_call_message)
-        logger.info("[TIMING] context + aggregators + processors created (+%.3fs)", _time.monotonic() - _t)
 
-        # Collect transcripts via Pipecat's built-in aggregator events
-        if agent:
-            @user_aggregator.event_handler("on_user_turn_stopped")
-            async def on_user_turn_stopped(aggregator, strategy, message: UserTurnStoppedMessage):
-                transcript_entries.append({
-                    "role": "user",
-                    "text": message.content,
-                    "timestamp": message.timestamp,
-                })
+        if is_s2s:
+            # S2S pipeline: audio goes through the LLM directly (no separate STT/TTS)
+            # But still needs context aggregators for conversation tracking
+            logger.info("Building S2S pipeline (speech-to-speech)")
+            from pipecat.frames.frames import LLMRunFrame
 
-            @assistant_aggregator.event_handler("on_assistant_turn_stopped")
-            async def on_assistant_turn_stopped(aggregator, message: AssistantTurnStoppedMessage):
-                transcript_entries.append({
-                    "role": "assistant",
-                    "text": message.content,
-                    "timestamp": message.timestamp,
-                })
+            tools = NOT_GIVEN
+            # For S2S, the first message in context triggers the initial response
+            # System prompt is already set via session_properties.instructions (OpenAI)
+            # or system_instruction (Gemini) during LLM creation
+            context = LLMContext(messages, tools)
+            context_aggregator = LLMContextAggregatorPair(context)
+            s2s_user_aggregator = context_aggregator.user()
+            s2s_assistant_aggregator = context_aggregator.assistant()
 
-        # Build pipeline
-        pipeline_processors = [transport.input()]
+            # Build pipeline: input → user_agg → llm → output → assistant_agg
+            pipeline_processors = [
+                transport.input(),
+                rtvi,
+                s2s_user_aggregator,
+                llm,
+                transport.output(),
+                s2s_assistant_aggregator,
+            ]
 
-        pipeline_processors.extend([
-            rtvi,
-            stt,
-            call_end_detector,
-            user_aggregator,
-            llm,
-            llm_text_processor,
-            tts,
-            transport.output(),
-            assistant_aggregator,
-        ])
+            # Collect transcripts via aggregator events (same as standard pipeline)
+            if agent:
+                @s2s_user_aggregator.event_handler("on_user_turn_stopped")
+                async def on_s2s_user_turn_stopped(aggregator, strategy, message: UserTurnStoppedMessage):
+                    transcript_entries.append({
+                        "role": "user",
+                        "text": message.content,
+                        "timestamp": message.timestamp,
+                    })
+
+                @s2s_assistant_aggregator.event_handler("on_assistant_turn_stopped")
+                async def on_s2s_assistant_turn_stopped(aggregator, message: AssistantTurnStoppedMessage):
+                    transcript_entries.append({
+                        "role": "assistant",
+                        "text": message.content,
+                        "timestamp": message.timestamp,
+                    })
+
+            logger.info("[TIMING] S2S pipeline processors created (+%.3fs)", _time.monotonic() - _t)
+        else:
+            # Standard pipeline: STT → LLM → TTS
+            tools = NOT_GIVEN
+            context = LLMContext(messages, tools)
+            context_aggregator = LLMContextAggregatorPair(context)
+            user_aggregator = context_aggregator.user()
+            assistant_aggregator = context_aggregator.assistant()
+            llm_text_processor = LLMTextProcessor()
+            # Use passed end_call_message; only query DB if not provided and agent exists
+            if end_call_message is None and agent:
+                agent_config = self._get_agent_config(agent)
+                if agent_config:
+                    end_call_message = agent_config.end_call_message
+            call_end_detector = CallEndDetectorProcessor(end_call_message=end_call_message)
+            logger.info("[TIMING] context + aggregators + processors created (+%.3fs)", _time.monotonic() - _t)
+
+            # Collect transcripts via Pipecat's built-in aggregator events
+            if agent:
+                @user_aggregator.event_handler("on_user_turn_stopped")
+                async def on_user_turn_stopped(aggregator, strategy, message: UserTurnStoppedMessage):
+                    transcript_entries.append({
+                        "role": "user",
+                        "text": message.content,
+                        "timestamp": message.timestamp,
+                    })
+
+                @assistant_aggregator.event_handler("on_assistant_turn_stopped")
+                async def on_assistant_turn_stopped(aggregator, message: AssistantTurnStoppedMessage):
+                    transcript_entries.append({
+                        "role": "assistant",
+                        "text": message.content,
+                        "timestamp": message.timestamp,
+                    })
+
+            # Build pipeline
+            pipeline_processors = [transport.input()]
+
+            pipeline_processors.extend([
+                rtvi,
+                stt,
+                call_end_detector,
+                user_aggregator,
+                llm,
+                llm_text_processor,
+                tts,
+                transport.output(),
+                assistant_aggregator,
+            ])
 
         # MetricsCollectorProcessor collects metrics for DB storage
         metrics_collector = MetricsCollectorProcessor()
@@ -1244,7 +1388,10 @@ class AgentFactoryService(BaseService):
 
         # Use the TTS service's native sample rate so the output transport
         # tags audio frames correctly for the serializer (e.g. Hume @ 48 kHz).
-        tts_sample_rate = getattr(tts, "_init_sample_rate", None) or 24000
+        # S2S models output 24kHz audio by default.
+        tts_sample_rate = 24000
+        if not is_s2s and tts:
+            tts_sample_rate = getattr(tts, "_init_sample_rate", None) or 24000
 
         task = PipelineTask(
             pipeline,
@@ -1274,7 +1421,12 @@ class AgentFactoryService(BaseService):
             async def on_client_connected(transport, client):
                 logger.info("Client connected — starting audio recording.")
                 await audio_buffer.start_recording()
-                if first_message_text:
+                if is_s2s:
+                    # S2S: kick off the conversation — context already has the messages
+                    from pipecat.frames.frames import LLMRunFrame
+                    logger.info("Kicking off S2S conversation via LLMRunFrame")
+                    await task.queue_frames([LLMRunFrame()])
+                elif first_message_text:
                     from pipecat.frames.frames import TTSSpeakFrame
                     logger.info("Speaking first_message via TTS: {}", first_message_text)
                     await task.queue_frame(TTSSpeakFrame(text=first_message_text))
@@ -1282,7 +1434,11 @@ class AgentFactoryService(BaseService):
             @transport.event_handler("on_client_connected")
             async def on_client_connected(transport, client):
                 logger.info("Client connected.")
-                if first_message_text:
+                if is_s2s:
+                    from pipecat.frames.frames import LLMRunFrame
+                    logger.info("Kicking off S2S conversation via LLMRunFrame")
+                    await task.queue_frames([LLMRunFrame()])
+                elif first_message_text:
                     from pipecat.frames.frames import TTSSpeakFrame
                     logger.info("Speaking first_message via TTS: {}", first_message_text)
                     await task.queue_frame(TTSSpeakFrame(text=first_message_text))
@@ -1354,6 +1510,7 @@ class AgentFactoryService(BaseService):
             messages=data["messages"],
             agent=agent,
             end_call_message=data.get("end_call_message"),
+            is_s2s=data.get("is_s2s", False),
         )
         logger.info("[TIMING] run_bot_for_agent: run_bot_with_components (+%.3fs), total: %.3fs", _time.monotonic() - _t, _time.monotonic() - _t0)
 
