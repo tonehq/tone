@@ -46,8 +46,9 @@ class LicenseInfo:
  
  
 class LicenseValidator:
-    def __init__(self, license_key: Optional[str] = None):
+    def __init__(self, license_key: Optional[str] = None, skip_license_check: bool = False):
         self._license_key = license_key
+        self._skip_license_check = skip_license_check
         self._cached_info: Optional[LicenseInfo] = None
         self._last_validation: int = 0
 
@@ -78,6 +79,19 @@ class LicenseValidator:
             return None
 
     def validate(self, fingerprint: Optional[str] = None) -> LicenseInfo:
+        if self._skip_license_check:
+            return LicenseInfo(
+                license_id="skip",
+                organization_id="",
+                tier=LicenseTier.ENTERPRISE,
+                capabilities=TIER_CAPABILITIES[LicenseTier.ENTERPRISE],
+                seats=0,
+                expires_at=0,
+                issued_at=0,
+                is_valid=True,
+                validation_error=None,
+            )
+
         if not self._license_key:
             return LicenseInfo(
                 license_id="",
@@ -168,9 +182,9 @@ class LicenseValidator:
 _license_validator: Optional[LicenseValidator] = None
 
 
-def init_license_validator(license_key: Optional[str] = None) -> LicenseValidator:
+def init_license_validator(license_key: Optional[str] = None, skip_license_check: bool = False) -> LicenseValidator:
     global _license_validator
-    _license_validator = LicenseValidator(license_key)
+    _license_validator = LicenseValidator(license_key, skip_license_check=skip_license_check)
     return _license_validator
 
 

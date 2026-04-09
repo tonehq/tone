@@ -56,6 +56,7 @@ class Settings:
         self.RESEND_API_KEY: str = get_secret("RESEND_API_KEY", "")
 
         self.LICENSE_KEY: Optional[str] = get_secret("TONE_LICENSE_KEY") or None
+        self.SKIP_LICENSE_CHECK: bool = get_secret("SKIP_LICENSE_CHECK", "false").lower() == "true"
 
         self.DEFAULT_ORG_ID: str = get_secret("DEFAULT_ORG_ID", "00000000-0000-0000-0000-000000000001")
 

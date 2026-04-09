@@ -18,25 +18,30 @@ from core.api.v1 import (
 )
 import core.models
 
+skip_license = settings.SKIP_LICENSE_CHECK
+
 fingerprint = generate_fingerprint(settings.DATABASE_URL)
-init_license_validator(settings.LICENSE_KEY)
+init_license_validator(settings.LICENSE_KEY, skip_license_check=skip_license)
 license_info = get_license_info(fingerprint)
-capabilities = init_capabilities(fingerprint)
+capabilities = init_capabilities(fingerprint, skip_license_check=skip_license)
 
 from core.internal.license import LicenseTier
 
 ee_folder_exists = os.path.isdir(os.path.join(os.path.dirname(__file__), "ee"))
 
-if ee_folder_exists and license_info.tier == LicenseTier.FREE:
-    print("ERROR: EE code detected but no valid EE license found.")
-    print("Please provide a valid TONE_LICENSE_KEY or remove the 'ee' folder to run Core edition.")
-    sys.exit(1)
-
-if not license_info.is_valid and settings.LICENSE_KEY:
-    print(f"License validation failed: {license_info.validation_error}")
-    if license_info.validation_error == "fingerprint_mismatch":
-        print("License is bound to a different instance.")
+if not skip_license:
+    if ee_folder_exists and license_info.tier == LicenseTier.FREE:
+        print("ERROR: EE code detected but no valid EE license found.")
+        print("Please provide a valid TONE_LICENSE_KEY or remove the 'ee' folder to run Core edition.")
         sys.exit(1)
+
+    if not license_info.is_valid and settings.LICENSE_KEY:
+        print(f"License validation failed: {license_info.validation_error}")
+        if license_info.validation_error == "fingerprint_mismatch":
+            print("License is bound to a different instance.")
+            sys.exit(1)
+else:
+    print("License check skipped (SKIP_LICENSE_CHECK=true)")
 
 ee_enabled = is_ee_enabled()
 edition = "enterprise" if ee_enabled else "core"
