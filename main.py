@@ -82,6 +82,8 @@ if ee_enabled:
         generated_api_keys as ee_generated_api_keys,
         channels as ee_channels,
         voices as ee_voices,
+        call_logs as ee_call_logs,
+        telephony as ee_telephony,
     )
 
     api_v1.include_router(ee_auth.router, prefix="/auth", tags=["auth"])
@@ -92,13 +94,13 @@ if ee_enabled:
     api_v1.include_router(ee_services.router, prefix="/services", tags=["services"])
     api_v1.include_router(ee_agents.router, prefix="/agent", tags=["agent"])
     api_v1.include_router(ee_agent_configs.router, prefix="/agent_config", tags=["agent_config"])
-    api_v1.include_router(ee_agent_channel_phone_numbers.router, prefix="/agent_channel_phone_number", tags=["channel_phone_number"])
-    api_v1.include_router(ee_channel_phone_numbers.router, prefix="/channel_phone_number", tags=["channel-phone-number"])
+    api_v1.include_router(ee_agent_channel_phone_numbers.router, prefix="/agent_channel_phone_number", tags=["agent_channel_phone_number"])
+    api_v1.include_router(ee_channel_phone_numbers.router, prefix="/channel_phone_number", tags=["channel_phone_number"])
     api_v1.include_router(ee_models.router, prefix="/model", tags=["model"])
     api_v1.include_router(ee_generated_api_keys.router, prefix="/generated-api-keys", tags=["generated-api-keys"])
     api_v1.include_router(ee_channels.router, prefix="/channel", tags=["channel"])
     api_v1.include_router(ee_voices.router, prefix="/voice", tags=["voice"])
-    api_v1.include_router(call_logs.router, prefix="/call-log", tags=["call-log"])
+    api_v1.include_router(ee_call_logs.router, prefix="/call-log", tags=["call-log"])
     print("EE edition: Multi-tenant routes loaded")
 else:
     api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -109,8 +111,8 @@ else:
     api_v1.include_router(services.router, prefix="/services", tags=["services"])
     api_v1.include_router(agents.router, prefix="/agent", tags=["agent"])
     api_v1.include_router(agent_configs.router, prefix="/agent_config", tags=["agent_config"])
-    api_v1.include_router(agent_channel_phone_numbers.router, prefix="/channel_phone_number", tags=["channel_phone_number"])
-    api_v1.include_router(channel_phone_numbers.router, prefix="/channel-phone-number", tags=["channel-phone-number"])
+    api_v1.include_router(agent_channel_phone_numbers.router, prefix="/agent_channel_phone_number", tags=["agent_channel_phone_number"])
+    api_v1.include_router(channel_phone_numbers.router, prefix="/channel_phone_number", tags=["channel_phone_number"])
     api_v1.include_router(models_router.router, prefix="/model", tags=["model"])
     api_v1.include_router(generated_api_keys.router, prefix="/generated-api-keys", tags=["generated-api-keys"])
     api_v1.include_router(channels.router, prefix="/channel", tags=["channel"])
@@ -127,7 +129,10 @@ def get_capabilities_endpoint():
 app.mount("/api/v1", api_v1)
 
 # Public telephony WebSocket — no auth required, mounted at root for provider compatibility
-app.include_router(telephony.router, tags=["telephony"])
+if ee_enabled:
+    app.include_router(ee_telephony.router, tags=["telephony"])
+else:
+    app.include_router(telephony.router, tags=["telephony"])
 
 
 @app.on_event("startup")
