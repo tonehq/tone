@@ -140,5 +140,6 @@ Thumbs.db
 # Custom backend environment file
 .env_backend
 
-.claude/settings.local.json
 .gitnexus
+
+.claude/settings.local.json
