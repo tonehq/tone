@@ -5,13 +5,14 @@ from typing import Dict, Any
 import time
 import uuid as uuid_lib
 from uuid import UUID
+import traceback
 
 from fastapi import HTTPException, status
 
 from core.services.base import BaseService
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
-from core.models.channel_phone_numbers import ChannelPhoneNumbers
+from core.models.agent_channel_phone_numbers import AgentChannelPhoneNumbers
 from core.models.service_provider import ServiceProvider
 from core.models.enums import AgentType
 from core.services.agent_config_service import AgentConfigService
@@ -109,7 +110,7 @@ class AgentService(BaseService):
         agent_id = agent_data.get("id")
         agent_uuid_raw = agent_data.get("uuid")
         if agent_id is not None:
-            existing = self.db.query(Agent).filter(Agent.id == int(agent_id)).first()
+            existing = self.query(Agent).filter(Agent.id == int(agent_id)).first()
             if not existing:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -126,6 +127,7 @@ class AgentService(BaseService):
             "name": agent_data["name"],
             "description": agent_data.get("description"),
             "created_by": created_by,
+            "organization_id": self.org_id,
             "created_at": now,
             "updated_at": now,
         }
@@ -143,97 +145,116 @@ class AgentService(BaseService):
             if key in values:
                 update_fields.append(key)
         try:
+            print("into agent try")
+            # Use auto_commit=False for all operations so we can commit
+            # everything atomically — if any step fails, nothing is persisted.
             self.upsert(
                 model=Agent,
                 values=values,
                 conflict_fields=["uuid"],
                 update_fields=update_fields,
                 extra_update={"updated_at": now},
+                auto_commit=False,
             )
+            # Flush so the agent row gets an id we can reference below
+            self.db.flush()
+            agent = self.query(Agent).filter(Agent.uuid == agent_uuid).first()
+
+            channel_data = agent_data.get("channel")
+            if channel_data and channel_data.get("type"):
+                channel_svc = ChannelService(self.db, user_id=self.user_id, org_id=self.org_id)
+                channel = channel_svc.get_or_create_channel_by_type(
+                    channel_type=channel_data["type"],
+                    meta_data=channel_data.get("meta_data"),
+                    created_by=created_by,
+                    auto_commit=False,
+                )
+                existing_link = (
+                    self.query(AgentChannel)
+                    .filter(AgentChannel.agent_id == agent.id, AgentChannel.channel_id == channel.id)
+                    .first()
+                )
+                if not existing_link:
+                    now_link = int(time.time())
+                    self.upsert(
+                        model=AgentChannel,
+                        values={
+                            "uuid": uuid_lib.uuid4(),
+                            "agent_id": agent.id,
+                            "channel_id": channel.id,
+                            "created_at": now_link,
+                            "updated_at": now_link,
+                        },
+                        conflict_fields=["uuid"],
+                        update_fields=["updated_at"],
+                        auto_commit=False,
+                    )
+
+            # When id present: edit both agent and agent_config. When id absent: create agent then create agent_config.
+            # Create/update config whenever any config-related field is present.
+            CONFIG_TRIGGER_KEYS = (
+                "system_prompt", "html_prompt", "first_message", "end_call_message",
+                "voicemail_message", "llm_service_id", "tts_service_id", "stt_service_id",
+                "llm_model_id", "tts_model_id", "stt_model_id",
+                "llm_metadata", "tts_metadata", "stt_metadata",
+                "llm_meta_data", "tts_meta_data", "stt_meta_data",
+                *AGENT_METADATA_KEYS,
+            )
+            existing_config = self.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).first()
+            has_config_field = any(k in agent_data for k in CONFIG_TRIGGER_KEYS)
+            if has_config_field or existing_config:
+                config_data = self._build_agent_config_data(agent.id, agent_data, existing_config=existing_config)
+                if existing_config:
+                    config_data["id"] = existing_config.id
+                    config_data["uuid"] = str(existing_config.uuid)
+                AgentConfigService(self.db, org_id=self.org_id).upsert_agent_config(config_data, auto_commit=False)
+
+            # All steps succeeded — commit the entire transaction atomically
+            self.db.commit()
         except IntegrityError as e:
+            print(traceback.format_exc())
             self.db.rollback()
             detail = _agent_unique_constraint_detail(e)
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=detail,
             ) from e
-        agent = self.db.query(Agent).filter(Agent.uuid == agent_uuid).first()
+        except HTTPException:
+            print(traceback.format_exc())
+            self.db.rollback()
+            raise
+        except Exception:
+            print(traceback.format_exc())
+            self.db.rollback()
+            raise
 
-        # Handle channel creation and agent-channel association
-        channel_data = agent_data.get("channel")
-        if channel_data and channel_data.get("type"):
-            channel_svc = ChannelService(self.db, user_id=self.user_id)
-            channel = channel_svc.get_or_create_channel_by_type(
-                channel_type=channel_data["type"],
-                meta_data=channel_data.get("meta_data"),
-                created_by=created_by,
-            )
-            # Create agent_channel link if it doesn't already exist
-            existing_link = (
-                self.db.query(AgentChannel)
-                .filter(AgentChannel.agent_id == agent.id, AgentChannel.channel_id == channel.id)
-                .first()
-            )
-            if not existing_link:
-                import uuid as _uuid
-                link = AgentChannel(
-                    uuid=_uuid.uuid4(),
-                    agent_id=agent.id,
-                    channel_id=channel.id,
-                    created_at=int(time.time()),
-                    updated_at=int(time.time()),
-                )
-                self.db.add(link)
-                self.db.commit()
-
-        # When id present: edit both agent and agent_config. When id absent: create agent then create agent_config.
-        # Create/update config whenever any config-related field is present.
-        CONFIG_TRIGGER_KEYS = (
-            "system_prompt", "html_prompt", "first_message", "end_call_message",
-            "voicemail_message", "llm_service_id", "tts_service_id", "stt_service_id",
-            "llm_model_id", "tts_model_id", "stt_model_id",
-            "llm_metadata", "tts_metadata", "stt_metadata",
-            "llm_meta_data", "tts_meta_data", "stt_meta_data",
-            *AGENT_METADATA_KEYS,
-        )
-        existing_config = self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).first()
-        has_config_field = any(k in agent_data for k in CONFIG_TRIGGER_KEYS)
-        if has_config_field or existing_config:
-            config_data = self._build_agent_config_data(agent.id, agent_data, existing_config=existing_config)
-            if existing_config:
-                config_data["id"] = existing_config.id
-                config_data["uuid"] = str(existing_config.uuid)
-            AgentConfigService(self.db).upsert_agent_config(config_data)
-
-        config = self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).first()
+        agent = self.query(Agent).filter(Agent.uuid == agent_uuid).first()
+        config = self.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).first()
         return self._agent_response_item(agent, config)
 
     def _agent_response_item(self, agent: Agent, config: Any) -> Dict[str, Any]:
         """Build response dict: agent + config as single flat object (no agent_config key)."""
         from core.models.channel import Channel
 
-        # Fetch linked channels via agent_channels
         channel_rows = (
-            self.db.query(Channel)
+            self.query(Channel)
             .join(AgentChannel, AgentChannel.channel_id == Channel.id)
             .filter(AgentChannel.agent_id == agent.id)
             .all()
         )
 
-        # Fetch phone numbers assigned to this specific agent
         channel_ids = [c.id for c in channel_rows]
         try:
             phone_rows = (
-                self.db.query(ChannelPhoneNumbers)
-                .filter(ChannelPhoneNumbers.agent_id == agent.id)
+                self.query(AgentChannelPhoneNumbers)
+                .filter(AgentChannelPhoneNumbers.agent_id == agent.id)
                 .all()
             )
         except Exception:
             self.db.rollback()
-            # Fallback for when agent_id column doesn't exist yet
             phone_rows = (
-                self.db.query(ChannelPhoneNumbers)
-                .filter(ChannelPhoneNumbers.channel_id.in_(channel_ids))
+                self.query(AgentChannelPhoneNumbers)
+                .filter(AgentChannelPhoneNumbers.channel_id.in_(channel_ids))
                 .all()
             ) if channel_ids else []
 
@@ -384,18 +405,15 @@ class AgentService(BaseService):
         return config_data
 
     def delete_agent(self, agent_id: int):
-        agent = self.db.query(Agent).filter(Agent.id == agent_id).first()
+        agent = self.query(Agent).filter(Agent.id == agent_id).first()
         if not agent:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Agent not found",
             )
-        # Delete associated phone number assignments
-        self.db.query(ChannelPhoneNumbers).filter(ChannelPhoneNumbers.agent_id == agent.id).delete()
-        # Delete associated agent_config
-        self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).delete()
-        # Delete associated agent_channel links
-        self.db.query(AgentChannel).filter(AgentChannel.agent_id == agent.id).delete()
+        self.query(AgentChannelPhoneNumbers).filter(AgentChannelPhoneNumbers.agent_id == agent.id).delete()
+        self.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).delete()
+        self.query(AgentChannel).filter(AgentChannel.agent_id == agent.id).delete()
         self.db.delete(agent)
         self.db.commit()
         return {"message": "Agent deleted successfully"}
@@ -409,11 +427,15 @@ class AgentService(BaseService):
         stt_provider = aliased(ServiceProvider)
 
         q = (
-            self.db.query(Agent, AgentConfig, llm_provider, tts_provider, stt_provider)
+            self.query(Agent)
             .outerjoin(AgentConfig, AgentConfig.agent_id == Agent.id)
             .outerjoin(llm_provider, AgentConfig.llm_service_id == llm_provider.id)
             .outerjoin(tts_provider, AgentConfig.tts_service_id == tts_provider.id)
             .outerjoin(stt_provider, AgentConfig.stt_service_id == stt_provider.id)
+            .add_entity(AgentConfig)
+            .add_entity(llm_provider)
+            .add_entity(tts_provider)
+            .add_entity(stt_provider)
         )
         if agent_id is not None:
             q = q.filter(Agent.id == agent_id)

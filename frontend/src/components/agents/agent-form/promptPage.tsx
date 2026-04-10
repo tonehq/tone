@@ -61,7 +61,7 @@ function ToolbarButton({
 }
 
 function ToolbarDivider() {
-  return <Separator orientation="vertical" className="mx-1.5 !h-5" />;
+  return <Separator orientation="vertical" className="mx-1.5 h-5!" />;
 }
 
 export default function PromptPage({ formData, onFormChange }: PromptPageProps) {
@@ -247,7 +247,7 @@ export default function PromptPage({ formData, onFormChange }: PromptPageProps) 
 
         {/* Editor */}
         <div
-          className="min-h-[400px] cursor-text px-4 py-4 [&_.ProseMirror]:min-h-[180px] [&_.ProseMirror]:text-sm [&_.ProseMirror]:leading-relaxed [&_.ProseMirror]:outline-none"
+          className="min-h-[380px] cursor-text px-4 py-4 [&_.ProseMirror]:min-h-[180px] [&_.ProseMirror]:text-sm [&_.ProseMirror]:leading-relaxed [&_.ProseMirror]:outline-none"
           onClick={() => editor?.commands.focus()}
         >
           <EditorContent editor={editor} />

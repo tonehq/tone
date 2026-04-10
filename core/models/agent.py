@@ -1,17 +1,16 @@
-from decimal import Decimal
 from sqlalchemy import Column, BigInteger, String, Boolean, Enum, UniqueConstraint, Integer, Numeric
 import uuid
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from core.database.base import Base
 from sqlalchemy import ForeignKey, Text
 from sqlalchemy.orm import relationship
-from core.models.base import TimestampModel
+from core.models.base import OrgScopedModel
 from core.models.enums import AgentType
 
-class Agent(TimestampModel):
+
+class Agent(OrgScopedModel):
     __tablename__ = 'agents'
     __table_args__ = (
-        UniqueConstraint('name', name='agent_name_unique'),
+        UniqueConstraint('organization_id', 'name', name='agent_org_name_unique'),
     )
 
     uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)

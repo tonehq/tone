@@ -1,0 +1,3 @@
+[submodule "pipecat"]
+	path = pipecat
+	url = https://github.com/tonehq/pipecat.git

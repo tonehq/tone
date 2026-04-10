@@ -3,13 +3,17 @@
 import { CustomButton, SelectInput } from '@/components/shared';
 import { Slider } from '@/components/ui/slider';
 import { languages } from '@/data/mockAgents';
-import { getVoicesByProvider, type VoiceItem } from '@/services/voiceService';
+import {
+  getLanguagesByProvider,
+  getVoicesByLanguage,
+  type VoiceItem,
+} from '@/services/voiceService';
 import type { ServiceProvider } from '@/types/provider';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { toSelectOptions } from '@/utils/selectUtils';
 import { Gauge, Mic, Volume2 } from 'lucide-react';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import DynamicProviderFields, { type DynamicProviderFieldsHandle } from './DynamicProviderFields';
 import type { AgentVoiceFormData } from './types';
 import VoiceSelect from './VoiceSelect';
@@ -88,8 +92,12 @@ export default function VoiceTab({
   onTtsValidityChange,
   onSttValidityChange,
 }: VoiceTabProps) {
+  const [languageCodes, setLanguageCodes] = useState<string[]>([]);
+  const [languagesLoading, setLanguagesLoading] = useState(false);
   const [voices, setVoices] = useState<VoiceItem[]>([]);
   const [voicesLoading, setVoicesLoading] = useState(false);
+  const fetchedProviderRef = useRef<number | null>(null);
+  const fetchedLangRef = useRef<{ provider: number; language: string } | null>(null);
 
   const ttsOptions = toSelectOptions(ttsProviders, { valueKey: 'id', labelKey: 'display_name' });
   const sttOptions = toSelectOptions(sttProviders, { valueKey: 'id', labelKey: 'display_name' });
@@ -103,17 +111,65 @@ export default function VoiceTab({
     [sttProviders, formData.sttProvider],
   );
 
+  // Fetch languages when provider changes
   useEffect(() => {
     if (!formData.voiceProvider) {
+      setLanguageCodes([]);
       setVoices([]);
+      fetchedProviderRef.current = null;
+      fetchedLangRef.current = null;
       return;
     }
+    if (fetchedProviderRef.current === formData.voiceProvider) return;
+
     let cancelled = false;
-    setVoicesLoading(true);
-    getVoicesByProvider(formData.voiceProvider)
+    setLanguagesLoading(true);
+    setVoices([]);
+    fetchedLangRef.current = null;
+    getLanguagesByProvider(formData.voiceProvider)
       .then((data) => {
         if (!cancelled) {
-          setVoices(data.voices ?? []);
+          fetchedProviderRef.current = formData.voiceProvider;
+          setLanguageCodes(data ?? []);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setLanguageCodes([]);
+          handleApiError(error);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLanguagesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [formData.voiceProvider]);
+
+  // Fetch voices when language changes
+  useEffect(() => {
+    if (!formData.voiceProvider || !formData.language) {
+      setVoices([]);
+      fetchedLangRef.current = null;
+      return;
+    }
+    if (
+      fetchedLangRef.current?.provider === formData.voiceProvider &&
+      fetchedLangRef.current?.language === formData.language
+    )
+      return;
+
+    let cancelled = false;
+    setVoicesLoading(true);
+    getVoicesByLanguage(formData.voiceProvider, formData.language)
+      .then((data) => {
+        if (!cancelled) {
+          fetchedLangRef.current = {
+            provider: formData.voiceProvider!,
+            language: formData.language,
+          };
+          setVoices(data ?? []);
         }
       })
       .catch((error) => {
@@ -128,13 +184,12 @@ export default function VoiceTab({
     return () => {
       cancelled = true;
     };
-  }, [formData.voiceProvider]);
+  }, [formData.voiceProvider, formData.language]);
 
   const availableLanguageOptions = useMemo(() => {
     const langMap = new Map(languages.map((l) => [l.value, l]));
-    const uniqueLangs = [...new Set(voices.map((v) => v.language))].sort();
-    if (!uniqueLangs.length) return [];
-    const langItems = uniqueLangs.map((code) => {
+    if (!languageCodes.length) return [];
+    const langItems = languageCodes.map((code) => {
       const known = langMap.get(code);
       return { code, name: known ? known.label : code, flag: known?.flag ?? '' };
     });
@@ -143,12 +198,7 @@ export default function VoiceTab({
       labelKey: 'name',
       labelFormatter: (item) => (item.flag ? `${item.flag} ${item.name}` : String(item.name)),
     });
-  }, [voices, languages]);
-
-  const filteredVoiceOptions = useMemo(() => {
-    if (!formData.language) return voices;
-    return voices.filter((v) => v.language === formData.language);
-  }, [voices, formData.language]);
+  }, [languageCodes]);
 
   return (
     <div className="space-y-5">
@@ -188,7 +238,7 @@ export default function VoiceTab({
               }}
               options={availableLanguageOptions}
               placeholder="Select a language"
-              loading={voicesLoading}
+              loading={languagesLoading}
             />
           </FormRow>
         )}
@@ -197,7 +247,7 @@ export default function VoiceTab({
           <FormRow label="Voice" description="Choose a voice for your agent.">
             <VoiceSelect
               name="voiceId"
-              voices={filteredVoiceOptions}
+              voices={voices}
               value={
                 formData.ttsMetaData.voice_id != null ? String(formData.ttsMetaData.voice_id) : ''
               }
@@ -304,7 +354,7 @@ export default function VoiceTab({
                   role="radio"
                   aria-checked={isActive}
                   className={cn(
-                    '!flex-col !h-auto !w-[170px] !items-start rounded-md border p-3 text-left transition-colors',
+                    'flex-col! h-auto! w-[170px]! items-start! rounded-md border p-3 text-left transition-colors',
                     isActive
                       ? 'border-primary bg-primary/10'
                       : 'border-border hover:border-muted-foreground/50',
@@ -346,7 +396,7 @@ export default function VoiceTab({
                   role="radio"
                   aria-checked={isActive}
                   className={cn(
-                    'flex !flex-col h-auto w-[105px] !items-start rounded-md border p-2 text-left transition-colors',
+                    'flex flex-col! h-auto w-[105px] items-start! rounded-md border p-2 text-left transition-colors',
                     isActive
                       ? 'border-primary bg-primary/10'
                       : 'border-border hover:border-muted-foreground/50',

@@ -1,19 +1,21 @@
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import jwt
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
+from uuid import UUID
 import time
 from pydantic import BaseModel
+from jose import JWTError, jwt
 
 from core.config import settings
 from core.context import set_tenant_context
+from core.internal.capabilities import is_ee_enabled
 
 
 security = HTTPBearer()
 
 class JWTClaims(BaseModel):
     user_id: int
-    org_id: Optional[int] = None
+    org_id: Optional[Union[str, int]] = None
     role: Optional[str] = None
     email: str
     exp: int
@@ -40,14 +42,14 @@ class JWTManager:
         self,
         user_id: int,
         email: str,
-        org_id: Optional[int] = None,
+        org_id: Optional[Union[str, int, UUID]] = None,
         role: Optional[str] = None
     ) -> str:
         current_time = int(time.time())
         payload = {
             "user_id": user_id,
             "email": email,
-            "org_id": org_id,
+            "org_id": str(org_id) if org_id else None,
             "role": role,
             "iat": current_time,
             "exp": current_time + (self.access_token_expire_hours * 3600)
@@ -74,7 +76,7 @@ class JWTManager:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token has expired"
             )
-        except jwt.JWTError:
+        except JWTError:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token"
@@ -90,7 +92,10 @@ jwt_manager = JWTManager()
 
 def get_jwt_claims(credentials: HTTPAuthorizationCredentials = Depends(security)) -> JWTClaims:
     claims = jwt_manager.verify_token(credentials)
-    org_id = claims.org_id or settings.DEFAULT_ORG_ID
+    if is_ee_enabled() and claims.org_id:
+        org_id = claims.org_id
+    else:
+        org_id = settings.DEFAULT_ORG_ID
     set_tenant_context(org_id=org_id, user_id=claims.user_id, role=claims.role)
     return claims
 

@@ -1,15 +1,19 @@
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from typing import Dict, Any
+import logging
 import time
 import uuid as uuid_lib
 from uuid import UUID
+import traceback
 
 from fastapi import HTTPException, status
 
 from core.services.base import BaseService
 from core.models.agent_config import AgentConfig
 from core.models.agent import Agent
+
+logger = logging.getLogger(__name__)
 
 
 def _agent_config_unique_constraint_detail(exc: IntegrityError) -> str:
@@ -47,7 +51,7 @@ class AgentConfigService(BaseService):
         "description", "updated_at",
     )
 
-    def upsert_agent_config(self, config_data: Dict[str, Any]):
+    def upsert_agent_config(self, config_data: Dict[str, Any], auto_commit: bool = True):
         if config_data.get("agent_id") is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -87,20 +91,51 @@ class AgentConfigService(BaseService):
                 continue
             if key in config_data and config_data[key] is not None:
                 values[key] = config_data[key]
+        # Debug logging for upsert troubleshooting
+        existing_in_db = self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent_id).first()
+        logger.info(
+            "UPSERT_DEBUG: config_id=%s, config_uuid=%s, agent_id=%s, org_id=%s, "
+            "conflict_fields=%s, auto_commit=%s",
+            config_id, config_uuid, agent_id, self.org_id,
+            ["agent_id", "organization_id"], auto_commit,
+        )
+        if existing_in_db:
+            logger.info(
+                "UPSERT_DEBUG existing row: id=%s, uuid=%s, agent_id=%s, org_id=%s",
+                existing_in_db.id, existing_in_db.uuid,
+                existing_in_db.agent_id, existing_in_db.organization_id,
+            )
+        else:
+            logger.info("UPSERT_DEBUG: no existing agent_config row for agent_id=%s", agent_id)
+        logger.info("UPSERT_DEBUG values being sent: %s", values)
+
         try:
             self.upsert(
                 model=AgentConfig,
                 values=values,
-                conflict_fields=["uuid"],
+                conflict_fields=["agent_id", "organization_id"],
                 update_fields=list(self.UPDATABLE_ATTRS),
                 extra_update={"updated_at": now},
+                auto_commit=auto_commit,
             )
         except IntegrityError as e:
-            self.db.rollback()
+            print(traceback.format_exc())
+            logger.error(
+                "UPSERT_DEBUG IntegrityError: %s | orig=%s | pgcode=%s",
+                str(e), getattr(e, "orig", None),
+                getattr(getattr(e, "orig", None), "pgcode", None),
+            )
+            if auto_commit:
+                self.db.rollback()
             detail = _agent_config_unique_constraint_detail(e)
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=detail,
             ) from e
         config = self.db.query(AgentConfig).filter(AgentConfig.uuid == config_uuid).first()
+
+        # Invalidate Redis cache for this agent so next call picks up the new config
+        from core.services.redis_service import cache_delete_pattern
+        cache_delete_pattern(f"agent_bot_data:{agent_id}:*")
+
         return config

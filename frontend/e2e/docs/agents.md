@@ -88,6 +88,7 @@ AgentFormPage.handleSave()
 ```
 
 Each tab exposes a `{ trigger: () => Promise<boolean> }` handle via callback refs:
+
 - `GeneralTab` → `onGeneralValidityChange` (validates `name` field)
 - `DynamicProviderFields` → `onLlmValidityChange` / `onTtsValidityChange` / `onSttValidityChange` (validates provider-specific required fields using `buildFieldRules()` from `src/utils/validators.ts`)
 
@@ -97,17 +98,17 @@ Each tab exposes a `{ trigger: () => Promise<boolean> }` handle via callback ref
 
 `DynamicProviderFields` renders form fields dynamically based on `ServiceProvider.meta_data_schema`:
 
-| `data_type` | Rendered as |
-| --- | --- |
-| `string` | `FormTextInput` (text or URL) |
-| `float` / `int` / `integer` | `TextInput` (type="number") via `Controller` |
-| `boolean` | `RadioGroupField` (Yes/No) via `Controller` |
-| `date` | `FormTextInput` (type="date") |
-| `datetime` | `FormTextInput` (type="datetime-local") |
-| `date range` | `DateRangeField` (two date inputs) via `Controller` |
-| `list` | `MultiSelectField` (checkboxes or tag input) via `Controller` |
-| `rangepicker` | `Slider` via `Controller` |
-| Has `values[]` array | `FormSelectInput` (dropdown) |
+| `data_type`                 | Rendered as                                                   |
+| --------------------------- | ------------------------------------------------------------- |
+| `string`                    | `FormTextInput` (text or URL)                                 |
+| `float` / `int` / `integer` | `TextInput` (type="number") via `Controller`                  |
+| `boolean`                   | `RadioGroupField` (Yes/No) via `Controller`                   |
+| `date`                      | `FormTextInput` (type="date")                                 |
+| `datetime`                  | `FormTextInput` (type="datetime-local")                       |
+| `date range`                | `DateRangeField` (two date inputs) via `Controller`           |
+| `list`                      | `MultiSelectField` (checkboxes or tag input) via `Controller` |
+| `rangepicker`               | `Slider` via `Controller`                                     |
+| Has `values[]` array        | `FormSelectInput` (dropdown)                                  |
 
 Validation rules are built by `buildFieldRules(field)` from `src/utils/validators.ts`, which reads `field.required`, `field.data_type`, `field.format`, and `field.min`/`field.max`.
 
@@ -180,24 +181,29 @@ Validation rules are built by `buildFieldRules(field)` from `src/utils/validator
 The General tab has 4 `SectionCard` sections:
 
 #### Agent Identity section (`Bot` icon):
+
 - [ ] Agent Name — `FormTextInput` (RHF controlled), required, validated with `rules={{ required: 'Please enter a name for your agent' }}`
 - [ ] Agent Description — `TextAreaField`, optional, 3 rows
 
 #### AI Configuration section (`Brain` icon):
+
 - [ ] AI Model — `SelectInput` dropdown, options from `llmProviders` (loaded from `loadableProvidersAtom`)
 - [ ] Model — `SelectInput` dropdown, appears only when selected LLM provider has `models[]` array; options from provider's models
 - [ ] Dynamic LLM Fields — `DynamicProviderFields` renders only when selected provider has `meta_data_schema[]`
 - [ ] Use Realistic Filler Words — `Switch` toggle, default off
 
 #### Messages section (`MessageSquare` icon):
+
 - [ ] First Message — `TextAreaField`, optional, 3 rows
 - [ ] End Call Message — `TextAreaField`, optional, 3 rows
 
 #### Advanced Settings section (`Settings2` icon):
+
 - [ ] Custom Vocabulary — chip-based input (type text + click "Add" or press Enter to add, click X badge button to remove)
 - [ ] Filter Words — chip-based input (same behavior as custom vocabulary)
 
 #### Danger Zone section (`Trash2` icon, `variant="danger"`):
+
 - [ ] "Delete Agent" button (type="danger") — calls `onDeleteAgent` which opens a `CustomModal` confirmation dialog
 - [ ] Delete description: "Permanently remove this agent and all associated data."
 
@@ -210,6 +216,7 @@ The General tab has 4 `SectionCard` sections:
 The Voice tab has 3 `SectionCard` sections:
 
 #### Text-to-Speech section (`Volume2` icon):
+
 - [ ] Voice Provider — `SelectInput` dropdown, options from `ttsProviders`
 - [ ] Language — `SelectInput` dropdown, appears only when voice provider is selected; options are languages filtered from available voices (fetched via `getVoicesByProvider()` service)
 - [ ] Voice — `VoiceSelect` (custom searchable select), appears only when both voice provider and language are selected; shows voice name, avatar, gender badge, description; filterable by name/gender/accent/description
@@ -217,6 +224,7 @@ The Voice tab has 3 `SectionCard` sections:
 - [ ] Voice Speed — `Slider` (0-100), default 50, labels: Slow / Normal / Fast
 
 #### Speech-to-Text section (`Mic` icon):
+
 - [ ] STT Provider — `SelectInput` dropdown, options from `sttProviders`
 - [ ] Dynamic STT Fields — `DynamicProviderFields`, appears when STT provider has `meta_data_schema[]` (excludes `language` field)
 - [ ] Speech Recognition — two `CustomButton` cards with `role="radio"`:
@@ -225,6 +233,7 @@ The Voice tab has 3 `SectionCard` sections:
   - Active card: `border-primary bg-primary/10`
 
 #### Response Timing section (`Gauge` icon):
+
 - [ ] Patience Level — three `CustomButton` cards with `role="radio"`:
   - Low (~1 sec), Medium (~3 sec), High (~5 sec)
   - Default: `low`
@@ -253,6 +262,7 @@ The Voice tab has 3 `SectionCard` sections:
 **Acceptance criteria**:
 
 #### Call Settings section (`Phone` icon):
+
 - [ ] Call Recording — `Switch` toggle, default off. Description: "Enable recording of all calls for review."
 - [ ] Call Transcription — `Switch` toggle, default off. Description: "Automatically transcribe all calls to text."
 
@@ -270,8 +280,8 @@ The Voice tab has 3 `SectionCard` sections:
 - [ ] Assigned phones listed with: phone icon (emerald), phone number, type label, "Unassign" button
 - [ ] Clicking "Assign Number" opens `AssignPhoneNumberModal`
 - [ ] Clicking "Unassign" opens a `CustomModal` confirmation: "Are you sure you want to unassign {number}?"
-- [ ] Assign calls POST `/channel_phone_number/upsert_channel_phone_number` with Twilio channel info
-- [ ] Unassign calls POST `/channel_phone_number/detach_channel_phone_number`
+- [ ] Assign calls POST `/agent_channel_phone_number/upsert_channel_phone_number` with Twilio channel info
+- [ ] Unassign calls POST `/agent_channel_phone_number/detach_channel_phone_number`
 
 ### US-9: Save agent
 
@@ -294,6 +304,7 @@ The Voice tab has 3 `SectionCard` sections:
 **Acceptance criteria**:
 
 #### From agent list:
+
 - [ ] Action menu shows "Delete" option
 - [ ] Clicking Delete triggers `AgentActionMenu` which uses `ActionMenu` with built-in `CustomModal` confirmation
 - [ ] Delete title: "Delete Agent", description: "Are you sure you want to delete this agent? This action cannot be undone."
@@ -302,6 +313,7 @@ The Voice tab has 3 `SectionCard` sections:
 - [ ] On API error: calls `handleApiError(error)`
 
 #### From agent form page:
+
 - [ ] "Delete Agent" button in General tab's Danger Zone section
 - [ ] Opens `CustomModal` confirmation: title "Delete Agent", description about erasing data
 - [ ] Confirming calls `deleteAgent()` service if in edit mode, then navigates to `/agents`
@@ -324,83 +336,83 @@ The Voice tab has 3 `SectionCard` sections:
 
 ### Agent List Page (`/agents`)
 
-| Element | Type | Content / Label | Behavior |
-| --- | --- | --- | --- |
-| Page heading | h1 | "Agents" | Static text (text-2xl font-semibold) |
-| Create Agent button | `CustomButton` (primary) | "Create Agent" (with `Plus` icon) | Opens CreateAgentModal |
-| CustomTable | table | Agent rows | 5 columns, search, sort, pagination, row click |
-| Agent Name column | column | "Agent Name" | Sortable, displays agent name |
-| Phone Number column | column | "Phone Number" | Comma-joined from `phone_number[]` array or "-" |
-| Last Edited column | column | "Last Edited" | Sortable, `formatDate()` or "-" |
-| Agent Type column | column | "Agent Type" | `AgentTypeBadge` component |
-| Actions column | column | "" (no title) | `AgentActionMenu` (right-aligned) |
-| Search input | text field | placeholder: "Search agents..." | Built-in `CustomTable` search |
-| Empty state | div | "No agents yet" + "Create your first agent" button | Shown when `dataSource` is empty |
+| Element             | Type                     | Content / Label                                    | Behavior                                        |
+| ------------------- | ------------------------ | -------------------------------------------------- | ----------------------------------------------- |
+| Page heading        | h1                       | "Agents"                                           | Static text (text-2xl font-semibold)            |
+| Create Agent button | `CustomButton` (primary) | "Create Agent" (with `Plus` icon)                  | Opens CreateAgentModal                          |
+| CustomTable         | table                    | Agent rows                                         | 5 columns, search, sort, pagination, row click  |
+| Agent Name column   | column                   | "Agent Name"                                       | Sortable, displays agent name                   |
+| Phone Number column | column                   | "Phone Number"                                     | Comma-joined from `phone_number[]` array or "-" |
+| Last Edited column  | column                   | "Last Edited"                                      | Sortable, `formatDate()` or "-"                 |
+| Agent Type column   | column                   | "Agent Type"                                       | `AgentTypeBadge` component                      |
+| Actions column      | column                   | "" (no title)                                      | `AgentActionMenu` (right-aligned)               |
+| Search input        | text field               | placeholder: "Search agents..."                    | Built-in `CustomTable` search                   |
+| Empty state         | div                      | "No agents yet" + "Create your first agent" button | Shown when `dataSource` is empty                |
 
 ### Agent Type Badge
 
-| Agent Type | Colors | Icon |
-| --- | --- | --- |
-| Inbound | emerald border/bg/text | `PhoneIncoming` |
-| Outbound | violet border/bg/text | `PhoneOutgoing` |
+| Agent Type | Colors                 | Icon            |
+| ---------- | ---------------------- | --------------- |
+| Inbound    | emerald border/bg/text | `PhoneIncoming` |
+| Outbound   | violet border/bg/text  | `PhoneOutgoing` |
 
 ### Create Agent Modal
 
-| Element | Type | Content / Label | Behavior |
-| --- | --- | --- | --- |
-| Modal | `CustomModal` | title: "Choose type of agent", `hideFooter` | — |
+| Element       | Type                     | Content / Label                                 | Behavior                               |
+| ------------- | ------------------------ | ----------------------------------------------- | -------------------------------------- |
+| Modal         | `CustomModal`            | title: "Choose type of agent", `hideFooter`     | —                                      |
 | Outbound card | `CustomButton` (default) | `PhoneOutgoing` icon + "Outbound" + description | Navigates to `/agents/create/outbound` |
-| Inbound card | `CustomButton` (default) | `PhoneIncoming` icon + "Inbound" + description | Navigates to `/agents/create/inbound` |
+| Inbound card  | `CustomButton` (default) | `PhoneIncoming` icon + "Inbound" + description  | Navigates to `/agents/create/inbound`  |
 
 ### Agent Form Page (create/edit)
 
-| Element | Type | Content / Label | Behavior |
-| --- | --- | --- | --- |
-| Status banner | div | Phone status message | Amber (no phone) or emerald (has phone) |
-| Breadcrumb: Agents | `CustomButton` (link) | "Agents" | Navigates to `/agents` |
-| Breadcrumb: name | span | Agent name (truncated 240px) | Display only |
-| Test Agent button | `CustomButton` (default) | "Test Agent" (with `Phone` icon) | Not yet implemented |
-| Save Changes button | `CustomButton` (primary) | "Save Changes" / "Saving..." | Validates then upserts |
-| Agent avatar | div | First char of name | Gradient bg with primary colors |
-| Agent name | h1 | `formData.name` or "Untitled Agent" | Reflects current name field |
-| Type badge | `AgentTypeBadge` | "Inbound" or "Outbound" | Display only |
-| Phone badge | span | Phone number + count | Only when phones assigned |
-| Tabs | `CustomTab` | General, Voice, Prompt, Call Config, Assign Number | Switches tab content |
-| Delete modal | `CustomModal` | "Delete Agent" confirmation | `confirmType="danger"` |
-| Unassign modal | `CustomModal` | "Unassign Phone Number" confirmation | `confirmType="danger"` |
+| Element             | Type                     | Content / Label                                    | Behavior                                |
+| ------------------- | ------------------------ | -------------------------------------------------- | --------------------------------------- |
+| Status banner       | div                      | Phone status message                               | Amber (no phone) or emerald (has phone) |
+| Breadcrumb: Agents  | `CustomButton` (link)    | "Agents"                                           | Navigates to `/agents`                  |
+| Breadcrumb: name    | span                     | Agent name (truncated 240px)                       | Display only                            |
+| Test Agent button   | `CustomButton` (default) | "Test Agent" (with `Phone` icon)                   | Not yet implemented                     |
+| Save Changes button | `CustomButton` (primary) | "Save Changes" / "Saving..."                       | Validates then upserts                  |
+| Agent avatar        | div                      | First char of name                                 | Gradient bg with primary colors         |
+| Agent name          | h1                       | `formData.name` or "Untitled Agent"                | Reflects current name field             |
+| Type badge          | `AgentTypeBadge`         | "Inbound" or "Outbound"                            | Display only                            |
+| Phone badge         | span                     | Phone number + count                               | Only when phones assigned               |
+| Tabs                | `CustomTab`              | General, Voice, Prompt, Call Config, Assign Number | Switches tab content                    |
+| Delete modal        | `CustomModal`            | "Delete Agent" confirmation                        | `confirmType="danger"`                  |
+| Unassign modal      | `CustomModal`            | "Unassign Phone Number" confirmation               | `confirmType="danger"`                  |
 
 ---
 
 ## Navigation
 
-| Trigger | Destination | Condition |
-| --- | --- | --- |
-| Click "Create Agent" button | Opens CreateAgentModal | Always |
-| Click Outbound card (modal) | `/agents/create/outbound` | Modal closes first |
-| Click Inbound card (modal) | `/agents/create/inbound` | Modal closes first |
-| Click close button (modal) | Closes modal (stays on `/agents`) | Always |
-| Click agent row in table | `/agents/edit/:type/:id` | Agent has valid id |
-| Click "Edit" in action menu | `/agents/edit/:type/:id` | Agent has valid id |
-| Click "Agents" breadcrumb | `/agents` | Always |
-| Save Changes (success, create) | `/agents` | API call succeeds, not edit mode |
-| Save Changes (success, edit) | Stays on page | API call succeeds, is edit mode |
-| Delete Agent (confirmed, edit) | `/agents` | Calls delete API then navigates |
-| Delete Agent (confirmed, create) | `/agents` | Just navigates (no API call) |
-| No auth cookie | `/auth/login?redirect=<path>` | Middleware redirect |
+| Trigger                          | Destination                       | Condition                        |
+| -------------------------------- | --------------------------------- | -------------------------------- |
+| Click "Create Agent" button      | Opens CreateAgentModal            | Always                           |
+| Click Outbound card (modal)      | `/agents/create/outbound`         | Modal closes first               |
+| Click Inbound card (modal)       | `/agents/create/inbound`          | Modal closes first               |
+| Click close button (modal)       | Closes modal (stays on `/agents`) | Always                           |
+| Click agent row in table         | `/agents/edit/:type/:id`          | Agent has valid id               |
+| Click "Edit" in action menu      | `/agents/edit/:type/:id`          | Agent has valid id               |
+| Click "Agents" breadcrumb        | `/agents`                         | Always                           |
+| Save Changes (success, create)   | `/agents`                         | API call succeeds, not edit mode |
+| Save Changes (success, edit)     | Stays on page                     | API call succeeds, is edit mode  |
+| Delete Agent (confirmed, edit)   | `/agents`                         | Calls delete API then navigates  |
+| Delete Agent (confirmed, create) | `/agents`                         | Just navigates (no API call)     |
+| No auth cookie                   | `/auth/login?redirect=<path>`     | Middleware redirect              |
 
 ---
 
 ## API Contracts
 
-| Endpoint | Method | Request | Success Response | Error Response |
-| --- | --- | --- | --- | --- |
-| `/agent/get_all_agents` | GET | (none) | `Agent[]` or `{ data: Agent[] }` | `{ detail: "..." }` |
-| `/agent/get_all_agents?agent_id=N` | GET | query param `agent_id` | `Agent[]` (single item) | `{ detail: "..." }` |
-| `/agent/upsert_agent` | POST | See payload shape below | `Agent` | `{ detail: "..." }` |
-| `/agent/delete_agent?agent_id=N` | DELETE | query param `agent_id` | — | `{ detail: "..." }` |
-| `/channel_phone_number/upsert_channel_phone_number` | POST | Phone number assignment payload | — | `{ detail: "..." }` |
-| `/channel_phone_number/detach_channel_phone_number` | POST | `{ channel_id, phone_number, agent_id }` | — | `{ detail: "..." }` |
-| Voice service: provider-specific | GET | provider id | `{ voices: VoiceItem[] }` | `{ detail: "..." }` |
+| Endpoint                                            | Method | Request                                  | Success Response                 | Error Response      |
+| --------------------------------------------------- | ------ | ---------------------------------------- | -------------------------------- | ------------------- |
+| `/agent/get_all_agents`                             | GET    | (none)                                   | `Agent[]` or `{ data: Agent[] }` | `{ detail: "..." }` |
+| `/agent/get_all_agents?agent_id=N`                  | GET    | query param `agent_id`                   | `Agent[]` (single item)          | `{ detail: "..." }` |
+| `/agent/upsert_agent`                               | POST   | See payload shape below                  | `Agent`                          | `{ detail: "..." }` |
+| `/agent/delete_agent?agent_id=N`                    | DELETE | query param `agent_id`                   | —                                | `{ detail: "..." }` |
+| `/agent_channel_phone_number/upsert_channel_phone_number` | POST   | Phone number assignment payload          | —                                | `{ detail: "..." }` |
+| `/agent_channel_phone_number/detach_channel_phone_number` | POST   | `{ channel_id, phone_number, agent_id }` | —                                | `{ detail: "..." }` |
+| Voice service: provider-specific                    | GET    | provider id                              | `{ voices: VoiceItem[] }`        | `{ detail: "..." }` |
 
 ### Agent response shape (from API)
 
@@ -477,6 +489,7 @@ The Voice tab has 3 `SectionCard` sections:
 ```
 
 **Key differences from `AgentFormState`**:
+
 - `aiModel` → `llm_service_id`, `voiceProvider` → `tts_service_id`, `sttProvider` → `stt_service_id`
 - `voicePrompting` → `system_prompt`
 - `customVocabulary` array → `custom_vocabulary` JSON string
@@ -505,6 +518,7 @@ The Voice tab has 3 `SectionCard` sections:
 ## Edge Cases
 
 ### List page
+
 - [ ] Empty agent list — CustomTable shows empty state with "No agents yet" and "Create your first agent" button
 - [ ] API returns object `{ data: [...] }` instead of array — handled in `fetchAgentList` atom
 - [ ] API returns empty array — handled in atom, sets empty list
@@ -516,6 +530,7 @@ The Voice tab has 3 `SectionCard` sections:
 - [ ] Double-fetch prevention — `hasFetchedRef` prevents duplicate API calls on mount
 
 ### Form page
+
 - [ ] Upsert API failure — calls `handleApiError(error)`, saving state resets, stays on page
 - [ ] Custom vocabulary as string from API (JSON-encoded) — `parseStringArray` handles it
 - [ ] Boolean fields as strings from API ("true"/"false") — `parseBoolean` handles it
@@ -535,12 +550,14 @@ The Voice tab has 3 `SectionCard` sections:
 - [ ] Delete in create mode — no API call, just navigates to `/agents`
 
 ### Delete
+
 - [ ] Delete from list — calls `deleteAgentAtom` which deletes then re-fetches
 - [ ] Delete from form (edit mode) — calls `deleteAgent()` then navigates
 - [ ] Delete from form (create mode) — just navigates, no API call
 - [ ] Delete confirmation cancelled — stays on page, no action
 
 ### Phone numbers
+
 - [ ] Assign in create mode — "Assign Number" button hidden (only shown in edit mode)
 - [ ] Empty phones list — shows contextual message based on edit/create mode
 - [ ] Assign failure — calls `handleApiError(error)`, re-throws error
@@ -589,7 +606,7 @@ The Voice tab has 3 `SectionCard` sections:
 - [ ] Toggle switches use shadcn `Switch` component (accessible by default)
 - [ ] "Agents" breadcrumb is a `CustomButton` (type="link") — proper button semantics
 - [ ] "Save Changes" button has `loading` prop which renders `disabled` attribute and spinner
-- [ ] Agent Name heading in FormRow renders as `<h3>` with text "Agent Name*" (asterisk in child `<span>`, no space char) — use `getByRole('heading', { name: /^Agent Name/, level: 3 })` in tests, not `getByText('Agent Name', { exact: true })`
+- [ ] Agent Name heading in FormRow renders as `<h3>` with text "Agent Name\*" (asterisk in child `<span>`, no space char) — use `getByRole('heading', { name: /^Agent Name/, level: 3 })` in tests, not `getByText('Agent Name', { exact: true })`
 - [ ] Delete confirmation uses `CustomModal` with `confirmType="danger"` — proper dialog semantics
 - [ ] VoiceSelect uses `SearchableSelect` — keyboard navigable popover with search input
 - [ ] Editor click area has `cursor-text` class but uses `div` with `onClick` — editor itself (`EditorContent`) is keyboard accessible

@@ -1,7 +1,7 @@
 # 🎙️ Open Source AI Voice Agent Builder
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.68+-green.svg)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-18+-blue.svg)](https://reactjs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-13+-blue.svg)](https://www.postgresql.org/)
@@ -57,10 +57,10 @@ We believe in democratizing AI voice technology through open source solutions. O
 - Deployed on Vercel
 
 **Backend**
-- FastAPI (Python 3.13)
+- FastAPI (Python 3.10+)
 - PostgreSQL with SQLAlchemy ORM
 - Alembic for database migrations
-- Infiscal for secrets management
+- Infisical for secrets management
 
 **Infrastructure**
 - Docker containerization
@@ -72,7 +72,7 @@ We believe in democratizing AI voice technology through open source solutions. O
 
 ### Prerequisites
 
-- Python 3.13
+- Python 3.10 or higher (download from [python.org](https://www.python.org/downloads/). Verify with `python --version`)
 - Node.js 16+
 - PostgreSQL 14+
 - Docker (optional)
@@ -87,23 +87,46 @@ We believe in democratizing AI voice technology through open source solutions. O
 
 2. **Backend Setup**
    ```bash
-   # Create virtual environment
+   # Create virtual environment (requires Python 3.10+)
    python -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
-   
+
    # Install dependencies
    pip install -r requirements.txt
-   
+
    # Set up environment variables
-   cp .env.example .env
-   # Edit .env with your configuration
-   
+   # Create a .env file in the project root with the required configuration:
+   #   DATABASE_URL=postgresql://<user>:<password>@<host>/<dbname>
+   #   JWT_SECRET_KEY=<your-secret-key>
+   #   ENCRYPTION_KEY=<your-encryption-key>
+
    # Run database migrations
    alembic upgrade head
-   
+
+   # Seed service providers, models, and voices
+   python dev/seed.py
+
    # Start the backend server
-   python app.py --env=dev
+   python main.py
    ```
+
+   **Seed Data (`dev/seed.py`)**
+
+   The seed script sets up your initial data — it creates an owner user, organization, and populates all supported service providers (LLM, STT, TTS), their models, and voices from `dev/dev-data.json`.
+
+   When you run `python dev/seed.py`, it will interactively prompt you for:
+   - **Organization name** — your organization/workspace name
+   - **Owner email** — the admin user's email (used for login)
+   - **Password** — must be 8+ characters with uppercase, lowercase, digit, and special character
+
+   To auto-populate API keys for providers during seeding, set the corresponding environment variables in your `.env` file before running the script. For example:
+   ```bash
+   OPENAI_API_KEY=sk-...
+   DEEPGRAM_API_KEY=...
+   ELEVENLABS_API_KEY=...
+   CARTESIA_API_KEY=...
+   ```
+   Any provider whose API key env var is not set will be seeded without a key — you can add keys later through the UI.
 
 3. **Frontend Setup**
    ```bash
@@ -135,22 +158,36 @@ docker-compose up -d
 Our codebase follows a clean architecture pattern:
 
 ```
-src/
-├── controller/          # HTTP route handlers
-│   ├── agent_controller.py
-│   ├── call_controller.py
-│   └── tool_controller.py
-├── services/           # Business logic layer
+core/
+├── api/v1/              # FastAPI route handlers
+│   ├── agents.py
+│   ├── auth.py
+│   ├── channels.py
+│   ├── models.py
+│   ├── organizations.py
+│   ├── service_providers.py
+│   └── voices.py
+├── services/            # Business logic layer
 │   ├── agent_service.py
-│   ├── call_service.py
-│   └── tool_service.py
-├── models/            # Database models
-│   ├── agent_model.py
-│   ├── call_model.py
-│   └── tool_model.py
-└── utils/             # Utility functions
-    ├── r2.py         # Cloudflare R2 integration
-    └── secrets.py    # Infiscal secrets management
+│   ├── agent_factory_service.py
+│   ├── voice_service.py
+│   ├── channel_service.py
+│   └── model_service.py
+├── models/              # SQLAlchemy ORM models
+│   ├── agent.py
+│   ├── organization.py
+│   ├── service_provider.py
+│   ├── voice.py
+│   └── user.py
+├── middleware/           # Auth & request middleware
+│   └── auth.py
+├── utils/               # Utility functions
+│   └── encryption.py    # AES encryption for API keys
+├── bot.py               # Voice pipeline entry point
+└── database/            # DB session & connection
+dev/
+├── seed.py              # Data seeding script
+└── dev-data.json        # Provider/model/voice definitions
 ```
 
 ### Key Concepts

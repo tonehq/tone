@@ -2,12 +2,11 @@
 
 import { CustomButton, SelectInput, TextAreaField, TextInput } from '@/components/shared';
 import { Form } from '@/components/shared/Form';
-import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import type { ServiceProvider } from '@/types/provider';
 import { toSelectOptions } from '@/utils/selectUtils';
-import { Bot, Brain, MessageSquare, Settings2, Trash2, X } from 'lucide-react';
-import { KeyboardEvent, ReactNode, useEffect, useMemo, useState } from 'react';
+import { Bot, Brain, MessageSquare, Trash2 } from 'lucide-react';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import DynamicProviderFields, { type DynamicProviderFieldsHandle } from './DynamicProviderFields';
 import type { AgentGeneralFormData } from './types';
@@ -154,7 +153,7 @@ export default function GeneralTab({
     onFormSubmit?.({ ...formData, ...next });
   };
 
-  const addVocabulary = () => {
+  const _addVocabulary = () => {
     const trimmed = vocabularyInput.trim();
     if (trimmed && !formData.customVocabulary.includes(trimmed)) {
       onFormChange({
@@ -164,7 +163,7 @@ export default function GeneralTab({
     }
   };
 
-  const addFilterWord = () => {
+  const _addFilterWord = () => {
     const trimmed = filterWordsInput.trim();
     if (trimmed && !formData.filterWords.includes(trimmed)) {
       onFormChange({
@@ -324,7 +323,7 @@ export default function GeneralTab({
         </SectionCard>
 
         {/* Advanced Section */}
-        <SectionCard
+        {/* <SectionCard
           icon={<Settings2 size={16} className="text-primary" />}
           title="Advanced Settings"
           description="Fine-tune vocabulary and word filters."
@@ -408,7 +407,7 @@ export default function GeneralTab({
               )}
             </div>
           </FormRow>
-        </SectionCard>
+        </SectionCard> */}
 
         {/* Danger Zone */}
         <SectionCard

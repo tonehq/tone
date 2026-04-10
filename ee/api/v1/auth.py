@@ -5,7 +5,7 @@ from fastapi import (APIRouter, Body, Depends, Header, HTTPException, Query,
                      status)
 from sqlalchemy.orm import Session
 
-from ee.database.session import get_ee_db
+from core.database.session import get_db
 from ee.middleware.auth import EEJWTClaims, get_ee_jwt_claims
 from ee.services.auth_service import EEAuthService
 
@@ -13,7 +13,7 @@ router = APIRouter()
 
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
-def signup(user_data: Dict[str, Any] = Body(...), db: Session = Depends(get_ee_db)):
+def signup(user_data: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
     email = user_data.get("email")
     password = user_data.get("password")
     username = user_data.get("username")
@@ -30,8 +30,7 @@ def signup(user_data: Dict[str, Any] = Body(...), db: Session = Depends(get_ee_d
 
 
 @router.get("/check_organization_exists")
-def check_organization_exists(name: str = Query(...), db: Session = Depends(get_ee_db)):
-    print(name)
+def check_organization_exists(name: str = Query(...), db: Session = Depends(get_db)):
     return EEAuthService(db).check_organization_exists(name)
 
 
@@ -39,7 +38,7 @@ def check_organization_exists(name: str = Query(...), db: Session = Depends(get_
 def signup_with_firebase(
     user_data: Dict[str, Any] = Body(...),
     authorization: str = Header(...),
-    db: Session = Depends(get_ee_db)
+    db: Session = Depends(get_db)
 ):
     email = user_data.get("email")
     profile = user_data.get("profile")
@@ -62,7 +61,7 @@ def signup_with_firebase(
 
 
 @router.get("/resend_verification_email")
-def resend_verification_email(email: str = Query(...), db: Session = Depends(get_ee_db)):
+def resend_verification_email(email: str = Query(...), db: Session = Depends(get_db)):
     return EEAuthService(db).resend_verification_email(email)
 
 
@@ -71,13 +70,13 @@ def verify_user_email(
     email: str = Query(...),
     code: str = Query(...),
     user_id: int = Query(...),
-    db: Session = Depends(get_ee_db)
+    db: Session = Depends(get_db)
 ):
     return EEAuthService(db).verify_user_email(email, code, user_id)
 
 
 @router.post("/login")
-def login(login_data: Dict[str, str] = Body(...), db: Session = Depends(get_ee_db)):
+def login(login_data: Dict[str, str] = Body(...), db: Session = Depends(get_db)):
     email = login_data.get("email")
     password = login_data.get("password")
 
@@ -91,7 +90,7 @@ def login(login_data: Dict[str, str] = Body(...), db: Session = Depends(get_ee_d
 
 
 @router.get("/forget-password")
-def forget_password(email: str = Query(...), db: Session = Depends(get_ee_db)):
+def forget_password(email: str = Query(...), db: Session = Depends(get_db)):
     return EEAuthService(db).forgot_password(email)
 
 
@@ -100,7 +99,7 @@ def accept_forgot_password(
     email: str = Query(...),
     password: str = Query(...),
     token: str = Query(...),
-    db: Session = Depends(get_ee_db)
+    db: Session = Depends(get_db)
 ):
     return EEAuthService(db).accept_forgot_password(email, password, token)
 
@@ -109,7 +108,7 @@ def accept_forgot_password(
 def switch_organization(
     org_data: Dict[str, str] = Body(...),
     claims: EEJWTClaims = Depends(get_ee_jwt_claims),
-    db: Session = Depends(get_ee_db)
+    db: Session = Depends(get_db)
 ):
     org_id = org_data.get("organization_id")
 

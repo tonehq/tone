@@ -40,15 +40,13 @@ class ChannelService(BaseService):
             meta_data = {}
         data["meta_data"] = meta_data
 
-        # Determine UUID
         channel_id = data.get("id")
         if channel_id is not None:
-            existing = self.db.query(Channel).filter(Channel.id == int(channel_id)).first()
+            existing = self.query(Channel).filter(Channel.id == int(channel_id)).first()
             if not existing:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found")
             channel_uuid = existing.uuid
         else:
-            # For new channels, enforce one channel per type
             from core.models.enums import ChannelType
             type_str = data.get("type", "").strip().upper()
             channel_enum = None
@@ -57,7 +55,7 @@ class ChannelService(BaseService):
                     channel_enum = ct
                     break
             if channel_enum is not None:
-                duplicate = self.db.query(Channel).filter(Channel.type == channel_enum).first()
+                duplicate = self.query(Channel).filter(Channel.type == channel_enum).first()
                 if duplicate:
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
@@ -94,11 +92,11 @@ class ChannelService(BaseService):
                 detail="A channel with this name already exists",
             ) from e
 
-        record = self.db.query(Channel).filter(Channel.uuid == channel_uuid).first()
+        record = self.query(Channel).filter(Channel.uuid == channel_uuid).first()
         return self._response_item(record)
 
     def get_channel(self, channel_id: int) -> Dict[str, Any]:
-        record = self.db.query(Channel).filter(Channel.id == channel_id).first()
+        record = self.query(Channel).filter(Channel.id == channel_id).first()
 
         if not record:
             raise HTTPException(
@@ -109,7 +107,7 @@ class ChannelService(BaseService):
         return self._response_item(record)
 
     def get_all_channels(self) -> List[Dict[str, Any]]:
-        rows = self.db.query(Channel).order_by(Channel.id).all()
+        rows = self.query(Channel).order_by(Channel.id).all()
         return [self._response_item(row) for row in rows]
 
     def get_channel_by_type(self, channel_type: str) -> Dict[str, Any]:
@@ -127,7 +125,7 @@ class ChannelService(BaseService):
                 detail=f"Invalid channel type: {channel_type}",
             )
 
-        record = self.db.query(Channel).filter(Channel.type == channel_enum).first()
+        record = self.query(Channel).filter(Channel.type == channel_enum).first()
         if not record:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -137,7 +135,7 @@ class ChannelService(BaseService):
         return self._response_item(record)
 
     def delete_channel(self, channel_id: int) -> Dict[str, str]:
-        record = self.db.query(Channel).filter(Channel.id == channel_id).first()
+        record = self.query(Channel).filter(Channel.id == channel_id).first()
 
         if not record:
             raise HTTPException(
@@ -150,11 +148,10 @@ class ChannelService(BaseService):
 
         return {"message": "Channel deleted successfully"}
 
-    def get_or_create_channel_by_type(self, channel_type: str, meta_data: Optional[Dict[str, Any]] = None, created_by: Optional[int] = None) -> Channel:
+    def get_or_create_channel_by_type(self, channel_type: str, meta_data: Optional[Dict[str, Any]] = None, created_by: Optional[int] = None, auto_commit: bool = True) -> Channel:
         """Find an existing channel by type or create one. Returns the ORM object."""
         from core.models.enums import ChannelType
 
-        # Normalize to enum name
         type_name = channel_type.strip().upper()
         channel_enum = None
         for ct in ChannelType:
@@ -167,26 +164,33 @@ class ChannelService(BaseService):
                 detail=f"Invalid channel type: {channel_type}",
             )
 
-        existing = self.db.query(Channel).filter(Channel.type == channel_enum).first()
+        existing = self.query(Channel).filter(Channel.type == channel_enum).first()
         if existing:
             return existing
 
         # Create a new channel with type as the default name
         now = int(time.time())
         md = meta_data if isinstance(meta_data, dict) else {}
+        channel_uuid = uuid_lib.uuid4()
 
-        channel = Channel(
-            uuid=uuid_lib.uuid4(),
-            name=channel_enum.value,
-            type=channel_enum,
-            created_by=created_by,
-            meta_data=md,
-            created_at=now,
-            updated_at=now,
+        self.upsert(
+            model=Channel,
+            values={
+                "uuid": channel_uuid,
+                "name": channel_enum.value,
+                "type": channel_enum,
+                "created_by": created_by,
+                "meta_data": md,
+                "created_at": now,
+                "updated_at": now,
+            },
+            conflict_fields=["uuid"],
+            update_fields=["name", "type", "meta_data", "updated_at"],
+            auto_commit=auto_commit,
         )
-        self.db.add(channel)
-        self.db.commit()
-        self.db.refresh(channel)
+        if not auto_commit:
+            self.db.flush()
+        channel = self.query(Channel).filter(Channel.uuid == channel_uuid).first()
         return channel
 
     def _response_item(self, record: Channel) -> Dict[str, Any]:

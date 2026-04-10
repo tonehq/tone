@@ -7,6 +7,7 @@ import { useState } from 'react';
 export interface ActionMenuProps {
   onEdit: () => void;
   onDelete: () => Promise<void>;
+  itemName?: string;
   deleteTitle?: string;
   deleteDescription?: string;
   confirmText?: string;
@@ -17,12 +18,19 @@ export interface ActionMenuProps {
 export default function ActionMenu({
   onEdit,
   onDelete,
-  deleteTitle = 'Delete',
-  deleteDescription = 'Are you sure you want to delete this? This action cannot be undone.',
+  itemName,
+  deleteTitle,
+  deleteDescription,
   confirmText = 'Delete',
   editLabel = 'Edit',
   deleteLabel = 'Delete',
 }: ActionMenuProps) {
+  const resolvedTitle = deleteTitle ?? (itemName ? `Delete ${itemName}?` : 'Delete');
+  const resolvedDescription =
+    deleteDescription ??
+    (itemName
+      ? `Are you sure you want to delete "${itemName}"? This action cannot be undone.`
+      : 'Are you sure you want to delete this? This action cannot be undone.');
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -68,8 +76,8 @@ export default function ActionMenu({
       <CustomModal
         open={confirmOpen}
         onClose={() => setConfirmOpen(false)}
-        title={deleteTitle}
-        description={deleteDescription}
+        title={resolvedTitle}
+        description={resolvedDescription}
         confirmText={confirmText}
         confirmType="danger"
         confirmLoading={deleting}

@@ -36,7 +36,7 @@ function CustomTableInner<TRow>({
   dataSource,
   rowKey,
   loading = false,
-  skeletonRows = 10,
+  skeletonRows = 12,
   searchable = false,
   searchPlaceholder = 'Search...',
   pagination,

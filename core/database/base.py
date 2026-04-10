@@ -1,9 +1,8 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base
 import logging
-import time
 
-from core.config import settings
+from shared.config import settings
 
 logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
 
@@ -25,11 +24,4 @@ engine = create_engine(
 
 
 Base = declarative_base()
-
-
-def _set_updated_at(mapper, connection, target):
-    if hasattr(target, "updated_at"):
-        target.updated_at = int(time.time())
-
-
 

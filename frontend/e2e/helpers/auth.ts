@@ -4,8 +4,9 @@ import { Page } from '@playwright/test';
 // Real credentials for the test account. The login hits the actual backend API.
 // Override via environment variables if needed:
 //   PLAYWRIGHT_TEST_EMAIL / PLAYWRIGHT_TEST_PASSWORD
-export const TEST_EMAIL = process.env.PLAYWRIGHT_TEST_EMAIL ?? 'pegovo3694@dolofan.com';
-export const TEST_PASSWORD = process.env.PLAYWRIGHT_TEST_PASSWORD ?? 'Test@123';
+export const TEST_EMAIL =
+  process.env.PLAYWRIGHT_TEST_EMAIL ?? 'thilak.gunasekaran@productfusion.co';
+export const TEST_PASSWORD = process.env.PLAYWRIGHT_TEST_PASSWORD ?? 'Pass@123';
 
 /**
  * Log in through the actual login page UI against the real backend.

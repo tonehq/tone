@@ -70,7 +70,7 @@ test.describe('Signup Page', () => {
     });
 
     test('shows the subtitle text', async ({ page }) => {
-      await expect(page.getByText('Get started with Voice AI in minutes')).toBeVisible();
+      await expect(page.getByText('Get started with AI Voice Agents in minutes')).toBeVisible();
     });
 
     test('shows the email input', async ({ page }) => {
@@ -98,7 +98,10 @@ test.describe('Signup Page', () => {
     });
 
     test('shows the Google icon inside the Google button', async ({ page }) => {
-      await expect(page.getByRole('img', { name: 'Google' })).toBeVisible();
+      // GoogleIcon is an inline SVG with aria-hidden, verify the button renders
+      const googleBtn = page.getByRole('button', { name: 'Sign up with Google' });
+      await expect(googleBtn).toBeVisible();
+      await expect(googleBtn.locator('svg')).toBeVisible();
     });
 
     test('shows the "Already have an account?" text', async ({ page }) => {
@@ -632,7 +635,7 @@ test.describe('Signup Page', () => {
 
     test('renders the heading at the correct level', async ({ page }) => {
       await expect(
-        page.getByRole('heading', { level: 4, name: 'Create your account' }),
+        page.getByRole('heading', { level: 2, name: 'Create your account' }),
       ).toBeVisible();
     });
   });

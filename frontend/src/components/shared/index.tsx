@@ -1,7 +1,9 @@
 import ActionMenu from './ActionMenu';
 import CheckboxField from './CheckboxField';
+import { PhoneNumberDisplay } from './PhoneNumberDisplay';
 import CustomButton from './CustomButton';
 import CustomLink from './CustomLink';
+import CustomTooltip from './CustomTooltip';
 import CustomModal from './CustomModal';
 import CustomTab from './CustomTab';
 import CustomTable from './CustomTable';
@@ -49,12 +51,14 @@ export {
   CustomButton,
   CustomLink,
   CustomModal,
+  CustomTooltip,
   CustomTab,
   CustomTable,
   Divider,
   Form,
   Logo,
   MultiSelectField,
+  PhoneNumberDisplay,
   RadioGroupField,
   SearchableSelect,
   SelectInput,

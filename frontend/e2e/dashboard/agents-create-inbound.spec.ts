@@ -59,7 +59,9 @@ test.describe('Create Inbound Agent Page', () => {
   // ── 1. Page Rendering ───────────────────────────────────────────────────────
   test.describe('Page Rendering', () => {
     test('shows agent name', async ({ page }) => {
-      await expect(page.getByRole('heading', { name: 'My Inbound Assistant', level: 1 })).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'My Inbound Assistant', level: 1 }),
+      ).toBeVisible();
     });
 
     test('shows Inbound badge', async ({ page }) => {
@@ -90,9 +92,10 @@ test.describe('Create Inbound Agent Page', () => {
 
   // ── 2. Form Tabs ───────────────────────────────────────────────────────────
   test.describe('Form Tabs', () => {
-    test('shows all four form tabs including Assign Number', async ({ page }) => {
+    test('shows all five form tabs', async ({ page }) => {
       await expect(page.getByRole('tab', { name: /general/i })).toBeVisible();
       await expect(page.getByRole('tab', { name: /voice/i })).toBeVisible();
+      await expect(page.getByRole('tab', { name: /prompt/i })).toBeVisible();
       await expect(page.getByRole('tab', { name: /call configuration/i })).toBeVisible();
       await expect(page.getByRole('tab', { name: /assign number/i })).toBeVisible();
     });
@@ -105,32 +108,39 @@ test.describe('Create Inbound Agent Page', () => {
     });
 
     test('shows all General tab form row labels and descriptions', async ({ page }) => {
+      // Agent Identity section
+      await expect(page.getByRole('heading', { name: 'Agent Identity' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Agent Name' })).toBeVisible();
       await expect(page.getByText('What name will your agent go by.')).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Agent Identity' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Agent Description' })).toBeVisible();
       await expect(
         page.getByText("Provide a brief summary explaining your agent's purpose."),
       ).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Agent Identity' })).toBeVisible();
+
+      // AI Configuration section
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
+      await expect(page.getByRole('heading', { name: 'AI Configuration' })).toBeVisible();
       await expect(
         page.getByText("Opt for speed or depth to suit your agent's role."),
       ).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'description' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Use Realistic Filler Words' })).toBeVisible();
+      await expect(
+        page.getByText("Include natural filler words like 'uh' and 'um'."),
+      ).toBeVisible();
+
+      // Messages section
+      await page.getByText('Messages').first().scrollIntoViewIfNeeded();
+      await expect(page.getByRole('heading', { name: 'Messages' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'First Message' })).toBeVisible();
       await expect(
         page.getByText('Initial message sent when the conversation starts.'),
       ).toBeVisible();
       await expect(page.getByRole('heading', { name: 'End Call Message' })).toBeVisible();
       await expect(page.getByText('Message sent at the end of a conversation.')).toBeVisible();
 
-      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
-      await expect(page.getByRole('heading', { name: 'AI Configuration' })).toBeVisible();
-      await expect(page.getByText('Add business terms to improve accuracy.')).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Filter Words' })).toBeVisible();
-      await expect(page.getByText('Words the agent should not speak.')).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Use Realistic Filler Words' })).toBeVisible();
-      await expect(
-        page.getByText("Include natural filler words like 'uh' and 'um'."),
-      ).toBeVisible();
+      // Danger Zone section
+      await page.getByText('Danger Zone').scrollIntoViewIfNeeded();
+      await expect(page.getByRole('heading', { name: 'Danger Zone' })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'Delete Agent' })).toBeVisible();
     });
 
@@ -161,7 +171,9 @@ test.describe('Create Inbound Agent Page', () => {
       await nameInput.fill('Custom Agent Name');
       await expect(nameInput).toHaveValue('Custom Agent Name');
       // Heading should reflect the updated name
-      await expect(page.getByRole('heading', { name: 'Custom Agent Name', level: 1 })).toBeVisible();
+      await expect(
+        page.getByRole('heading', { name: 'Custom Agent Name', level: 1 }),
+      ).toBeVisible();
     });
 
     test('allows editing the description field', async ({ page }) => {
@@ -180,92 +192,6 @@ test.describe('Create Inbound Agent Page', () => {
       const endCallTextarea = page.locator('textarea[name="end_call_message"]');
       await endCallTextarea.fill('Thank you for calling. Goodbye!');
       await expect(endCallTextarea).toHaveValue('Thank you for calling. Goodbye!');
-    });
-
-    test('allows adding custom vocabulary via Enter key', async ({ page }) => {
-      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
-      const vocabInput = page.locator('input[name="vocabularyInput"]');
-      await vocabInput.fill('ToneHQ');
-      await vocabInput.press('Enter');
-
-      await expect(page.getByText('ToneHQ', { exact: true })).toBeVisible();
-    });
-
-    test('allows adding multiple custom vocabulary words', async ({ page }) => {
-      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
-      const vocabInput = page.locator('input[name="vocabularyInput"]');
-
-      await vocabInput.fill('ToneHQ');
-      await vocabInput.press('Enter');
-      await vocabInput.fill('Pipecat');
-      await vocabInput.press('Enter');
-      await vocabInput.fill('WebRTC');
-      await vocabInput.press('Enter');
-
-      await expect(page.getByText('ToneHQ', { exact: true })).toBeVisible();
-      await expect(page.getByText('Pipecat', { exact: true })).toBeVisible();
-      await expect(page.getByText('WebRTC', { exact: true })).toBeVisible();
-    });
-
-    test('prevents adding duplicate vocabulary words', async ({ page }) => {
-      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
-      const vocabInput = page.locator('input[name="vocabularyInput"]');
-
-      await vocabInput.fill('ToneHQ');
-      await vocabInput.press('Enter');
-      await vocabInput.fill('ToneHQ');
-      await vocabInput.press('Enter');
-
-      // Only one badge should exist
-      const badges = page.locator('.flex-wrap').first().getByText('ToneHQ', { exact: true });
-      await expect(badges).toHaveCount(1);
-    });
-
-    test('allows deleting custom vocabulary chips', async ({ page }) => {
-      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
-      const vocabInput = page.locator('input[name="vocabularyInput"]');
-      await vocabInput.fill('ToneHQ');
-      await vocabInput.press('Enter');
-      await expect(page.getByText('ToneHQ', { exact: true })).toBeVisible();
-
-      // Delete chip — the Badge element wraps the text + X button
-      await page.getByText('ToneHQ', { exact: true }).getByRole('button').click();
-      await expect(page.getByText('ToneHQ', { exact: true })).not.toBeVisible();
-    });
-
-    test('allows adding custom vocabulary via Enter button', async ({ page }) => {
-      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
-      const vocabInput = page.locator('input[name="vocabularyInput"]');
-      await vocabInput.fill('PipelineWord');
-      // Click the paired Add button (first "Add" button in the form)
-      await page.getByRole('button', { name: 'Add' }).nth(0).click();
-      await expect(page.getByText('PipelineWord', { exact: true })).toBeVisible();
-    });
-
-    test('allows adding and deleting filter word chips', async ({ page }) => {
-      await page.getByText('Filter Words').scrollIntoViewIfNeeded();
-      const filterInput = page.locator('input[name="filterWordsInput"]');
-      await filterInput.fill('badword');
-      await filterInput.press('Enter');
-
-      await expect(page.getByText('badword', { exact: true })).toBeVisible();
-
-      // Delete chip
-      await page.getByText('badword', { exact: true }).getByRole('button').click();
-      await expect(page.getByText('badword', { exact: true })).not.toBeVisible();
-    });
-
-    test('allows adding multiple filter words', async ({ page }) => {
-      await page.getByText('Filter Words').scrollIntoViewIfNeeded();
-      const filterInput = page.locator('input[name="filterWordsInput"]');
-
-      await filterInput.fill('word1');
-      await filterInput.press('Enter');
-      await filterInput.fill('word2');
-      await filterInput.press('Enter');
-
-      await expect(page.getByText('word1', { exact: true })).toBeVisible();
-      await expect(page.getByText('word2', { exact: true })).toBeVisible();
     });
 
     test('allows toggling filler words switch', async ({ page }) => {
@@ -541,26 +467,16 @@ test.describe('Create Inbound Agent Page', () => {
       // ── General Tab ──
       await page.locator('input[name="name"]').fill('E2E Full Agent');
       await page.locator('textarea[name="description"]').fill('Full form test agent');
-      await page.locator('textarea[name="first_message"]').fill('Hello from E2E!');
-      await page.locator('textarea[name="end_call_message"]').fill('Goodbye from E2E!');
-
-      // Add custom vocabulary
-      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
-      const vocabInput = page.locator('input[name="vocabularyInput"]');
-      await vocabInput.fill('ToneHQ');
-      await vocabInput.press('Enter');
-      await vocabInput.fill('Pipecat');
-      await vocabInput.press('Enter');
-
-      // Add filter words
-      await page.getByText('Filter Words').scrollIntoViewIfNeeded();
-      const filterInput = page.locator('input[name="filterWordsInput"]');
-      await filterInput.fill('badword');
-      await filterInput.press('Enter');
 
       // Enable filler words
+      await page.getByText('AI Configuration').scrollIntoViewIfNeeded();
       const fillerRow = page.getByText('Use Realistic Filler Words').locator('..').locator('..');
       await fillerRow.getByRole('switch').click();
+
+      // Messages
+      await page.getByText('Messages').first().scrollIntoViewIfNeeded();
+      await page.locator('textarea[name="first_message"]').fill('Hello from E2E!');
+      await page.locator('textarea[name="end_call_message"]').fill('Goodbye from E2E!');
 
       // ── Voice Tab ──
       await page.getByRole('tab', { name: /voice/i }).click();
@@ -603,10 +519,9 @@ test.describe('Create Inbound Agent Page', () => {
         speech_recognition: 'accurate',
         call_recording: true,
         call_transcription: true,
+        custom_vocabulary: null,
+        filter_words: null,
       });
-      // Custom vocabulary and filter words are JSON-stringified arrays
-      expect(JSON.parse(payload.custom_vocabulary as string)).toEqual(['ToneHQ', 'Pipecat']);
-      expect(JSON.parse(payload.filter_words as string)).toEqual(['badword']);
       // System prompt contains the typed text (TipTap wraps in HTML)
       expect(payload.system_prompt).toContain('You are a helpful sales agent.');
     });
@@ -639,25 +554,37 @@ test.describe('Create Inbound Agent Page', () => {
     });
 
     test('saves agent to DB and shows in list (real API)', async ({ page }) => {
+      test.slow(); // triple timeout — real API may be slow
+
       // No mocks: triggers actual save to backend/DB. Requires running backend.
       const agentName = `E2E Inbound ${Date.now()}`;
       await page.locator('input[name="name"]').fill(agentName);
 
+      // Wait for the upsert API to succeed before checking navigation
+      const saveResponse = page.waitForResponse(
+        (resp) => resp.url().includes('/agent/upsert_agent') && resp.ok(),
+        { timeout: 30_000 },
+      );
       await page.getByRole('button', { name: /save changes/i }).click();
-      await expect(page).toHaveURL(/\/agents(?:\?|$)/, { timeout: 15_000 });
+      await saveResponse;
+      await expect(page).toHaveURL(/\/agents(?:\?|$)/, { timeout: 30_000 });
 
-      // Wait for the agent list to finish loading
+      // Wait for the agent list to finish loading (skeletons disappear)
       await page.waitForFunction(
         () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
         null,
-        { timeout: 20_000 },
+        { timeout: 15_000 },
       );
 
       // Search for the created agent (it may be on a later pagination page)
-      await page.getByPlaceholder('Search agents...').fill(agentName);
+      const searchInput = page.getByPlaceholder('Search agents...');
+      await expect(searchInput).toBeVisible({ timeout: 5_000 });
+      await searchInput.fill(agentName);
 
-      await expect(page.getByText(agentName).first()).toBeVisible({ timeout: 10_000 });
-      await expect(page.locator('tbody').getByText('Inbound').first()).toBeVisible();
+      await expect(page.getByText(agentName).first()).toBeVisible({ timeout: 15_000 });
+      await expect(
+        page.locator('tbody').getByText('Inbound', { exact: true }).first(),
+      ).toBeVisible();
 
       // Navigate back to create page so subsequent tests aren't affected
       await page.goto('/agents/create/inbound');
@@ -667,7 +594,6 @@ test.describe('Create Inbound Agent Page', () => {
   // ── 9. Delete Agent Confirmation ──────────────────────────────────────────
   test.describe('Delete Agent Confirmation', () => {
     test('opens confirmation modal when clicking Delete Agent', async ({ page }) => {
-      await page.getByRole('button', { name: 'Delete Agent' }).scrollIntoViewIfNeeded();
       await page.getByRole('button', { name: 'Delete Agent' }).click();
 
       const dialog = page.getByRole('dialog');
@@ -683,7 +609,6 @@ test.describe('Create Inbound Agent Page', () => {
     });
 
     test('closes delete modal when cancelled', async ({ page }) => {
-      await page.getByRole('button', { name: 'Delete Agent' }).scrollIntoViewIfNeeded();
       await page.getByRole('button', { name: 'Delete Agent' }).click();
       await expect(page.getByRole('dialog')).toBeVisible();
 

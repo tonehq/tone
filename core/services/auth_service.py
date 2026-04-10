@@ -8,20 +8,46 @@ from fastapi import HTTPException, status
 from core.services.base import BaseService
 from core.models.user import User
 from core.models.member import Member
+from core.models.organization import Organization
 from core.models.organization_invite import OrganizationInvite
 from core.models.email_verification import EmailVerification
 from core.models.password_reset import PasswordReset
 from core.models.organization_access_request import OrganizationAccessRequest
-from core.models.enums import UserStatus, Role, InviteStatus, AuthProvider, AccessRequestStatus
+from core.models.enums import UserStatus, Role, InviteStatus, AuthProvider, AccessRequestStatus, OrganizationStatus
 from core.middleware.auth import jwt_manager
 from core.utils.security import hash_password, verify_password, generate_verification_code, generate_token
 from core.services.email_service import MailService
 from core.config import settings
+import uuid as uuid_lib
 
 
 class AuthService(BaseService):
-    def __init__(self, db: Session, user_id: Optional[int] = None):
-        super().__init__(db, user_id)
+    def __init__(self, db: Session, user_id: Optional[int] = None, org_id=None):
+        super().__init__(db, user_id, org_id=org_id)
+
+    def ensure_default_organization(self, created_by: int) -> Organization:
+        from uuid import UUID
+        default_org_id = UUID(settings.DEFAULT_ORG_ID)
+        existing = self.db.query(Organization).filter(Organization.id == default_org_id).first()
+        if existing:
+            return existing
+
+        current_time = int(time.time())
+        org = Organization(
+            id=default_org_id,
+            name="Default Organization",
+            slug="default",
+            description="Default organization",
+            status=OrganizationStatus.ACTIVE,
+            created_by=created_by,
+            subscription_plan="free",
+            subscription_status="active",
+            created_at=current_time,
+            updated_at=current_time,
+        )
+        self.db.add(org)
+        self.db.commit()
+        return org
 
     def signup(self, email: str, password: str, username: Optional[str] = None,
                profile: Optional[Dict] = None) -> Dict[str, Any]:
@@ -200,20 +226,29 @@ class AuthService(BaseService):
             user.status = UserStatus.ACTIVE
             user.updated_at = current_time
 
-            # First user in the org becomes owner
-            existing_member_count = self.db.query(Member).count()
+            self.ensure_default_organization(user.id)
+
+            existing_member_count = self.db.query(Member).filter(
+                Member.organization_id == settings.DEFAULT_ORG_ID
+            ).count()
             role = Role.OWNER if existing_member_count == 0 else Role.MEMBER
 
-            member = Member(
-                user_id=user.id,
-                role=role,
-                status='active',
-                created_by=user.id,
-                created_at=current_time,
-                updated_at=current_time,
-                joined_at=current_time
+            self.upsert(
+                model=Member,
+                values={
+                    "user_id": user.id,
+                    "role": role,
+                    "status": "active",
+                    "created_by": user.id,
+                    "created_at": current_time,
+                    "updated_at": current_time,
+                    "joined_at": current_time,
+                    "organization_id": settings.DEFAULT_ORG_ID,
+                },
+                conflict_fields=["organization_id", "user_id"],
+                update_fields=["role", "status", "updated_at", "joined_at"],
+                auto_commit=False,
             )
-            self.db.add(member)
 
         self.db.commit()
 
@@ -319,20 +354,25 @@ class AuthService(BaseService):
                 detail="Pending invitation already exists"
             )
 
-        invitation = OrganizationInvite(
-            email=email,
-            name=name,
-            role=role_enum,
-            invitation_token=generate_token(),
-            expires_at=expires_at,
-            invited_by=invited_by,
-            created_at=current_time,
-            updated_at=current_time
+        invite_uuid = uuid_lib.uuid4()
+        invitation_token = generate_token()
+        self.upsert(
+            model=OrganizationInvite,
+            values={
+                "uuid": invite_uuid,
+                "email": email,
+                "name": name,
+                "role": role_enum,
+                "invitation_token": invitation_token,
+                "expires_at": expires_at,
+                "invited_by": invited_by,
+                "created_at": current_time,
+                "updated_at": current_time,
+            },
+            conflict_fields=["uuid"],
+            update_fields=["name", "role", "invitation_token", "expires_at", "updated_at"],
         )
-
-        self.db.add(invitation)
-        self.db.commit()
-        self.db.refresh(invitation)
+        invitation = self.db.query(OrganizationInvite).filter(OrganizationInvite.uuid == invite_uuid).first()
 
         invite_url = f"{settings.APPLICATION_URL}/verify/user_to_workspace?email={email}&code={invitation.invitation_token}"
 
@@ -386,17 +426,23 @@ class AuthService(BaseService):
                 detail="You are already a member"
             )
 
-        member = Member(
-            user_id=user.id,
-            role=invitation.role,
-            status='active',
-            created_by=invitation.invited_by,
-            created_at=current_time,
-            updated_at=current_time,
-            joined_at=current_time
+        org_id = invitation.organization_id if invitation.organization_id else settings.DEFAULT_ORG_ID
+        self.upsert(
+            model=Member,
+            values={
+                "user_id": user.id,
+                "role": invitation.role,
+                "status": "active",
+                "created_by": invitation.invited_by,
+                "created_at": current_time,
+                "updated_at": current_time,
+                "joined_at": current_time,
+                "organization_id": org_id,
+            },
+            conflict_fields=["organization_id", "user_id"],
+            update_fields=["role", "status", "updated_at", "joined_at"],
+            auto_commit=False,
         )
-
-        self.db.add(member)
 
         invitation.status = InviteStatus.ACCEPTED
         invitation.updated_at = current_time
@@ -476,17 +522,23 @@ class AuthService(BaseService):
         self.db.add(user)
         self.db.flush()
 
-        member = Member(
-            user_id=user.id,
-            role=invitation.role,
-            status='active',
-            created_by=invitation.invited_by,
-            created_at=current_time,
-            updated_at=current_time,
-            joined_at=current_time
+        org_id = invitation.organization_id if invitation.organization_id else settings.DEFAULT_ORG_ID
+        self.upsert(
+            model=Member,
+            values={
+                "user_id": user.id,
+                "role": invitation.role,
+                "status": "active",
+                "created_by": invitation.invited_by,
+                "created_at": current_time,
+                "updated_at": current_time,
+                "joined_at": current_time,
+                "organization_id": org_id,
+            },
+            conflict_fields=["organization_id", "user_id"],
+            update_fields=["role", "status", "updated_at", "joined_at"],
+            auto_commit=False,
         )
-
-        self.db.add(member)
 
         invitation.status = InviteStatus.ACCEPTED
         invitation.accepted_by = user.id
@@ -655,16 +707,23 @@ class AuthService(BaseService):
             access_request.reviewed_at = current_time
             access_request.updated_at = current_time
 
-            member = Member(
-                user_id=access_request.user_id,
-                role=Role.MEMBER,
-                status='active',
-                created_by=reviewer_id,
-                created_at=current_time,
-                updated_at=current_time,
-                joined_at=current_time
+            org_id = access_request.organization_id if access_request.organization_id else settings.DEFAULT_ORG_ID
+            self.upsert(
+                model=Member,
+                values={
+                    "user_id": access_request.user_id,
+                    "role": Role.MEMBER,
+                    "status": "active",
+                    "created_by": reviewer_id,
+                    "created_at": current_time,
+                    "updated_at": current_time,
+                    "joined_at": current_time,
+                    "organization_id": org_id,
+                },
+                conflict_fields=["organization_id", "user_id"],
+                update_fields=["role", "status", "updated_at", "joined_at"],
+                auto_commit=False,
             )
-            self.db.add(member)
             self.db.commit()
 
             return {"message": "Access request approved"}
@@ -707,16 +766,32 @@ class AuthService(BaseService):
         user.last_login_at = int(time.time())
         self.db.commit()
 
+        # Get user's organization membership
+        member = self.db.query(Member).filter(
+            Member.user_id == user.id,
+            Member.status == 'active'
+        ).first()
+
+        org_id = None
+        role = None
+        if member:
+            org_id = str(member.organization_id)
+            role = member.role.value
+
         access_token = jwt_manager.create_access_token(
             user_id=user.id,
-            email=user.email
+            email=user.email,
+            org_id=org_id,
+            role=role
         )
 
         return {
             "access_token": access_token,
             "token_type": "bearer",
             "user_id": user.id,
-            "email": user.email
+            "email": user.email,
+            "org_id": org_id,
+            "role": role
         }
 
     def forgot_password(self, email: str) -> Dict[str, str]:

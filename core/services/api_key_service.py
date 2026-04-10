@@ -13,8 +13,8 @@ from core.utils.encryption import encrypt, decrypt
 
 
 class ApiKeyService(BaseService):
-    def __init__(self, db: Session, user_id: Optional[int] = None):
-        super().__init__(db, user_id)
+    def __init__(self, db: Session, user_id: Optional[int] = None, org_id=None):
+        super().__init__(db, user_id, org_id=org_id)
 
     def upsert_api_key(self, service_provider_id: int, name: str,
                        api_key_value: str, description: Optional[str] = None,
@@ -74,6 +74,10 @@ class ApiKeyService(BaseService):
         record_uuid = values["uuid"]
         api_key = self.db.query(ApiKey).filter(ApiKey.uuid == record_uuid).first()
 
+        # API key change can affect any agent — invalidate all cached agent bot data
+        from core.services.redis_service import cache_delete_pattern
+        cache_delete_pattern("agent_bot_data:*")
+
         return {
             "id": api_key.id,
             "uuid": str(api_key.uuid),
@@ -88,11 +92,12 @@ class ApiKeyService(BaseService):
         }
 
     def get_all_api_keys(self) -> List[Dict[str, Any]]:
-        results = self.db.query(ApiKey, ServiceProvider).join(
+        base_query = self.query(ApiKey)
+        results = base_query.join(
             ServiceProvider, ApiKey.service_provider_id == ServiceProvider.id
         ).filter(
             ApiKey.status == 'active'
-        ).all()
+        ).add_entity(ServiceProvider).all()
 
         return [{
             "id": key.id,
@@ -111,11 +116,11 @@ class ApiKeyService(BaseService):
         } for key, provider in results]
 
     def get_api_key(self, api_key_id: int) -> Dict[str, Any]:
-        result = self.db.query(ApiKey, ServiceProvider).join(
+        result = self.query(ApiKey).join(
             ServiceProvider, ApiKey.service_provider_id == ServiceProvider.id
         ).filter(
             ApiKey.id == api_key_id
-        ).first()
+        ).add_entity(ServiceProvider).first()
 
         if not result:
             raise HTTPException(
@@ -149,7 +154,7 @@ class ApiKeyService(BaseService):
         }
 
     def delete_api_key(self, api_key_id: int) -> Dict[str, str]:
-        key = self.db.query(ApiKey).filter(ApiKey.id == api_key_id).first()
+        key = self.query(ApiKey).filter(ApiKey.id == api_key_id).first()
 
         if not key:
             raise HTTPException(
@@ -160,11 +165,15 @@ class ApiKeyService(BaseService):
         self.db.delete(key)
         self.db.commit()
 
+        # API key deleted — invalidate all cached agent bot data
+        from core.services.redis_service import cache_delete_pattern
+        cache_delete_pattern("agent_bot_data:*")
+
         return {"message": "API key deleted successfully"}
 
     def validate_api_key(self, api_key_id: int, is_valid: bool,
                          validation_error: Optional[str] = None) -> Dict[str, Any]:
-        key = self.db.query(ApiKey).filter(ApiKey.id == api_key_id).first()
+        key = self.query(ApiKey).filter(ApiKey.id == api_key_id).first()
 
         if not key:
             raise HTTPException(

@@ -11,8 +11,8 @@ from core.models.models import Model
 
 
 class ServiceProviderService(BaseService):
-    def __init__(self, db: Session, user_id: Optional[int] = None):
-        super().__init__(db, user_id)
+    def __init__(self, db: Session, user_id: Optional[int] = None, org_id=None):
+        super().__init__(db, user_id, org_id=org_id)
 
     def _exists_same_name_and_provider_type(
         self, name: str, provider_type: str, exclude_id: Optional[int] = None

@@ -7,11 +7,28 @@ description: Generate and maintain Postman collections from FastAPI route files.
 
 Generate Postman v2.1 collections by reading FastAPI router files. Produce one collection per controller (router file) with all its endpoints fully configured.
 
+## Core vs EE Handling
+
+This project has two editions — **Core** (`core/api/v1/`) and **EE** (`ee/api/v1/`). A single `main.py` handles both: it checks `is_ee_enabled()` at startup and loads either core or EE routers (never both). The edition is determined by the license key and whether the `ee/` folder exists.
+
+Both editions share the same API paths (`/api/v1/...`) and request/response formats. The only differences are:
+- **Auth guards** — EE uses `require_ee_org_member` / `require_ee_admin_or_owner` instead of core equivalents (internal, not visible in the API).
+- **Org context** — EE passes `org_id` (UUID) internally for multi-tenancy.
+- **A few EE-only endpoints** — e.g., `switch_organization`, `get_associated_tenants`, `create_tenants`, `request_access`.
+
+From Postman's perspective, the request is identical for both editions — same URLs, same server, same port. Which controllers handle it depends on the server's edition.
+
+**Rules:**
+- Maintain a **single collection per controller** — do NOT create separate core and EE collections.
+- Use the **core controller** (`core/api/v1/`) as the primary source for generating collections.
+- Also check the **EE controller** (`ee/api/v1/`) for any extra endpoints not in core. Add those to the same collection with an `[EE]` prefix in the endpoint name (e.g., `[EE] Switch Organization`).
+- Each controller file gets its own collection — do NOT merge different controllers into one collection (e.g., `agent_channel_phone_numbers` and `channel_phone_numbers` are separate controllers and must have separate collection files).
+
 ## Inputs
 
 The user provides:
 1. **Source path** — A single file or directory containing FastAPI router files (e.g., `core/api/v1/`).
-2. **Output directory** — Where to write the generated `.json` collection files (default: `postman/`).
+2. **Output directory** — Where to write the generated `.json` collection files (default: `postman_collection/`).
 
 ## First Run Workflow
 
@@ -43,12 +60,12 @@ Use the `analyze_diff.py` script from `.claude/skills/find-impacted-apis/`:
 python .claude/skills/find-impacted-apis/analyze_diff.py \
   --project-path . \
   --auto \
-  --output postman/
+  --output postman_collection/
 ```
 
 This produces:
-- `postman/impacted-apis-report.json` — structured data with all changed endpoints, services, and models
-- `postman/impacted-apis-report.md` — human-readable summary
+- `postman_collection/impacted-apis-report.json` — structured data with all changed endpoints, services, and models
+- `postman_collection/impacted-apis-report.md` — human-readable summary
 
 If this is the first run of `find-impacted-apis` (no state file at
 `~/.claude-skills/find-impacted-apis/last_run.json`), you can either:
@@ -102,7 +119,7 @@ For each controller file that has impacted endpoints:
 
 ## Collection Structure (Postman v2.1 Format)
 
-Each generated collection must follow this structure:
+Each generated collection must follow this structure. Every endpoint item MUST include both a `request` and a `response` array with example responses (success case + relevant error cases).
 
 ```json
 {
@@ -135,11 +152,41 @@ Each generated collection must follow this structure:
           "raw": "{ ... example body ... }",
           "options": { "raw": { "language": "json" } }
         }
-      }
+      },
+      "response": [
+        {
+          "name": "{Endpoint Description} - Success",
+          "originalRequest": { "...same as request above..." },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{ ... example success response body ... }"
+        },
+        {
+          "name": "{Endpoint Description} - {Error Case}",
+          "originalRequest": { "...request with invalid data..." },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{ \"detail\": \"error message\" }"
+        }
+      ]
     }
   ]
 }
 ```
+
+## Response Example Rules
+
+Each endpoint must include example responses:
+- **Success response** — Always include at least one 200/201 success example with realistic response body.
+- **Error responses** — Include examples for validation errors (400) found in the handler (e.g., missing required fields), not-found errors (404) if applicable, and auth errors if the endpoint requires specific roles.
+- **Multiple success variants** — For upsert endpoints, include both "Create" and "Update" success examples.
+- Infer response body structure from the service method return or the model's fields. Use realistic placeholder values consistent with the request body examples.
 
 ## Endpoint Naming Convention
 
@@ -157,12 +204,15 @@ Derive endpoint names from the route handler function name, converted to title c
 ## Auth Header Rules
 
 Map auth dependencies to collection-level or request-level auth:
-- `require_org_member` / `require_admin_or_owner` / `get_jwt_claims` -> Bearer token auth using `{{authToken}}` variable.
-- No auth dependency -> No auth on that request.
+- Core: `require_org_member` / `require_admin_or_owner` / `get_jwt_claims` -> Bearer token auth using `{{authToken}}` variable.
+- EE: `require_ee_org_member` / `require_ee_admin_or_owner` / `get_ee_jwt_claims` -> Same Bearer token auth (the JWT format differs but the header is identical).
+- No auth dependency -> No auth on that request (set `"auth": { "type": "noauth" }` at the request level).
 
 ## Output Rules
 
 - Write valid JSON with 2-space indentation.
-- One collection file per controller/router file.
+- One collection file per controller/router file. Never merge different controllers into one file.
 - File naming: `{controller_name}.postman_collection.json` (e.g., `agents.postman_collection.json`).
+- Output directory: `postman_collection/` (not `postman/`).
 - Prefix all URL paths with `/api/v1` followed by the router prefix from `main.py`.
+- Single collection per controller covers both core and EE. EE-only endpoints are prefixed with `[EE]` in the name.

@@ -156,24 +156,25 @@ test.describe('Agents List Page', () => {
     test('shows inbound agent type badge', async ({ page }) => {
       // AgentTypeBadge renders a shadcn Badge with text 'Inbound' in the table body
       const tableBody = page.locator('tbody');
-      await expect(tableBody.getByText('Inbound')).toBeVisible({ timeout: 5_000 });
+      await expect(tableBody.getByText('Inbound', { exact: true })).toBeVisible({ timeout: 5_000 });
     });
 
     test('shows outbound agent type badge', async ({ page }) => {
       const tableBody = page.locator('tbody');
-      await expect(tableBody.getByText('Outbound')).toBeVisible({ timeout: 5_000 });
+      await expect(tableBody.getByText('Outbound', { exact: true })).toBeVisible({ timeout: 5_000 });
     });
 
     test('shows phone number for agents that have one', async ({ page }) => {
       const salesRow = page.locator('tbody tr').filter({ hasText: 'Sales Assistant' });
       await expect(salesRow).toBeVisible({ timeout: 5_000 });
-      await expect(salesRow.getByText('+1 (555) 123-4567')).toBeVisible();
+      // PhoneNumberDisplay formats as +CC-LOCAL via formatPhoneWithDash
+      await expect(salesRow.getByText('+1-5551234567')).toBeVisible();
     });
 
-    test('shows dash for agents without a phone number', async ({ page }) => {
+    test('shows em-dash for agents without a phone number', async ({ page }) => {
       const supportRow = page.locator('tbody tr').filter({ hasText: 'Support Bot' });
       await expect(supportRow).toBeVisible({ timeout: 5_000 });
-      await expect(supportRow.getByText('-')).toBeVisible();
+      await expect(supportRow.getByText('—')).toBeVisible();
     });
 
     test('shows pagination footer with rows per page control', async ({ page }) => {
@@ -184,12 +185,13 @@ test.describe('Agents List Page', () => {
   // ── 2. Table Columns & Interaction ─────────────────────────────────────────
   test.describe('Table Columns & Interaction', () => {
     test('shows all column headers', async ({ page }) => {
-      await expect(page.getByRole('columnheader', { name: 'Agent Name' })).toBeVisible({
+      await expect(page.getByRole('columnheader', { name: 'Agent' })).toBeVisible({
         timeout: 5_000,
       });
-      await expect(page.getByRole('columnheader', { name: 'Phone Number' })).toBeVisible();
-      await expect(page.getByRole('columnheader', { name: 'Last Edited' })).toBeVisible();
-      await expect(page.getByRole('columnheader', { name: 'Agent Type' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Type' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Phone' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Last Updated' })).toBeVisible();
     });
 
     test('shows inline Edit and Delete buttons for each row', async ({ page }) => {
@@ -285,8 +287,9 @@ test.describe('Agents List Page', () => {
       await expect(page.getByText('No agents yet')).toBeVisible({ timeout: 5_000 });
     });
 
-    test('shows create first agent button in empty state', async ({ page }) => {
-      await expect(page.getByRole('button', { name: /create your first agent/i })).toBeVisible({
+    test('shows create agent button in empty state', async ({ page }) => {
+      const emptyState = page.getByRole('cell', { name: /no agents yet/i });
+      await expect(emptyState.getByRole('button', { name: /create agent/i })).toBeVisible({
         timeout: 5_000,
       });
     });

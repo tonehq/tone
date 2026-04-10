@@ -1,314 +1,71 @@
 {
   "metadata": {
-    "generated_at": "2026-03-10T06:10:51.722267+00:00",
-    "commit1": "7e2039f96abb9e6c0eb412ed48fbcf85e441f19f",
-    "commit2": "c6b491952168aa62b4f5c5606a552245e5558f57",
-    "branch": "claude/UI-improvements",
-    "project_path": "/Users/kishokkumara/Projects/tonehq/frontend"
+    "generated_at": "2026-03-17T10:42:15.762593+00:00",
+    "commit1": "3aff27133b2d6d5286268dc0928357578969bdad",
+    "commit2": "ab3afb0e0bae1539bbd692afc2e5525202b42690",
+    "branch": "new-schema-changes",
+    "project_path": "/Users/thilak/Documents/Tone/frontend"
   },
   "summary": {
-    "direct_route_changes": 2,
-    "transitive_impacts": 7,
+    "direct_route_changes": 0,
+    "transitive_impacts": 4,
     "layout_impacts": 0,
     "middleware_modified": false,
-    "total_unique_routes": 9,
-    "files_changed_total": 20
+    "total_unique_routes": 4,
+    "files_changed_total": 2
   },
   "impacted_routes": [
     {
-      "route": "/auth/forgotpassword",
-      "page_file": "src/app/auth/forgotpassword/page.tsx",
-      "impact_type": "direct",
-      "trigger_file": null,
-      "chain": []
-    },
-    {
-      "route": "/auth/reset-password",
-      "page_file": "src/app/auth/reset-password/page.tsx",
-      "impact_type": "direct",
-      "trigger_file": null,
-      "chain": []
-    },
-    {
-      "route": "/auth/login",
-      "page_file": "src/app/auth/login/page.tsx",
+      "route": "/settings",
+      "page_file": "src/app/(dashboard)/settings/page.tsx",
       "impact_type": "transitive",
-      "trigger_file": "src/app/auth/login/LoginPage.tsx",
-      "chain": [
-        "LoginPage.tsx",
-        "page.tsx"
-      ]
-    },
-    {
-      "route": "/auth/signup",
-      "page_file": "src/app/auth/signup/page.tsx",
-      "impact_type": "transitive",
-      "trigger_file": "src/app/auth/signup/SignupClient.tsx",
-      "chain": [
-        "SignupClient.tsx",
-        "page.tsx"
-      ]
+      "trigger_file": "src/components/settings/AddChannelModal.tsx",
+      "chain": ["AddChannelModal.tsx", "Integrations.tsx", "page.tsx"]
     },
     {
       "route": "/agents/create/inbound",
       "page_file": "src/app/(dashboard)/agents/create/inbound/page.tsx",
       "impact_type": "transitive",
-      "trigger_file": "src/components/agents/agent-form/DynamicProviderFields.tsx",
-      "chain": [
-        "DynamicProviderFields.tsx",
-        "AgentFormPage.tsx",
-        "page.tsx"
-      ]
-    },
-    {
-      "route": "/agents/create/outbound",
-      "page_file": "src/app/(dashboard)/agents/create/outbound/page.tsx",
-      "impact_type": "transitive",
-      "trigger_file": "src/components/agents/agent-form/DynamicProviderFields.tsx",
-      "chain": [
-        "DynamicProviderFields.tsx",
-        "AgentFormPage.tsx",
-        "page.tsx"
-      ]
+      "trigger_file": "src/utils/agentFormUtils.ts",
+      "chain": ["agentFormUtils.ts", "AgentFormPage.tsx", "page.tsx"]
     },
     {
       "route": "/agents/edit/[type]/[id]",
       "page_file": "src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx",
       "impact_type": "transitive",
-      "trigger_file": "src/components/agents/agent-form/DynamicProviderFields.tsx",
-      "chain": [
-        "DynamicProviderFields.tsx",
-        "AgentFormPage.tsx",
-        "page.tsx"
-      ]
+      "trigger_file": "src/utils/agentFormUtils.ts",
+      "chain": ["agentFormUtils.ts", "AgentFormPage.tsx", "page.tsx"]
     },
     {
-      "route": "/settings",
-      "page_file": "src/app/(dashboard)/settings/page.tsx",
+      "route": "/agents/create/outbound",
+      "page_file": "src/app/(dashboard)/agents/create/outbound/page.tsx",
       "impact_type": "transitive",
-      "trigger_file": "src/components/shared/CheckboxField.tsx",
-      "chain": [
-        "CheckboxField.tsx",
-        "index.tsx",
-        "page.tsx"
-      ]
-    },
-    {
-      "route": "/agents",
-      "page_file": "src/app/(dashboard)/agents/page.tsx",
-      "impact_type": "transitive",
-      "trigger_file": "src/components/shared/CheckboxField.tsx",
-      "chain": [
-        "CheckboxField.tsx",
-        "index.tsx",
-        "AgentListPage.tsx",
-        "page.tsx"
-      ]
+      "trigger_file": "src/utils/agentFormUtils.ts",
+      "chain": ["agentFormUtils.ts", "AgentFormPage.tsx", "page.tsx"]
     }
   ],
   "layout_impacts": [],
   "middleware_modified": false,
   "files_changed": [
     {
-      "file": "src/app/auth/forgotpassword/page.tsx",
-      "category": "page",
-      "status": "modified",
-      "lines_added": 2,
-      "lines_removed": 2
-    },
-    {
-      "file": "src/app/auth/login/LoginPage.tsx",
-      "category": "app-config",
-      "status": "modified",
-      "lines_added": 3,
-      "lines_removed": 3
-    },
-    {
-      "file": "src/app/auth/reset-password/page.tsx",
-      "category": "page",
-      "status": "modified",
-      "lines_added": 3,
-      "lines_removed": 3
-    },
-    {
-      "file": "src/app/auth/signup/SignupClient.tsx",
-      "category": "app-config",
+      "file": "src/components/settings/AddChannelModal.tsx",
+      "category": "component",
       "status": "modified",
       "lines_added": 4,
       "lines_removed": 4
     },
     {
-      "file": "src/components/agents/agent-form/DynamicProviderFields.tsx",
-      "category": "component",
+      "file": "src/utils/agentFormUtils.ts",
+      "category": "util",
       "status": "modified",
-      "lines_added": 25,
-      "lines_removed": 144
-    },
-    {
-      "file": "src/components/agents/agent-form/GeneralTab.tsx",
-      "category": "component",
-      "status": "modified",
-      "lines_added": 2,
-      "lines_removed": 8
-    },
-    {
-      "file": "src/components/shared/CheckboxField.tsx",
-      "category": "component",
-      "status": "modified",
-      "lines_added": 40,
-      "lines_removed": 11
-    },
-    {
-      "file": "src/components/shared/FormCheckboxField.tsx",
-      "category": "component",
-      "status": "deleted",
-      "lines_added": 0,
-      "lines_removed": 45
-    },
-    {
-      "file": "src/components/shared/FormRadioGroupField.tsx",
-      "category": "component",
-      "status": "deleted",
-      "lines_added": 0,
-      "lines_removed": 45
-    },
-    {
-      "file": "src/components/shared/FormSelectInput.tsx",
-      "category": "component",
-      "status": "deleted",
-      "lines_added": 0,
-      "lines_removed": 45
-    },
-    {
-      "file": "src/components/shared/FormTextAreaField.tsx",
-      "category": "component",
-      "status": "deleted",
-      "lines_added": 0,
-      "lines_removed": 46
-    },
-    {
-      "file": "src/components/shared/FormTextInput.tsx",
-      "category": "component",
-      "status": "deleted",
-      "lines_added": 0,
-      "lines_removed": 46
-    },
-    {
-      "file": "src/components/shared/MultiSelectField.tsx",
-      "category": "component",
-      "status": "added",
-      "lines_added": 184,
-      "lines_removed": 0
-    },
-    {
-      "file": "src/components/shared/RadioGroupField.tsx",
-      "category": "component",
-      "status": "modified",
-      "lines_added": 49,
-      "lines_removed": 18
-    },
-    {
-      "file": "src/components/shared/SelectInput.tsx",
-      "category": "component",
-      "status": "modified",
-      "lines_added": 40,
-      "lines_removed": 24
-    },
-    {
-      "file": "src/components/shared/SliderField.tsx",
-      "category": "component",
-      "status": "added",
-      "lines_added": 119,
-      "lines_removed": 0
-    },
-    {
-      "file": "src/components/shared/TextAreaField.tsx",
-      "category": "component",
-      "status": "modified",
-      "lines_added": 40,
-      "lines_removed": 9
-    },
-    {
-      "file": "src/components/shared/TextInput.tsx",
-      "category": "component",
-      "status": "modified",
-      "lines_added": 40,
-      "lines_removed": 11
-    },
-    {
-      "file": "src/components/shared/index.tsx",
-      "category": "component",
-      "status": "modified",
-      "lines_added": 20,
-      "lines_removed": 17
-    },
-    {
-      "file": "src/types/components.ts",
-      "category": "type",
-      "status": "modified",
-      "lines_added": 183,
-      "lines_removed": 0
+      "lines_added": 1,
+      "lines_removed": 1
     }
   ],
   "dependency_chains": [
-    "src/app/auth/login/LoginPage.tsx (app-config, modified)\n  \u2192 LoginPage.tsx  \u2192 page.tsx\n  \u2192 /auth/login  [src/app/auth/login/page.tsx]",
-    "src/app/auth/signup/SignupClient.tsx (app-config, modified)\n  \u2192 SignupClient.tsx  \u2192 page.tsx\n  \u2192 /auth/signup  [src/app/auth/signup/page.tsx]",
-    "src/components/agents/agent-form/DynamicProviderFields.tsx (component, modified)\n  \u2192 DynamicProviderFields.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
-    "src/components/agents/agent-form/DynamicProviderFields.tsx (component, modified)\n  \u2192 DynamicProviderFields.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
-    "src/components/agents/agent-form/DynamicProviderFields.tsx (component, modified)\n  \u2192 DynamicProviderFields.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
-    "src/components/agents/agent-form/GeneralTab.tsx (component, modified)\n  \u2192 GeneralTab.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
-    "src/components/agents/agent-form/GeneralTab.tsx (component, modified)\n  \u2192 GeneralTab.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
-    "src/components/agents/agent-form/GeneralTab.tsx (component, modified)\n  \u2192 GeneralTab.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
-    "src/components/shared/CheckboxField.tsx (component, modified)\n  \u2192 CheckboxField.tsx  \u2192 index.tsx  \u2192 page.tsx\n  \u2192 /settings  [src/app/(dashboard)/settings/page.tsx]",
-    "src/components/shared/CheckboxField.tsx (component, modified)\n  \u2192 CheckboxField.tsx  \u2192 index.tsx  \u2192 LoginPage.tsx  \u2192 page.tsx\n  \u2192 /auth/login  [src/app/auth/login/page.tsx]",
-    "src/components/shared/CheckboxField.tsx (component, modified)\n  \u2192 CheckboxField.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
-    "src/components/shared/CheckboxField.tsx (component, modified)\n  \u2192 CheckboxField.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
-    "src/components/shared/CheckboxField.tsx (component, modified)\n  \u2192 CheckboxField.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
-    "src/components/shared/CheckboxField.tsx (component, modified)\n  \u2192 CheckboxField.tsx  \u2192 index.tsx  \u2192 AgentListPage.tsx  \u2192 page.tsx\n  \u2192 /agents  [src/app/(dashboard)/agents/page.tsx]",
-    "src/components/shared/MultiSelectField.tsx (component, added)\n  \u2192 MultiSelectField.tsx  \u2192 index.tsx  \u2192 page.tsx\n  \u2192 /settings  [src/app/(dashboard)/settings/page.tsx]",
-    "src/components/shared/MultiSelectField.tsx (component, added)\n  \u2192 MultiSelectField.tsx  \u2192 index.tsx  \u2192 LoginPage.tsx  \u2192 page.tsx\n  \u2192 /auth/login  [src/app/auth/login/page.tsx]",
-    "src/components/shared/MultiSelectField.tsx (component, added)\n  \u2192 MultiSelectField.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
-    "src/components/shared/MultiSelectField.tsx (component, added)\n  \u2192 MultiSelectField.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
-    "src/components/shared/MultiSelectField.tsx (component, added)\n  \u2192 MultiSelectField.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
-    "src/components/shared/MultiSelectField.tsx (component, added)\n  \u2192 MultiSelectField.tsx  \u2192 index.tsx  \u2192 AgentListPage.tsx  \u2192 page.tsx\n  \u2192 /agents  [src/app/(dashboard)/agents/page.tsx]",
-    "src/components/shared/RadioGroupField.tsx (component, modified)\n  \u2192 RadioGroupField.tsx  \u2192 index.tsx  \u2192 page.tsx\n  \u2192 /settings  [src/app/(dashboard)/settings/page.tsx]",
-    "src/components/shared/RadioGroupField.tsx (component, modified)\n  \u2192 RadioGroupField.tsx  \u2192 index.tsx  \u2192 LoginPage.tsx  \u2192 page.tsx\n  \u2192 /auth/login  [src/app/auth/login/page.tsx]",
-    "src/components/shared/RadioGroupField.tsx (component, modified)\n  \u2192 RadioGroupField.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
-    "src/components/shared/RadioGroupField.tsx (component, modified)\n  \u2192 RadioGroupField.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
-    "src/components/shared/RadioGroupField.tsx (component, modified)\n  \u2192 RadioGroupField.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
-    "src/components/shared/RadioGroupField.tsx (component, modified)\n  \u2192 RadioGroupField.tsx  \u2192 index.tsx  \u2192 AgentListPage.tsx  \u2192 page.tsx\n  \u2192 /agents  [src/app/(dashboard)/agents/page.tsx]",
-    "src/components/shared/SelectInput.tsx (component, modified)\n  \u2192 SelectInput.tsx  \u2192 index.tsx  \u2192 page.tsx\n  \u2192 /settings  [src/app/(dashboard)/settings/page.tsx]",
-    "src/components/shared/SelectInput.tsx (component, modified)\n  \u2192 SelectInput.tsx  \u2192 index.tsx  \u2192 LoginPage.tsx  \u2192 page.tsx\n  \u2192 /auth/login  [src/app/auth/login/page.tsx]",
-    "src/components/shared/SelectInput.tsx (component, modified)\n  \u2192 SelectInput.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
-    "src/components/shared/SelectInput.tsx (component, modified)\n  \u2192 SelectInput.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
-    "src/components/shared/SelectInput.tsx (component, modified)\n  \u2192 SelectInput.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
-    "src/components/shared/SelectInput.tsx (component, modified)\n  \u2192 SelectInput.tsx  \u2192 index.tsx  \u2192 AgentListPage.tsx  \u2192 page.tsx\n  \u2192 /agents  [src/app/(dashboard)/agents/page.tsx]",
-    "src/components/shared/SliderField.tsx (component, added)\n  \u2192 SliderField.tsx  \u2192 index.tsx  \u2192 page.tsx\n  \u2192 /settings  [src/app/(dashboard)/settings/page.tsx]",
-    "src/components/shared/SliderField.tsx (component, added)\n  \u2192 SliderField.tsx  \u2192 index.tsx  \u2192 LoginPage.tsx  \u2192 page.tsx\n  \u2192 /auth/login  [src/app/auth/login/page.tsx]",
-    "src/components/shared/SliderField.tsx (component, added)\n  \u2192 SliderField.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
-    "src/components/shared/SliderField.tsx (component, added)\n  \u2192 SliderField.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
-    "src/components/shared/SliderField.tsx (component, added)\n  \u2192 SliderField.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
-    "src/components/shared/SliderField.tsx (component, added)\n  \u2192 SliderField.tsx  \u2192 index.tsx  \u2192 AgentListPage.tsx  \u2192 page.tsx\n  \u2192 /agents  [src/app/(dashboard)/agents/page.tsx]",
-    "src/components/shared/TextAreaField.tsx (component, modified)\n  \u2192 TextAreaField.tsx  \u2192 index.tsx  \u2192 page.tsx\n  \u2192 /settings  [src/app/(dashboard)/settings/page.tsx]",
-    "src/components/shared/TextAreaField.tsx (component, modified)\n  \u2192 TextAreaField.tsx  \u2192 index.tsx  \u2192 LoginPage.tsx  \u2192 page.tsx\n  \u2192 /auth/login  [src/app/auth/login/page.tsx]",
-    "src/components/shared/TextAreaField.tsx (component, modified)\n  \u2192 TextAreaField.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
-    "src/components/shared/TextAreaField.tsx (component, modified)\n  \u2192 TextAreaField.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
-    "src/components/shared/TextAreaField.tsx (component, modified)\n  \u2192 TextAreaField.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
-    "src/components/shared/TextAreaField.tsx (component, modified)\n  \u2192 TextAreaField.tsx  \u2192 index.tsx  \u2192 AgentListPage.tsx  \u2192 page.tsx\n  \u2192 /agents  [src/app/(dashboard)/agents/page.tsx]",
-    "src/components/shared/TextInput.tsx (component, modified)\n  \u2192 TextInput.tsx  \u2192 page.tsx\n  \u2192 /auth/reset-password  [src/app/auth/reset-password/page.tsx]",
-    "src/components/shared/TextInput.tsx (component, modified)\n  \u2192 TextInput.tsx  \u2192 page.tsx\n  \u2192 /auth/forgotpassword  [src/app/auth/forgotpassword/page.tsx]",
-    "src/components/shared/TextInput.tsx (component, modified)\n  \u2192 TextInput.tsx  \u2192 index.tsx  \u2192 page.tsx\n  \u2192 /settings  [src/app/(dashboard)/settings/page.tsx]",
-    "src/components/shared/TextInput.tsx (component, modified)\n  \u2192 TextInput.tsx  \u2192 SignupClient.tsx  \u2192 page.tsx\n  \u2192 /auth/signup  [src/app/auth/signup/page.tsx]",
-    "src/components/shared/TextInput.tsx (component, modified)\n  \u2192 TextInput.tsx  \u2192 index.tsx  \u2192 LoginPage.tsx  \u2192 page.tsx\n  \u2192 /auth/login  [src/app/auth/login/page.tsx]",
-    "src/components/shared/TextInput.tsx (component, modified)\n  \u2192 TextInput.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
-    "src/components/shared/TextInput.tsx (component, modified)\n  \u2192 TextInput.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
-    "src/components/shared/TextInput.tsx (component, modified)\n  \u2192 TextInput.tsx  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
-    "src/components/shared/TextInput.tsx (component, modified)\n  \u2192 TextInput.tsx  \u2192 index.tsx  \u2192 AgentListPage.tsx  \u2192 page.tsx\n  \u2192 /agents  [src/app/(dashboard)/agents/page.tsx]",
-    "src/components/shared/index.tsx (component, modified)\n  \u2192 index.tsx  \u2192 page.tsx\n  \u2192 /settings  [src/app/(dashboard)/settings/page.tsx]",
-    "src/components/shared/index.tsx (component, modified)\n  \u2192 index.tsx  \u2192 LoginPage.tsx  \u2192 page.tsx\n  \u2192 /auth/login  [src/app/auth/login/page.tsx]",
-    "src/components/shared/index.tsx (component, modified)\n  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
-    "src/components/shared/index.tsx (component, modified)\n  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]",
-    "src/components/shared/index.tsx (component, modified)\n  \u2192 index.tsx  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
-    "src/components/shared/index.tsx (component, modified)\n  \u2192 index.tsx  \u2192 AgentListPage.tsx  \u2192 page.tsx\n  \u2192 /agents  [src/app/(dashboard)/agents/page.tsx]"
+    "src/components/settings/AddChannelModal.tsx (component, modified)\n  \u2192 AddChannelModal.tsx  \u2192 Integrations.tsx  \u2192 page.tsx\n  \u2192 /settings  [src/app/(dashboard)/settings/page.tsx]",
+    "src/utils/agentFormUtils.ts (util, modified)\n  \u2192 agentFormUtils.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/inbound  [src/app/(dashboard)/agents/create/inbound/page.tsx]",
+    "src/utils/agentFormUtils.ts (util, modified)\n  \u2192 agentFormUtils.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/edit/[type]/[id]  [src/app/(dashboard)/agents/edit/[type]/[id]/page.tsx]",
+    "src/utils/agentFormUtils.ts (util, modified)\n  \u2192 agentFormUtils.ts  \u2192 AgentFormPage.tsx  \u2192 page.tsx\n  \u2192 /agents/create/outbound  [src/app/(dashboard)/agents/create/outbound/page.tsx]"
   ]
 }

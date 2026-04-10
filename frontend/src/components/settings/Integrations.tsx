@@ -46,13 +46,14 @@ export default function Integrations() {
   const handleSubmit = async (data: {
     id?: number;
     name: string;
+    type: string;
     auth_token: string;
     account_sid: string;
   }) => {
     const payload = {
       ...(data.id ? { id: data.id } : {}),
       name: data.name,
-      type: 'TWILIO' as const,
+      type: data.type,
       meta_data: {
         account_sid: data.account_sid,
         auth_token: data.auth_token,
@@ -92,8 +93,13 @@ export default function Integrations() {
 
   return (
     <div className="w-full">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-xl font-semibold text-foreground">Integrations</h2>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Integrations</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Manage your API keys and service connections
+          </p>
+        </div>
         <CustomButton type="primary" icon={<Plus size={18} />} onClick={handleAdd}>
           Add API key
         </CustomButton>

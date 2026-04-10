@@ -6,4 +6,4 @@ export const SIGNUP = '/auth/signup';
 export const FORGOT_PASSWORD = '/auth/forgot-password';
 export const FIREBASE_SIGNUP = '/auth/signup_with_firebase';
 
-export const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+export const BACKEND_URL = `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1`;

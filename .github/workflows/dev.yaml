@@ -1,50 +1,66 @@
 name: Dev CI/CD
+
 on:
   push:
-    branches:
-      - "dev"
+    branches: ["dev"]
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Docker Login
-        uses: docker/login-action@v2
+      - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v4
+      - uses: docker/build-push-action@v5
         with:
           context: .
-          file: core/Dockerfile
+          file: Dockerfile
           push: true
-          tags: developer390/tone:latest
+          tags: |
+            developer390/tone:latest
+            developer390/tone:${{ github.sha }}
           cache-from: type=registry,ref=developer390/tone:buildcache
           cache-to: type=registry,ref=developer390/tone:buildcache,mode=max
+          secrets: |
+            pip_extra_index=${{ secrets.PIP_EXTRA_INDEX_URL }}
 
-      - name: Set up Kubernetes context
-        uses: azure/k8s-set-context@v2
+      - uses: azure/k8s-set-context@v4
         with:
           kubeconfig: ${{ secrets.KUBE_CONFIG_JSON }}
 
-      - name: Create or ensure namespace exists
+      - name: Create namespace
         run: kubectl create namespace dev --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Deploy to Kubernetes
-        uses: azure/k8s-deploy@v1
-        with:
-          namespace: dev
-          manifests: |
-            core/kubernetes/dev/deployment.yaml
-            core/kubernetes/dev/service.yaml
-            core/kubernetes/dev/ingress.yaml
+      - name: Substitute IMAGE_TAG in deployment manifests
+        run: |
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/dev/deployment.yaml
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/dev/call-deployment.yaml
 
-      - name: Force rollout restart
-        run: kubectl rollout restart deployment/tone-api-deployment -n dev
+      - name: Apply all manifests
+        run: |
+          kubectl apply -f build/kubernetes/dev/service.yaml
+          kubectl apply -f build/kubernetes/dev/deployment.yaml
+          kubectl apply -f build/kubernetes/dev/ingress.yaml
+          kubectl apply -f build/kubernetes/dev/call-pdb.yaml
+          kubectl apply -f build/kubernetes/dev/call-service.yaml
+          kubectl apply -f build/kubernetes/dev/call-deployment.yaml
+          kubectl apply -f build/kubernetes/dev/call-ingress.yaml
+          kubectl apply -f build/kubernetes/dev/call-certificate.yaml
+          kubectl apply -f build/kubernetes/dev/letsencrypt-prod.yaml
+          kubectl apply -f build/kubernetes/dev/certificate.yaml
+
+      - name: Rollout restart deployments
+        run: |
+          kubectl rollout restart deployment/tone-api-deployment -n dev
+          kubectl rollout restart deployment/tone-call-worker -n dev
+
+      - name: Wait for rollouts
+        run: |
+          kubectl rollout status deployment/tone-api-deployment -n dev --timeout=180s
+          kubectl rollout status deployment/tone-call-worker -n dev --timeout=180s

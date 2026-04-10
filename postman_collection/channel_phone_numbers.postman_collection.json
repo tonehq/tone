@@ -1,0 +1,409 @@
+{
+  "info": {
+    "name": "Channel Phone Numbers API",
+    "description": "Auto-generated from core/api/v1/channel_phone_numbers.py",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/api/v1" },
+    { "key": "authToken", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{authToken}}" }]
+  },
+  "item": [
+    {
+      "name": "Upsert Channel Phone Number",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/channel_phone_number/upsert",
+          "host": ["{{baseUrl}}"],
+          "path": ["channel_phone_number", "upsert"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone_number\": \"+15551234567\",\n  \"phone_number_sid\": \"PN_example_sid\",\n  \"provider\": \"twilio\",\n  \"channel_id\": 1\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      },
+      "response": [
+        {
+          "name": "Upsert Channel Phone Number - Create",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/channel_phone_number/upsert",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel_phone_number", "upsert"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone_number\": \"+15551234567\",\n  \"phone_number_sid\": \"PN_example_sid\",\n  \"provider\": \"twilio\",\n  \"channel_id\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"c9d0e1f2-a3b4-5678-ijkl-789012345678\",\n  \"phone_number\": \"+15551234567\",\n  \"phone_number_sid\": \"PN_example_sid\",\n  \"provider\": \"twilio\",\n  \"channel_id\": 1,\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Upsert Channel Phone Number - Missing phone_number",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/channel_phone_number/upsert",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel_phone_number", "upsert"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone_number_sid\": \"PN_example_sid\",\n  \"provider\": \"twilio\",\n  \"channel_id\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"phone_number is required\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "List Channel Phone Numbers",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/channel_phone_number/list",
+          "host": ["{{baseUrl}}"],
+          "path": ["channel_phone_number", "list"],
+          "query": [
+            { "key": "channel_id", "value": "1", "description": "Filter by channel ID", "disabled": true }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "List Channel Phone Numbers - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/channel_phone_number/list",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel_phone_number", "list"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"c9d0e1f2-a3b4-5678-ijkl-789012345678\",\n    \"phone_number\": \"+15551234567\",\n    \"phone_number_sid\": \"PN_example_sid\",\n    \"provider\": \"twilio\",\n    \"channel_id\": 1,\n    \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
+        },
+        {
+          "name": "List Channel Phone Numbers - Filter by Channel",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/channel_phone_number/list?channel_id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel_phone_number", "list"],
+              "query": [
+                { "key": "channel_id", "value": "1" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"c9d0e1f2-a3b4-5678-ijkl-789012345678\",\n    \"phone_number\": \"+15551234567\",\n    \"phone_number_sid\": \"PN_example_sid\",\n    \"provider\": \"twilio\",\n    \"channel_id\": 1,\n    \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
+        }
+      ]
+    },
+    {
+      "name": "Get Phone Numbers By Channel",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/channel_phone_number/get_by_channel?channel_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["channel_phone_number", "get_by_channel"],
+          "query": [
+            { "key": "channel_id", "value": "1", "description": "The channel ID" }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Get Phone Numbers By Channel - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/channel_phone_number/get_by_channel?channel_id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel_phone_number", "get_by_channel"],
+              "query": [
+                { "key": "channel_id", "value": "1" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"c9d0e1f2-a3b4-5678-ijkl-789012345678\",\n    \"phone_number\": \"+15551234567\",\n    \"phone_number_sid\": \"PN_example_sid\",\n    \"provider\": \"twilio\",\n    \"channel_id\": 1,\n    \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
+        }
+      ]
+    },
+    {
+      "name": "Get Channel Phone Number",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/channel_phone_number/get?phone_number_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["channel_phone_number", "get"],
+          "query": [
+            { "key": "phone_number_id", "value": "1", "description": "The phone number record ID" }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Get Channel Phone Number - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/channel_phone_number/get?phone_number_id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel_phone_number", "get"],
+              "query": [
+                { "key": "phone_number_id", "value": "1" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"c9d0e1f2-a3b4-5678-ijkl-789012345678\",\n  \"phone_number\": \"+15551234567\",\n  \"phone_number_sid\": \"PN_example_sid\",\n  \"provider\": \"twilio\",\n  \"channel_id\": 1,\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        }
+      ]
+    },
+    {
+      "name": "Delete Channel Phone Number",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/channel_phone_number/delete?phone_number_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["channel_phone_number", "delete"],
+          "query": [
+            { "key": "phone_number_id", "value": "1", "description": "The phone number record ID" }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Delete Channel Phone Number - Success",
+          "originalRequest": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/channel_phone_number/delete?phone_number_id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel_phone_number", "delete"],
+              "query": [
+                { "key": "phone_number_id", "value": "1" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"message\": \"Phone number deleted successfully\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get Twilio Phone Numbers",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/channel_phone_number/get_twilio_phone_numbers?type=twilio",
+          "host": ["{{baseUrl}}"],
+          "path": ["channel_phone_number", "get_twilio_phone_numbers"],
+          "query": [
+            { "key": "type", "value": "twilio", "description": "The channel type (e.g. twilio)" },
+            { "key": "channel_id", "value": "1", "description": "The channel ID to use for credentials", "disabled": true },
+            { "key": "agent_id", "value": "1", "description": "Current agent ID — numbers assigned to other agents are excluded", "disabled": true }
+          ]
+        },
+        "auth": { "type": "noauth" }
+      },
+      "response": [
+        {
+          "name": "Get Twilio Phone Numbers - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/channel_phone_number/get_twilio_phone_numbers?type=twilio&channel_id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel_phone_number", "get_twilio_phone_numbers"],
+              "query": [
+                { "key": "type", "value": "twilio" },
+                { "key": "channel_id", "value": "1" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "[\n  {\n    \"phone_number\": \"+15551234567\",\n    \"friendly_name\": \"My Twilio Number\",\n    \"phone_number_sid\": \"PN_example_sid\",\n    \"capabilities\": {\"voice\": true, \"sms\": true}\n  },\n  {\n    \"phone_number\": \"+15559876543\",\n    \"friendly_name\": \"Secondary Number\",\n    \"phone_number_sid\": \"PN_example_sid_2\",\n    \"capabilities\": {\"voice\": true, \"sms\": false}\n  }\n]"
+        }
+      ]
+    },
+    {
+      "name": "Get Phone Number List To Buy",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/channel_phone_number/get_phone_number_list_to_buy?type=twilio",
+          "host": ["{{baseUrl}}"],
+          "path": ["channel_phone_number", "get_phone_number_list_to_buy"],
+          "query": [
+            { "key": "type", "value": "twilio", "description": "The channel type (e.g. twilio, exotel)" }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Get Phone Number List To Buy - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/channel_phone_number/get_phone_number_list_to_buy?type=twilio",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel_phone_number", "get_phone_number_list_to_buy"],
+              "query": [
+                { "key": "type", "value": "twilio" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "[\n  {\n    \"phone_number\": \"+15551112222\",\n    \"friendly_name\": \"(555) 111-2222\",\n    \"region\": \"CA\",\n    \"capabilities\": {\"voice\": true, \"sms\": true}\n  },\n  {\n    \"phone_number\": \"+15553334444\",\n    \"friendly_name\": \"(555) 333-4444\",\n    \"region\": \"NY\",\n    \"capabilities\": {\"voice\": true, \"sms\": true}\n  }\n]"
+        }
+      ]
+    },
+    {
+      "name": "Buy Phone Number",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/channel_phone_number/buy_phone_number",
+          "host": ["{{baseUrl}}"],
+          "path": ["channel_phone_number", "buy_phone_number"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"phone_number\": \"+15551112222\",\n  \"channel_name\": \"twilio\"\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      },
+      "response": [
+        {
+          "name": "Buy Phone Number - Success",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/channel_phone_number/buy_phone_number",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel_phone_number", "buy_phone_number"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone_number\": \"+15551112222\",\n  \"channel_name\": \"twilio\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"id\": 2,\n  \"uuid\": \"d0e1f2a3-b4c5-6789-klmn-890123456789\",\n  \"phone_number\": \"+15551112222\",\n  \"phone_number_sid\": \"PN_new_sid\",\n  \"provider\": \"twilio\",\n  \"channel_id\": 1,\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Buy Phone Number - Missing phone_number",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/channel_phone_number/buy_phone_number",
+              "host": ["{{baseUrl}}"],
+              "path": ["channel_phone_number", "buy_phone_number"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel_name\": \"twilio\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"phone_number is required\"\n}"
+        }
+      ]
+    }
+  ]
+}

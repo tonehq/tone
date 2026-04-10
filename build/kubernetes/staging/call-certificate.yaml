@@ -1,0 +1,19 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: staging-tone-call-certificate
+  namespace: staging
+spec:
+  secretName: staging-tone-call-certificate
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  commonName: staging-call.trytone.ai
+  dnsNames:
+  - staging-call.trytone.ai
+  duration: 2160h # 90 days
+  renewBefore: 720h # 30 days
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048

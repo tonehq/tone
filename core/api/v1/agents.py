@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Body, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List, Optional
@@ -5,6 +7,7 @@ from typing import Dict, Any, List, Optional
 from core.database.session import get_db
 from core.services.agent_service import AgentService
 from core.middleware.auth import require_org_member, JWTClaims
+from shared.config import settings
 
 router = APIRouter()
 
@@ -55,4 +58,5 @@ def upsert_agent(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="name is required",
         )
-    return AgentService(db).upsert_agent(data, created_by=claims.user_id)
+    org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
+    return AgentService(db, org_id=org_id).upsert_agent(data, created_by=claims.user_id)

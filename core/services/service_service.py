@@ -13,8 +13,8 @@ from core.models.api_key import ApiKey
 
 
 class ServiceConfigService(BaseService):
-    def __init__(self, db: Session, user_id: Optional[int] = None):
-        super().__init__(db, user_id)
+    def __init__(self, db: Session, user_id: Optional[int] = None, org_id=None):
+        super().__init__(db, user_id, org_id=org_id)
 
     def upsert_service(self, service_provider_id: int, name: str, service_type: str,
                        config: Dict, api_key_id: Optional[int] = None,
@@ -105,9 +105,9 @@ class ServiceConfigService(BaseService):
         }
 
     def get_all_services(self, service_type: Optional[str] = None) -> List[Dict[str, Any]]:
-        query = self.db.query(Service, ServiceProvider).join(
+        query = self.query(Service).join(
             ServiceProvider, Service.service_provider_id == ServiceProvider.id
-        ).filter(Service.status == 'active')
+        ).filter(Service.status == 'active').add_entity(ServiceProvider)
 
         if service_type:
             query = query.filter(Service.service_type == service_type)
@@ -135,9 +135,9 @@ class ServiceConfigService(BaseService):
         } for svc, provider in results]
 
     def get_service(self, service_id: int) -> Dict[str, Any]:
-        result = self.db.query(Service, ServiceProvider).join(
+        result = self.query(Service).join(
             ServiceProvider, Service.service_provider_id == ServiceProvider.id
-        ).filter(Service.id == service_id).first()
+        ).filter(Service.id == service_id).add_entity(ServiceProvider).first()
 
         if not result:
             raise HTTPException(
@@ -169,7 +169,7 @@ class ServiceConfigService(BaseService):
         }
 
     def delete_service(self, service_id: int) -> Dict[str, str]:
-        svc = self.db.query(Service).filter(Service.id == service_id).first()
+        svc = self.query(Service).filter(Service.id == service_id).first()
 
         if not svc:
             raise HTTPException(
@@ -183,13 +183,13 @@ class ServiceConfigService(BaseService):
         return {"message": "Service deleted successfully"}
 
     def get_default_service(self, service_type: str) -> Dict[str, Any]:
-        result = self.db.query(Service, ServiceProvider).join(
+        result = self.query(Service).join(
             ServiceProvider, Service.service_provider_id == ServiceProvider.id
         ).filter(
             Service.service_type == service_type,
             Service.is_default == True,
             Service.status == 'active'
-        ).first()
+        ).add_entity(ServiceProvider).first()
 
         if not result:
             raise HTTPException(
