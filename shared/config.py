@@ -60,6 +60,9 @@ class Settings:
 
         self.DEFAULT_ORG_ID: str = get_secret("DEFAULT_ORG_ID", "00000000-0000-0000-0000-000000000001")
 
+        # Auth token for scripts/API calls
+        self.AUTH_TOKEN: str = get_secret("AUTH_TOKEN", "")
+
         # Redis
         self.REDIS_URL: str = get_secret("REDIS_URL", "redis://localhost:6379/0")
 
