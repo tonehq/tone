@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staging-tone-api-deployment
+  namespace: staging
+  labels:
+    app: staging-tone-api
+    environment: staging
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: staging-tone-api
+  template:
+    metadata:
+      labels:
+        app: staging-tone-api
+        environment: staging
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+      containers:
+        - name: staging-tone-api
+          image: developer390/tone:${IMAGE_TAG}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "512Mi"
+            limits:
+              cpu: "256m"
+              memory: "1Gi"
+          env:
+            - name: ENV
+              value: "staging"
+            - name: INFISICAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: infisical-credentials
+                  key: token
+            - name: INFISICAL_PROJECT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: infisical-credentials
+                  key: project_id
+      imagePullSecrets:
+        - name: dockerhub-auth
