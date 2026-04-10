@@ -8,9 +8,9 @@ spec:
   issuerRef:
     name: letsencrypt-prod
     kind: ClusterIssuer
-  commonName: staging.trytone.ai
+  commonName: staging-api.trytone.ai
   dnsNames:
-  - staging.trytone.ai
+  - staging-api.trytone.ai
   duration: 2160h # 90 days
   renewBefore: 720h # 30 days
   privateKey:

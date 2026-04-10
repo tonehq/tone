@@ -21,10 +21,10 @@ spec:
   ingressClassName: nginx
   tls:
   - hosts:
-    - staging.trytone.ai
+    - staging-api.trytone.ai
     secretName: staging-certificate
   rules:
-  - host: staging.trytone.ai
+  - host: staging-api.trytone.ai
     http:
       paths:
       - path: /
