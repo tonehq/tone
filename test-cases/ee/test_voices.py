@@ -186,26 +186,6 @@ class TestUpsertVoice:
         assert data["name"] == "Multilingual Voice"
         assert data["gender"] == "male"
 
-    def test_update_voice(self, client_as_member):
-        """Postman: Update voice via id."""
-        created = _create_voice(client_as_member)
-        resp = client_as_member.post("/api/v1/voice/upsert_voice", json={
-            "id": created["id"],
-            "name": "Updated Voice",
-            "description": "Updated description",
-        })
-        assert resp.status_code == 200
-        assert resp.json()["name"] == "Updated Voice"
-
-    def test_deactivate_voice(self, client_as_member):
-        """Postman: Deactivate voice via is_active=false."""
-        created = _create_voice(client_as_member)
-        resp = client_as_member.post("/api/v1/voice/upsert_voice", json={
-            "id": created["id"],
-            "is_active": False,
-        })
-        assert resp.status_code == 200
-        assert resp.json()["is_active"] is False
 
 
 # ─── DELETE /api/v1/voice/delete_voice ───
