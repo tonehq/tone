@@ -1,0 +1,67 @@
+name: Staging CI/CD
+
+on:
+  push:
+    branches: ["staging"]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            developer390/tone:staging-latest
+            developer390/tone:${{ github.sha }}
+          cache-from: type=registry,ref=developer390/tone:staging-buildcache
+          cache-to: type=registry,ref=developer390/tone:staging-buildcache,mode=max
+          secrets: |
+            pip_extra_index=${{ secrets.PIP_EXTRA_INDEX_URL }}
+
+      - uses: azure/k8s-set-context@v4
+        with:
+          kubeconfig: ${{ secrets.STAGING_KUBE_CONFIG_JSON }}
+
+      - name: Create namespace
+        run: kubectl create namespace staging --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Substitute IMAGE_TAG in deployment manifests
+        run: |
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging/deployment.yaml
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging/call-deployment.yaml
+
+      - name: Apply all manifests
+        run: |
+          kubectl apply -f build/kubernetes/staging/namespace.yaml
+          kubectl apply -f build/kubernetes/staging/letsencrypt-prod.yaml
+          kubectl apply -f build/kubernetes/staging/service.yaml
+          kubectl apply -f build/kubernetes/staging/deployment.yaml
+          kubectl apply -f build/kubernetes/staging/certificate.yaml
+          kubectl apply -f build/kubernetes/staging/ingress.yaml
+          kubectl apply -f build/kubernetes/staging/call-pdb.yaml
+          kubectl apply -f build/kubernetes/staging/call-service.yaml
+          kubectl apply -f build/kubernetes/staging/call-deployment.yaml
+          kubectl apply -f build/kubernetes/staging/call-certificate.yaml
+          kubectl apply -f build/kubernetes/staging/call-ingress.yaml
+
+      - name: Rollout restart deployments
+        run: |
+          kubectl rollout restart deployment/staging-tone-api-deployment -n staging
+          kubectl rollout restart deployment/staging-tone-call-worker -n staging
+
+      - name: Wait for rollouts
+        run: |
+          kubectl rollout status deployment/staging-tone-api-deployment -n staging --timeout=180s
+          kubectl rollout status deployment/staging-tone-call-worker -n staging --timeout=180s
