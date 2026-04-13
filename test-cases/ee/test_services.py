@@ -1,0 +1,279 @@
+"""Tests for Services API endpoints (EE edition).
+
+Source: ee/api/v1/services.py
+Integration tests — real DB, real endpoints, no mocks.
+"""
+
+import pytest
+import uuid
+
+
+# ─── Helpers ───
+
+def _unique_name(prefix="Service"):
+    return f"{prefix}-{uuid.uuid4().hex[:8]}"
+
+
+def _create_service_provider(client, provider_type="llm"):
+    """Create a service provider via the API and return the response JSON."""
+    data = {
+        "name": f"test-provider-{uuid.uuid4().hex[:8]}",
+        "display_name": f"Test Provider {uuid.uuid4().hex[:6]}",
+        "provider_type": provider_type,
+        "auth_type": "api_key",
+    }
+    resp = client.post("/api/v1/service-providers/upsert", json=data)
+    assert resp.status_code == 200
+    return resp.json()
+
+
+def _create_service(client, service_type="llm", is_default=False, **extra):
+    """Create a service via the API and return the response JSON."""
+    if "service_provider_id" not in extra:
+        provider = _create_service_provider(client, provider_type=service_type)
+        extra["service_provider_id"] = provider["id"]
+    data = {
+        "name": extra.pop("name", _unique_name()),
+        "service_type": service_type,
+        "config": extra.pop("config", {"model": "test-model"}),
+        "is_default": is_default,
+        "status": "active",
+        **extra,
+    }
+    resp = client.post("/api/v1/services/upsert", json=data)
+    assert resp.status_code == 200
+    return resp.json()
+
+
+# ─── POST /api/v1/services/upsert ───
+
+class TestUpsertService:
+    """Tests for POST /api/v1/services/upsert"""
+
+    def test_upsert_service_missing_service_provider_id(self, client_as_admin):
+        response = client_as_admin.post("/api/v1/services/upsert", json={
+            "name": "Test", "service_type": "llm", "config": {}
+        })
+        assert response.status_code == 400
+
+    def test_upsert_service_missing_name(self, client_as_admin):
+        response = client_as_admin.post("/api/v1/services/upsert", json={
+            "service_provider_id": 1, "service_type": "llm", "config": {}
+        })
+        assert response.status_code == 400
+
+    def test_upsert_service_missing_service_type(self, client_as_admin):
+        response = client_as_admin.post("/api/v1/services/upsert", json={
+            "service_provider_id": 1, "name": "Test", "config": {}
+        })
+        assert response.status_code == 400
+
+    def test_upsert_service_missing_config(self, client_as_admin):
+        response = client_as_admin.post("/api/v1/services/upsert", json={
+            "service_provider_id": 1, "name": "Test", "service_type": "llm"
+        })
+        assert response.status_code == 400
+
+    def test_upsert_service_empty_body(self, client_as_admin):
+        response = client_as_admin.post("/api/v1/services/upsert", json={})
+        assert response.status_code == 400
+
+    def test_upsert_service_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.post("/api/v1/services/upsert", json={
+            "service_provider_id": 1, "name": "T", "service_type": "llm", "config": {}
+        })
+        assert response.status_code in (401, 403)
+
+    def test_create_llm_service_anthropic(self, client_as_admin):
+        """Postman: Create LLM Service (Anthropic)."""
+        provider = _create_service_provider(client_as_admin, provider_type="llm")
+        response = client_as_admin.post("/api/v1/services/upsert", json={
+            "service_provider_id": provider["id"],
+            "name": _unique_name("Anthropic-LLM"),
+            "service_type": "llm",
+            "config": {"model": "claude-3-opus", "max_tokens": 4096},
+            "status": "active",
+        })
+        assert response.status_code == 200
+        data = response.json()
+        assert data["service_type"] == "llm"
+
+    def test_create_stt_service_google(self, client_as_admin):
+        """Postman: Create STT Service (Google)."""
+        provider = _create_service_provider(client_as_admin, provider_type="stt")
+        response = client_as_admin.post("/api/v1/services/upsert", json={
+            "service_provider_id": provider["id"],
+            "name": _unique_name("Google-STT"),
+            "service_type": "stt",
+            "config": {"model": "latest_long", "language_code": "en-US"},
+            "status": "active",
+        })
+        assert response.status_code == 200
+
+    def test_create_tts_service_openai(self, client_as_admin):
+        """Postman: Create TTS Service (OpenAI)."""
+        provider = _create_service_provider(client_as_admin, provider_type="tts")
+        response = client_as_admin.post("/api/v1/services/upsert", json={
+            "service_provider_id": provider["id"],
+            "name": _unique_name("OpenAI-TTS"),
+            "service_type": "tts",
+            "config": {"voice": "alloy", "model": "tts-1"},
+            "status": "active",
+        })
+        assert response.status_code == 200
+
+    def test_create_tts_service_cartesia(self, client_as_admin):
+        """Postman: Create TTS Service (Cartesia)."""
+        provider = _create_service_provider(client_as_admin, provider_type="tts")
+        response = client_as_admin.post("/api/v1/services/upsert", json={
+            "service_provider_id": provider["id"],
+            "name": _unique_name("Cartesia-TTS"),
+            "service_type": "tts",
+            "config": {"voice_id": "voice_abc", "model_id": "sonic-english"},
+            "status": "active",
+        })
+        assert response.status_code == 200
+
+    def test_update_service_via_uuid(self, client_as_admin):
+        """Postman: Update Service via uuid."""
+        svc = _create_service(client_as_admin, service_type="llm")
+        response = client_as_admin.post("/api/v1/services/upsert", json={
+            "uuid": svc["uuid"],
+            "service_provider_id": svc["service_provider_id"],
+            "name": "Updated LLM Service",
+            "service_type": "llm",
+            "config": {"model": "gpt-4-turbo", "temperature": 0.5},
+            "status": "active",
+        })
+        assert response.status_code == 200
+        assert response.json()["name"] == "Updated LLM Service"
+
+    def test_upsert_service_provider_not_found(self, client_as_admin):
+        """Postman: Service Provider Not Found (404)."""
+        response = client_as_admin.post("/api/v1/services/upsert", json={
+            "service_provider_id": 999999,
+            "name": "Test",
+            "service_type": "llm",
+            "config": {"model": "test"},
+        })
+        assert response.status_code in (400, 404)
+
+
+# ─── GET /api/v1/services/list ───
+
+class TestGetAllServices:
+    """Tests for GET /api/v1/services/list"""
+
+    def test_get_all_services_returns_200(self, client_as_member):
+        response = client_as_member.get("/api/v1/services/list")
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+
+    def test_get_all_services_filter_by_type(self, client_as_member):
+        response = client_as_member.get("/api/v1/services/list?service_type=llm")
+        assert response.status_code == 200
+
+    def test_get_all_services_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get("/api/v1/services/list")
+        assert response.status_code in (401, 403)
+
+    def test_get_all_services_filter_by_stt(self, client_as_admin):
+        """Postman: Filter by STT — only STT services returned."""
+        _create_service(client_as_admin, service_type="stt")
+        response = client_as_admin.get("/api/v1/services/list?service_type=stt")
+        assert response.status_code == 200
+        for svc in response.json():
+            assert svc["service_type"] == "stt"
+
+    def test_get_all_services_filter_by_tts(self, client_as_admin):
+        """Postman: Filter by TTS — only TTS services returned."""
+        _create_service(client_as_admin, service_type="tts")
+        response = client_as_admin.get("/api/v1/services/list?service_type=tts")
+        assert response.status_code == 200
+        for svc in response.json():
+            assert svc["service_type"] == "tts"
+
+
+# ─── GET /api/v1/services/get ───
+
+class TestGetService:
+    """Tests for GET /api/v1/services/get"""
+
+    def test_get_service_missing_id(self, client_as_member):
+        response = client_as_member.get("/api/v1/services/get")
+        assert response.status_code == 422
+
+    def test_get_service_invalid_id(self, client_as_member):
+        response = client_as_member.get("/api/v1/services/get?service_id=abc")
+        assert response.status_code == 422
+
+    def test_get_service_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get("/api/v1/services/get?service_id=1")
+        assert response.status_code in (401, 403)
+
+    def test_get_service_not_found(self, client_as_member):
+        response = client_as_member.get("/api/v1/services/get?service_id=999999")
+        assert response.status_code == 404
+
+    def test_get_service_success(self, client_as_admin):
+        svc = _create_service(client_as_admin, service_type="llm")
+        response = client_as_admin.get(f"/api/v1/services/get?service_id={svc['id']}")
+        assert response.status_code == 200
+        assert response.json()["id"] == svc["id"]
+
+
+# ─── GET /api/v1/services/default ───
+
+class TestGetDefaultService:
+    """Tests for GET /api/v1/services/default"""
+
+    def test_get_default_service_missing_type(self, client_as_member):
+        response = client_as_member.get("/api/v1/services/default")
+        assert response.status_code == 422
+
+    def test_get_default_service_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get("/api/v1/services/default?service_type=llm")
+        assert response.status_code in (401, 403)
+
+    def test_get_default_stt_service(self, client_as_admin):
+        _create_service(client_as_admin, service_type="stt", is_default=True)
+        response = client_as_admin.get("/api/v1/services/default?service_type=stt")
+        assert response.status_code == 200
+
+    def test_get_default_tts_service(self, client_as_admin):
+        _create_service(client_as_admin, service_type="tts", is_default=True)
+        response = client_as_admin.get("/api/v1/services/default?service_type=tts")
+        assert response.status_code == 200
+
+    def test_no_default_found(self, client_as_admin):
+        response = client_as_admin.get("/api/v1/services/default?service_type=nonexistent_type")
+        assert response.status_code == 404
+
+
+# ─── DELETE /api/v1/services/delete ───
+
+class TestDeleteService:
+    """Tests for DELETE /api/v1/services/delete"""
+
+    def test_delete_service_missing_id(self, client_as_admin):
+        response = client_as_admin.delete("/api/v1/services/delete")
+        assert response.status_code == 422
+
+    def test_delete_service_invalid_id(self, client_as_admin):
+        response = client_as_admin.delete("/api/v1/services/delete?service_id=abc")
+        assert response.status_code == 422
+
+    def test_delete_service_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.delete("/api/v1/services/delete?service_id=1")
+        assert response.status_code in (401, 403)
+
+    def test_delete_service_not_found(self, client_as_admin):
+        response = client_as_admin.delete("/api/v1/services/delete?service_id=999999")
+        assert response.status_code == 404
+
+    def test_delete_service_success(self, client_as_admin):
+        svc = _create_service(client_as_admin, service_type="llm")
+        response = client_as_admin.delete(f"/api/v1/services/delete?service_id={svc['id']}")
+        assert response.status_code == 200
+        get_resp = client_as_admin.get(f"/api/v1/services/get?service_id={svc['id']}")
+        assert get_resp.status_code == 404

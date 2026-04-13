@@ -9,7 +9,6 @@ __pycache__
 .idea
 node_modules
 frontend
-ee
 kubernetes
 backend
 .mypy_cache

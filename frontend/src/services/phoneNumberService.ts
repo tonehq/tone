@@ -28,7 +28,7 @@ export const getTwilioPhoneNumbers = async (
 
 export const getAssignedPhoneNumbers = async (): Promise<AssignedPhoneNumber[]> => {
   const { data } = await axiosInstance.get<AssignedPhoneNumber[]>(
-    '/channel_phone_number/get_assigned_phone_numbers',
+    '/agent_channel_phone_number/get_assigned_phone_numbers',
   );
   return data ?? [];
 };

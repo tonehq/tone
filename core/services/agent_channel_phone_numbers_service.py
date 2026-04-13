@@ -279,6 +279,12 @@ class AgentChannelPhoneNumbersService(BaseService):
                 detail=detail,
             ) from e
 
-        return self.db.query(AgentChannelPhoneNumbers).filter(
+        result = self.db.query(AgentChannelPhoneNumbers).filter(
             AgentChannelPhoneNumbers.uuid == row_uuid
         ).first()
+
+        # Invalidate phone→agent cache when phone numbers are assigned/changed
+        from core.services.redis_service import cache_delete_pattern
+        cache_delete_pattern("phone_to_agent:*")
+
+        return result

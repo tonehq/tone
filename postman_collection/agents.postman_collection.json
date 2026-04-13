@@ -15,133 +15,68 @@
   "item": [
     {
       "name": "Get All Agents",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/agent/get_all_agents",
-          "host": ["{{baseUrl}}"],
-          "path": ["agent", "get_all_agents"],
-          "query": [
-            { "key": "agent_id", "value": "1", "description": "If provided, return only this agent", "disabled": true }
-          ]
-        }
-      },
+      "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/agent/get_all_agents", "host": ["{{baseUrl}}"], "path": ["agent", "get_all_agents"], "query": [{ "key": "agent_id", "value": "1", "description": "If provided, return only this agent", "disabled": true }] } },
       "response": [
         {
           "name": "Get All Agents - Success",
-          "originalRequest": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/agent/get_all_agents",
-              "host": ["{{baseUrl}}"],
-              "path": ["agent", "get_all_agents"]
-            }
-          },
-          "status": "OK",
-          "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"name\": \"Customer Support Agent\",\n    \"description\": \"Handles customer inquiries\",\n    \"is_public\": false,\n    \"tags\": [\"support\", \"voice\"],\n    \"total_calls\": 150,\n    \"total_minutes\": 320.50,\n    \"average_rating\": 4.50,\n    \"created_by\": 1,\n    \"meta_data\": {},\n    \"status\": \"active\",\n    \"agent_type\": \"INBOUND\",\n    \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600,\n    \"agent_config\": {\n      \"id\": 1,\n      \"uuid\": \"c3d4e5f6-a7b8-9012-cdef-123456789012\",\n      \"system_prompt\": \"You are a helpful customer support agent.\",\n      \"first_message\": \"Hello! How can I help you today?\",\n      \"llm_service_id\": 1,\n      \"tts_service_id\": 2,\n      \"stt_service_id\": 3,\n      \"llm_metadata\": {},\n      \"tts_metadata\": {},\n      \"stt_metadata\": {},\n      \"agent_metadata\": {}\n    },\n    \"llm_provider\": {\n      \"id\": 1,\n      \"name\": \"openai\",\n      \"display_name\": \"OpenAI\",\n      \"provider_type\": \"llm\"\n    },\n    \"tts_provider\": {\n      \"id\": 2,\n      \"name\": \"elevenlabs\",\n      \"display_name\": \"ElevenLabs\",\n      \"provider_type\": \"tts\"\n    },\n    \"stt_provider\": {\n      \"id\": 3,\n      \"name\": \"deepgram\",\n      \"display_name\": \"Deepgram\",\n      \"provider_type\": \"stt\"\n    }\n  }\n]"
+          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/agent/get_all_agents", "host": ["{{baseUrl}}"], "path": ["agent", "get_all_agents"] } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"name\": \"Customer Support Agent\",\n    \"description\": \"Handles customer inquiries\",\n    \"is_public\": false,\n    \"tags\": [\"support\", \"voice\"],\n    \"total_calls\": 150,\n    \"total_minutes\": 320.5,\n    \"average_rating\": 4.5,\n    \"created_by\": 1,\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600,\n    \"meta_data\": {},\n    \"status\": \"active\",\n    \"agent_type\": \"inbound\",\n    \"phone_number\": [{\"type\": \"twilio\", \"no\": \"+15551234567\"}],\n    \"channels\": [{\"id\": 1, \"uuid\": \"f6a7b8c9-d0e1-2345-a678-456789012345\", \"name\": \"My Twilio Channel\", \"type\": \"twilio\", \"created_by\": 1, \"meta_data\": {}, \"phone_numbers\": []}],\n    \"llm_service_id\": 1,\n    \"tts_service_id\": 5,\n    \"stt_service_id\": 3,\n    \"llm_model_id\": 1,\n    \"tts_model_id\": 20,\n    \"stt_model_id\": 10,\n    \"llm_metadata\": {\"model_id\": 1},\n    \"tts_metadata\": {\"model_id\": 20},\n    \"stt_metadata\": {\"model_id\": 10},\n    \"llm_meta_data\": {\"model_id\": 1},\n    \"tts_meta_data\": {\"model_id\": 20},\n    \"stt_meta_data\": {\"model_id\": 10},\n    \"first_message\": \"Hello! How can I help you today?\",\n    \"system_prompt\": \"You are a helpful customer support agent.\",\n    \"end_call_message\": \"Thank you for calling!\",\n    \"voicemail_message\": null,\n    \"html_prompt\": null,\n    \"config_status\": \"active\",\n    \"custom_vocabulary\": null,\n    \"filter_words\": null,\n    \"realistic_filler_words\": null,\n    \"language\": \"en\",\n    \"voice_speed\": null,\n    \"patience_level\": null,\n    \"speech_recognition\": null,\n    \"call_recording\": true,\n    \"call_transcription\": true\n  }\n]"
+        },
+        {
+          "name": "Get All Agents - Filter by agent_id",
+          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/agent/get_all_agents?agent_id=1", "host": ["{{baseUrl}}"], "path": ["agent", "get_all_agents"], "query": [{ "key": "agent_id", "value": "1" }] } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"name\": \"Customer Support Agent\",\n    \"description\": \"Handles customer inquiries\",\n    \"is_public\": false,\n    \"tags\": [\"support\"],\n    \"total_calls\": 150,\n    \"total_minutes\": 320.5,\n    \"average_rating\": 4.5,\n    \"created_by\": 1,\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600,\n    \"meta_data\": {},\n    \"status\": \"active\",\n    \"agent_type\": \"inbound\",\n    \"phone_number\": [],\n    \"channels\": [],\n    \"llm_service_id\": 1,\n    \"tts_service_id\": 5,\n    \"stt_service_id\": 3,\n    \"llm_model_id\": 1,\n    \"tts_model_id\": null,\n    \"stt_model_id\": null,\n    \"llm_metadata\": {\"model_id\": 1},\n    \"tts_metadata\": {},\n    \"stt_metadata\": {},\n    \"llm_meta_data\": {\"model_id\": 1},\n    \"tts_meta_data\": {},\n    \"stt_meta_data\": {},\n    \"first_message\": \"Hello!\",\n    \"system_prompt\": \"You are a helpful agent.\",\n    \"end_call_message\": null,\n    \"voicemail_message\": null,\n    \"html_prompt\": null,\n    \"config_status\": \"active\",\n    \"custom_vocabulary\": null,\n    \"filter_words\": null,\n    \"realistic_filler_words\": null,\n    \"language\": \"en\",\n    \"voice_speed\": null,\n    \"patience_level\": null,\n    \"speech_recognition\": null,\n    \"call_recording\": null,\n    \"call_transcription\": null\n  }\n]"
+        },
+        {
+          "name": "Get All Agents - Empty List",
+          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/agent/get_all_agents", "host": ["{{baseUrl}}"], "path": ["agent", "get_all_agents"] } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "[]"
         }
       ]
     },
     {
       "name": "Get Agent",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/agent/get_agent?agent_id=1",
-          "host": ["{{baseUrl}}"],
-          "path": ["agent", "get_agent"],
-          "query": [
-            { "key": "agent_id", "value": "1", "description": "The agent ID to fetch" }
-          ]
-        }
-      },
+      "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/agent/get_agent?agent_id=1", "host": ["{{baseUrl}}"], "path": ["agent", "get_agent"], "query": [{ "key": "agent_id", "value": "1", "description": "The agent ID to fetch" }] } },
       "response": [
         {
           "name": "Get Agent - Success",
-          "originalRequest": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/agent/get_agent?agent_id=1",
-              "host": ["{{baseUrl}}"],
-              "path": ["agent", "get_agent"],
-              "query": [
-                { "key": "agent_id", "value": "1" }
-              ]
-            }
-          },
-          "status": "OK",
-          "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "{\n  \"id\": 1,\n  \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"name\": \"Customer Support Agent\",\n  \"description\": \"Handles customer inquiries\",\n  \"is_public\": false,\n  \"tags\": [\"support\", \"voice\"],\n  \"total_calls\": 150,\n  \"total_minutes\": 320.50,\n  \"average_rating\": 4.50,\n  \"created_by\": 1,\n  \"meta_data\": {},\n  \"status\": \"active\",\n  \"agent_type\": \"INBOUND\",\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600,\n  \"agent_config\": {\n    \"id\": 1,\n    \"uuid\": \"c3d4e5f6-a7b8-9012-cdef-123456789012\",\n    \"system_prompt\": \"You are a helpful customer support agent.\",\n    \"first_message\": \"Hello! How can I help you today?\",\n    \"llm_service_id\": 1,\n    \"tts_service_id\": 2,\n    \"stt_service_id\": 3\n  }\n}"
+          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/agent/get_agent?agent_id=1", "host": ["{{baseUrl}}"], "path": ["agent", "get_agent"], "query": [{ "key": "agent_id", "value": "1" }] } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"name\": \"Customer Support Agent\",\n    \"description\": \"Handles customer inquiries\",\n    \"is_public\": false,\n    \"tags\": [\"support\"],\n    \"total_calls\": 150,\n    \"total_minutes\": 320.5,\n    \"average_rating\": 4.5,\n    \"created_by\": 1,\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600,\n    \"meta_data\": {},\n    \"status\": \"active\",\n    \"agent_type\": \"inbound\",\n    \"phone_number\": [],\n    \"channels\": [],\n    \"llm_service_id\": 1,\n    \"tts_service_id\": 5,\n    \"stt_service_id\": 3,\n    \"llm_model_id\": 1,\n    \"tts_model_id\": null,\n    \"stt_model_id\": null,\n    \"llm_metadata\": {\"model_id\": 1},\n    \"tts_metadata\": {},\n    \"stt_metadata\": {},\n    \"llm_meta_data\": {\"model_id\": 1},\n    \"tts_meta_data\": {},\n    \"stt_meta_data\": {},\n    \"first_message\": \"Hello! How can I help you today?\",\n    \"system_prompt\": \"You are a helpful customer support agent.\",\n    \"end_call_message\": \"Thank you for calling!\",\n    \"voicemail_message\": null,\n    \"html_prompt\": null,\n    \"config_status\": \"active\",\n    \"custom_vocabulary\": null,\n    \"filter_words\": null,\n    \"realistic_filler_words\": null,\n    \"language\": \"en\",\n    \"voice_speed\": null,\n    \"patience_level\": null,\n    \"speech_recognition\": null,\n    \"call_recording\": true,\n    \"call_transcription\": true\n  }\n]"
         },
         {
           "name": "Get Agent - Not Found",
-          "originalRequest": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/agent/get_agent?agent_id=999",
-              "host": ["{{baseUrl}}"],
-              "path": ["agent", "get_agent"],
-              "query": [
-                { "key": "agent_id", "value": "999" }
-              ]
-            }
-          },
-          "status": "Not Found",
-          "code": 404,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
+          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/agent/get_agent?agent_id=999", "host": ["{{baseUrl}}"], "path": ["agent", "get_agent"], "query": [{ "key": "agent_id", "value": "999" }] } },
+          "status": "Not Found", "code": 404,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
           "body": "{\n  \"detail\": \"Agent not found\"\n}"
         }
       ]
     },
     {
       "name": "Delete Agent",
-      "request": {
-        "method": "DELETE",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/agent/delete_agent?agent_id=1",
-          "host": ["{{baseUrl}}"],
-          "path": ["agent", "delete_agent"],
-          "query": [
-            { "key": "agent_id", "value": "1", "description": "The agent ID to delete" }
-          ]
-        }
-      },
+      "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/agent/delete_agent?agent_id=1", "host": ["{{baseUrl}}"], "path": ["agent", "delete_agent"], "query": [{ "key": "agent_id", "value": "1", "description": "The agent ID to delete" }] } },
       "response": [
         {
           "name": "Delete Agent - Success",
-          "originalRequest": {
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/agent/delete_agent?agent_id=1",
-              "host": ["{{baseUrl}}"],
-              "path": ["agent", "delete_agent"],
-              "query": [
-                { "key": "agent_id", "value": "1" }
-              ]
-            }
-          },
-          "status": "OK",
-          "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
+          "originalRequest": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/agent/delete_agent?agent_id=1", "host": ["{{baseUrl}}"], "path": ["agent", "delete_agent"], "query": [{ "key": "agent_id", "value": "1" }] } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
           "body": "{\n  \"message\": \"Agent deleted successfully\"\n}"
+        },
+        {
+          "name": "Delete Agent - Not Found",
+          "originalRequest": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/agent/delete_agent?agent_id=999", "host": ["{{baseUrl}}"], "path": ["agent", "delete_agent"], "query": [{ "key": "agent_id", "value": "999" }] } },
+          "status": "Not Found", "code": 404,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Agent not found\"\n}"
         }
       ]
     },
@@ -149,95 +84,80 @@
       "name": "Upsert Agent",
       "request": {
         "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/agent/upsert_agent",
-          "host": ["{{baseUrl}}"],
-          "path": ["agent", "upsert_agent"]
-        },
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"name\": \"Customer Support Agent\",\n  \"description\": \"Handles customer inquiries via voice\",\n  \"is_public\": false,\n  \"tags\": [\"support\", \"voice\"],\n  \"meta_data\": {},\n  \"status\": \"active\",\n  \"agent_type\": \"INBOUND\"\n}",
-          "options": { "raw": { "language": "json" } }
-        }
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/agent/upsert_agent", "host": ["{{baseUrl}}"], "path": ["agent", "upsert_agent"] },
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Customer Support Agent\",\n  \"description\": \"Handles customer inquiries via voice\",\n  \"agent_type\": \"INBOUND\",\n  \"system_prompt\": \"You are a helpful customer support agent.\",\n  \"first_message\": \"Hello! How can I help you today?\"\n}", "options": { "raw": { "language": "json" } } }
       },
       "response": [
         {
-          "name": "Upsert Agent - Create",
-          "originalRequest": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/agent/upsert_agent",
-              "host": ["{{baseUrl}}"],
-              "path": ["agent", "upsert_agent"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Customer Support Agent\",\n  \"description\": \"Handles customer inquiries via voice\",\n  \"is_public\": false,\n  \"tags\": [\"support\", \"voice\"],\n  \"meta_data\": {},\n  \"status\": \"active\",\n  \"agent_type\": \"INBOUND\"\n}",
-              "options": { "raw": { "language": "json" } }
-            }
-          },
-          "status": "OK",
-          "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "{\n  \"id\": 1,\n  \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"name\": \"Customer Support Agent\",\n  \"description\": \"Handles customer inquiries via voice\",\n  \"is_public\": false,\n  \"tags\": [\"support\", \"voice\"],\n  \"total_calls\": 0,\n  \"total_minutes\": 0.00,\n  \"average_rating\": 0.00,\n  \"created_by\": 1,\n  \"meta_data\": {},\n  \"status\": \"active\",\n  \"agent_type\": \"INBOUND\",\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+          "name": "Create Inbound Agent",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/agent/upsert_agent", "host": ["{{baseUrl}}"], "path": ["agent", "upsert_agent"] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"Customer Support Agent\",\n  \"description\": \"Handles customer inquiries via voice\",\n  \"agent_type\": \"INBOUND\",\n  \"system_prompt\": \"You are a helpful customer support agent.\",\n  \"first_message\": \"Hello! How can I help you today?\",\n  \"language\": \"en\",\n  \"call_recording\": true,\n  \"call_transcription\": true\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"name\": \"Customer Support Agent\",\n  \"description\": \"Handles customer inquiries via voice\",\n  \"is_public\": false,\n  \"tags\": null,\n  \"total_calls\": 0,\n  \"total_minutes\": 0.0,\n  \"average_rating\": 0.0,\n  \"created_by\": 1,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600,\n  \"meta_data\": null,\n  \"status\": \"active\",\n  \"agent_type\": \"inbound\",\n  \"phone_number\": [],\n  \"channels\": [],\n  \"llm_service_id\": null,\n  \"tts_service_id\": null,\n  \"stt_service_id\": null,\n  \"llm_model_id\": null,\n  \"tts_model_id\": null,\n  \"stt_model_id\": null,\n  \"llm_metadata\": {},\n  \"tts_metadata\": {},\n  \"stt_metadata\": {},\n  \"llm_meta_data\": {},\n  \"tts_meta_data\": {},\n  \"stt_meta_data\": {},\n  \"first_message\": \"Hello! How can I help you today?\",\n  \"system_prompt\": \"You are a helpful customer support agent.\",\n  \"end_call_message\": null,\n  \"voicemail_message\": null,\n  \"html_prompt\": null,\n  \"config_status\": null,\n  \"custom_vocabulary\": null,\n  \"filter_words\": null,\n  \"realistic_filler_words\": null,\n  \"language\": \"en\",\n  \"voice_speed\": null,\n  \"patience_level\": null,\n  \"speech_recognition\": null,\n  \"call_recording\": true,\n  \"call_transcription\": true\n}"
         },
         {
-          "name": "Upsert Agent - Update",
-          "originalRequest": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/agent/upsert_agent",
-              "host": ["{{baseUrl}}"],
-              "path": ["agent", "upsert_agent"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"name\": \"Updated Support Agent\",\n  \"description\": \"Updated description\",\n  \"status\": \"active\",\n  \"agent_type\": \"OUTBOUND\"\n}",
-              "options": { "raw": { "language": "json" } }
-            }
-          },
-          "status": "OK",
-          "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "{\n  \"id\": 1,\n  \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"name\": \"Updated Support Agent\",\n  \"description\": \"Updated description\",\n  \"is_public\": false,\n  \"tags\": [\"support\", \"voice\"],\n  \"total_calls\": 150,\n  \"total_minutes\": 320.50,\n  \"average_rating\": 4.50,\n  \"created_by\": 1,\n  \"meta_data\": {},\n  \"status\": \"active\",\n  \"agent_type\": \"OUTBOUND\",\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710288000\n}"
+          "name": "Create Outbound Agent",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/agent/upsert_agent", "host": ["{{baseUrl}}"], "path": ["agent", "upsert_agent"] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"Sales Outbound Agent\",\n  \"description\": \"Makes outbound sales calls\",\n  \"agent_type\": \"OUTBOUND\",\n  \"system_prompt\": \"You are a friendly sales agent.\",\n  \"first_message\": \"Hi! I'm calling about our latest offer.\",\n  \"tags\": [\"sales\", \"outbound\"]\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 2,\n  \"uuid\": \"b2c3d4e5-f6a7-8901-bcde-f23456789012\",\n  \"name\": \"Sales Outbound Agent\",\n  \"description\": \"Makes outbound sales calls\",\n  \"is_public\": false,\n  \"tags\": [\"sales\", \"outbound\"],\n  \"total_calls\": 0,\n  \"total_minutes\": 0.0,\n  \"average_rating\": 0.0,\n  \"created_by\": 1,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600,\n  \"meta_data\": null,\n  \"status\": \"active\",\n  \"agent_type\": \"outbound\",\n  \"phone_number\": [],\n  \"channels\": [],\n  \"llm_service_id\": null,\n  \"tts_service_id\": null,\n  \"stt_service_id\": null,\n  \"llm_model_id\": null,\n  \"tts_model_id\": null,\n  \"stt_model_id\": null,\n  \"llm_metadata\": {},\n  \"tts_metadata\": {},\n  \"stt_metadata\": {},\n  \"llm_meta_data\": {},\n  \"tts_meta_data\": {},\n  \"stt_meta_data\": {},\n  \"first_message\": \"Hi! I'm calling about our latest offer.\",\n  \"system_prompt\": \"You are a friendly sales agent.\",\n  \"end_call_message\": null,\n  \"voicemail_message\": null,\n  \"html_prompt\": null,\n  \"config_status\": null,\n  \"custom_vocabulary\": null,\n  \"filter_words\": null,\n  \"realistic_filler_words\": null,\n  \"language\": null,\n  \"voice_speed\": null,\n  \"patience_level\": null,\n  \"speech_recognition\": null,\n  \"call_recording\": null,\n  \"call_transcription\": null\n}"
         },
         {
-          "name": "Upsert Agent - Missing Name",
-          "originalRequest": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/agent/upsert_agent",
-              "host": ["{{baseUrl}}"],
-              "path": ["agent", "upsert_agent"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"description\": \"Missing name field\"\n}",
-              "options": { "raw": { "language": "json" } }
-            }
-          },
-          "status": "Bad Request",
-          "code": 400,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
+          "name": "Create Chatbot Agent",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/agent/upsert_agent", "host": ["{{baseUrl}}"], "path": ["agent", "upsert_agent"] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"Website Chatbot\",\n  \"description\": \"Web-based chatbot for FAQ\",\n  \"agent_type\": \"CHATBOT\",\n  \"system_prompt\": \"You are a helpful FAQ chatbot.\",\n  \"first_message\": \"Welcome! How can I assist you?\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 3,\n  \"uuid\": \"c3d4e5f6-a7b8-9012-cdef-345678901234\",\n  \"name\": \"Website Chatbot\",\n  \"description\": \"Web-based chatbot for FAQ\",\n  \"is_public\": false,\n  \"tags\": null,\n  \"total_calls\": 0,\n  \"total_minutes\": 0.0,\n  \"average_rating\": 0.0,\n  \"created_by\": 1,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600,\n  \"meta_data\": null,\n  \"status\": \"active\",\n  \"agent_type\": \"chatbot\",\n  \"phone_number\": [],\n  \"channels\": [],\n  \"llm_service_id\": null,\n  \"tts_service_id\": null,\n  \"stt_service_id\": null,\n  \"llm_model_id\": null,\n  \"tts_model_id\": null,\n  \"stt_model_id\": null,\n  \"llm_metadata\": {},\n  \"tts_metadata\": {},\n  \"stt_metadata\": {},\n  \"llm_meta_data\": {},\n  \"tts_meta_data\": {},\n  \"stt_meta_data\": {},\n  \"first_message\": \"Welcome! How can I assist you?\",\n  \"system_prompt\": \"You are a helpful FAQ chatbot.\",\n  \"end_call_message\": null,\n  \"voicemail_message\": null,\n  \"html_prompt\": null,\n  \"config_status\": null,\n  \"custom_vocabulary\": null,\n  \"filter_words\": null,\n  \"realistic_filler_words\": null,\n  \"language\": null,\n  \"voice_speed\": null,\n  \"patience_level\": null,\n  \"speech_recognition\": null,\n  \"call_recording\": null,\n  \"call_transcription\": null\n}"
+        },
+        {
+          "name": "Update Agent",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/agent/upsert_agent", "host": ["{{baseUrl}}"], "path": ["agent", "upsert_agent"] }, "body": { "mode": "raw", "raw": "{\n  \"id\": 1,\n  \"name\": \"Updated Support Agent\",\n  \"description\": \"Updated description\",\n  \"status\": \"active\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"name\": \"Updated Support Agent\",\n  \"description\": \"Updated description\",\n  \"is_public\": false,\n  \"tags\": [\"support\", \"voice\"],\n  \"total_calls\": 150,\n  \"total_minutes\": 320.5,\n  \"average_rating\": 4.5,\n  \"created_by\": 1,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710288000,\n  \"meta_data\": {},\n  \"status\": \"active\",\n  \"agent_type\": \"inbound\",\n  \"phone_number\": [],\n  \"channels\": [],\n  \"llm_service_id\": 1,\n  \"tts_service_id\": 5,\n  \"stt_service_id\": 3,\n  \"llm_model_id\": 1,\n  \"tts_model_id\": null,\n  \"stt_model_id\": null,\n  \"llm_metadata\": {\"model_id\": 1},\n  \"tts_metadata\": {},\n  \"stt_metadata\": {},\n  \"llm_meta_data\": {\"model_id\": 1},\n  \"tts_meta_data\": {},\n  \"stt_meta_data\": {},\n  \"first_message\": \"Hello! How can I help you today?\",\n  \"system_prompt\": \"You are a helpful customer support agent.\",\n  \"end_call_message\": \"Thank you for calling!\",\n  \"voicemail_message\": null,\n  \"html_prompt\": null,\n  \"config_status\": \"active\",\n  \"custom_vocabulary\": null,\n  \"filter_words\": null,\n  \"realistic_filler_words\": null,\n  \"language\": \"en\",\n  \"voice_speed\": null,\n  \"patience_level\": null,\n  \"speech_recognition\": null,\n  \"call_recording\": true,\n  \"call_transcription\": true\n}"
+        },
+        {
+          "name": "Update Agent Type",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/agent/upsert_agent", "host": ["{{baseUrl}}"], "path": ["agent", "upsert_agent"] }, "body": { "mode": "raw", "raw": "{\n  \"id\": 1,\n  \"name\": \"Updated Support Agent\",\n  \"agent_type\": \"OUTBOUND\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"name\": \"Updated Support Agent\",\n  \"description\": \"Handles customer inquiries\",\n  \"is_public\": false,\n  \"tags\": [\"support\"],\n  \"total_calls\": 150,\n  \"total_minutes\": 320.5,\n  \"average_rating\": 4.5,\n  \"created_by\": 1,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710288000,\n  \"meta_data\": {},\n  \"status\": \"active\",\n  \"agent_type\": \"outbound\",\n  \"phone_number\": [],\n  \"channels\": [],\n  \"html_prompt\": null\n}"
+        },
+        {
+          "name": "Create with Tags and Metadata",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/agent/upsert_agent", "host": ["{{baseUrl}}"], "path": ["agent", "upsert_agent"] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"Sales Agent with Metadata\",\n  \"agent_type\": \"OUTBOUND\",\n  \"tags\": [\"sales\", \"premium\"],\n  \"meta_data\": {},\n  \"language\": \"en\",\n  \"custom_vocabulary\": [\"ProductX\", \"FeatureY\"],\n  \"voice_speed\": 1.2,\n  \"call_recording\": true\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 4,\n  \"uuid\": \"d4e5f6a7-b8c9-0123-defg-456789012345\",\n  \"name\": \"Sales Agent with Metadata\",\n  \"description\": null,\n  \"is_public\": false,\n  \"tags\": [\"sales\", \"premium\"],\n  \"total_calls\": 0,\n  \"total_minutes\": 0.0,\n  \"average_rating\": 0.0,\n  \"created_by\": 1,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600,\n  \"meta_data\": {},\n  \"status\": \"active\",\n  \"agent_type\": \"outbound\",\n  \"phone_number\": [],\n  \"channels\": [],\n  \"llm_service_id\": null,\n  \"tts_service_id\": null,\n  \"stt_service_id\": null,\n  \"llm_model_id\": null,\n  \"tts_model_id\": null,\n  \"stt_model_id\": null,\n  \"llm_metadata\": {},\n  \"tts_metadata\": {},\n  \"stt_metadata\": {},\n  \"llm_meta_data\": {},\n  \"tts_meta_data\": {},\n  \"stt_meta_data\": {},\n  \"first_message\": null,\n  \"system_prompt\": \"\",\n  \"end_call_message\": null,\n  \"voicemail_message\": null,\n  \"html_prompt\": null,\n  \"config_status\": null,\n  \"custom_vocabulary\": [\"ProductX\", \"FeatureY\"],\n  \"filter_words\": null,\n  \"realistic_filler_words\": null,\n  \"language\": \"en\",\n  \"voice_speed\": 1.2,\n  \"patience_level\": null,\n  \"speech_recognition\": null,\n  \"call_recording\": true,\n  \"call_transcription\": null\n}"
+        },
+        {
+          "name": "Create Public Agent",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/agent/upsert_agent", "host": ["{{baseUrl}}"], "path": ["agent", "upsert_agent"] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"Public Demo Agent\",\n  \"description\": \"Demo agent for public access\",\n  \"agent_type\": \"INBOUND\",\n  \"is_public\": true,\n  \"system_prompt\": \"You are a demo agent.\",\n  \"first_message\": \"Welcome to our demo!\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 5,\n  \"uuid\": \"e5f6a7b8-c9d0-1234-efgh-567890123456\",\n  \"name\": \"Public Demo Agent\",\n  \"description\": \"Demo agent for public access\",\n  \"is_public\": true,\n  \"tags\": null,\n  \"total_calls\": 0,\n  \"total_minutes\": 0.0,\n  \"average_rating\": 0.0,\n  \"created_by\": 1,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600,\n  \"meta_data\": null,\n  \"status\": \"active\",\n  \"agent_type\": \"inbound\",\n  \"phone_number\": [],\n  \"channels\": [],\n  \"html_prompt\": null\n}"
+        },
+        {
+          "name": "Missing Name",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/agent/upsert_agent", "host": ["{{baseUrl}}"], "path": ["agent", "upsert_agent"] }, "body": { "mode": "raw", "raw": "{\n  \"description\": \"Missing name field\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "Bad Request", "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
           "body": "{\n  \"detail\": \"name is required\"\n}"
+        },
+        {
+          "name": "Duplicate Agent Name",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/agent/upsert_agent", "host": ["{{baseUrl}}"], "path": ["agent", "upsert_agent"] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"Customer Support Agent\",\n  \"agent_type\": \"INBOUND\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "Conflict", "code": 409,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"An agent with this name already exists.\"\n}"
+        },
+        {
+          "name": "Create with Numeric agent_type",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/agent/upsert_agent", "host": ["{{baseUrl}}"], "path": ["agent", "upsert_agent"] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"Numeric Type Agent\",\n  \"agent_type\": 0,\n  \"system_prompt\": \"Test agent with numeric type.\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 6,\n  \"uuid\": \"f6a7b8c9-d0e1-2345-fghi-678901234567\",\n  \"name\": \"Numeric Type Agent\",\n  \"description\": null,\n  \"is_public\": false,\n  \"tags\": null,\n  \"total_calls\": 0,\n  \"total_minutes\": 0.0,\n  \"average_rating\": 0.0,\n  \"created_by\": 1,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600,\n  \"meta_data\": null,\n  \"status\": \"active\",\n  \"agent_type\": \"inbound\",\n  \"phone_number\": [],\n  \"channels\": [],\n  \"html_prompt\": null\n}"
         }
       ]
     }

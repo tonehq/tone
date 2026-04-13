@@ -1,5 +1,5 @@
 from sqlalchemy import Column, BigInteger, String, ForeignKey, Boolean, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
 
 from core.models.base import TimestampModel
@@ -18,6 +18,7 @@ class Voice(TimestampModel):
     accent = Column(String, nullable=True)
     description = Column(String, nullable=True)
     service_provider_id = Column(BigInteger, ForeignKey("service_providers.id"), nullable=False)
-    # model_id = Column(BigInteger, ForeignKey("models.id"), nullable=True)
+    model_id = Column(BigInteger, ForeignKey("models.id"), nullable=True)
     is_active = Column(Boolean, default=True)
     sample_url = Column(String, nullable=True)
+    language_list = Column(JSONB, nullable=True)

@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staging-tone-call-worker
+  namespace: staging
+  labels:
+    app: staging-tone-call-worker
+    environment: staging
+    component: call
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: staging-tone-call-worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: staging-tone-call-worker
+        environment: staging
+        component: call
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+      terminationGracePeriodSeconds: 20
+      containers:
+        - name: staging-tone-call-worker
+          image: developer390/tone:${IMAGE_TAG}
+          imagePullPolicy: Always
+          command:
+            - uvicorn
+            - "main:app"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8080"
+            - "--workers"
+            - "1"
+            - "--timeout-keep-alive"
+            - "3600"
+            - "--log-level"
+            - "info"
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: "1"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          env:
+            - name: ENV
+              value: "staging"
+            - name: WORKER_MODE
+              value: "voice"
+            - name: MAX_CONCURRENT_CALLS
+              value: "5"
+            - name: INFISICAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: infisical-credentials
+                  key: token
+            - name: INFISICAL_PROJECT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: infisical-credentials
+                  key: project_id
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 2
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - "curl -sf http://localhost:8080/drain || true && sleep 280"
+      imagePullSecrets:
+        - name: dockerhub-auth

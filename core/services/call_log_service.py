@@ -26,6 +26,17 @@ class CallLogService(BaseService):
         from_number: Optional[str] = None,
         to_number: Optional[str] = None,
     ) -> CallLog:
+        # Deduplicate: if a call log with the same provider_call_id already exists
+        # for this agent, return the existing one (prevents duplicates from retries
+        # or warm-to-cold worker fallbacks)
+        if provider_call_id:
+            existing = self.db.query(CallLog).filter(
+                CallLog.provider_call_id == provider_call_id,
+                CallLog.agent_id == agent_id,
+            ).first()
+            if existing:
+                return existing
+
         call_log = CallLog(
             agent_id=agent_id,
             organization_id=organization_id,
@@ -71,6 +82,7 @@ class CallLogService(BaseService):
         audio_file_path: Optional[str] = None,
         upload_id: Optional[int] = None,
         transcript: Optional[List[dict]] = None,
+        metrics: Optional[dict] = None,
     ) -> Optional[CallLog]:
         call_log = self.db.query(CallLog).filter(CallLog.id == call_log_id).first()
         if not call_log:
@@ -84,6 +96,8 @@ class CallLogService(BaseService):
         if upload_id:
             call_log.upload_id = upload_id
         call_log.transcript = transcript
+        if metrics:
+            call_log.metrics = metrics
 
         self.db.commit()
         self.db.refresh(call_log)
@@ -234,6 +248,7 @@ class CallLogService(BaseService):
                 "status": call_log.status,
                 "audio_file_path": call_log.audio_file_path,
                 "provider_call_id": call_log.provider_call_id,
+                "metrics": call_log.metrics,
             })
 
         return {
@@ -275,4 +290,5 @@ class CallLogService(BaseService):
             "status": call_log.status,
             "audio_file_path": call_log.audio_file_path,
             "provider_call_id": call_log.provider_call_id,
+            "metrics": call_log.metrics,
         }

@@ -23,3 +23,4 @@ exclude = ["frontend*", "pipecatfork*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+addopts = "-n auto"

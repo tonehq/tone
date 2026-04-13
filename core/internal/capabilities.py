@@ -22,13 +22,17 @@ _current_capabilities: List[str] = BASE_CAPABILITIES.copy()
 _license_info: Optional[LicenseInfo] = None
 
 
-def init_capabilities(fingerprint: Optional[str] = None) -> List[str]:
+def init_capabilities(fingerprint: Optional[str] = None, skip_license_check: bool = False) -> List[str]:
     global _current_capabilities, _license_info
-    _license_info = get_license_info(fingerprint)
-    if _license_info.is_valid:
-        _current_capabilities = _license_info.capabilities
+    if skip_license_check:
+        _current_capabilities = list(CAPABILITY_CODES.keys())
+        _license_info = get_license_info(fingerprint)
     else:
-        _current_capabilities = BASE_CAPABILITIES.copy()
+        _license_info = get_license_info(fingerprint)
+        if _license_info.is_valid:
+            _current_capabilities = _license_info.capabilities
+        else:
+            _current_capabilities = BASE_CAPABILITIES.copy()
     return _current_capabilities
 
 

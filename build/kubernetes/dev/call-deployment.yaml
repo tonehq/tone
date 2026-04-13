@@ -24,7 +24,7 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/os: linux
-      terminationGracePeriodSeconds: 300
+      terminationGracePeriodSeconds: 20
       containers:
         - name: tone-call-worker
           image: developer390/tone:${IMAGE_TAG}

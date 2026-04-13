@@ -1,5 +1,6 @@
 """Service to resolve the bot (agent) for incoming telephony calls by phone number."""
 
+import time as _time
 from typing import Optional, Tuple, Any, Dict
 
 import aiohttp
@@ -24,53 +25,91 @@ class BotRunnerService(BaseService):
     def get_bot_for_phone_number(self, phone_number: str) -> Optional[Agent]:
         """Find the agent (bot) associated with the given phone number (the number the call came to).
 
+        Uses a single JOIN query instead of separate lookups.
+        Results are cached in Redis keyed by phone number.
+
         Args:
             phone_number: The 'To' number (our number that received the call).
 
         Returns:
             The Agent for that phone number, or None if not found.
         """
+        from core.services.redis_service import cache_get, cache_set
+
         normalized = self._normalize_phone_number(phone_number)
         print("normalized in bot_runner_service.py file ===========", normalized)
         if not normalized:
             return None
-        channel_phone = (
-            self.db.query(AgentChannelPhoneNumbers)
+
+        # Check Redis cache first
+        cache_key = f"phone_to_agent:{normalized}"
+        cached_agent_id = cache_get(cache_key)
+        if cached_agent_id is not None:
+            logger.info("[TIMING] phone_to_agent CACHE HIT: %s -> agent_id=%s", normalized, cached_agent_id)
+            agent = self.db.query(Agent).filter(Agent.id == cached_agent_id).first()
+            if agent:
+                return agent
+
+        # Single JOIN: phone_number → agent (avoids 2 separate queries)
+        result = (
+            self.db.query(Agent)
+            .join(AgentChannelPhoneNumbers, AgentChannelPhoneNumbers.agent_id == Agent.id)
             .filter(AgentChannelPhoneNumbers.phone_number == normalized)
             .first()
         )
-        
-
-        if not channel_phone:
-            return None
-
-        # Prefer direct agent_id lookup
-        try:
-            if channel_phone.agent_id:
-                return self.db.query(Agent).filter(Agent.id == channel_phone.agent_id).first()
-        except Exception:
-            self.db.rollback()
-
-        # Fallback to channel-based lookup for legacy records without agent_id
-        if channel_phone.channel_id:
-            agent = (
+        if not result:
+            # Fallback to channel-based lookup for legacy records without agent_id
+            result = (
                 self.db.query(Agent)
                 .join(AgentChannel, AgentChannel.agent_id == Agent.id)
-                .filter(AgentChannel.channel_id == channel_phone.channel_id)
+                .join(AgentChannelPhoneNumbers, AgentChannelPhoneNumbers.channel_id == AgentChannel.channel_id)
+                .filter(AgentChannelPhoneNumbers.phone_number == normalized)
                 .first()
             )
-            return agent
 
-        return None
+        if result:
+            cache_set(cache_key, result.id, ttl_seconds=1800)
 
-    def _get_twilio_credentials(self) -> dict:
-        """Fetch Twilio account_sid and auth_token from the DB (api_keys table)."""
+        return result
+
+    def _get_twilio_credentials_from_channel(self, org_id=None) -> dict:
+        """Fetch Twilio account_sid and auth_token from the channels table (org-scoped).
+
+        Looks up the Twilio channel for the given org_id and extracts credentials
+        from channel.meta_data. This is the preferred method as it supports
+        per-organization Twilio accounts.
+
+        Falls back to _get_twilio_credentials_from_api_keys() if no channel found.
+        """
+        from core.models.channel import Channel
+        from core.models.enums import ChannelType
+
+        if org_id:
+            channel = (
+                self.db.query(Channel)
+                .filter(Channel.type == ChannelType.TWILIO, Channel.organization_id == org_id)
+                .first()
+            )
+            if channel and channel.meta_data:
+                meta = channel.meta_data
+                account_sid = meta.get("account_sid")
+                auth_token = meta.get("auth_token")
+                if account_sid and auth_token:
+                    return {"account_sid": account_sid, "auth_token": auth_token}
+
+        # Fallback: try api_keys table
+        return self._get_twilio_credentials_from_api_keys()
+
+    def _get_twilio_credentials_from_api_keys(self) -> dict:
+        """Fetch Twilio account_sid and auth_token from the DB (api_keys table).
+
+        Legacy method — queries globally without org scoping.
+        """
         from core.models.service_provider import ServiceProvider
         from core.models.api_key import ApiKey
         from core.utils.encryption import decrypt
 
         provider = self.db.query(ServiceProvider).filter(ServiceProvider.name == "twilio").first()
-        print("provider_idd", provider.id)
         if not provider:
             logger.warning("Twilio service provider not found in DB")
             return {}
@@ -81,29 +120,35 @@ class BotRunnerService(BaseService):
             .all()
         )
 
-        print("api_keyss", api_keys)
-
         creds = {}
         for ak in api_keys:
             additional = ak.additional_credentials or {}
             key_type = additional.get("key_type")
-            print("key_typee", key_type)
             if key_type == "account_sid":
                 creds["account_sid"] = decrypt(ak.api_key_encrypted)
             if key_type == "auth_token":
                 creds["auth_token"] = decrypt(ak.api_key_encrypted)
 
-        print("credssss", creds)
         return creds
 
-    async def _fetch_twilio_to_number(self, call_sid: str) -> Optional[str]:
-        """Fetch the 'to' number for a Twilio call from Twilio REST API."""
+    def _get_twilio_credentials(self) -> dict:
+        """Fetch Twilio credentials — tries channels table first, then api_keys."""
+        return self._get_twilio_credentials_from_channel(org_id=self.org_id)
+
+    async def _fetch_twilio_call_info(self, call_sid: str, call_data: Dict[str, Any]) -> Optional[str]:
+        """Fetch call info from Twilio REST API and enrich call_data with from/to and credentials.
+
+        Stores 'from', 'to', and '_twilio_creds' into call_data so downstream code
+        (bot.py, _create_serializer) can reuse them without duplicate DB/API calls.
+        Returns the 'to' number or None.
+        """
         twilio_creds = self._get_twilio_credentials()
         account_sid = twilio_creds.get("account_sid")
         auth_token = twilio_creds.get("auth_token")
 
-        print("account_sidd", account_sid)
-        print("auth_tokenn", auth_token)
+        # Cache credentials in call_data for reuse by _create_serializer
+        call_data["_twilio_creds"] = twilio_creds
+
         if not account_sid or not auth_token:
             logger.warning("Missing Twilio credentials in DB, cannot resolve to_number")
             return None
@@ -115,7 +160,14 @@ class BotRunnerService(BaseService):
                     if response.status != 200:
                         return None
                     data = await response.json()
-                    return data.get("to")
+                    to_number = data.get("to")
+                    from_number = data.get("from")
+                    # Store both numbers so bot() doesn't need to call Twilio API again
+                    if to_number:
+                        call_data["to"] = to_number
+                    if from_number:
+                        call_data["from"] = from_number
+                    return to_number
         except Exception as e:
             logger.error("Error fetching Twilio call info: %s", e)
             return None
@@ -215,10 +267,20 @@ class BotRunnerService(BaseService):
     ) -> Optional[str]:
         """Get the 'to' phone number from parsed call_data (async; handles provider APIs)."""
         if transport_type == "twilio":
+            # Use from/to from Twilio's WebSocket body if available (avoids 6-7s API call)
+            body = call_data.get("body") or {}
+            to_number = body.get("to") or call_data.get("to")
+            from_number = body.get("from") or call_data.get("from")
+            if to_number:
+                call_data["to"] = to_number
+                if from_number:
+                    call_data["from"] = from_number
+                return to_number
+            # Fallback: call Twilio REST API if not in body
             call_sid = call_data.get("call_id")
             if not call_sid:
                 return None
-            return await self._fetch_twilio_to_number(call_sid)
+            return await self._fetch_twilio_call_info(call_sid, call_data)
 
         elif transport_type == "telnyx":
             # Telnyx provides 'to' directly in WebSocket start message
@@ -264,16 +326,22 @@ class BotRunnerService(BaseService):
         """
         from pipecat.runner.utils import parse_telephony_websocket
 
+        _t0 = _time.monotonic()
         transport_type, call_data = await parse_telephony_websocket(websocket)
+        logger.info("[TIMING] parse_telephony_websocket (+%.3fs)", _time.monotonic() - _t0)
+
+        _t1 = _time.monotonic()
         to_number = await self.get_to_number_from_call_data_async(transport_type, call_data)
-        # print("to_number in bot_runner_service.py file ===========", to_number)
-        # print("transport_type in bot_runner_service.py file ===========", transport_type)
-        # print("call_data in bot_runner_service.py file ===========", call_data)
+        logger.info("[TIMING] get_to_number_from_call_data_async (+%.3fs)", _time.monotonic() - _t1)
+
         if not to_number:
             logger.warning("Could not determine 'to' phone number from call data")
             return None, transport_type, call_data
+
+        _t2 = _time.monotonic()
         agent = self.get_bot_for_phone_number(to_number)
-        # print("agent ===========", agent)
+        logger.info("[TIMING] get_bot_for_phone_number (+%.3fs)", _time.monotonic() - _t2)
+
         if agent:
             logger.info(
                 "Resolved bot for to_number=%s -> agent_id=%s name=%s",
@@ -283,8 +351,5 @@ class BotRunnerService(BaseService):
             )
         else:
             logger.warning("No agent found for phone number: %s", to_number)
-        
-        print("agent in bot_runner_service.py file before return ===========", agent.id)
-        print("transport_type in bot_runner_service.py file before return ===========", transport_type)
-        print("call_data in bot_runner_service.py file before return ===========", call_data)
+
         return agent, transport_type, call_data

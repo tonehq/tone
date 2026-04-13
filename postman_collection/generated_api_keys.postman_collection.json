@@ -17,76 +17,25 @@
       "name": "Upsert Basic Key",
       "request": {
         "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/generated-api-keys/upsert",
-          "host": ["{{baseUrl}}"],
-          "path": ["generated-api-keys", "upsert"],
-          "query": [
-            { "key": "id", "value": "1", "description": "Provide ID to update existing key", "disabled": true }
-          ]
-        },
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"name\": \"My API Key\",\n  \"key_value\": \"tone_api_key_example_123\"\n}",
-          "options": { "raw": { "language": "json" } }
-        }
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/generated-api-keys/upsert", "host": ["{{baseUrl}}"], "path": ["generated-api-keys", "upsert"], "query": [{ "key": "id", "value": "1", "description": "Provide ID to update existing key", "disabled": true }] },
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"My API Key\",\n  \"key_value\": \"tone_api_key_example_123\"\n}", "options": { "raw": { "language": "json" } } }
       },
       "response": [
         {
-          "name": "Upsert Basic Key - Create",
-          "originalRequest": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/generated-api-keys/upsert",
-              "host": ["{{baseUrl}}"],
-              "path": ["generated-api-keys", "upsert"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"My API Key\",\n  \"key_value\": \"tone_api_key_example_123\"\n}",
-              "options": { "raw": { "language": "json" } }
-            }
-          },
-          "status": "OK",
-          "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "{\n  \"id\": 1,\n  \"uuid\": \"d0e1f2a3-b4c5-6789-jklm-890123456789\",\n  \"name\": \"My API Key\",\n  \"key_value\": \"tone_api_key_example_123\",\n  \"domains\": null,\n  \"abuse_prevention\": null,\n  \"fraud_protection\": null,\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+          "name": "Create Basic Key", "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/generated-api-keys/upsert", "host": ["{{baseUrl}}"], "path": ["generated-api-keys", "upsert"] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"My API Key\",\n  \"key_value\": \"tone_api_key_example_123\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200, "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"d0e1f2a3-b4c5-6789-abcd-890123456789\",\n  \"name\": \"My API Key\",\n  \"key_value\": \"tone_api_key_example_123\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
         },
         {
-          "name": "Upsert Basic Key - Update",
-          "originalRequest": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/generated-api-keys/upsert?id=1",
-              "host": ["{{baseUrl}}"],
-              "path": ["generated-api-keys", "upsert"],
-              "query": [
-                { "key": "id", "value": "1" }
-              ]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"My API Key - Updated\",\n  \"key_value\": \"tone_api_key_updated_456\"\n}",
-              "options": { "raw": { "language": "json" } }
-            }
-          },
-          "status": "OK",
-          "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "{\n  \"id\": 1,\n  \"uuid\": \"d0e1f2a3-b4c5-6789-jklm-890123456789\",\n  \"name\": \"My API Key - Updated\",\n  \"key_value\": \"tone_api_key_updated_456\",\n  \"domains\": null,\n  \"abuse_prevention\": null,\n  \"fraud_protection\": null,\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710288000\n}"
+          "name": "Update Basic Key", "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/generated-api-keys/upsert?id=1", "host": ["{{baseUrl}}"], "path": ["generated-api-keys", "upsert"], "query": [{ "key": "id", "value": "1" }] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"My API Key - Updated\",\n  \"key_value\": \"tone_api_key_updated_456\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200, "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"d0e1f2a3-b4c5-6789-abcd-890123456789\",\n  \"name\": \"My API Key - Updated\",\n  \"key_value\": \"tone_api_key_updated_456\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710288000\n}"
+        },
+        {
+          "name": "Update Basic Key - Not Found", "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/generated-api-keys/upsert?id=9999", "host": ["{{baseUrl}}"], "path": ["generated-api-keys", "upsert"], "query": [{ "key": "id", "value": "9999" }] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"test\",\n  \"key_value\": \"test\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "Not Found", "code": 404, "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Generated API key not found\"\n}"
         }
       ]
     },
@@ -94,156 +43,78 @@
       "name": "Upsert Full Key",
       "request": {
         "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/generated-api-keys/upsert-full",
-          "host": ["{{baseUrl}}"],
-          "path": ["generated-api-keys", "upsert-full"],
-          "query": [
-            { "key": "id", "value": "1", "description": "Provide ID to update existing key", "disabled": true }
-          ]
-        },
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"name\": \"My Full API Key\",\n  \"key_value\": \"tone_api_key_example_456\",\n  \"domains\": [\"example.com\", \"api.example.com\"],\n  \"abuse_prevention\": {\n    \"is_toggled\": true,\n    \"recaptcha_secret_key\": \"recaptcha-secret-here\",\n    \"threshold\": 0.5\n  },\n  \"fraud_protection\": true\n}",
-          "options": { "raw": { "language": "json" } }
-        }
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/generated-api-keys/upsert-full", "host": ["{{baseUrl}}"], "path": ["generated-api-keys", "upsert-full"], "query": [{ "key": "id", "value": "1", "description": "Provide ID to update existing key", "disabled": true }] },
+        "body": { "mode": "raw", "raw": "{\n  \"name\": \"My Full API Key\",\n  \"key_value\": \"tone_api_key_example_456\",\n  \"domains\": [\"example.com\", \"api.example.com\"],\n  \"abuse_prevention\": {\n    \"is_toggled\": true,\n    \"recaptcha_secret_key\": \"recaptcha-secret-here\",\n    \"threshold\": 0.5\n  },\n  \"fraud_protection\": true\n}", "options": { "raw": { "language": "json" } } }
       },
       "response": [
         {
-          "name": "Upsert Full Key - Create",
-          "originalRequest": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/generated-api-keys/upsert-full",
-              "host": ["{{baseUrl}}"],
-              "path": ["generated-api-keys", "upsert-full"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"My Full API Key\",\n  \"key_value\": \"tone_api_key_example_456\",\n  \"domains\": [\"example.com\", \"api.example.com\"],\n  \"abuse_prevention\": {\"is_toggled\": true, \"recaptcha_secret_key\": \"recaptcha-secret-here\", \"threshold\": 0.5},\n  \"fraud_protection\": true\n}",
-              "options": { "raw": { "language": "json" } }
-            }
-          },
-          "status": "OK",
-          "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "{\n  \"id\": 2,\n  \"uuid\": \"e1f2a3b4-c5d6-7890-klmn-901234567890\",\n  \"name\": \"My Full API Key\",\n  \"key_value\": \"tone_api_key_example_456\",\n  \"domains\": [\"example.com\", \"api.example.com\"],\n  \"abuse_prevention\": {\"is_toggled\": true, \"recaptcha_secret_key\": \"recaptcha-secret-here\", \"threshold\": 0.5},\n  \"fraud_protection\": true,\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+          "name": "Create Full Key - All Security Fields", "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/generated-api-keys/upsert-full", "host": ["{{baseUrl}}"], "path": ["generated-api-keys", "upsert-full"] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"My Full API Key\",\n  \"key_value\": \"tone_api_key_example_456\",\n  \"domains\": [\"example.com\", \"api.example.com\"],\n  \"abuse_prevention\": {\"is_toggled\": true, \"recaptcha_secret_key\": \"recaptcha-secret\", \"threshold\": 0.5},\n  \"fraud_protection\": true\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200, "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 2,\n  \"uuid\": \"e1f2a3b4-c5d6-7890-bcde-901234567890\",\n  \"name\": \"My Full API Key\",\n  \"key_value\": \"tone_api_key_example_456\",\n  \"domains\": [\"example.com\", \"api.example.com\"],\n  \"abuse_prevention\": {\"is_toggled\": true, \"recaptcha_secret_key\": \"recaptcha-secret\", \"threshold\": 0.5},\n  \"fraud_protection\": true,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Update Full Key", "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/generated-api-keys/upsert-full?id=2", "host": ["{{baseUrl}}"], "path": ["generated-api-keys", "upsert-full"], "query": [{ "key": "id", "value": "2" }] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"Updated Full Key\",\n  \"key_value\": \"tone_api_key_updated_789\",\n  \"domains\": [\"newdomain.com\"],\n  \"abuse_prevention\": {\"is_toggled\": false},\n  \"fraud_protection\": false\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200, "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 2,\n  \"uuid\": \"e1f2a3b4-c5d6-7890-bcde-901234567890\",\n  \"name\": \"Updated Full Key\",\n  \"key_value\": \"tone_api_key_updated_789\",\n  \"domains\": [\"newdomain.com\"],\n  \"abuse_prevention\": {\"is_toggled\": false},\n  \"fraud_protection\": false,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710288000\n}"
+        },
+        {
+          "name": "Create with Domains Only", "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/generated-api-keys/upsert-full", "host": ["{{baseUrl}}"], "path": ["generated-api-keys", "upsert-full"] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"Domain-Only Key\",\n  \"key_value\": \"tone_domain_key_123\",\n  \"domains\": [\"myapp.com\"]\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200, "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 3,\n  \"uuid\": \"f2a3b4c5-d6e7-8901-cdef-012345678901\",\n  \"name\": \"Domain-Only Key\",\n  \"key_value\": \"tone_domain_key_123\",\n  \"domains\": [\"myapp.com\"],\n  \"abuse_prevention\": null,\n  \"fraud_protection\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Create with Empty Domains Array", "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/generated-api-keys/upsert-full", "host": ["{{baseUrl}}"], "path": ["generated-api-keys", "upsert-full"] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"No Domain Restriction\",\n  \"key_value\": \"tone_no_domain_key\",\n  \"domains\": [],\n  \"fraud_protection\": true\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200, "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 4,\n  \"uuid\": \"a3b4c5d6-e7f8-9012-defg-123456789012\",\n  \"name\": \"No Domain Restriction\",\n  \"key_value\": \"tone_no_domain_key\",\n  \"domains\": [],\n  \"abuse_prevention\": null,\n  \"fraud_protection\": true,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
         }
       ]
     },
     {
       "name": "Get All Keys",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/generated-api-keys/list",
-          "host": ["{{baseUrl}}"],
-          "path": ["generated-api-keys", "list"]
-        }
-      },
+      "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/generated-api-keys/list", "host": ["{{baseUrl}}"], "path": ["generated-api-keys", "list"] } },
       "response": [
         {
-          "name": "Get All Keys - Success",
-          "originalRequest": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/generated-api-keys/list",
-              "host": ["{{baseUrl}}"],
-              "path": ["generated-api-keys", "list"]
-            }
-          },
-          "status": "OK",
-          "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"d0e1f2a3-b4c5-6789-jklm-890123456789\",\n    \"name\": \"My API Key\",\n    \"key_value\": \"tone_api_key_example_123\",\n    \"domains\": null,\n    \"abuse_prevention\": null,\n    \"fraud_protection\": null,\n    \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  },\n  {\n    \"id\": 2,\n    \"uuid\": \"e1f2a3b4-c5d6-7890-klmn-901234567890\",\n    \"name\": \"My Full API Key\",\n    \"key_value\": \"tone_api_key_example_456\",\n    \"domains\": [\"example.com\"],\n    \"abuse_prevention\": {\"is_toggled\": true},\n    \"fraud_protection\": true,\n    \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
+          "name": "Get All Keys - Success", "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/generated-api-keys/list", "host": ["{{baseUrl}}"], "path": ["generated-api-keys", "list"] } },
+          "status": "OK", "code": 200, "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"d0e1f2a3-b4c5-6789-abcd-890123456789\",\n    \"name\": \"My API Key\",\n    \"key_value\": \"tone_api_key_example_123\",\n    \"domains\": null,\n    \"abuse_prevention\": null,\n    \"fraud_protection\": null,\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  },\n  {\n    \"id\": 2,\n    \"uuid\": \"e1f2a3b4-c5d6-7890-bcde-901234567890\",\n    \"name\": \"My Full API Key\",\n    \"key_value\": \"tone_api_key_example_456\",\n    \"domains\": [\"example.com\"],\n    \"abuse_prevention\": {\"is_toggled\": true},\n    \"fraud_protection\": true,\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
+        },
+        {
+          "name": "Get All Keys - Empty", "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/generated-api-keys/list", "host": ["{{baseUrl}}"], "path": ["generated-api-keys", "list"] } },
+          "status": "OK", "code": 200, "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "[]"
         }
       ]
     },
     {
       "name": "Get Key",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/generated-api-keys/get?key_id=1",
-          "host": ["{{baseUrl}}"],
-          "path": ["generated-api-keys", "get"],
-          "query": [
-            { "key": "key_id", "value": "1" }
-          ]
-        }
-      },
+      "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/generated-api-keys/get?key_id=1", "host": ["{{baseUrl}}"], "path": ["generated-api-keys", "get"], "query": [{ "key": "key_id", "value": "1" }] } },
       "response": [
         {
-          "name": "Get Key - Success",
-          "originalRequest": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/generated-api-keys/get?key_id=1",
-              "host": ["{{baseUrl}}"],
-              "path": ["generated-api-keys", "get"],
-              "query": [
-                { "key": "key_id", "value": "1" }
-              ]
-            }
-          },
-          "status": "OK",
-          "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "{\n  \"id\": 1,\n  \"uuid\": \"d0e1f2a3-b4c5-6789-jklm-890123456789\",\n  \"name\": \"My API Key\",\n  \"key_value\": \"tone_api_key_example_123\",\n  \"domains\": null,\n  \"abuse_prevention\": null,\n  \"fraud_protection\": null,\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+          "name": "Get Key - Success", "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/generated-api-keys/get?key_id=1", "host": ["{{baseUrl}}"], "path": ["generated-api-keys", "get"], "query": [{ "key": "key_id", "value": "1" }] } },
+          "status": "OK", "code": 200, "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"d0e1f2a3-b4c5-6789-abcd-890123456789\",\n  \"name\": \"My API Key\",\n  \"key_value\": \"tone_api_key_example_123\",\n  \"domains\": null,\n  \"abuse_prevention\": null,\n  \"fraud_protection\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Get Key - Not Found", "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/generated-api-keys/get?key_id=9999", "host": ["{{baseUrl}}"], "path": ["generated-api-keys", "get"], "query": [{ "key": "key_id", "value": "9999" }] } },
+          "status": "Not Found", "code": 404, "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Generated API key not found\"\n}"
         }
       ]
     },
     {
       "name": "Delete Key",
-      "request": {
-        "method": "DELETE",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/generated-api-keys/delete?key_id=1",
-          "host": ["{{baseUrl}}"],
-          "path": ["generated-api-keys", "delete"],
-          "query": [
-            { "key": "key_id", "value": "1" }
-          ]
-        }
-      },
+      "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/generated-api-keys/delete?key_id=1", "host": ["{{baseUrl}}"], "path": ["generated-api-keys", "delete"], "query": [{ "key": "key_id", "value": "1" }] } },
       "response": [
         {
-          "name": "Delete Key - Success",
-          "originalRequest": {
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/generated-api-keys/delete?key_id=1",
-              "host": ["{{baseUrl}}"],
-              "path": ["generated-api-keys", "delete"],
-              "query": [
-                { "key": "key_id", "value": "1" }
-              ]
-            }
-          },
-          "status": "OK",
-          "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "{\n  \"message\": \"API key deleted successfully\"\n}"
+          "name": "Delete Key - Success", "originalRequest": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/generated-api-keys/delete?key_id=1", "host": ["{{baseUrl}}"], "path": ["generated-api-keys", "delete"], "query": [{ "key": "key_id", "value": "1" }] } },
+          "status": "OK", "code": 200, "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"message\": \"Generated API key deleted successfully\"\n}"
+        },
+        {
+          "name": "Delete Key - Not Found", "originalRequest": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/generated-api-keys/delete?key_id=9999", "host": ["{{baseUrl}}"], "path": ["generated-api-keys", "delete"], "query": [{ "key": "key_id", "value": "9999" }] } },
+          "status": "Not Found", "code": 404, "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Generated API key not found\"\n}"
         }
       ]
     }

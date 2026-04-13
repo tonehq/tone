@@ -45,7 +45,7 @@ class Settings:
         def get_secret(key: str, default: str = "") -> str:
             return infisical_secrets.get(key) or os.getenv(key, default)
 
-        self.DATABASE_URL: str = get_secret("DATABASE_URL", "")
+        self.DATABASE_URL: str = get_secret("DATABASE_URL")
         self.JWT_SECRET_KEY: str = get_secret("JWT_SECRET_KEY", "your-secret-key-here")
         self.JWT_ALGORITHM: str = "HS256"
         self.ACCESS_TOKEN_EXPIRE_HOURS: int = 24
@@ -56,8 +56,15 @@ class Settings:
         self.RESEND_API_KEY: str = get_secret("RESEND_API_KEY", "")
 
         self.LICENSE_KEY: Optional[str] = get_secret("TONE_LICENSE_KEY") or None
+        self.SKIP_LICENSE_CHECK: bool = get_secret("SKIP_LICENSE_CHECK", "false").lower() == "true"
 
         self.DEFAULT_ORG_ID: str = get_secret("DEFAULT_ORG_ID", "00000000-0000-0000-0000-000000000001")
+
+        # Auth token for scripts/API calls
+        self.AUTH_TOKEN: str = get_secret("AUTH_TOKEN", "")
+
+        # Redis
+        self.REDIS_URL: str = get_secret("REDIS_URL", "redis://localhost:6379/0")
 
         # Cloudflare R2 storage
         self.R2_ACCESS_KEY_ID: str = get_secret("R2_ACCESS_KEY_ID", "")

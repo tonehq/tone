@@ -51,7 +51,6 @@ def get_all_service_providers(
     claims: JWTClaims = Depends(get_jwt_claims),
     db: Session = Depends(get_db)
 ):
-    ALLOWED_PROVIDER_IDS = {1, 2, 3, 19, 20, 21, 23, 26, 30, 33, 36, 37, 38, 39, 40, 42, 43, 46, 47, 48, 49, 50, 51, 55}
     providers = ServiceProviderService(db, user_id=claims.user_id).get_all_service_providers(
         provider_type=provider_type
     )
@@ -61,8 +60,6 @@ def get_all_service_providers(
     )
     result = []
     for p in providers:
-        if p.get("id") not in ALLOWED_PROVIDER_IDS:
-            continue
         # For TTS providers, only include if they have voices
         if p.get("provider_type") == "tts" and p.get("id") not in tts_provider_ids_with_voices:
             continue

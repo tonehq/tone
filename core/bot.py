@@ -5,6 +5,7 @@
 #
 
 import os
+import time as _time
 
 from dotenv import load_dotenv
 from loguru import logger
@@ -43,19 +44,38 @@ from pipecat.runner.types import (
 load_dotenv(override=True)
 
 
-def _get_twilio_credentials() -> dict:
-    """Fetch Twilio account_sid and auth_token from the DB (api_keys table).
+def _get_twilio_credentials(org_id=None) -> dict:
+    """Fetch Twilio account_sid and auth_token.
 
-    Queries service_providers for name='twilio', then finds the two api_keys
-    rows whose additional_credentials->key_type is 'sid' or 'auth_token'.
+    Tries the channels table first (org-scoped), then falls back to
+    the api_keys table (global).
     Returns {"account_sid": ..., "auth_token": ...}.
     """
     from core.database.session import get_db_context
-    from core.models.service_provider import ServiceProvider
-    from core.models.api_key import ApiKey
-    from core.utils.encryption import decrypt
 
     with get_db_context() as db:
+        # Try channels table first (per-org credentials)
+        if org_id:
+            from core.models.channel import Channel
+            from core.models.enums import ChannelType
+
+            channel = (
+                db.query(Channel)
+                .filter(Channel.type == ChannelType.TWILIO, Channel.organization_id == org_id)
+                .first()
+            )
+            if channel and channel.meta_data:
+                meta = channel.meta_data
+                account_sid = meta.get("account_sid")
+                auth_token = meta.get("auth_token")
+                if account_sid and auth_token:
+                    return {"account_sid": account_sid, "auth_token": auth_token}
+
+        # Fallback: api_keys table (legacy, global)
+        from core.models.service_provider import ServiceProvider
+        from core.models.api_key import ApiKey
+        from core.utils.encryption import decrypt
+
         provider = db.query(ServiceProvider).filter(ServiceProvider.name == "twilio").first()
         if not provider:
             logger.warning("Twilio service provider not found in DB")
@@ -197,18 +217,20 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     agent_factory_service to get LLM, STT, TTS and prompt from agent config and runs the pipeline.
     Otherwise uses env-based default services and a default prompt.
     """
+    _t_run_bot = _time.monotonic()
     from core.services.agent_factory_service import AgentFactoryService
     from core.database.session import get_db_context
-
-    print("body ===========", runner_args.body)
+    logger.info("[TIMING] run_bot() entered")
 
     body = getattr(runner_args, "body", None) or {}
     agent = body.get("agent")
 
     if agent:
         logger.info("Running bot with agent config: id=%s name=%s", agent.id, agent.name)
+        _t = _time.monotonic()
         with get_db_context() as db:
             await AgentFactoryService(db).run_bot_for_agent(agent, transport, runner_args)
+        logger.info("[TIMING] run_bot() run_bot_for_agent finished (+%.3fs), total run_bot: %.3fs", _time.monotonic() - _t, _time.monotonic() - _t_run_bot)
         return
 
     # Fallback when no agent (e.g. WebRTC, Daily without agent in body)
@@ -304,7 +326,8 @@ def _create_serializer(transport_type: str, call_data: dict):
         A FrameSerializer instance for the given provider.
     """
     if transport_type == "twilio":
-        twilio_creds = _get_twilio_credentials()
+        # Reuse credentials cached by BotRunnerService if available
+        twilio_creds = call_data.get("_twilio_creds") or _get_twilio_credentials(org_id=call_data.get("_org_id"))
         return TwilioFrameSerializer(
             stream_sid=call_data["stream_id"],
             call_sid=call_data["call_id"],
@@ -342,8 +365,9 @@ def _create_serializer(transport_type: str, call_data: dict):
 
 async def bot(runner_args: RunnerArguments, call_type: str = None):
     """Main bot entry point compatible with Pipecat Cloud."""
-    logger.info(f"Starting the bot, received body: 0.3 {runner_args.body}")
-    
+    _t_bot_start = _time.monotonic()
+    logger.info(f"[TIMING] bot() entered")
+
     #if runner_args:
     if isinstance(runner_args, WebSocketRunnerArguments):
         body = getattr(runner_args, "body", None) or {}
@@ -352,25 +376,34 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
         agent = body.get("agent")
 
         if call_data is None or transport_type is None:
+            _t = _time.monotonic()
             transport_type, call_data = await parse_telephony_websocket(runner_args.websocket)
+            logger.info("[TIMING] bot() parse_telephony_websocket (+%.3fs)", _time.monotonic() - _t)
 
-        if transport_type == "twilio":
+        # Fetch from/to only if not already present (BotRunnerService enriches call_data)
+        if transport_type == "twilio" and not call_data.get("from"):
+            _t = _time.monotonic()
             call_info = await get_call_info(transport_type, call_data.get("call_id", ""))
+            logger.info("[TIMING] bot() get_call_info Twilio API (+%.3fs)", _time.monotonic() - _t)
             if call_info:
                 call_data["from"] = call_info.get("from_number", "")
                 call_data["to"] = call_info.get("to_number", "")
-                logger.info(f"Call from: {call_data['from']} to: {call_data['to']}")
-        elif transport_type in ("telnyx", "exotel"):
-            # Telnyx and Exotel provide from/to in the call_data directly
-            from_number = call_data.get("from", "")
-            to_number = call_data.get("to", "")
-            if from_number or to_number:
-                logger.info(f"Call from: {from_number} to: {to_number}")
+
+        from_number = call_data.get("from", "")
+        to_number = call_data.get("to", "")
+        if from_number or to_number:
+            logger.info(f"Call from: {from_number} to: {to_number}")
 
         if agent:
             logger.info(f"Resolved agent for this call: id={agent.id} name={agent.name}")
 
+        _t = _time.monotonic()
         serializer = _create_serializer(transport_type, call_data)
+        logger.info("[TIMING] bot() _create_serializer (+%.3fs)", _time.monotonic() - _t)
+
+        _t = _time.monotonic()
+        vad = SileroVADAnalyzer(params=VADParams(stop_secs=0.2, min_volume=0.15))
+        logger.info("[TIMING] bot() SileroVADAnalyzer init (+%.3fs)", _time.monotonic() - _t)
 
         transport = FastAPIWebsocketTransport(
             websocket=runner_args.websocket,
@@ -378,7 +411,7 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
                 audio_in_enabled=True,
                 audio_out_enabled=True,
                 add_wav_header=False,
-                vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=0.2)),
+                vad_analyzer=vad,
                 serializer=serializer,
             ),
         )
@@ -421,9 +454,10 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
     else:
         raise ValueError(f"Unsupported runner arguments type: {type(runner_args)}")
 
-    print("runner_args ===========", runner_args)
-    print("runner_args.body ===========:", runner_args.body)
+    logger.info("[TIMING] bot() transport created, total bot() setup: %.3fs", _time.monotonic() - _t_bot_start)
+    _t = _time.monotonic()
     await run_bot(transport, runner_args)
+    logger.info("[TIMING] bot() run_bot finished (+%.3fs), total bot(): %.3fs", _time.monotonic() - _t, _time.monotonic() - _t_bot_start)
 
 async def get_call_info(transport_type: str, call_sid: str) -> dict:
     """Fetch call information from the telephony provider's REST API.
