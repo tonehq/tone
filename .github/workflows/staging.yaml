@@ -44,7 +44,6 @@ jobs:
 
       - name: Apply all manifests
         run: |
-          kubectl apply -f build/kubernetes/staging/namespace.yaml
           kubectl apply -f build/kubernetes/staging/letsencrypt-prod.yaml
           kubectl apply -f build/kubernetes/staging/service.yaml
           kubectl apply -f build/kubernetes/staging/deployment.yaml
