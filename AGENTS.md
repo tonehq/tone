@@ -119,3 +119,5 @@ To check whether embeddings exist, inspect `.gitnexus/meta.json` — the `stats.
 | Work in the Heygen area (70 symbols) | `.claude/skills/generated/heygen/SKILL.md` |
 
 <!-- gitnexus:end -->
+
+
