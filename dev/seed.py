@@ -217,7 +217,7 @@ def seed_from_configs(db, org_name, email, password):
             provider_type=provider_type,
             auth_type="api_key",
             description=description,
-            status="active",
+            status=config.get("status", "active"),
             is_system=True,
             meta_data_schema=meta_data_schema,
         )

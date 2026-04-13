@@ -15,71 +15,60 @@
   "item": [
     {
       "name": "Get Voices",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/voice/get_voices",
-          "host": ["{{baseUrl}}"],
-          "path": ["voice", "get_voices"]
-        }
-      },
+      "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/voice/get_voices", "host": ["{{baseUrl}}"], "path": ["voice", "get_voices"] } },
       "response": [
         {
           "name": "Get Voices - Success",
-          "originalRequest": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/voice/get_voices",
-              "host": ["{{baseUrl}}"],
-              "path": ["voice", "get_voices"]
-            }
-          },
-          "status": "OK",
-          "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"f2a3b4c5-d6e7-8901-lmno-012345678901\",\n    \"voice_id\": \"voice_123\",\n    \"name\": \"Alloy\",\n    \"language\": \"en\",\n    \"gender\": \"female\",\n    \"accent\": \"american\",\n    \"description\": \"A warm and friendly voice\",\n    \"service_provider_id\": 2,\n    \"is_active\": true,\n    \"sample_url\": \"https://example.com/samples/alloy.mp3\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  },\n  {\n    \"id\": 2,\n    \"uuid\": \"a3b4c5d6-e7f8-9012-mnop-123456789012\",\n    \"voice_id\": \"voice_456\",\n    \"name\": \"Echo\",\n    \"language\": \"en\",\n    \"gender\": \"male\",\n    \"accent\": \"british\",\n    \"description\": \"A professional and clear voice\",\n    \"service_provider_id\": 2,\n    \"is_active\": true,\n    \"sample_url\": \"https://example.com/samples/echo.mp3\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
+          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/voice/get_voices", "host": ["{{baseUrl}}"], "path": ["voice", "get_voices"] } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"f2a3b4c5-d6e7-8901-abcd-012345678901\",\n    \"voice_id\": \"21m00Tcm4TlvDq8ikWAM\",\n    \"name\": \"Rachel\",\n    \"language\": \"en\",\n    \"gender\": \"female\",\n    \"accent\": \"american\",\n    \"description\": \"A warm and friendly voice\",\n    \"service_provider_id\": 5,\n    \"is_active\": true,\n    \"model_id\": null,\n    \"language_list\": [\"en\", \"es\", \"fr\"],\n    \"sample_url\": \"https://example.com/samples/rachel.mp3\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  },\n  {\n    \"id\": 2,\n    \"uuid\": \"a3b4c5d6-e7f8-9012-bcde-123456789012\",\n    \"voice_id\": \"alloy\",\n    \"name\": \"Alloy\",\n    \"language\": \"en\",\n    \"gender\": \"female\",\n    \"accent\": \"american\",\n    \"description\": \"OpenAI Alloy voice\",\n    \"service_provider_id\": 1,\n    \"is_active\": true,\n    \"model_id\": null,\n    \"language_list\": [\"en\"],\n    \"sample_url\": null,\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
         }
       ]
     },
     {
       "name": "Get Voice By Provider",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/voice/get_voice_by_provider?service_provider_id=1",
-          "host": ["{{baseUrl}}"],
-          "path": ["voice", "get_voice_by_provider"],
-          "query": [
-            { "key": "service_provider_id", "value": "1", "description": "The service provider ID to filter voices by" }
-          ]
-        }
-      },
+      "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/voice/get_voice_by_provider?service_provider_id=5", "host": ["{{baseUrl}}"], "path": ["voice", "get_voice_by_provider"], "query": [{ "key": "service_provider_id", "value": "5", "description": "The service provider ID to filter voices by" }] } },
       "response": [
         {
           "name": "Get Voice By Provider - Success",
-          "originalRequest": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/voice/get_voice_by_provider?service_provider_id=2",
-              "host": ["{{baseUrl}}"],
-              "path": ["voice", "get_voice_by_provider"],
-              "query": [
-                { "key": "service_provider_id", "value": "2" }
-              ]
-            }
-          },
-          "status": "OK",
-          "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"f2a3b4c5-d6e7-8901-lmno-012345678901\",\n    \"voice_id\": \"voice_123\",\n    \"name\": \"Alloy\",\n    \"language\": \"en\",\n    \"gender\": \"female\",\n    \"accent\": \"american\",\n    \"description\": \"A warm and friendly voice\",\n    \"service_provider_id\": 2,\n    \"is_active\": true,\n    \"sample_url\": \"https://example.com/samples/alloy.mp3\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
+          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/voice/get_voice_by_provider?service_provider_id=5", "host": ["{{baseUrl}}"], "path": ["voice", "get_voice_by_provider"], "query": [{ "key": "service_provider_id", "value": "5" }] } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 5,\n  \"uuid\": \"b4c5d6e7-f890-1234-cdef-234567890123\",\n  \"name\": \"elevenlabs\",\n  \"display_name\": \"ElevenLabs\",\n  \"description\": \"ElevenLabs TTS Provider\",\n  \"provider_type\": \"tts\",\n  \"logo_url\": null,\n  \"voices\": [\n    {\n      \"id\": 1,\n      \"uuid\": \"f2a3b4c5-d6e7-8901-abcd-012345678901\",\n      \"voice_id\": \"21m00Tcm4TlvDq8ikWAM\",\n      \"name\": \"Rachel\",\n      \"language\": \"en\",\n      \"gender\": \"female\",\n      \"accent\": \"american\",\n      \"description\": \"A warm and friendly voice\",\n      \"sample_url\": \"https://example.com/samples/rachel.mp3\",\n      \"created_at\": 1710201600,\n      \"updated_at\": 1710201600\n    },\n    {\n      \"id\": 3,\n      \"uuid\": \"c5d6e7f8-9012-3456-defg-345678901234\",\n      \"voice_id\": \"EXAVITQu4vr4xnSDxMaL\",\n      \"name\": \"Bella\",\n      \"language\": \"en\",\n      \"gender\": \"female\",\n      \"accent\": \"american\",\n      \"description\": \"A soft and gentle voice\",\n      \"sample_url\": null,\n      \"created_at\": 1710201600,\n      \"updated_at\": 1710201600\n    }\n  ],\n  \"languages\": [\"en\"],\n  \"genders\": [\"female\"]\n}"
+        },
+        {
+          "name": "Get Voice By Provider - No Voices Found",
+          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/voice/get_voice_by_provider?service_provider_id=99", "host": ["{{baseUrl}}"], "path": ["voice", "get_voice_by_provider"], "query": [{ "key": "service_provider_id", "value": "99" }] } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "\"No voices found for this provider\""
+        }
+      ]
+    },
+    {
+      "name": "Get Languages By Provider",
+      "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/voice/get_languages_by_provider?service_provider_id=5", "host": ["{{baseUrl}}"], "path": ["voice", "get_languages_by_provider"], "query": [{ "key": "service_provider_id", "value": "5", "description": "The service provider ID" }] } },
+      "response": [
+        {
+          "name": "Get Languages - Success",
+          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/voice/get_languages_by_provider?service_provider_id=5", "host": ["{{baseUrl}}"], "path": ["voice", "get_languages_by_provider"], "query": [{ "key": "service_provider_id", "value": "5" }] } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"languages\": [\"de\", \"en\", \"es\", \"fr\", \"ja\", \"ko\", \"pt\", \"zh\"]\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get Voices By Language",
+      "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/voice/get_voices_by_language?language=en&service_provider_id=5", "host": ["{{baseUrl}}"], "path": ["voice", "get_voices_by_language"], "query": [{ "key": "language", "value": "en" }, { "key": "service_provider_id", "value": "5" }] } },
+      "response": [
+        {
+          "name": "Get Voices By Language - Success",
+          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/voice/get_voices_by_language?language=en&service_provider_id=5", "host": ["{{baseUrl}}"], "path": ["voice", "get_voices_by_language"], "query": [{ "key": "language", "value": "en" }, { "key": "service_provider_id", "value": "5" }] } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"voices\": [\n    {\n      \"id\": 1,\n      \"uuid\": \"f2a3b4c5-d6e7-8901-abcd-012345678901\",\n      \"voice_id\": \"21m00Tcm4TlvDq8ikWAM\",\n      \"name\": \"Rachel\",\n      \"gender\": \"female\",\n      \"accent\": \"american\",\n      \"description\": \"A warm and friendly voice\",\n      \"sample_url\": \"https://example.com/samples/rachel.mp3\"\n    }\n  ]\n}"
         }
       ]
     },
@@ -87,108 +76,86 @@
       "name": "Upsert Voice",
       "request": {
         "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/voice/upsert_voice",
-          "host": ["{{baseUrl}}"],
-          "path": ["voice", "upsert_voice"]
-        },
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"service_provider_id\": 2,\n  \"name\": \"Alloy\",\n  \"voice_id\": \"voice_123\",\n  \"language\": \"en\",\n  \"gender\": \"female\",\n  \"accent\": \"american\",\n  \"description\": \"A warm and friendly voice\",\n  \"is_active\": true,\n  \"sample_url\": \"https://example.com/samples/alloy.mp3\"\n}",
-          "options": { "raw": { "language": "json" } }
-        }
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/voice/upsert_voice", "host": ["{{baseUrl}}"], "path": ["voice", "upsert_voice"] },
+        "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 5,\n  \"name\": \"Rachel\",\n  \"voice_id\": \"21m00Tcm4TlvDq8ikWAM\",\n  \"language\": \"en\",\n  \"gender\": \"female\",\n  \"accent\": \"american\",\n  \"description\": \"A warm and friendly voice\"\n}", "options": { "raw": { "language": "json" } } }
       },
       "response": [
         {
-          "name": "Upsert Voice - Create",
-          "originalRequest": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/voice/upsert_voice",
-              "host": ["{{baseUrl}}"],
-              "path": ["voice", "upsert_voice"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"service_provider_id\": 2,\n  \"name\": \"Alloy\",\n  \"voice_id\": \"voice_123\",\n  \"language\": \"en\",\n  \"gender\": \"female\",\n  \"accent\": \"american\",\n  \"description\": \"A warm and friendly voice\",\n  \"is_active\": true,\n  \"sample_url\": \"https://example.com/samples/alloy.mp3\"\n}",
-              "options": { "raw": { "language": "json" } }
-            }
-          },
-          "status": "OK",
-          "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "{\n  \"id\": 1,\n  \"uuid\": \"f2a3b4c5-d6e7-8901-lmno-012345678901\",\n  \"voice_id\": \"voice_123\",\n  \"name\": \"Alloy\",\n  \"language\": \"en\",\n  \"gender\": \"female\",\n  \"accent\": \"american\",\n  \"description\": \"A warm and friendly voice\",\n  \"service_provider_id\": 2,\n  \"is_active\": true,\n  \"sample_url\": \"https://example.com/samples/alloy.mp3\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+          "name": "Create ElevenLabs Voice",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/voice/upsert_voice", "host": ["{{baseUrl}}"], "path": ["voice", "upsert_voice"] }, "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 5,\n  \"name\": \"Rachel\",\n  \"voice_id\": \"21m00Tcm4TlvDq8ikWAM\",\n  \"language\": \"en\",\n  \"gender\": \"female\",\n  \"accent\": \"american\",\n  \"description\": \"A warm and friendly ElevenLabs voice\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"f2a3b4c5-d6e7-8901-abcd-012345678901\",\n  \"voice_id\": \"21m00Tcm4TlvDq8ikWAM\",\n  \"name\": \"Rachel\",\n  \"language\": \"en\",\n  \"gender\": \"female\",\n  \"accent\": \"american\",\n  \"description\": \"A warm and friendly ElevenLabs voice\",\n  \"service_provider_id\": 5,\n  \"is_active\": true,\n  \"model_id\": null,\n  \"language_list\": null,\n  \"sample_url\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
         },
         {
-          "name": "Upsert Voice - Update",
-          "originalRequest": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/voice/upsert_voice",
-              "host": ["{{baseUrl}}"],
-              "path": ["voice", "upsert_voice"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"id\": 1,\n  \"name\": \"Alloy Updated\",\n  \"description\": \"Updated description\",\n  \"is_active\": false\n}",
-              "options": { "raw": { "language": "json" } }
-            }
-          },
-          "status": "OK",
-          "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "{\n  \"id\": 1,\n  \"uuid\": \"f2a3b4c5-d6e7-8901-lmno-012345678901\",\n  \"voice_id\": \"voice_123\",\n  \"name\": \"Alloy Updated\",\n  \"language\": \"en\",\n  \"gender\": \"female\",\n  \"accent\": \"american\",\n  \"description\": \"Updated description\",\n  \"service_provider_id\": 2,\n  \"is_active\": false,\n  \"sample_url\": \"https://example.com/samples/alloy.mp3\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710288000\n}"
+          "name": "Create OpenAI Voice",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/voice/upsert_voice", "host": ["{{baseUrl}}"], "path": ["voice", "upsert_voice"] }, "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 1,\n  \"name\": \"Alloy\",\n  \"voice_id\": \"alloy\",\n  \"language\": \"en\",\n  \"gender\": \"female\",\n  \"description\": \"OpenAI Alloy voice\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 2,\n  \"uuid\": \"a3b4c5d6-e7f8-9012-bcde-123456789012\",\n  \"voice_id\": \"alloy\",\n  \"name\": \"Alloy\",\n  \"language\": \"en\",\n  \"gender\": \"female\",\n  \"accent\": null,\n  \"description\": \"OpenAI Alloy voice\",\n  \"service_provider_id\": 1,\n  \"is_active\": true,\n  \"model_id\": null,\n  \"language_list\": null,\n  \"sample_url\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Create Deepgram Voice",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/voice/upsert_voice", "host": ["{{baseUrl}}"], "path": ["voice", "upsert_voice"] }, "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 3,\n  \"name\": \"Asteria\",\n  \"voice_id\": \"aura-asteria-en\",\n  \"language\": \"en\",\n  \"gender\": \"female\",\n  \"description\": \"Deepgram Aura Asteria voice\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 3,\n  \"uuid\": \"b4c5d6e7-f890-1234-cdef-234567890123\",\n  \"voice_id\": \"aura-asteria-en\",\n  \"name\": \"Asteria\",\n  \"language\": \"en\",\n  \"gender\": \"female\",\n  \"accent\": null,\n  \"description\": \"Deepgram Aura Asteria voice\",\n  \"service_provider_id\": 3,\n  \"is_active\": true,\n  \"model_id\": null,\n  \"language_list\": null,\n  \"sample_url\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Create Cartesia Voice with Language List",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/voice/upsert_voice", "host": ["{{baseUrl}}"], "path": ["voice", "upsert_voice"] }, "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 6,\n  \"name\": \"Cartesia Voice\",\n  \"voice_id\": \"cartesia_voice_123\",\n  \"language\": \"en\",\n  \"gender\": \"female\",\n  \"description\": \"Cartesia multilingual voice\",\n  \"language_list\": [\"en\", \"es\", \"fr\"]\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 4,\n  \"uuid\": \"c5d6e7f8-9012-3456-defg-345678901234\",\n  \"voice_id\": \"cartesia_voice_123\",\n  \"name\": \"Cartesia Voice\",\n  \"language\": \"en\",\n  \"gender\": \"female\",\n  \"accent\": null,\n  \"description\": \"Cartesia multilingual voice\",\n  \"service_provider_id\": 6,\n  \"is_active\": true,\n  \"model_id\": null,\n  \"language_list\": [\"en\", \"es\", \"fr\"],\n  \"sample_url\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Create Google TTS Voice",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/voice/upsert_voice", "host": ["{{baseUrl}}"], "path": ["voice", "upsert_voice"] }, "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 4,\n  \"name\": \"Standard A\",\n  \"voice_id\": \"en-US-Standard-A\",\n  \"language\": \"en-US\",\n  \"gender\": \"female\",\n  \"description\": \"Google Cloud TTS Standard voice\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 5,\n  \"uuid\": \"d6e7f890-1234-5678-efgh-456789012345\",\n  \"voice_id\": \"en-US-Standard-A\",\n  \"name\": \"Standard A\",\n  \"language\": \"en-US\",\n  \"gender\": \"female\",\n  \"accent\": null,\n  \"description\": \"Google Cloud TTS Standard voice\",\n  \"service_provider_id\": 4,\n  \"is_active\": true,\n  \"model_id\": null,\n  \"language_list\": null,\n  \"sample_url\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Create Multilingual Voice with Language List",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/voice/upsert_voice", "host": ["{{baseUrl}}"], "path": ["voice", "upsert_voice"] }, "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 5,\n  \"name\": \"Multilingual Voice\",\n  \"voice_id\": \"multi_voice_789\",\n  \"language\": \"en\",\n  \"gender\": \"male\",\n  \"description\": \"Supports multiple languages\",\n  \"language_list\": [\"en\", \"es\", \"de\", \"fr\"]\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 6,\n  \"uuid\": \"e7f89012-3456-7890-fghi-567890123456\",\n  \"voice_id\": \"multi_voice_789\",\n  \"name\": \"Multilingual Voice\",\n  \"language\": \"en\",\n  \"gender\": \"male\",\n  \"accent\": null,\n  \"description\": \"Supports multiple languages\",\n  \"service_provider_id\": 5,\n  \"is_active\": true,\n  \"model_id\": null,\n  \"language_list\": [\"en\", \"es\", \"de\", \"fr\"],\n  \"sample_url\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Update Voice",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/voice/upsert_voice", "host": ["{{baseUrl}}"], "path": ["voice", "upsert_voice"] }, "body": { "mode": "raw", "raw": "{\n  \"id\": 1,\n  \"name\": \"Rachel Updated\",\n  \"description\": \"Updated description\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"f2a3b4c5-d6e7-8901-abcd-012345678901\",\n  \"voice_id\": \"21m00Tcm4TlvDq8ikWAM\",\n  \"name\": \"Rachel Updated\",\n  \"language\": \"en\",\n  \"gender\": \"female\",\n  \"accent\": \"american\",\n  \"description\": \"Updated description\",\n  \"service_provider_id\": 5,\n  \"is_active\": true,\n  \"model_id\": null,\n  \"language_list\": [\"en\", \"es\", \"fr\"],\n  \"sample_url\": \"https://example.com/samples/rachel.mp3\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710288000\n}"
+        },
+        {
+          "name": "Deactivate Voice",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/voice/upsert_voice", "host": ["{{baseUrl}}"], "path": ["voice", "upsert_voice"] }, "body": { "mode": "raw", "raw": "{\n  \"id\": 1,\n  \"is_active\": false\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"f2a3b4c5-d6e7-8901-abcd-012345678901\",\n  \"voice_id\": \"21m00Tcm4TlvDq8ikWAM\",\n  \"name\": \"Rachel\",\n  \"language\": \"en\",\n  \"gender\": \"female\",\n  \"accent\": \"american\",\n  \"description\": \"A warm and friendly voice\",\n  \"service_provider_id\": 5,\n  \"is_active\": false,\n  \"model_id\": null,\n  \"language_list\": [\"en\", \"es\", \"fr\"],\n  \"sample_url\": \"https://example.com/samples/rachel.mp3\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710288000\n}"
         }
       ]
     },
     {
       "name": "Delete Voice",
-      "request": {
-        "method": "DELETE",
-        "header": [],
-        "url": {
-          "raw": "{{baseUrl}}/voice/delete_voice?voice_id=1",
-          "host": ["{{baseUrl}}"],
-          "path": ["voice", "delete_voice"],
-          "query": [
-            { "key": "voice_id", "value": "1", "description": "The voice ID to delete" }
-          ]
-        }
-      },
+      "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/voice/delete_voice?voice_id=1", "host": ["{{baseUrl}}"], "path": ["voice", "delete_voice"], "query": [{ "key": "voice_id", "value": "1", "description": "The voice ID to delete" }] } },
       "response": [
         {
           "name": "Delete Voice - Success",
-          "originalRequest": {
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/voice/delete_voice?voice_id=1",
-              "host": ["{{baseUrl}}"],
-              "path": ["voice", "delete_voice"],
-              "query": [
-                { "key": "voice_id", "value": "1" }
-              ]
-            }
-          },
-          "status": "OK",
-          "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
+          "originalRequest": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/voice/delete_voice?voice_id=1", "host": ["{{baseUrl}}"], "path": ["voice", "delete_voice"], "query": [{ "key": "voice_id", "value": "1" }] } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
           "body": "{\n  \"message\": \"Voice deleted successfully\"\n}"
+        },
+        {
+          "name": "Delete Voice - Not Found",
+          "originalRequest": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/voice/delete_voice?voice_id=9999", "host": ["{{baseUrl}}"], "path": ["voice", "delete_voice"], "query": [{ "key": "voice_id", "value": "9999" }] } },
+          "status": "Not Found", "code": 404,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Voice not found\"\n}"
         }
       ]
     }

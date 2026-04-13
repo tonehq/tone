@@ -182,11 +182,73 @@ Each generated collection must follow this structure. Every endpoint item MUST i
 
 ## Response Example Rules
 
-Each endpoint must include example responses:
-- **Success response** — Always include at least one 200/201 success example with realistic response body.
-- **Error responses** — Include examples for validation errors (400) found in the handler (e.g., missing required fields), not-found errors (404) if applicable, and auth errors if the endpoint requires specific roles.
-- **Multiple success variants** — For upsert endpoints, include both "Create" and "Update" success examples.
-- Infer response body structure from the service method return or the model's fields. Use realistic placeholder values consistent with the request body examples.
+Each endpoint must include **comprehensive** example responses that cover all variations and edge cases. The goal is to produce collections rich enough that test case generation can use them as the source of truth.
+
+### Required Examples per Endpoint Type
+
+**For Upsert/Create endpoints:**
+1. **One success example per type/provider/variant** — If the entity has a `type`, `provider`, `service_type`, `agent_type`, or similar discriminator field (including enum fields), include a separate Create example for EACH possible value. For example:
+   - Channels: one Create example per ChannelType (TWILIO, EXOTEL, WEB, GOOGLE_MEET, ZOOM) — each with type-specific `meta_data`
+   - Services: one Create example per service_type × provider combination (LLM/OpenAI, LLM/Anthropic, STT/Deepgram, STT/Google, TTS/ElevenLabs, TTS/OpenAI, TTS/Cartesia)
+   - Models: one Create per service_type (llm, stt, tts) with provider-specific `meta_data`
+   - Agents: one Create per AgentType (INBOUND, OUTBOUND, CHATBOT)
+   - Voices: one Create per provider (ElevenLabs, OpenAI, Deepgram, Cartesia, Google)
+   - Phone Numbers: one Create per provider (twilio, exotel)
+2. **Update example** — with `id` or `uuid` to trigger the update path
+3. **JSONB field variations** — If the entity has JSONB fields (meta_data, config, capabilities, etc.) that vary by type/provider, each Create example must show the correct JSONB structure for that type. To discover the correct structure:
+   - Read the **service layer code** to see how `meta_data`/`config` is validated or used (e.g., `meta_data.get("account_sid")`)
+   - Read **`dev/dev-data.json`** for seeded provider/model data with real meta_data structures
+   - Read the **model** to see JSONB column definitions and defaults
+4. **All validation error examples (400)** — Read the controller AND service code to find every `HTTPException(status_code=400)` raise. Create one example per distinct validation error (e.g., missing name, missing type, missing provider, missing required JSONB field).
+5. **Not Found errors (404)** — For endpoints that look up by ID, include a Not Found example.
+6. **Conflict errors (409)** — If the service raises `IntegrityError` or `HTTP_409_CONFLICT`, include examples for:
+   - Duplicate name/unique constraint violations
+   - Duplicate type (e.g., only one channel per type)
+   - Resource already assigned (e.g., phone number already assigned to another agent)
+7. **Set-as-default example** — If the entity supports `is_default`, include an example setting it to `true`.
+
+**For List/Get-All endpoints:**
+1. **Success** — With realistic data showing multiple items
+2. **Filtered results** — One example per supported filter parameter (e.g., `?service_type=stt`, `?channel_id=1`)
+3. **Empty result** — Returning `[]`
+
+**For Get-By-ID endpoints:**
+1. **Success** — With full response body
+2. **Not Found (404)** — With the exact error message from the service code
+
+**For Get-By-Type/Provider endpoints:**
+1. **One success example per type/provider value** — Show realistic data for each
+2. **Not Found (404)** — When no record exists for the given type
+3. **Invalid type (400)** — If the service validates enum values
+
+**For Delete endpoints:**
+1. **Success** — With the exact success message from the service code
+2. **Not Found (404)** — With the exact error message from the service code
+
+**For Get-Default endpoints:**
+1. **One example per type** (e.g., default LLM, default STT, default TTS)
+2. **No default found (404)**
+
+### How to Discover Correct Response Shapes
+
+Do NOT guess response fields. Trace the actual code path:
+
+1. **Read the controller** (`core/api/v1/{name}.py`) — Find the route handler and what service method it calls.
+2. **Read the service** (`core/services/{name}_service.py`) — Find the service method and its return statement. This is the source of truth for response fields. Look for:
+   - `_response_item()` methods that build the response dict
+   - Direct ORM object returns (use the model's column definitions)
+   - Joined queries that add extra fields (e.g., `service_provider_name` from a JOIN)
+   - Different response shapes for different endpoints (e.g., `get_all` may return fewer fields than `get_one`)
+3. **Read the model** (`core/models/{name}.py`) — For ORM object returns, use the model's column names as response fields.
+4. **Check for enum value casing** — Enum `.value` often returns lowercase (e.g., `"inbound"` not `"INBOUND"`, `"twilio"` not `"TWILIO"`). Verify by reading the enum definition.
+
+### Response Body Field Accuracy
+
+- Use the **exact field names** from the service method return dict or ORM model columns
+- Include **all fields** — don't omit nullable fields; show them as `null`
+- Use **correct value types** — don't use strings for integers, don't use uppercase for lowercase enums
+- For joined responses, include the joined fields (e.g., `service_provider_name`, `provider_type`)
+- For flat responses (like agents), don't nest into sub-objects unless the code does
 
 ## Endpoint Naming Convention
 

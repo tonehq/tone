@@ -159,6 +159,8 @@ class VoiceService(BaseService):
             self.db.delete(voice)
             self.db.commit()
             return {"message": "Voice deleted successfully"}
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"Error deleting voice: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

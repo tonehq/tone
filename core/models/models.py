@@ -17,3 +17,5 @@ class Model(TimestampModel):
     status = Column(String, default='active')
     service_type = Column(String, nullable=True)
     meta_data_schema = Column(JSONB, nullable=True)
+    auth_meta_data = Column(JSON, nullable=True)
+    endpoint_url = Column(String, nullable=True)

@@ -199,6 +199,7 @@ pyOpenSSL==25.3.0
 pyphen==0.14.0
 PySocks==1.7.1
 pytest==9.0.2
+pytest-xdist==3.8.0
 python-dateutil==2.8.2
 python-dotenv==1.2.1
 python-jose==3.3.0
