@@ -1,8 +1,8 @@
-from sqlalchemy.orm import Session
-from typing import Optional, Union, List, Dict, Any
+from typing import List, Dict, Any
 from uuid import UUID
 import time
 import uuid as uuid_lib
+import traceback
 
 from fastapi import HTTPException, status
 from loguru import logger
@@ -10,6 +10,9 @@ from loguru import logger
 from core.services.base import BaseService
 from core.models.document import Document, DocumentChunk
 from core.models.upload import Upload
+from core.models.service_provider import ServiceProvider
+from core.models.api_key import ApiKey
+from core.utils.encryption import decrypt
 
 
 class DocumentService(BaseService):
@@ -57,7 +60,107 @@ class DocumentService(BaseService):
         self.db.commit()
         self.db.refresh(doc)
         logger.info("Document record created: id={} upload_id={}", doc.id, upload.id)
+
+        # Process the document: extract text → chunk → embed → store
+        self._process_document(doc, file_bytes, content_type)
+
         return doc
+
+    def _process_document(self, doc: Document, file_bytes: bytes, content_type: str):
+        """Extract text, chunk it, generate embeddings, and store chunks."""
+        try:
+            from core.services.text_extractor import TextExtractor
+            from core.services.chunking_service import ChunkingService
+            from core.services.embedding_service import EmbeddingService
+
+            # Step 1: Extract plain text from the file
+            extractor = TextExtractor()
+            plain_text = extractor.extract(file_bytes, content_type)
+            if not plain_text.strip():
+                self._update_status(doc, "failed")
+                logger.warning("Document {} has no extractable text", doc.id)
+                return
+
+            # Step 2: Split text into chunks
+            chunker = ChunkingService()
+            chunks = chunker.split(plain_text)
+            if not chunks:
+                self._update_status(doc, "failed")
+                logger.warning("Document {} produced no chunks", doc.id)
+                return
+
+            # Step 3: Get OpenAI API key from DB and generate embeddings
+            api_key = self._get_openai_api_key()
+            embedder = EmbeddingService(api_key)
+            chunk_texts = [c["chunk_text"] for c in chunks]
+            embeddings = embedder.embed_texts(chunk_texts)
+
+            # Step 4: Store chunks with embeddings
+            now = int(time.time())
+            chunk_objects = []
+            for chunk, embedding in zip(chunks, embeddings):
+                obj = DocumentChunk(
+                    uuid=uuid_lib.uuid4(),
+                    document_id=doc.id,
+                    chunk_index=chunk["chunk_index"],
+                    chunk_text=chunk["chunk_text"],
+                    embedding=embedding,
+                    organization_id=self.org_id,
+                    created_at=now,
+                    updated_at=now,
+                )
+                chunk_objects.append(obj)
+            self.db.add_all(chunk_objects)
+
+            # Step 5: Update document status to ready
+            doc.status = "ready"
+            doc.content_text = plain_text
+            doc.updated_at = now
+            self.db.commit()
+            self.db.refresh(doc)
+
+            logger.info(
+                "Document {} processed: {} chunks with embeddings",
+                doc.id, len(chunk_objects),
+            )
+
+        except Exception as e:
+            print(traceback.format_exc())
+            logger.error("Failed to process document {}: {}", doc.id, e)
+            self.db.rollback()
+            # Update status to failed
+            doc.status = "failed"
+            doc.meta_data = {"error": str(e)}
+            doc.updated_at = int(time.time())
+            self.db.add(doc)
+            self.db.commit()
+
+    def _update_status(self, doc: Document, new_status: str):
+        doc.status = new_status
+        doc.updated_at = int(time.time())
+        self.db.commit()
+
+    def _get_openai_api_key(self) -> str:
+        """Fetch the OpenAI API key from DB: find service_provider(name='openai', provider_type='llm'),
+        then get the api_key linked to it, decrypt and return."""
+
+        provider = (
+            self.db.query(ServiceProvider)
+            .filter(ServiceProvider.name == "openai", ServiceProvider.provider_type == "llm")
+            .first()
+        )
+        if not provider:
+            raise ValueError("OpenAI LLM service provider not found in database")
+
+        api_key_record = (
+            self.query(ApiKey)
+            .filter(ApiKey.service_provider_id == provider.id, ApiKey.status == "active")
+            .first()
+        )
+        if not api_key_record or not api_key_record.api_key_encrypted:
+            raise ValueError("No active OpenAI API key found for embedding")
+
+        return decrypt(api_key_record.api_key_encrypted)
 
     def get_documents_by_agent(self, agent_id: int) -> List[Dict[str, Any]]:
         """List all documents for a given agent."""
