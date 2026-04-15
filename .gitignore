@@ -143,3 +143,6 @@ Thumbs.db
 .gitnexus
 
 .claude/settings.local.json
+
+docs/
+scripts
