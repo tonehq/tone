@@ -19,3 +19,4 @@ from core.models.channel import Channel
 from core.models.agent_channel import AgentChannel
 from core.models.upload import Upload
 from core.models.call_log import CallLog
+from core.models.document import Document, DocumentChunk

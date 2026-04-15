@@ -63,6 +63,9 @@ class Settings:
         # Auth token for scripts/API calls
         self.AUTH_TOKEN: str = get_secret("AUTH_TOKEN", "")
 
+        # Base API URL for scripts
+        self.BASE_API_URL: str = get_secret("BASE_API_URL", "http://localhost:8000/api/v1")
+
         # Redis
         self.REDIS_URL: str = get_secret("REDIS_URL", "redis://localhost:6379/0")
 
