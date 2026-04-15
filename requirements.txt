@@ -174,6 +174,7 @@ prompt-toolkit==3.0.39
 propcache==0.4.1
 proto-plus==1.27.0
 protobuf==5.29.5
+pgvector==0.3.6
 psycopg2-binary==2.9.6
 pusher==3.3.2
 pyasn1==0.6.1
