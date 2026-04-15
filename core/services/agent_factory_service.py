@@ -1257,13 +1257,19 @@ class AgentFactoryService(BaseService):
         _t = _time.monotonic()
         rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
 
+        # Register document tool if agent has uploaded documents
+        doc_tools = None
+        if agent:
+            from core.services.document_tool_service import register_document_tool
+            doc_tools = register_document_tool(llm, agent.id, agent.organization_id)
+
         if is_s2s:
             # S2S pipeline: audio goes through the LLM directly (no separate STT/TTS)
             # But still needs context aggregators for conversation tracking
             logger.info("Building S2S pipeline (speech-to-speech)")
             from pipecat.frames.frames import LLMRunFrame
 
-            tools = NOT_GIVEN
+            tools = doc_tools if doc_tools else NOT_GIVEN
             # For S2S, the first message in context triggers the initial response
             # System prompt is already set via session_properties.instructions (OpenAI)
             # or system_instruction (Gemini) during LLM creation
@@ -1303,7 +1309,7 @@ class AgentFactoryService(BaseService):
             logger.info("[TIMING] S2S pipeline processors created (+%.3fs)", _time.monotonic() - _t)
         else:
             # Standard pipeline: STT → LLM → TTS
-            tools = NOT_GIVEN
+            tools = doc_tools if doc_tools else NOT_GIVEN
             context = LLMContext(messages, tools)
             context_aggregator = LLMContextAggregatorPair(context)
             user_aggregator = context_aggregator.user()
