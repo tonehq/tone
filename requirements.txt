@@ -124,6 +124,7 @@ jmespath==1.0.1
 joblib==1.5.3
 kombu==5.3.1
 kubernetes==32.0.1
+langchain-text-splitters==0.3.8
 lazy-object-proxy==1.9.0
 llvmlite==0.44.0
 logtail-python==0.2.6
@@ -175,6 +176,8 @@ propcache==0.4.1
 proto-plus==1.27.0
 protobuf==5.29.5
 pgvector==0.3.6
+PyPDF2==3.0.1
+python-docx==1.1.2
 psycopg2-binary==2.9.6
 pusher==3.3.2
 pyasn1==0.6.1
