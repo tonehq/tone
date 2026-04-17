@@ -24,20 +24,11 @@ def upsert_channel_phone_number(
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
+    print("data", data)
     if not data.get("phone_number"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="phone_number is required",
-        )
-    if not data.get("phone_number_sid"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="phone_number_sid is required",
-        )
-    if not data.get("phone_number_auth_token"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="phone_number_auth_token is required",
         )
     if not data.get("provider"):
         raise HTTPException(

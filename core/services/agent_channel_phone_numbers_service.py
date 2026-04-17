@@ -9,6 +9,7 @@ from fastapi import HTTPException, status
 from core.services.base import BaseService
 from core.models.agent_channel_phone_numbers import AgentChannelPhoneNumbers
 from core.models.channel import Channel
+from core.context import get_current_org_id
 
 
 def _channel_phone_number_unique_constraint_detail(exc: IntegrityError) -> str:
@@ -171,6 +172,38 @@ class AgentChannelPhoneNumbersService(BaseService):
     def upsert_channel_phone_number(self, data: Dict[str, Any]):
         return self.upsert_channel_phone_numbers(data)
 
+    def _get_channel_credentials(self, provider: str) -> Dict[str, str]:
+        """Fetch account_sid and auth_token from the Channel meta_data by org_id and provider type."""
+        from core.models.enums import ChannelType
+
+        org_id = get_current_org_id()
+        if not org_id or not provider:
+            return {}
+
+        provider_upper = provider.strip().upper()
+        channel_enum = None
+        for ct in ChannelType:
+            if ct.name == provider_upper:
+                channel_enum = ct
+                break
+        if channel_enum is None:
+            return {}
+
+        channel = (
+            self.query(Channel)
+            .filter(Channel.type == channel_enum, Channel.organization_id == org_id)
+            .first()
+        )
+        if channel and channel.meta_data:
+            meta = channel.meta_data
+            return {
+                "account_sid": meta.get("account_sid", ""),
+                "auth_token": meta.get("auth_token", ""),
+                "api_key": meta.get("api_key", ""),
+                "api_token": meta.get("api_token", ""),
+            }
+        return {}
+
     def _upsert_single(self, data: Dict[str, Any]) -> AgentChannelPhoneNumbers:
         """Upsert a single phone number row. phone_number must be a plain string here."""
         phone_number = data["phone_number"].strip()
@@ -246,14 +279,25 @@ class AgentChannelPhoneNumbersService(BaseService):
             else:
                 row_uuid = uuid_lib.uuid4()
 
+        # If phone_number_sid or phone_number_auth_token not provided,
+        # fetch from the channel's meta_data using org_id + provider type.
+        phone_number_sid = data.get("phone_number_sid", "")
+        phone_number_auth_token = data.get("phone_number_auth_token", "")
+        if not phone_number_sid or not phone_number_auth_token:
+            channel_creds = self._get_channel_credentials(data.get("provider", ""))
+            if not phone_number_sid:
+                phone_number_sid = channel_creds.get("account_sid", "")
+            if not phone_number_auth_token:
+                phone_number_auth_token = channel_creds.get("auth_token", "")
+
         now = int(time.time())
         values = {
             "uuid": row_uuid,
             "channel_id": int(channel_id) if channel_id is not None else None,
             "agent_id": int(agent_id) if agent_id is not None else None,
             "phone_number": phone_number,
-            "phone_number_sid": data.get("phone_number_sid", ""),
-            "phone_number_auth_token": data.get("phone_number_auth_token", ""),
+            "phone_number_sid": phone_number_sid,
+            "phone_number_auth_token": phone_number_auth_token,
             "provider": data.get("provider", ""),
             "created_at": now,
             "updated_at": now,

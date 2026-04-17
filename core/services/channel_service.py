@@ -16,6 +16,9 @@ from loguru import logger
 # Local
 from core.services.base import BaseService
 from core.models.channel import Channel
+from core.models.channel_phone_numbers import ChannelPhoneNumber
+from core.models.agent_channel_phone_numbers import AgentChannelPhoneNumbers
+from core.models.agent_channel import AgentChannel
 
 
 class ChannelService(BaseService):
@@ -142,6 +145,19 @@ class ChannelService(BaseService):
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Channel not found",
             )
+
+        # Unassign phone numbers from agents tied to this channel
+        self.query(AgentChannelPhoneNumbers).filter(
+            AgentChannelPhoneNumbers.channel_id == record.id
+        ).delete()
+        # Remove the channel's phone number inventory
+        self.query(ChannelPhoneNumber).filter(
+            ChannelPhoneNumber.channel_id == record.id
+        ).delete()
+        # Detach agents linked to this channel
+        self.query(AgentChannel).filter(
+            AgentChannel.channel_id == record.id
+        ).delete()
 
         self.db.delete(record)
         self.db.commit()
