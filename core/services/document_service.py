@@ -166,31 +166,32 @@ class DocumentService(BaseService):
     def get_documents_by_agent(
         self,
         agent_id: int | None = None,
-        agent_name: str | None = None,
-        file_name: str | None = None,
+        name: str | None = None,
         sort_by: str = "created_at",
         sort_order: str = "desc",
     ) -> List[Dict[str, Any]]:
         """List documents with optional filters and sorting."""
         from core.models.agent import Agent
-        from sqlalchemy import asc, desc
+        from sqlalchemy import asc, desc, or_
 
         query = self.query(Document).filter(Document.organization_id == self.org_id)
+        agent_joined = False
         upload_joined = False
 
         if agent_id is not None:
             query = query.filter(Document.agent_id == agent_id)
 
-        if agent_name is not None:
-            query = query.join(Agent, Document.agent_id == Agent.id).filter(
-                Agent.name.ilike(f"%{agent_name}%")
-            )
-
-        if file_name is not None:
-            query = query.join(Upload, Document.upload_id == Upload.id).filter(
-                Upload.file_name.ilike(f"%{file_name}%")
-            )
+        if name is not None:
+            query = query.join(Agent, Document.agent_id == Agent.id)
+            agent_joined = True
+            query = query.join(Upload, Document.upload_id == Upload.id)
             upload_joined = True
+            query = query.filter(
+                or_(
+                    Agent.name.ilike(f"%{name}%"),
+                    Upload.file_name.ilike(f"%{name}%"),
+                )
+            )
 
         # Determine sort column
         sort_column_map = {
