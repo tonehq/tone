@@ -57,6 +57,7 @@ class AgentFactoryService(BaseService):
             .first()
         )
         if not result:
+            print(f"DEBUG _get_service_and_credentials: no active Model found for provider_id={service_provider_id} type={service_type}")
             return None
         svc, provider = result
         api_key_value = None
@@ -67,7 +68,12 @@ class AgentFactoryService(BaseService):
                     api_key_value = decrypt(api_key.api_key_encrypted)
                 except Exception as e:
                     logger.warning("Failed to decrypt API key for model %s: %s", svc.id, e)
+            else:
+                print(f"DEBUG _get_service_and_credentials: api_key record missing or not encrypted for api_key_id={svc.api_key_id}")
+        else:
+            print(f"DEBUG _get_service_and_credentials: model {svc.id} ({svc.name}) has no api_key_id")
         if not api_key_value:
+            print(f"DEBUG _get_service_and_credentials: no api_key_value resolved for provider_id={service_provider_id} type={service_type} model={svc.name}")
             return None
         return (svc, provider, api_key_value)
 
@@ -779,16 +785,13 @@ class AgentFactoryService(BaseService):
                     dg_kwargs["sample_rate"] = metadata["sample_rate"]
                 print(f"[TTS {provider_name}] model: {dg_model}, voice: {dg_voice}")
                 return DeepgramHttpTTSService(api_key=api_key, model=dg_model, voice=dg_voice, aiohttp_session=session, **dg_kwargs)
-            if provider_name == "google_base": # In code
-                # To check this fully
-                from pipecat.services.google.tts import GoogleBaseTTSService
+            if provider_name == "google": # Done
+                from pipecat.services.google.tts import GeminiTTSService
                 voice_kwargs = {}
                 if tts_voice_id is not None:
                     voice_kwargs["voice_id"] = tts_voice_id
-                if tts_language is not None:
-                    voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return GoogleBaseTTSService(credentials=api_key, params=self._build_input_params(GoogleBaseTTSService, metadata), **voice_kwargs)
+                return GeminiTTSService(credentials=api_key, model=model or "gemini-3.1-flash-tts-preview", params=self._build_input_params(GeminiTTSService, metadata), **voice_kwargs)
             if provider_name == "groq": # In code
                 from pipecat.services.groq.tts import GroqTTSService
                 voice_kwargs = {}
@@ -983,6 +986,7 @@ class AgentFactoryService(BaseService):
 
         # If no prefetched data provided, try Redis cache before hitting DB
         if not prefetched:
+            print("agent.idd", agent.id)
             from core.services.redis_service import cache_get
             agent_id = agent.id if hasattr(agent, "id") else agent
             # Try transport-specific cache keys first, then fall back to 'none'
@@ -1017,6 +1021,7 @@ class AgentFactoryService(BaseService):
             end_call_message = prefetched.get("end_call_message")
         else:
             config = self._get_agent_config(agent)
+            print("configgg", config)
             logger.info("[TIMING] _get_agent_config (+%.3fs)", _time.monotonic() - _t0)
             if not config or not config.system_prompt:
                 return None
@@ -1026,6 +1031,7 @@ class AgentFactoryService(BaseService):
 
             _t = _time.monotonic()
             llm = self.get_llm_for_agent(agent, config=config)
+            print(f"DEBUG llm_service_id={config.llm_service_id} llm={llm}")
             logger.info("[TIMING] get_llm_for_agent (+%.3fs)", _time.monotonic() - _t)
 
             stt = None
@@ -1033,15 +1039,19 @@ class AgentFactoryService(BaseService):
             if not is_s2s:
                 _t = _time.monotonic()
                 stt = self.get_stt_for_agent(agent, config=config)
+                print(f"DEBUG stt_service_id={config.stt_service_id} stt={stt}")
                 logger.info("[TIMING] get_stt_for_agent (+%.3fs)", _time.monotonic() - _t)
 
                 _t = _time.monotonic()
                 tts = self.get_tts_for_agent(agent, config=config)
+                print(f"DEBUG tts_service_id={config.tts_service_id} tts={tts}")
                 logger.info("[TIMING] get_tts_for_agent (+%.3fs)", _time.monotonic() - _t)
 
             if not llm:
+                print("DEBUG RETURNING None: llm is None/falsy")
                 return None
             if not is_s2s and (not stt or not tts):
+                print(f"DEBUG RETURNING None: is_s2s={is_s2s} stt={stt} tts={tts}")
                 return None
             messages = [{"role": "system", "content": config.system_prompt}]
             if getattr(config, "first_message", None) and config.first_message.strip():
@@ -1499,7 +1509,10 @@ class AgentFactoryService(BaseService):
         # Use pre-fetched service data from main process if available (subprocess path)
         body = getattr(runner_args, "body", None) or {}
         prefetched = body.get("_prefetched_services")
+        print("agenttt", agent)
+        print("prefetcheddd", prefetched)
         data = self.get_agent_bot_data(agent, prefetched=prefetched)
+        print("dataaa", data )
         logger.info("[TIMING] run_bot_for_agent: get_agent_bot_data (+%.3fs)", _time.monotonic() - _t0)
         if not data:
             raise ValueError(
