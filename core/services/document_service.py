@@ -163,18 +163,51 @@ class DocumentService(BaseService):
 
         return decrypt(api_key_record.api_key_encrypted)
 
-    def get_documents_by_agent(self, agent_id: int | None) -> List[Dict[str, Any]]:
-        """List all documents for a given agent. If agent_id is given, pick for agent else for the org"""
+    def get_documents_by_agent(
+        self,
+        agent_id: int | None = None,
+        agent_name: str | None = None,
+        file_name: str | None = None,
+        sort_by: str = "created_at",
+        sort_order: str = "desc",
+    ) -> List[Dict[str, Any]]:
+        """List documents with optional filters and sorting."""
+        from core.models.agent import Agent
+        from sqlalchemy import asc, desc
+
+        query = self.query(Document).filter(Document.organization_id == self.org_id)
+        upload_joined = False
+
         if agent_id is not None:
-            docs = (
-            self.query(Document)
-            .filter(Document.agent_id == agent_id)
-            .order_by(Document.created_at.desc())
-            .all()
+            query = query.filter(Document.agent_id == agent_id)
+
+        if agent_name is not None:
+            query = query.join(Agent, Document.agent_id == Agent.id).filter(
+                Agent.name.ilike(f"%{agent_name}%")
             )
+
+        if file_name is not None:
+            query = query.join(Upload, Document.upload_id == Upload.id).filter(
+                Upload.file_name.ilike(f"%{file_name}%")
+            )
+            upload_joined = True
+
+        # Determine sort column
+        sort_column_map = {
+            "created_at": Document.created_at,
+            "updated_at": Document.updated_at,
+            "status": Document.status,
+        }
+        if sort_by == "file_name":
+            if not upload_joined:
+                query = query.join(Upload, Document.upload_id == Upload.id)
+            sort_column = Upload.file_name
         else:
-            docs = self.query(Document).filter(Document.organization_id == self.org_id).all()
-        return [self._document_response(doc) for doc in docs]    
+            sort_column = sort_column_map[sort_by]
+
+        order_func = asc if sort_order == "asc" else desc
+        docs = query.order_by(order_func(sort_column)).all()
+        return [self._document_response(doc) for doc in docs]
 
     def get_document_by_id(self, document_id: int) -> Document:
         doc = self.query(Document).filter(Document.id == document_id).first()
