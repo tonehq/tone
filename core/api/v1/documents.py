@@ -21,7 +21,7 @@ ALLOWED_CONTENT_TYPES = {
 
 @router.get("/get_documents", response_model=List[Dict[str, Any]])
 def get_documents(
-    agent_id: int = Query(..., description="The agent ID to fetch documents for"),
+    agent_id: int = None,
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
@@ -33,41 +33,50 @@ def get_documents(
 @router.post("/upload_document", status_code=status.HTTP_201_CREATED)
 def upload_document(
     agent_id: int = Form(...),
-    file: UploadFile = File(...),
+    files: List[UploadFile] = File(...),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    """Upload a document file (PDF, DOCX, TXT), store in R2, create Upload + Document records."""
-    if file.content_type not in ALLOWED_CONTENT_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported file type: {file.content_type}. Allowed: PDF, DOCX, TXT",
-        )
-
-    file_bytes = file.file.read()
-    if not file_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Uploaded file is empty",
-        )
-
+    """Upload one or more document files (PDF, DOCX, TXT, CSV), store in R2, create Upload + Document records."""
     org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
     svc = DocumentService(db, org_id=org_id)
-    doc = svc.upload_and_create_document(
-        agent_id=agent_id,
-        file_bytes=file_bytes,
-        file_name=file.filename,
-        content_type=file.content_type,
-    )
-    return svc._document_response(doc)
+    results = []
+
+    for file in files:
+        if file.content_type not in ALLOWED_CONTENT_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported file type: {file.content_type} for file '{file.filename}'. Allowed: PDF, DOCX, TXT, CSV",
+            )
+
+        file_bytes = file.file.read()
+        if not file_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Uploaded file '{file.filename}' is empty",
+            )
+
+        doc = svc.upload_and_create_document(
+            agent_id=agent_id,
+            file_bytes=file_bytes,
+            file_name=file.filename,
+            content_type=file.content_type,
+        )
+        results.append(svc._document_response(doc))
+
+    return results
 
 
 @router.delete("/delete_document", status_code=status.HTTP_200_OK)
 def delete_document(
-    document_id: int = Query(..., description="The document ID to delete"),
+    document_ids: List[int] = Query(..., description="One or more document IDs to delete"),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    """Delete a document, its chunks, and the file from R2."""
+    """Delete one or more documents, their chunks, and the files from R2."""
     org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
-    return DocumentService(db, org_id=org_id).delete_document(document_id)
+    svc = DocumentService(db, org_id=org_id)
+    for document_id in document_ids:
+        svc.delete_document(document_id)
+    return {"message": f"{len(document_ids)} document(s) deleted successfully"}
+
