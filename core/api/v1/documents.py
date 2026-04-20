@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy.orm import Session
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from core.database.session import get_db
 from core.services.document_service import DocumentService
@@ -22,12 +22,32 @@ ALLOWED_CONTENT_TYPES = {
 @router.get("/get_documents", response_model=List[Dict[str, Any]])
 def get_documents(
     agent_id: int = None,
+    agent_name: Optional[str] = Query(None, description="Filter by agent name (partial match, case-insensitive)"),
+    file_name: Optional[str] = Query(None, description="Filter by document file name (partial match, case-insensitive)"),
+    sort_by: Optional[str] = Query("created_at", description="Field to sort by: created_at, updated_at, file_name, status"),
+    sort_order: Optional[str] = Query("desc", description="Sort order: asc or desc"),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    """Return all documents for a given agent."""
+    """Return all documents, optionally filtered and sorted."""
+    if sort_by not in {"created_at", "updated_at", "file_name", "status"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid sort_by field: {sort_by}. Allowed: created_at, updated_at, file_name, status",
+        )
+    if sort_order not in {"asc", "desc"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid sort_order. Allowed: asc, desc",
+        )
     org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
-    return DocumentService(db, org_id=org_id).get_documents_by_agent(agent_id)
+    return DocumentService(db, org_id=org_id).get_documents_by_agent(
+        agent_id=agent_id,
+        agent_name=agent_name,
+        file_name=file_name,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
 
 
 @router.post("/upload_document", status_code=status.HTTP_201_CREATED)
