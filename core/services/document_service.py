@@ -6,6 +6,7 @@ import traceback
 
 from fastapi import HTTPException, status
 from loguru import logger
+from sqlalchemy import Null
 
 from core.services.base import BaseService
 from core.models.document import Document, DocumentChunk
@@ -162,15 +163,18 @@ class DocumentService(BaseService):
 
         return decrypt(api_key_record.api_key_encrypted)
 
-    def get_documents_by_agent(self, agent_id: int) -> List[Dict[str, Any]]:
-        """List all documents for a given agent."""
-        docs = (
+    def get_documents_by_agent(self, agent_id: int | None) -> List[Dict[str, Any]]:
+        """List all documents for a given agent. If agent_id is given, pick for agent else for the org"""
+        if agent_id is not None:
+            docs = (
             self.query(Document)
             .filter(Document.agent_id == agent_id)
             .order_by(Document.created_at.desc())
             .all()
-        )
-        return [self._document_response(doc) for doc in docs]
+            )
+        else:
+            docs = self.query(Document).filter(Document.organization_id == self.org_id).all()
+        return [self._document_response(doc) for doc in docs]    
 
     def get_document_by_id(self, document_id: int) -> Document:
         doc = self.query(Document).filter(Document.id == document_id).first()
@@ -249,6 +253,13 @@ class DocumentService(BaseService):
 
     def _document_response(self, doc: Document) -> Dict[str, Any]:
         upload = self.db.query(Upload).filter(Upload.id == doc.upload_id).first()
+        url = None
+        if upload and upload.r2_object_key:
+            try:
+                from core.services.r2_storage_service import R2StorageService
+                url = R2StorageService().generate_presigned_url(upload.r2_object_key)
+            except Exception as e:
+                logger.error("Failed to generate presigned URL for document {}: {}", doc.id, e)
         return {
             "id": doc.id,
             "uuid": str(doc.uuid),
@@ -257,8 +268,17 @@ class DocumentService(BaseService):
             "file_name": upload.file_name if upload else None,
             "content_type": upload.content_type if upload else None,
             "file_size_bytes": upload.file_size_bytes if upload else None,
+            "url": url,
             "status": doc.status,
             "meta_data": doc.meta_data,
             "created_at": doc.created_at,
             "updated_at": doc.updated_at,
         }
+
+    def get_all_documents(self):
+        documents = self.db.query(Document).filter(Document.organization_id == self.org_id).all()
+        if documents:
+            return documents
+        else:
+            return "No documents found for this organisation"    
+
