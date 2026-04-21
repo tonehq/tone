@@ -1,8 +1,9 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from typing import Any, Dict, List
+from typing import List, Optional
 
 from core.database.session import get_db
 from core.services.document_service import DocumentService
@@ -10,6 +11,14 @@ from core.middleware.auth import require_org_member, JWTClaims
 from shared.config import settings
 
 router = APIRouter()
+
+
+class GetDocumentsRequest(BaseModel):
+    agent_id: Optional[int] = None
+    name: Optional[str] = Field(None, description="Filter by agent name and/or file name (partial match, case-insensitive)")
+    sort: Optional[str] = Field("-created_at", description="Sort field. Prefix with - for desc. Allowed: created_at, updated_at, name")
+    page: int = Field(1, ge=1, description="Page number (1-based)")
+    page_size: int = Field(10, ge=1, le=100, description="Number of items per page")
 
 ALLOWED_CONTENT_TYPES = {
     "application/pdf",
@@ -19,15 +28,37 @@ ALLOWED_CONTENT_TYPES = {
 }
 
 
-@router.get("/get_documents", response_model=List[Dict[str, Any]])
+@router.post("/get_documents")
 def get_documents(
-    agent_id: int = None,
+    body: GetDocumentsRequest,
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    """Return all documents for a given agent."""
+    """Return documents with filtering, sorting, and pagination."""
+    sort = body.sort or "-created_at"
+    # Parse sort param: -field = desc, field = asc
+    if sort.startswith("-"):
+        sort_by = sort[1:]
+        sort_order = "desc"
+    else:
+        sort_by = sort
+        sort_order = "asc"
+
+    if sort_by not in {"created_at", "updated_at", "name"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid sort field: {sort_by}. Allowed: created_at, updated_at, name",
+        )
+
     org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
-    return DocumentService(db, org_id=org_id).get_documents_by_agent(agent_id)
+    return DocumentService(db, org_id=org_id).get_documents_by_agent(
+        agent_id=body.agent_id,
+        name=body.name,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        page=body.page,
+        page_size=body.page_size,
+    )
 
 
 @router.post("/upload_document", status_code=status.HTTP_201_CREATED)

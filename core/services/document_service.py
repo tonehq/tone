@@ -163,18 +163,68 @@ class DocumentService(BaseService):
 
         return decrypt(api_key_record.api_key_encrypted)
 
-    def get_documents_by_agent(self, agent_id: int | None) -> List[Dict[str, Any]]:
-        """List all documents for a given agent. If agent_id is given, pick for agent else for the org"""
+    def get_documents_by_agent(
+        self,
+        agent_id: int | None = None,
+        name: str | None = None,
+        sort_by: str = "created_at",
+        sort_order: str = "desc",
+        page: int = 1,
+        page_size: int = 10,
+    ) -> Dict[str, Any]:
+        """List documents with optional filters, sorting, and pagination."""
+        from core.models.agent import Agent
+        from sqlalchemy import asc, desc, or_
+
+        query = self.query(Document).filter(Document.organization_id == self.org_id)
+        agent_joined = False
+        upload_joined = False
+
         if agent_id is not None:
-            docs = (
-            self.query(Document)
-            .filter(Document.agent_id == agent_id)
-            .order_by(Document.created_at.desc())
-            .all()
+            query = query.filter(Document.agent_id == agent_id)
+
+        if name is not None:
+            query = query.join(Agent, Document.agent_id == Agent.id)
+            agent_joined = True
+            query = query.join(Upload, Document.upload_id == Upload.id)
+            upload_joined = True
+            query = query.filter(
+                or_(
+                    Agent.name.ilike(f"%{name}%"),
+                    Upload.file_name.ilike(f"%{name}%"),
+                )
             )
+
+        # Get total count before pagination
+        total = query.count()
+
+        # Determine sort column
+        sort_column_map = {
+            "created_at": Document.created_at,
+            "updated_at": Document.updated_at,
+        }
+        if sort_by == "name":
+            if not upload_joined:
+                query = query.join(Upload, Document.upload_id == Upload.id)
+            sort_column = Upload.file_name
         else:
-            docs = self.query(Document).filter(Document.organization_id == self.org_id).all()
-        return [self._document_response(doc) for doc in docs]    
+            sort_column = sort_column_map[sort_by]
+
+        order_func = asc if sort_order == "asc" else desc
+        offset = (page - 1) * page_size
+        docs = query.order_by(order_func(sort_column)).offset(offset).limit(page_size).all()
+
+        total_pages = (total + page_size - 1) // page_size
+
+        return {
+            "data": [self._document_response(doc) for doc in docs],
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total": total,
+                "total_pages": total_pages,
+            },
+        }
 
     def get_document_by_id(self, document_id: int) -> Document:
         doc = self.query(Document).filter(Document.id == document_id).first()
