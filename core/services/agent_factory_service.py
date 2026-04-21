@@ -710,6 +710,7 @@ class AgentFactoryService(BaseService):
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
                 return CartesiaTTSService(api_key=api_key, model=model or "sonic-3", params=self._build_input_params(CartesiaTTSService, metadata), **voice_kwargs)
             if provider_name == "openai": # In code
+                
                 from pipecat.services.openai.tts import OpenAITTSService
                 voice_kwargs = {}
                 if tts_voice_id is not None:
