@@ -60,9 +60,10 @@ class AgentFactoryService(BaseService):
             print(f"DEBUG _get_service_and_credentials: no active Model found for provider_id={service_provider_id} type={service_type}")
             return None
         svc, provider = result
+        api_key_id = self.db.query(ApiKey.id).filter(ApiKey.service_provider_id == service_provider_id).scalar()
         api_key_value = None
-        if svc.api_key_id:
-            api_key = self.db.query(ApiKey).filter(ApiKey.id == svc.api_key_id).first()
+        if api_key_id:
+            api_key = self.db.query(ApiKey).filter(ApiKey.id == api_key_id).first()
             if api_key and api_key.api_key_encrypted:
                 try:
                     api_key_value = decrypt(api_key.api_key_encrypted)
@@ -85,11 +86,9 @@ class AgentFactoryService(BaseService):
         Returns None if the service has no InputParams class.
         """
         input_params_class = getattr(service_class, "InputParams", None)
-        # print(f"input_params_class: {input_params_class}")
         if not input_params_class:
             return None
         valid_keys = set(input_params_class.model_fields.keys())
-        # print(f"valid_keys: {valid_keys}")
         filtered = {k: v for k, v in metadata.items() if k in valid_keys and v is not None and v != "None"}
         # Deserialize JSON-encoded strings for fields that expect list/dict types
         for k, v in filtered.items():
@@ -100,7 +99,6 @@ class AgentFactoryService(BaseService):
                         filtered[k] = parsed
                 except (json.JSONDecodeError, TypeError):
                     pass
-        # print(f"filtered: {filtered}")
         if not filtered:
             return input_params_class()
         try:
@@ -986,7 +984,6 @@ class AgentFactoryService(BaseService):
 
         # If no prefetched data provided, try Redis cache before hitting DB
         if not prefetched:
-            print("agent.idd", agent.id)
             from core.services.redis_service import cache_get
             agent_id = agent.id if hasattr(agent, "id") else agent
             # Try transport-specific cache keys first, then fall back to 'none'
@@ -1021,7 +1018,6 @@ class AgentFactoryService(BaseService):
             end_call_message = prefetched.get("end_call_message")
         else:
             config = self._get_agent_config(agent)
-            print("configgg", config)
             logger.info("[TIMING] _get_agent_config (+%.3fs)", _time.monotonic() - _t0)
             if not config or not config.system_prompt:
                 return None
@@ -1509,10 +1505,7 @@ class AgentFactoryService(BaseService):
         # Use pre-fetched service data from main process if available (subprocess path)
         body = getattr(runner_args, "body", None) or {}
         prefetched = body.get("_prefetched_services")
-        print("agenttt", agent)
-        print("prefetcheddd", prefetched)
         data = self.get_agent_bot_data(agent, prefetched=prefetched)
-        print("dataaa", data )
         logger.info("[TIMING] run_bot_for_agent: get_agent_bot_data (+%.3fs)", _time.monotonic() - _t0)
         if not data:
             raise ValueError(

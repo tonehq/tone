@@ -447,6 +447,54 @@
           "meta_data": {
             "model": "gemini-2.5-flash-lite"
           }
+        },
+        {
+          "name": "gemma-4-31b-it",
+          "meta_data": {
+            "model": "gemma-4-31b-it"
+          }
+        },
+        {
+          "name": "gemma-4-26b-a4b-it",
+          "meta_data": {
+            "model": "gemma-4-26b-a4b-it"
+          }
+        },
+        {
+          "name": "gemma-3-27b-it",
+          "meta_data": {
+            "model": "gemma-3-27b-it"
+          }
+        },
+        {
+          "name": "gemma-3-12b-it",
+          "meta_data": {
+            "model": "gemma-3-12b-it"
+          }
+        },
+        {
+          "name": "gemma-3-4b-it",
+          "meta_data": {
+            "model": "gemma-3-4b-it"
+          }
+        },
+        {
+          "name": "gemma-3-1b-it",
+          "meta_data": {
+            "model": "gemma-3-1b-it"
+          }
+        },
+        {
+          "name": "gemma-3n-e4b-it",
+          "meta_data": {
+            "model": "gemma-3n-e4b-it"
+          }
+        },
+        {
+          "name": "gemma-3n-e2b-it",
+          "meta_data": {
+            "model": "gemma-3n-e2b-it"
+          }
         }
       ],
       "meta_data_schema": [
@@ -49017,15 +49065,15 @@
       "api_key_env": "GOOGLE_API_KEY",
       "models": [
         {
-          "name": "gemini-2.5-pro-preview-tts",
+          "name": "gemini-2.5-pro-tts",
           "meta_data": {
-            "model": "gemini-2.5-pro-preview-tts"
+            "model": "gemini-2.5-pro-tts"
           }
         },
         {
-          "name": "gemini-2.5-flash-preview-tts",
+          "name": "gemini-2.5-flash-tts",
           "meta_data": {
-            "model": "gemini-2.5-flash-preview-tts"
+            "model": "gemini-2.5-flash-tts"
           }
         },
         {
