@@ -1,6 +1,6 @@
 export interface CustomTableColumn<TRow> {
   key: string;
-  title: string;
+  title: string | React.ReactNode;
   dataIndex?: keyof TRow & string;
   render?: (value: unknown, record: TRow, index: number) => React.ReactNode;
   align?: 'left' | 'center' | 'right';
@@ -18,6 +18,11 @@ export interface CustomTablePagination {
   onChange?: (page: number, pageSize: number) => void;
 }
 
+export interface CustomTableSortState {
+  field: string;
+  order: 'asc' | 'desc';
+}
+
 export interface CustomTableProps<TRow> {
   columns: CustomTableColumn<TRow>[];
   dataSource: TRow[];
@@ -29,6 +34,7 @@ export interface CustomTableProps<TRow> {
   pagination?: CustomTablePagination | false;
   emptyState?: React.ReactNode;
   onRowClick?: (record: TRow, index: number) => void;
+  onSortChange?: (sort: CustomTableSortState | null) => void;
   className?: string;
 }
 
