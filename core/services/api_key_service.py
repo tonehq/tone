@@ -35,7 +35,17 @@ class ApiKeyService(BaseService):
                 detail="Service provider not found"
             )
 
-        hint = api_key_value[:4] + "..." + api_key_value[-4:] if len(api_key_value) > 8 else "****"
+        # Generate hint: for JSON credentials show project_id, else show first/last chars
+        if api_key_value.strip().startswith("{"):
+            import json as _json
+            try:
+                cred_data = _json.loads(api_key_value)
+                identifier = cred_data.get("project_id") or cred_data.get("client_email") or ""
+                hint = f"json:{identifier[:20]}..." if identifier else "json:****"
+            except (ValueError, _json.JSONDecodeError):
+                hint = api_key_value[:4] + "..." + api_key_value[-4:] if len(api_key_value) > 8 else "****"
+        else:
+            hint = api_key_value[:4] + "..." + api_key_value[-4:] if len(api_key_value) > 8 else "****"
 
         values = {
             "uuid": UUID(key_uuid) if key_uuid else uuid_lib.uuid4(),

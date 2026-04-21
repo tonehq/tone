@@ -57,17 +57,24 @@ class AgentFactoryService(BaseService):
             .first()
         )
         if not result:
+            print(f"DEBUG _get_service_and_credentials: no active Model found for provider_id={service_provider_id} type={service_type}")
             return None
         svc, provider = result
+        api_key_id = self.db.query(ApiKey.id).filter(ApiKey.service_provider_id == service_provider_id).scalar()
         api_key_value = None
-        if svc.api_key_id:
-            api_key = self.db.query(ApiKey).filter(ApiKey.id == svc.api_key_id).first()
+        if api_key_id:
+            api_key = self.db.query(ApiKey).filter(ApiKey.id == api_key_id).first()
             if api_key and api_key.api_key_encrypted:
                 try:
                     api_key_value = decrypt(api_key.api_key_encrypted)
                 except Exception as e:
                     logger.warning("Failed to decrypt API key for model %s: %s", svc.id, e)
+            else:
+                print(f"DEBUG _get_service_and_credentials: api_key record missing or not encrypted for api_key_id={svc.api_key_id}")
+        else:
+            print(f"DEBUG _get_service_and_credentials: model {svc.id} ({svc.name}) has no api_key_id")
         if not api_key_value:
+            print(f"DEBUG _get_service_and_credentials: no api_key_value resolved for provider_id={service_provider_id} type={service_type} model={svc.name}")
             return None
         return (svc, provider, api_key_value)
 
@@ -79,11 +86,9 @@ class AgentFactoryService(BaseService):
         Returns None if the service has no InputParams class.
         """
         input_params_class = getattr(service_class, "InputParams", None)
-        # print(f"input_params_class: {input_params_class}")
         if not input_params_class:
             return None
         valid_keys = set(input_params_class.model_fields.keys())
-        # print(f"valid_keys: {valid_keys}")
         filtered = {k: v for k, v in metadata.items() if k in valid_keys and v is not None and v != "None"}
         # Deserialize JSON-encoded strings for fields that expect list/dict types
         for k, v in filtered.items():
@@ -94,7 +99,6 @@ class AgentFactoryService(BaseService):
                         filtered[k] = parsed
                 except (json.JSONDecodeError, TypeError):
                     pass
-        # print(f"filtered: {filtered}")
         if not filtered:
             return input_params_class()
         try:
@@ -779,16 +783,13 @@ class AgentFactoryService(BaseService):
                     dg_kwargs["sample_rate"] = metadata["sample_rate"]
                 print(f"[TTS {provider_name}] model: {dg_model}, voice: {dg_voice}")
                 return DeepgramHttpTTSService(api_key=api_key, model=dg_model, voice=dg_voice, aiohttp_session=session, **dg_kwargs)
-            if provider_name == "google_base": # In code
-                # To check this fully
-                from pipecat.services.google.tts import GoogleBaseTTSService
+            if provider_name == "google": # Done
+                from pipecat.services.google.tts import GeminiTTSService
                 voice_kwargs = {}
                 if tts_voice_id is not None:
                     voice_kwargs["voice_id"] = tts_voice_id
-                if tts_language is not None:
-                    voice_kwargs["language"] = tts_language
                 print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return GoogleBaseTTSService(credentials=api_key, params=self._build_input_params(GoogleBaseTTSService, metadata), **voice_kwargs)
+                return GeminiTTSService(credentials=api_key, model=model or "gemini-3.1-flash-tts-preview", params=self._build_input_params(GeminiTTSService, metadata), **voice_kwargs)
             if provider_name == "groq": # In code
                 from pipecat.services.groq.tts import GroqTTSService
                 voice_kwargs = {}
@@ -1026,6 +1027,7 @@ class AgentFactoryService(BaseService):
 
             _t = _time.monotonic()
             llm = self.get_llm_for_agent(agent, config=config)
+            print(f"DEBUG llm_service_id={config.llm_service_id} llm={llm}")
             logger.info("[TIMING] get_llm_for_agent (+%.3fs)", _time.monotonic() - _t)
 
             stt = None
@@ -1033,15 +1035,19 @@ class AgentFactoryService(BaseService):
             if not is_s2s:
                 _t = _time.monotonic()
                 stt = self.get_stt_for_agent(agent, config=config)
+                print(f"DEBUG stt_service_id={config.stt_service_id} stt={stt}")
                 logger.info("[TIMING] get_stt_for_agent (+%.3fs)", _time.monotonic() - _t)
 
                 _t = _time.monotonic()
                 tts = self.get_tts_for_agent(agent, config=config)
+                print(f"DEBUG tts_service_id={config.tts_service_id} tts={tts}")
                 logger.info("[TIMING] get_tts_for_agent (+%.3fs)", _time.monotonic() - _t)
 
             if not llm:
+                print("DEBUG RETURNING None: llm is None/falsy")
                 return None
             if not is_s2s and (not stt or not tts):
+                print(f"DEBUG RETURNING None: is_s2s={is_s2s} stt={stt} tts={tts}")
                 return None
             messages = [{"role": "system", "content": config.system_prompt}]
             if getattr(config, "first_message", None) and config.first_message.strip():

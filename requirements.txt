@@ -284,3 +284,4 @@ zope.deprecation==4.4.0
 zope.interface==5.5.2
 zopfli==0.2.3
 infisicalsdk==1.0.16
+google-generativeai==0.8.6

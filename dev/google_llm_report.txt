@@ -1,0 +1,31 @@
+Google Gemma LLM Model Evaluation Report
+==========================================
+
+Date:        2026-04-17
+Provider:    Google (via Gemini API)
+Test Prompt: "Hello"
+Models:      8
+
+Results
+-------
+
+Model                  Latency     Response
+---------------------  ----------  --------------------------------------------------
+gemma-3n-e2b-it        1.12s       Hello there!
+gemma-3n-e4b-it        1.04s       Hello there!
+gemma-3-1b-it          1.08s       Hello there!
+gemma-3-4b-it          1.36s       Hello there!
+gemma-3-12b-it         3.79s       Hello there!
+gemma-3-27b-it         1.53s       Hello there, it's lovely to connect with you!
+gemma-4-26b-a4b-it     5.53s       Hello!
+gemma-4-31b-it         3.25s       Hello!
+
+Total tests: 8 | Passed: 8 | Failed: 0
+
+Key Observations
+----------------
+- Fastest: gemma-3n-e4b-it (1.04s)
+- Slowest: gemma-4-26b-a4b-it (5.53s)
+- Smaller models (1b-4b, 3n) consistently respond under 1.4s
+- Larger models (12b+) have noticeably higher latency
+- All models responded successfully via the Gemini API

@@ -1,0 +1,268 @@
+{
+  "test_text": "The quick brown fox jumps over the lazy dog. This is a test of text-to-speech synthesis quality and latency.",
+  "test_text_length": 108,
+  "total": 9,
+  "passed": 0,
+  "failed": 9,
+  "auth_method": "Application Default Credentials (google.cloud.texttospeech_v1)",
+  "results": [
+    {
+      "provider": "google",
+      "model": "en-US-Chirp3-HD-Charon (http)",
+      "voice": "en-US-Chirp3-HD-Charon",
+      "text_length": 108,
+      "ttfb_ms": 0.0,
+      "ttfs_ms": 0.0,
+      "total_time_ms": 0,
+      "audio_duration_ms": 0.0,
+      "total_bytes": 0,
+      "chunk_count": 0,
+      "sample_rate": 24000,
+      "channels": 1,
+      "encoding": "LINEAR16 PCM",
+      "realtime_factor": 0.0,
+      "error": "403 Cloud Text-to-Speech API has not been used in project 1053639266183 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: \"SERVICE_DISABLED\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"texttospeech.googleapis.com\"\n}\nmetadata {\n  key: \"serviceTitle\"\n  value: \"Cloud Text-to-Speech API\"\n}\nmetadata {\n  key: \"containerInfo\"\n  value: \"1053639266183\"\n}\nmetadata {\n  key: \"consumer\"\n  value: \"projects/1053639266183\"\n}\nmetadata {\n  key: \"activationUrl\"\n  value: \"https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183\"\n}\n, locale: \"en-US\"\nmessage: \"Cloud Text-to-Speech API has not been used in project 1053639266183 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.\"\n, links {\n  description: \"Google developers console API activation\"\n  url: \"https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183\"\n}\n]",
+      "streaming_analysis": null
+    },
+    {
+      "provider": "google",
+      "model": "en-US-Chirp3-HD-Kore (http)",
+      "voice": "en-US-Chirp3-HD-Kore",
+      "text_length": 108,
+      "ttfb_ms": 0.0,
+      "ttfs_ms": 0.0,
+      "total_time_ms": 0,
+      "audio_duration_ms": 0.0,
+      "total_bytes": 0,
+      "chunk_count": 0,
+      "sample_rate": 24000,
+      "channels": 1,
+      "encoding": "LINEAR16 PCM",
+      "realtime_factor": 0.0,
+      "error": "403 Cloud Text-to-Speech API has not been used in project 1053639266183 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: \"SERVICE_DISABLED\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"texttospeech.googleapis.com\"\n}\nmetadata {\n  key: \"serviceTitle\"\n  value: \"Cloud Text-to-Speech API\"\n}\nmetadata {\n  key: \"containerInfo\"\n  value: \"1053639266183\"\n}\nmetadata {\n  key: \"consumer\"\n  value: \"projects/1053639266183\"\n}\nmetadata {\n  key: \"activationUrl\"\n  value: \"https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183\"\n}\n, locale: \"en-US\"\nmessage: \"Cloud Text-to-Speech API has not been used in project 1053639266183 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.\"\n, links {\n  description: \"Google developers console API activation\"\n  url: \"https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183\"\n}\n]",
+      "streaming_analysis": null
+    },
+    {
+      "provider": "google",
+      "model": "en-US-Chirp3-HD-Puck (http)",
+      "voice": "en-US-Chirp3-HD-Puck",
+      "text_length": 108,
+      "ttfb_ms": 0.0,
+      "ttfs_ms": 0.0,
+      "total_time_ms": 0,
+      "audio_duration_ms": 0.0,
+      "total_bytes": 0,
+      "chunk_count": 0,
+      "sample_rate": 24000,
+      "channels": 1,
+      "encoding": "LINEAR16 PCM",
+      "realtime_factor": 0.0,
+      "error": "403 Cloud Text-to-Speech API has not been used in project 1053639266183 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: \"SERVICE_DISABLED\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"texttospeech.googleapis.com\"\n}\nmetadata {\n  key: \"serviceTitle\"\n  value: \"Cloud Text-to-Speech API\"\n}\nmetadata {\n  key: \"containerInfo\"\n  value: \"1053639266183\"\n}\nmetadata {\n  key: \"consumer\"\n  value: \"projects/1053639266183\"\n}\nmetadata {\n  key: \"activationUrl\"\n  value: \"https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183\"\n}\n, locale: \"en-US\"\nmessage: \"Cloud Text-to-Speech API has not been used in project 1053639266183 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.\"\n, links {\n  description: \"Google developers console API activation\"\n  url: \"https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183\"\n}\n]",
+      "streaming_analysis": null
+    },
+    {
+      "provider": "google",
+      "model": "en-US-Chirp3-HD-Zephyr (http)",
+      "voice": "en-US-Chirp3-HD-Zephyr",
+      "text_length": 108,
+      "ttfb_ms": 0.0,
+      "ttfs_ms": 0.0,
+      "total_time_ms": 0,
+      "audio_duration_ms": 0.0,
+      "total_bytes": 0,
+      "chunk_count": 0,
+      "sample_rate": 24000,
+      "channels": 1,
+      "encoding": "LINEAR16 PCM",
+      "realtime_factor": 0.0,
+      "error": "403 Cloud Text-to-Speech API has not been used in project 1053639266183 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: \"SERVICE_DISABLED\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"texttospeech.googleapis.com\"\n}\nmetadata {\n  key: \"serviceTitle\"\n  value: \"Cloud Text-to-Speech API\"\n}\nmetadata {\n  key: \"containerInfo\"\n  value: \"1053639266183\"\n}\nmetadata {\n  key: \"consumer\"\n  value: \"projects/1053639266183\"\n}\nmetadata {\n  key: \"activationUrl\"\n  value: \"https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183\"\n}\n, locale: \"en-US\"\nmessage: \"Cloud Text-to-Speech API has not been used in project 1053639266183 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.\"\n, links {\n  description: \"Google developers console API activation\"\n  url: \"https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183\"\n}\n]",
+      "streaming_analysis": null
+    },
+    {
+      "provider": "google",
+      "model": "en-US-Neural2-A (http)",
+      "voice": "en-US-Neural2-A",
+      "text_length": 108,
+      "ttfb_ms": 0.0,
+      "ttfs_ms": 0.0,
+      "total_time_ms": 0,
+      "audio_duration_ms": 0.0,
+      "total_bytes": 0,
+      "chunk_count": 0,
+      "sample_rate": 24000,
+      "channels": 1,
+      "encoding": "LINEAR16 PCM",
+      "realtime_factor": 0.0,
+      "error": "403 Cloud Text-to-Speech API has not been used in project 1053639266183 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: \"SERVICE_DISABLED\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"texttospeech.googleapis.com\"\n}\nmetadata {\n  key: \"serviceTitle\"\n  value: \"Cloud Text-to-Speech API\"\n}\nmetadata {\n  key: \"containerInfo\"\n  value: \"1053639266183\"\n}\nmetadata {\n  key: \"consumer\"\n  value: \"projects/1053639266183\"\n}\nmetadata {\n  key: \"activationUrl\"\n  value: \"https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183\"\n}\n, locale: \"en-US\"\nmessage: \"Cloud Text-to-Speech API has not been used in project 1053639266183 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.\"\n, links {\n  description: \"Google developers console API activation\"\n  url: \"https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183\"\n}\n]",
+      "streaming_analysis": null
+    },
+    {
+      "provider": "google",
+      "model": "en-US-Neural2-C (http)",
+      "voice": "en-US-Neural2-C",
+      "text_length": 108,
+      "ttfb_ms": 0.0,
+      "ttfs_ms": 0.0,
+      "total_time_ms": 0,
+      "audio_duration_ms": 0.0,
+      "total_bytes": 0,
+      "chunk_count": 0,
+      "sample_rate": 24000,
+      "channels": 1,
+      "encoding": "LINEAR16 PCM",
+      "realtime_factor": 0.0,
+      "error": "403 Cloud Text-to-Speech API has not been used in project 1053639266183 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: \"SERVICE_DISABLED\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"texttospeech.googleapis.com\"\n}\nmetadata {\n  key: \"serviceTitle\"\n  value: \"Cloud Text-to-Speech API\"\n}\nmetadata {\n  key: \"containerInfo\"\n  value: \"1053639266183\"\n}\nmetadata {\n  key: \"consumer\"\n  value: \"projects/1053639266183\"\n}\nmetadata {\n  key: \"activationUrl\"\n  value: \"https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183\"\n}\n, locale: \"en-US\"\nmessage: \"Cloud Text-to-Speech API has not been used in project 1053639266183 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.\"\n, links {\n  description: \"Google developers console API activation\"\n  url: \"https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183\"\n}\n]",
+      "streaming_analysis": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-2.5-flash-tts (Kore)",
+      "voice": "Kore",
+      "text_length": 108,
+      "ttfb_ms": 0.0,
+      "ttfs_ms": 0.0,
+      "total_time_ms": 349.1987080005856,
+      "audio_duration_ms": 0.0,
+      "total_bytes": 0,
+      "chunk_count": 0,
+      "sample_rate": 24000,
+      "channels": 1,
+      "encoding": "LINEAR16 PCM",
+      "realtime_factor": 0.0,
+      "error": "403 Cloud Text-to-Speech API has not been used in project 1053639266183 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: \"SERVICE_DISABLED\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"texttospeech.googleapis.com\"\n}\nmetadata {\n  key: \"serviceTitle\"\n  value: \"Cloud Text-to-Speech API\"\n}\nmetadata {\n  key: \"containerInfo\"\n  value: \"1053639266183\"\n}\nmetadata {\n  key: \"consumer\"\n  value: \"projects/1053639266183\"\n}\nmetadata {\n  key: \"activationUrl\"\n  value: \"https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183\"\n}\n, locale: \"en-US\"\nmessage: \"Cloud Text-to-Speech API has not been used in project 1053639266183 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.\"\n, links {\n  description: \"Google developers console API activation\"\n  url: \"https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183\"\n}\n]",
+      "streaming_analysis": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-2.5-pro-tts (Kore)",
+      "voice": "Kore",
+      "text_length": 108,
+      "ttfb_ms": 0.0,
+      "ttfs_ms": 0.0,
+      "total_time_ms": 287.0265000001382,
+      "audio_duration_ms": 0.0,
+      "total_bytes": 0,
+      "chunk_count": 0,
+      "sample_rate": 24000,
+      "channels": 1,
+      "encoding": "LINEAR16 PCM",
+      "realtime_factor": 0.0,
+      "error": "403 Cloud Text-to-Speech API has not been used in project 1053639266183 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: \"SERVICE_DISABLED\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"texttospeech.googleapis.com\"\n}\nmetadata {\n  key: \"serviceTitle\"\n  value: \"Cloud Text-to-Speech API\"\n}\nmetadata {\n  key: \"containerInfo\"\n  value: \"1053639266183\"\n}\nmetadata {\n  key: \"consumer\"\n  value: \"projects/1053639266183\"\n}\nmetadata {\n  key: \"activationUrl\"\n  value: \"https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183\"\n}\n, locale: \"en-US\"\nmessage: \"Cloud Text-to-Speech API has not been used in project 1053639266183 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.\"\n, links {\n  description: \"Google developers console API activation\"\n  url: \"https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183\"\n}\n]",
+      "streaming_analysis": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-3.1-flash-tts-preview (Kore)",
+      "voice": "Kore",
+      "text_length": 108,
+      "ttfb_ms": 0.0,
+      "ttfs_ms": 0.0,
+      "total_time_ms": 346.35195800001384,
+      "audio_duration_ms": 0.0,
+      "total_bytes": 0,
+      "chunk_count": 0,
+      "sample_rate": 24000,
+      "channels": 1,
+      "encoding": "LINEAR16 PCM",
+      "realtime_factor": 0.0,
+      "error": "403 Cloud Text-to-Speech API has not been used in project 1053639266183 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry. [reason: \"SERVICE_DISABLED\"\ndomain: \"googleapis.com\"\nmetadata {\n  key: \"service\"\n  value: \"texttospeech.googleapis.com\"\n}\nmetadata {\n  key: \"serviceTitle\"\n  value: \"Cloud Text-to-Speech API\"\n}\nmetadata {\n  key: \"containerInfo\"\n  value: \"1053639266183\"\n}\nmetadata {\n  key: \"consumer\"\n  value: \"projects/1053639266183\"\n}\nmetadata {\n  key: \"activationUrl\"\n  value: \"https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183\"\n}\n, locale: \"en-US\"\nmessage: \"Cloud Text-to-Speech API has not been used in project 1053639266183 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.\"\n, links {\n  description: \"Google developers console API activation\"\n  url: \"https://console.developers.google.com/apis/api/texttospeech.googleapis.com/overview?project=1053639266183\"\n}\n]",
+      "streaming_analysis": null
+    }
+  ],
+  "audio_format_reference": {
+    "LINEAR16_PCM": {
+      "description": "Raw uncompressed PCM audio, 16-bit signed integers, little-endian",
+      "codec": "None (uncompressed)",
+      "mime_type": "audio/L16",
+      "sample_widths": "2 bytes (16-bit)",
+      "typical_sample_rates": [
+        8000,
+        16000,
+        24000,
+        44100,
+        48000
+      ],
+      "bitrate_at_24khz": "384 kbps (mono)",
+      "streaming_suitability": "EXCELLENT \u2014 lowest latency, no encode/decode overhead",
+      "ws_considerations": "Largest bandwidth; client must reassemble. Best for LAN/local.",
+      "used_by": [
+        "Google TTS (streaming)",
+        "Gemini TTS",
+        "OpenAI TTS",
+        "Deepgram TTS"
+      ]
+    },
+    "WAV": {
+      "description": "RIFF WAV container wrapping LINEAR16 PCM with a 44-byte header",
+      "codec": "PCM (uncompressed) inside WAV container",
+      "mime_type": "audio/wav",
+      "sample_widths": "2 bytes (16-bit) typically",
+      "typical_sample_rates": [
+        8000,
+        16000,
+        24000,
+        44100,
+        48000
+      ],
+      "bitrate_at_24khz": "384 kbps + 44 bytes header",
+      "streaming_suitability": "GOOD \u2014 simple header, then raw PCM follows",
+      "ws_considerations": "Send header once, then stream PCM chunks. Easy client-side decoding.",
+      "used_by": [
+        "Google HTTP TTS",
+        "AWS Polly"
+      ]
+    },
+    "MP3": {
+      "description": "Lossy compressed audio using MPEG Layer 3",
+      "codec": "MP3 (MPEG-1 Audio Layer III)",
+      "mime_type": "audio/mpeg",
+      "typical_bitrates": [
+        "64 kbps",
+        "128 kbps",
+        "192 kbps"
+      ],
+      "streaming_suitability": "MODERATE \u2014 smaller bandwidth but encode/decode latency",
+      "ws_considerations": "Frames are self-contained; can stream frame-by-frame. Client needs MP3 decoder. ~26ms per frame at 128kbps.",
+      "used_by": [
+        "ElevenLabs",
+        "OpenAI TTS (non-streaming)"
+      ]
+    },
+    "OPUS": {
+      "description": "Modern lossy codec optimized for speech and low-latency streaming",
+      "codec": "Opus (RFC 6716)",
+      "mime_type": "audio/opus",
+      "typical_bitrates": [
+        "16-64 kbps (speech)",
+        "64-128 kbps (music)"
+      ],
+      "frame_sizes": [
+        "2.5ms",
+        "5ms",
+        "10ms",
+        "20ms",
+        "40ms",
+        "60ms"
+      ],
+      "streaming_suitability": "EXCELLENT \u2014 designed for real-time streaming, very low latency",
+      "ws_considerations": "Smallest bandwidth for speech. Native WebRTC codec. Ideal for WAN/mobile. OGG container not needed for raw streaming.",
+      "used_by": [
+        "WebRTC (native)",
+        "Cartesia (via OGG container)"
+      ]
+    },
+    "MULAW": {
+      "description": "G.711 \u03bc-law companding, standard telephony codec",
+      "codec": "G.711 \u03bc-law (ITU-T G.711)",
+      "mime_type": "audio/basic",
+      "sample_rate": 8000,
+      "bitrate": "64 kbps",
+      "streaming_suitability": "GOOD \u2014 designed for telephony, very low latency",
+      "ws_considerations": "Fixed 8kHz/8-bit. Used by Twilio and PSTN gateways.",
+      "used_by": [
+        "Twilio transport",
+        "PSTN gateways"
+      ]
+    }
+  }
+}
