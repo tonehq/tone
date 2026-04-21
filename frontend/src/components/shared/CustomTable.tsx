@@ -42,6 +42,7 @@ function CustomTableInner<TRow>({
   pagination,
   emptyState,
   onRowClick,
+  onSortChange,
   className,
 }: CustomTableProps<TRow>) {
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -93,7 +94,7 @@ function CustomTableInner<TRow>({
           return {
             id: col.key,
             ...(col.dataIndex ? { accessorKey: col.dataIndex } : { accessorFn: () => undefined }),
-            header: col.title,
+            header: typeof col.title === 'string' ? col.title : () => col.title,
             cell: col.render
               ? ({ getValue, row }) => col.render!(getValue(), row.original, row.index)
               : ({ getValue }) => {
@@ -135,7 +136,21 @@ function CustomTableInner<TRow>({
       globalFilter,
       columnVisibility,
     },
-    onSortingChange: setSorting,
+    onSortingChange: (updater) => {
+      const next = typeof updater === 'function' ? updater(sorting) : updater;
+      setSorting(next);
+      if (onSortChange) {
+        if (next.length > 0) {
+          const { id, desc } = next[0];
+          // Resolve the dataIndex from the column definition
+          const col = columns.find((c) => c.key === id);
+          const field = col?.dataIndex ?? id;
+          onSortChange({ field, order: desc ? 'desc' : 'asc' });
+        } else {
+          onSortChange(null);
+        }
+      }
+    },
     onGlobalFilterChange: setGlobalFilter,
     globalFilterFn: globalFilterFn as FilterFn<TRow>,
     getCoreRowModel: getCoreRowModel(),
@@ -145,11 +160,14 @@ function CustomTableInner<TRow>({
   });
 
   const processedRows = table.getRowModel().rows;
+  const isServerPaginated = paginationConfig?.total != null;
   const totalItems = paginationConfig?.total ?? processedRows.length;
   const totalPages = paginationEnabled ? Math.max(1, Math.ceil(totalItems / pageSize)) : 1;
-  const paginatedRows = paginationEnabled
-    ? processedRows.slice((currentPage - 1) * pageSize, currentPage * pageSize)
-    : processedRows;
+  // Skip client-side slicing when server already returns paginated data
+  const paginatedRows =
+    paginationEnabled && !isServerPaginated
+      ? processedRows.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+      : processedRows;
 
   return (
     <div className={cn('flex flex-col gap-5 min-h-0', className)}>

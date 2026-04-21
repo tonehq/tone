@@ -10,8 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { cn } from '@/utils/cn';
 import type { CustomModalProps } from '@/types/components';
+import { cn } from '@/utils/cn';
 import { X } from 'lucide-react';
 import React from 'react';
 
@@ -71,7 +71,9 @@ const CustomModal: React.FC<CustomModalProps> = ({
           </DialogHeader>
         )}
 
-        {children && <div className={cn('py-4 pl-6 pr-6', contentClassName)}>{children}</div>}
+        {children && (
+          <div className={cn('min-w-0 py-4 pl-6 pr-6', contentClassName)}>{children}</div>
+        )}
 
         {showFooter && (
           <DialogFooter className="bg-muted/30 px-6 py-4">
