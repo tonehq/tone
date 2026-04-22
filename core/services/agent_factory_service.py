@@ -785,12 +785,12 @@ class AgentFactoryService(BaseService):
                 print(f"[TTS {provider_name}] model: {dg_model}, voice: {dg_voice}")
                 return DeepgramHttpTTSService(api_key=api_key, model=dg_model, voice=dg_voice, aiohttp_session=session, **dg_kwargs)
             if provider_name == "google": # Done
-                from pipecat.services.google.tts import GeminiTTSService
+                from pipecat.services.google.tts import GoogleTTSService
                 voice_kwargs = {}
                 if tts_voice_id is not None:
                     voice_kwargs["voice_id"] = tts_voice_id
-                print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}")
-                return GeminiTTSService(credentials=api_key, model=model or "gemini-3.1-flash-tts-preview", params=self._build_input_params(GeminiTTSService, metadata), **voice_kwargs)
+                print(f"[TTS {provider_name}] voice_kwargs: {voice_kwargs}, location: global")
+                return GoogleTTSService(credentials=api_key, params=self._build_input_params(GoogleTTSService, metadata), **voice_kwargs)
             if provider_name == "groq": # In code
                 from pipecat.services.groq.tts import GroqTTSService
                 voice_kwargs = {}
