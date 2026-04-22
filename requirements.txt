@@ -163,7 +163,7 @@ PasteDeploy==3.0.1
 pathspec==0.11.2
 phonenumbers==8.12.48
 pillow==11.3.0
-tone-pipecat==0.0.74+dev.5
+tone-pipecat==0.0.75.dev1
 pipecat-ai-small-webrtc-prebuilt==2.0.4
 pkce==1.0.3
 plaster==1.1.2
