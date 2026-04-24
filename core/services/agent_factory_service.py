@@ -591,9 +591,8 @@ class AgentFactoryService(BaseService):
                 )
             if provider_name == "speechmatics":
                 from pipecat.services.speechmatics.stt import SpeechmaticsSTTService
-                # Use Speechmatics built-in SMART_TURN for VAD/turn detection
                 if "turn_detection_mode" not in metadata:
-                    metadata["turn_detection_mode"] = "smart_turn"
+                    metadata["turn_detection_mode"] = "adaptive"
                 return SpeechmaticsSTTService(
                     api_key=api_key,
                     base_url="wss://us2.rt.speechmatics.com/v2",
