@@ -591,6 +591,8 @@ class AgentFactoryService(BaseService):
                 )
             if provider_name == "speechmatics":
                 from pipecat.services.speechmatics.stt import SpeechmaticsSTTService
+                if "turn_detection_mode" not in metadata:
+                    metadata["turn_detection_mode"] = "adaptive"
                 return SpeechmaticsSTTService(
                     api_key=api_key,
                     base_url="wss://us2.rt.speechmatics.com/v2",
@@ -1095,13 +1097,9 @@ class AgentFactoryService(BaseService):
         from pipecat.processors.aggregators.llm_context import LLMContext
         from pipecat.processors.aggregators.llm_response_universal import (
             LLMContextAggregatorPair,
-            LLMUserAggregatorParams,
             UserTurnStoppedMessage,
             AssistantTurnStoppedMessage,
         )
-        from pipecat.turns.user_turn_strategies import UserTurnStrategies
-        from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
-        from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
         from pipecat.processors.aggregators.llm_text_processor import (
             LLMTextProcessor,
         )
@@ -1323,19 +1321,7 @@ class AgentFactoryService(BaseService):
             # Standard pipeline: STT → LLM → TTS
             tools = doc_tools if doc_tools else NOT_GIVEN
             context = LLMContext(messages, tools)
-            from pipecat.audio.turn.smart_turn.base_smart_turn import SmartTurnParams
-            smart_turn_analyzer = LocalSmartTurnAnalyzerV3(
-                confidence_threshold=0.9,
-                params=SmartTurnParams(stop_secs=2.5),
-            )
-            context_aggregator = LLMContextAggregatorPair(
-                context,
-                user_params=LLMUserAggregatorParams(
-                    user_turn_strategies=UserTurnStrategies(
-                        stop=[TurnAnalyzerUserTurnStopStrategy(turn_analyzer=smart_turn_analyzer)]
-                    ),
-                ),
-            )
+            context_aggregator = LLMContextAggregatorPair(context)
             user_aggregator = context_aggregator.user()
             assistant_aggregator = context_aggregator.assistant()
             llm_text_processor = LLMTextProcessor()
