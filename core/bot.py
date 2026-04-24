@@ -402,7 +402,7 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
         logger.info("[TIMING] bot() _create_serializer (+%.3fs)", _time.monotonic() - _t)
 
         _t = _time.monotonic()
-        vad = SileroVADAnalyzer(params=VADParams(stop_secs=0.2, min_volume=0.15))
+        vad = SileroVADAnalyzer(params=VADParams(stop_secs=0.5, min_volume=0.15))
         logger.info("[TIMING] bot() SileroVADAnalyzer init (+%.3fs)", _time.monotonic() - _t)
 
         transport = FastAPIWebsocketTransport(
@@ -448,7 +448,7 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
             DailyParams(
                 audio_in_enabled=True,
                 audio_out_enabled=True,
-                vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=0.2)),
+                vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=0.5)),
             ),
         )
     else:
