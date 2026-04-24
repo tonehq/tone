@@ -1325,8 +1325,8 @@ class AgentFactoryService(BaseService):
             context = LLMContext(messages, tools)
             from pipecat.audio.turn.smart_turn.base_smart_turn import SmartTurnParams
             smart_turn_analyzer = LocalSmartTurnAnalyzerV3(
-                confidence_threshold=0.8,
-                params=SmartTurnParams(stop_secs=1.5),
+                confidence_threshold=0.9,
+                params=SmartTurnParams(stop_secs=2.5),
             )
             context_aggregator = LLMContextAggregatorPair(
                 context,
