@@ -9,9 +9,6 @@ import time as _time
 
 from dotenv import load_dotenv
 from loguru import logger
-from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.audio.vad.vad_analyzer import VADParams
-
 # Use pipecat.runner.types so we get the same classes as run.py (avoids isinstance mismatch)
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import create_transport
@@ -30,8 +27,6 @@ from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketParams,
     FastAPIWebsocketTransport,
 )
-from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.audio.vad.vad_analyzer import VADParams
 from pipecat.runner.utils import parse_telephony_websocket
 import aiohttp
 from pipecat.runner.types import (
@@ -401,17 +396,12 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
         serializer = _create_serializer(transport_type, call_data)
         logger.info("[TIMING] bot() _create_serializer (+%.3fs)", _time.monotonic() - _t)
 
-        _t = _time.monotonic()
-        vad = SileroVADAnalyzer(params=VADParams(stop_secs=0.5, min_volume=0.15))
-        logger.info("[TIMING] bot() SileroVADAnalyzer init (+%.3fs)", _time.monotonic() - _t)
-
         transport = FastAPIWebsocketTransport(
             websocket=runner_args.websocket,
             params=FastAPIWebsocketParams(
                 audio_in_enabled=True,
                 audio_out_enabled=True,
                 add_wav_header=False,
-                vad_analyzer=vad,
                 serializer=serializer,
             ),
         )
@@ -436,7 +426,6 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
                 audio_in_enabled=True,
                 audio_in_filter=krisp_filter,
                 audio_out_enabled=True,
-                vad_analyzer=SileroVADAnalyzer(),
             ),
         )
     
@@ -448,7 +437,6 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
             DailyParams(
                 audio_in_enabled=True,
                 audio_out_enabled=True,
-                vad_analyzer=SileroVADAnalyzer(params=VADParams(stop_secs=0.5)),
             ),
         )
     else:
