@@ -595,15 +595,14 @@ class AgentFactoryService(BaseService):
                     params=self._build_input_params(SarvamSTTService, metadata),
                 )
             if provider_name == "speechmatics":
-                from pipecat.services.speechmatics.stt import \
-                    SpeechmaticsSTTService
+                from core.services.speechmatics_stt import ToneSpeechmaticsSTTService
                 if "turn_detection_mode" not in metadata:
                     metadata["turn_detection_mode"] = "adaptive"
-                return SpeechmaticsSTTService(
+                return ToneSpeechmaticsSTTService(
                     api_key=api_key,
                     base_url="wss://us2.rt.speechmatics.com/v2",
                     sample_rate=metadata.get("sample_rate"),
-                    params=self._build_input_params(SpeechmaticsSTTService, metadata),
+                    params=self._build_input_params(ToneSpeechmaticsSTTService, metadata),
                 )
             if provider_name == "assemblyai":
                 from pipecat.services.assemblyai.models import \
