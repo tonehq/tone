@@ -1380,11 +1380,11 @@ class AgentFactoryService(BaseService):
 
         # Observers for metrics, latency, and turn tracking
         from pipecat.observers.loggers.metrics_log_observer import MetricsLogObserver
-        from pipecat.observers.loggers.user_bot_latency_log_observer import UserBotLatencyLogObserver
+        from core.observers.user_bot_latency_observer import UserBotLatencyObserver
         from pipecat.observers.turn_tracking_observer import TurnTrackingObserver
 
         metrics_observer = MetricsLogObserver()
-        latency_observer = UserBotLatencyLogObserver()
+        latency_observer = UserBotLatencyObserver()
         turn_observer = TurnTrackingObserver()
         turn_entries: list[dict] = []
 
