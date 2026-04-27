@@ -596,8 +596,15 @@ class AgentFactoryService(BaseService):
                 )
             if provider_name == "speechmatics":
                 from core.services.speechmatics_stt import ToneSpeechmaticsSTTService
+                # Optimized defaults for low-latency voice agents
                 if "turn_detection_mode" not in metadata:
-                    metadata["turn_detection_mode"] = "adaptive"
+                    metadata["turn_detection_mode"] = "smart_turn"
+                if "max_delay" not in metadata:
+                    metadata["max_delay"] = 0.7
+                if "end_of_utterance_silence_trigger" not in metadata:
+                    metadata["end_of_utterance_silence_trigger"] = 0.3
+                if "end_of_utterance_max_delay" not in metadata:
+                    metadata["end_of_utterance_max_delay"] = 0.5
                 return ToneSpeechmaticsSTTService(
                     api_key=api_key,
                     base_url="wss://us2.rt.speechmatics.com/v2",
