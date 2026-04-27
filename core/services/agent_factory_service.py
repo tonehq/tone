@@ -595,16 +595,17 @@ class AgentFactoryService(BaseService):
                     params=self._build_input_params(SarvamSTTService, metadata),
                 )
             if provider_name == "speechmatics":
-                from core.services.speechmatics_stt import ToneSpeechmaticsSTTService
-                # Optimized defaults for low-latency voice agents
+                from core.services.speechmatics_stt import \
+                    ToneSpeechmaticsSTTService
+
+                # Use adaptive mode for fast basic VAD; LocalSmartTurnAnalyzerV3
+                # handles the actual turn-end decision in the pipeline.
                 if "turn_detection_mode" not in metadata:
-                    metadata["turn_detection_mode"] = "smart_turn"
+                    metadata["turn_detection_mode"] = "adaptive"
+                if "operating_point" not in metadata:
+                    metadata["operating_point"] = "enhanced"
                 if "max_delay" not in metadata:
                     metadata["max_delay"] = 0.7
-                if "end_of_utterance_silence_trigger" not in metadata:
-                    metadata["end_of_utterance_silence_trigger"] = 0.3
-                if "end_of_utterance_max_delay" not in metadata:
-                    metadata["end_of_utterance_max_delay"] = 0.5
                 return ToneSpeechmaticsSTTService(
                     api_key=api_key,
                     base_url="wss://us2.rt.speechmatics.com/v2",
@@ -1119,7 +1120,11 @@ class AgentFactoryService(BaseService):
                                                                 LLMContext)
         from pipecat.processors.aggregators.llm_response_universal import (
             AssistantTurnStoppedMessage, LLMContextAggregatorPair,
-            UserTurnStoppedMessage)
+            LLMUserAggregatorParams, UserTurnStoppedMessage)
+        from pipecat.turns.user_turn_strategies import UserTurnStrategies
+        from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
+        from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
+        from pipecat.audio.turn.smart_turn.base_smart_turn import SmartTurnParams
         from pipecat.processors.aggregators.llm_text_processor import \
             LLMTextProcessor
         from pipecat.processors.audio.audio_buffer_processor import \
@@ -1341,7 +1346,18 @@ class AgentFactoryService(BaseService):
             # Standard pipeline: STT → LLM → TTS
             tools = doc_tools if doc_tools else NOT_GIVEN
             context = LLMContext(messages, tools)
-            context_aggregator = LLMContextAggregatorPair(context)
+            smart_turn_analyzer = LocalSmartTurnAnalyzerV3(
+                confidence_threshold=0.9,
+                params=SmartTurnParams(stop_secs=0.4),
+            )
+            context_aggregator = LLMContextAggregatorPair(
+                context,
+                user_params=LLMUserAggregatorParams(
+                    user_turn_strategies=UserTurnStrategies(
+                        stop=[TurnAnalyzerUserTurnStopStrategy(turn_analyzer=smart_turn_analyzer)]
+                    ),
+                ),
+            )
             user_aggregator = context_aggregator.user()
             assistant_aggregator = context_aggregator.assistant()
             llm_text_processor = LLMTextProcessor()
