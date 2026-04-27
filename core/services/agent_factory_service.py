@@ -1105,10 +1105,6 @@ class AgentFactoryService(BaseService):
         import io
 
         _t = _time.monotonic()
-        from pipecat.audio.turn.smart_turn.base_smart_turn import \
-            SmartTurnParams
-        from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import \
-            LocalSmartTurnAnalyzerV3
         from pipecat.pipeline.pipeline import Pipeline
         from pipecat.pipeline.runner import PipelineRunner
         from pipecat.pipeline.task import PipelineParams, PipelineTask
@@ -1116,7 +1112,7 @@ class AgentFactoryService(BaseService):
                                                                 LLMContext)
         from pipecat.processors.aggregators.llm_response_universal import (
             AssistantTurnStoppedMessage, LLMContextAggregatorPair,
-            LLMUserAggregatorParams, UserTurnStoppedMessage)
+            UserTurnStoppedMessage)
         from pipecat.processors.aggregators.llm_text_processor import \
             LLMTextProcessor
         from pipecat.processors.audio.audio_buffer_processor import \
@@ -1124,8 +1120,6 @@ class AgentFactoryService(BaseService):
         from pipecat.processors.frameworks.rtvi import (RTVIConfig,
                                                         RTVIObserver,
                                                         RTVIProcessor)
-        from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
-        from pipecat.turns.user_turn_strategies import UserTurnStrategies
         from pydub import AudioSegment
 
         from core.database.session import get_db_context
@@ -1340,18 +1334,7 @@ class AgentFactoryService(BaseService):
             # Standard pipeline: STT → LLM → TTS
             tools = doc_tools if doc_tools else NOT_GIVEN
             context = LLMContext(messages, tools)
-            smart_turn_analyzer = LocalSmartTurnAnalyzerV3(
-                confidence_threshold=0.9,
-                params=SmartTurnParams(stop_secs=1),
-            )
-            context_aggregator = LLMContextAggregatorPair(
-                context,
-                user_params=LLMUserAggregatorParams(
-                    user_turn_strategies=UserTurnStrategies(
-                        stop=[TurnAnalyzerUserTurnStopStrategy(turn_analyzer=smart_turn_analyzer)]
-                    ),
-                ),
-            )
+            context_aggregator = LLMContextAggregatorPair(context)
             user_aggregator = context_aggregator.user()
             assistant_aggregator = context_aggregator.assistant()
             llm_text_processor = LLMTextProcessor()
