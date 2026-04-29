@@ -14,6 +14,7 @@ from core.models.models import Model
 from core.models.api_key import ApiKey
 from core.models.voice import Voice
 from core.utils.encryption import encrypt
+from shared.config import settings
 
 
 class ServiceProviderService(BaseService):
@@ -184,7 +185,8 @@ class ServiceProviderService(BaseService):
                 )
             provider = self.db.query(ServiceProvider).get(provider_id)
             name = payload.get("name") or f"{provider.name} key"
-            ApiKeyService(self.db, user_id=self._user_id).upsert_api_key(
+            resolved_org_id = self.org_id or settings.DEFAULT_ORG_ID
+            ApiKeyService(self.db, user_id=self._user_id, org_id=resolved_org_id).upsert_api_key(
                 service_provider_id=provider_id,
                 name=name,
                 api_key_value=api_key_value,
