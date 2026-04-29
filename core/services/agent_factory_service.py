@@ -421,9 +421,10 @@ class AgentFactoryService(BaseService):
                 return OpenAILLMService(api_key = api_key, model=model or "gpt-4.1", params=self._build_input_params(OpenAILLMService, metadata))
             if provider_name == "anthropic": #done
                 from pipecat.services.anthropic.llm import AnthropicLLMService
+                if "enable_prompt_caching" not in metadata:
+                    metadata["enable_prompt_caching"] = True
                 params=self._build_input_params(AnthropicLLMService, metadata)
-                print(f"params: {params}")
-                return AnthropicLLMService(api_key=api_key, model= model or "claude-sonnet-4-5-20250929", params=params)
+                return AnthropicLLMService(api_key=api_key, model= model or "claude-haiku-4-5-20251001", params=params)
             if provider_name == "groq": #done
                 from pipecat.services.groq.llm import GroqLLMService
                 return GroqLLMService(api_key=api_key, model=model or "llama-3.3-70b-versatile", params=self._build_input_params(GroqLLMService, metadata))
