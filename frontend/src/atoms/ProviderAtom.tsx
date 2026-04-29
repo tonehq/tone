@@ -1,8 +1,121 @@
 import { atom } from 'jotai';
 import { loadable } from 'jotai/utils';
 
-import { getServiceProviders } from '@/services/providerService';
-import type { ServiceProvider } from '@/types/provider';
+import {
+  deleteModel,
+  deleteServiceProvider,
+  getServiceProviders,
+  listModelsByProvider,
+  listServiceProviders,
+  upsertModel,
+  upsertServiceProvider,
+} from '@/services/providerService';
+import type {
+  ListModelsParams,
+  ListProvidersParams,
+  PaginationInfo,
+} from '@/services/providerService';
+import type {
+  ModelUpsertPayload,
+  ServiceProvider,
+  ServiceProviderModel,
+  ServiceProviderUpsertPayload,
+} from '@/types/provider';
+
+// ── Service Providers ──────────────────────────────────────────────
+
+interface ProvidersState {
+  providers: ServiceProvider[];
+  pagination: PaginationInfo | null;
+  loading: boolean;
+  loadingMore: boolean;
+}
+
+const providersAtom = atom<ProvidersState>({
+  providers: [],
+  pagination: null,
+  loading: false,
+  loadingMore: false,
+});
+
+interface FetchProvidersPayload {
+  params?: ListProvidersParams;
+  append?: boolean;
+}
+
+const fetchProvidersAtom = atom(null, async (_get, set, payload?: FetchProvidersPayload) => {
+  const params = payload?.params;
+  const append = payload?.append ?? false;
+
+  if (append) {
+    set(providersAtom, (prev) => ({ ...prev, loadingMore: true }));
+  } else {
+    set(providersAtom, (prev) => ({ ...prev, loading: true }));
+  }
+
+  try {
+    const result = await listServiceProviders({ page_size: 15, ...params });
+
+    set(providersAtom, (prev) => ({
+      providers: append ? [...prev.providers, ...result.providers] : result.providers,
+      pagination: result.pagination,
+      loading: false,
+      loadingMore: false,
+    }));
+  } catch (error) {
+    set(providersAtom, (prev) => ({ ...prev, loading: false, loadingMore: false }));
+    throw error;
+  }
+});
+
+const upsertProviderAtom = atom(
+  null,
+  async (_get, _set, payload: ServiceProviderUpsertPayload) => await upsertServiceProvider(payload),
+);
+
+const deleteProviderAtom = atom(null, async (_get, _set, providerId: number) => {
+  await deleteServiceProvider(providerId);
+});
+
+// ── Models ─────────────────────────────────────────────────────────
+
+interface ModelsState {
+  models: ServiceProviderModel[];
+  pagination: PaginationInfo | null;
+  loading: boolean;
+}
+
+const modelsAtom = atom<ModelsState>({
+  models: [],
+  pagination: null,
+  loading: false,
+});
+
+const fetchModelsAtom = atom(null, async (_get, set, params: ListModelsParams) => {
+  set(modelsAtom, { models: [], pagination: null, loading: true });
+  try {
+    const result = await listModelsByProvider(params);
+    set(modelsAtom, {
+      models: result.models,
+      pagination: result.pagination,
+      loading: false,
+    });
+  } catch (error) {
+    set(modelsAtom, (prev) => ({ ...prev, loading: false }));
+    throw error;
+  }
+});
+
+const upsertModelAtom = atom(
+  null,
+  async (_get, _set, payload: ModelUpsertPayload) => await upsertModel(payload),
+);
+
+const deleteModelAtom = atom(null, async (_get, _set, modelId: number) => {
+  await deleteModel(modelId);
+});
+
+// ── Legacy: loadable atom for AgentFormPage compatibility ──────────
 
 const providersRefreshAtom = atom(0);
 
@@ -17,4 +130,15 @@ const refetchProvidersAtom = atom(null, (_get, set) => {
   set(providersRefreshAtom, (c) => c + 1);
 });
 
-export { loadableProvidersAtom, refetchProvidersAtom };
+export {
+  providersAtom,
+  fetchProvidersAtom,
+  upsertProviderAtom,
+  deleteProviderAtom,
+  modelsAtom,
+  fetchModelsAtom,
+  upsertModelAtom,
+  deleteModelAtom,
+  loadableProvidersAtom,
+  refetchProvidersAtom,
+};
