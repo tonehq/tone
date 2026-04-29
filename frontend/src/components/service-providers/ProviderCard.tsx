@@ -4,7 +4,7 @@ import { ActionMenu } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import type { ServiceProvider } from '@/types/provider';
 import { cn } from '@/utils/cn';
-import { Server } from 'lucide-react';
+import { Key, Server } from 'lucide-react';
 
 import { STATUS_STYLES, TYPE_BADGE_STYLES, TYPE_ICON_STYLES, TYPE_ICONS } from './constants';
 
@@ -25,6 +25,8 @@ export default function ProviderCard({
 }: ProviderCardProps) {
   const statusKey = (provider.status ?? 'active').toLowerCase();
   const typeKey = provider.provider_type ?? '';
+  const hasKey = !!provider.api_key;
+  const keyValid = provider.api_key?.is_valid;
 
   return (
     <button
@@ -80,6 +82,22 @@ export default function ProviderCard({
           <span className="tabular-nums">
             {provider.models?.length ?? 0} model{(provider.models?.length ?? 0) !== 1 ? 's' : ''}
           </span>
+          {hasKey && (
+            <>
+              <span className="text-border">&middot;</span>
+              <span
+                className={cn(
+                  'flex items-center gap-0.5',
+                  keyValid
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-amber-600 dark:text-amber-400',
+                )}
+              >
+                <Key className="size-3" />
+                <span>{provider.api_key?.api_key_hint ?? 'key'}</span>
+              </span>
+            </>
+          )}
         </div>
       </div>
 

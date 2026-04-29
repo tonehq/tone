@@ -16,16 +16,10 @@ import { formatDate } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
-import { Box, BrainCircuit, ChevronLeft, Plus, Search, Server } from 'lucide-react';
+import { Box, BrainCircuit, ChevronLeft, Key, Plus, Search, Server } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import {
-  MODELS_PAGE_SIZE,
-  STATUS_STYLES,
-  TYPE_BADGE_STYLES,
-  TYPE_ICON_STYLES,
-  TYPE_ICONS,
-} from './constants';
+import { MODELS_PAGE_SIZE, TYPE_BADGE_STYLES, TYPE_ICON_STYLES, TYPE_ICONS } from './constants';
 
 interface ModelsPanelProps {
   selectedProvider: ServiceProvider | null;
@@ -163,6 +157,8 @@ export default function ModelsPanel({ selectedProvider, onBack }: ModelsPanelPro
 
   // ── Columns ──────────────────────────────────────────────────────
 
+  const providerType = selectedProvider?.provider_type ?? '';
+
   const columns: CustomTableColumn<ServiceProviderModel>[] = [
     {
       key: 'name',
@@ -174,53 +170,51 @@ export default function ModelsPanel({ selectedProvider, onBack }: ModelsPanelPro
           <div
             className={cn(
               'flex size-7 shrink-0 items-center justify-center rounded-md',
-              TYPE_ICON_STYLES[record.service_type ?? ''] ?? 'bg-muted text-muted-foreground',
+              TYPE_ICON_STYLES[providerType] ?? 'bg-muted text-muted-foreground',
             )}
           >
-            {TYPE_ICONS[record.service_type ?? ''] ?? <Box className="size-3.5" />}
+            {TYPE_ICONS[providerType] ?? <Box className="size-3.5" />}
           </div>
-          <span className="font-medium text-foreground">{record.name}</span>
+          <div className="flex flex-col">
+            <span className="font-medium text-foreground">{record.name}</span>
+            {record.meta_data?.model && record.meta_data.model !== record.name && (
+              <span className="text-[11px] text-muted-foreground">
+                {String(record.meta_data.model)}
+              </span>
+            )}
+          </div>
         </div>
       ),
     },
     {
-      key: 'service_type',
-      title: 'Type',
-      dataIndex: 'service_type',
-      render: (value) => {
-        const t = (value as string) ?? '';
+      key: 'meta_data',
+      title: 'Metadata',
+      render: (_value, record) => {
+        if (!record.meta_data || Object.keys(record.meta_data).length === 0) {
+          return <span className="text-muted-foreground">—</span>;
+        }
+        const entries = Object.entries(record.meta_data);
         return (
-          <Badge
-            className={cn(
-              'text-[10px] font-semibold uppercase tracking-wide',
-              TYPE_BADGE_STYLES[t] ?? 'bg-muted text-muted-foreground',
+          <div className="flex flex-wrap gap-1">
+            {entries.slice(0, 3).map(([k, v]) => (
+              <span
+                key={k}
+                className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+              >
+                {k}: {String(v)}
+              </span>
+            ))}
+            {entries.length > 3 && (
+              <span className="text-[10px] text-muted-foreground">+{entries.length - 3} more</span>
             )}
-          >
-            {t || '—'}
-          </Badge>
-        );
-      },
-    },
-    {
-      key: 'status',
-      title: 'Status',
-      dataIndex: 'status',
-      render: (value) => {
-        const s = ((value as string) ?? 'active').toLowerCase();
-        return (
-          <div className="flex items-center gap-1.5">
-            <span
-              className={cn('size-1.5 rounded-full', STATUS_STYLES[s] ?? STATUS_STYLES.inactive)}
-            />
-            <span className="text-sm capitalize text-muted-foreground">{s}</span>
           </div>
         );
       },
     },
     {
-      key: 'created_at',
-      title: 'Created',
-      dataIndex: 'created_at',
+      key: 'updated_at',
+      title: 'Updated',
+      dataIndex: 'updated_at',
       sorter: true,
       render: (value) =>
         value ? (
@@ -297,16 +291,34 @@ export default function ModelsPanel({ selectedProvider, onBack }: ModelsPanelPro
                 {selectedProvider.provider_type}
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">
-              {modelsState.pagination?.total ?? modelsState.models.length} model
-              {(modelsState.pagination?.total ?? modelsState.models.length) !== 1 ? 's' : ''}
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span>
+                {modelsState.pagination?.total ?? modelsState.models.length} model
+                {(modelsState.pagination?.total ?? modelsState.models.length) !== 1 ? 's' : ''}
+              </span>
               {selectedProvider.description && (
                 <>
-                  <span className="mx-1.5 text-border">|</span>
+                  <span className="text-border">|</span>
                   <span className="truncate">{selectedProvider.description}</span>
                 </>
               )}
-            </p>
+              {selectedProvider.api_key && (
+                <>
+                  <span className="text-border">|</span>
+                  <span
+                    className={cn(
+                      'flex items-center gap-0.5',
+                      selectedProvider.api_key.is_valid
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : 'text-amber-600 dark:text-amber-400',
+                    )}
+                  >
+                    <Key className="size-3" />
+                    {selectedProvider.api_key.api_key_hint}
+                  </span>
+                </>
+              )}
+            </div>
           </div>
         </div>
         <CustomButton type="primary" size="sm" icon={<Plus />} onClick={openCreate}>
@@ -364,6 +376,7 @@ export default function ModelsPanel({ selectedProvider, onBack }: ModelsPanelPro
         onSubmit={handleSubmit}
         serviceProviderId={selectedProvider.id}
         defaultServiceType={selectedProvider.provider_type}
+        providerApiKeyId={selectedProvider.api_key?.id}
         model={editingModel}
       />
     </>

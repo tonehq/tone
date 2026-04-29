@@ -8,18 +8,13 @@ import {
   TextInput,
 } from '@/components/shared';
 import type { ServiceProvider, ServiceProviderUpsertPayload } from '@/types/provider';
+import { Key } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 const PROVIDER_TYPE_OPTIONS = [
   { value: 'llm', label: 'LLM' },
   { value: 'stt', label: 'STT' },
   { value: 'tts', label: 'TTS' },
-];
-
-const AUTH_TYPE_OPTIONS = [
-  { value: 'api_key', label: 'API Key' },
-  { value: 'oauth', label: 'OAuth' },
-  { value: 'none', label: 'None' },
 ];
 
 const STATUS_OPTIONS = [
@@ -46,14 +41,21 @@ export default function ProviderUpsertModal({
 }: ProviderUpsertModalProps) {
   const isEdit = !!provider;
 
+  // Provider fields
   const [name, setName] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [providerType, setProviderType] = useState('llm');
-  const [authType, setAuthType] = useState('api_key');
   const [description, setDescription] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
   const [supportsStreaming, setSupportsStreaming] = useState(false);
   const [status, setStatus] = useState('active');
+
+  // API Key fields
+  const [apiKeyName, setApiKeyName] = useState('');
+  const [apiKeyValue, setApiKeyValue] = useState('');
+  const [apiKeyDescription, setApiKeyDescription] = useState('');
+  const [apiKeyStatus, setApiKeyStatus] = useState('active');
+
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -62,37 +64,51 @@ export default function ProviderUpsertModal({
         setName(provider.name);
         setDisplayName(provider.display_name);
         setProviderType(provider.provider_type);
-        setAuthType(provider.auth_type ?? 'api_key');
         setDescription(provider.description ?? '');
         setBaseUrl(provider.base_url ?? '');
         setSupportsStreaming(provider.supports_streaming ?? false);
         setStatus(provider.status ?? 'active');
+        setApiKeyName(provider.api_key?.name ?? '');
+        setApiKeyValue('');
+        setApiKeyDescription(provider.api_key?.description ?? '');
+        setApiKeyStatus(provider.api_key?.status ?? 'active');
       } else {
         setName('');
         setDisplayName('');
         setProviderType('llm');
-        setAuthType('api_key');
         setDescription('');
         setBaseUrl('');
         setSupportsStreaming(false);
         setStatus('active');
+        setApiKeyName('');
+        setApiKeyValue('');
+        setApiKeyDescription('');
+        setApiKeyStatus('active');
       }
     }
   }, [open, provider]);
 
   const handleSubmit = useCallback(async () => {
     if (!name.trim() || !displayName.trim()) return;
+    if (!isEdit && !apiKeyValue.trim()) return;
     setSaving(true);
     try {
       const payload: ServiceProviderUpsertPayload = {
         name: name.trim(),
         display_name: displayName.trim(),
         provider_type: providerType as 'llm' | 'stt' | 'tts',
-        auth_type: authType,
+        auth_type: 'api_key',
         description: description.trim() || undefined,
         base_url: baseUrl.trim() || undefined,
         supports_streaming: supportsStreaming,
         status,
+        api_key: {
+          name: apiKeyName.trim() || `${displayName.trim()} key`,
+          description: apiKeyDescription.trim() || undefined,
+          status: apiKeyStatus,
+          ...(apiKeyValue.trim() ? { api_key: apiKeyValue.trim() } : {}),
+          ...(isEdit && provider?.api_key?.id ? { id: provider.api_key.id } : {}),
+        },
       };
       if (isEdit) payload.id = provider.id;
       await onSubmit(payload);
@@ -104,18 +120,24 @@ export default function ProviderUpsertModal({
     name,
     displayName,
     providerType,
-    authType,
     description,
     baseUrl,
     supportsStreaming,
     status,
+    apiKeyName,
+    apiKeyValue,
+    apiKeyDescription,
+    apiKeyStatus,
     isEdit,
     provider,
     onSubmit,
     onClose,
   ]);
 
-  const isValid = name.trim().length > 0 && displayName.trim().length > 0;
+  const isValid =
+    name.trim().length > 0 &&
+    displayName.trim().length > 0 &&
+    (isEdit || apiKeyValue.trim().length > 0);
 
   return (
     <CustomModal
@@ -133,9 +155,10 @@ export default function ProviderUpsertModal({
       confirmDisabled={!isValid}
       width="sm:max-w-xl"
       className={MODAL_CLASS}
-      contentClassName={`pt-2 pb-2 ${LABEL_COMPACT}`}
+      contentClassName={`pt-2 pb-2 max-h-[70vh] overflow-y-auto ${LABEL_COMPACT}`}
     >
       <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
+        {/* ── Provider Details ──────────────────────────────────────── */}
         <TextInput
           name="provider-name"
           label="Name"
@@ -152,22 +175,17 @@ export default function ProviderUpsertModal({
           onChange={(e) => setDisplayName(e.target.value)}
           isRequired
         />
-        <SelectInput
-          name="provider-type"
-          label="Provider Type"
-          options={PROVIDER_TYPE_OPTIONS}
-          value={providerType}
-          onValueChange={setProviderType}
-          isRequired
-        />
-        <SelectInput
-          name="auth-type"
-          label="Auth Type"
-          options={AUTH_TYPE_OPTIONS}
-          value={authType}
-          onValueChange={setAuthType}
-          isRequired
-        />
+
+        <div className="col-span-2">
+          <SelectInput
+            name="provider-type"
+            label="Provider Type"
+            options={PROVIDER_TYPE_OPTIONS}
+            value={providerType}
+            onValueChange={setProviderType}
+            isRequired
+          />
+        </div>
 
         <div className="col-span-2">
           <TextAreaField
@@ -205,6 +223,51 @@ export default function ProviderUpsertModal({
               checked={supportsStreaming}
               onCheckedChange={(checked) => setSupportsStreaming(!!checked)}
               labelClassName="mt-1"
+            />
+          </div>
+        </div>
+
+        {/* ── API Key ──────────────────────────────────────────────── */}
+        <div className="col-span-2 mt-1 border-t border-border pt-3">
+          <div className="mb-2.5 flex items-center gap-1.5">
+            <Key className="size-3.5 text-muted-foreground" />
+            <span className="text-xs font-semibold text-foreground">API Key</span>
+            {isEdit && provider?.api_key?.api_key_hint && (
+              <span className="ml-auto font-mono text-[10px] text-muted-foreground">
+                {provider.api_key.api_key_hint}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
+            <TextInput
+              name="api-key-name"
+              label="Key Name"
+              placeholder={`${displayName || 'Provider'} key`}
+              value={apiKeyName}
+              onChange={(e) => setApiKeyName(e.target.value)}
+            />
+            <TextInput
+              name="api-key-value"
+              label={isEdit ? 'New API Key (leave blank to keep)' : 'API Key'}
+              placeholder="sk-..."
+              type="password"
+              value={apiKeyValue}
+              onChange={(e) => setApiKeyValue(e.target.value)}
+              isRequired={!isEdit}
+            />
+            <TextInput
+              name="api-key-description"
+              label="Key Description"
+              placeholder="e.g. production credential"
+              value={apiKeyDescription}
+              onChange={(e) => setApiKeyDescription(e.target.value)}
+            />
+            <SelectInput
+              name="api-key-status"
+              label="Key Status"
+              options={STATUS_OPTIONS}
+              value={apiKeyStatus}
+              onValueChange={setApiKeyStatus}
             />
           </div>
         </div>

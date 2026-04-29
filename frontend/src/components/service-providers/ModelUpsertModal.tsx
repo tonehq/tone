@@ -4,12 +4,6 @@ import { CustomModal, SelectInput, TextInput } from '@/components/shared';
 import type { ModelUpsertPayload, ServiceProviderModel } from '@/types/provider';
 import { useCallback, useEffect, useState } from 'react';
 
-const SERVICE_TYPE_OPTIONS = [
-  { value: 'llm', label: 'LLM' },
-  { value: 'stt', label: 'STT' },
-  { value: 'tts', label: 'TTS' },
-];
-
 const STATUS_OPTIONS = [
   { value: 'active', label: 'Active' },
   { value: 'inactive', label: 'Inactive' },
@@ -21,6 +15,7 @@ interface ModelUpsertModalProps {
   onSubmit: (payload: ModelUpsertPayload) => Promise<void>;
   serviceProviderId: number;
   defaultServiceType?: string;
+  providerApiKeyId?: number | null;
   model?: ServiceProviderModel | null;
 }
 
@@ -34,12 +29,12 @@ export default function ModelUpsertModal({
   onSubmit,
   serviceProviderId,
   defaultServiceType,
+  providerApiKeyId,
   model,
 }: ModelUpsertModalProps) {
   const isEdit = !!model;
 
   const [name, setName] = useState('');
-  const [serviceType, setServiceType] = useState(defaultServiceType ?? 'llm');
   const [status, setStatus] = useState('active');
   const [metaDataStr, setMetaDataStr] = useState('');
   const [saving, setSaving] = useState(false);
@@ -49,18 +44,16 @@ export default function ModelUpsertModal({
     if (open) {
       if (model) {
         setName(model.name);
-        setServiceType(model.service_type ?? defaultServiceType ?? 'llm');
         setStatus(model.status ?? 'active');
         setMetaDataStr(model.meta_data ? JSON.stringify(model.meta_data, null, 2) : '');
       } else {
         setName('');
-        setServiceType(defaultServiceType ?? 'llm');
         setStatus('active');
         setMetaDataStr('');
       }
       setMetaError('');
     }
-  }, [open, model, defaultServiceType]);
+  }, [open, model]);
 
   const handleSubmit = useCallback(async () => {
     if (!name.trim()) return;
@@ -81,9 +74,10 @@ export default function ModelUpsertModal({
       const payload: ModelUpsertPayload = {
         service_provider_id: serviceProviderId,
         name: name.trim(),
-        service_type: serviceType,
+        service_type: defaultServiceType,
         status,
         meta_data: metaData,
+        api_key_id: providerApiKeyId ?? null,
       };
       if (isEdit) payload.id = model.id;
       await onSubmit(payload);
@@ -91,7 +85,18 @@ export default function ModelUpsertModal({
     } finally {
       setSaving(false);
     }
-  }, [name, serviceType, status, metaDataStr, serviceProviderId, isEdit, model, onSubmit, onClose]);
+  }, [
+    name,
+    status,
+    metaDataStr,
+    serviceProviderId,
+    defaultServiceType,
+    providerApiKeyId,
+    isEdit,
+    model,
+    onSubmit,
+    onClose,
+  ]);
 
   const isValid = name.trim().length > 0;
 
@@ -112,22 +117,14 @@ export default function ModelUpsertModal({
       contentClassName={`pt-2 pb-3 ${LABEL_COMPACT}`}
     >
       <div className="flex flex-col gap-2.5">
-        <TextInput
-          name="model-name"
-          label="Model Name"
-          placeholder="e.g. gpt-4o"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          isRequired
-        />
-
         <div className="grid grid-cols-2 gap-3">
-          <SelectInput
-            name="model-service-type"
-            label="Service Type"
-            options={SERVICE_TYPE_OPTIONS}
-            value={serviceType}
-            onValueChange={setServiceType}
+          <TextInput
+            name="model-name"
+            label="Model Name"
+            placeholder="e.g. gpt-4o"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            isRequired
           />
           <SelectInput
             name="model-status"
@@ -152,9 +149,9 @@ export default function ModelUpsertModal({
               setMetaDataStr(e.target.value);
               if (metaError) setMetaError('');
             }}
-            placeholder='{"context_window": 128000}'
+            placeholder='{"model": "gpt-4o"}'
             rows={3}
-            className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 font-mono"
+            className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
           />
           {metaError && <p className="mt-1 text-xs text-destructive">{metaError}</p>}
         </div>
