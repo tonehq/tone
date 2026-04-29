@@ -305,7 +305,7 @@ def seed_from_configs(db, org_name, email, password):
             description=config.get("description") or f"{config['display_name']} {provider_type} service",
             service_type=provider_type,
             config={},
-            status="active",
+            status=config.get("status", "active"),
             is_default=True,
             created_by=user_id,
         )

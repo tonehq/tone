@@ -343,7 +343,10 @@ class AgentFactoryService(BaseService):
                 .filter(ServiceProvider.name == transport_type)
                 .scalar_subquery()
             )
-            q3_filters.append(ApiKey.service_provider_id == telephony_sp_subq)
+            telephony_filter = ApiKey.service_provider_id == telephony_sp_subq
+            if self.org_id:
+                telephony_filter = and_(telephony_filter, ApiKey.organization_id == self.org_id)
+            q3_filters.append(telephony_filter)
 
         # Try channels table first for telephony creds (org-scoped)
         if transport_type == "twilio" and hasattr(agent, "organization_id") and agent.organization_id:

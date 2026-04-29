@@ -60,7 +60,6 @@ def main():
             "models_created": 0,
             "voices_deleted": 0,
             "voices_created": 0,
-            "api_keys_linked": 0,
         }
 
         print(f"Loaded {len(all_providers)} providers from dev-data.json\n")
@@ -125,35 +124,11 @@ def main():
                     service_type=provider_type,
                     status="active",
                     meta_data=meta_data,
-                    api_key_id=None,
                 )
                 db.add(model)
             db.flush()
 
             stats["models_created"] += len(models_spec)
-
-            # 5. Re-link models to existing API key
-            existing_key = (
-                db.query(ApiKey)
-                .filter(
-                    ApiKey.service_provider_id == provider_id,
-                    ApiKey.status == "active",
-                )
-                .first()
-            )
-            if existing_key:
-                linked = (
-                    db.query(Model)
-                    .filter(
-                        Model.service_provider_id == provider_id,
-                        Model.status == "active",
-                    )
-                    .update(
-                        {Model.api_key_id: existing_key.id},
-                        synchronize_session=False,
-                    )
-                )
-                stats["api_keys_linked"] += linked
 
             # 6. Recreate voices
             # Build model_name → model_id lookup
@@ -201,7 +176,6 @@ def main():
         print(f"  Providers not found:  {stats['providers_not_found']}")
         print(f"  Models deleted:       {stats['models_deleted']}")
         print(f"  Models created:       {stats['models_created']}")
-        print(f"  Models linked to key: {stats['api_keys_linked']}")
         print(f"  Voices deleted:       {stats['voices_deleted']}")
         print(f"  Voices created:       {stats['voices_created']}")
 

@@ -111,25 +111,28 @@ export default function VoiceTab({
     [sttProviders, formData.sttProvider],
   );
 
+  // Resolve the service_provider_id for voice API calls (voices are linked to providers, not services)
+  const ttsServiceProviderId = selectedTtsProvider?.service_provider_id ?? null;
+
   // Fetch languages when provider changes
   useEffect(() => {
-    if (!formData.voiceProvider) {
+    if (!ttsServiceProviderId) {
       setLanguageCodes([]);
       setVoices([]);
       fetchedProviderRef.current = null;
       fetchedLangRef.current = null;
       return;
     }
-    if (fetchedProviderRef.current === formData.voiceProvider) return;
+    if (fetchedProviderRef.current === ttsServiceProviderId) return;
 
     let cancelled = false;
     setLanguagesLoading(true);
     setVoices([]);
     fetchedLangRef.current = null;
-    getLanguagesByProvider(formData.voiceProvider)
+    getLanguagesByProvider(ttsServiceProviderId)
       .then((data) => {
         if (!cancelled) {
-          fetchedProviderRef.current = formData.voiceProvider;
+          fetchedProviderRef.current = ttsServiceProviderId;
           setLanguageCodes(data ?? []);
         }
       })
@@ -145,28 +148,28 @@ export default function VoiceTab({
     return () => {
       cancelled = true;
     };
-  }, [formData.voiceProvider]);
+  }, [ttsServiceProviderId]);
 
   // Fetch voices when language changes
   useEffect(() => {
-    if (!formData.voiceProvider || !formData.language) {
+    if (!ttsServiceProviderId || !formData.language) {
       setVoices([]);
       fetchedLangRef.current = null;
       return;
     }
     if (
-      fetchedLangRef.current?.provider === formData.voiceProvider &&
+      fetchedLangRef.current?.provider === ttsServiceProviderId &&
       fetchedLangRef.current?.language === formData.language
     )
       return;
 
     let cancelled = false;
     setVoicesLoading(true);
-    getVoicesByLanguage(formData.voiceProvider, formData.language)
+    getVoicesByLanguage(ttsServiceProviderId, formData.language)
       .then((data) => {
         if (!cancelled) {
           fetchedLangRef.current = {
-            provider: formData.voiceProvider!,
+            provider: ttsServiceProviderId!,
             language: formData.language,
           };
           setVoices(data ?? []);
@@ -184,7 +187,7 @@ export default function VoiceTab({
     return () => {
       cancelled = true;
     };
-  }, [formData.voiceProvider, formData.language]);
+  }, [ttsServiceProviderId, formData.language]);
 
   const availableLanguageOptions = useMemo(() => {
     const langMap = new Map(languages.map((l) => [l.value, l]));

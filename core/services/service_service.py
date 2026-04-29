@@ -9,6 +9,7 @@ from fastapi import HTTPException, status
 from core.services.base import BaseService
 from core.models.service import Service
 from core.models.service_provider import ServiceProvider
+from core.models.models import Model
 from core.models.api_key import ApiKey
 
 
@@ -139,10 +140,31 @@ class ServiceConfigService(BaseService):
             hint_rows = self.db.query(ApiKey.id, ApiKey.api_key_hint).filter(ApiKey.id.in_(api_key_ids)).all()
             api_key_hints = {row.id: row.api_key_hint for row in hint_rows}
 
+        # Batch-fetch models for all providers referenced by these services
+        provider_ids = list({svc.service_provider_id for svc, _ in results})
+        models_by_provider: Dict[int, List[Dict[str, Any]]] = {}
+        if provider_ids:
+            models = (
+                self.db.query(Model)
+                .filter(Model.service_provider_id.in_(provider_ids), Model.status == "active")
+                .order_by(Model.id)
+                .all()
+            )
+            for m in models:
+                models_by_provider.setdefault(m.service_provider_id, []).append({
+                    "id": m.id,
+                    "service_provider_id": m.service_provider_id,
+                    "name": m.name,
+                    "meta_data": m.meta_data,
+                    "created_at": m.created_at,
+                    "updated_at": m.updated_at,
+                })
+
         return [{
             "id": svc.id,
             "uuid": str(svc.uuid),
             "name": svc.name,
+            "display_name": svc.name,
             "description": svc.description,
             "service_type": svc.service_type,
             "service_provider_id": svc.service_provider_id,
@@ -157,7 +179,9 @@ class ServiceConfigService(BaseService):
             "tags": svc.tags,
             "usage_count": svc.usage_count,
             "last_used_at": svc.last_used_at,
-            "created_at": svc.created_at
+            "created_at": svc.created_at,
+            "models": models_by_provider.get(svc.service_provider_id, []),
+            "meta_data_schema": provider.meta_data_schema,
         } for svc, provider in results]
 
     def get_service(self, service_id: int) -> Dict[str, Any]:

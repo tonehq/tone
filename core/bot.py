@@ -28,6 +28,7 @@ from pipecat.transports.websocket.fastapi import (
     FastAPIWebsocketParams,
     FastAPIWebsocketTransport,
 )
+from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.runner.utils import parse_telephony_websocket
 import aiohttp
 from pipecat.runner.types import (
@@ -77,11 +78,10 @@ def _get_twilio_credentials(org_id=None) -> dict:
             logger.warning("Twilio service provider not found in DB")
             return {}
 
-        api_keys = (
-            db.query(ApiKey)
-            .filter(ApiKey.service_provider_id == provider.id)
-            .all()
-        )
+        q = db.query(ApiKey).filter(ApiKey.service_provider_id == provider.id)
+        if org_id:
+            q = q.filter(ApiKey.organization_id == org_id)
+        api_keys = q.all()
 
         creds = {}
         for ak in api_keys:
@@ -95,7 +95,7 @@ def _get_twilio_credentials(org_id=None) -> dict:
         return creds
 
 
-def _get_plivo_credentials() -> dict:
+def _get_plivo_credentials(org_id=None) -> dict:
     """Fetch Plivo auth_id and auth_token from the DB (api_keys table).
 
     Queries service_providers for name='plivo', then finds the two api_keys
@@ -113,11 +113,10 @@ def _get_plivo_credentials() -> dict:
             logger.warning("Plivo service provider not found in DB")
             return {}
 
-        api_keys = (
-            db.query(ApiKey)
-            .filter(ApiKey.service_provider_id == provider.id)
-            .all()
-        )
+        q = db.query(ApiKey).filter(ApiKey.service_provider_id == provider.id)
+        if org_id:
+            q = q.filter(ApiKey.organization_id == org_id)
+        api_keys = q.all()
 
         creds = {}
         for ak in api_keys:
@@ -131,7 +130,7 @@ def _get_plivo_credentials() -> dict:
         return creds
 
 
-def _get_telnyx_api_key() -> str:
+def _get_telnyx_api_key(org_id=None) -> str:
     """Fetch Telnyx API key from the DB.
 
     Queries service_providers for name='telnyx', then retrieves the first
@@ -149,11 +148,10 @@ def _get_telnyx_api_key() -> str:
             logger.warning("Telnyx service provider not found in DB")
             return ""
 
-        api_key = (
-            db.query(ApiKey)
-            .filter(ApiKey.service_provider_id == provider.id, ApiKey.status == "active")
-            .first()
-        )
+        q = db.query(ApiKey).filter(ApiKey.service_provider_id == provider.id, ApiKey.status == "active")
+        if org_id:
+            q = q.filter(ApiKey.organization_id == org_id)
+        api_key = q.first()
         if not api_key:
             logger.warning("No active API key found for Telnyx")
             return ""
@@ -331,7 +329,7 @@ def _create_serializer(transport_type: str, call_data: dict):
             auth_token=twilio_creds.get("auth_token", ""),
         )
     elif transport_type == "telnyx":
-        telnyx_api_key = _get_telnyx_api_key()
+        telnyx_api_key = call_data.get("_telnyx_creds", {}).get("api_key") or _get_telnyx_api_key(org_id=call_data.get("_org_id"))
         return TelnyxFrameSerializer(
             stream_id=call_data["stream_id"],
             call_control_id=call_data.get("call_control_id"),
@@ -345,7 +343,7 @@ def _create_serializer(transport_type: str, call_data: dict):
             call_sid=call_data.get("call_id"),
         )
     elif transport_type == "plivo":
-        plivo_creds = _get_plivo_credentials()
+        plivo_creds = call_data.get("_plivo_creds") or _get_plivo_credentials(org_id=call_data.get("_org_id"))
         return PlivoFrameSerializer(
             stream_id=call_data["stream_id"],
             call_id=call_data.get("call_id"),
@@ -379,7 +377,7 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
         # Fetch from/to only if not already present (BotRunnerService enriches call_data)
         if transport_type == "twilio" and not call_data.get("from"):
             _t = _time.monotonic()
-            call_info = await get_call_info(transport_type, call_data.get("call_id", ""))
+            call_info = await get_call_info(transport_type, call_data.get("call_id", ""), org_id=call_data.get("_org_id"))
             logger.info("[TIMING] bot() get_call_info Twilio API (+%.3fs)", _time.monotonic() - _t)
             if call_info:
                 call_data["from"] = call_info.get("from_number", "")
@@ -403,6 +401,7 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
                 audio_in_enabled=True,
                 audio_out_enabled=True,
                 add_wav_header=False,
+                vad_analyzer=SileroVADAnalyzer(),
                 serializer=serializer,
             ),
         )
@@ -448,7 +447,7 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
     await run_bot(transport, runner_args)
     logger.info("[TIMING] bot() run_bot finished (+%.3fs), total bot(): %.3fs", _time.monotonic() - _t, _time.monotonic() - _t_bot_start)
 
-async def get_call_info(transport_type: str, call_sid: str) -> dict:
+async def get_call_info(transport_type: str, call_sid: str, org_id=None) -> dict:
     """Fetch call information from the telephony provider's REST API.
 
     Currently only Twilio is supported for call info lookup via REST API.
@@ -465,8 +464,7 @@ async def get_call_info(transport_type: str, call_sid: str) -> dict:
     if transport_type != "twilio":
         return {}
 
-    twilio_creds = _get_twilio_credentials()
-    print("twilio_credsss", twilio_creds)
+    twilio_creds = _get_twilio_credentials(org_id=org_id)
     account_sid = twilio_creds.get("account_sid")
     auth_token = twilio_creds.get("auth_token")
 

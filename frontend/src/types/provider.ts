@@ -59,6 +59,7 @@ export interface ServiceProvider {
   display_name: string;
   description: string;
   provider_type: ProviderType;
+  service_provider_id?: number;
   logo_url?: string | null;
   website_url?: string | null;
   documentation_url?: string | null;
