@@ -234,7 +234,7 @@ class ServiceProviderService(BaseService):
         sort_by: str = "created_at",
         sort_order: str = "desc",
         page: int = 1,
-        page_size: int = 10,
+        page_size: Optional[int] = 10,
     ) -> Dict[str, Any]:
         """List service providers with optional filters, sorting, and pagination.
 
@@ -283,14 +283,14 @@ class ServiceProviderService(BaseService):
         }
         sort_column = sort_column_map.get(sort_by, ServiceProvider.created_at)
         order_func = asc if sort_order == "asc" else desc
-        offset = (page - 1) * page_size
 
-        providers = (
-            query.order_by(order_func(sort_column), ServiceProvider.id)
-            .offset(offset)
-            .limit(page_size)
-            .all()
-        )
+        ordered_query = query.order_by(order_func(sort_column), ServiceProvider.id)
+
+        if page_size is not None:
+            offset = (page - 1) * page_size
+            providers = ordered_query.offset(offset).limit(page_size).all()
+        else:
+            providers = ordered_query.all()
 
         # Batch-fetch models for the paginated providers only
         provider_ids = [p.id for p in providers]
@@ -367,12 +367,16 @@ class ServiceProviderService(BaseService):
             for p in providers
         ]
 
-        total_pages = (total + page_size - 1) // page_size
+        if page_size is not None:
+            total_pages = (total + page_size - 1) // page_size
+        else:
+            total_pages = 1
+
         return {
             "data": data,
             "pagination": {
                 "page": page,
-                "page_size": page_size,
+                "page_size": page_size if page_size is not None else total,
                 "total": total,
                 "total_pages": total_pages,
             },

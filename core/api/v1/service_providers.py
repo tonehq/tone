@@ -29,10 +29,14 @@ def _parse_sort(sort: Optional[str], allowed: set, default: str = "-created_at")
 
 
 def _parse_page(data: Dict[str, Any]):
-    """Extract and validate page / page_size from a dict body."""
+    """Extract and validate page / page_size from a dict body.
+
+    If page_size is omitted or 0, returns (page, None) to signal "return all rows".
+    """
     try:
         page = int(data.get("page", 1) or 1)
-        page_size = int(data.get("page_size", 10) or 10)
+        raw_page_size = data.get("page_size")
+        page_size = None if raw_page_size is None else int(raw_page_size)
     except (TypeError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -43,11 +47,14 @@ def _parse_page(data: Dict[str, Any]):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="page must be >= 1",
         )
-    if page_size < 1 or page_size > 100:
+    if page_size is not None and page_size < 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="page_size must be between 1 and 100",
+            detail="page_size must be >= 0",
         )
+    # page_size=0 means "all"
+    if page_size == 0:
+        page_size = None
     return page, page_size
 
 

@@ -297,6 +297,21 @@ class SubprocessBotManager:
         done, pending = await asyncio.wait(
             proxy_tasks, return_when=asyncio.FIRST_COMPLETED
         )
+
+        # If the telephony→subprocess relay finished first (WS disconnected),
+        # the subprocess has received a DISCONNECT frame and is now running
+        # cleanup (on_audio_data: encode audio, upload to R2, update call log).
+        # Wait for it to finish and close stdout (which ends output_task)
+        # instead of killing it immediately.
+        if input_task in done and output_task in pending:
+            logger.info("Telephony WS closed, waiting up to 30s for subprocess cleanup")
+            cleanup_done, still_pending = await asyncio.wait(
+                pending, timeout=30
+            )
+            if still_pending:
+                logger.warning("Subprocess cleanup timed out after 30s, cancelling")
+            pending = still_pending
+
         for task in pending:
             task.cancel()
             try:
@@ -310,6 +325,15 @@ class SubprocessBotManager:
         if proc.returncode is not None:
             logger.info("Bot worker subprocess already exited (pid={} rc={})", proc.pid, proc.returncode)
             return
+
+        # Give the subprocess a grace period to exit on its own (it may be
+        # finishing call-log updates / audio upload after receiving DISCONNECT).
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=5)
+            logger.info("Bot worker subprocess exited gracefully (pid={})", proc.pid)
+            return
+        except asyncio.TimeoutError:
+            pass
 
         logger.info("Terminating bot worker subprocess pid={}", proc.pid)
         proc.terminate()

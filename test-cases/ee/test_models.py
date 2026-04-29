@@ -41,52 +41,66 @@ def _create_model(client, service_provider_id, name=None, service_type="llm", **
     return resp.json()
 
 
-# ─── GET /api/v1/model/get_models_by_provider ───
+# ─── POST /api/v1/model/get_models_by_provider ───
 
 class TestGetModelsByProvider:
-    """Tests for GET /api/v1/model/get_models_by_provider"""
+    """Tests for POST /api/v1/model/get_models_by_provider"""
 
     def test_get_models_by_provider_returns_success_or_not_found(self, client_as_member):
-        response = client_as_member.get("/api/v1/model/get_models_by_provider?service_provider_id=1")
+        response = client_as_member.post("/api/v1/model/get_models_by_provider", json={
+            "service_provider_id": 1
+        })
         assert response.status_code in (200, 404)
 
     def test_get_models_missing_provider_id(self, client_as_member):
-        response = client_as_member.get("/api/v1/model/get_models_by_provider")
-        assert response.status_code == 422
+        response = client_as_member.post("/api/v1/model/get_models_by_provider", json={})
+        assert response.status_code == 400
 
     def test_get_models_invalid_provider_id(self, client_as_member):
-        response = client_as_member.get("/api/v1/model/get_models_by_provider?service_provider_id=abc")
-        assert response.status_code == 422
+        response = client_as_member.post("/api/v1/model/get_models_by_provider", json={
+            "service_provider_id": "abc"
+        })
+        assert response.status_code == 400
 
     def test_get_models_unauthenticated(self, client_unauthenticated):
-        response = client_unauthenticated.get("/api/v1/model/get_models_by_provider?service_provider_id=1")
+        response = client_unauthenticated.post("/api/v1/model/get_models_by_provider", json={
+            "service_provider_id": 1
+        })
         assert response.status_code in (401, 403)
 
     def test_get_models_llm_provider(self, client_as_admin):
         """Postman: Get Models - LLM Provider."""
         provider = _create_service_provider(client_as_admin, provider_type="llm")
         _create_model(client_as_admin, provider["id"], name="gpt-4", service_type="llm")
-        response = client_as_admin.get(f"/api/v1/model/get_models_by_provider?service_provider_id={provider['id']}")
+        response = client_as_admin.post("/api/v1/model/get_models_by_provider", json={
+            "service_provider_id": provider["id"]
+        })
         assert response.status_code == 200
 
     def test_get_models_stt_provider(self, client_as_admin):
         """Postman: Get Models - STT Provider (Deepgram)."""
         provider = _create_service_provider(client_as_admin, provider_type="stt")
         _create_model(client_as_admin, provider["id"], name="nova-2", service_type="stt")
-        response = client_as_admin.get(f"/api/v1/model/get_models_by_provider?service_provider_id={provider['id']}")
+        response = client_as_admin.post("/api/v1/model/get_models_by_provider", json={
+            "service_provider_id": provider["id"]
+        })
         assert response.status_code == 200
 
     def test_get_models_tts_provider(self, client_as_admin):
         """Postman: Get Models - TTS Provider (Cartesia)."""
         provider = _create_service_provider(client_as_admin, provider_type="tts")
         _create_model(client_as_admin, provider["id"], name="sonic-3", service_type="tts")
-        response = client_as_admin.get(f"/api/v1/model/get_models_by_provider?service_provider_id={provider['id']}")
+        response = client_as_admin.post("/api/v1/model/get_models_by_provider", json={
+            "service_provider_id": provider["id"]
+        })
         assert response.status_code == 200
 
     def test_get_models_empty(self, client_as_admin):
         """Postman: Get Models - Empty (no models for provider)."""
         provider = _create_service_provider(client_as_admin, provider_type="llm")
-        response = client_as_admin.get(f"/api/v1/model/get_models_by_provider?service_provider_id={provider['id']}")
+        response = client_as_admin.post("/api/v1/model/get_models_by_provider", json={
+            "service_provider_id": provider["id"]
+        })
         assert response.status_code in (200, 404)
 
 

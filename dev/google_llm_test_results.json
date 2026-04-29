@@ -1,0 +1,92 @@
+[
+  {
+    "model": "gemini-3.1-pro-preview",
+    "status": "OK",
+    "response": "Hello, I hope you are having a wonderful day!",
+    "latency_s": 4.01
+  },
+  {
+    "model": "gemini-3-pro-preview",
+    "status": "OK",
+    "response": "Hello, I hope you are having a fantastic day!",
+    "latency_s": 4.74
+  },
+  {
+    "model": "gemini-3-flash-preview",
+    "status": "OK",
+    "response": "Hello there, I am happy to help you with whatever you need!",
+    "latency_s": 1.43
+  },
+  {
+    "model": "gemini-3.1-flash-lite-preview",
+    "status": "OK",
+    "response": "Hello, it is a pleasure to meet you!",
+    "latency_s": 1.22
+  },
+  {
+    "model": "gemini-2.5-pro",
+    "status": "OK",
+    "response": "Hello, I hope you're having a wonderful day",
+    "latency_s": 11.07
+  },
+  {
+    "model": "gemini-2.5-flash",
+    "status": "OK",
+    "response": "Hello there!",
+    "latency_s": 1.45
+  },
+  {
+    "model": "gemini-2.5-flash-lite",
+    "status": "OK",
+    "response": "Hello!",
+    "latency_s": 0.72
+  },
+  {
+    "model": "gemma-4-31b-it",
+    "status": "OK",
+    "response": "Hello!",
+    "latency_s": 2.82
+  },
+  {
+    "model": "gemma-4-26b-a4b-it",
+    "status": "OK",
+    "response": "Hello!",
+    "latency_s": 4.55
+  },
+  {
+    "model": "gemma-3-27b-it",
+    "status": "OK",
+    "response": "Hello there, it's lovely to connect with you! \ud83d\ude0a",
+    "latency_s": 0.98
+  },
+  {
+    "model": "gemma-3-12b-it",
+    "status": "OK",
+    "response": "Hello there! \ud83d\ude0a\n\n\n\nHope you're having a wonderful day!",
+    "latency_s": 4.61
+  },
+  {
+    "model": "gemma-3-4b-it",
+    "status": "OK",
+    "response": "Hello there! \ud83d\ude0a",
+    "latency_s": 1.22
+  },
+  {
+    "model": "gemma-3-1b-it",
+    "status": "OK",
+    "response": "Hello there!",
+    "latency_s": 0.93
+  },
+  {
+    "model": "gemma-3n-e4b-it",
+    "status": "OK",
+    "response": "Hello there!",
+    "latency_s": 1.08
+  },
+  {
+    "model": "gemma-3n-e2b-it",
+    "status": "OK",
+    "response": "Hello there!",
+    "latency_s": 0.78
+  }
+]
