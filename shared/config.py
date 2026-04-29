@@ -15,7 +15,7 @@ def get_infisical_secrets() -> dict:
     try:
         from infisical_sdk import InfisicalSDKClient
 
-        environment = os.getenv("INFISICAL_ENV", "dev")
+        environment = os.getenv("INFISICAL_ENV", os.getenv("ENV", "dev"))
 
         client = InfisicalSDKClient(
             host="https://app.infisical.com",
