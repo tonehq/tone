@@ -16,7 +16,7 @@ import { formatDate } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
-import { Box, BrainCircuit, ChevronLeft, Key, Plus, Search, Server } from 'lucide-react';
+import { Box, BrainCircuit, ChevronLeft, Hash, Key, Plus, Search, Server } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { MODELS_PAGE_SIZE, TYPE_BADGE_STYLES, TYPE_ICON_STYLES, TYPE_ICONS } from './constants';
@@ -165,47 +165,107 @@ export default function ModelsPanel({ selectedProvider, onBack }: ModelsPanelPro
       title: 'Model',
       dataIndex: 'name',
       sorter: true,
-      render: (_value, record) => (
-        <div className="flex items-center gap-2.5">
-          <div
+      render: (_value, record) => {
+        const subtitle =
+          record.meta_data?.model && record.meta_data.model !== record.name
+            ? String(record.meta_data.model)
+            : null;
+        return (
+          <div className="flex items-center gap-3 py-0.5">
+            <div
+              className={cn(
+                'flex size-8 shrink-0 items-center justify-center rounded-md ring-1 ring-border/40',
+                TYPE_ICON_STYLES[providerType] ?? 'bg-muted text-muted-foreground',
+              )}
+            >
+              {TYPE_ICONS[providerType] ?? <Box className="size-3.5" />}
+            </div>
+            <div className="flex min-w-0 flex-col leading-tight">
+              <span className="truncate text-sm font-medium text-foreground">{record.name}</span>
+              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                <Hash className="size-3" />
+                <span className="font-mono">{record.id}</span>
+                {subtitle && (
+                  <>
+                    <span className="text-border">·</span>
+                    <span className="truncate">{subtitle}</span>
+                  </>
+                )}
+              </span>
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      key: 'service_type',
+      title: 'Type',
+      width: '100px',
+      render: (_value, record) => {
+        const t = record.service_type ?? providerType;
+        if (!t) return <span className="text-muted-foreground">—</span>;
+        return (
+          <Badge
             className={cn(
-              'flex size-7 shrink-0 items-center justify-center rounded-md',
-              TYPE_ICON_STYLES[providerType] ?? 'bg-muted text-muted-foreground',
+              'text-[10px] font-semibold uppercase tracking-wide',
+              TYPE_BADGE_STYLES[t] ?? 'bg-muted text-muted-foreground',
             )}
           >
-            {TYPE_ICONS[providerType] ?? <Box className="size-3.5" />}
-          </div>
-          <div className="flex flex-col">
-            <span className="font-medium text-foreground">{record.name}</span>
-            {record.meta_data?.model && record.meta_data.model !== record.name && (
-              <span className="text-[11px] text-muted-foreground">
-                {String(record.meta_data.model)}
-              </span>
-            )}
-          </div>
-        </div>
-      ),
+            {t}
+          </Badge>
+        );
+      },
+    },
+    {
+      key: 'status',
+      title: 'Status',
+      width: '110px',
+      render: (_value, record) => {
+        const s = (record.status ?? 'active').toLowerCase();
+        const isActive = s === 'active';
+        return (
+          <span className="inline-flex items-center gap-1.5 text-xs">
+            <span
+              className={cn('size-1.5 rounded-full', isActive ? 'bg-emerald-500' : 'bg-amber-500')}
+            />
+            <span
+              className={cn('capitalize', isActive ? 'text-foreground' : 'text-muted-foreground')}
+            >
+              {s}
+            </span>
+          </span>
+        );
+      },
     },
     {
       key: 'meta_data',
       title: 'Metadata',
       render: (_value, record) => {
-        if (!record.meta_data || Object.keys(record.meta_data).length === 0) {
-          return <span className="text-muted-foreground">—</span>;
+        const entries = record.meta_data
+          ? Object.entries(record.meta_data).filter(([k]) => k !== 'model')
+          : [];
+        if (entries.length === 0) {
+          return <span className="text-xs text-muted-foreground">—</span>;
         }
-        const entries = Object.entries(record.meta_data);
+        const visible = entries.slice(0, 2);
+        const overflow = entries.length - visible.length;
+        const fullText = entries.map(([k, v]) => `${k}: ${String(v)}`).join('\n');
         return (
-          <div className="flex flex-wrap gap-1">
-            {entries.slice(0, 3).map(([k, v]) => (
+          <div className="flex flex-wrap items-center gap-1" title={fullText}>
+            {visible.map(([k, v]) => (
               <span
                 key={k}
-                className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
               >
-                {k}: {String(v)}
+                <span className="text-foreground/80">{k}</span>
+                <span className="text-border">=</span>
+                <span className="truncate max-w-30">{String(v)}</span>
               </span>
             ))}
-            {entries.length > 3 && (
-              <span className="text-[10px] text-muted-foreground">+{entries.length - 3} more</span>
+            {overflow > 0 && (
+              <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                +{overflow}
+              </span>
             )}
           </div>
         );
@@ -216,19 +276,21 @@ export default function ModelsPanel({ selectedProvider, onBack }: ModelsPanelPro
       title: 'Updated',
       dataIndex: 'updated_at',
       sorter: true,
+      width: '130px',
       render: (value) =>
         value ? (
-          <span className="text-sm text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {formatDate(value as number, 'DD MMM YYYY')}
           </span>
         ) : (
-          <span className="text-muted-foreground">—</span>
+          <span className="text-xs text-muted-foreground">—</span>
         ),
     },
     {
       key: 'actions',
       title: '',
       align: 'right',
+      width: '56px',
       render: (_value, record) => (
         <ActionMenu
           onEdit={() => openEdit(record)}
@@ -244,12 +306,12 @@ export default function ModelsPanel({ selectedProvider, onBack }: ModelsPanelPro
   if (!selectedProvider) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-4 p-8">
-        <div className="flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5">
+        <div className="flex size-16 items-center justify-center rounded-2xl bg-linear-to-br from-primary/10 to-primary/5">
           <BrainCircuit className="size-7 text-primary/60" />
         </div>
         <div className="text-center">
           <p className="text-sm font-semibold text-foreground">Select a provider</p>
-          <p className="mt-1 max-w-[240px] text-xs leading-relaxed text-muted-foreground">
+          <p className="mt-1 max-w-60 text-xs leading-relaxed text-muted-foreground">
             Choose a service provider from the list to view and manage its models
           </p>
         </div>

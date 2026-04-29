@@ -6,7 +6,6 @@ import {
   providersAtom,
   upsertProviderAtom,
 } from '@/atoms/ProviderAtom';
-import ModelsPanel from '@/components/service-providers/ModelsPanel';
 import ProviderCard from '@/components/service-providers/ProviderCard';
 import ProviderUpsertModal from '@/components/service-providers/ProviderUpsertModal';
 import { CustomButton } from '@/components/shared';
@@ -16,11 +15,13 @@ import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
 import { Loader2, Plus, Search, Server } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { PROVIDER_TYPE_TABS, PROVIDERS_PAGE_SIZE } from './constants';
 
 export default function ServiceProvidersPage() {
+  const router = useRouter();
   const [providersState] = useAtom(providersAtom);
   const [, fetchProviders] = useAtom(fetchProvidersAtom);
   const [, upsertProvider] = useAtom(upsertProviderAtom);
@@ -31,10 +32,8 @@ export default function ServiceProvidersPage() {
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedProvider, setSelectedProvider] = useState<ServiceProvider | null>(null);
   const [providerModalOpen, setProviderModalOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<ServiceProvider | null>(null);
-  const [showModelsPanel, setShowModelsPanel] = useState(false);
 
   // ── Helpers ──────────────────────────────────────────────────────
 
@@ -83,8 +82,6 @@ export default function ServiceProvidersPage() {
   const handleTabChange = useCallback(
     (tab: string) => {
       setActiveTab(tab);
-      setSelectedProvider(null);
-      setShowModelsPanel(false);
       const params: Record<string, unknown> = { page: 1, page_size: PROVIDERS_PAGE_SIZE };
       if (tab !== 'all') params.provider_type = tab;
       fetchProviders({ params }).catch(handleApiError);
@@ -129,10 +126,10 @@ export default function ServiceProvidersPage() {
 
   // ── Provider CRUD ────────────────────────────────────────────────
 
-  const handleProviderSelect = useCallback((provider: ServiceProvider) => {
-    setSelectedProvider(provider);
-    setShowModelsPanel(true);
-  }, []);
+  const handleProviderSelect = useCallback(
+    (provider: ServiceProvider) => router.push(`/service-providers/${provider.id}`),
+    [router],
+  );
 
   const refreshProviders = useCallback(
     () => fetchProviders({ params: buildParams(1) }),
@@ -158,16 +155,12 @@ export default function ServiceProvidersPage() {
       try {
         await removeProvider(provider.id);
         showToast.success('Provider deleted');
-        if (selectedProvider?.id === provider.id) {
-          setSelectedProvider(null);
-          setShowModelsPanel(false);
-        }
         await refreshProviders();
       } catch (error) {
         handleApiError(error);
       }
     },
-    [removeProvider, refreshProviders, selectedProvider],
+    [removeProvider, refreshProviders],
   );
 
   const openEditProvider = useCallback((provider: ServiceProvider) => {
@@ -199,15 +192,9 @@ export default function ServiceProvidersPage() {
         </CustomButton>
       </div>
 
-      {/* Two-panel layout */}
+      {/* Single-pane provider list (clicking a card navigates to /service-providers/{id}) */}
       <div className="flex min-h-0 flex-1 gap-5">
-        {/* ─── Left Panel — Provider List ───────────────────────────── */}
-        <div
-          className={cn(
-            'flex min-h-0 w-full flex-col lg:w-[360px] lg:shrink-0',
-            showModelsPanel && 'hidden lg:flex',
-          )}
-        >
+        <div className={cn('flex min-h-0 w-full flex-col')}>
           {/* Search */}
           <div className="relative mb-3">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -290,7 +277,7 @@ export default function ServiceProvidersPage() {
                   <ProviderCard
                     key={provider.id}
                     provider={provider}
-                    selected={selectedProvider?.id === provider.id}
+                    selected={false}
                     onSelect={() => handleProviderSelect(provider)}
                     onEdit={() => openEditProvider(provider)}
                     onDelete={() => handleProviderDelete(provider)}
@@ -321,19 +308,6 @@ export default function ServiceProvidersPage() {
                 )}
             </div>
           )}
-        </div>
-
-        {/* ─── Right Panel — Models ─────────────────────────────────── */}
-        <div
-          className={cn(
-            'flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm',
-            !showModelsPanel && 'hidden lg:flex',
-          )}
-        >
-          <ModelsPanel
-            selectedProvider={selectedProvider}
-            onBack={() => setShowModelsPanel(false)}
-          />
         </div>
       </div>
 

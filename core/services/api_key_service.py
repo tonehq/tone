@@ -101,6 +101,81 @@ class ApiKeyService(BaseService):
             "updated_at": api_key.updated_at
         }
 
+    def list_by_provider(
+        self,
+        service_provider_id: int,
+        status_filter: Optional[str] = None,
+        sort_by: str = "created_at",
+        sort_order: str = "desc",
+        page: int = 1,
+        page_size: Optional[int] = 20,
+    ) -> Dict[str, Any]:
+        """List api_keys for a single provider, scoped to caller's org."""
+        from sqlalchemy import asc, desc
+
+        provider = self.db.query(ServiceProvider).filter(
+            ServiceProvider.id == service_provider_id
+        ).first()
+        if not provider:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Service provider not found",
+            )
+
+        query = self.query(ApiKey).filter(ApiKey.service_provider_id == service_provider_id)
+        if status_filter:
+            query = query.filter(ApiKey.status == status_filter)
+
+        total = query.count()
+
+        sort_column_map = {
+            "created_at": ApiKey.created_at,
+            "updated_at": ApiKey.updated_at,
+            "name": ApiKey.name,
+            "id": ApiKey.id,
+        }
+        sort_column = sort_column_map.get(sort_by, ApiKey.created_at)
+        order_func = asc if sort_order == "asc" else desc
+        query = query.order_by(order_func(sort_column), ApiKey.id.desc())
+
+        if page_size:
+            query = query.offset((page - 1) * page_size).limit(page_size)
+
+        rows = query.all()
+        data = [
+            {
+                "id": k.id,
+                "uuid": str(k.uuid),
+                "name": k.name,
+                "description": k.description,
+                "api_key_hint": k.api_key_hint,
+                "service_provider_id": k.service_provider_id,
+                "additional_credentials": k.additional_credentials,
+                "rate_limit_config": k.rate_limit_config,
+                "expires_at": k.expires_at,
+                "status": k.status,
+                "is_valid": k.is_valid,
+                "last_validated_at": k.last_validated_at,
+                "validation_error": k.validation_error,
+                "last_used_at": k.last_used_at,
+                "usage_count": k.usage_count,
+                "created_at": k.created_at,
+                "updated_at": k.updated_at,
+            }
+            for k in rows
+        ]
+
+        total_pages = (total + page_size - 1) // page_size if page_size else 1
+        return {
+            "data": data,
+            "pagination": {
+                "page": page,
+                "page_size": page_size or total,
+                "total": total,
+                "total_pages": total_pages,
+            },
+        }
+
     def get_all_api_keys(self) -> List[Dict[str, Any]]:
         base_query = self.query(ApiKey)
         results = base_query.join(

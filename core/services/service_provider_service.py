@@ -50,7 +50,12 @@ class ServiceProviderService(BaseService):
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Service provider not found",
                 )
-            if self._exists_same_name_and_provider_type(name, provider_type, exclude_id=provider_id):
+            # Only check for conflicts when (name, provider_type) is actually changing
+            name_changed = name is not None and name != existing.name
+            type_changed = provider_type is not None and provider_type != existing.provider_type
+            if (name_changed or type_changed) and self._exists_same_name_and_provider_type(
+                name, provider_type, exclude_id=provider_id
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="A service provider with this name and provider_type already exists.",
@@ -129,7 +134,7 @@ class ServiceProviderService(BaseService):
 
     def _get_provider_api_key(self, provider_id: int) -> Optional[Dict[str, Any]]:
         key = (
-            self.db.query(ApiKey)
+            self.query(ApiKey)
             .filter(ApiKey.service_provider_id == provider_id, ApiKey.status == "active")
             .order_by(ApiKey.id.desc())
             .first()
@@ -314,7 +319,7 @@ class ServiceProviderService(BaseService):
                 })
 
             api_keys = (
-                self.db.query(ApiKey)
+                self.query(ApiKey)
                 .filter(
                     ApiKey.service_provider_id.in_(provider_ids),
                     ApiKey.status == "active",
