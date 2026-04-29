@@ -133,57 +133,54 @@ export default function ProviderUpsertModal({
       confirmDisabled={!isValid}
       width="sm:max-w-xl"
       className={MODAL_CLASS}
-      contentClassName={`pt-2 pb-3 ${LABEL_COMPACT}`}
+      contentClassName={`pt-2 pb-2 ${LABEL_COMPACT}`}
     >
-      <div className="flex flex-col gap-2.5">
-        <div className="grid grid-cols-2 gap-3">
-          <TextInput
-            name="provider-name"
-            label="Name"
-            placeholder="e.g. openai"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            isRequired
-          />
-          <TextInput
-            name="provider-display-name"
-            label="Display Name"
-            placeholder="e.g. OpenAI"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            isRequired
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <SelectInput
-            name="provider-type"
-            label="Provider Type"
-            options={PROVIDER_TYPE_OPTIONS}
-            value={providerType}
-            onValueChange={setProviderType}
-            isRequired
-          />
-          <SelectInput
-            name="auth-type"
-            label="Auth Type"
-            options={AUTH_TYPE_OPTIONS}
-            value={authType}
-            onValueChange={setAuthType}
-            isRequired
-          />
-        </div>
-
-        <TextAreaField
-          name="provider-description"
-          label="Description"
-          placeholder="Describe this provider..."
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={2}
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
+        <TextInput
+          name="provider-name"
+          label="Name"
+          placeholder="e.g. openai"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          isRequired
+        />
+        <TextInput
+          name="provider-display-name"
+          label="Display Name"
+          placeholder="e.g. OpenAI"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          isRequired
+        />
+        <SelectInput
+          name="provider-type"
+          label="Provider Type"
+          options={PROVIDER_TYPE_OPTIONS}
+          value={providerType}
+          onValueChange={setProviderType}
+          isRequired
+        />
+        <SelectInput
+          name="auth-type"
+          label="Auth Type"
+          options={AUTH_TYPE_OPTIONS}
+          value={authType}
+          onValueChange={setAuthType}
+          isRequired
         />
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="col-span-2">
+          <TextAreaField
+            name="provider-description"
+            label="Description"
+            placeholder="Describe this provider..."
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={2}
+          />
+        </div>
+
+        <div className="col-span-2">
           <TextInput
             name="provider-base-url"
             label="Base URL"
@@ -191,22 +188,25 @@ export default function ProviderUpsertModal({
             value={baseUrl}
             onChange={(e) => setBaseUrl(e.target.value)}
           />
-          <SelectInput
-            name="provider-status"
-            label="Status"
-            options={STATUS_OPTIONS}
-            value={status}
-            onValueChange={setStatus}
-          />
         </div>
 
-        <div className="mt-0.5">
-          <CheckboxField
-            id="supports-streaming"
-            label="Supports Streaming"
-            checked={supportsStreaming}
-            onCheckedChange={(checked) => setSupportsStreaming(!!checked)}
-          />
+        <SelectInput
+          name="provider-status"
+          label="Status"
+          options={STATUS_OPTIONS}
+          value={status}
+          onValueChange={setStatus}
+        />
+        <div className="flex h-full flex-col justify-end">
+          <div className="flex h-9 items-center rounded-md border border-input bg-background px-3">
+            <CheckboxField
+              id="supports-streaming"
+              label="Supports Streaming"
+              checked={supportsStreaming}
+              onCheckedChange={(checked) => setSupportsStreaming(!!checked)}
+              labelClassName="mt-1"
+            />
+          </div>
         </div>
       </div>
     </CustomModal>
