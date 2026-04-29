@@ -218,5 +218,13 @@ async def test_websocket(websocket: WebSocket):
     runner_args = WebSocketRunnerArguments(websocket=websocket, body=body)
 
     logger.info("[TEST WS] running pipeline for agent: {} ({})", agent.name, agent.id)
-    await run_bot(transport, runner_args)
-    logger.info("[TEST WS] finished, duration: {:.1f}s", _time.monotonic() - _t_start)
+    try:
+        await run_bot(transport, runner_args)
+    except Exception as e:
+        logger.error("[TEST WS] pipeline error: {}", e)
+    finally:
+        logger.info("[TEST WS] finished, duration: {:.1f}s", _time.monotonic() - _t_start)
+        try:
+            await websocket.close()
+        except Exception:
+            pass

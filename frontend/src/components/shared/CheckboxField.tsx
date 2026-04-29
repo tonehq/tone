@@ -51,6 +51,7 @@ const PlainCheckboxField = memo(
             aria-invalid={error || undefined}
             aria-required={isRequired || undefined}
             className={cn(
+              'cursor-pointer',
               error &&
                 'border-destructive data-[state=checked]:bg-destructive/90 focus-visible:ring-destructive/20',
               className,

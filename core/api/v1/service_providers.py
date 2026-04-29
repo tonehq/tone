@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional
 from core.database.session import get_db
 from core.services.service_provider_service import ServiceProviderService
 from core.middleware.auth import get_jwt_claims, require_admin_or_owner, JWTClaims
+from shared.config import settings
 
 router = APIRouter()
 
@@ -28,10 +29,14 @@ def _parse_sort(sort: Optional[str], allowed: set, default: str = "-created_at")
 
 
 def _parse_page(data: Dict[str, Any]):
-    """Extract and validate page / page_size from a dict body."""
+    """Extract and validate page / page_size from a dict body.
+
+    If page_size is omitted or 0, returns (page, None) to signal "return all rows".
+    """
     try:
         page = int(data.get("page", 1) or 1)
-        page_size = int(data.get("page_size", 10) or 10)
+        raw_page_size = data.get("page_size")
+        page_size = None if raw_page_size is None else int(raw_page_size)
     except (TypeError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -42,11 +47,14 @@ def _parse_page(data: Dict[str, Any]):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="page must be >= 1",
         )
-    if page_size < 1 or page_size > 100:
+    if page_size is not None and page_size < 0:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="page_size must be between 1 and 100",
+            detail="page_size must be >= 0",
         )
+    # page_size=0 means "all"
+    if page_size == 0:
+        page_size = None
     return page, page_size
 
 
@@ -60,6 +68,7 @@ def upsert_service_provider(
     display_name = data.get("display_name")
     provider_type = data.get("provider_type")
     auth_type = data.get("auth_type")
+    api_key = data.get("api_key")
 
     if not all([name, display_name, provider_type, auth_type]):
         raise HTTPException(
@@ -67,7 +76,26 @@ def upsert_service_provider(
             detail="name, display_name, provider_type, and auth_type are required"
         )
 
-    return ServiceProviderService(db, user_id=claims.user_id).upsert_service_provider(
+    if not isinstance(api_key, dict):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="api_key object is required",
+        )
+
+    is_update = data.get("id") is not None
+    if not is_update and not api_key.get("api_key"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="api_key.api_key (secret value) is required when creating a service provider",
+        )
+    if api_key.get("id") is None and not api_key.get("api_key"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="api_key.id or api_key.api_key (secret value) is required",
+        )
+
+    org_id = claims.org_id or settings.DEFAULT_ORG_ID
+    return ServiceProviderService(db, user_id=claims.user_id, org_id=org_id).upsert_service_provider(
         name=name,
         display_name=display_name,
         provider_type=provider_type,
@@ -82,6 +110,7 @@ def upsert_service_provider(
         is_system=data.get("is_system", False),
         provider_status=data.get("status"),
         provider_id=data.get("id"),
+        api_key=api_key,
     )
 
 
