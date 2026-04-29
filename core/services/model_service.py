@@ -62,7 +62,6 @@ class ModelService(BaseService):
                 "service_provider_id": m.service_provider_id,
                 "name": m.name,
                 "meta_data": m.meta_data,
-                "api_key_id": m.api_key_id,
                 "status": m.status,
                 "service_type": m.service_type,
                 "meta_data_schema": m.meta_data_schema,

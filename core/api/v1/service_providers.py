@@ -68,30 +68,11 @@ def upsert_service_provider(
     display_name = data.get("display_name")
     provider_type = data.get("provider_type")
     auth_type = data.get("auth_type")
-    api_key = data.get("api_key")
 
     if not all([name, display_name, provider_type, auth_type]):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="name, display_name, provider_type, and auth_type are required"
-        )
-
-    if not isinstance(api_key, dict):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="api_key object is required",
-        )
-
-    is_update = data.get("id") is not None
-    if not is_update and not api_key.get("api_key"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="api_key.api_key (secret value) is required when creating a service provider",
-        )
-    if api_key.get("id") is None and not api_key.get("api_key"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="api_key.id or api_key.api_key (secret value) is required",
         )
 
     org_id = claims.org_id or settings.DEFAULT_ORG_ID
@@ -110,7 +91,6 @@ def upsert_service_provider(
         is_system=data.get("is_system", False),
         provider_status=data.get("status"),
         provider_id=data.get("id"),
-        api_key=api_key,
     )
 
 

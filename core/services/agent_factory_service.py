@@ -17,6 +17,7 @@ from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
 from core.models.api_key import ApiKey
 from core.models.models import Model
+from core.models.service import Service
 from core.models.service_provider import ServiceProvider
 from core.models.voice import Voice
 from core.services.base import BaseService
@@ -39,14 +40,24 @@ class AgentFactoryService(BaseService):
         )
 
     def _get_service_and_credentials(
-        self, service_provider_id: Optional[int], service_type: str
+        self, service_id: Optional[int], service_type: str
     ) -> Optional[Tuple[Model, ServiceProvider, str]]:
         """
-        Get the first active Model for the given provider and type, plus decrypted API key.
+        Get the first active Model for the given service and type, plus decrypted API key.
+        service_id now refers to services.id (not service_providers.id).
         Returns (Model, ServiceProvider, decrypted_api_key) or None.
         """
-        if not service_provider_id:
+        if not service_id:
             return None
+
+        # Look up the Service record to get service_provider_id and api_key_id
+        service = self.db.query(Service).filter(Service.id == service_id).first()
+        if not service:
+            print(f"DEBUG _get_service_and_credentials: no Service found for service_id={service_id}")
+            return None
+
+        service_provider_id = service.service_provider_id
+
         result = (
             self.db.query(Model, ServiceProvider)
             .join(ServiceProvider, Model.service_provider_id == ServiceProvider.id)
@@ -61,7 +72,15 @@ class AgentFactoryService(BaseService):
             print(f"DEBUG _get_service_and_credentials: no active Model found for provider_id={service_provider_id} type={service_type}")
             return None
         svc, provider = result
-        api_key_id = self.db.query(ApiKey.id).filter(ApiKey.service_provider_id == service_provider_id).scalar()
+
+        # Prefer API key from Service record, then fallback to provider-level
+        api_key_id = service.api_key_id
+        if not api_key_id:
+            q = self.db.query(ApiKey.id).filter(ApiKey.service_provider_id == service_provider_id)
+            if self.org_id:
+                q = q.filter(ApiKey.organization_id == self.org_id)
+            api_key_id = q.order_by(ApiKey.id.desc()).limit(1).scalar()
+
         api_key_value = None
         if api_key_id:
             api_key = self.db.query(ApiKey).filter(ApiKey.id == api_key_id).first()
@@ -71,11 +90,11 @@ class AgentFactoryService(BaseService):
                 except Exception as e:
                     logger.warning("Failed to decrypt API key for model %s: %s", svc.id, e)
             else:
-                print(f"DEBUG _get_service_and_credentials: api_key record missing or not encrypted for api_key_id={svc.api_key_id}")
+                print(f"DEBUG _get_service_and_credentials: api_key record missing or not encrypted for api_key_id={api_key_id}")
         else:
-            print(f"DEBUG _get_service_and_credentials: model {svc.id} ({svc.name}) has no api_key_id")
+            print(f"DEBUG _get_service_and_credentials: no api_key found for service_id={service_id} provider_id={service_provider_id}")
         if not api_key_value:
-            print(f"DEBUG _get_service_and_credentials: no api_key_value resolved for provider_id={service_provider_id} type={service_type} model={svc.name}")
+            print(f"DEBUG _get_service_and_credentials: no api_key_value resolved for service_id={service_id} type={service_type}")
             return None
         return (svc, provider, api_key_value)
 
@@ -171,11 +190,10 @@ class AgentFactoryService(BaseService):
             logger.warning("%s service provider not found in DB", provider_name)
             return {}
 
-        api_keys = (
-            self.db.query(ApiKey)
-            .filter(ApiKey.service_provider_id == provider.id)
-            .all()
-        )
+        q = self.db.query(ApiKey).filter(ApiKey.service_provider_id == provider.id)
+        if self.org_id:
+            q = q.filter(ApiKey.organization_id == self.org_id)
+        api_keys = q.all()
 
         creds = {}
         for ak in api_keys:
@@ -230,18 +248,33 @@ class AgentFactoryService(BaseService):
             llm_metadata = dict(llm_metadata)  # don't mutate the original
             llm_metadata["system_prompt"] = config.system_prompt
 
-        # Collect all service_provider_ids to fetch in bulk
-        service_ids = {
+        # Collect all service IDs (these now point to services.id, not service_providers.id)
+        service_id_map = {
             "llm": config.llm_service_id,
             "stt": config.stt_service_id,
             "tts": config.tts_service_id,
         }
-        all_sp_ids = [sid for sid in service_ids.values() if sid]
+        all_svc_ids = [sid for sid in service_id_map.values() if sid]
         # S2S only needs LLM; standard pipeline needs all 3
         if not config.llm_service_id:
             return None
-        if not is_s2s and len(all_sp_ids) < 3:
+        if not is_s2s and len(all_svc_ids) < 3:
             return None
+
+        # Query 1.5: Resolve service IDs to service_provider_ids and api_key_ids
+        _t = _time.monotonic()
+        svc_records = self.db.query(Service).filter(Service.id.in_(all_svc_ids)).all()
+        svc_lookup = {s.id: s for s in svc_records}
+        # Map: service_type -> service_provider_id
+        sp_id_map = {}
+        svc_api_key_map = {}  # service_id -> api_key_id from Service record
+        for stype, svc_id in service_id_map.items():
+            if svc_id and svc_id in svc_lookup:
+                sp_id_map[stype] = svc_lookup[svc_id].service_provider_id
+                if svc_lookup[svc_id].api_key_id:
+                    svc_api_key_map[svc_id] = svc_lookup[svc_id].api_key_id
+        all_sp_ids = list(set(sp_id_map.values()))
+        logger.info("[TIMING] serialize: Q1.5 resolve Service->provider (+%.3fs)", _time.monotonic() - _t)
 
         # Collect model_ids for name resolution (needed before Q2)
         metadata_map = {"llm": llm_metadata, "stt": stt_metadata, "tts": tts_metadata}
@@ -273,8 +306,27 @@ class AgentFactoryService(BaseService):
             key = (svc.service_provider_id, svc.service_type)
             if key not in model_map:
                 model_map[key] = (svc, provider)
-                if svc.api_key_id:
-                    api_key_ids.add(svc.api_key_id)
+                # Get API key from Service record, then fallback to provider-level
+                matched_svc_id = None
+                for sid, s in svc_lookup.items():
+                    if s.service_provider_id == svc.service_provider_id:
+                        matched_svc_id = sid
+                        break
+                svc_api_key = svc_api_key_map.get(matched_svc_id) if matched_svc_id else None
+                if svc_api_key:
+                    api_key_ids.add(svc_api_key)
+                else:
+                    # Fallback: find API key by service_provider_id
+                    fallback_q = self.db.query(ApiKey.id).filter(
+                        ApiKey.service_provider_id == svc.service_provider_id,
+                        ApiKey.status == "active",
+                    )
+                    if self.org_id:
+                        fallback_q = fallback_q.filter(ApiKey.organization_id == self.org_id)
+                    fallback_key_id = fallback_q.order_by(ApiKey.id.desc()).limit(1).scalar()
+                    if fallback_key_id:
+                        api_key_ids.add(fallback_key_id)
+                        svc_api_key_map[matched_svc_id] = fallback_key_id
 
         # Query 3: Bulk fetch ApiKeys + telephony keys (merged Q3 + telephony creds)
         _t = _time.monotonic()
@@ -335,12 +387,18 @@ class AgentFactoryService(BaseService):
         logger.info("[TIMING] serialize: TOTAL (+%.3fs)", _time.monotonic() - _t_ser)
 
         # Build service data dicts
-        def _build_service_data(sp_id, stype, metadata):
+        def _build_service_data(stype, metadata):
+            sp_id = sp_id_map.get(stype)
+            if not sp_id:
+                return None
             entry = model_map.get((sp_id, stype))
             if not entry:
                 return None
             svc, provider = entry
-            api_key = api_key_map.get(svc.api_key_id) if svc.api_key_id else None
+            # Look up API key from Service record (via svc_api_key_map), not Model
+            svc_id = service_id_map.get(stype)
+            svc_ak_id = svc_api_key_map.get(svc_id) if svc_id else None
+            api_key = api_key_map.get(svc_ak_id) if svc_ak_id else None
             if not api_key:
                 return None
             model_meta = (svc.meta_data or {}) if isinstance(getattr(svc, "meta_data", None), dict) else {}
@@ -354,9 +412,9 @@ class AgentFactoryService(BaseService):
                 "model_meta_data": model_meta,
             }
 
-        llm_data = _build_service_data(config.llm_service_id, "llm", llm_metadata)
-        stt_data = _build_service_data(config.stt_service_id, "stt", stt_metadata) if config.stt_service_id else None
-        tts_data = _build_service_data(config.tts_service_id, "tts", tts_metadata) if config.tts_service_id else None
+        llm_data = _build_service_data("llm", llm_metadata)
+        stt_data = _build_service_data("stt", stt_metadata) if config.stt_service_id else None
+        tts_data = _build_service_data("tts", tts_metadata) if config.tts_service_id else None
 
         if not llm_data:
             return None
