@@ -116,44 +116,87 @@ class ServiceProviderService(BaseService):
             "updated_at": provider.updated_at
         }
 
-    def get_all_service_providers(self, provider_type: Optional[str] = None) -> List[Dict[str, Any]]:
-        query = (
-            self.db.query(ServiceProvider, Model)
-            .outerjoin(Model, Model.service_provider_id == ServiceProvider.id)
-            .filter(ServiceProvider.status == "active")
-        )
+    def get_all_service_providers(
+        self,
+        provider_type: Optional[str] = None,
+        name: Optional[str] = None,
+        status_filter: Optional[str] = None,
+        sort_by: str = "created_at",
+        sort_order: str = "desc",
+        page: int = 1,
+        page_size: int = 10,
+    ) -> Dict[str, Any]:
+        """List service providers with optional filters, sorting, and pagination.
+
+        Excludes TTS providers that have no active voices (matches legacy behaviour).
+        Returns {"data": [...], "pagination": {...}}.
+        """
+        from sqlalchemy import asc, desc, or_
+        from core.models.voice import Voice
+
+        query = self.db.query(ServiceProvider)
+
+        if status_filter:
+            query = query.filter(ServiceProvider.status == status_filter)
+        else:
+            query = query.filter(ServiceProvider.status == "active")
 
         if provider_type:
             query = query.filter(ServiceProvider.provider_type == provider_type)
 
-        rows = query.order_by(ServiceProvider.id, Model.id).all()
+        if name:
+            query = query.filter(
+                or_(
+                    ServiceProvider.name.ilike(f"%{name}%"),
+                    ServiceProvider.display_name.ilike(f"%{name}%"),
+                )
+            )
 
-        # Group by provider, collect models
-        by_id: Dict[int, Dict[str, Any]] = {}
-        for sp, m in rows:
-            if sp.id not in by_id:
-                by_id[sp.id] = {
-                    "id": sp.id,
-                    "uuid": str(sp.uuid),
-                    "name": sp.name,
-                    "display_name": sp.display_name,
-                    "description": sp.description,
-                    "provider_type": sp.provider_type,
-                    "logo_url": sp.logo_url,
-                    "website_url": sp.website_url,
-                    "documentation_url": sp.documentation_url,
-                    "base_url": sp.base_url,
-                    "auth_type": sp.auth_type,
-                    "supports_streaming": sp.supports_streaming,
-                    "config_schema": sp.config_schema,
-                    "is_system": sp.is_system,
-                    "status": sp.status,
-                    "created_at": sp.created_at,
-                    "meta_data_schema": sp.meta_data_schema,
-                    "models": [],
-                }
-            if m is not None:
-                by_id[sp.id]["models"].append({
+        # Exclude TTS providers without active voices (so pagination total stays correct)
+        tts_with_voices_subq = (
+            self.db.query(Voice.service_provider_id)
+            .filter(Voice.is_active == True)
+            .distinct()
+        )
+        query = query.filter(
+            or_(
+                ServiceProvider.provider_type != "tts",
+                ServiceProvider.id.in_(tts_with_voices_subq),
+            )
+        )
+
+        # Count BEFORE pagination
+        total = query.count()
+
+        sort_column_map = {
+            "created_at": ServiceProvider.created_at,
+            "updated_at": ServiceProvider.updated_at,
+            "name": ServiceProvider.name,
+            "display_name": ServiceProvider.display_name,
+        }
+        sort_column = sort_column_map.get(sort_by, ServiceProvider.created_at)
+        order_func = asc if sort_order == "asc" else desc
+        offset = (page - 1) * page_size
+
+        providers = (
+            query.order_by(order_func(sort_column), ServiceProvider.id)
+            .offset(offset)
+            .limit(page_size)
+            .all()
+        )
+
+        # Batch-fetch models for the paginated providers only
+        provider_ids = [p.id for p in providers]
+        models_by_provider: Dict[int, List[Dict[str, Any]]] = {}
+        if provider_ids:
+            models = (
+                self.db.query(Model)
+                .filter(Model.service_provider_id.in_(provider_ids))
+                .order_by(Model.id)
+                .all()
+            )
+            for m in models:
+                models_by_provider.setdefault(m.service_provider_id, []).append({
                     "id": m.id,
                     "service_provider_id": m.service_provider_id,
                     "name": m.name,
@@ -162,7 +205,40 @@ class ServiceProviderService(BaseService):
                     "updated_at": m.updated_at,
                 })
 
-        return list(by_id.values())
+        data = [
+            {
+                "id": p.id,
+                "uuid": str(p.uuid),
+                "name": p.name,
+                "display_name": p.display_name,
+                "description": p.description,
+                "provider_type": p.provider_type,
+                "logo_url": p.logo_url,
+                "website_url": p.website_url,
+                "documentation_url": p.documentation_url,
+                "base_url": p.base_url,
+                "auth_type": p.auth_type,
+                "supports_streaming": p.supports_streaming,
+                "config_schema": p.config_schema,
+                "is_system": p.is_system,
+                "status": p.status,
+                "created_at": p.created_at,
+                "meta_data_schema": p.meta_data_schema,
+                "models": models_by_provider.get(p.id, []),
+            }
+            for p in providers
+        ]
+
+        total_pages = (total + page_size - 1) // page_size
+        return {
+            "data": data,
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total": total,
+                "total_pages": total_pages,
+            },
+        }
 
     def get_service_provider(self, provider_id: int) -> Dict[str, Any]:
         provider = self.db.query(ServiceProvider).filter(ServiceProvider.id == provider_id).first()
