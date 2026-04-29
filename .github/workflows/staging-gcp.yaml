@@ -65,5 +65,5 @@ jobs:
             --cpu=0.5
             --min-instances=0
             --max-instances=3
-            --timeout=300
+            --timeout=3600
             --set-env-vars=ENV=staging,INFISICAL_TOKEN=${{ secrets.INFISICAL_TOKEN }},INFISICAL_PROJECT_ID=${{ secrets.INFISICAL_PROJECT_ID }}
