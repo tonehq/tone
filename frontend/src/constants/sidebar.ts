@@ -1,5 +1,5 @@
 import type { SidebarMenuItem, SidebarSection } from '@/types/sidebar';
-import { BookOpen, Bot, Home, Phone, Plug, Server, Users } from 'lucide-react';
+import { BookOpen, Bot, Building2, Home, Phone, Plug, Server, Users } from 'lucide-react';
 
 export const SIDEBAR_WIDTH_EXPANDED = 240;
 export const SIDEBAR_WIDTH_COLLAPSED = 72;
@@ -36,6 +36,7 @@ export const sidebarSections: SidebarSection[] = [
         icon: Server,
       },
       { key: 'integrations', title: 'Integrations', path: '/settings', icon: Plug },
+      { key: 'organizations', title: 'Organizations', path: '/organizations', icon: Building2 },
       { key: 'members', title: 'Members', path: '/members', icon: Users },
     ],
   },
