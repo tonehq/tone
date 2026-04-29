@@ -15,4 +15,5 @@ from ee.api.v1 import (
     voices,
     call_logs,
     telephony,
+    documents,
 )
