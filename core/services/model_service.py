@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import time
 
 from fastapi import HTTPException, status
@@ -13,14 +13,77 @@ class ModelService(BaseService):
     CREATED_ATTRS = ("service_provider_id", "name", "meta_data", "api_key_id", "status", "service_type")
     UPDATABLE_ATTRS = ("service_provider_id", "name", "meta_data", "api_key_id", "status", "service_type", "updated_at")
 
-    def get_models_by_provider(self, service_provider_id: int):
+    def get_models_by_provider(
+        self,
+        service_provider_id: int,
+        name: Optional[str] = None,
+        status_filter: Optional[str] = None,
+        service_type: Optional[str] = None,
+        sort_by: str = "created_at",
+        sort_order: str = "desc",
+        page: int = 1,
+        page_size: int = 10,
+    ) -> Dict[str, Any]:
+        """List models for a provider with optional filters, sorting, and pagination."""
+        from sqlalchemy import asc, desc
+
         _ensure_service_provider_exists(self.db, service_provider_id)
-        return (
-            self.db.query(Model)
-            .filter(Model.service_provider_id == service_provider_id)
-            .order_by(Model.id)
+
+        query = self.db.query(Model).filter(Model.service_provider_id == service_provider_id)
+
+        if name:
+            query = query.filter(Model.name.ilike(f"%{name}%"))
+        if status_filter:
+            query = query.filter(Model.status == status_filter)
+        if service_type:
+            query = query.filter(Model.service_type == service_type)
+
+        total = query.count()
+
+        sort_column_map = {
+            "created_at": Model.created_at,
+            "updated_at": Model.updated_at,
+            "name": Model.name,
+        }
+        sort_column = sort_column_map.get(sort_by, Model.created_at)
+        order_func = asc if sort_order == "asc" else desc
+        offset = (page - 1) * page_size
+
+        models = (
+            query.order_by(order_func(sort_column), Model.id)
+            .offset(offset)
+            .limit(page_size)
             .all()
         )
+
+        data = [
+            {
+                "id": m.id,
+                "service_provider_id": m.service_provider_id,
+                "name": m.name,
+                "meta_data": m.meta_data,
+                "api_key_id": m.api_key_id,
+                "status": m.status,
+                "service_type": m.service_type,
+                "meta_data_schema": m.meta_data_schema,
+                "auth_meta_data": m.auth_meta_data,
+                "endpoint_url": m.endpoint_url,
+                "created_at": m.created_at,
+                "updated_at": m.updated_at,
+            }
+            for m in models
+        ]
+
+        total_pages = (total + page_size - 1) // page_size
+        return {
+            "data": data,
+            "pagination": {
+                "page": page,
+                "page_size": page_size,
+                "total": total,
+                "total_pages": total_pages,
+            },
+        }
 
     def delete_model(self, model_id: int):
         model = self.db.query(Model).filter(Model.id == model_id).first()

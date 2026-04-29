@@ -25,6 +25,7 @@ jobs:
           tags: |
             developer390/tone:latest
             developer390/tone:${{ github.sha }}
+          no-cache: true
           cache-from: type=registry,ref=developer390/tone:buildcache
           cache-to: type=registry,ref=developer390/tone:buildcache,mode=max
           secrets: |
