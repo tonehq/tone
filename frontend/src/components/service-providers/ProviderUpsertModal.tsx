@@ -7,7 +7,9 @@ import {
   TextAreaField,
   TextInput,
 } from '@/components/shared';
+import { getApiKeyPlaintext } from '@/services/providerService';
 import type { ServiceProvider, ServiceProviderUpsertPayload } from '@/types/provider';
+import { handleApiError } from '@/utils/helpers';
 import { Key } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -53,38 +55,55 @@ export default function ProviderUpsertModal({
   // API Key fields
   const [apiKeyName, setApiKeyName] = useState('');
   const [apiKeyValue, setApiKeyValue] = useState('');
+  const [originalApiKey, setOriginalApiKey] = useState('');
   const [apiKeyDescription, setApiKeyDescription] = useState('');
   const [apiKeyStatus, setApiKeyStatus] = useState('active');
+  const [loadingKey, setLoadingKey] = useState(false);
 
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open) {
-      if (provider) {
-        setName(provider.name);
-        setDisplayName(provider.display_name);
-        setProviderType(provider.provider_type);
-        setDescription(provider.description ?? '');
-        setBaseUrl(provider.base_url ?? '');
-        setSupportsStreaming(provider.supports_streaming ?? false);
-        setStatus(provider.status ?? 'active');
-        setApiKeyName(provider.api_key?.name ?? '');
+    if (!open) return;
+    if (provider) {
+      setName(provider.name);
+      setDisplayName(provider.display_name);
+      setProviderType(provider.provider_type);
+      setDescription(provider.description ?? '');
+      setBaseUrl(provider.base_url ?? '');
+      setSupportsStreaming(provider.supports_streaming ?? false);
+      setStatus(provider.status ?? 'active');
+      setApiKeyName(provider.api_key?.name ?? '');
+      setApiKeyDescription(provider.api_key?.description ?? '');
+      setApiKeyStatus(provider.api_key?.status ?? 'active');
+      // Pre-fill plaintext key when editing an existing api_key row
+      if (provider.api_key?.id) {
+        setLoadingKey(true);
         setApiKeyValue('');
-        setApiKeyDescription(provider.api_key?.description ?? '');
-        setApiKeyStatus(provider.api_key?.status ?? 'active');
+        setOriginalApiKey('');
+        getApiKeyPlaintext(provider.api_key.id)
+          .then((detail) => {
+            setApiKeyValue(detail.api_key);
+            setOriginalApiKey(detail.api_key);
+          })
+          .catch(handleApiError)
+          .finally(() => setLoadingKey(false));
       } else {
-        setName('');
-        setDisplayName('');
-        setProviderType('llm');
-        setDescription('');
-        setBaseUrl('');
-        setSupportsStreaming(false);
-        setStatus('active');
-        setApiKeyName('');
         setApiKeyValue('');
-        setApiKeyDescription('');
-        setApiKeyStatus('active');
+        setOriginalApiKey('');
       }
+    } else {
+      setName('');
+      setDisplayName('');
+      setProviderType('llm');
+      setDescription('');
+      setBaseUrl('');
+      setSupportsStreaming(false);
+      setStatus('active');
+      setApiKeyName('');
+      setApiKeyValue('');
+      setOriginalApiKey('');
+      setApiKeyDescription('');
+      setApiKeyStatus('active');
     }
   }, [open, provider]);
 
@@ -93,6 +112,9 @@ export default function ProviderUpsertModal({
     if (!isEdit && !apiKeyValue.trim()) return;
     setSaving(true);
     try {
+      const trimmedKey = apiKeyValue.trim();
+      // Only send the secret when it actually changed (rotation), or on create
+      const sendSecret = !isEdit ? !!trimmedKey : trimmedKey !== originalApiKey;
       const payload: ServiceProviderUpsertPayload = {
         name: name.trim(),
         display_name: displayName.trim(),
@@ -106,7 +128,7 @@ export default function ProviderUpsertModal({
           name: apiKeyName.trim() || `${displayName.trim()} key`,
           description: apiKeyDescription.trim() || undefined,
           status: apiKeyStatus,
-          ...(apiKeyValue.trim() ? { api_key: apiKeyValue.trim() } : {}),
+          ...(sendSecret && trimmedKey ? { api_key: trimmedKey } : {}),
           ...(isEdit && provider?.api_key?.id ? { id: provider.api_key.id } : {}),
         },
       };
@@ -126,6 +148,7 @@ export default function ProviderUpsertModal({
     status,
     apiKeyName,
     apiKeyValue,
+    originalApiKey,
     apiKeyDescription,
     apiKeyStatus,
     isEdit,
@@ -248,12 +271,13 @@ export default function ProviderUpsertModal({
             />
             <TextInput
               name="api-key-value"
-              label={isEdit ? 'New API Key (leave blank to keep)' : 'API Key'}
-              placeholder="sk-..."
+              label="API Key"
+              placeholder={loadingKey ? 'Loading...' : 'sk-...'}
               type="password"
               value={apiKeyValue}
               onChange={(e) => setApiKeyValue(e.target.value)}
               isRequired={!isEdit}
+              disabled={loadingKey}
             />
             <TextInput
               name="api-key-description"

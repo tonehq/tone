@@ -91,6 +91,34 @@ def get_all_api_keys(
     return ApiKeyService(db, org_id=UUID(claims.org_id), user_id=claims.user_id).get_all_api_keys()
 
 
+@router.post("/list_by_provider")
+def list_api_keys_by_provider(
+    data: Dict[str, Any] = Body(...),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    """List api_keys for one provider, scoped to caller's org."""
+    sp_id = data.get("service_provider_id")
+    if sp_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="service_provider_id is required",
+        )
+    try:
+        sp_id = int(sp_id)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="service_provider_id must be an integer",
+        )
+    return ApiKeyService(db, org_id=UUID(claims.org_id), user_id=claims.user_id).list_by_provider(
+        service_provider_id=sp_id,
+        status_filter=data.get("status"),
+        page=int(data.get("page") or 1),
+        page_size=int(data.get("page_size") or 20),
+    )
+
+
 @router.get("/get")
 def get_api_key(
     api_key_id: int = Query(...),

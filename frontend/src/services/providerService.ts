@@ -80,6 +80,104 @@ export const deleteServiceProvider = async (providerId: number): Promise<void> =
   });
 };
 
+// ── API Keys (provider credentials) ────────────────────────────────
+
+export interface ApiKeyDetail {
+  id: number;
+  uuid: string;
+  name: string;
+  description: string | null;
+  api_key: string;
+  api_key_hint: string;
+  service_provider_id: number;
+  service_provider_name?: string;
+  provider_type?: string;
+  status: string;
+  is_valid: boolean;
+  last_validated_at: number | null;
+  validation_error: string | null;
+  last_used_at: number | null;
+  usage_count: number;
+  additional_credentials: Record<string, unknown> | null;
+  rate_limit_config: Record<string, unknown> | null;
+  created_at: number;
+  updated_at: number;
+  expires_at: number | null;
+}
+
+export const getApiKeyPlaintext = async (apiKeyId: number): Promise<ApiKeyDetail> => {
+  const { data } = await axiosInstance.get<ApiKeyDetail>('/api-keys/get', {
+    params: { api_key_id: apiKeyId },
+  });
+  return data;
+};
+
+export interface ApiKeyListRow {
+  id: number;
+  uuid: string;
+  name: string;
+  description: string | null;
+  api_key_hint: string;
+  service_provider_id: number;
+  status: string;
+  is_valid: boolean;
+  last_validated_at: number | null;
+  validation_error: string | null;
+  last_used_at: number | null;
+  usage_count: number;
+  expires_at: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface ListApiKeysParams {
+  service_provider_id: number;
+  status?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export interface ListApiKeysResult {
+  keys: ApiKeyListRow[];
+  pagination: PaginationInfo;
+}
+
+export const listApiKeysByProvider = async (
+  params: ListApiKeysParams,
+): Promise<ListApiKeysResult> => {
+  const { data } = await axiosInstance.post<{ data: ApiKeyListRow[]; pagination: PaginationInfo }>(
+    '/api-keys/list_by_provider',
+    params,
+  );
+  return { keys: data.data ?? [], pagination: data.pagination };
+};
+
+export interface ApiKeyUpsertInput {
+  service_provider_id: number;
+  name: string;
+  api_key: string;
+  description?: string;
+  status?: string;
+  uuid?: string;
+}
+
+export const upsertApiKey = async (input: ApiKeyUpsertInput): Promise<ApiKeyListRow> => {
+  // Backend uses multipart/form-data
+  const form = new FormData();
+  form.append('service_provider_id', String(input.service_provider_id));
+  form.append('name', input.name);
+  form.append('api_key', input.api_key);
+  if (input.description) form.append('description', input.description);
+  if (input.status) form.append('key_status', input.status);
+  if (input.uuid) form.append('uuid', input.uuid);
+  const { data } = await axiosInstance.post<ApiKeyListRow>('/api-keys/upsert', form);
+  return data;
+};
+
+export const deleteApiKey = async (apiKeyId: number): Promise<void> => {
+  await axiosInstance.delete('/api-keys/delete', { params: { api_key_id: apiKeyId } });
+};
+
 // ── Models ─────────────────────────────────────────────────────────
 
 export interface ListModelsParams {

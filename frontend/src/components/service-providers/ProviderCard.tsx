@@ -29,18 +29,26 @@ export default function ProviderCard({
   const keyValid = provider.api_key?.is_valid;
 
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
       className={cn(
-        'group relative flex w-full cursor-pointer items-center gap-3 rounded-lg border p-3 text-left transition-all',
+        'group relative flex w-full cursor-pointer items-center gap-3 rounded-lg border p-3 text-left transition-all focus:outline-none focus:ring-2 focus:ring-ring/30',
         selected
-          ? 'border-primary/30 bg-primary/[0.04] shadow-sm shadow-primary/5'
+          ? 'border-primary/30 bg-primary/4 shadow-sm shadow-primary/5'
           : 'border-transparent bg-transparent hover:bg-accent/40',
       )}
     >
       {/* Selection indicator */}
       {selected && (
-        <div className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-primary" />
+        <div className="absolute left-0 top-1/2 h-6 w-0.75 -translate-y-1/2 rounded-r-full bg-primary" />
       )}
 
       {/* Type icon */}
@@ -59,9 +67,12 @@ export default function ProviderCard({
           <span className="truncate text-sm font-medium text-foreground">
             {provider.display_name}
           </span>
+          <span className="shrink-0 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            · {typeKey}
+          </span>
           <Badge
             className={cn(
-              'shrink-0 px-1.5 py-0 text-[9px] font-semibold uppercase tracking-wider',
+              'shrink-0 px-1.5 py-0 text-[10px] font-semibold uppercase tracking-wider',
               TYPE_BADGE_STYLES[typeKey] ?? 'bg-muted text-muted-foreground',
             )}
           >
@@ -118,6 +129,6 @@ export default function ProviderCard({
           }
         />
       </div>
-    </button>
+    </div>
   );
 }
