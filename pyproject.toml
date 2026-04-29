@@ -23,4 +23,8 @@ exclude = ["frontend*", "pipecatfork*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+import_mode = "importlib"
 addopts = "-n auto"
+
+# Pipeline tests need serial execution (async pipelines don't work with xdist).
+# Run them with:  pytest test-cases/pipeline/ -v -s -o "addopts="
