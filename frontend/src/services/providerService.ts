@@ -56,9 +56,7 @@ export const listServiceProviders = async (
 
 /** @deprecated Use listServiceProviders — kept for AgentFormPage loadable atom */
 export const getServiceProviders = async (providerType?: string): Promise<ServiceProvider[]> => {
-  const result = await listServiceProviders(
-    providerType ? { provider_type: providerType, page_size: 100 } : { page_size: 100 },
-  );
+  const result = await listServiceProviders(providerType ? { provider_type: providerType } : {});
   return result.providers;
 };
 
