@@ -84,6 +84,7 @@ if ee_enabled:
         voices as ee_voices,
         call_logs as ee_call_logs,
         telephony as ee_telephony,
+        documents as ee_documents,
     )
 
     api_v1.include_router(ee_auth.router, prefix="/auth", tags=["auth"])
@@ -101,7 +102,7 @@ if ee_enabled:
     api_v1.include_router(ee_channels.router, prefix="/channel", tags=["channel"])
     api_v1.include_router(ee_voices.router, prefix="/voice", tags=["voice"])
     api_v1.include_router(ee_call_logs.router, prefix="/call-log", tags=["call-log"])
-    api_v1.include_router(documents.router, prefix="/document", tags=["document"])
+    api_v1.include_router(ee_documents.router, prefix="/document", tags=["document"])
     print("EE edition: Multi-tenant routes loaded")
 else:
     api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])

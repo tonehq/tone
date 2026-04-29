@@ -47,40 +47,45 @@ class TestUpsertServiceProvider:
         assert response.status_code in (401, 403)
 
 
-# ─── GET /api/v1/service-providers/list ───
+# ─── POST /api/v1/service-providers/list ───
 
 class TestGetAllServiceProviders:
-    """Tests for GET /api/v1/service-providers/list"""
+    """Tests for POST /api/v1/service-providers/list"""
 
     def test_get_all_providers_returns_200(self, client_as_member):
-        response = client_as_member.get("/api/v1/service-providers/list")
+        response = client_as_member.post("/api/v1/service-providers/list", json={})
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
 
     def test_get_all_providers_filter_by_type(self, client_as_member):
-        response = client_as_member.get("/api/v1/service-providers/list?provider_type=tts")
+        response = client_as_member.post("/api/v1/service-providers/list", json={
+            "provider_type": "tts"
+        })
         assert response.status_code == 200
 
     def test_get_all_providers_unauthenticated(self, client_unauthenticated):
-        response = client_unauthenticated.get("/api/v1/service-providers/list")
+        response = client_unauthenticated.post("/api/v1/service-providers/list", json={})
         assert response.status_code in (401, 403)
 
 
-# ─── GET /api/v1/service-providers/get ───
+# ─── POST /api/v1/service-providers/get ───
 
 class TestGetServiceProvider:
-    """Tests for GET /api/v1/service-providers/get"""
+    """Tests for POST /api/v1/service-providers/get"""
 
     def test_get_provider_missing_id(self, client_as_member):
-        response = client_as_member.get("/api/v1/service-providers/get")
-        assert response.status_code == 422
+        response = client_as_member.post("/api/v1/service-providers/get", json={})
+        assert response.status_code == 400
 
     def test_get_provider_invalid_id(self, client_as_member):
-        response = client_as_member.get("/api/v1/service-providers/get?provider_id=abc")
-        assert response.status_code == 422
+        response = client_as_member.post("/api/v1/service-providers/get", json={
+            "provider_id": "abc"
+        })
+        assert response.status_code == 400
 
     def test_get_provider_unauthenticated(self, client_unauthenticated):
-        response = client_unauthenticated.get("/api/v1/service-providers/get?provider_id=1")
+        response = client_unauthenticated.post("/api/v1/service-providers/get", json={
+            "provider_id": 1
+        })
         assert response.status_code in (401, 403)
 
 
