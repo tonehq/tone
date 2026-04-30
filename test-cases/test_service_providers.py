@@ -90,10 +90,10 @@ class TestUpsertServiceProvider:
         assert response.status_code in (401, 403)
 
 
-# ─── GET /api/v1/service-providers/list — Get All Service Providers ───
+# ─── POST /api/v1/service-providers/list — Get All Service Providers ───
 
 class TestGetAllServiceProviders:
-    """Tests for GET /api/v1/service-providers/list"""
+    """Tests for POST /api/v1/service-providers/list"""
 
     @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_get_all_providers_success(self, mock_service_cls, client_as_member, mock_db):
@@ -101,7 +101,7 @@ class TestGetAllServiceProviders:
             {"id": 1, "name": "openai", "provider_type": "llm"}
         ]
         mock_db.query.return_value.filter.return_value.distinct.return_value.all.return_value = []
-        response = client_as_member.get("/api/v1/service-providers/list")
+        response = client_as_member.post("/api/v1/service-providers/list", json={})
         assert response.status_code == 200
         assert isinstance(response.json(), list)
         mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID, user_id=EXPECTED_USER_ID)
@@ -110,52 +110,52 @@ class TestGetAllServiceProviders:
     def test_get_all_providers_filter_by_type(self, mock_service_cls, client_as_member, mock_db):
         mock_service_cls.return_value.get_all_service_providers.return_value = []
         mock_db.query.return_value.filter.return_value.distinct.return_value.all.return_value = []
-        response = client_as_member.get("/api/v1/service-providers/list?provider_type=tts")
+        response = client_as_member.post("/api/v1/service-providers/list", json={"provider_type": "tts"})
         assert response.status_code == 200
 
     @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_get_all_providers_empty(self, mock_service_cls, client_as_member, mock_db):
         mock_service_cls.return_value.get_all_service_providers.return_value = []
         mock_db.query.return_value.filter.return_value.distinct.return_value.all.return_value = []
-        response = client_as_member.get("/api/v1/service-providers/list")
+        response = client_as_member.post("/api/v1/service-providers/list", json={})
         assert response.status_code == 200
         assert response.json() == []
 
     def test_get_all_providers_unauthenticated(self, client_unauthenticated):
-        response = client_unauthenticated.get("/api/v1/service-providers/list")
+        response = client_unauthenticated.post("/api/v1/service-providers/list", json={})
         assert response.status_code in (401, 403)
 
 
-# ─── GET /api/v1/service-providers/get — Get Service Provider ───
+# ─── POST /api/v1/service-providers/get — Get Service Provider ───
 
 class TestGetServiceProvider:
-    """Tests for GET /api/v1/service-providers/get"""
+    """Tests for POST /api/v1/service-providers/get"""
 
     @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_get_provider_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_service_provider.return_value = {"id": 1, "name": "openai"}
-        response = client_as_member.get("/api/v1/service-providers/get?provider_id=1")
+        response = client_as_member.post("/api/v1/service-providers/get", json={"provider_id": 1})
         assert response.status_code == 200
         mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID, user_id=EXPECTED_USER_ID)
 
     def test_get_provider_missing_id(self, client_as_member):
-        response = client_as_member.get("/api/v1/service-providers/get")
-        assert response.status_code == 422
+        response = client_as_member.post("/api/v1/service-providers/get", json={})
+        assert response.status_code == 400
 
     def test_get_provider_invalid_id(self, client_as_member):
-        response = client_as_member.get("/api/v1/service-providers/get?provider_id=abc")
-        assert response.status_code == 422
+        response = client_as_member.post("/api/v1/service-providers/get", json={"provider_id": "abc"})
+        assert response.status_code == 400
 
     @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_get_provider_not_found(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_service_provider.side_effect = HTTPException(
             status_code=404, detail="Provider not found"
         )
-        response = client_as_member.get("/api/v1/service-providers/get?provider_id=999")
+        response = client_as_member.post("/api/v1/service-providers/get", json={"provider_id": 999})
         assert response.status_code == 404
 
     def test_get_provider_unauthenticated(self, client_unauthenticated):
-        response = client_unauthenticated.get("/api/v1/service-providers/get?provider_id=1")
+        response = client_unauthenticated.post("/api/v1/service-providers/get", json={"provider_id": 1})
         assert response.status_code in (401, 403)
 
 

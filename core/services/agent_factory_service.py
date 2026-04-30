@@ -393,15 +393,18 @@ class AgentFactoryService(BaseService):
         def _build_service_data(stype, metadata):
             sp_id = sp_id_map.get(stype)
             if not sp_id:
+                print(f"DEBUG _build_service_data({stype}): no sp_id in sp_id_map. sp_id_map={sp_id_map}")
                 return None
             entry = model_map.get((sp_id, stype))
             if not entry:
+                print(f"DEBUG _build_service_data({stype}): no entry in model_map for key=({sp_id}, {stype}). model_map_keys={list(model_map.keys())}")
                 return None
             svc, provider = entry
             # Look up API key from Service record (via svc_api_key_map), not Model
             svc_id = service_id_map.get(stype)
             svc_ak_id = svc_api_key_map.get(svc_id) if svc_id else None
             api_key = api_key_map.get(svc_ak_id) if svc_ak_id else None
+            print(f"DEBUG _build_service_data({stype}): svc_id={svc_id} svc_ak_id={svc_ak_id} api_key={'present' if api_key else 'MISSING'} api_key_map_keys={list(api_key_map.keys())} svc_api_key_map={svc_api_key_map}")
             if not api_key:
                 return None
             model_meta = (svc.meta_data or {}) if isinstance(getattr(svc, "meta_data", None), dict) else {}
@@ -418,6 +421,7 @@ class AgentFactoryService(BaseService):
         llm_data = _build_service_data("llm", llm_metadata)
         stt_data = _build_service_data("stt", stt_metadata) if config.stt_service_id else None
         tts_data = _build_service_data("tts", tts_metadata) if config.tts_service_id else None
+        print(f"DEBUG serialize: llm_data={'present' if llm_data else 'NONE'} stt_data={'present' if stt_data else 'NONE'} tts_data={'present' if tts_data else 'NONE'} is_s2s={is_s2s}")
 
         if not llm_data:
             return None
@@ -476,6 +480,7 @@ class AgentFactoryService(BaseService):
                 metadata = dict(metadata)
                 metadata["system_prompt"] = config.system_prompt
 
+        print(f"DEBUG get_llm_for_agent: provider_name='{provider_name}' model='{model}' api_key={'present' if api_key else 'MISSING'}")
         try:
             if provider_name == "openai": #done
                 from pipecat.services.openai.llm import OpenAILLMService
@@ -571,9 +576,13 @@ class AgentFactoryService(BaseService):
                     voice_id=voice_id,
                     system_instruction=metadata.get("system_instruction"),
                 )
+            print(f"DEBUG get_llm_for_agent: no matching provider for '{provider_name}'")
             return None
         except ImportError as e:
-            logger.exception("LLM provider %s not available", provider_name)
+            logger.exception("LLM provider %s not available (ImportError)", provider_name)
+            return None
+        except Exception as e:
+            logger.exception("LLM provider %s failed to initialize: %s", provider_name, e)
             return None
 
 
@@ -1085,9 +1094,11 @@ class AgentFactoryService(BaseService):
         if prefetched:
             logger.info("[TIMING] using prefetched service data (no DB queries)")
             is_s2s = bool(prefetched.get("is_s2s"))
+            print(f"DEBUG get_agent_bot_data: is_s2s={is_s2s} llm_prefetched={prefetched.get('llm')}")
 
             _t = _time.monotonic()
             llm = self.get_llm_for_agent(agent, prefetched=prefetched["llm"])
+            print(f"DEBUG get_agent_bot_data: llm={'present' if llm else 'NONE'}")
             logger.info("[TIMING] get_llm_for_agent prefetched (+%.3fs)", _time.monotonic() - _t)
 
             stt = None

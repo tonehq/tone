@@ -10,8 +10,8 @@ from core.models.service_provider import ServiceProvider
 
 
 class ModelService(BaseService):
-    CREATED_ATTRS = ("service_provider_id", "name", "meta_data", "api_key_id", "status", "service_type")
-    UPDATABLE_ATTRS = ("service_provider_id", "name", "meta_data", "api_key_id", "status", "service_type", "updated_at")
+    CREATED_ATTRS = ("service_provider_id", "name", "meta_data", "status", "service_type")
+    UPDATABLE_ATTRS = ("service_provider_id", "name", "meta_data", "status", "service_type", "updated_at")
 
     def get_models_by_provider(
         self,
@@ -125,8 +125,6 @@ class ModelService(BaseService):
                 update_fields["name"] = data["name"]
             if "meta_data" in data:
                 update_fields["meta_data"] = data["meta_data"]
-            if "api_key_id" in data:
-                update_fields["api_key_id"] = int(data["api_key_id"]) if data["api_key_id"] is not None else None
             if "status" in data:
                 update_fields["status"] = data["status"]
             if "service_type" in data:
@@ -144,7 +142,6 @@ class ModelService(BaseService):
             "service_provider_id": service_provider_id,
             "name": data["name"],
             "meta_data": data.get("meta_data"),
-            "api_key_id": int(data["api_key_id"]) if data.get("api_key_id") is not None else None,
             "status": data.get("status", "active"),
             "service_type": data.get("service_type"),
             "created_at": now,
