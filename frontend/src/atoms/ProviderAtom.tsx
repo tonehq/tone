@@ -5,6 +5,7 @@ import {
   deleteModel,
   deleteServiceProvider,
   getServiceProviders,
+  getServices,
   listModelsByProvider,
   listServiceProviders,
   upsertModel,
@@ -115,13 +116,13 @@ const deleteModelAtom = atom(null, async (_get, _set, modelId: number) => {
   await deleteModel(modelId);
 });
 
-// ── Legacy: loadable atom for AgentFormPage compatibility ──────────
+// ── Loadable atom for AgentFormPage — fetches org-scoped services ──
 
 const providersRefreshAtom = atom(0);
 
 const providersRowsAtom = atom<Promise<ServiceProvider[]>>(async (get) => {
   get(providersRefreshAtom);
-  return await getServiceProviders();
+  return await getServices();
 });
 
 const loadableProvidersAtom = loadable(providersRowsAtom);

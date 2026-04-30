@@ -60,6 +60,15 @@ export const getServiceProviders = async (providerType?: string): Promise<Servic
   return result.providers;
 };
 
+// ── Services (org-scoped, used by agent form) ────────────────────
+
+export const getServices = async (serviceType?: string): Promise<ServiceProvider[]> => {
+  const { data } = await axiosInstance.get<ServiceProvider[]>('/services/list', {
+    params: serviceType ? { service_type: serviceType } : {},
+  });
+  return data;
+};
+
 export const getServiceProvider = async (providerId: number): Promise<ServiceProvider> => {
   const { data } = await axiosInstance.post<ServiceProvider>('/service-providers/get', {
     provider_id: providerId,

@@ -38,7 +38,10 @@ def upsert_service(
         is_public=data.get("is_public", False),
         tags=data.get("tags"),
         service_uuid=data.get("uuid"),
-        service_status=data.get("status")
+        service_status=data.get("status"),
+        api_key_value=data.get("api_key_value"),
+        api_key_name=data.get("api_key_name"),
+        additional_credentials=data.get("additional_credentials"),
     )
 
 

@@ -43,6 +43,9 @@ class TestUpsertService:
             tags=None,
             service_uuid=None,
             service_status=None,
+            api_key_value=None,
+            api_key_name=None,
+            additional_credentials=None,
         )
 
     @patch("core.api.v1.services.ServiceConfigService")
@@ -81,6 +84,9 @@ class TestUpsertService:
             tags=["production"],
             service_uuid="abc-123",
             service_status="active",
+            api_key_value=None,
+            api_key_name=None,
+            additional_credentials=None,
         )
 
     @patch("core.api.v1.services.ServiceConfigService")
