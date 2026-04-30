@@ -1371,13 +1371,43 @@ class AgentFactoryService(BaseService):
                 register_document_tool
             doc_tools = register_document_tool(llm, agent.id, agent.organization_id)
 
+        # Fetch custom tools for this agent
+        custom_tools_schema = None
+        if agent:
+            from core.services.custom_tool_service import (
+                get_custom_tools_for_agent,
+                build_custom_tool_schemas,
+                create_custom_tool_handler,
+            )
+            custom_tools = get_custom_tools_for_agent(agent.id)
+            if custom_tools:
+                logger.info("Fetched {} custom tools for agent {}", len(custom_tools), agent.id)
+                custom_tools_schema = build_custom_tool_schemas(custom_tools)
+                for tool in custom_tools:
+                    handler = create_custom_tool_handler(tool)
+                    llm.register_function(tool.name, handler)
+                    logger.info("Registered custom tool handler: {}", tool.name)
+
+        # Combine doc tools and custom tools into one ToolsSchema
+        all_tool_schemas = []
+        if doc_tools:
+            all_tool_schemas.extend(doc_tools.standard_tools)
+        if custom_tools_schema:
+            all_tool_schemas.extend(custom_tools_schema.standard_tools)
+
+        if all_tool_schemas:
+            from pipecat.adapters.schemas.tools_schema import ToolsSchema
+            combined_tools = ToolsSchema(standard_tools=all_tool_schemas)
+        else:
+            combined_tools = NOT_GIVEN
+
         if is_s2s:
             # S2S pipeline: audio goes through the LLM directly (no separate STT/TTS)
             # But still needs context aggregators for conversation tracking
             logger.info("Building S2S pipeline (speech-to-speech)")
             from pipecat.frames.frames import LLMRunFrame
 
-            tools = doc_tools if doc_tools else NOT_GIVEN
+            tools = combined_tools
             # For S2S, the first message in context triggers the initial response
             # System prompt is already set via session_properties.instructions (OpenAI)
             # or system_instruction (Gemini) during LLM creation
@@ -1417,7 +1447,7 @@ class AgentFactoryService(BaseService):
             logger.info("[TIMING] S2S pipeline processors created (+%.3fs)", _time.monotonic() - _t)
         else:
             # Standard pipeline: STT → LLM → TTS
-            tools = doc_tools if doc_tools else NOT_GIVEN
+            tools = combined_tools
             context = LLMContext(messages, tools)
             smart_turn_analyzer = LocalSmartTurnAnalyzerV3(
                 confidence_threshold=0.9,

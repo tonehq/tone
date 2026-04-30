@@ -1,0 +1,295 @@
+{
+  "info": {
+    "name": "Tone - Tools API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "CRUD APIs for managing custom tools and agent-tool mappings"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000/api/v1"
+    },
+    {
+      "key": "token",
+      "value": "your_jwt_token_here"
+    },
+    {
+      "key": "tool_id",
+      "value": "1"
+    },
+    {
+      "key": "agent_id",
+      "value": "1"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Tools CRUD",
+      "item": [
+        {
+          "name": "Create Tool",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/tool",
+              "host": ["{{base_url}}"],
+              "path": ["tool"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"check_order_status\",\n  \"description\": \"Check the current status of a customer's order by order ID\",\n  \"parameters\": {\n    \"properties\": {\n      \"order_id\": {\n        \"type\": \"string\",\n        \"description\": \"The unique order ID to look up\"\n      }\n    },\n    \"required\": [\"order_id\"]\n  },\n  \"url\": \"https://api.example.com/orders/status\",\n  \"method\": \"GET\",\n  \"auth_type\": \"api_key\",\n  \"auth_config\": {\n    \"header\": \"X-API-Key\",\n    \"value\": \"your_api_key_here\"\n  },\n  \"meta_data\": {\n    \"timeout\": 10\n  },\n  \"is_active\": true\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "201 - Tool Created",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"id\": 1,\n  \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"name\": \"check_order_status\",\n  \"description\": \"Check the current status of a customer's order by order ID\",\n  \"parameters\": {\n    \"properties\": {\n      \"order_id\": {\n        \"type\": \"string\",\n        \"description\": \"The unique order ID to look up\"\n      }\n    },\n    \"required\": [\"order_id\"]\n  },\n  \"url\": \"https://api.example.com/orders/status\",\n  \"method\": \"GET\",\n  \"auth_type\": \"api_key\",\n  \"auth_config\": {\n    \"header\": \"X-API-Key\",\n    \"value\": \"your_api_key_here\"\n  },\n  \"meta_data\": {\n    \"timeout\": 10\n  },\n  \"is_active\": true,\n  \"created_at\": 1714470000,\n  \"updated_at\": 1714470000\n}"
+            }
+          ]
+        },
+        {
+          "name": "Create Tool - Bearer Token Auth",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/tool",
+              "host": ["{{base_url}}"],
+              "path": ["tool"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"book_appointment\",\n  \"description\": \"Book an appointment for a customer at a specific date and time\",\n  \"parameters\": {\n    \"properties\": {\n      \"customer_name\": {\n        \"type\": \"string\",\n        \"description\": \"Full name of the customer\"\n      },\n      \"date\": {\n        \"type\": \"string\",\n        \"description\": \"Appointment date in YYYY-MM-DD format\"\n      },\n      \"time\": {\n        \"type\": \"string\",\n        \"description\": \"Appointment time in HH:MM format\"\n      }\n    },\n    \"required\": [\"customer_name\", \"date\", \"time\"]\n  },\n  \"url\": \"https://api.example.com/appointments\",\n  \"method\": \"POST\",\n  \"auth_type\": \"bearer_token\",\n  \"auth_config\": {\n    \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n  },\n  \"is_active\": true\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "201 - Tool Created",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"id\": 2,\n  \"uuid\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"name\": \"book_appointment\",\n  \"description\": \"Book an appointment for a customer at a specific date and time\",\n  \"parameters\": {\n    \"properties\": {\n      \"customer_name\": {\n        \"type\": \"string\",\n        \"description\": \"Full name of the customer\"\n      },\n      \"date\": {\n        \"type\": \"string\",\n        \"description\": \"Appointment date in YYYY-MM-DD format\"\n      },\n      \"time\": {\n        \"type\": \"string\",\n        \"description\": \"Appointment time in HH:MM format\"\n      }\n    },\n    \"required\": [\"customer_name\", \"date\", \"time\"]\n  },\n  \"url\": \"https://api.example.com/appointments\",\n  \"method\": \"POST\",\n  \"auth_type\": \"bearer_token\",\n  \"auth_config\": {\n    \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n  },\n  \"meta_data\": null,\n  \"is_active\": true,\n  \"created_at\": 1714470000,\n  \"updated_at\": 1714470000\n}"
+            }
+          ]
+        },
+        {
+          "name": "Create Tool - No Auth",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/tool",
+              "host": ["{{base_url}}"],
+              "path": ["tool"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"get_weather\",\n  \"description\": \"Get the current weather for a given city\",\n  \"parameters\": {\n    \"properties\": {\n      \"city\": {\n        \"type\": \"string\",\n        \"description\": \"City name to get weather for\"\n      }\n    },\n    \"required\": [\"city\"]\n  },\n  \"url\": \"https://api.example.com/weather\",\n  \"method\": \"GET\",\n  \"auth_type\": \"none\",\n  \"is_active\": true\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "201 - Tool Created",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"id\": 3,\n  \"uuid\": \"c3d4e5f6-a7b8-9012-cdef-123456789012\",\n  \"name\": \"get_weather\",\n  \"description\": \"Get the current weather for a given city\",\n  \"parameters\": {\n    \"properties\": {\n      \"city\": {\n        \"type\": \"string\",\n        \"description\": \"City name to get weather for\"\n      }\n    },\n    \"required\": [\"city\"]\n  },\n  \"url\": \"https://api.example.com/weather\",\n  \"method\": \"GET\",\n  \"auth_type\": \"none\",\n  \"auth_config\": null,\n  \"meta_data\": null,\n  \"is_active\": true,\n  \"created_at\": 1714470000,\n  \"updated_at\": 1714470000\n}"
+            }
+          ]
+        },
+        {
+          "name": "List All Tools",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/tool",
+              "host": ["{{base_url}}"],
+              "path": ["tool"]
+            }
+          },
+          "response": [
+            {
+              "name": "200 - Tools List",
+              "status": "OK",
+              "code": 200,
+              "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"name\": \"check_order_status\",\n    \"description\": \"Check the current status of a customer's order by order ID\",\n    \"parameters\": {\n      \"properties\": {\n        \"order_id\": {\n          \"type\": \"string\",\n          \"description\": \"The unique order ID to look up\"\n        }\n      },\n      \"required\": [\"order_id\"]\n    },\n    \"url\": \"https://api.example.com/orders/status\",\n    \"method\": \"GET\",\n    \"auth_type\": \"api_key\",\n    \"auth_config\": {\n      \"header\": \"X-API-Key\",\n      \"value\": \"your_api_key_here\"\n    },\n    \"meta_data\": {\n      \"timeout\": 10\n    },\n    \"is_active\": true,\n    \"created_at\": 1714470000,\n    \"updated_at\": 1714470000\n  }\n]"
+            }
+          ]
+        },
+        {
+          "name": "Get Tool by ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/tool/{{tool_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["tool", "{{tool_id}}"]
+            }
+          },
+          "response": [
+            {
+              "name": "200 - Tool Found",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"id\": 1,\n  \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"name\": \"check_order_status\",\n  \"description\": \"Check the current status of a customer's order by order ID\",\n  \"parameters\": {\n    \"properties\": {\n      \"order_id\": {\n        \"type\": \"string\",\n        \"description\": \"The unique order ID to look up\"\n      }\n    },\n    \"required\": [\"order_id\"]\n  },\n  \"url\": \"https://api.example.com/orders/status\",\n  \"method\": \"GET\",\n  \"auth_type\": \"api_key\",\n  \"auth_config\": {\n    \"header\": \"X-API-Key\",\n    \"value\": \"your_api_key_here\"\n  },\n  \"meta_data\": {\n    \"timeout\": 10\n  },\n  \"is_active\": true,\n  \"created_at\": 1714470000,\n  \"updated_at\": 1714470000\n}"
+            },
+            {
+              "name": "404 - Tool Not Found",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"detail\": \"Tool not found\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Tool",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/tool/{{tool_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["tool", "{{tool_id}}"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Check the current status and estimated delivery time of a customer's order\",\n  \"url\": \"https://api.example.com/v2/orders/status\",\n  \"is_active\": true\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 - Tool Updated",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"id\": 1,\n  \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n  \"name\": \"check_order_status\",\n  \"description\": \"Check the current status and estimated delivery time of a customer's order\",\n  \"parameters\": {\n    \"properties\": {\n      \"order_id\": {\n        \"type\": \"string\",\n        \"description\": \"The unique order ID to look up\"\n      }\n    },\n    \"required\": [\"order_id\"]\n  },\n  \"url\": \"https://api.example.com/v2/orders/status\",\n  \"method\": \"GET\",\n  \"auth_type\": \"api_key\",\n  \"auth_config\": {\n    \"header\": \"X-API-Key\",\n    \"value\": \"your_api_key_here\"\n  },\n  \"meta_data\": {\n    \"timeout\": 10\n  },\n  \"is_active\": true,\n  \"created_at\": 1714470000,\n  \"updated_at\": 1714470100\n}"
+            }
+          ]
+        },
+        {
+          "name": "Delete Tool",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/tool/{{tool_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["tool", "{{tool_id}}"]
+            }
+          },
+          "response": [
+            {
+              "name": "200 - Tool Deleted",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Tool deleted successfully\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Agent-Tool Mapping",
+      "item": [
+        {
+          "name": "Attach Tool to Agent",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/tool/{{tool_id}}/agents/{{agent_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["tool", "{{tool_id}}", "agents", "{{agent_id}}"]
+            }
+          },
+          "response": [
+            {
+              "name": "200 - Tool Attached",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Tool attached to agent successfully\"\n}"
+            },
+            {
+              "name": "400 - Already Attached",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"detail\": \"Tool is already attached to this agent\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Detach Tool from Agent",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/tool/{{tool_id}}/agents/{{agent_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["tool", "{{tool_id}}", "agents", "{{agent_id}}"]
+            }
+          },
+          "response": [
+            {
+              "name": "200 - Tool Detached",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"message\": \"Tool detached from agent successfully\"\n}"
+            },
+            {
+              "name": "404 - Not Attached",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"detail\": \"Tool is not attached to this agent\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Tools by Agent",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/tool/agent/{{agent_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["tool", "agent", "{{agent_id}}"]
+            }
+          },
+          "response": [
+            {
+              "name": "200 - Agent Tools List",
+              "status": "OK",
+              "code": 200,
+              "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"name\": \"check_order_status\",\n    \"description\": \"Check the current status of a customer's order by order ID\",\n    \"parameters\": {\n      \"properties\": {\n        \"order_id\": {\n          \"type\": \"string\",\n          \"description\": \"The unique order ID to look up\"\n        }\n      },\n      \"required\": [\"order_id\"]\n    },\n    \"url\": \"https://api.example.com/orders/status\",\n    \"method\": \"GET\",\n    \"auth_type\": \"api_key\",\n    \"auth_config\": {\n      \"header\": \"X-API-Key\",\n      \"value\": \"your_api_key_here\"\n    },\n    \"meta_data\": {\n      \"timeout\": 10\n    },\n    \"is_active\": true,\n    \"created_at\": 1714470000,\n    \"updated_at\": 1714470000\n  },\n  {\n    \"id\": 2,\n    \"uuid\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"name\": \"book_appointment\",\n    \"description\": \"Book an appointment for a customer at a specific date and time\",\n    \"parameters\": {\n      \"properties\": {\n        \"customer_name\": {\n          \"type\": \"string\",\n          \"description\": \"Full name of the customer\"\n        },\n        \"date\": {\n          \"type\": \"string\",\n          \"description\": \"Appointment date in YYYY-MM-DD format\"\n        },\n        \"time\": {\n          \"type\": \"string\",\n          \"description\": \"Appointment time in HH:MM format\"\n        }\n      },\n      \"required\": [\"customer_name\", \"date\", \"time\"]\n    },\n    \"url\": \"https://api.example.com/appointments\",\n    \"method\": \"POST\",\n    \"auth_type\": \"bearer_token\",\n    \"auth_config\": {\n      \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n    },\n    \"meta_data\": null,\n    \"is_active\": true,\n    \"created_at\": 1714470000,\n    \"updated_at\": 1714470000\n  }\n]"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
