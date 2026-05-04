@@ -404,6 +404,122 @@ class AgentService(BaseService):
         }
         return config_data
 
+    def duplicate_agent(self, agent_id: int, new_name: str, created_by: int):
+        """Duplicate an existing agent with its config and channel links.
+
+        Creates a new agent with the given name, copies the full AgentConfig
+        (prompts, service IDs, all metadata), and links to the same channels.
+        Phone numbers, documents, call logs, and uploads are NOT copied.
+        """
+        source_agent = self.query(Agent).filter(Agent.id == agent_id).first()
+        if not source_agent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Source agent not found",
+            )
+
+        now = int(time.time())
+        new_agent_uuid = uuid_lib.uuid4()
+
+        # 1. Create new Agent
+        agent_values = {
+            "uuid": new_agent_uuid,
+            "name": new_name,
+            "description": source_agent.description,
+            "is_public": source_agent.is_public,
+            "tags": source_agent.tags,
+            "meta_data": source_agent.meta_data,
+            "status": "active",
+            "agent_type": source_agent.agent_type,
+            "total_calls": 0,
+            "total_minutes": Decimal("0"),
+            "average_rating": Decimal("0"),
+            "created_by": created_by,
+            "organization_id": self.org_id,
+            "created_at": now,
+            "updated_at": now,
+        }
+
+        try:
+            self.upsert(
+                model=Agent,
+                values=agent_values,
+                conflict_fields=["uuid"],
+                update_fields=["updated_at"],
+                auto_commit=False,
+            )
+            self.db.flush()
+            new_agent = self.query(Agent).filter(Agent.uuid == new_agent_uuid).first()
+
+            # 2. Copy AgentConfig
+            source_config = self.query(AgentConfig).filter(AgentConfig.agent_id == source_agent.id).first()
+            if source_config:
+                import copy
+                config_values = {
+                    "uuid": uuid_lib.uuid4(),
+                    "agent_id": new_agent.id,
+                    "organization_id": self.org_id,
+                    "llm_service_id": source_config.llm_service_id,
+                    "tts_service_id": source_config.tts_service_id,
+                    "stt_service_id": source_config.stt_service_id,
+                    "first_message": source_config.first_message,
+                    "system_prompt": source_config.system_prompt or "",
+                    "end_call_message": source_config.end_call_message,
+                    "voicemail_message": source_config.voicemail_message,
+                    "html_prompt": source_config.html_prompt,
+                    "status": "active",
+                    "llm_metadata": copy.deepcopy(source_config.llm_metadata) if source_config.llm_metadata else {},
+                    "tts_metadata": copy.deepcopy(source_config.tts_metadata) if source_config.tts_metadata else {},
+                    "stt_metadata": copy.deepcopy(source_config.stt_metadata) if source_config.stt_metadata else {},
+                    "agent_metadata": copy.deepcopy(source_config.agent_metadata) if source_config.agent_metadata else {},
+                    "created_at": now,
+                    "updated_at": now,
+                }
+                self.upsert(
+                    model=AgentConfig,
+                    values=config_values,
+                    conflict_fields=["agent_id", "organization_id"],
+                    update_fields=["updated_at"],
+                    auto_commit=False,
+                )
+
+            # 3. Link to same channels
+            source_channels = self.query(AgentChannel).filter(AgentChannel.agent_id == source_agent.id).all()
+            for link in source_channels:
+                self.upsert(
+                    model=AgentChannel,
+                    values={
+                        "uuid": uuid_lib.uuid4(),
+                        "agent_id": new_agent.id,
+                        "channel_id": link.channel_id,
+                        "organization_id": self.org_id,
+                        "created_at": now,
+                        "updated_at": now,
+                    },
+                    conflict_fields=["uuid"],
+                    update_fields=["updated_at"],
+                    auto_commit=False,
+                )
+
+            self.db.commit()
+        except IntegrityError as e:
+            self.db.rollback()
+            detail = _agent_unique_constraint_detail(e)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=detail,
+            ) from e
+        except HTTPException:
+            self.db.rollback()
+            raise
+        except Exception:
+            self.db.rollback()
+            raise
+
+        new_agent = self.query(Agent).filter(Agent.uuid == new_agent_uuid).first()
+        new_config = self.query(AgentConfig).filter(AgentConfig.agent_id == new_agent.id).first()
+        return self._agent_response_item(new_agent, new_config)
+
     def delete_agent(self, agent_id: int):
         agent = self.query(Agent).filter(Agent.id == agent_id).first()
         if not agent:

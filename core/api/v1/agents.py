@@ -46,6 +46,32 @@ def delete_agent(
     return AgentService(db).delete_agent(agent_id)
 
 
+@router.post("/duplicate_agent", status_code=status.HTTP_200_OK)
+def duplicate_agent(
+    data: Dict[str, Any] = Body(...),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    agent_id = data.get("agent_id")
+    name = data.get("name")
+    if not agent_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="agent_id is required",
+        )
+    if not name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="name is required",
+        )
+    org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
+    return AgentService(db, org_id=org_id).duplicate_agent(
+        agent_id=int(agent_id),
+        new_name=name,
+        created_by=claims.user_id,
+    )
+
+
 @router.post("/upsert_agent", status_code=status.HTTP_200_OK)
 def upsert_agent(
     data: Dict[str, Any] = Body(...),

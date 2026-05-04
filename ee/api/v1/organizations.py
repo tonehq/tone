@@ -166,3 +166,35 @@ def get_invited_users(
     db: Session = Depends(get_db)
 ):
     return EEAuthService(db, org_id=UUID(claims.org_id)).get_all_invited_users_for_organization(UUID(claims.org_id))
+
+
+@router.get("/details")
+def get_organization_details(
+    org_id: str = Query(...),
+    claims: EEJWTClaims = Depends(get_ee_jwt_claims),
+    db: Session = Depends(get_db)
+):
+    return EEAuthService(db, user_id=claims.user_id).get_organization_details(UUID(org_id))
+
+
+@router.put("/details")
+def update_organization_details(
+    update_data: Dict[str, Any] = Body(...),
+    org_id: str = Query(...),
+    claims: EEJWTClaims = Depends(require_ee_admin_or_owner),
+    db: Session = Depends(get_db)
+):
+    return EEAuthService(db, org_id=UUID(org_id), user_id=claims.user_id).update_organization_details(
+        UUID(org_id), update_data
+    )
+
+
+@router.delete("/delete")
+def delete_organization(
+    org_id: str = Query(...),
+    claims: EEJWTClaims = Depends(get_ee_jwt_claims),
+    db: Session = Depends(get_db)
+):
+    return EEAuthService(db, org_id=UUID(org_id), user_id=claims.user_id).delete_organization(
+        UUID(org_id), claims.user_id
+    )

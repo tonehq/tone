@@ -674,3 +674,110 @@ class EEAuthService(AuthService):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid action. Use 'approve' or 'reject'"
             )
+
+    def get_organization_details(self, org_id: UUID) -> Dict[str, Any]:
+        org = self.db.query(Organization).filter(Organization.id == org_id).first()
+        if not org:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Organization not found",
+            )
+
+        member_count = self.db.query(Member).filter(
+            Member.organization_id == org_id,
+            Member.status == 'active',
+        ).count()
+
+        return {
+            "id": str(org.id),
+            "name": org.name,
+            "slug": org.slug,
+            "description": org.description,
+            "logo_url": org.logo_url,
+            "website_url": org.website_url,
+            "status": org.status.value if org.status else None,
+            "subscription_plan": org.subscription_plan,
+            "member_count": member_count,
+            "created_at": org.created_at,
+            "updated_at": org.updated_at,
+        }
+
+    def update_organization_details(self, org_id: UUID, update_data: Dict[str, Any]) -> Dict[str, Any]:
+        org = self.db.query(Organization).filter(Organization.id == org_id).first()
+        if not org:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Organization not found",
+            )
+
+        allowed_fields = {"name", "description", "logo_url", "website_url"}
+        changes = {k: v for k, v in update_data.items() if k in allowed_fields}
+
+        if "name" in changes and changes["name"] and changes["name"] != org.name:
+            new_slug = self.create_slug_from_name(changes["name"])
+            duplicate = self.db.query(Organization).filter(
+                Organization.slug == new_slug,
+                Organization.id != org_id,
+            ).first()
+            if duplicate:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Organization with this name already exists",
+                )
+            org.name = changes["name"]
+            org.slug = new_slug
+
+        if "description" in changes:
+            org.description = changes["description"]
+        if "logo_url" in changes:
+            org.logo_url = changes["logo_url"]
+        if "website_url" in changes:
+            org.website_url = changes["website_url"]
+
+        org.updated_at = int(time.time())
+        self.db.commit()
+        self.db.refresh(org)
+
+        return {
+            "id": str(org.id),
+            "name": org.name,
+            "slug": org.slug,
+            "description": org.description,
+            "logo_url": org.logo_url,
+            "website_url": org.website_url,
+            "message": "Organization updated successfully",
+        }
+
+    def delete_organization(self, org_id: UUID, user_id: int) -> Dict[str, str]:
+        org = self.db.query(Organization).filter(Organization.id == org_id).first()
+        if not org:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Organization not found",
+            )
+
+        owner_member = self.db.query(Member).filter(
+            Member.organization_id == org_id,
+            Member.user_id == user_id,
+            Member.role == Role.OWNER,
+            Member.status == 'active',
+        ).first()
+        if not owner_member:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only an owner can delete this organization",
+            )
+
+        self.db.query(OrganizationInvite).filter(
+            OrganizationInvite.organization_id == org_id
+        ).delete(synchronize_session=False)
+        self.db.query(OrganizationAccessRequest).filter(
+            OrganizationAccessRequest.organization_id == org_id
+        ).delete(synchronize_session=False)
+        self.db.query(Member).filter(
+            Member.organization_id == org_id
+        ).delete(synchronize_session=False)
+        self.db.delete(org)
+        self.db.commit()
+
+        return {"message": "Organization deleted successfully"}

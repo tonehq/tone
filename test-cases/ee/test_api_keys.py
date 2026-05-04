@@ -13,26 +13,27 @@ class TestUpsertApiKey:
     """Tests for POST /api/v1/api-keys/upsert"""
 
     def test_upsert_api_key_missing_service_provider_id(self, client_as_admin):
-        response = client_as_admin.post("/api/v1/api-keys/upsert", json={
+        response = client_as_admin.post("/api/v1/api-keys/upsert", data={
             "name": "Key", "api_key": "sk-test"
         })
-        assert response.status_code == 400
+        assert response.status_code == 422
 
     def test_upsert_api_key_missing_name(self, client_as_admin):
-        response = client_as_admin.post("/api/v1/api-keys/upsert", json={
+        response = client_as_admin.post("/api/v1/api-keys/upsert", data={
             "service_provider_id": 1, "api_key": "sk-test"
         })
-        assert response.status_code == 400
+        assert response.status_code == 422
 
-    def test_upsert_api_key_missing_api_key(self, client_as_admin):
-        response = client_as_admin.post("/api/v1/api-keys/upsert", json={
+    def test_upsert_api_key_missing_api_key_and_file(self, client_as_admin):
+        response = client_as_admin.post("/api/v1/api-keys/upsert", data={
             "service_provider_id": 1, "name": "Key"
         })
         assert response.status_code == 400
+        assert "Either a file or api_key must be provided" in response.json()["detail"]
 
     def test_upsert_api_key_empty_body(self, client_as_admin):
-        response = client_as_admin.post("/api/v1/api-keys/upsert", json={})
-        assert response.status_code == 400
+        response = client_as_admin.post("/api/v1/api-keys/upsert", data={})
+        assert response.status_code == 422
 
     def test_upsert_api_key_unauthenticated(self, client_unauthenticated):
         response = client_unauthenticated.post("/api/v1/api-keys/upsert", json={

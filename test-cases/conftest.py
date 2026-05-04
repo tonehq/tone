@@ -1,5 +1,9 @@
 """Shared fixtures for all API test cases (Core and EE)."""
 
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
 import pytest
 import time
 from unittest.mock import MagicMock

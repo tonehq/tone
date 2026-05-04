@@ -163,7 +163,7 @@ PasteDeploy==3.0.1
 pathspec==0.11.2
 phonenumbers==8.12.48
 pillow==11.3.0
-tone-pipecat==0.0.74+dev.5
+tone-pipecat==0.0.75.dev4
 pipecat-ai-small-webrtc-prebuilt==2.0.4
 pkce==1.0.3
 plaster==1.1.2
@@ -284,3 +284,4 @@ zope.deprecation==4.4.0
 zope.interface==5.5.2
 zopfli==0.2.3
 infisicalsdk==1.0.16
+google-generativeai==0.8.6
