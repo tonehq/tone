@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-gcp-kube-tone-call-service
+  namespace: staging-gcp-kube
+  labels:
+    app: staging-gcp-kube-tone-call-worker
+    environment: staging-gcp-kube
+    component: call
+spec:
+  selector:
+    app: staging-gcp-kube-tone-call-worker
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+  type: ClusterIP
