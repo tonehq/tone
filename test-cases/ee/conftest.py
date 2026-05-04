@@ -63,9 +63,9 @@ def _make_real_client(db_session, token=None):
 
 
 # Use real user IDs that exist in the database
-MEMBER_USER_ID = 2
-ADMIN_USER_ID = 2
-OWNER_USER_ID = 2
+MEMBER_USER_ID = 1
+ADMIN_USER_ID = 1
+OWNER_USER_ID = 1
 
 
 @pytest.fixture

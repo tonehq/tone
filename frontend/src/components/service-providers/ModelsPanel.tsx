@@ -16,7 +16,7 @@ import { formatDate } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
-import { Box, BrainCircuit, ChevronLeft, Hash, Key, Plus, Search, Server } from 'lucide-react';
+import { Box, BrainCircuit, ChevronLeft, Plus, Search, Server } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { MODELS_PAGE_SIZE, TYPE_BADGE_STYLES, TYPE_ICON_STYLES, TYPE_ICONS } from './constants';
@@ -24,9 +24,11 @@ import { MODELS_PAGE_SIZE, TYPE_BADGE_STYLES, TYPE_ICON_STYLES, TYPE_ICONS } fro
 interface ModelsPanelProps {
   selectedProvider: ServiceProvider | null;
   onBack: () => void;
+  /** Hide the provider header when embedded in tabs */
+  compact?: boolean;
 }
 
-export default function ModelsPanel({ selectedProvider, onBack }: ModelsPanelProps) {
+export default function ModelsPanel({ selectedProvider, onBack, compact }: ModelsPanelProps) {
   const [modelsState] = useAtom(modelsAtom);
   const [, fetchModels] = useAtom(fetchModelsAtom);
   const [, upsertModel] = useAtom(upsertModelAtom);
@@ -165,37 +167,19 @@ export default function ModelsPanel({ selectedProvider, onBack }: ModelsPanelPro
       title: 'Model',
       dataIndex: 'name',
       sorter: true,
-      render: (_value, record) => {
-        const subtitle =
-          record.meta_data?.model && record.meta_data.model !== record.name
-            ? String(record.meta_data.model)
-            : null;
-        return (
-          <div className="flex items-center gap-3 py-0.5">
-            <div
-              className={cn(
-                'flex size-8 shrink-0 items-center justify-center rounded-md ring-1 ring-border/40',
-                TYPE_ICON_STYLES[providerType] ?? 'bg-muted text-muted-foreground',
-              )}
-            >
-              {TYPE_ICONS[providerType] ?? <Box className="size-3.5" />}
-            </div>
-            <div className="flex min-w-0 flex-col leading-tight">
-              <span className="truncate text-sm font-medium text-foreground">{record.name}</span>
-              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                <Hash className="size-3" />
-                <span className="font-mono">{record.id}</span>
-                {subtitle && (
-                  <>
-                    <span className="text-border">·</span>
-                    <span className="truncate">{subtitle}</span>
-                  </>
-                )}
-              </span>
-            </div>
+      render: (_value, record) => (
+        <div className="flex items-center gap-2.5">
+          <div
+            className={cn(
+              'flex size-7 shrink-0 items-center justify-center rounded-md',
+              TYPE_ICON_STYLES[providerType] ?? 'bg-muted text-muted-foreground',
+            )}
+          >
+            {TYPE_ICONS[providerType] ?? <Box className="size-3.5" />}
           </div>
-        );
-      },
+          <span className="truncate font-medium text-foreground">{record.name}</span>
+        </div>
+      ),
     },
     {
       key: 'service_type',
@@ -321,87 +305,85 @@ export default function ModelsPanel({ selectedProvider, onBack }: ModelsPanelPro
 
   return (
     <>
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-5 py-4">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="flex size-8 cursor-pointer items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground lg:hidden"
-            aria-label="Back to providers"
-          >
-            <ChevronLeft className="size-5" />
-          </button>
-          <div
-            className={cn(
-              'flex size-9 items-center justify-center rounded-lg',
-              TYPE_ICON_STYLES[selectedProvider.provider_type] ?? 'bg-muted',
-            )}
-          >
-            {TYPE_ICONS[selectedProvider.provider_type] ?? <Server className="size-4" />}
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-foreground">
-                {selectedProvider.display_name}
-              </h2>
-              <Badge
-                className={cn(
-                  'text-[10px] font-semibold uppercase tracking-wide',
-                  TYPE_BADGE_STYLES[selectedProvider.provider_type],
+      {/* Header — hidden in compact/tab mode */}
+      {!compact && (
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onBack}
+              className="flex size-8 cursor-pointer items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground lg:hidden"
+              aria-label="Back to providers"
+            >
+              <ChevronLeft className="size-5" />
+            </button>
+            <div
+              className={cn(
+                'flex size-9 items-center justify-center rounded-lg',
+                TYPE_ICON_STYLES[selectedProvider.provider_type] ?? 'bg-muted',
+              )}
+            >
+              {TYPE_ICONS[selectedProvider.provider_type] ?? <Server className="size-4" />}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-semibold text-foreground">
+                  {selectedProvider.display_name}
+                </h2>
+                <Badge
+                  className={cn(
+                    'text-[10px] font-semibold uppercase tracking-wide',
+                    TYPE_BADGE_STYLES[selectedProvider.provider_type],
+                  )}
+                >
+                  {selectedProvider.provider_type}
+                </Badge>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>
+                  {modelsState.pagination?.total ?? modelsState.models.length} model
+                  {(modelsState.pagination?.total ?? modelsState.models.length) !== 1 ? 's' : ''}
+                </span>
+                {selectedProvider.description && (
+                  <>
+                    <span className="text-border">|</span>
+                    <span className="truncate">{selectedProvider.description}</span>
+                  </>
                 )}
-              >
-                {selectedProvider.provider_type}
-              </Badge>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>
-                {modelsState.pagination?.total ?? modelsState.models.length} model
-                {(modelsState.pagination?.total ?? modelsState.models.length) !== 1 ? 's' : ''}
-              </span>
-              {selectedProvider.description && (
-                <>
-                  <span className="text-border">|</span>
-                  <span className="truncate">{selectedProvider.description}</span>
-                </>
-              )}
-              {selectedProvider.api_key && (
-                <>
-                  <span className="text-border">|</span>
-                  <span
-                    className={cn(
-                      'flex items-center gap-0.5',
-                      selectedProvider.api_key.is_valid
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : 'text-amber-600 dark:text-amber-400',
-                    )}
-                  >
-                    <Key className="size-3" />
-                    {selectedProvider.api_key.api_key_hint}
-                  </span>
-                </>
-              )}
+              </div>
             </div>
           </div>
+          <CustomButton type="primary" size="sm" icon={<Plus />} onClick={openCreate}>
+            Add Model
+          </CustomButton>
         </div>
-        <CustomButton type="primary" size="sm" icon={<Plus />} onClick={openCreate}>
-          Add Model
-        </CustomButton>
-      </div>
+      )}
 
       {/* Search + Table */}
-      <div className="flex min-h-0 flex-1 flex-col p-4">
-        <div className="relative mb-4 max-w-xs">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search models..."
-            value={modelSearch}
-            onChange={(e) => {
-              setModelSearch(e.target.value);
-              debouncedSearch(e.target.value);
-            }}
-            className="h-9 w-full cursor-text rounded-lg border border-input bg-background pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
-          />
+      <div
+        className={cn(
+          'flex min-h-0 flex-1 flex-col overflow-hidden',
+          compact ? 'px-6 py-4' : 'p-4',
+        )}
+      >
+        <div className="mb-4 flex items-center gap-3">
+          <div className="relative max-w-xs flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search models..."
+              value={modelSearch}
+              onChange={(e) => {
+                setModelSearch(e.target.value);
+                debouncedSearch(e.target.value);
+              }}
+              className="h-9 w-full cursor-text rounded-lg border border-input bg-background pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
+            />
+          </div>
+          {compact && (
+            <CustomButton type="primary" size="sm" icon={<Plus />} onClick={openCreate}>
+              Add Model
+            </CustomButton>
+          )}
         </div>
         <CustomTable
           columns={columns}

@@ -10,6 +10,7 @@ then seeds:
 - ServiceProvider records (LLM, STT, TTS providers)
 - Model records (all models for each provider)
 - ApiKey records (from environment variables)
+- Service records (one per provider that has an API key, linking provider + key)
 - Voice records (for TTS providers that have voices defined)
 """
 import os
@@ -174,6 +175,7 @@ def seed_from_configs(db, org_name, email, password):
     from core.models.service_provider import ServiceProvider
     from core.models.models import Model
     from core.models.api_key import ApiKey
+    from core.models.service import Service
     from core.utils.encryption import encrypt
 
     # 0. Create seed user, organization, and member first
@@ -190,6 +192,7 @@ def seed_from_configs(db, org_name, email, password):
         "models_created": 0,
         "api_keys_created": 0,
         "api_keys_none": 0,
+        "services_created": 0,
         "voices_created": 0,
     }
 
@@ -241,7 +244,6 @@ def seed_from_configs(db, org_name, email, password):
                 service_type=provider_type,
                 status="active",
                 meta_data=model_spec.get("meta_data"),
-                api_key_id=None,
             )
             db.add(model)
             model_name_to_obj[(provider.id, model_name)] = model
@@ -249,7 +251,7 @@ def seed_from_configs(db, org_name, email, password):
 
     db.flush()  # Single flush: all models get their IDs
 
-    # --- Phase 3: Insert API keys and link to models ---
+    # --- Phase 3: Insert API keys ---
     for i, config in enumerate(all_providers):
         provider = provider_map[i]
         api_key_env = config.get("api_key_env")
@@ -274,15 +276,16 @@ def seed_from_configs(db, org_name, email, password):
 
     db.flush()  # Single flush: all API keys get their IDs
 
-    # Link models to API keys (bulk update per provider)
+    # --- Phase 4: Insert Service records (one per provider that has an API key) ---
     for i, config in enumerate(all_providers):
         provider = provider_map[i]
+        provider_type = config["provider_type"]
         api_key_env = config.get("api_key_env")
         api_key_value = _get_api_key_from_env(api_key_env)
         if not api_key_value:
             continue
 
-        # Get the API key we just created for this provider
+        # Find the API key we created for this provider
         api_key_obj = (
             db.query(ApiKey)
             .filter(
@@ -291,13 +294,27 @@ def seed_from_configs(db, org_name, email, password):
             )
             .first()
         )
-        if api_key_obj:
-            db.query(Model).filter(
-                Model.service_provider_id == provider.id,
-                Model.status == "active",
-            ).update({Model.api_key_id: api_key_obj.id}, synchronize_session=False)
+        if not api_key_obj:
+            continue
 
-    # --- Phase 4: Insert all voices ---
+        service = Service(
+            service_provider_id=provider.id,
+            api_key_id=api_key_obj.id,
+            organization_id=org_id,
+            name=f"{config['display_name']} {provider_type.upper()}",
+            description=config.get("description") or f"{config['display_name']} {provider_type} service",
+            service_type=provider_type,
+            config={},
+            status=config.get("status", "active"),
+            is_default=True,
+            created_by=user_id,
+        )
+        db.add(service)
+        stats["services_created"] += 1
+
+    db.flush()  # Single flush: all services get their IDs
+
+    # --- Phase 5: Insert all voices ---
     for i, config in enumerate(all_providers):
         provider = provider_map[i]
         voices_spec = config.get("voices") or []
@@ -359,6 +376,7 @@ def main():
         print(f"   Providers: {stats['providers_created']} created")
         print(f"   Models:    {stats['models_created']} created")
         print(f"   API keys:  {stats['api_keys_created']} created, {stats['api_keys_none']} no env key")
+        print(f"   Services:  {stats['services_created']} created")
         print(f"   Voices:    {stats['voices_created']} created")
     finally:
         db.close()

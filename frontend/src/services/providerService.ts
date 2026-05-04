@@ -1,8 +1,10 @@
 import type {
   ModelUpsertPayload,
+  Service,
   ServiceProvider,
   ServiceProviderModel,
   ServiceProviderUpsertPayload,
+  ServiceUpsertPayload,
 } from '@/types/provider';
 import axiosInstance from '@/utils/axios';
 
@@ -58,6 +60,51 @@ export const listServiceProviders = async (
 export const getServiceProviders = async (providerType?: string): Promise<ServiceProvider[]> => {
   const result = await listServiceProviders(providerType ? { provider_type: providerType } : {});
   return result.providers;
+};
+
+// ── Services (org-scoped provider instances) ─────────────────────
+
+export interface ListServicesParams {
+  service_type?: string;
+  name?: string;
+  page?: number;
+  page_size?: number;
+}
+
+export interface ListServicesResult {
+  services: Service[];
+  pagination: PaginationInfo;
+}
+
+export const listServices = async (
+  params: ListServicesParams = {},
+): Promise<ListServicesResult> => {
+  const { data } = await axiosInstance.post<PaginatedResponse<Service> | Service[]>(
+    '/services/list',
+    params,
+  );
+  if (Array.isArray(data)) {
+    return {
+      services: data,
+      pagination: { page: 1, page_size: data.length, total: data.length, total_pages: 1 },
+    };
+  }
+  return { services: data?.data ?? [], pagination: data.pagination };
+};
+
+/** Flat array of all services — used by AgentFormPage loadable atom */
+export const getServices = async (serviceType?: string): Promise<Service[]> => {
+  const result = await listServices(serviceType ? { service_type: serviceType } : {});
+  return result.services;
+};
+
+export const upsertService = async (payload: ServiceUpsertPayload): Promise<Service> => {
+  const { data } = await axiosInstance.post<Service>('/services/upsert', payload);
+  return data;
+};
+
+export const deleteService = async (serviceUuid: string): Promise<void> => {
+  await axiosInstance.delete('/services/delete', { params: { uuid: serviceUuid } });
 };
 
 export const getServiceProvider = async (providerId: number): Promise<ServiceProvider> => {

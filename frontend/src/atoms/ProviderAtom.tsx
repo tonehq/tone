@@ -3,23 +3,29 @@ import { loadable } from 'jotai/utils';
 
 import {
   deleteModel,
+  deleteService,
   deleteServiceProvider,
-  getServiceProviders,
+  getServices,
   listModelsByProvider,
   listServiceProviders,
+  listServices,
   upsertModel,
+  upsertService,
   upsertServiceProvider,
 } from '@/services/providerService';
 import type {
   ListModelsParams,
   ListProvidersParams,
+  ListServicesParams,
   PaginationInfo,
 } from '@/services/providerService';
 import type {
   ModelUpsertPayload,
+  Service,
   ServiceProvider,
   ServiceProviderModel,
   ServiceProviderUpsertPayload,
+  ServiceUpsertPayload,
 } from '@/types/provider';
 
 // ── Service Providers ──────────────────────────────────────────────
@@ -115,13 +121,67 @@ const deleteModelAtom = atom(null, async (_get, _set, modelId: number) => {
   await deleteModel(modelId);
 });
 
-// ── Legacy: loadable atom for AgentFormPage compatibility ──────────
+// ── Services (org-scoped provider instances) ───────────────────────
+
+interface ServicesState {
+  services: Service[];
+  pagination: PaginationInfo | null;
+  loading: boolean;
+  loadingMore: boolean;
+}
+
+const servicesAtom = atom<ServicesState>({
+  services: [],
+  pagination: null,
+  loading: false,
+  loadingMore: false,
+});
+
+interface FetchServicesPayload {
+  params?: ListServicesParams;
+  append?: boolean;
+}
+
+const fetchServicesAtom = atom(null, async (_get, set, payload?: FetchServicesPayload) => {
+  const params = payload?.params;
+  const append = payload?.append ?? false;
+
+  if (append) {
+    set(servicesAtom, (prev) => ({ ...prev, loadingMore: true }));
+  } else {
+    set(servicesAtom, (prev) => ({ ...prev, loading: true }));
+  }
+
+  try {
+    const result = await listServices(params);
+    set(servicesAtom, (prev) => ({
+      services: append ? [...prev.services, ...result.services] : result.services,
+      pagination: result.pagination,
+      loading: false,
+      loadingMore: false,
+    }));
+  } catch (error) {
+    set(servicesAtom, (prev) => ({ ...prev, loading: false, loadingMore: false }));
+    throw error;
+  }
+});
+
+const upsertServiceAtom = atom(
+  null,
+  async (_get, _set, payload: ServiceUpsertPayload) => await upsertService(payload),
+);
+
+const deleteServiceAtom = atom(null, async (_get, _set, uuid: string) => {
+  await deleteService(uuid);
+});
+
+// ── Loadable atom for AgentFormPage — fetches org-scoped services ──
 
 const providersRefreshAtom = atom(0);
 
-const providersRowsAtom = atom<Promise<ServiceProvider[]>>(async (get) => {
+const providersRowsAtom = atom<Promise<Service[]>>(async (get) => {
   get(providersRefreshAtom);
-  return await getServiceProviders();
+  return await getServices();
 });
 
 const loadableProvidersAtom = loadable(providersRowsAtom);
@@ -139,6 +199,10 @@ export {
   fetchModelsAtom,
   upsertModelAtom,
   deleteModelAtom,
+  servicesAtom,
+  fetchServicesAtom,
+  upsertServiceAtom,
+  deleteServiceAtom,
   loadableProvidersAtom,
   refetchProvidersAtom,
 };

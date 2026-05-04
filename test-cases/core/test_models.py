@@ -9,7 +9,7 @@ from fastapi import HTTPException
 
 
 # ---------------------------------------------------------------------------
-# GET /api/v1/model/get_models_by_provider
+# POST /api/v1/model/get_models_by_provider
 # ---------------------------------------------------------------------------
 class TestGetModelsByProvider:
     @patch("core.api.v1.models.ModelService")
@@ -21,15 +21,24 @@ class TestGetModelsByProvider:
         ]
         mock_service_cls.return_value = mock_instance
 
-        resp = client_as_member.get(
+        resp = client_as_member.post(
             "/api/v1/model/get_models_by_provider",
-            params={"service_provider_id": 10},
+            json={"service_provider_id": 10},
         )
 
         assert resp.status_code == 200
         assert len(resp.json()) == 2
         mock_service_cls.assert_called_once_with(ANY)
-        mock_instance.get_models_by_provider.assert_called_once_with(10)
+        mock_instance.get_models_by_provider.assert_called_once_with(
+            service_provider_id=10,
+            name=None,
+            status_filter=None,
+            service_type=None,
+            sort_by="created_at",
+            sort_order="desc",
+            page=1,
+            page_size=10,
+        )
 
     @patch("core.api.v1.models.ModelService")
     def test_empty_list(self, mock_service_cls, client_as_member):
@@ -37,17 +46,17 @@ class TestGetModelsByProvider:
         mock_instance.get_models_by_provider.return_value = []
         mock_service_cls.return_value = mock_instance
 
-        resp = client_as_member.get(
+        resp = client_as_member.post(
             "/api/v1/model/get_models_by_provider",
-            params={"service_provider_id": 999},
+            json={"service_provider_id": 999},
         )
 
         assert resp.status_code == 200
         assert resp.json() == []
 
     def test_missing_service_provider_id(self, client_as_member):
-        resp = client_as_member.get("/api/v1/model/get_models_by_provider")
-        assert resp.status_code == 422
+        resp = client_as_member.post("/api/v1/model/get_models_by_provider", json={})
+        assert resp.status_code == 400
 
     @patch("core.api.v1.models.ModelService")
     def test_service_error(self, mock_service_cls, client_as_member):
@@ -57,9 +66,9 @@ class TestGetModelsByProvider:
         )
         mock_service_cls.return_value = mock_instance
 
-        resp = client_as_member.get(
+        resp = client_as_member.post(
             "/api/v1/model/get_models_by_provider",
-            params={"service_provider_id": 10},
+            json={"service_provider_id": 10},
         )
         assert resp.status_code == 500
 

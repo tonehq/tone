@@ -26,6 +26,10 @@ def upsert_service(
             detail="service_provider_id, name, service_type, and config are required"
         )
 
+    api_key_value = data.get("api_key_value")
+    api_key_name = data.get("api_key_name")
+    additional_credentials = data.get("additional_credentials")
+
     return ServiceConfigService(db, user_id=claims.user_id).upsert_service(
         service_provider_id=service_provider_id,
         name=name,
@@ -37,7 +41,10 @@ def upsert_service(
         is_public=data.get("is_public", False),
         tags=data.get("tags"),
         service_uuid=data.get("uuid"),
-        service_status=data.get("status")
+        service_status=data.get("status"),
+        api_key_value=api_key_value,
+        api_key_name=api_key_name,
+        additional_credentials=additional_credentials,
     )
 
 

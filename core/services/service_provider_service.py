@@ -7,14 +7,9 @@ import time
 from fastapi import HTTPException, status
 
 from core.services.base import BaseService
-from core.services.api_key_service import ApiKeyService
-from core.services.redis_service import cache_delete_pattern
 from core.models.service_provider import ServiceProvider
 from core.models.models import Model
-from core.models.api_key import ApiKey
 from core.models.voice import Voice
-from core.utils.encryption import encrypt
-from shared.config import settings
 
 
 class ServiceProviderService(BaseService):
@@ -34,7 +29,7 @@ class ServiceProviderService(BaseService):
         return q.first() is not None
 
     def upsert_service_provider(self, name: str, display_name: str, provider_type: str,
-                                auth_type: str, api_key: Dict[str, Any],
+                                auth_type: str,
                                 description: Optional[str] = None,
                                 logo_url: Optional[str] = None, website_url: Optional[str] = None,
                                 documentation_url: Optional[str] = None, base_url: Optional[str] = None,
@@ -50,12 +45,7 @@ class ServiceProviderService(BaseService):
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Service provider not found",
                 )
-            # Only check for conflicts when (name, provider_type) is actually changing
-            name_changed = name is not None and name != existing.name
-            type_changed = provider_type is not None and provider_type != existing.provider_type
-            if (name_changed or type_changed) and self._exists_same_name_and_provider_type(
-                name, provider_type, exclude_id=provider_id
-            ):
+            if self._exists_same_name_and_provider_type(name, provider_type, exclude_id=provider_id):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="A service provider with this name and provider_type already exists.",
@@ -109,8 +99,6 @@ class ServiceProviderService(BaseService):
             self.db.commit()
             self.db.refresh(provider)
 
-        api_key_payload = self._upsert_provider_api_key(provider.id, api_key)
-
         return {
             "id": provider.id,
             "uuid": str(provider.uuid),
@@ -129,107 +117,7 @@ class ServiceProviderService(BaseService):
             "status": provider.status,
             "created_at": provider.created_at,
             "updated_at": provider.updated_at,
-            "api_key": api_key_payload,
         }
-
-    def _get_provider_api_key(self, provider_id: int) -> Optional[Dict[str, Any]]:
-        key = (
-            self.query(ApiKey)
-            .filter(ApiKey.service_provider_id == provider_id, ApiKey.status == "active")
-            .order_by(ApiKey.id.desc())
-            .first()
-        )
-        if not key:
-            return None
-        return {
-            "id": key.id,
-            "uuid": str(key.uuid),
-            "name": key.name,
-            "description": key.description,
-            "api_key_hint": key.api_key_hint,
-            "service_provider_id": key.service_provider_id,
-            "additional_credentials": key.additional_credentials,
-            "rate_limit_config": key.rate_limit_config,
-            "expires_at": key.expires_at,
-            "status": key.status,
-            "is_valid": key.is_valid,
-            "created_at": key.created_at,
-            "updated_at": key.updated_at,
-        }
-
-    def _upsert_provider_api_key(self, provider_id: int, payload: Dict[str, Any]) -> Dict[str, Any]:
-        api_key_value = payload.get("api_key")
-        api_key_id = payload.get("id")
-
-        existing: Optional[ApiKey] = None
-        if api_key_id is not None:
-            try:
-                api_key_id = int(api_key_id)
-            except (TypeError, ValueError):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="api_key.id must be an integer",
-                )
-            existing = self.db.query(ApiKey).filter(ApiKey.id == api_key_id).first()
-            if not existing:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="API key not found",
-                )
-            if existing.service_provider_id != provider_id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="API key does not belong to this service provider",
-                )
-
-        if existing is None:
-            if not api_key_value:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="api_key.api_key (secret value) is required to create a new key",
-                )
-            provider = self.db.query(ServiceProvider).get(provider_id)
-            name = payload.get("name") or f"{provider.name} key"
-            resolved_org_id = self.org_id or settings.DEFAULT_ORG_ID
-            ApiKeyService(self.db, user_id=self._user_id, org_id=resolved_org_id).upsert_api_key(
-                service_provider_id=provider_id,
-                name=name,
-                api_key_value=api_key_value,
-                description=payload.get("description"),
-                additional_credentials=payload.get("additional_credentials"),
-                rate_limit_config=payload.get("rate_limit_config"),
-                expires_at=payload.get("expires_at"),
-                key_status=payload.get("status"),
-            )
-            return self._get_provider_api_key(provider_id)
-
-        current_time = int(time.time())
-        if payload.get("name") is not None:
-            existing.name = payload["name"]
-        if "description" in payload:
-            existing.description = payload.get("description")
-        if "additional_credentials" in payload:
-            existing.additional_credentials = payload.get("additional_credentials")
-        if "rate_limit_config" in payload:
-            existing.rate_limit_config = payload.get("rate_limit_config")
-        if "expires_at" in payload:
-            existing.expires_at = payload.get("expires_at")
-        if payload.get("status") is not None:
-            existing.status = payload["status"]
-        if api_key_value:
-            existing.api_key_encrypted = encrypt(api_key_value)
-            existing.api_key_hint = (
-                api_key_value[:4] + "..." + api_key_value[-4:]
-                if len(api_key_value) > 8 else "****"
-            )
-            existing.is_valid = False
-            existing.last_validated_at = None
-            existing.validation_error = None
-        existing.updated_at = current_time
-        self.db.commit()
-        self.db.refresh(existing)
-        cache_delete_pattern("agent_bot_data:*")
-        return self._get_provider_api_key(provider_id)
 
     def get_all_service_providers(
         self,
@@ -300,7 +188,6 @@ class ServiceProviderService(BaseService):
         # Batch-fetch models for the paginated providers only
         provider_ids = [p.id for p in providers]
         models_by_provider: Dict[int, List[Dict[str, Any]]] = {}
-        api_key_by_provider: Dict[int, Dict[str, Any]] = {}
         if provider_ids:
             models = (
                 self.db.query(Model)
@@ -317,35 +204,6 @@ class ServiceProviderService(BaseService):
                     "created_at": m.created_at,
                     "updated_at": m.updated_at,
                 })
-
-            api_keys = (
-                self.query(ApiKey)
-                .filter(
-                    ApiKey.service_provider_id.in_(provider_ids),
-                    ApiKey.status == "active",
-                )
-                .order_by(ApiKey.service_provider_id, ApiKey.id.desc())
-                .all()
-            )
-            for k in api_keys:
-                # First (latest) wins per provider
-                if k.service_provider_id in api_key_by_provider:
-                    continue
-                api_key_by_provider[k.service_provider_id] = {
-                    "id": k.id,
-                    "uuid": str(k.uuid),
-                    "name": k.name,
-                    "description": k.description,
-                    "api_key_hint": k.api_key_hint,
-                    "service_provider_id": k.service_provider_id,
-                    "additional_credentials": k.additional_credentials,
-                    "rate_limit_config": k.rate_limit_config,
-                    "expires_at": k.expires_at,
-                    "status": k.status,
-                    "is_valid": k.is_valid,
-                    "created_at": k.created_at,
-                    "updated_at": k.updated_at,
-                }
 
         data = [
             {
@@ -367,7 +225,6 @@ class ServiceProviderService(BaseService):
                 "created_at": p.created_at,
                 "meta_data_schema": p.meta_data_schema,
                 "models": models_by_provider.get(p.id, []),
-                "api_key": api_key_by_provider.get(p.id),
             }
             for p in providers
         ]
@@ -414,7 +271,6 @@ class ServiceProviderService(BaseService):
             "status": provider.status,
             "created_at": provider.created_at,
             "updated_at": provider.updated_at,
-            "api_key": self._get_provider_api_key(provider.id),
         }
 
     def delete_service_provider(self, provider_id: int) -> Dict[str, str]:

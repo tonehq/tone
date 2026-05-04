@@ -22,17 +22,17 @@ def sample_model_data():
     }
 
 
-# ─── GET /api/v1/model/get_models_by_provider — Get Models By Provider ───
+# ─── POST /api/v1/model/get_models_by_provider — Get Models By Provider ───
 
 class TestGetModelsByProvider:
-    """Tests for GET /api/v1/model/get_models_by_provider"""
+    """Tests for POST /api/v1/model/get_models_by_provider"""
 
     @patch("ee.api.v1.models.ModelService")
     def test_get_models_by_provider_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_models_by_provider.return_value = [
             {"id": 1, "name": "gpt-4"}
         ]
-        response = client_as_member.get("/api/v1/model/get_models_by_provider?service_provider_id=1")
+        response = client_as_member.post("/api/v1/model/get_models_by_provider", json={"service_provider_id": 1})
         assert response.status_code == 200
         assert isinstance(response.json(), list)
         mock_service_cls.assert_called_once_with(ANY, org_id=EXPECTED_ORG_ID)
@@ -40,20 +40,20 @@ class TestGetModelsByProvider:
     @patch("ee.api.v1.models.ModelService")
     def test_get_models_by_provider_empty(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_models_by_provider.return_value = []
-        response = client_as_member.get("/api/v1/model/get_models_by_provider?service_provider_id=1")
+        response = client_as_member.post("/api/v1/model/get_models_by_provider", json={"service_provider_id": 1})
         assert response.status_code == 200
         assert response.json() == []
 
     def test_get_models_missing_provider_id(self, client_as_member):
-        response = client_as_member.get("/api/v1/model/get_models_by_provider")
-        assert response.status_code == 422
+        response = client_as_member.post("/api/v1/model/get_models_by_provider", json={})
+        assert response.status_code == 400
 
     def test_get_models_invalid_provider_id(self, client_as_member):
-        response = client_as_member.get("/api/v1/model/get_models_by_provider?service_provider_id=abc")
-        assert response.status_code == 422
+        response = client_as_member.post("/api/v1/model/get_models_by_provider", json={"service_provider_id": "abc"})
+        assert response.status_code == 400
 
     def test_get_models_unauthenticated(self, client_unauthenticated):
-        response = client_unauthenticated.get("/api/v1/model/get_models_by_provider?service_provider_id=1")
+        response = client_unauthenticated.post("/api/v1/model/get_models_by_provider", json={"service_provider_id": 1})
         assert response.status_code in (401, 403)
 
 

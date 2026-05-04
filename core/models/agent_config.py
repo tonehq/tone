@@ -13,9 +13,9 @@ class AgentConfig(OrgScopedModel):
     uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
     agent_id = Column(BigInteger, ForeignKey('agents.id'), nullable=False)
     
-    llm_service_id = Column(BigInteger, ForeignKey('service_providers.id'))
-    tts_service_id = Column(BigInteger, ForeignKey('service_providers.id'))
-    stt_service_id = Column(BigInteger, ForeignKey('service_providers.id'))
+    llm_service_id = Column(BigInteger, ForeignKey('services.id'))
+    tts_service_id = Column(BigInteger, ForeignKey('services.id'))
+    stt_service_id = Column(BigInteger, ForeignKey('services.id'))
     first_message = Column(Text, nullable=True)
     system_prompt = Column(Text, nullable=True, default="")
     end_call_message = Column(Text, nullable=True)

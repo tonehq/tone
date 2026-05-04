@@ -4,6 +4,7 @@ import { createElement } from 'react';
 // ── Pagination ─────────────────────────────────────────────────────
 
 export const PROVIDERS_PAGE_SIZE = 15;
+export const SERVICES_PAGE_SIZE = 15;
 export const MODELS_PAGE_SIZE = 10;
 
 export const PROVIDER_TYPE_TABS = [
