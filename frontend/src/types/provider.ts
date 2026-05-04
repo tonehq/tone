@@ -109,3 +109,47 @@ export interface ModelUpsertPayload {
   meta_data?: Record<string, unknown>;
   api_key_id?: number | null;
 }
+
+// ── Services (org-scoped provider instances) ───────────────────────
+
+export interface Service {
+  id: number;
+  uuid: string;
+  name: string;
+  display_name?: string;
+  description?: string;
+  service_type: ProviderType;
+  service_provider_id: number;
+  service_provider_name?: string;
+  provider_type?: string;
+  api_key_id?: number | null;
+  api_key_hint?: string | null;
+  config: Record<string, unknown>;
+  status: string;
+  is_default?: boolean;
+  is_public?: boolean;
+  tags?: string[] | null;
+  usage_count?: number;
+  last_used_at?: number | null;
+  created_at: number;
+  updated_at?: number;
+  models: ServiceProviderModel[];
+  meta_data_schema: MetaDataSchemaField[] | null;
+}
+
+export interface ServiceUpsertPayload {
+  uuid?: string;
+  service_provider_id: number;
+  name: string;
+  service_type: string;
+  config: Record<string, unknown>;
+  description?: string;
+  is_default?: boolean;
+  is_public?: boolean;
+  tags?: string[];
+  status?: string;
+  api_key_id?: number | null;
+  api_key_value?: string;
+  api_key_name?: string;
+  additional_credentials?: Record<string, unknown> | null;
+}

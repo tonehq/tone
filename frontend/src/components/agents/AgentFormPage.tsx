@@ -12,6 +12,7 @@ import { CustomButton, CustomModal, CustomTab, PhoneNumberDisplay } from '@/comp
 import { Badge } from '@/components/ui/badge';
 import { deleteAgent, getAgent, upsertAgent } from '@/services/agentsService';
 import type { AgentFormState } from '@/types/agent';
+import type { ServiceProvider } from '@/types/provider';
 import {
   apiAgentToFormState,
   defaultFormState,
@@ -63,7 +64,10 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
   const ttsHandle = useRef<DynamicProviderFieldsHandle | null>(null);
   const sttHandle = useRef<DynamicProviderFieldsHandle | null>(null);
 
-  const providers = providersLoadable.state === 'hasData' ? providersLoadable.data : [];
+  // Services from the loadable atom are org-scoped; cast to ServiceProvider for tab compatibility
+  const providers = (providersLoadable.state === 'hasData'
+    ? providersLoadable.data
+    : []) as unknown as ServiceProvider[];
   const providersLoading = providersLoadable.state === 'loading';
   const llmProviders = providers.filter((p) => p.provider_type === 'llm');
   const ttsProviders = providers.filter((p) => p.provider_type === 'tts');

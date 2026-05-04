@@ -4,42 +4,47 @@ import {
   deleteProviderAtom,
   fetchModelsAtom,
   modelsAtom,
-  upsertProviderAtom,
+  upsertServiceAtom,
 } from '@/atoms/ProviderAtom';
+
 import ApiKeyUpsertModal from '@/components/service-providers/ApiKeyUpsertModal';
 import ModelsPanel from '@/components/service-providers/ModelsPanel';
-import ProviderUpsertModal from '@/components/service-providers/ProviderUpsertModal';
-import { ActionMenu, CustomButton } from '@/components/shared';
+import ServiceUpsertModal from '@/components/service-providers/ServiceUpsertModal';
+import { ActionMenu, CustomButton, CustomTab } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import {
   deleteApiKey,
+  deleteService as deleteServiceApi,
   getApiKeyPlaintext,
   getServiceProvider,
   listApiKeysByProvider,
+  listServices,
   type ApiKeyListRow,
 } from '@/services/providerService';
-import type { ServiceProvider, ServiceProviderUpsertPayload } from '@/types/provider';
+import type { Service, ServiceProvider, ServiceUpsertPayload } from '@/types/provider';
 import { cn } from '@/utils/cn';
-import { formatDate } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
 import {
   AlertCircle,
   ArrowLeft,
+  Box,
   CheckCircle2,
   Copy,
-  Edit,
   Eye,
   EyeOff,
+  Globe,
   Key,
   Loader2,
+  Pencil,
+  Plug,
   Plus,
   Server,
   Trash2,
 } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { STATUS_STYLES, TYPE_BADGE_STYLES, TYPE_ICON_STYLES, TYPE_ICONS } from './constants';
 
@@ -48,14 +53,16 @@ export default function ServiceProviderDetailPage() {
   const params = useParams<{ providerId: string }>();
   const providerId = Number(params.providerId);
 
+  const [modelsState] = useAtom(modelsAtom);
   const [, fetchModels] = useAtom(fetchModelsAtom);
-  const [, upsertProvider] = useAtom(upsertProviderAtom);
   const [, removeProvider] = useAtom(deleteProviderAtom);
+  const [, upsertSvc] = useAtom(upsertServiceAtom);
 
   const [provider, setProvider] = useState<ServiceProvider | null>(null);
   const [loading, setLoading] = useState(true);
-  const [editOpen, setEditOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  // API Keys
   const [keys, setKeys] = useState<ApiKeyListRow[]>([]);
   const [keysLoading, setKeysLoading] = useState(false);
   const [keyModalOpen, setKeyModalOpen] = useState(false);
@@ -63,6 +70,14 @@ export default function ServiceProviderDetailPage() {
   const [revealedKeyId, setRevealedKeyId] = useState<number | null>(null);
   const [revealedKeyValue, setRevealedKeyValue] = useState<string | null>(null);
   const [revealingKeyId, setRevealingKeyId] = useState<number | null>(null);
+
+  // Services
+  const [services, setServices] = useState<Service[]>([]);
+  const [servicesLoading, setServicesLoading] = useState(false);
+  const [serviceModalOpen, setServiceModalOpen] = useState(false);
+  const [editingService, setEditingService] = useState<Service | null>(null);
+
+  // ── Data loading ─────────────────────────────────────────────────
 
   const loadKeys = useCallback(async () => {
     if (!Number.isFinite(providerId)) return;
@@ -81,6 +96,19 @@ export default function ServiceProviderDetailPage() {
     }
   }, [providerId]);
 
+  const loadServices = useCallback(async () => {
+    if (!Number.isFinite(providerId)) return;
+    setServicesLoading(true);
+    try {
+      const result = await listServices({});
+      setServices(result.services.filter((s) => s.service_provider_id === providerId));
+    } catch (error) {
+      handleApiError(error);
+    } finally {
+      setServicesLoading(false);
+    }
+  }, [providerId]);
+
   const loadProvider = useCallback(async () => {
     if (!Number.isFinite(providerId)) return;
     setLoading(true);
@@ -93,13 +121,20 @@ export default function ServiceProviderDetailPage() {
         handleApiError,
       );
       loadKeys();
+      loadServices();
     } catch (error) {
       handleApiError(error);
       setProvider(null);
     } finally {
       setLoading(false);
     }
-  }, [providerId, fetchModels, loadKeys]);
+  }, [providerId, fetchModels, loadKeys, loadServices]);
+
+  useEffect(() => {
+    loadProvider();
+  }, [loadProvider]);
+
+  // ── API Key handlers ─────────────────────────────────────────────
 
   const handleReveal = useCallback(
     async (keyId: number) => {
@@ -126,20 +161,10 @@ export default function ServiceProviderDetailPage() {
     try {
       const detail = await getApiKeyPlaintext(keyId);
       await navigator.clipboard.writeText(detail.api_key);
-      showToast.success('API key copied to clipboard');
+      showToast.success('Copied to clipboard');
     } catch (error) {
       handleApiError(error);
     }
-  }, []);
-
-  const handleAddKey = useCallback(() => {
-    setEditingKey(null);
-    setKeyModalOpen(true);
-  }, []);
-
-  const handleEditKey = useCallback((row: ApiKeyListRow) => {
-    setEditingKey(row);
-    setKeyModalOpen(true);
   }, []);
 
   const handleDeleteKey = useCallback(
@@ -148,48 +173,52 @@ export default function ServiceProviderDetailPage() {
         await deleteApiKey(row.id);
         showToast.success('API key deleted');
         await loadKeys();
-        await loadProvider();
       } catch (error) {
         handleApiError(error);
       }
     },
-    [loadKeys, loadProvider],
+    [loadKeys],
   );
 
   const handleKeySaved = useCallback(async () => {
     await loadKeys();
-    await loadProvider();
-  }, [loadKeys, loadProvider]);
+  }, [loadKeys]);
 
-  useEffect(() => {
-    loadProvider();
-  }, [loadProvider]);
+  // ── Service handlers ─────────────────────────────────────────────
 
-  const handleSubmit = useCallback(
-    async (payload: ServiceProviderUpsertPayload) => {
+  const handleServiceSubmit = useCallback(
+    async (payload: ServiceUpsertPayload) => {
       try {
-        await upsertProvider(payload);
-        showToast.success('Provider updated');
-        await loadProvider();
+        await upsertSvc(payload);
+        showToast.success(payload.uuid ? 'Service updated' : 'Service created');
+        await loadServices();
       } catch (error) {
         handleApiError(error);
         throw error;
       }
     },
-    [upsertProvider, loadProvider],
+    [upsertSvc, loadServices],
   );
+
+  const handleDeleteService = useCallback(
+    async (svc: Service) => {
+      try {
+        await deleteServiceApi(svc.uuid);
+        showToast.success('Service deleted');
+        await loadServices();
+      } catch (error) {
+        handleApiError(error);
+      }
+    },
+    [loadServices],
+  );
+
+  // ── Provider handlers ────────────────────────────────────────────
 
   const handleDelete = useCallback(async () => {
     if (!provider) return;
     if (provider.is_system) {
       showToast.error('System providers cannot be deleted');
-      return;
-    }
-    if (
-      !window.confirm(
-        `Delete "${provider.display_name}"? This also removes its API key and unlinks any models using it.`,
-      )
-    ) {
       return;
     }
     setDeleting(true);
@@ -206,6 +235,317 @@ export default function ServiceProviderDetailPage() {
 
   const goBack = useCallback(() => router.push('/service-providers'), [router]);
 
+  // ── Tab content ──────────────────────────────────────────────────
+
+  const tabItems = useMemo(() => {
+    if (!provider) return [];
+
+    return [
+      {
+        key: 'keys',
+        label: (
+          <span className="flex items-center gap-1.5">
+            <Key className="size-3.5" />
+            API Keys
+            <span className="ml-0.5 rounded-full bg-muted px-1.5 py-px text-[10px] tabular-nums text-muted-foreground">
+              {keys.length}
+            </span>
+          </span>
+        ),
+        children: (
+          <div className="h-full overflow-auto px-6 py-5">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                Credentials used by services and models for this provider
+              </p>
+              <CustomButton
+                type="primary"
+                size="sm"
+                icon={<Plus />}
+                onClick={() => {
+                  setEditingKey(null);
+                  setKeyModalOpen(true);
+                }}
+              >
+                Add Key
+              </CustomButton>
+            </div>
+            {keysLoading && keys.length === 0 ? (
+              <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                Loading...
+              </div>
+            ) : keys.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 py-10">
+                <div className="flex size-11 items-center justify-center rounded-xl bg-muted">
+                  <Key className="size-5 text-muted-foreground" />
+                </div>
+                <p className="text-xs text-muted-foreground">No API keys yet</p>
+                <CustomButton
+                  type="default"
+                  size="sm"
+                  icon={<Plus />}
+                  onClick={() => {
+                    setEditingKey(null);
+                    setKeyModalOpen(true);
+                  }}
+                >
+                  Add Key
+                </CustomButton>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {keys.map((row) => {
+                  const isRevealed = revealedKeyId === row.id;
+                  const isRevLoading = revealingKeyId === row.id;
+                  const displayValue =
+                    isRevealed && revealedKeyValue ? revealedKeyValue : row.api_key_hint;
+                  return (
+                    <div
+                      key={row.id}
+                      className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 transition-colors hover:bg-accent/20"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm font-medium text-foreground">{row.name}</div>
+                        {row.description && (
+                          <p className="text-[11px] text-muted-foreground">{row.description}</p>
+                        )}
+                      </div>
+
+                      {/* Key value display */}
+                      <div className="flex items-center gap-1 rounded-md bg-muted/50 px-2.5 py-1.5">
+                        <span className="max-w-[200px] truncate font-mono text-xs text-foreground">
+                          {isRevLoading ? '...' : displayValue}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleReveal(row.id)}
+                          disabled={isRevLoading}
+                          className="flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-50"
+                        >
+                          {isRevLoading ? (
+                            <Loader2 className="size-3 animate-spin" />
+                          ) : isRevealed ? (
+                            <EyeOff className="size-3" />
+                          ) : (
+                            <Eye className="size-3" />
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(row.id)}
+                          className="flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                        >
+                          <Copy className="size-3" />
+                        </button>
+                      </div>
+
+                      {/* Status + Validation */}
+                      <div className="flex items-center gap-3">
+                        <span className="flex items-center gap-1 text-[11px] capitalize text-muted-foreground">
+                          <span
+                            className={cn(
+                              'size-1.5 rounded-full',
+                              row.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500',
+                            )}
+                          />
+                          {row.status}
+                        </span>
+                        <span
+                          className={cn(
+                            'flex items-center gap-1 text-[11px]',
+                            row.is_valid
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : 'text-amber-600 dark:text-amber-400',
+                          )}
+                        >
+                          {row.is_valid ? (
+                            <CheckCircle2 className="size-3.5" />
+                          ) : (
+                            <AlertCircle className="size-3.5" />
+                          )}
+                          {row.is_valid ? 'Valid' : 'Unverified'}
+                        </span>
+                      </div>
+
+                      <ActionMenu
+                        onEdit={() => {
+                          setEditingKey(row);
+                          setKeyModalOpen(true);
+                        }}
+                        onDelete={() => handleDeleteKey(row)}
+                        itemName={row.name}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: 'services',
+        label: (
+          <span className="flex items-center gap-1.5">
+            <Plug className="size-3.5" />
+            Services
+            <span className="ml-0.5 rounded-full bg-muted px-1.5 py-px text-[10px] tabular-nums text-muted-foreground">
+              {services.length}
+            </span>
+          </span>
+        ),
+        children: (
+          <div className="h-full overflow-auto px-6 py-5">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                Org-scoped service configurations linked to this provider
+              </p>
+              <CustomButton
+                type="primary"
+                size="sm"
+                icon={<Plus />}
+                onClick={() => {
+                  setEditingService(null);
+                  setServiceModalOpen(true);
+                }}
+              >
+                Add Service
+              </CustomButton>
+            </div>
+            {servicesLoading && services.length === 0 ? (
+              <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                Loading...
+              </div>
+            ) : services.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 py-10">
+                <div className="flex size-11 items-center justify-center rounded-xl bg-muted">
+                  <Plug className="size-5 text-muted-foreground" />
+                </div>
+                <p className="text-xs text-muted-foreground">No services configured yet</p>
+                <CustomButton
+                  type="default"
+                  size="sm"
+                  icon={<Plus />}
+                  onClick={() => {
+                    setEditingService(null);
+                    setServiceModalOpen(true);
+                  }}
+                >
+                  Create Service
+                </CustomButton>
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {services.map((svc) => (
+                  <div
+                    key={svc.uuid}
+                    className="flex items-start gap-3 rounded-lg border border-border bg-background p-3 transition-colors hover:bg-accent/20"
+                  >
+                    <div
+                      className={cn(
+                        'flex size-8 shrink-0 items-center justify-center rounded-md',
+                        TYPE_ICON_STYLES[svc.service_type] ?? 'bg-muted',
+                      )}
+                    >
+                      {TYPE_ICONS[svc.service_type] ?? <Server className="size-3.5" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="truncate text-sm font-medium text-foreground">
+                          {svc.name}
+                        </span>
+                        <Badge
+                          className={cn(
+                            'text-[9px] font-semibold uppercase',
+                            TYPE_BADGE_STYLES[svc.service_type],
+                          )}
+                        >
+                          {svc.service_type}
+                        </Badge>
+                        {svc.is_default && (
+                          <Badge className="bg-primary/10 text-[9px] text-primary hover:bg-primary/10">
+                            Default
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <span
+                            className={cn(
+                              'size-1.5 rounded-full',
+                              svc.status === 'active' ? 'bg-emerald-500' : 'bg-zinc-400',
+                            )}
+                          />
+                          {svc.status}
+                        </span>
+                        {svc.api_key_hint && (
+                          <>
+                            <span className="text-border">&middot;</span>
+                            <span className="flex items-center gap-0.5 font-mono">
+                              <Key className="size-2.5" />
+                              {svc.api_key_hint}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
+                    >
+                      <ActionMenu
+                        onEdit={() => {
+                          setEditingService(svc);
+                          setServiceModalOpen(true);
+                        }}
+                        onDelete={() => handleDeleteService(svc)}
+                        itemName={svc.name}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ),
+      },
+      {
+        key: 'models',
+        label: (
+          <span className="flex items-center gap-1.5">
+            <Box className="size-3.5" />
+            Models
+            <span className="ml-0.5 rounded-full bg-muted px-1.5 py-px text-[10px] tabular-nums text-muted-foreground">
+              {modelsState.pagination?.total ?? provider.models?.length ?? 0}
+            </span>
+          </span>
+        ),
+        children: (
+          <div className="flex h-full min-h-0 flex-col overflow-hidden">
+            <ModelsPanel selectedProvider={provider} onBack={goBack} compact />
+          </div>
+        ),
+      },
+    ];
+  }, [
+    provider,
+    keys,
+    keysLoading,
+    revealedKeyId,
+    revealedKeyValue,
+    revealingKeyId,
+    services,
+    servicesLoading,
+    modelsState.pagination,
+    handleReveal,
+    handleCopy,
+    handleDeleteKey,
+    handleDeleteService,
+    goBack,
+  ]);
+
   // ── Loading / Not found ────────────────────────────────────────
 
   if (loading) {
@@ -218,11 +558,13 @@ export default function ServiceProviderDetailPage() {
 
   if (!provider) {
     return (
-      <div className="animate-page flex h-full flex-col items-center justify-center gap-3 p-6">
-        <Server className="size-10 text-muted-foreground" />
+      <div className="animate-page flex h-full flex-col items-center justify-center gap-4 p-6">
+        <div className="flex size-14 items-center justify-center rounded-2xl bg-muted">
+          <Server className="size-6 text-muted-foreground" />
+        </div>
         <p className="text-sm font-medium text-foreground">Service provider not found</p>
         <CustomButton type="default" icon={<ArrowLeft />} onClick={goBack}>
-          Back to providers
+          Back to services
         </CustomButton>
       </div>
     );
@@ -232,225 +574,110 @@ export default function ServiceProviderDetailPage() {
   const statusKey = (provider.status ?? 'active').toLowerCase();
 
   return (
-    <div className="animate-page flex h-full flex-col gap-4 p-5">
-      {/* Compact header strip */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <button
-            onClick={goBack}
-            className="flex size-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            aria-label="Back"
-          >
-            <ArrowLeft className="size-4" />
-          </button>
-          <div
-            className={cn(
-              'flex size-9 shrink-0 items-center justify-center rounded-lg',
-              TYPE_ICON_STYLES[typeKey] ?? 'bg-muted text-muted-foreground',
-            )}
-          >
-            {TYPE_ICONS[typeKey] ?? <Server className="size-4" />}
-          </div>
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <h1 className="truncate text-lg font-semibold tracking-tight text-foreground">
-                {provider.display_name}
-              </h1>
-              <Badge
-                className={cn(
-                  'text-[10px] font-semibold uppercase tracking-wider',
-                  TYPE_BADGE_STYLES[typeKey] ?? 'bg-muted text-muted-foreground',
-                )}
-              >
-                {typeKey}
-              </Badge>
-              <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                <span
-                  className={cn(
-                    'size-1.5 rounded-full',
-                    STATUS_STYLES[statusKey] ?? STATUS_STYLES.inactive,
-                  )}
-                />
-                <span className="capitalize">{statusKey}</span>
-              </span>
-              {provider.is_system && (
-                <Badge className="bg-muted text-[10px] font-medium text-muted-foreground">
-                  System
-                </Badge>
-              )}
-            </div>
-            <p className="truncate text-[11px] text-muted-foreground">
-              <span className="font-mono">{provider.name}</span>
-              {provider.description && (
-                <>
-                  <span className="mx-1.5 text-border">·</span>
-                  <span>{provider.description}</span>
-                </>
-              )}
-              {provider.base_url && (
-                <>
-                  <span className="mx-1.5 text-border">·</span>
-                  <span className="font-mono">{provider.base_url}</span>
-                </>
-              )}
-            </p>
-          </div>
-        </div>
+    <div className="animate-page flex h-full flex-col overflow-hidden">
+      {/* ── Header ──────────────────────────────────────────────────── */}
+      <div className="shrink-0 border-b border-border bg-card px-6 py-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
+            <button
+              onClick={goBack}
+              className="flex size-9 cursor-pointer items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              aria-label="Back"
+            >
+              <ArrowLeft className="size-4" />
+            </button>
 
-        <div className="flex items-center gap-1.5">
-          <CustomButton type="default" size="sm" icon={<Edit />} onClick={() => setEditOpen(true)}>
-            Edit
-          </CustomButton>
-          {!provider.is_system && (
+            <div
+              className={cn(
+                'flex size-12 shrink-0 items-center justify-center rounded-xl',
+                TYPE_ICON_STYLES[typeKey] ?? 'bg-muted text-muted-foreground',
+              )}
+            >
+              {TYPE_ICONS[typeKey] ?? <Server className="size-5" />}
+            </div>
+
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                  {provider.display_name}
+                </h1>
+                <Badge
+                  className={cn(
+                    'text-[10px] font-semibold uppercase tracking-wider',
+                    TYPE_BADGE_STYLES[typeKey] ?? 'bg-muted text-muted-foreground',
+                  )}
+                >
+                  {typeKey}
+                </Badge>
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <span
+                    className={cn(
+                      'size-2 rounded-full',
+                      STATUS_STYLES[statusKey] ?? STATUS_STYLES.inactive,
+                    )}
+                  />
+                  <span className="capitalize">{statusKey}</span>
+                </span>
+                {provider.is_system && (
+                  <Badge className="bg-muted text-[10px] font-medium text-muted-foreground hover:bg-muted">
+                    System
+                  </Badge>
+                )}
+              </div>
+
+              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span className="font-mono">{provider.name}</span>
+                {provider.description && <span>{provider.description}</span>}
+                {provider.base_url && (
+                  <span className="flex items-center gap-1">
+                    <Globe className="size-3" />
+                    <span className="font-mono">{provider.base_url}</span>
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
             <CustomButton
               type="default"
               size="sm"
-              icon={<Trash2 />}
-              onClick={handleDelete}
-              loading={deleting}
+              icon={<Pencil />}
+              onClick={() => {
+                setEditingService(services.length > 0 ? services[0] : null);
+                setServiceModalOpen(true);
+              }}
             >
-              Delete
+              Edit
             </CustomButton>
-          )}
+            {!provider.is_system && (
+              <CustomButton
+                type="danger"
+                size="sm"
+                icon={<Trash2 />}
+                onClick={handleDelete}
+                loading={deleting}
+              >
+                Delete
+              </CustomButton>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* API Keys section — multi-key list */}
-      <div className="flex flex-col rounded-xl border border-border bg-card shadow-sm">
-        <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-          <div className="flex items-center gap-2">
-            <div className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary">
-              <Key className="size-3.5" />
-            </div>
-            <div>
-              <h2 className="text-sm font-semibold text-foreground">API Keys</h2>
-              <p className="text-[11px] text-muted-foreground">
-                {keys.length} {keys.length === 1 ? 'key' : 'keys'} for this provider
-              </p>
-            </div>
-          </div>
-          <CustomButton type="primary" size="sm" icon={<Plus />} onClick={handleAddKey}>
-            Add Key
-          </CustomButton>
-        </div>
-
-        {keysLoading && keys.length === 0 ? (
-          <div className="flex items-center justify-center gap-2 py-6 text-xs text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" />
-            Loading keys...
-          </div>
-        ) : keys.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-6 text-center">
-            <Key className="size-5 text-muted-foreground" />
-            <p className="text-xs text-muted-foreground">No API keys yet for this provider.</p>
-            <CustomButton type="default" size="sm" icon={<Plus />} onClick={handleAddKey}>
-              Add API Key
-            </CustomButton>
-          </div>
-        ) : (
-          <div className="divide-y divide-border">
-            {keys.map((row) => {
-              const isRevealed = revealedKeyId === row.id;
-              const isLoading = revealingKeyId === row.id;
-              const displayValue =
-                isRevealed && revealedKeyValue ? revealedKeyValue : row.api_key_hint;
-              return (
-                <div
-                  key={row.id}
-                  className="flex flex-wrap items-center gap-3 px-4 py-2.5 transition-colors hover:bg-accent/30"
-                >
-                  <div className="min-w-30 flex-1 truncate text-sm font-medium text-foreground">
-                    {row.name}
-                    {row.description && (
-                      <span className="ml-1.5 text-[11px] font-normal text-muted-foreground">
-                        — {row.description}
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex min-w-50 flex-2 items-center gap-1 rounded-md border border-border bg-muted/40 px-2 py-1">
-                    <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">
-                      {isLoading ? 'Loading...' : displayValue}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleReveal(row.id)}
-                      disabled={isLoading}
-                      className="flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                      title={isRevealed ? 'Hide' : 'Reveal'}
-                    >
-                      {isLoading ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : isRevealed ? (
-                        <EyeOff className="size-3.5" />
-                      ) : (
-                        <Eye className="size-3.5" />
-                      )}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(row.id)}
-                      className="flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                      title="Copy"
-                    >
-                      <Copy className="size-3.5" />
-                    </button>
-                  </div>
-                  <span className="flex items-center gap-1 text-[11px] capitalize text-muted-foreground">
-                    <span
-                      className={cn(
-                        'size-1.5 rounded-full',
-                        row.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500',
-                      )}
-                    />
-                    {row.status}
-                  </span>
-                  <span
-                    className={cn(
-                      'flex items-center gap-1 whitespace-nowrap text-[11px]',
-                      row.is_valid
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : 'text-amber-600 dark:text-amber-400',
-                    )}
-                  >
-                    {row.is_valid ? (
-                      <CheckCircle2 className="size-3.5" />
-                    ) : (
-                      <AlertCircle className="size-3.5" />
-                    )}
-                    {row.is_valid ? 'Valid' : 'Not validated'}
-                  </span>
-                  {row.updated_at != null && (
-                    <span className="whitespace-nowrap text-[11px] text-muted-foreground">
-                      {formatDate(row.updated_at, 'DD MMM YYYY')}
-                    </span>
-                  )}
-                  <ActionMenu
-                    onEdit={() => handleEditKey(row)}
-                    onDelete={() => handleDeleteKey(row)}
-                    itemName={row.name}
-                    deleteDescription={`Delete API key "${row.name}"? Models pointing at this key will be unlinked.`}
-                  />
-                </div>
-              );
-            })}
-          </div>
-        )}
+      {/* ── Tabbed content ──────────────────────────────────────────── */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <CustomTab
+          items={tabItems}
+          defaultActiveKey="keys"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden"
+          tabBarClassName="shrink-0 border-b border-border bg-background px-6"
+          contentClassName="min-h-0 flex-1 overflow-hidden"
+        />
       </div>
 
-      {/* Models — full width */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-        <ModelsPanel selectedProvider={provider} onBack={goBack} />
-      </div>
+      {/* ── Modals ──────────────────────────────────────────────────── */}
 
-      {/* Provider edit modal */}
-      <ProviderUpsertModal
-        open={editOpen}
-        onClose={() => setEditOpen(false)}
-        onSubmit={handleSubmit}
-        provider={provider}
-      />
-
-      {/* Multi-key add/edit modal */}
       <ApiKeyUpsertModal
         open={keyModalOpen}
         onClose={() => setKeyModalOpen(false)}
@@ -458,23 +685,13 @@ export default function ServiceProviderDetailPage() {
         serviceProviderId={providerId}
         apiKey={editingKey}
       />
-    </div>
-  );
-}
 
-// ── small helper ───────────────────────────────────────────────────
-
-interface RowProps {
-  label: string;
-  value?: string;
-  valueNode?: React.ReactNode;
-}
-
-function Row({ label, value, valueNode }: RowProps) {
-  return (
-    <div className="flex items-center justify-between gap-3 text-xs">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-foreground">{valueNode ?? value}</span>
+      <ServiceUpsertModal
+        open={serviceModalOpen}
+        onClose={() => setServiceModalOpen(false)}
+        onSubmit={handleServiceSubmit}
+        service={editingService}
+      />
     </div>
   );
 }
