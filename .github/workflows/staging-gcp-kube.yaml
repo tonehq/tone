@@ -1,0 +1,91 @@
+name: Staging GCP GKE CI/CD
+
+on:
+  push:
+    branches: ["staging-gcp-kube"]
+
+env:
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_REGION: us-central1
+  GKE_CLUSTER_NAME: staging-gcp-kube
+  GKE_CLUSTER_LOCATION: us-east4-a
+  REPOSITORY: tone
+  IMAGE_NAME: tone-staging-gke
+  NAMESPACE: staging-gcp-kube
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:latest
+            ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+          secrets: |
+            pip_extra_index=${{ secrets.PIP_EXTRA_INDEX_URL }}
+
+      - id: get-credentials
+        uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ env.GKE_CLUSTER_NAME }}
+          location: ${{ env.GKE_CLUSTER_LOCATION }}
+
+      - name: Create namespace
+        run: kubectl create namespace ${{ env.NAMESPACE }} --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Ensure infisical-credentials secret exists
+        run: |
+          kubectl create secret generic infisical-credentials \
+            --namespace=${{ env.NAMESPACE }} \
+            --from-literal=token='${{ secrets.INFISICAL_TOKEN }}' \
+            --from-literal=project_id='${{ secrets.INFISICAL_PROJECT_ID }}' \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Substitute IMAGE_TAG in deployment manifests
+        run: |
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging-gcp-kube/deployment.yaml
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging-gcp-kube/call-deployment.yaml
+
+      - name: Apply all manifests
+        run: |
+          kubectl apply -f build/kubernetes/staging-gcp-kube/letsencrypt-prod.yaml
+          kubectl apply -f build/kubernetes/staging-gcp-kube/service.yaml
+          kubectl apply -f build/kubernetes/staging-gcp-kube/deployment.yaml
+          kubectl apply -f build/kubernetes/staging-gcp-kube/certificate.yaml
+          kubectl apply -f build/kubernetes/staging-gcp-kube/ingress.yaml
+          kubectl apply -f build/kubernetes/staging-gcp-kube/call-pdb.yaml
+          kubectl apply -f build/kubernetes/staging-gcp-kube/call-service.yaml
+          kubectl apply -f build/kubernetes/staging-gcp-kube/call-deployment.yaml
+          kubectl apply -f build/kubernetes/staging-gcp-kube/call-certificate.yaml
+          kubectl apply -f build/kubernetes/staging-gcp-kube/call-ingress.yaml
+
+      - name: Rollout restart deployments
+        run: |
+          kubectl rollout restart deployment/staging-gcp-kube-tone-api-deployment -n ${{ env.NAMESPACE }}
+          kubectl rollout restart deployment/staging-gcp-kube-tone-call-worker -n ${{ env.NAMESPACE }}
+
+      - name: Wait for rollouts
+        run: |
+          kubectl rollout status deployment/staging-gcp-kube-tone-api-deployment -n ${{ env.NAMESPACE }} --timeout=180s
+          kubectl rollout status deployment/staging-gcp-kube-tone-call-worker -n ${{ env.NAMESPACE }} --timeout=180s
