@@ -34,7 +34,7 @@ class TestUpsertServiceProvider:
 
         assert resp.status_code == 200
         assert resp.json()["name"] == "openai"
-        mock_service_cls.assert_called_once_with(ANY, user_id=ANY)
+        mock_service_cls.assert_called_once_with(ANY, user_id=ANY, org_id=ANY)
         mock_instance.upsert_service_provider.assert_called_once_with(
             name="openai",
             display_name="OpenAI",
@@ -162,7 +162,7 @@ class TestUpsertServiceProvider:
 
 
 # ---------------------------------------------------------------------------
-# GET /api/v1/service-providers/list
+# POST /api/v1/service-providers/list
 # ---------------------------------------------------------------------------
 class TestListServiceProviders:
     @patch("core.api.v1.service_providers.ServiceProviderService")
@@ -177,7 +177,7 @@ class TestListServiceProviders:
         # Mock the Voice query for TTS filtering
         mock_db.query.return_value.filter.return_value.distinct.return_value.all.return_value = []
 
-        resp = client_as_member.get("/api/v1/service-providers/list")
+        resp = client_as_member.post("/api/v1/service-providers/list", json={})
 
         assert resp.status_code == 200
         mock_instance.get_all_service_providers.assert_called_once_with(
@@ -193,8 +193,8 @@ class TestListServiceProviders:
         mock_service_cls.return_value = mock_instance
         mock_db.query.return_value.filter.return_value.distinct.return_value.all.return_value = []
 
-        resp = client_as_member.get(
-            "/api/v1/service-providers/list", params={"provider_type": "llm"}
+        resp = client_as_member.post(
+            "/api/v1/service-providers/list", json={"provider_type": "llm"}
         )
 
         assert resp.status_code == 200
@@ -216,7 +216,7 @@ class TestListServiceProviders:
         # No voices in DB
         mock_db.query.return_value.filter.return_value.distinct.return_value.all.return_value = []
 
-        resp = client_as_member.get("/api/v1/service-providers/list")
+        resp = client_as_member.post("/api/v1/service-providers/list", json={})
 
         assert resp.status_code == 200
         # Provider id=1 is in ALLOWED_PROVIDER_IDS but is TTS with no voices
@@ -238,7 +238,7 @@ class TestListServiceProviders:
             (1,)
         ]
 
-        resp = client_as_member.get("/api/v1/service-providers/list")
+        resp = client_as_member.post("/api/v1/service-providers/list", json={})
 
         assert resp.status_code == 200
         assert len(resp.json()) == 1
@@ -255,7 +255,7 @@ class TestListServiceProviders:
         mock_service_cls.return_value = mock_instance
         mock_db.query.return_value.filter.return_value.distinct.return_value.all.return_value = []
 
-        resp = client_as_member.get("/api/v1/service-providers/list")
+        resp = client_as_member.post("/api/v1/service-providers/list", json={})
 
         assert resp.status_code == 200
         assert len(resp.json()) == 0
@@ -267,14 +267,14 @@ class TestListServiceProviders:
         mock_service_cls.return_value = mock_instance
         mock_db.query.return_value.filter.return_value.distinct.return_value.all.return_value = []
 
-        resp = client_as_member.get("/api/v1/service-providers/list")
+        resp = client_as_member.post("/api/v1/service-providers/list", json={})
 
         assert resp.status_code == 200
         assert resp.json() == []
 
 
 # ---------------------------------------------------------------------------
-# GET /api/v1/service-providers/get
+# POST /api/v1/service-providers/get
 # ---------------------------------------------------------------------------
 class TestGetServiceProvider:
     @patch("core.api.v1.service_providers.ServiceProviderService")
@@ -286,8 +286,8 @@ class TestGetServiceProvider:
         }
         mock_service_cls.return_value = mock_instance
 
-        resp = client_as_member.get(
-            "/api/v1/service-providers/get", params={"provider_id": 1}
+        resp = client_as_member.post(
+            "/api/v1/service-providers/get", json={"provider_id": 1}
         )
 
         assert resp.status_code == 200
@@ -302,14 +302,14 @@ class TestGetServiceProvider:
         )
         mock_service_cls.return_value = mock_instance
 
-        resp = client_as_member.get(
-            "/api/v1/service-providers/get", params={"provider_id": 999}
+        resp = client_as_member.post(
+            "/api/v1/service-providers/get", json={"provider_id": 999}
         )
         assert resp.status_code == 404
 
     def test_missing_provider_id(self, client_as_member):
-        resp = client_as_member.get("/api/v1/service-providers/get")
-        assert resp.status_code == 422
+        resp = client_as_member.post("/api/v1/service-providers/get", json={})
+        assert resp.status_code == 400
 
 
 # ---------------------------------------------------------------------------
