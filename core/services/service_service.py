@@ -123,7 +123,9 @@ class ServiceConfigService(BaseService):
             "updated_at": svc.updated_at
         }
 
-    def get_all_services(self, service_type: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_all_services(self, service_type: Optional[str] = None,
+                         page: Optional[int] = None,
+                         page_size: Optional[int] = None):
         query = self.query(Service).join(
             ServiceProvider, Service.service_provider_id == ServiceProvider.id
         ).filter(Service.status == 'active').add_entity(ServiceProvider)
@@ -131,7 +133,13 @@ class ServiceConfigService(BaseService):
         if service_type:
             query = query.filter(Service.service_type == service_type)
 
-        results = query.all()
+        total = query.count() if page and page_size else None
+
+        if page and page_size:
+            offset = (page - 1) * page_size
+            results = query.offset(offset).limit(page_size).all()
+        else:
+            results = query.all()
 
         # Collect api_key_ids to batch-fetch hints
         api_key_ids = [svc.api_key_id for svc, _ in results if svc.api_key_id]
@@ -160,7 +168,7 @@ class ServiceConfigService(BaseService):
                     "updated_at": m.updated_at,
                 })
 
-        return [{
+        data = [{
             "id": svc.id,
             "uuid": str(svc.uuid),
             "name": svc.name,
@@ -183,6 +191,19 @@ class ServiceConfigService(BaseService):
             "models": models_by_provider.get(svc.service_provider_id, []),
             "meta_data_schema": provider.meta_data_schema,
         } for svc, provider in results]
+
+        if page and page_size and total is not None:
+            return {
+                "data": data,
+                "pagination": {
+                    "page": page,
+                    "page_size": page_size,
+                    "total": total,
+                    "total_pages": (total + page_size - 1) // page_size,
+                }
+            }
+
+        return data
 
     def get_service(self, service_id: int) -> Dict[str, Any]:
         result = self.query(Service).join(
