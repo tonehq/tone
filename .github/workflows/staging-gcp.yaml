@@ -67,4 +67,5 @@ jobs:
             --max-instances=10
             --concurrency=3
             --timeout=3600
+            --termination-grace-period=300
             --set-env-vars=ENV=staging,INFISICAL_TOKEN=${{ secrets.INFISICAL_TOKEN }},INFISICAL_PROJECT_ID=${{ secrets.INFISICAL_PROJECT_ID }}
