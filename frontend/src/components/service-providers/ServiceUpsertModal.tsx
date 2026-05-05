@@ -236,10 +236,8 @@ export default function ServiceUpsertModal({
   ]);
 
   const isNewKey = selectedApiKeyId === '__new__';
-  const isValid =
-    name.trim().length > 0 &&
-    !!selectedProviderId &&
-    (!isNewKey || newApiKeyValue.trim().length > 0);
+  const hasApiKey = isNewKey ? newApiKeyValue.trim().length > 0 : !!selectedApiKeyId;
+  const isValid = name.trim().length > 0 && !!selectedProviderId && hasApiKey;
 
   return (
     <CustomModal
