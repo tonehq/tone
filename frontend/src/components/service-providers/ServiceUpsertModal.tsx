@@ -73,7 +73,7 @@ export default function ServiceUpsertModal({
   useEffect(() => {
     if (!open) return;
     setProvidersLoading(true);
-    listServiceProviders({ page_size: 0 })
+    listServiceProviders({ page_size: 0, exclude_existing_services: true })
       .then((result) => setProviders(result.providers))
       .catch(handleApiError)
       .finally(() => setProvidersLoading(false));
