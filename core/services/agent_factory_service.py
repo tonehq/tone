@@ -1618,27 +1618,39 @@ class AgentFactoryService(BaseService):
         # Fallback: if on_audio_data didn't update DB (e.g. no audio captured),
         # update the call log here with whatever we have.
         call_log_id = await _get_call_log_id()
+        call_duration_secs = _time.monotonic() - _t_comp_start
         if call_log_id and agent and not call_log_updated["done"]:
-            logger.info("on_audio_data did not complete DB update, running fallback for call_log_id={}", call_log_id)
-            try:
-                transcript_data = transcript_entries if transcript_entries else None
-
-                collected_metrics = metrics_collector.get_collected_metrics()
-                with get_db_context() as db:
-                    CallLogService(db).complete_call(
-                        call_log_id=call_log_id,
-                        audio_file_path=None,
-                        transcript=transcript_data,
-                        metrics=collected_metrics,
-                    )
-                logger.info("Call log completed (fallback): id={}", call_log_id)
-            except Exception as e:
-                logger.error("Failed to complete call log id={}: {}", call_log_id, e)
+            # For /ws/test calls only: if the connection was very short with no
+            # transcript, it was a failed/retried connection — delete to avoid duplicates.
+            # Real telephony calls (Twilio/Telnyx/Plivo via /ws) always keep their log.
+            if transport_type == "test" and call_duration_secs < 10 and not transcript_entries:
+                logger.info("Short-lived test connection ({:.1f}s, no transcript) — deleting call_log id={}", call_duration_secs, call_log_id)
                 try:
                     with get_db_context() as db:
-                        CallLogService(db).fail_call(call_log_id)
-                except Exception:
-                    pass
+                        CallLogService(db).delete_call(call_log_id)
+                except Exception as e:
+                    logger.error("Failed to delete short call_log id={}: {}", call_log_id, e)
+            else:
+                logger.info("on_audio_data did not complete DB update, running fallback for call_log_id={}", call_log_id)
+                try:
+                    transcript_data = transcript_entries if transcript_entries else None
+
+                    collected_metrics = metrics_collector.get_collected_metrics()
+                    with get_db_context() as db:
+                        CallLogService(db).complete_call(
+                            call_log_id=call_log_id,
+                            audio_file_path=None,
+                            transcript=transcript_data,
+                            metrics=collected_metrics,
+                        )
+                    logger.info("Call log completed (fallback): id={}", call_log_id)
+                except Exception as e:
+                    logger.error("Failed to complete call log id={}: {}", call_log_id, e)
+                    try:
+                        with get_db_context() as db:
+                            CallLogService(db).fail_call(call_log_id)
+                    except Exception:
+                        pass
 
     async def run_bot_for_agent(
         self, agent: Any, transport: Any, runner_args: Any

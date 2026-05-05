@@ -121,6 +121,13 @@ class CallLogService(BaseService):
         self.db.commit()
         return call_log
 
+    def delete_call(self, call_log_id: int) -> None:
+        """Delete a call_log entry (used for short-lived test connections that were retried)."""
+        call_log = self.db.query(CallLog).filter(CallLog.id == call_log_id).first()
+        if call_log:
+            self.db.delete(call_log)
+            self.db.commit()
+
     def get_filter_values(self, column_name: str) -> Dict[str, Any]:
         allowed = {
             "status": CallLog.status,
