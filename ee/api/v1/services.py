@@ -19,9 +19,8 @@ def upsert_service(
     service_provider_id = data.get("service_provider_id")
     name = data.get("name")
     service_type = data.get("service_type")
-    config = data.get("config")
 
-    if not all([service_provider_id, name, service_type, config]):
+    if service_provider_id is None or not name or not service_type :
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="service_provider_id, name, service_type, and config are required"
@@ -31,7 +30,7 @@ def upsert_service(
         service_provider_id=service_provider_id,
         name=name,
         service_type=service_type,
-        config=config,
+        config=data.get("config", {}),
         api_key_id=data.get("api_key_id"),
         description=data.get("description"),
         is_default=data.get("is_default", False),
@@ -92,8 +91,17 @@ def get_default_service(
 
 @router.delete("/delete")
 def delete_service(
-    service_id: int = Query(...),
+    uuid: str = Query(None),
+    service_id: int = Query(None),
     claims: EEJWTClaims = Depends(require_ee_admin_or_owner),
     db: Session = Depends(get_db)
 ):
-    return ServiceConfigService(db, org_id=UUID(claims.org_id), user_id=claims.user_id).delete_service(service_id)
+    service_config = ServiceConfigService(db, org_id=UUID(claims.org_id), user_id=claims.user_id)
+    if uuid:
+        return service_config.delete_service_by_uuid(uuid)
+    if service_id:
+        return service_config.delete_service(service_id)
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="uuid or service_id is required"
+    )
