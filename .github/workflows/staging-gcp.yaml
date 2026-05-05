@@ -63,8 +63,8 @@ jobs:
             --allow-unauthenticated
             --memory=2Gi
             --cpu=2
-            --min-instances=1
-            --max-instances=3
+            --min-instances=2
+            --max-instances=5
             --concurrency=10
             --timeout=3600
             --set-env-vars=ENV=staging,INFISICAL_TOKEN=${{ secrets.INFISICAL_TOKEN }},INFISICAL_PROJECT_ID=${{ secrets.INFISICAL_PROJECT_ID }}
