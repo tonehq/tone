@@ -504,7 +504,6 @@ class AgentFactoryService(BaseService):
             if provider_name == "google": #Done
                 from pipecat.services.google.llm import GoogleLLMService
                 params=self._build_input_params(GoogleLLMService, metadata)
-                print(f"params: {params}")
                 return GoogleLLMService(api_key=api_key, model=model or "gemini-2.5-flash", params=params)
             if provider_name == "ollama": #done
                 from pipecat.services.ollama.llm import OLLamaLLMService
