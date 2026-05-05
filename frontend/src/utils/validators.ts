@@ -51,7 +51,7 @@ export function buildFieldRules(field: MetaDataSchemaField): RegisterOptions {
     rules.required = 'Please enter a value for this field';
   }
 
-  const validatorFn = VALIDATORS[field.validator];
+  const validatorFn = typeof field.validator === 'string' ? VALIDATORS[field.validator] : undefined;
   if (validatorFn) {
     rules.validate = (value: unknown) => validatorFn(value, field);
   }

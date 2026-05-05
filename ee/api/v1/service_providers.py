@@ -5,6 +5,7 @@ from uuid import UUID
 
 from core.database.session import get_db
 from core.services.service_provider_service import ServiceProviderService
+from core.services.service_service import ServiceConfigService
 from ee.middleware.auth import get_ee_jwt_claims, require_ee_admin_or_owner, require_ee_org_member, EEJWTClaims
 
 router = APIRouter()
@@ -64,7 +65,6 @@ def upsert_service_provider(
     display_name = data.get("display_name")
     provider_type = data.get("provider_type")
     auth_type = data.get("auth_type")
-    api_key = data.get("api_key")
 
     if not all([name, display_name, provider_type, auth_type]):
         raise HTTPException(
@@ -72,30 +72,12 @@ def upsert_service_provider(
             detail="name, display_name, provider_type, and auth_type are required"
         )
 
-    if not isinstance(api_key, dict):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="api_key object is required",
-        )
-
-    is_update = data.get("id") is not None
-    if not is_update and not api_key.get("api_key"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="api_key.api_key (secret value) is required when creating a service provider",
-        )
-    if api_key.get("id") is None and not api_key.get("api_key"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="api_key.id or api_key.api_key (secret value) is required",
-        )
-
-    return ServiceProviderService(db, org_id=UUID(claims.org_id), user_id=claims.user_id).upsert_service_provider(
+    org_id = UUID(claims.org_id)
+    result = ServiceProviderService(db, org_id=org_id, user_id=claims.user_id).upsert_service_provider(
         name=name,
         display_name=display_name,
         provider_type=provider_type,
         auth_type=auth_type,
-        api_key=api_key,
         description=data.get("description"),
         logo_url=data.get("logo_url"),
         website_url=data.get("website_url"),
@@ -107,6 +89,27 @@ def upsert_service_provider(
         provider_status=data.get("status"),
         provider_id=data.get("id"),
     )
+
+    # Create/update a Service record when API key is provided
+    api_key = data.get("api_key")
+    if isinstance(api_key, dict):
+        api_key_value = api_key.get("api_key")
+        service_status = "active" if api_key_value or api_key.get("id") else "inactive"
+        ServiceConfigService(db, org_id=org_id, user_id=claims.user_id).upsert_service(
+            service_provider_id=result["id"],
+            name=f"{display_name} {provider_type.upper()}",
+            service_type=provider_type,
+            config={},
+            api_key_value=api_key_value if api_key_value else None,
+            api_key_name=api_key.get("name") or f"{display_name} key",
+            api_key_id=api_key.get("id"),
+            additional_credentials=api_key.get("additional_credentials"),
+            description=data.get("description"),
+            is_default=True,
+            service_status=service_status,
+        )
+
+    return result
 
 
 @router.post("/list")

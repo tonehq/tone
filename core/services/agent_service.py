@@ -14,6 +14,7 @@ from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
 from core.models.agent_channel_phone_numbers import AgentChannelPhoneNumbers
 from core.models.service_provider import ServiceProvider
+from core.models.service import Service
 from core.models.enums import AgentType
 from core.services.agent_config_service import AgentConfigService
 from core.services.channel_service import ChannelService
@@ -535,23 +536,12 @@ class AgentService(BaseService):
         return {"message": "Agent deleted successfully"}
 
     def get_all_agents(self, agent_id=None, created_by=None):
-        """Return all agents with joined agent_config and service_providers (llm, tts, stt). If agent_id is given, return only that agent."""
-        from sqlalchemy.orm import aliased
-
-        llm_provider = aliased(ServiceProvider)
-        tts_provider = aliased(ServiceProvider)
-        stt_provider = aliased(ServiceProvider)
+        """Return all agents with joined agent_config. If agent_id is given, return only that agent."""
 
         q = (
             self.query(Agent)
             .outerjoin(AgentConfig, AgentConfig.agent_id == Agent.id)
-            .outerjoin(llm_provider, AgentConfig.llm_service_id == llm_provider.id)
-            .outerjoin(tts_provider, AgentConfig.tts_service_id == tts_provider.id)
-            .outerjoin(stt_provider, AgentConfig.stt_service_id == stt_provider.id)
             .add_entity(AgentConfig)
-            .add_entity(llm_provider)
-            .add_entity(tts_provider)
-            .add_entity(stt_provider)
         )
         if agent_id is not None:
             q = q.filter(Agent.id == agent_id)
@@ -560,6 +550,6 @@ class AgentService(BaseService):
         rows = q.order_by(Agent.id).all()
 
         result = []
-        for agent, config, llm_sp, tts_sp, stt_sp in rows:
+        for agent, config in rows:
             result.append(self._agent_response_item(agent, config))
         return result

@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: staging-gcp-kube-tone-call-worker-pdb
+  namespace: staging-gcp-kube
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: staging-gcp-kube-tone-call-worker

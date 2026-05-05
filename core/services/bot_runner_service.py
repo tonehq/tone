@@ -114,11 +114,10 @@ class BotRunnerService(BaseService):
             logger.warning("Twilio service provider not found in DB")
             return {}
 
-        api_keys = (
-            self.db.query(ApiKey)
-            .filter(ApiKey.service_provider_id == provider.id)
-            .all()
-        )
+        q = self.db.query(ApiKey).filter(ApiKey.service_provider_id == provider.id)
+        if self.org_id:
+            q = q.filter(ApiKey.organization_id == self.org_id)
+        api_keys = q.all()
 
         creds = {}
         for ak in api_keys:
@@ -183,11 +182,10 @@ class BotRunnerService(BaseService):
             logger.warning("Telnyx service provider not found in DB")
             return None
 
-        api_key = (
-            self.db.query(ApiKey)
-            .filter(ApiKey.service_provider_id == provider.id, ApiKey.status == "active")
-            .first()
-        )
+        q = self.db.query(ApiKey).filter(ApiKey.service_provider_id == provider.id, ApiKey.status == "active")
+        if self.org_id:
+            q = q.filter(ApiKey.organization_id == self.org_id)
+        api_key = q.first()
         if not api_key:
             logger.warning("No active API key found for Telnyx")
             return None
