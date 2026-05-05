@@ -1463,8 +1463,8 @@ class AgentFactoryService(BaseService):
             user_aggregator = context_aggregator.user()
             assistant_aggregator = context_aggregator.assistant()
             llm_text_processor = LLMTextProcessor()
-            # Use passed end_call_message; only query DB if not provided and agent exists
-            if end_call_message is None and agent:
+            # Use passed end_call_message; only query DB if not provided, agent exists, and DB is available
+            if end_call_message is None and agent and self.db is not None:
                 agent_config = self._get_agent_config(agent)
                 if agent_config:
                     end_call_message = agent_config.end_call_message

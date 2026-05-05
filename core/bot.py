@@ -222,9 +222,35 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     if agent:
         logger.info("Running bot with agent config: id=%s name=%s", agent.id, agent.name)
         _t = _time.monotonic()
+        # Get agent bot data (LLM, STT, TTS, prompt) from DB, then close the session
+        # BEFORE starting the long-running pipeline. This prevents Neon DB SSL
+        # timeout errors after 300+ second calls.
         with get_db_context() as db:
-            await AgentFactoryService(db).run_bot_for_agent(agent, transport, runner_args)
-        logger.info("[TIMING] run_bot() run_bot_for_agent finished (+%.3fs), total run_bot: %.3fs", _time.monotonic() - _t, _time.monotonic() - _t_run_bot)
+            factory = AgentFactoryService(db)
+            bot_data = factory.get_agent_bot_data(agent, prefetched=body.get("_prefetched_services"))
+        if not bot_data:
+            raise ValueError(
+                "Agent has no active config or missing LLM/STT/TTS services. "
+                "Configure the agent and ensure services are set."
+            )
+        logger.info("[TIMING] run_bot() get_agent_bot_data (+%.3fs)", _time.monotonic() - _t)
+        # Run the pipeline WITHOUT holding a DB session open. run_bot_with_components
+        # creates its own short-lived DB sessions for call_log creation, audio upload,
+        # etc. This avoids Neon DB SSL timeout on 300+ second calls.
+        _t2 = _time.monotonic()
+        factory = AgentFactoryService(db=None)
+        await factory.run_bot_with_components(
+            transport=transport,
+            runner_args=runner_args,
+            llm=bot_data["llm"],
+            stt=bot_data["stt"],
+            tts=bot_data["tts"],
+            messages=bot_data["messages"],
+            agent=agent,
+            end_call_message=bot_data.get("end_call_message"),
+            is_s2s=bot_data.get("is_s2s", False),
+        )
+        logger.info("[TIMING] run_bot() run_bot_with_components finished (+%.3fs), total run_bot: %.3fs", _time.monotonic() - _t2, _time.monotonic() - _t_run_bot)
         return
 
     # Fallback when no agent (e.g. WebRTC, Daily without agent in body)
