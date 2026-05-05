@@ -33,6 +33,7 @@ export interface ListProvidersParams {
   sort?: string;
   page?: number;
   page_size?: number;
+  exclude_existing_services?: boolean;
 }
 
 export interface ListProvidersResult {
