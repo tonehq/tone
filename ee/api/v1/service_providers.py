@@ -135,6 +135,7 @@ def get_all_service_providers(
         sort_order=sort_order,
         page=page,
         page_size=page_size,
+        exclude_existing_services=bool(data.get("exclude_existing_services")),
     )
 
 

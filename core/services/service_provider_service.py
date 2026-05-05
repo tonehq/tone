@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 
 from core.services.base import BaseService
 from core.models.service_provider import ServiceProvider
+from core.models.service import Service
 from core.models.models import Model
 from core.models.voice import Voice
 
@@ -128,6 +129,7 @@ class ServiceProviderService(BaseService):
         sort_order: str = "desc",
         page: int = 1,
         page_size: Optional[int] = 10,
+        exclude_existing_services: bool = False,
     ) -> Dict[str, Any]:
         """List service providers with optional filters, sorting, and pagination.
 
@@ -138,8 +140,6 @@ class ServiceProviderService(BaseService):
 
         if status_filter:
             query = query.filter(ServiceProvider.status == status_filter)
-        else:
-            query = query.filter(ServiceProvider.status == "active")
 
         if provider_type:
             query = query.filter(ServiceProvider.provider_type == provider_type)
@@ -164,6 +164,17 @@ class ServiceProviderService(BaseService):
                 ServiceProvider.id.in_(tts_with_voices_subq),
             )
         )
+
+        if exclude_existing_services and self.org_id:
+            mapped_ids = (
+                self.db.query(Service.service_provider_id)
+                .filter(Service.organization_id == self.org_id)
+                .distinct()
+                .all()
+            )
+            mapped_id_list = [row[0] for row in mapped_ids]
+            if mapped_id_list:
+                query = query.filter(ServiceProvider.id.notin_(mapped_id_list))
 
         # Count BEFORE pagination
         total = query.count()

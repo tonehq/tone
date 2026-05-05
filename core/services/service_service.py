@@ -259,6 +259,20 @@ class ServiceConfigService(BaseService):
 
         return {"message": "Service deleted successfully"}
 
+    def delete_service_by_uuid(self, service_uuid: str) -> Dict[str, str]:
+        svc = self.query(Service).filter(Service.uuid == service_uuid).first()
+
+        if not svc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Service not found"
+            )
+
+        self.db.delete(svc)
+        self.db.commit()
+
+        return {"message": "Service deleted successfully"}
+
     def get_default_service(self, service_type: str) -> Dict[str, Any]:
         result = self.query(Service).join(
             ServiceProvider, Service.service_provider_id == ServiceProvider.id
