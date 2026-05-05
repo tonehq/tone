@@ -2,6 +2,7 @@
 
 import { loadableProvidersAtom } from '@/atoms/ProviderAtom';
 import { CallConfigurationTab, GeneralTab, VoiceTab } from '@/components/agents/agent-form';
+import ToolsTab from '@/components/agents/agent-form/ToolsTab';
 import type { DynamicProviderFieldsHandle } from '@/components/agents/agent-form/DynamicProviderFields';
 import type { GeneralTabHandle } from '@/components/agents/agent-form/GeneralTab';
 import PromptPage from '@/components/agents/agent-form/promptPage';
@@ -34,6 +35,7 @@ import {
   Save,
   Settings,
   Volume2,
+  Wrench,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -292,6 +294,14 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
             }}
             onFormChange={handleFormChange}
           />
+        ),
+      },
+      {
+        key: 'tools',
+        label: 'Tools',
+        icon: <Wrench size={16} />,
+        children: (
+          <ToolsTab agentId={agentId ? Number(agentId) : undefined} isEditMode={isEditMode} />
         ),
       },
       {
