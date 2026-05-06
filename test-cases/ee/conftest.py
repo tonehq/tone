@@ -34,7 +34,19 @@ def _get_real_org_id():
         conn.close()
 
 
+def _get_real_user_id():
+    """Fetch a real user ID from the DB for tests."""
+    from sqlalchemy import text
+    conn = engine.connect()
+    try:
+        row = conn.execute(text("SELECT id FROM users LIMIT 1")).fetchone()
+        return row[0] if row else 1
+    finally:
+        conn.close()
+
+
 ORG_ID = _get_real_org_id()
+REAL_USER_ID = _get_real_user_id()
 
 
 @pytest.fixture
@@ -63,9 +75,9 @@ def _make_real_client(db_session, token=None):
 
 
 # Use real user IDs that exist in the database
-MEMBER_USER_ID = 1
-ADMIN_USER_ID = 1
-OWNER_USER_ID = 1
+MEMBER_USER_ID = REAL_USER_ID
+ADMIN_USER_ID = REAL_USER_ID
+OWNER_USER_ID = REAL_USER_ID
 
 
 @pytest.fixture

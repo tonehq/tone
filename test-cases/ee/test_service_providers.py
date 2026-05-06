@@ -66,6 +66,38 @@ class TestGetAllServiceProviders:
         response = client_unauthenticated.post("/api/v1/service-providers/list", json={})
         assert response.status_code in (401, 403)
 
+    def test_get_all_providers_exclude_existing_services(self, client_as_member):
+        """New param: exclude_existing_services filters out providers with active services."""
+        response = client_as_member.post("/api/v1/service-providers/list", json={
+            "exclude_existing_services": True
+        })
+        assert response.status_code == 200
+
+    def test_get_all_providers_with_sort(self, client_as_member):
+        response = client_as_member.post("/api/v1/service-providers/list", json={
+            "sort": "-name"
+        })
+        assert response.status_code == 200
+
+    def test_get_all_providers_invalid_sort_field(self, client_as_member):
+        response = client_as_member.post("/api/v1/service-providers/list", json={
+            "sort": "-invalid_field"
+        })
+        assert response.status_code == 400
+
+    def test_get_all_providers_pagination(self, client_as_member):
+        response = client_as_member.post("/api/v1/service-providers/list", json={
+            "page": 1, "page_size": 5
+        })
+        assert response.status_code == 200
+
+    def test_get_all_providers_invalid_page(self, client_as_member):
+        """page=-1 should fail validation (page must be >= 1)."""
+        response = client_as_member.post("/api/v1/service-providers/list", json={
+            "page": -1
+        })
+        assert response.status_code == 400
+
 
 # ─── POST /api/v1/service-providers/get ───
 
