@@ -104,6 +104,54 @@ class TestGetVoiceByProvider:
         assert response.status_code == 200
 
 
+# ─── GET /api/v1/voice/get_languages_by_provider ───
+
+class TestGetLanguagesByProvider:
+    """Tests for GET /api/v1/voice/get_languages_by_provider"""
+
+    def test_get_languages_by_provider_returns_200(self, client_as_member):
+        response = client_as_member.get("/api/v1/voice/get_languages_by_provider?service_provider_id=1")
+        assert response.status_code == 200
+
+    def test_get_languages_by_provider_missing_id(self, client_as_member):
+        response = client_as_member.get("/api/v1/voice/get_languages_by_provider")
+        assert response.status_code == 422
+
+    def test_get_languages_by_provider_invalid_id(self, client_as_member):
+        response = client_as_member.get("/api/v1/voice/get_languages_by_provider?service_provider_id=abc")
+        assert response.status_code == 422
+
+    def test_get_languages_by_provider_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get("/api/v1/voice/get_languages_by_provider?service_provider_id=1")
+        assert response.status_code in (401, 403)
+
+
+# ─── GET /api/v1/voice/get_voices_by_language ───
+
+class TestGetVoicesByLanguage:
+    """Tests for GET /api/v1/voice/get_voices_by_language"""
+
+    def test_get_voices_by_language_returns_200(self, client_as_member):
+        response = client_as_member.get(
+            "/api/v1/voice/get_voices_by_language?service_provider_id=1&language=en"
+        )
+        assert response.status_code == 200
+
+    def test_get_voices_by_language_missing_provider_id(self, client_as_member):
+        response = client_as_member.get("/api/v1/voice/get_voices_by_language?language=en")
+        assert response.status_code == 422
+
+    def test_get_voices_by_language_missing_language(self, client_as_member):
+        response = client_as_member.get("/api/v1/voice/get_voices_by_language?service_provider_id=1")
+        assert response.status_code == 422
+
+    def test_get_voices_by_language_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get(
+            "/api/v1/voice/get_voices_by_language?service_provider_id=1&language=en"
+        )
+        assert response.status_code in (401, 403)
+
+
 # ─── POST /api/v1/voice/upsert_voice ───
 
 class TestUpsertVoice:

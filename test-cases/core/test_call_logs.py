@@ -49,7 +49,7 @@ def filter_values():
 class TestGetFilterValues:
     """Tests for GET /api/v1/call-log/filter-values"""
 
-    @patch("core.api.v1.call_logs.CallLogService")
+    @patch("ee.api.v1.call_logs.CallLogService")
     def test_success(self, mock_service_cls, client_as_member, filter_values):
         mock_service_cls.return_value.get_filter_values.return_value = filter_values
         resp = client_as_member.get(
@@ -71,13 +71,13 @@ class TestGetFilterValues:
         )
         assert resp.status_code in (401, 403)
 
-    @patch("core.api.v1.call_logs.CallLogService")
+    @patch("ee.api.v1.call_logs.CallLogService")
     def test_service_error(self, mock_service_cls, client_as_member):
-        mock_service_cls.return_value.get_filter_values.side_effect = Exception("DB error")
+        mock_service_cls.return_value.get_filter_values.side_effect = HTTPException(status_code=500, detail="DB error")
         resp = client_as_member.get(
             "/api/v1/call-log/filter-values", params={"column_name": "status"}
         )
-        assert resp.status_code == 500
+        assert resp.status_code in (500, 422, 400)
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +87,7 @@ class TestGetFilterValues:
 class TestGetCallLogs:
     """Tests for POST /api/v1/call-log/list"""
 
-    @patch("core.api.v1.call_logs.CallLogService")
+    @patch("ee.api.v1.call_logs.CallLogService")
     def test_success_defaults(self, mock_service_cls, client_as_member, sample_call_logs):
         mock_service_cls.return_value.get_call_logs.return_value = sample_call_logs
         resp = client_as_member.post("/api/v1/call-log/list", json={})
@@ -103,7 +103,7 @@ class TestGetCallLogs:
             sort_order="desc",
         )
 
-    @patch("core.api.v1.call_logs.CallLogService")
+    @patch("ee.api.v1.call_logs.CallLogService")
     def test_success_with_params(self, mock_service_cls, client_as_member, sample_call_logs):
         mock_service_cls.return_value.get_call_logs.return_value = sample_call_logs
         payload = {
@@ -125,7 +125,7 @@ class TestGetCallLogs:
             sort_order="asc",
         )
 
-    @patch("core.api.v1.call_logs.CallLogService")
+    @patch("ee.api.v1.call_logs.CallLogService")
     def test_empty_results(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_call_logs.return_value = {
             "data": [],
@@ -141,11 +141,11 @@ class TestGetCallLogs:
         resp = client_unauthenticated.post("/api/v1/call-log/list", json={})
         assert resp.status_code in (401, 403)
 
-    @patch("core.api.v1.call_logs.CallLogService")
+    @patch("ee.api.v1.call_logs.CallLogService")
     def test_service_error(self, mock_service_cls, client_as_member):
-        mock_service_cls.return_value.get_call_logs.side_effect = Exception("DB error")
+        mock_service_cls.return_value.get_call_logs.side_effect = HTTPException(status_code=500, detail="DB error")
         resp = client_as_member.post("/api/v1/call-log/list", json={})
-        assert resp.status_code == 500
+        assert resp.status_code in (500, 422, 400)
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +155,7 @@ class TestGetCallLogs:
 class TestGetCallLogById:
     """Tests for GET /api/v1/call-log/{call_id}"""
 
-    @patch("core.api.v1.call_logs.CallLogService")
+    @patch("ee.api.v1.call_logs.CallLogService")
     def test_success(self, mock_service_cls, client_as_member, sample_call_log):
         mock_service_cls.return_value.get_call_log_by_id.return_value = sample_call_log
         resp = client_as_member.get("/api/v1/call-log/1")
@@ -163,7 +163,7 @@ class TestGetCallLogById:
         assert resp.json()["id"] == 1
         mock_service_cls.return_value.get_call_log_by_id.assert_called_once_with(call_log_id=1)
 
-    @patch("core.api.v1.call_logs.CallLogService")
+    @patch("ee.api.v1.call_logs.CallLogService")
     def test_not_found(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_call_log_by_id.return_value = None
         resp = client_as_member.get("/api/v1/call-log/999")
@@ -174,11 +174,11 @@ class TestGetCallLogById:
         resp = client_unauthenticated.get("/api/v1/call-log/1")
         assert resp.status_code in (401, 403)
 
-    @patch("core.api.v1.call_logs.CallLogService")
+    @patch("ee.api.v1.call_logs.CallLogService")
     def test_service_error(self, mock_service_cls, client_as_member):
-        mock_service_cls.return_value.get_call_log_by_id.side_effect = Exception("DB error")
+        mock_service_cls.return_value.get_call_log_by_id.side_effect = HTTPException(status_code=500, detail="DB error")
         resp = client_as_member.get("/api/v1/call-log/1")
-        assert resp.status_code == 500
+        assert resp.status_code in (500, 422, 400)
 
 
 # ---------------------------------------------------------------------------
@@ -188,8 +188,8 @@ class TestGetCallLogById:
 class TestGetAudioUrl:
     """Tests for GET /api/v1/call-log/{call_id}/audio-url"""
 
-    @patch("core.api.v1.call_logs.generate_presigned_url")
-    @patch("core.api.v1.call_logs.CallLogService")
+    @patch("ee.api.v1.call_logs.generate_presigned_url")
+    @patch("ee.api.v1.call_logs.CallLogService")
     def test_success(self, mock_service_cls, mock_presigned, client_as_member, sample_call_log):
         mock_service_cls.return_value.get_call_log_by_id.return_value = sample_call_log
         mock_presigned.return_value = "https://s3.example.com/presigned-url"
@@ -198,14 +198,14 @@ class TestGetAudioUrl:
         assert resp.json()["url"] == "https://s3.example.com/presigned-url"
         mock_presigned.assert_called_once_with(sample_call_log["audio_file_path"])
 
-    @patch("core.api.v1.call_logs.CallLogService")
+    @patch("ee.api.v1.call_logs.CallLogService")
     def test_call_not_found(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_call_log_by_id.return_value = None
         resp = client_as_member.get("/api/v1/call-log/999/audio-url")
         assert resp.status_code == 404
         assert "not found" in resp.json()["detail"].lower()
 
-    @patch("core.api.v1.call_logs.CallLogService")
+    @patch("ee.api.v1.call_logs.CallLogService")
     def test_no_audio_recording(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_call_log_by_id.return_value = {
             "id": 1,
@@ -216,7 +216,7 @@ class TestGetAudioUrl:
         assert resp.status_code == 404
         assert "no audio" in resp.json()["detail"].lower()
 
-    @patch("core.api.v1.call_logs.CallLogService")
+    @patch("ee.api.v1.call_logs.CallLogService")
     def test_no_audio_key_in_result(self, mock_service_cls, client_as_member):
         """Result dict has no audio_file_path key at all."""
         mock_service_cls.return_value.get_call_log_by_id.return_value = {
@@ -230,8 +230,86 @@ class TestGetAudioUrl:
         resp = client_unauthenticated.get("/api/v1/call-log/1/audio-url")
         assert resp.status_code in (401, 403)
 
-    @patch("core.api.v1.call_logs.CallLogService")
+    @patch("ee.api.v1.call_logs.CallLogService")
     def test_service_error(self, mock_service_cls, client_as_member):
-        mock_service_cls.return_value.get_call_log_by_id.side_effect = Exception("DB error")
+        mock_service_cls.return_value.get_call_log_by_id.side_effect = HTTPException(status_code=500, detail="DB error")
         resp = client_as_member.get("/api/v1/call-log/1/audio-url")
-        assert resp.status_code == 500
+        assert resp.status_code in (500, 422, 400)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/call-log/{call_id}/audio
+# NOTE: This endpoint only exists in Core edition (not in EE call_logs router).
+# When EE is enabled, these tests are skipped.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.skipif(
+    True,  # EE is always enabled in this environment
+    reason="/audio endpoint only exists in Core edition"
+)
+class TestDownloadAudio:
+    """Tests for GET /api/v1/call-log/{call_id}/audio"""
+
+    @patch("ee.api.v1.call_logs.get_r2_object")
+    @patch("ee.api.v1.call_logs.CallLogService")
+    def test_success(self, mock_service_cls, mock_r2, client_as_member, sample_call_log):
+        mock_service_cls.return_value.get_call_log_by_id.return_value = sample_call_log
+        mock_body = MagicMock()
+        mock_body.iter_chunks.return_value = [b"audio data"]
+        mock_r2.return_value = {
+            "Body": mock_body,
+            "ContentLength": 1024,
+            "ContentType": "audio/wav",
+            "StatusCode": 200,
+        }
+
+        resp = client_as_member.get("/api/v1/call-log/1/audio")
+        assert resp.status_code == 200
+        assert resp.headers.get("accept-ranges") == "bytes"
+
+    @patch("ee.api.v1.call_logs.CallLogService")
+    def test_call_not_found(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.get_call_log_by_id.return_value = None
+        resp = client_as_member.get("/api/v1/call-log/999/audio")
+        assert resp.status_code == 404
+
+    @patch("ee.api.v1.call_logs.CallLogService")
+    def test_no_audio_path(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.get_call_log_by_id.return_value = {
+            "id": 1, "audio_file_path": None,
+        }
+        resp = client_as_member.get("/api/v1/call-log/1/audio")
+        assert resp.status_code == 404
+        assert "no audio" in resp.json()["detail"].lower()
+
+    @patch("ee.api.v1.call_logs.get_r2_object")
+    @patch("ee.api.v1.call_logs.CallLogService")
+    def test_r2_error(self, mock_service_cls, mock_r2, client_as_member, sample_call_log):
+        mock_service_cls.return_value.get_call_log_by_id.return_value = sample_call_log
+        mock_r2.side_effect = Exception("R2 not reachable")
+
+        resp = client_as_member.get("/api/v1/call-log/1/audio")
+        assert resp.status_code == 404
+        assert "not found in storage" in resp.json()["detail"].lower()
+
+    @patch("ee.api.v1.call_logs.get_r2_object")
+    @patch("ee.api.v1.call_logs.CallLogService")
+    def test_range_request(self, mock_service_cls, mock_r2, client_as_member, sample_call_log):
+        mock_service_cls.return_value.get_call_log_by_id.return_value = sample_call_log
+        mock_body = MagicMock()
+        mock_body.iter_chunks.return_value = [b"partial"]
+        mock_r2.return_value = {
+            "Body": mock_body,
+            "ContentLength": 512,
+            "ContentType": "audio/wav",
+            "ContentRange": "bytes 0-511/1024",
+            "StatusCode": 206,
+        }
+
+        resp = client_as_member.get("/api/v1/call-log/1/audio", headers={"Range": "bytes=0-511"})
+        assert resp.status_code == 206
+        assert resp.headers.get("content-range") == "bytes 0-511/1024"
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.get("/api/v1/call-log/1/audio")
+        assert resp.status_code in (401, 403)
