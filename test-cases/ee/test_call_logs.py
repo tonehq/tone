@@ -19,9 +19,18 @@ class TestGetFilterValues:
         # Response is {"column": "status", "values": [...]}
         assert "values" in data or isinstance(data, list)
 
+    def test_get_filter_values_agent_name(self, client_as_member):
+        response = client_as_member.get("/api/v1/call-log/filter-values?column_name=agent_name")
+        assert response.status_code == 200
+
     def test_missing_column_name(self, client_as_member):
         response = client_as_member.get("/api/v1/call-log/filter-values")
         assert response.status_code == 422
+
+    def test_invalid_column_name(self, client_as_member):
+        """Invalid/nonexistent column should return 400 or empty."""
+        response = client_as_member.get("/api/v1/call-log/filter-values?column_name=nonexistent_col")
+        assert response.status_code in (200, 400)
 
     def test_unauthenticated(self, client_unauthenticated):
         response = client_unauthenticated.get("/api/v1/call-log/filter-values?column_name=status")
@@ -46,6 +55,34 @@ class TestListCallLogs:
     def test_list_with_sort(self, client_as_member):
         response = client_as_member.post("/api/v1/call-log/list", json={
             "sort_by": "created_at", "sort_order": "desc"
+        })
+        assert response.status_code == 200
+
+    def test_list_with_sort_asc(self, client_as_member):
+        response = client_as_member.post("/api/v1/call-log/list", json={
+            "sort_by": "created_at", "sort_order": "asc"
+        })
+        assert response.status_code == 200
+
+    def test_list_with_date_filter(self, client_as_member):
+        """Date filters use unix timestamps (integers)."""
+        response = client_as_member.post("/api/v1/call-log/list", json={
+            "start_date_time": 1704067200,
+            "end_date_time": 1767225599,
+        })
+        assert response.status_code == 200
+
+    def test_list_with_filters(self, client_as_member):
+        """Test column-based filters."""
+        response = client_as_member.post("/api/v1/call-log/list", json={
+            "filters": [{"column": "status", "values": ["completed", "failed"]}],
+        })
+        assert response.status_code == 200
+
+    def test_list_with_large_page_number(self, client_as_member):
+        """High page number should return empty results, not error."""
+        response = client_as_member.post("/api/v1/call-log/list", json={
+            "page_no": 99999, "page_size": 10
         })
         assert response.status_code == 200
 

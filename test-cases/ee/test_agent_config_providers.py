@@ -23,25 +23,18 @@ def _create_agent(client, name=None):
 
 
 def _resolve_provider(db_session, provider_name, service_type):
-    """Look up service ID and first model ID. Returns (service_id, model_id) or (None, None).
+    """Look up service_provider ID and first model ID. Returns (provider_id, model_id) or (None, None).
 
-    agent_config.*_service_id now FKs to services.id (not service_providers.id),
-    so we resolve the Service record for the given provider.
+    agent_config.*_service_id FKs to service_providers(id).
     """
     from core.models.service_provider import ServiceProvider
-    from core.models.service import Service
     from core.models.models import Model
 
     provider = db_session.query(ServiceProvider).filter(
-        ServiceProvider.name == provider_name
+        ServiceProvider.name == provider_name,
+        ServiceProvider.provider_type == service_type,
     ).first()
     if not provider:
-        return None, None
-    service = db_session.query(Service).filter(
-        Service.service_provider_id == provider.id,
-        Service.service_type == service_type,
-    ).first()
-    if not service:
         return None, None
     model = db_session.query(Model).filter(
         Model.service_provider_id == provider.id,
@@ -49,7 +42,7 @@ def _resolve_provider(db_session, provider_name, service_type):
         Model.status == "active",
     ).first()
     model_id = model.id if model else None
-    return service.id, model_id
+    return provider.id, model_id
 
 
 def _upsert_config(client, agent_id, system_prompt="Test prompt.", **kwargs):

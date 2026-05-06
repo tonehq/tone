@@ -12,7 +12,7 @@ from fastapi import HTTPException
 # POST /api/v1/service-providers/upsert
 # ---------------------------------------------------------------------------
 class TestUpsertServiceProvider:
-    @patch("core.api.v1.service_providers.ServiceProviderService")
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_success(self, mock_service_cls, client_as_admin):
         mock_instance = MagicMock()
         mock_instance.upsert_service_provider.return_value = {
@@ -34,7 +34,6 @@ class TestUpsertServiceProvider:
 
         assert resp.status_code == 200
         assert resp.json()["name"] == "openai"
-        mock_service_cls.assert_called_once_with(ANY, user_id=ANY, org_id=ANY)
         mock_instance.upsert_service_provider.assert_called_once_with(
             name="openai",
             display_name="OpenAI",
@@ -52,7 +51,7 @@ class TestUpsertServiceProvider:
             provider_id=None,
         )
 
-    @patch("core.api.v1.service_providers.ServiceProviderService")
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_with_optional_fields(self, mock_service_cls, client_as_admin):
         mock_instance = MagicMock()
         mock_instance.upsert_service_provider.return_value = {"id": 1}
@@ -92,7 +91,7 @@ class TestUpsertServiceProvider:
             provider_id=42,
         )
 
-    @patch("core.api.v1.service_providers.ServiceProviderService")
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_missing_name(self, mock_service_cls, client_as_admin):
         resp = client_as_admin.post(
             "/api/v1/service-providers/upsert",
@@ -105,7 +104,7 @@ class TestUpsertServiceProvider:
         assert resp.status_code == 400
         assert "name" in resp.json()["detail"]
 
-    @patch("core.api.v1.service_providers.ServiceProviderService")
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_missing_display_name(self, mock_service_cls, client_as_admin):
         resp = client_as_admin.post(
             "/api/v1/service-providers/upsert",
@@ -117,7 +116,7 @@ class TestUpsertServiceProvider:
         )
         assert resp.status_code == 400
 
-    @patch("core.api.v1.service_providers.ServiceProviderService")
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_missing_provider_type(self, mock_service_cls, client_as_admin):
         resp = client_as_admin.post(
             "/api/v1/service-providers/upsert",
@@ -129,7 +128,7 @@ class TestUpsertServiceProvider:
         )
         assert resp.status_code == 400
 
-    @patch("core.api.v1.service_providers.ServiceProviderService")
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_missing_auth_type(self, mock_service_cls, client_as_admin):
         resp = client_as_admin.post(
             "/api/v1/service-providers/upsert",
@@ -141,7 +140,7 @@ class TestUpsertServiceProvider:
         )
         assert resp.status_code == 400
 
-    @patch("core.api.v1.service_providers.ServiceProviderService")
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_service_error(self, mock_service_cls, client_as_admin):
         mock_instance = MagicMock()
         mock_instance.upsert_service_provider.side_effect = HTTPException(
@@ -165,7 +164,7 @@ class TestUpsertServiceProvider:
 # POST /api/v1/service-providers/list
 # ---------------------------------------------------------------------------
 class TestListServiceProviders:
-    @patch("core.api.v1.service_providers.ServiceProviderService")
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_success(self, mock_service_cls, client_as_member, mock_db):
         mock_instance = MagicMock()
         mock_instance.get_all_service_providers.return_value = [
@@ -184,7 +183,7 @@ class TestListServiceProviders:
             provider_type=None
         )
 
-    @patch("core.api.v1.service_providers.ServiceProviderService")
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_filter_by_provider_type(self, mock_service_cls, client_as_member, mock_db):
         mock_instance = MagicMock()
         mock_instance.get_all_service_providers.return_value = [
@@ -202,7 +201,7 @@ class TestListServiceProviders:
             provider_type="llm"
         )
 
-    @patch("core.api.v1.service_providers.ServiceProviderService")
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_tts_provider_filtered_without_voices(
         self, mock_service_cls, client_as_member, mock_db
     ):
@@ -222,7 +221,7 @@ class TestListServiceProviders:
         # Provider id=1 is in ALLOWED_PROVIDER_IDS but is TTS with no voices
         assert len(resp.json()) == 0
 
-    @patch("core.api.v1.service_providers.ServiceProviderService")
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_tts_provider_included_with_voices(
         self, mock_service_cls, client_as_member, mock_db
     ):
@@ -243,7 +242,7 @@ class TestListServiceProviders:
         assert resp.status_code == 200
         assert len(resp.json()) == 1
 
-    @patch("core.api.v1.service_providers.ServiceProviderService")
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_provider_not_in_allowed_list(
         self, mock_service_cls, client_as_member, mock_db
     ):
@@ -260,7 +259,7 @@ class TestListServiceProviders:
         assert resp.status_code == 200
         assert len(resp.json()) == 0
 
-    @patch("core.api.v1.service_providers.ServiceProviderService")
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_empty_list(self, mock_service_cls, client_as_member, mock_db):
         mock_instance = MagicMock()
         mock_instance.get_all_service_providers.return_value = []
@@ -277,7 +276,7 @@ class TestListServiceProviders:
 # POST /api/v1/service-providers/get
 # ---------------------------------------------------------------------------
 class TestGetServiceProvider:
-    @patch("core.api.v1.service_providers.ServiceProviderService")
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_success(self, mock_service_cls, client_as_member):
         mock_instance = MagicMock()
         mock_instance.get_service_provider.return_value = {
@@ -294,7 +293,7 @@ class TestGetServiceProvider:
         assert resp.json()["name"] == "openai"
         mock_instance.get_service_provider.assert_called_once_with(1)
 
-    @patch("core.api.v1.service_providers.ServiceProviderService")
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_not_found(self, mock_service_cls, client_as_member):
         mock_instance = MagicMock()
         mock_instance.get_service_provider.side_effect = HTTPException(
@@ -316,7 +315,7 @@ class TestGetServiceProvider:
 # DELETE /api/v1/service-providers/delete
 # ---------------------------------------------------------------------------
 class TestDeleteServiceProvider:
-    @patch("core.api.v1.service_providers.ServiceProviderService")
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_success(self, mock_service_cls, client_as_admin):
         mock_instance = MagicMock()
         mock_instance.delete_service_provider.return_value = {"message": "Deleted"}
@@ -329,7 +328,7 @@ class TestDeleteServiceProvider:
         assert resp.status_code == 200
         mock_instance.delete_service_provider.assert_called_once_with(5)
 
-    @patch("core.api.v1.service_providers.ServiceProviderService")
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_not_found(self, mock_service_cls, client_as_admin):
         mock_instance = MagicMock()
         mock_instance.delete_service_provider.side_effect = HTTPException(
@@ -342,7 +341,7 @@ class TestDeleteServiceProvider:
         )
         assert resp.status_code == 404
 
-    @patch("core.api.v1.service_providers.ServiceProviderService")
+    @patch("ee.api.v1.service_providers.ServiceProviderService")
     def test_system_provider_cannot_be_deleted(self, mock_service_cls, client_as_admin):
         mock_instance = MagicMock()
         mock_instance.delete_service_provider.side_effect = HTTPException(

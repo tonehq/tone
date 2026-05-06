@@ -72,8 +72,14 @@ def create_custom_tool_handler(tool: Tool):
             if tool.auth_type == "api_key":
                 header_name = auth_config.get("header", "X-API-Key")
                 headers[header_name] = auth_config.get("value", "")
-            elif tool.auth_type == "bearer_token":
+            elif tool.auth_type == "bearer_token" or tool.auth_type == "bearer":
                 headers["Authorization"] = f"Bearer {auth_config.get('token', '')}"
+            elif tool.auth_type == "basic" or tool.auth_type == "basic_auth" :
+                import base64
+                username = auth_config.get("username", "")
+                password = auth_config.get("password", "")
+                credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+                headers["Authorization"] = f"Basic {credentials}"
 
             # Build the URL — replace {placeholder} with argument values
             url = tool.url

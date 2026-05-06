@@ -110,6 +110,45 @@ class TestValidateApiKey:
         })
         assert response.status_code == 400
 
+
+# ─── POST /api/v1/api-keys/list_by_provider ───
+
+class TestListApiKeysByProvider:
+    """Tests for POST /api/v1/api-keys/list_by_provider"""
+
+    def test_list_by_provider_success(self, client_as_member):
+        """Returns list (possibly empty) for valid provider_id."""
+        response = client_as_member.post("/api/v1/api-keys/list_by_provider", json={
+            "service_provider_id": 1
+        })
+        assert response.status_code in (200, 404)
+
+    def test_list_by_provider_missing_id(self, client_as_member):
+        response = client_as_member.post("/api/v1/api-keys/list_by_provider", json={})
+        assert response.status_code == 400
+        assert "service_provider_id is required" in response.json()["detail"]
+
+    def test_list_by_provider_invalid_id(self, client_as_member):
+        response = client_as_member.post("/api/v1/api-keys/list_by_provider", json={
+            "service_provider_id": "abc"
+        })
+        assert response.status_code == 400
+        assert "integer" in response.json()["detail"]
+
+    def test_list_by_provider_with_pagination(self, client_as_member):
+        response = client_as_member.post("/api/v1/api-keys/list_by_provider", json={
+            "service_provider_id": 1,
+            "page": 1,
+            "page_size": 10,
+        })
+        assert response.status_code in (200, 404)
+
+    def test_list_by_provider_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.post("/api/v1/api-keys/list_by_provider", json={
+            "service_provider_id": 1
+        })
+        assert response.status_code in (401, 403)
+
     def test_validate_api_key_empty_body(self, client_as_admin):
         response = client_as_admin.post("/api/v1/api-keys/validate", json={})
         assert response.status_code == 400
