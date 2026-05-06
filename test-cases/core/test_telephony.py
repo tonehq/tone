@@ -26,8 +26,8 @@ class TestTelephonyWebSocket:
         ]
         assert len(ws_routes) > 0, "/ws route should be registered on the app"
 
-    @patch("core.api.v1.telephony.BotRunnerService", create=True)
-    @patch("core.api.v1.telephony.get_db_context", create=True)
+    @patch("ee.api.v1.telephony.BotRunnerService", create=True)
+    @patch("ee.api.v1.telephony.get_db_context", create=True)
     def test_websocket_accepts_connection(self, mock_db_ctx, mock_bot_svc):
         """Verify that the WebSocket endpoint accepts connections."""
         mock_db = MagicMock()

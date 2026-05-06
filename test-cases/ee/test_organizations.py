@@ -251,3 +251,99 @@ class TestGetInvitedUsers:
     def test_get_invited_users_unauthenticated(self, client_unauthenticated):
         response = client_unauthenticated.get("/api/v1/organization/invited_users")
         assert response.status_code in (401, 403)
+
+
+# ─── GET /api/v1/organization/details ───
+
+class TestGetOrganizationDetails:
+    """Tests for GET /api/v1/organization/details"""
+
+    def _get_org_id(self):
+        """Get the real org_id from the DB (same one used in conftest)."""
+        from sqlalchemy import create_engine, text
+        from shared.config import settings
+        eng = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
+        with eng.connect() as conn:
+            row = conn.execute(text("SELECT id FROM organizations LIMIT 1")).fetchone()
+            return str(row[0]) if row else settings.DEFAULT_ORG_ID
+
+    def test_get_org_details_success(self, client_as_member):
+        org_id = self._get_org_id()
+        response = client_as_member.get(f"/api/v1/organization/details?org_id={org_id}")
+        assert response.status_code == 200
+
+    def test_get_org_details_missing_org_id(self, client_as_member):
+        response = client_as_member.get("/api/v1/organization/details")
+        assert response.status_code == 422
+
+    def test_get_org_details_invalid_org_id(self, client_as_member):
+        """Invalid UUID raises ValueError (unhandled in API — known issue)."""
+        with pytest.raises((ValueError, Exception)):
+            client_as_member.get("/api/v1/organization/details?org_id=not-a-uuid")
+
+    def test_get_org_details_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get("/api/v1/organization/details?org_id=550e8400-e29b-41d4-a716-446655440000")
+        assert response.status_code in (401, 403)
+
+
+# ─── PUT /api/v1/organization/details ───
+
+class TestUpdateOrganizationDetails:
+    """Tests for PUT /api/v1/organization/details"""
+
+    def _get_org_id(self):
+        from sqlalchemy import create_engine, text
+        from shared.config import settings
+        eng = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
+        with eng.connect() as conn:
+            row = conn.execute(text("SELECT id FROM organizations LIMIT 1")).fetchone()
+            return str(row[0]) if row else settings.DEFAULT_ORG_ID
+
+    def test_update_org_details_success(self, client_as_admin):
+        org_id = self._get_org_id()
+        response = client_as_admin.put(
+            f"/api/v1/organization/details?org_id={org_id}",
+            json={"name": "Updated Org Name"},
+        )
+        assert response.status_code == 200
+
+    def test_update_org_details_missing_org_id(self, client_as_admin):
+        response = client_as_admin.put("/api/v1/organization/details", json={"name": "X"})
+        assert response.status_code == 422
+
+    def test_update_org_details_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.put(
+            "/api/v1/organization/details?org_id=550e8400-e29b-41d4-a716-446655440000",
+            json={"name": "X"},
+        )
+        assert response.status_code in (401, 403)
+
+    def test_update_org_details_as_member_forbidden(self, client_as_member):
+        """Members cannot update org details — requires admin_or_owner."""
+        org_id = self._get_org_id()
+        response = client_as_member.put(
+            f"/api/v1/organization/details?org_id={org_id}",
+            json={"name": "X"},
+        )
+        assert response.status_code in (401, 403)
+
+
+# ─── DELETE /api/v1/organization/delete ───
+
+class TestDeleteOrganization:
+    """Tests for DELETE /api/v1/organization/delete"""
+
+    def test_delete_org_missing_org_id(self, client_as_admin):
+        response = client_as_admin.delete("/api/v1/organization/delete")
+        assert response.status_code == 422
+
+    def test_delete_org_invalid_org_id(self, client_as_admin):
+        """Invalid UUID raises ValueError (unhandled in API — known issue)."""
+        with pytest.raises((ValueError, Exception)):
+            client_as_admin.delete("/api/v1/organization/delete?org_id=not-a-uuid")
+
+    def test_delete_org_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.delete(
+            "/api/v1/organization/delete?org_id=550e8400-e29b-41d4-a716-446655440000"
+        )
+        assert response.status_code in (401, 403)

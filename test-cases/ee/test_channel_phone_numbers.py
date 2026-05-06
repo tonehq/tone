@@ -203,6 +203,50 @@ class TestGetAssignedPhoneNumbers:
         assert response.status_code in (401, 403)
 
 
+# ─── GET /api/v1/channel_phone_number/get ───
+
+class TestGetChannelPhoneNumber:
+    """Tests for GET /api/v1/channel_phone_number/get"""
+
+    def test_get_phone_number_missing_id(self, client_as_member):
+        response = client_as_member.get("/api/v1/channel_phone_number/get")
+        assert response.status_code == 422
+
+    def test_get_phone_number_invalid_id(self, client_as_member):
+        response = client_as_member.get("/api/v1/channel_phone_number/get?phone_number_id=abc")
+        assert response.status_code == 422
+
+    def test_get_phone_number_not_found(self, client_as_member):
+        response = client_as_member.get("/api/v1/channel_phone_number/get?phone_number_id=999999")
+        assert response.status_code in (404, 400)
+
+    def test_get_phone_number_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get("/api/v1/channel_phone_number/get?phone_number_id=1")
+        assert response.status_code in (401, 403)
+
+
+# ─── DELETE /api/v1/channel_phone_number/delete ───
+
+class TestDeleteChannelPhoneNumber:
+    """Tests for DELETE /api/v1/channel_phone_number/delete"""
+
+    def test_delete_phone_number_missing_id(self, client_as_member):
+        response = client_as_member.delete("/api/v1/channel_phone_number/delete")
+        assert response.status_code == 422
+
+    def test_delete_phone_number_invalid_id(self, client_as_member):
+        response = client_as_member.delete("/api/v1/channel_phone_number/delete?phone_number_id=abc")
+        assert response.status_code == 422
+
+    def test_delete_phone_number_not_found(self, client_as_member):
+        response = client_as_member.delete("/api/v1/channel_phone_number/delete?phone_number_id=999999")
+        assert response.status_code in (404, 400)
+
+    def test_delete_phone_number_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.delete("/api/v1/channel_phone_number/delete?phone_number_id=1")
+        assert response.status_code in (401, 403)
+
+
 # ─── GET /api/v1/channel_phone_number/get_twilio_phone_numbers ───
 
 class TestGetTwilioPhoneNumbers:

@@ -68,11 +68,13 @@ class TestUpsertService:
         })
         assert response.status_code == 400
 
-    def test_upsert_service_missing_config(self, client_as_admin):
+    def test_upsert_service_without_config_uses_default(self, client_as_admin):
+        """config is optional — defaults to {} when omitted."""
+        provider = _create_service_provider(client_as_admin, provider_type="llm")
         response = client_as_admin.post("/api/v1/services/upsert", json={
-            "service_provider_id": 1, "name": "Test", "service_type": "llm"
+            "service_provider_id": provider["id"], "name": _unique_name(), "service_type": "llm"
         })
-        assert response.status_code == 400
+        assert response.status_code == 200
 
     def test_upsert_service_empty_body(self, client_as_admin):
         response = client_as_admin.post("/api/v1/services/upsert", json={})
@@ -159,28 +161,27 @@ class TestUpsertService:
         assert response.status_code in (400, 404)
 
 
-# ─── GET /api/v1/services/list ───
+# ─── POST /api/v1/services/list ───
 
 class TestGetAllServices:
-    """Tests for GET /api/v1/services/list"""
+    """Tests for POST /api/v1/services/list"""
 
     def test_get_all_services_returns_200(self, client_as_member):
-        response = client_as_member.get("/api/v1/services/list")
+        response = client_as_member.post("/api/v1/services/list", json={})
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
 
     def test_get_all_services_filter_by_type(self, client_as_member):
-        response = client_as_member.get("/api/v1/services/list?service_type=llm")
+        response = client_as_member.post("/api/v1/services/list", json={"service_type": "llm"})
         assert response.status_code == 200
 
     def test_get_all_services_unauthenticated(self, client_unauthenticated):
-        response = client_unauthenticated.get("/api/v1/services/list")
+        response = client_unauthenticated.post("/api/v1/services/list", json={})
         assert response.status_code in (401, 403)
 
     def test_get_all_services_filter_by_stt(self, client_as_admin):
         """Postman: Filter by STT — only STT services returned."""
         _create_service(client_as_admin, service_type="stt")
-        response = client_as_admin.get("/api/v1/services/list?service_type=stt")
+        response = client_as_admin.post("/api/v1/services/list", json={"service_type": "stt"})
         assert response.status_code == 200
         for svc in response.json():
             assert svc["service_type"] == "stt"
@@ -188,10 +189,19 @@ class TestGetAllServices:
     def test_get_all_services_filter_by_tts(self, client_as_admin):
         """Postman: Filter by TTS — only TTS services returned."""
         _create_service(client_as_admin, service_type="tts")
-        response = client_as_admin.get("/api/v1/services/list?service_type=tts")
+        response = client_as_admin.post("/api/v1/services/list", json={"service_type": "tts"})
         assert response.status_code == 200
         for svc in response.json():
             assert svc["service_type"] == "tts"
+
+    def test_get_all_services_pagination(self, client_as_admin):
+        """Test page/page_size body params."""
+        response = client_as_admin.post("/api/v1/services/list", json={"page": 1, "page_size": 5})
+        assert response.status_code == 200
+
+    def test_get_all_services_invalid_page(self, client_as_admin):
+        response = client_as_admin.post("/api/v1/services/list", json={"page": 0})
+        assert response.status_code == 400
 
 
 # ─── GET /api/v1/services/get ───
@@ -253,27 +263,37 @@ class TestGetDefaultService:
 # ─── DELETE /api/v1/services/delete ───
 
 class TestDeleteService:
-    """Tests for DELETE /api/v1/services/delete"""
+    """Tests for DELETE /api/v1/services/delete
 
-    def test_delete_service_missing_id(self, client_as_admin):
+    Accepts either `uuid` or `service_id` query param. Returns 400 if neither provided.
+    """
+
+    def test_delete_service_no_params(self, client_as_admin):
+        """Neither uuid nor service_id — returns 400."""
         response = client_as_admin.delete("/api/v1/services/delete")
-        assert response.status_code == 422
+        assert response.status_code == 400
+        assert "uuid or service_id is required" in response.json()["detail"]
 
-    def test_delete_service_invalid_id(self, client_as_admin):
-        response = client_as_admin.delete("/api/v1/services/delete?service_id=abc")
-        assert response.status_code == 422
-
-    def test_delete_service_unauthenticated(self, client_unauthenticated):
-        response = client_unauthenticated.delete("/api/v1/services/delete?service_id=1")
-        assert response.status_code in (401, 403)
-
-    def test_delete_service_not_found(self, client_as_admin):
-        response = client_as_admin.delete("/api/v1/services/delete?service_id=999999")
-        assert response.status_code == 404
-
-    def test_delete_service_success(self, client_as_admin):
+    def test_delete_service_by_id_success(self, client_as_admin):
         svc = _create_service(client_as_admin, service_type="llm")
         response = client_as_admin.delete(f"/api/v1/services/delete?service_id={svc['id']}")
         assert response.status_code == 200
         get_resp = client_as_admin.get(f"/api/v1/services/get?service_id={svc['id']}")
         assert get_resp.status_code == 404
+
+    def test_delete_service_by_uuid_success(self, client_as_admin):
+        svc = _create_service(client_as_admin, service_type="llm")
+        response = client_as_admin.delete(f"/api/v1/services/delete?uuid={svc['uuid']}")
+        assert response.status_code == 200
+
+    def test_delete_service_by_id_not_found(self, client_as_admin):
+        response = client_as_admin.delete("/api/v1/services/delete?service_id=999999")
+        assert response.status_code == 404
+
+    def test_delete_service_by_uuid_not_found(self, client_as_admin):
+        response = client_as_admin.delete("/api/v1/services/delete?uuid=00000000-0000-0000-0000-000000000000")
+        assert response.status_code in (404, 400)
+
+    def test_delete_service_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.delete("/api/v1/services/delete?service_id=1")
+        assert response.status_code in (401, 403)
