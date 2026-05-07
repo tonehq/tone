@@ -115,7 +115,9 @@ export default function ToolsListPage() {
         width: '100px',
         render: (_val: unknown, record: Tool) => (
           <span className="text-[12px] capitalize text-muted-foreground">
-            {record.auth_type === 'none' ? '-' : record.auth_type.replace('_', ' ')}
+            {!record.auth_type || record.auth_type === 'none'
+              ? '-'
+              : record.auth_type.replace('_', ' ')}
           </span>
         ),
       },

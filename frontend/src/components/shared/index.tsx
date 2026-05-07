@@ -1,5 +1,6 @@
 import ActionMenu from './ActionMenu';
 import CheckboxField from './CheckboxField';
+import ErrorBoundary from './ErrorBoundary';
 import { PhoneNumberDisplay } from './PhoneNumberDisplay';
 import CustomButton from './CustomButton';
 import CustomLink from './CustomLink';
@@ -48,6 +49,7 @@ export type { ActionMenuProps } from './ActionMenu';
 export {
   ActionMenu,
   CheckboxField,
+  ErrorBoundary,
   CustomButton,
   CustomLink,
   CustomModal,
