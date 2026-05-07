@@ -7,8 +7,11 @@ export const createTool = async (payload: ToolCreatePayload): Promise<Tool> => {
 };
 
 export const getAllTools = async (): Promise<Tool[]> => {
-  const { data } = await axiosInstance.get<Tool[]>('/tool/get_all_tools');
-  return Array.isArray(data) ? data : [];
+  const res = await axiosInstance.get('/tool/get_all_tools');
+  const data = res.data;
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.data)) return data.data;
+  return [];
 };
 
 export const getTool = async (toolId: number): Promise<Tool> => {
