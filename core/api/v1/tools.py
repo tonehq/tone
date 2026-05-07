@@ -1,7 +1,7 @@
 from uuid import UUID
 from typing import Optional, List, Dict, Any
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Body, Depends, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -71,6 +71,18 @@ def get_tool(
 ):
     svc = _get_service(claims, db)
     tool = svc.get_tool(tool_id)
+    return svc.tool_response(tool)
+
+
+@router.post("/upsert_tool", status_code=status.HTTP_200_OK)
+def upsert_tool(
+    data: Dict[str, Any] = Body(...),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Create or update a tool. Send id to update; send name and description to create."""
+    svc = _get_service(claims, db)
+    tool = svc.upsert_tool(data)
     return svc.tool_response(tool)
 
 
