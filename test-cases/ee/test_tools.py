@@ -213,6 +213,56 @@ class TestUpdateTool:
         assert response.status_code in (401, 403)
 
 
+# ─── POST /api/v1/tool/upsert_tool ───
+
+class TestUpsertTool:
+    """Tests for POST /api/v1/tool/upsert_tool"""
+
+    def test_upsert_create_success(self, client_as_member):
+        data = {
+            "name": _unique_name(),
+            "description": "A new tool via upsert",
+            "url": "https://example.com/api",
+        }
+        response = client_as_member.post("/api/v1/tool/upsert_tool", json=data)
+        assert response.status_code == 200
+        assert response.json()["name"] == data["name"]
+
+    def test_upsert_update_success(self, client_as_member):
+        tool = _create_tool(client_as_member)
+        response = client_as_member.post("/api/v1/tool/upsert_tool", json={
+            "id": tool["id"],
+            "name": "Updated via Upsert",
+        })
+        assert response.status_code == 200
+        assert response.json()["name"] == "Updated via Upsert"
+
+    def test_upsert_update_not_found(self, client_as_member):
+        response = client_as_member.post("/api/v1/tool/upsert_tool", json={
+            "id": 999999,
+            "name": "X",
+        })
+        assert response.status_code == 404
+
+    def test_upsert_create_missing_name(self, client_as_member):
+        response = client_as_member.post("/api/v1/tool/upsert_tool", json={
+            "description": "A tool",
+        })
+        assert response.status_code == 400
+
+    def test_upsert_create_missing_description(self, client_as_member):
+        response = client_as_member.post("/api/v1/tool/upsert_tool", json={
+            "name": _unique_name(),
+        })
+        assert response.status_code == 400
+
+    def test_upsert_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.post("/api/v1/tool/upsert_tool", json={
+            "name": "Tool", "description": "A tool",
+        })
+        assert response.status_code in (401, 403)
+
+
 # ─── DELETE /api/v1/tool/delete_tool ───
 
 class TestDeleteTool:
