@@ -1,8 +1,8 @@
-import type { Tool, ToolAttachPayload, ToolCreatePayload, ToolUpdatePayload } from '@/types/tool';
+import type { Tool, ToolAttachPayload, ToolUpsertPayload } from '@/types/tool';
 import axiosInstance from '@/utils/axios';
 
-export const createTool = async (payload: ToolCreatePayload): Promise<Tool> => {
-  const { data } = await axiosInstance.post<Tool>('/tool/create_tool', payload);
+export const upsertTool = async (payload: ToolUpsertPayload): Promise<Tool> => {
+  const { data } = await axiosInstance.post<Tool>('/tool/upsert_tool', payload);
   return data;
 };
 
@@ -16,13 +16,6 @@ export const getAllTools = async (): Promise<Tool[]> => {
 
 export const getTool = async (toolId: number): Promise<Tool> => {
   const { data } = await axiosInstance.get<Tool>('/tool/get_tool', {
-    params: { tool_id: toolId },
-  });
-  return data;
-};
-
-export const updateTool = async (toolId: number, payload: ToolUpdatePayload): Promise<Tool> => {
-  const { data } = await axiosInstance.put<Tool>('/tool/update_tool', payload, {
     params: { tool_id: toolId },
   });
   return data;

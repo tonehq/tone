@@ -1,12 +1,15 @@
+export type ToolType = 'custom' | 'built_in';
+
 export interface Tool {
   id: number;
   uuid: string;
   name: string;
   description: string;
+  tool_type: ToolType;
   parameters: ToolParametersSchema;
-  url: string;
-  method: string;
-  auth_type: ToolAuthType;
+  url: string | null;
+  method: string | null;
+  auth_type: ToolAuthType | null;
   auth_config: Record<string, string> | null;
   meta_data: Record<string, unknown> | null;
   is_active: boolean;
@@ -32,21 +35,11 @@ export interface ToolParametersSchema {
   required?: string[];
 }
 
-export interface ToolCreatePayload {
-  name: string;
-  description: string;
-  parameters?: ToolParametersSchema;
-  url: string;
-  method?: string;
-  auth_type?: ToolAuthType;
-  auth_config?: Record<string, string> | null;
-  meta_data?: Record<string, unknown> | null;
-  is_active?: boolean;
-}
-
-export interface ToolUpdatePayload {
+export interface ToolUpsertPayload {
+  id?: number;
   name?: string;
   description?: string;
+  tool_type?: ToolType;
   parameters?: ToolParametersSchema;
   url?: string;
   method?: string;
