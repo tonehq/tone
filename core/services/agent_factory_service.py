@@ -1377,15 +1377,19 @@ class AgentFactoryService(BaseService):
                 get_custom_tools_for_agent,
                 build_custom_tool_schemas,
                 create_custom_tool_handler,
+                create_built_in_tool_handler,
             )
             custom_tools = get_custom_tools_for_agent(agent.id)
             if custom_tools:
                 logger.info("Fetched {} custom tools for agent {}", len(custom_tools), agent.id)
                 custom_tools_schema = build_custom_tool_schemas(custom_tools)
                 for tool in custom_tools:
-                    handler = create_custom_tool_handler(tool)
+                    if tool.tool_type == "built_in":
+                        handler = create_built_in_tool_handler(tool, from_number)
+                    else:
+                        handler = create_custom_tool_handler(tool)
                     llm.register_function(tool.name, handler)
-                    logger.info("Registered custom tool handler: {}", tool.name)
+                    logger.info("Registered {} tool handler: {}", tool.tool_type, tool.name)
 
         # Combine doc tools and custom tools into one ToolsSchema
         all_tool_schemas = []

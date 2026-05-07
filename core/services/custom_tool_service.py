@@ -1,7 +1,7 @@
-"""Custom tool service for voice agents — lets the LLM call customer-defined webhook tools during a call."""
+"""Custom tool service for voice agents — lets the LLM call customer-defined webhook tools and built-in tools during a call."""
 
 import json
-from typing import Any, List, Optional
+from typing import Any, Callable, List, Optional
 
 import httpx
 from loguru import logger
@@ -117,3 +117,68 @@ def create_custom_tool_handler(tool: Tool):
             await params.result_callback(f"Error calling tool: {str(e)}")
 
     return handle_tool_call
+
+
+def create_built_in_tool_handler(tool: Tool, caller_number: str) -> Callable:
+    """Create a handler for a built-in tool (e.g. send_sms)."""
+
+    if tool.name == "send_sms":
+        return _create_send_sms_handler(tool, caller_number)
+
+    # Fallback: unknown built-in tool
+    async def noop_handler(params: FunctionCallParams) -> None:
+        logger.warning("Unknown built-in tool '{}' called", tool.name)
+        await params.result_callback(f"Unknown built-in tool: {tool.name}")
+
+    return noop_handler
+
+
+def _create_send_sms_handler(tool: Tool, caller_number: str) -> Callable:
+    """Create a handler that sends an SMS via Twilio."""
+
+    async def handle_send_sms(params: FunctionCallParams) -> None:
+        arguments = params.arguments
+        message = arguments.get("message", "")
+        logger.info("Built-in tool 'send_sms' called. Sending SMS to {}", caller_number)
+
+        meta = tool.meta_data or {}
+        account_sid = meta.get("account_sid")
+        auth_token = meta.get("auth_token")
+        from_number = meta.get("from_number")
+
+        if not all([account_sid, auth_token, from_number]):
+            logger.error("send_sms tool missing Twilio credentials in meta_data")
+            await params.result_callback("Error: SMS tool is not configured. Missing Twilio credentials.")
+            return
+
+        if not caller_number:
+            logger.error("send_sms tool: no caller phone number available")
+            await params.result_callback("Error: Caller phone number is not available for this call.")
+            return
+
+        try:
+            url = f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    url,
+                    auth=(account_sid, auth_token),
+                    data={
+                        "From": from_number,
+                        "To": caller_number,
+                        "Body": message,
+                    },
+                )
+
+            if response.status_code == 201:
+                logger.info("SMS sent successfully to {}", caller_number)
+                await params.result_callback("SMS sent successfully.")
+            else:
+                error_detail = response.text
+                logger.error("SMS sending failed: status={} body={}", response.status_code, error_detail)
+                await params.result_callback(f"Failed to send SMS: {error_detail}")
+
+        except Exception as e:
+            logger.error("send_sms tool failed: {}", e)
+            await params.result_callback(f"Error sending SMS: {str(e)}")
+
+    return handle_send_sms

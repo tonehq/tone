@@ -176,6 +176,7 @@ def seed_from_configs(db, org_name, email, password):
     from core.models.models import Model
     from core.models.api_key import ApiKey
     from core.models.service import Service
+    from core.models.tool import Tool
     from core.utils.encryption import encrypt
 
     # 0. Create seed user, organization, and member first
@@ -194,6 +195,7 @@ def seed_from_configs(db, org_name, email, password):
         "api_keys_none": 0,
         "services_created": 0,
         "voices_created": 0,
+        "tools_created": 0,
     }
 
     # Load all provider configs from JSON
@@ -348,6 +350,19 @@ def seed_from_configs(db, org_name, email, password):
             db.add(voice)
             stats["voices_created"] += 1
 
+    # --- Phase 6: Insert built-in tools ---
+    for tool_spec in data.get("built_in_tools", []):
+        tool = Tool(
+            organization_id=org_id,
+            name=tool_spec["name"],
+            description=tool_spec["description"],
+            tool_type=tool_spec.get("tool_type", "built_in"),
+            parameters=tool_spec.get("parameters"),
+            is_active=True,
+        )
+        db.add(tool)
+        stats["tools_created"] += 1
+
     db.commit()  # Single commit: everything becomes permanent
     return stats
 
@@ -378,6 +393,7 @@ def main():
         print(f"   API keys:  {stats['api_keys_created']} created, {stats['api_keys_none']} no env key")
         print(f"   Services:  {stats['services_created']} created")
         print(f"   Voices:    {stats['voices_created']} created")
+        print(f"   Tools:     {stats['tools_created']} created")
     finally:
         db.close()
 
