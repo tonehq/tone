@@ -37,9 +37,9 @@ export default function ToolsListPage() {
     const q = search.toLowerCase();
     return tools.filter(
       (t) =>
-        t.name.toLowerCase().includes(q) ||
-        t.description.toLowerCase().includes(q) ||
-        t.url.toLowerCase().includes(q),
+        (t.name ?? '').toLowerCase().includes(q) ||
+        (t.description ?? '').toLowerCase().includes(q) ||
+        (t.url ?? '').toLowerCase().includes(q),
     );
   }, [tools, search]);
 
@@ -79,6 +79,24 @@ export default function ToolsListPage() {
               {record.description}
             </p>
           </div>
+        ),
+      },
+      {
+        key: 'tool_type',
+        dataIndex: 'tool_type',
+        title: 'Type',
+        width: '90px',
+        render: (_val: unknown, record: Tool) => (
+          <span
+            className={cn(
+              'inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium',
+              record.tool_type === 'built_in'
+                ? 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400'
+                : 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400',
+            )}
+          >
+            {record.tool_type === 'built_in' ? 'Built-in' : 'Custom'}
+          </span>
         ),
       },
       {

@@ -1,6 +1,6 @@
 'use client';
 
-import { createToolAtom, updateToolAtom } from '@/atoms/ToolAtom';
+import { fetchToolsAtom, upsertToolAtom } from '@/atoms/ToolAtom';
 import { CustomButton, SelectInput, TextAreaField, TextInput } from '@/components/shared';
 import CheckboxField from '@/components/shared/CheckboxField';
 import ParameterBuilder from '@/components/tools/ParameterBuilder';
@@ -8,15 +8,16 @@ import { getTool } from '@/services/toolService';
 import type {
   Tool,
   ToolAuthType,
-  ToolCreatePayload,
   ToolHttpMethod,
   ToolParametersSchema,
+  ToolType,
+  ToolUpsertPayload,
 } from '@/types/tool';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
-import { ArrowLeft, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, Loader2, MessageSquare, Save, Shield } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
@@ -52,9 +53,13 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   const router = useRouter();
   const isEditMode = !!toolId;
 
-  const [, createToolAction] = useAtom(createToolAtom);
-  const [, updateToolAction] = useAtom(updateToolAtom);
+  const [, upsertToolAction] = useAtom(upsertToolAtom);
+  const [, fetchTools] = useAtom(fetchToolsAtom);
 
+  // Tool type
+  const [toolType, setToolType] = useState<ToolType>('custom');
+
+  // Form state
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [url, setUrl] = useState('');
@@ -68,27 +73,40 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   const [authPassword, setAuthPassword] = useState('');
   const [isActive, setIsActive] = useState(true);
 
+  // Built-in tool meta_data fields
+  const [metaAccountSid, setMetaAccountSid] = useState('');
+  const [metaAuthToken, setMetaAuthToken] = useState('');
+  const [metaFromNumber, setMetaFromNumber] = useState('');
+
   const [loading, setLoading] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
+
+  const isBuiltIn = toolType === 'built_in';
 
   const loadToolData = useCallback(async () => {
     if (!toolId) return;
     setLoading(true);
     try {
       const tool: Tool = await getTool(Number(toolId));
-      setName(tool.name);
-      setDescription(tool.description);
-      setUrl(tool.url);
-      setMethod((tool.method?.toUpperCase() as ToolHttpMethod) || 'POST');
+      setToolType(tool.tool_type ?? 'custom');
+      setName(tool.name ?? '');
+      setDescription(tool.description ?? '');
+      setUrl(tool.url ?? '');
+      setMethod(((tool.method ?? '').toUpperCase() as ToolHttpMethod) || 'POST');
       setParameters(tool.parameters ?? {});
-      setAuthType(tool.auth_type ?? 'none');
-      setIsActive(tool.is_active);
+      setAuthType((tool.auth_type as ToolAuthType) ?? 'none');
+      setIsActive(tool.is_active ?? true);
       const cfg = tool.auth_config ?? {};
       setAuthHeaderName(cfg.header_name ?? '');
       setAuthApiKey(cfg.api_key ?? '');
       setAuthBearerToken(cfg.token ?? '');
       setAuthUsername(cfg.username ?? '');
       setAuthPassword(cfg.password ?? '');
+      // Built-in meta_data
+      const meta = (tool.meta_data ?? {}) as Record<string, string>;
+      setMetaAccountSid(meta.account_sid ?? '');
+      setMetaAuthToken(meta.auth_token ?? '');
+      setMetaFromNumber(meta.from_number ?? '');
     } catch (error) {
       handleApiError(error);
       router.push('/tools');
@@ -115,27 +133,39 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   }, [authType, authHeaderName, authApiKey, authBearerToken, authUsername, authPassword]);
 
   const handleSave = async () => {
-    if (!name.trim() || !description.trim() || !url.trim()) return;
-    const payload: ToolCreatePayload = {
-      name: name.trim(),
-      description: description.trim(),
-      url: url.trim(),
-      method,
-      parameters,
-      auth_type: authType,
-      auth_config: buildAuthConfig(),
-      is_active: isActive,
-    };
+    let payload: ToolUpsertPayload;
+
+    if (isBuiltIn && isEditMode) {
+      // Built-in tools: only send id + meta_data
+      payload = {
+        id: Number(toolId),
+        meta_data: {
+          account_sid: metaAccountSid.trim(),
+          auth_token: metaAuthToken.trim(),
+          from_number: metaFromNumber.trim(),
+        },
+      };
+    } else {
+      if (!(name ?? '').trim() || !(description ?? '').trim() || !(url ?? '').trim()) return;
+      payload = {
+        ...(isEditMode ? { id: Number(toolId) } : {}),
+        name: (name ?? '').trim(),
+        description: (description ?? '').trim(),
+        url: (url ?? '').trim(),
+        method,
+        parameters,
+        auth_type: authType,
+        auth_config: buildAuthConfig(),
+        is_active: isActive,
+      };
+    }
+
     setSaving(true);
     try {
-      if (isEditMode) {
-        await updateToolAction({ toolId: Number(toolId), payload });
-        showToast.success('Tool updated successfully');
-      } else {
-        await createToolAction(payload);
-        showToast.success('Tool created successfully');
-        router.push('/tools');
-      }
+      await upsertToolAction(payload);
+      showToast.success(isEditMode ? 'Tool updated successfully' : 'Tool created successfully');
+      await fetchTools();
+      if (!isEditMode) router.push('/tools');
     } catch (error) {
       handleApiError(error);
     } finally {
@@ -147,7 +177,11 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
     setParameters(schema);
   }, []);
 
-  const isValid = name.trim().length > 0 && description.trim().length > 0 && url.trim().length > 0;
+  const isValid = isBuiltIn
+    ? true
+    : (name ?? '').trim().length > 0 &&
+      (description ?? '').trim().length > 0 &&
+      (url ?? '').trim().length > 0;
 
   if (loading) {
     return (
@@ -167,6 +201,143 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
 
   const paramCount = Object.keys(parameters?.properties ?? {}).length;
 
+  /* ================================================================ */
+  /*  BUILT-IN TOOL LAYOUT                                            */
+  /* ================================================================ */
+  if (isBuiltIn) {
+    return (
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+        {/* ── Header ────────────────────────────────────────────── */}
+        <div className="flex shrink-0 items-center justify-between border-b border-border bg-background px-4 py-2">
+          <div className="flex items-center gap-2">
+            <CustomButton
+              type="text"
+              size="icon-sm"
+              onClick={() => router.push('/tools')}
+              className="text-muted-foreground hover:text-foreground"
+              aria-label="Back"
+            >
+              <ArrowLeft size={16} />
+            </CustomButton>
+            <span className="text-[13px] font-medium text-foreground">Configure {name}</span>
+            <span className="inline-flex items-center rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+              Built-in
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <CustomButton type="default" size="sm" onClick={() => router.push('/tools')}>
+              Cancel
+            </CustomButton>
+            <CustomButton
+              type="primary"
+              size="sm"
+              icon={saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save size={13} />}
+              onClick={handleSave}
+              loading={saving}
+            >
+              Save
+            </CustomButton>
+          </div>
+        </div>
+
+        {/* ── Content ───────────────────────────────────────────── */}
+        <div className="min-h-0 flex-1 overflow-auto bg-muted/30">
+          <div className="mx-auto max-w-[680px] space-y-4 px-6 py-5">
+            {/* ── Tool overview card (read-only) ────────────────── */}
+            <div className="rounded-xl border border-border bg-background shadow-sm">
+              <div className="flex items-start gap-4 p-5">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                  <MessageSquare size={18} className="text-primary" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h2 className="font-mono text-[15px] font-semibold text-foreground">{name}</h2>
+                  </div>
+                  <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
+                    {description || 'No description'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Parameters as inline pills */}
+              {paramCount > 0 && (
+                <div className="border-t border-border/50 px-5 py-3">
+                  <p className="mb-2 text-[11px] font-medium text-muted-foreground">
+                    Accepts {paramCount} parameter{paramCount > 1 ? 's' : ''}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {Object.entries(parameters?.properties ?? {}).map(([paramName, param]) => {
+                      const isReq = (parameters?.required ?? []).includes(paramName);
+                      return (
+                        <span
+                          key={paramName}
+                          className={cn(
+                            'inline-flex items-center gap-1 rounded-md px-2 py-1 font-mono text-[11px]',
+                            isReq
+                              ? 'bg-foreground/5 text-foreground ring-1 ring-inset ring-foreground/10'
+                              : 'bg-muted text-muted-foreground',
+                          )}
+                        >
+                          {paramName}
+                          <span className="text-[9px] opacity-60">
+                            {(param as { type?: string }).type ?? 'string'}
+                          </span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ── Credentials card (editable) ───────────────────── */}
+            <div className="rounded-xl border border-border bg-background shadow-sm">
+              <div className="flex items-center gap-2.5 border-b border-border/60 px-5 py-3.5">
+                <Shield size={15} className="text-muted-foreground" />
+                <div>
+                  <h3 className="text-[13px] font-semibold text-foreground">Credentials</h3>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    Provide your service credentials to enable this tool.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-3 p-5">
+                <TextInput
+                  name="tool-meta-account-sid"
+                  label="Account SID"
+                  placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  value={metaAccountSid}
+                  onChange={(e) => setMetaAccountSid(e.target.value)}
+                  className="font-mono text-[13px]"
+                />
+                <TextInput
+                  name="tool-meta-auth-token"
+                  label="Auth Token"
+                  type="password"
+                  placeholder="Enter auth token"
+                  value={metaAuthToken}
+                  onChange={(e) => setMetaAuthToken(e.target.value)}
+                  className="font-mono text-[13px]"
+                />
+                <TextInput
+                  name="tool-meta-from-number"
+                  label="From Number"
+                  placeholder="+1234567890"
+                  value={metaFromNumber}
+                  onChange={(e) => setMetaFromNumber(e.target.value)}
+                  className="font-mono text-[13px]"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ================================================================ */
+  /*  CUSTOM TOOL LAYOUT                                              */
+  /* ================================================================ */
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* ── Header ──────────────────────────────────────────────── */}
@@ -206,7 +377,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
       <div className="min-h-0 flex-1 overflow-auto bg-muted/30">
         <div className="mx-auto max-w-[680px] px-6 py-5">
           <div className="overflow-hidden rounded-xl border border-border bg-background shadow-sm">
-            {/* ── Section: Definition ──────────────────────────── */}
+            {/* ── Definition ─────────────────────────────────────── */}
             <div className="border-b border-border/60 p-5">
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="text-[13px] font-semibold text-foreground">Tool Definition</h3>
@@ -239,7 +410,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
               </div>
             </div>
 
-            {/* ── Section: Request ─────────────────────────────── */}
+            {/* ── Request ────────────────────────────────────────── */}
             <div className="border-b border-border/60 p-5">
               <h3 className="mb-3 text-[13px] font-semibold text-foreground">Request</h3>
               <div className="overflow-hidden rounded-lg border border-border">
@@ -287,7 +458,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
               </p>
             </div>
 
-            {/* ── Section: Parameters ──────────────────────────── */}
+            {/* ── Parameters ─────────────────────────────────────── */}
             <div className="border-b border-border/60 p-5">
               <div className="mb-3 flex items-center gap-2">
                 <h3 className="text-[13px] font-semibold text-foreground">Parameters</h3>
@@ -305,7 +476,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
               <ParameterBuilder value={parameters} onChange={handleParametersChange} />
             </div>
 
-            {/* ── Section: Authentication ──────────────────────── */}
+            {/* ── Authentication ──────────────────────────────────── */}
             <div className="p-5">
               <h3 className="mb-3 text-[13px] font-semibold text-foreground">Authentication</h3>
               <SelectInput
