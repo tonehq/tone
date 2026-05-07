@@ -47,6 +47,10 @@ class ToolService(BaseService):
 
     def update_tool(self, tool_id: int, data: Dict[str, Any]) -> Tool:
         tool = self.get_tool(tool_id)
+        # Built-in tools: only allow updating meta_data and is_active
+        if tool.tool_type == "built_in":
+            allowed = {"meta_data", "is_active"}
+            data = {k: v for k, v in data.items() if k in allowed}
         for key, value in data.items():
             if hasattr(tool, key):
                 setattr(tool, key, value)
@@ -55,8 +59,71 @@ class ToolService(BaseService):
         self.db.refresh(tool)
         return tool
 
+    def upsert_tool(self, data: Dict[str, Any]) -> Tool:
+        """Create or update a tool. Send id to update; send name and description to create."""
+        tool_id = data.get("id")
+        now = int(time.time())
+
+        if tool_id is not None:
+            existing = self.query(Tool).filter(Tool.id == int(tool_id)).first()
+            if not existing:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Tool not found",
+                )
+            # Built-in tools: only allow updating meta_data and is_active
+            if existing.tool_type == "built_in":
+                allowed = {"meta_data", "is_active"}
+                update_data = {k: v for k, v in data.items() if k in allowed}
+            else:
+                update_data = {k: v for k, v in data.items() if k != "id"}
+            for key, value in update_data.items():
+                if hasattr(existing, key):
+                    setattr(existing, key, value)
+            existing.updated_at = now
+            self.db.commit()
+            self.db.refresh(existing)
+            return existing
+
+        # Create new tool
+        if not data.get("name"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="name is required when creating a new tool",
+            )
+        if not data.get("description"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="description is required when creating a new tool",
+            )
+        tool = Tool(
+            uuid=uuid_lib.uuid4(),
+            name=data["name"],
+            description=data["description"],
+            tool_type=data.get("tool_type", "custom"),
+            parameters=data.get("parameters", {}),
+            url=data.get("url"),
+            method=data.get("method", "POST"),
+            auth_type=data.get("auth_type", "none"),
+            auth_config=data.get("auth_config"),
+            meta_data=data.get("meta_data"),
+            is_active=data.get("is_active", True),
+            organization_id=self.org_id,
+            created_at=now,
+            updated_at=now,
+        )
+        self.db.add(tool)
+        self.db.commit()
+        self.db.refresh(tool)
+        return tool
+
     def delete_tool(self, tool_id: int) -> Dict[str, str]:
         tool = self.get_tool(tool_id)
+        if tool.tool_type == "built_in":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Built-in tools cannot be deleted",
+            )
         self.db.delete(tool)
         self.db.commit()
         return {"message": "Tool deleted successfully"}
@@ -124,6 +191,7 @@ class ToolService(BaseService):
             "uuid": str(tool.uuid),
             "name": tool.name,
             "description": tool.description,
+            "tool_type": tool.tool_type,
             "parameters": tool.parameters,
             "url": tool.url,
             "method": tool.method,

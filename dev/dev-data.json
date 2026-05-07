@@ -52763,5 +52763,22 @@
       ],
       "status": "inactive"
     }
+  ],
+  "built_in_tools": [
+    {
+      "name": "send_sms",
+      "description": "Send an SMS message to the caller during a voice call",
+      "tool_type": "built_in",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "The text message content to send via SMS"
+          }
+        },
+        "required": ["message"]
+      }
+    }
   ]
 }
