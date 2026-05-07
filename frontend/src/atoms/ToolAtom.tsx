@@ -11,9 +11,9 @@ const fetchToolsAtom = atom(null, async (_get, set) => {
   set(toolsAtom, (prev) => ({ ...prev, loading: true }));
   try {
     const tools = await getAllTools();
-    set(toolsAtom, { tools, loading: false });
+    set(toolsAtom, { tools: tools ?? [], loading: false });
   } catch (error) {
-    set(toolsAtom, (prev) => ({ ...prev, loading: false }));
+    set(toolsAtom, (prev) => ({ ...prev, tools: prev.tools ?? [], loading: false }));
     throw error;
   }
 });
