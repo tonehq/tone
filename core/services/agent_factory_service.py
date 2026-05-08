@@ -1384,8 +1384,8 @@ class AgentFactoryService(BaseService):
                 logger.info("Fetched {} custom tools for agent {}", len(custom_tools), agent.id)
                 custom_tools_schema = build_custom_tool_schemas(custom_tools)
                 for tool in custom_tools:
-                    if tool.tool_type == "built_in":
-                        handler = create_built_in_tool_handler(tool, from_number)
+                    if tool.tool_type != "custom":
+                        handler = create_built_in_tool_handler(tool, from_number, org_id=agent.organization_id)
                     else:
                         handler = create_custom_tool_handler(tool)
                     llm.register_function(tool.name, handler)

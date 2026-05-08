@@ -1,4 +1,4 @@
-export type ToolType = 'custom' | 'built_in';
+export type ToolType = 'custom' | 'send_sms' | 'google_calendar' | 'google_sheets';
 
 export interface Tool {
   id: number;

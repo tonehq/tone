@@ -52768,7 +52768,7 @@
     {
       "name": "send_sms",
       "description": "Send an SMS message to the caller during a voice call",
-      "tool_type": "built_in",
+      "tool_type": "send_sms",
       "parameters": {
         "type": "object",
         "properties": {

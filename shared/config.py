@@ -75,5 +75,9 @@ class Settings:
         self.R2_BUCKET_NAME: str = get_secret("R2_BUCKET_NAME", "")
         self.R2_ENDPOINT_URL: str = get_secret("R2_ENDPOINT_URL", "")
 
+        # Google OAuth
+        self.GOOGLE_CLIENT_ID: str = get_secret("GOOGLE_CLIENT_ID", "")
+        self.GOOGLE_CLIENT_SECRET: str = get_secret("GOOGLE_CLIENT_SECRET", "")
+
 
 settings = Settings()
