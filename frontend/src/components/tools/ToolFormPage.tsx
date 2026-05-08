@@ -17,8 +17,8 @@ import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
-import { ArrowLeft, Loader2, MessageSquare, Save, Shield } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { ArrowLeft, Loader2, Save, Shield } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 interface ToolFormPageProps {
@@ -51,10 +51,14 @@ const AUTH_TYPE_OPTIONS = [
 
 export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const isEditMode = !!toolId;
 
   const [, upsertToolAction] = useAtom(upsertToolAtom);
   const [, fetchTools] = useAtom(fetchToolsAtom);
+
+  // Template ID from query params (when creating from a built-in template)
+  const templateId = searchParams.get('template_id');
 
   // Tool type
   const [toolType, setToolType] = useState<ToolType>('custom');
@@ -80,6 +84,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
 
   const [loading, setLoading] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
+  const [showErrors, setShowErrors] = useState(false);
 
   const isBuiltIn = toolType === 'built_in';
 
@@ -119,6 +124,22 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
     if (isEditMode) loadToolData();
   }, [isEditMode, loadToolData]);
 
+  // Load template data when creating from a built-in template
+  useEffect(() => {
+    if (!templateId || isEditMode) return;
+    setLoading(true);
+    getTool(Number(templateId))
+      .then((template) => {
+        setToolType(template.tool_type ?? 'custom');
+        setParameters(template.parameters ?? {});
+        // Name and description are left empty for the user to fill
+      })
+      .catch(() => {
+        // Template not found — proceed as custom tool
+      })
+      .finally(() => setLoading(false));
+  }, [templateId, isEditMode]);
+
   const buildAuthConfig = useCallback((): Record<string, string> | null => {
     switch (authType) {
       case 'api_key':
@@ -132,21 +153,33 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
     }
   }, [authType, authHeaderName, authApiKey, authBearerToken, authUsername, authPassword]);
 
+  const isValid = isBuiltIn
+    ? (name ?? '').trim().length > 0 && (description ?? '').trim().length > 0
+    : (name ?? '').trim().length > 0 &&
+      (description ?? '').trim().length > 0 &&
+      (url ?? '').trim().length > 0;
+
   const handleSave = async () => {
+    setShowErrors(true);
+    if (!isValid) return;
+
     let payload: ToolUpsertPayload;
 
-    if (isBuiltIn && isEditMode) {
-      // Built-in tools: only send id + meta_data
+    if (isBuiltIn) {
       payload = {
-        id: Number(toolId),
+        ...(isEditMode ? { id: Number(toolId) } : {}),
+        name: (name ?? '').trim(),
+        description: (description ?? '').trim(),
+        tool_type: 'built_in',
+        parameters,
         meta_data: {
           account_sid: metaAccountSid.trim(),
           auth_token: metaAuthToken.trim(),
           from_number: metaFromNumber.trim(),
         },
+        is_active: true,
       };
     } else {
-      if (!(name ?? '').trim() || !(description ?? '').trim() || !(url ?? '').trim()) return;
       payload = {
         ...(isEditMode ? { id: Number(toolId) } : {}),
         name: (name ?? '').trim(),
@@ -176,12 +209,6 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   const handleParametersChange = useCallback((schema: ToolParametersSchema) => {
     setParameters(schema);
   }, []);
-
-  const isValid = isBuiltIn
-    ? true
-    : (name ?? '').trim().length > 0 &&
-      (description ?? '').trim().length > 0 &&
-      (url ?? '').trim().length > 0;
 
   if (loading) {
     return (
@@ -243,19 +270,37 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
         {/* ── Content ───────────────────────────────────────────── */}
         <div className="min-h-0 flex-1 overflow-auto bg-muted/30">
           <div className="mx-auto max-w-[680px] space-y-4 px-6 py-5">
-            {/* ── Tool overview card (read-only) ────────────────── */}
+            {/* ── Tool definition card ─────────────────────────── */}
             <div className="rounded-xl border border-border bg-background shadow-sm">
-              <div className="flex items-start gap-4 p-5">
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                  <MessageSquare size={18} className="text-primary" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <h2 className="font-mono text-[15px] font-semibold text-foreground">{name}</h2>
-                  </div>
-                  <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-                    {description || 'No description'}
-                  </p>
+              <div className="p-5">
+                <h3 className="mb-3 text-[13px] font-semibold text-foreground">Tool Definition</h3>
+                <div className="space-y-3">
+                  <TextInput
+                    name="tool-name"
+                    label="Name"
+                    placeholder="send_sms"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    isRequired
+                    error={showErrors && !(name ?? '').trim()}
+                    helperText={showErrors && !(name ?? '').trim() ? 'Name is required' : undefined}
+                    className="font-mono"
+                  />
+                  <TextAreaField
+                    name="tool-description"
+                    label="Description"
+                    placeholder="Describe what this tool does."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    rows={2}
+                    isRequired
+                    error={showErrors && !(description ?? '').trim()}
+                    helperText={
+                      showErrors && !(description ?? '').trim()
+                        ? 'Description is required'
+                        : undefined
+                    }
+                  />
                 </div>
               </div>
 
@@ -366,7 +411,6 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
             icon={saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save size={13} />}
             onClick={handleSave}
             loading={saving}
-            disabled={!isValid}
           >
             {isEditMode ? 'Save' : 'Create'}
           </CustomButton>
@@ -396,6 +440,8 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   isRequired
+                  error={showErrors && !(name ?? '').trim()}
+                  helperText={showErrors && !(name ?? '').trim() ? 'Name is required' : undefined}
                   className="font-mono"
                 />
                 <TextAreaField
@@ -406,6 +452,12 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
                   onChange={(e) => setDescription(e.target.value)}
                   rows={2}
                   isRequired
+                  error={showErrors && !(description ?? '').trim()}
+                  helperText={
+                    showErrors && !(description ?? '').trim()
+                      ? 'Description is required'
+                      : undefined
+                  }
                 />
               </div>
             </div>
@@ -446,6 +498,9 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
                   </div>
                 </div>
               </div>
+              {showErrors && !(url ?? '').trim() && (
+                <p className="mt-1.5 text-[12px] text-destructive">URL is required</p>
+              )}
               <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
                 Use{' '}
                 <code className="rounded bg-muted/80 px-1 py-px font-mono text-[10px] text-foreground">

@@ -13,6 +13,7 @@ export interface Tool {
   auth_config: Record<string, string> | null;
   meta_data: Record<string, unknown> | null;
   is_active: boolean;
+  is_template?: boolean;
   created_at: number;
   updated_at: number;
 }
