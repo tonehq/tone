@@ -58,7 +58,7 @@ def get_all_tools(
 ):
     svc = _get_service(claims, db)
     tools = svc.get_tools()
-    return [svc.tool_response(t) for t in tools]
+    return [svc.tool_response(t) for t in tools if not t.is_template]
 
 
 @router.get("/get_template_tools")
