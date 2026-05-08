@@ -68,7 +68,7 @@ class ToolService(BaseService):
                 detail="Template tools cannot be edited",
             )
         # Built-in tools: only allow updating meta_data and is_active
-        if tool.tool_type == "built_in":
+        if tool.tool_type != "custom":
             allowed = {"meta_data", "is_active"}
             data = {k: v for k, v in data.items() if k in allowed}
         if "name" in data:
@@ -99,7 +99,7 @@ class ToolService(BaseService):
                     detail="Template tools cannot be edited",
                 )
             # Built-in tools: only allow updating meta_data and is_active
-            if existing.tool_type == "built_in":
+            if existing.tool_type != "custom":
                 allowed = {"meta_data", "is_active"}
                 update_data = {k: v for k, v in data.items() if k in allowed}
             else:

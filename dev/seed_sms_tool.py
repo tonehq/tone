@@ -18,7 +18,7 @@ DATABASE_URL = "postgresql://neondb_owner:npg_6MIP1wKAkFQh@ep-round-pond-anxl011
 SEND_SMS_TOOL = {
     "name": "send_sms",
     "description": "Send an SMS message to the caller during a voice call",
-    "tool_type": "built_in",
+    "tool_type": "send_sms",
     "parameters": {
         "type": "object",
         "properties": {
@@ -60,7 +60,7 @@ def main():
                 # Update existing tool to ensure is_template is set
                 session.execute(
                     text("UPDATE tools SET is_template = :is_template, tool_type = :tool_type WHERE id = :id"),
-                    {"is_template": True, "tool_type": "built_in", "id": existing[0]},
+                    {"is_template": True, "tool_type": "send_sms", "id": existing[0]},
                 )
                 print(f"  [{org_name}] send_sms tool already exists (id={existing[0]}), updated is_template=True.")
                 skipped += 1
