@@ -63,6 +63,16 @@ def get_all_tools(
     return [svc.tool_response(t) for t in tools]
 
 
+@router.get("/get_template_tools")
+def get_template_tools(
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    svc = _get_service(claims, db)
+    tools = svc.get_template_tools()
+    return [svc.tool_response(t) for t in tools]
+
+
 @router.get("/get_tool")
 def get_tool(
     tool_id: int = Query(..., description="The tool ID to fetch"),

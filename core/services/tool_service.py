@@ -11,7 +11,19 @@ from core.models.tool import Tool, AgentTool
 
 class ToolService(BaseService):
 
+    def _check_duplicate_name(self, name: str, exclude_id: int = None) -> None:
+        """Raise 409 if a tool with the same name already exists in this org."""
+        query = self.query(Tool).filter(Tool.name == name)
+        if exclude_id is not None:
+            query = query.filter(Tool.id != exclude_id)
+        if query.first():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"A tool with name '{name}' already exists in this organization",
+            )
+
     def create_tool(self, data: Dict[str, Any]) -> Tool:
+        self._check_duplicate_name(data["name"])
         now = int(time.time())
         tool = Tool(
             uuid=uuid_lib.uuid4(),
@@ -36,6 +48,9 @@ class ToolService(BaseService):
     def get_tools(self) -> List[Tool]:
         return self.query(Tool).all()
 
+    def get_template_tools(self) -> List[Tool]:
+        return self.query(Tool).filter(Tool.is_template == True).all()
+
     def get_tool(self, tool_id: int) -> Tool:
         tool = self.query(Tool).filter(Tool.id == tool_id).first()
         if not tool:
@@ -47,10 +62,17 @@ class ToolService(BaseService):
 
     def update_tool(self, tool_id: int, data: Dict[str, Any]) -> Tool:
         tool = self.get_tool(tool_id)
+        if tool.is_template:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Template tools cannot be edited",
+            )
         # Built-in tools: only allow updating meta_data and is_active
         if tool.tool_type == "built_in":
             allowed = {"meta_data", "is_active"}
             data = {k: v for k, v in data.items() if k in allowed}
+        if "name" in data:
+            self._check_duplicate_name(data["name"], exclude_id=tool_id)
         for key, value in data.items():
             if hasattr(tool, key):
                 setattr(tool, key, value)
@@ -71,12 +93,19 @@ class ToolService(BaseService):
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Tool not found",
                 )
+            if existing.is_template:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Template tools cannot be edited",
+                )
             # Built-in tools: only allow updating meta_data and is_active
             if existing.tool_type == "built_in":
                 allowed = {"meta_data", "is_active"}
                 update_data = {k: v for k, v in data.items() if k in allowed}
             else:
                 update_data = {k: v for k, v in data.items() if k != "id"}
+            if "name" in update_data:
+                self._check_duplicate_name(update_data["name"], exclude_id=int(tool_id))
             for key, value in update_data.items():
                 if hasattr(existing, key):
                     setattr(existing, key, value)
@@ -96,6 +125,7 @@ class ToolService(BaseService):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="description is required when creating a new tool",
             )
+        self._check_duplicate_name(data["name"])
         tool = Tool(
             uuid=uuid_lib.uuid4(),
             name=data["name"],
@@ -119,10 +149,10 @@ class ToolService(BaseService):
 
     def delete_tool(self, tool_id: int) -> Dict[str, str]:
         tool = self.get_tool(tool_id)
-        if tool.tool_type == "built_in":
+        if tool.is_template:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Built-in tools cannot be deleted",
+                detail="Template tools cannot be deleted",
             )
         self.db.delete(tool)
         self.db.commit()
@@ -199,6 +229,7 @@ class ToolService(BaseService):
             "auth_config": tool.auth_config,
             "meta_data": tool.meta_data,
             "is_active": tool.is_active,
+            "is_template": tool.is_template,
             "created_at": tool.created_at,
             "updated_at": tool.updated_at,
         }

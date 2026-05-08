@@ -20,6 +20,7 @@ class Tool(OrgScopedModel):
     auth_config = Column(JSONB, nullable=True)
     meta_data = Column(JSONB, nullable=True, default=dict)
     is_active = Column(Boolean, default=True, nullable=False)
+    is_template = Column(Boolean, default=False, nullable=False)
 
 
 class AgentTool(TimestampModel):
