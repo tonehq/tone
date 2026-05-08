@@ -4,6 +4,7 @@ import json
 from typing import Any, Callable, List, Optional
 
 import httpx
+from fastapi import HTTPException
 from loguru import logger
 
 from pipecat.adapters.schemas.function_schema import FunctionSchema
@@ -211,10 +212,26 @@ def _create_google_calendar_handler(tool: Tool, org_id=None) -> Callable:
 
             with get_db_context() as db:
                 svc = OAuthService(db, org_id=effective_org_id)
+                connection = svc.get_connection_by_provider("google_calendar")
+                if not connection:
+                    logger.error("google_calendar: no OAuth connection found for org {}", effective_org_id)
+                    await params.result_callback(
+                        "Google Calendar is not connected. Please ask the admin to connect Google Calendar in the Integrations settings."
+                    )
+                    return
                 access_token = svc.get_valid_access_token("google_calendar")
+        except HTTPException as e:
+            logger.error("google_calendar: OAuth error: {}", e.detail)
+            if "reconnect" in str(e.detail).lower():
+                await params.result_callback(
+                    "Google Calendar connection has expired. Please ask the admin to reconnect Google Calendar in the Integrations settings."
+                )
+            else:
+                await params.result_callback(f"Google Calendar is not available right now. Reason: {e.detail}")
+            return
         except Exception as e:
-            logger.error("google_calendar: failed to get access token: {}", e)
-            await params.result_callback(f"Error: Google Calendar is not connected. {str(e)}")
+            logger.error("google_calendar: unexpected error getting access token: {}", e)
+            await params.result_callback("Google Calendar is temporarily unavailable. Please try again later.")
             return
 
         headers = {
@@ -237,9 +254,12 @@ def _create_google_calendar_handler(tool: Tool, org_id=None) -> Callable:
             logger.info("google_calendar action='{}' result: {}", action, result)
             await params.result_callback(result)
 
+        except httpx.TimeoutException:
+            logger.error("google_calendar: Google API request timed out")
+            await params.result_callback("Google Calendar is taking too long to respond. Please try again.")
         except Exception as e:
             logger.error("google_calendar tool failed: {}", e)
-            await params.result_callback(f"Error with Google Calendar: {str(e)}")
+            await params.result_callback(f"Something went wrong with Google Calendar. Please try again later.")
 
     return handle_google_calendar
 
