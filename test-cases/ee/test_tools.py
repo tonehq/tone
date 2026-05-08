@@ -117,6 +117,80 @@ class TestCreateTool:
         assert response.status_code == 201
 
 
+# ─── POST /api/v1/tool/upsert_tool ───
+
+class TestUpsertTool:
+    """Tests for POST /api/v1/tool/upsert_tool"""
+
+    def test_upsert_create_success(self, client_as_member):
+        """Create a new tool via upsert (no id provided)."""
+        data = {
+            "name": _unique_name(),
+            "description": "Created via upsert",
+            "url": "https://example.com/upsert-tool",
+            "method": "POST",
+        }
+        response = client_as_member.post("/api/v1/tool/upsert_tool", json=data)
+        assert response.status_code == 200
+        result = response.json()
+        assert result["name"] == data["name"]
+        assert result["url"] == data["url"]
+
+    def test_upsert_update_success(self, client_as_member):
+        """Update an existing tool via upsert (id provided)."""
+        tool = _create_tool(client_as_member)
+        response = client_as_member.post("/api/v1/tool/upsert_tool", json={
+            "id": tool["id"],
+            "name": "Updated via upsert",
+            "description": "Updated description",
+        })
+        assert response.status_code == 200
+        assert response.json()["name"] == "Updated via upsert"
+
+    def test_upsert_update_not_found(self, client_as_member):
+        """Update with non-existent id returns 404."""
+        response = client_as_member.post("/api/v1/tool/upsert_tool", json={
+            "id": 999999,
+            "name": "Ghost",
+        })
+        assert response.status_code == 404
+
+    def test_upsert_create_missing_name(self, client_as_member):
+        """Create without name returns 400."""
+        response = client_as_member.post("/api/v1/tool/upsert_tool", json={
+            "description": "No name tool",
+            "url": "https://example.com",
+        })
+        assert response.status_code == 400
+        assert "name" in response.json()["detail"].lower()
+
+    def test_upsert_create_missing_description(self, client_as_member):
+        """Create without description returns 400."""
+        response = client_as_member.post("/api/v1/tool/upsert_tool", json={
+            "name": _unique_name(),
+            "url": "https://example.com",
+        })
+        assert response.status_code == 400
+        assert "description" in response.json()["detail"].lower()
+
+    def test_upsert_partial_update(self, client_as_member):
+        """Partial update — only change description."""
+        tool = _create_tool(client_as_member)
+        response = client_as_member.post("/api/v1/tool/upsert_tool", json={
+            "id": tool["id"],
+            "description": "Only description changed",
+        })
+        assert response.status_code == 200
+        assert response.json()["description"] == "Only description changed"
+        assert response.json()["name"] == tool["name"]
+
+    def test_upsert_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.post("/api/v1/tool/upsert_tool", json={
+            "name": "Tool", "description": "A tool", "url": "https://example.com"
+        })
+        assert response.status_code in (401, 403)
+
+
 # ─── GET /api/v1/tool/get_all_tools ───
 
 class TestGetAllTools:
