@@ -86,7 +86,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   const [saving, setSaving] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
 
-  const isBuiltIn = toolType === 'built_in';
+  const isBuiltIn = toolType !== 'custom';
 
   const loadToolData = useCallback(async () => {
     if (!toolId) return;
@@ -170,7 +170,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
         ...(isEditMode ? { id: Number(toolId) } : {}),
         name: (name ?? '').trim(),
         description: (description ?? '').trim(),
-        tool_type: 'built_in',
+        tool_type: toolType,
         parameters,
         meta_data: {
           account_sid: metaAccountSid.trim(),
