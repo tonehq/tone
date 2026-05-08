@@ -1,7 +1,7 @@
 'use client';
 
-import ToolFormPage from '@/components/tools/ToolFormPage';
+import ToolCreatePage from '@/components/tools/ToolCreatePage';
 
 export default function CreateToolPage() {
-  return <ToolFormPage />;
+  return <ToolCreatePage />;
 }
