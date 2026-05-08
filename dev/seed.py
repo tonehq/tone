@@ -359,6 +359,7 @@ def seed_from_configs(db, org_name, email, password):
             tool_type=tool_spec.get("tool_type", "built_in"),
             parameters=tool_spec.get("parameters"),
             is_active=True,
+            is_template=True,
         )
         db.add(tool)
         stats["tools_created"] += 1
