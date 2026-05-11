@@ -277,18 +277,22 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
             from core.database.session import get_db_context
             from core.services.oauth_service import OAuthService
 
+            if not tool.oauth_connection_id:
+                logger.error("google_calendar: tool '{}' has no oauth_connection_id set", tool.name)
+                _log_tool_call("error: no oauth_connection_id")
+                await params.result_callback(
+                    "Google Calendar tool is not linked to an OAuth connection. Please configure it in tool settings."
+                )
+                return
+
             with get_db_context() as db:
                 svc = OAuthService(db, org_id=effective_org_id)
-                # Prefer direct link via oauth_connection_id; fall back to org-level provider lookup
-                if tool.oauth_connection_id:
-                    connection = svc.get_connection(tool.oauth_connection_id)
-                else:
-                    connection = svc.get_connection_by_provider("google_calendar")
+                connection = svc.get_connection(tool.oauth_connection_id)
                 if not connection:
-                    logger.error("google_calendar: no OAuth connection found for org {}", effective_org_id)
-                    _log_tool_call("error: no OAuth connection")
+                    logger.error("google_calendar: OAuth connection {} not found for org {}", tool.oauth_connection_id, effective_org_id)
+                    _log_tool_call("error: OAuth connection not found")
                     await params.result_callback(
-                        "Google Calendar is not connected. Please ask the admin to connect Google Calendar in the Integrations settings."
+                        "Google Calendar connection not found. Please reconnect Google Calendar in the Integrations settings."
                     )
                     return
                 access_token = svc.get_valid_access_token_for_connection(connection)
