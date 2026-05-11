@@ -11,6 +11,29 @@ from core.models.tool import Tool, AgentTool
 
 class ToolService(BaseService):
 
+    def _validate_oauth_connection(self, oauth_connection_id: int) -> None:
+        """Raise 400 if the OAuth connection doesn't exist, is inactive, or belongs to a different org."""
+        from core.models.oauth_connection import OAuthConnection
+
+        connection = self.db.query(OAuthConnection).filter(
+            OAuthConnection.id == oauth_connection_id,
+        ).first()
+        if not connection:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"OAuth connection {oauth_connection_id} not found",
+            )
+        if str(connection.organization_id) != str(self.org_id):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="OAuth connection does not belong to this organization",
+            )
+        if not connection.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="OAuth connection is no longer active. Please reconnect.",
+            )
+
     def _check_duplicate_name(self, name: str, exclude_id: int = None) -> None:
         """Raise 409 if a tool with the same name already exists in this org."""
         query = self.query(Tool).filter(Tool.name == name)
@@ -24,6 +47,8 @@ class ToolService(BaseService):
 
     def create_tool(self, data: Dict[str, Any]) -> Tool:
         self._check_duplicate_name(data["name"])
+        if data.get("oauth_connection_id"):
+            self._validate_oauth_connection(data["oauth_connection_id"])
         now = int(time.time())
         tool = Tool(
             uuid=uuid_lib.uuid4(),
@@ -72,6 +97,8 @@ class ToolService(BaseService):
         if tool.tool_type != "custom":
             allowed = {"meta_data", "is_active", "oauth_connection_id"}
             data = {k: v for k, v in data.items() if k in allowed}
+        if data.get("oauth_connection_id"):
+            self._validate_oauth_connection(data["oauth_connection_id"])
         if "name" in data:
             self._check_duplicate_name(data["name"], exclude_id=tool_id)
         for key, value in data.items():
@@ -105,6 +132,8 @@ class ToolService(BaseService):
                 update_data = {k: v for k, v in data.items() if k in allowed}
             else:
                 update_data = {k: v for k, v in data.items() if k != "id"}
+            if update_data.get("oauth_connection_id"):
+                self._validate_oauth_connection(update_data["oauth_connection_id"])
             if "name" in update_data:
                 self._check_duplicate_name(update_data["name"], exclude_id=int(tool_id))
             for key, value in update_data.items():
@@ -127,6 +156,8 @@ class ToolService(BaseService):
                 detail="description is required when creating a new tool",
             )
         self._check_duplicate_name(data["name"])
+        if data.get("oauth_connection_id"):
+            self._validate_oauth_connection(data["oauth_connection_id"])
         tool = Tool(
             uuid=uuid_lib.uuid4(),
             name=data["name"],
