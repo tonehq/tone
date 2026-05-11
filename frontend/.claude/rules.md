@@ -223,7 +223,7 @@ Keep code organized by responsibility. Every new file must land in the correct d
 | Directory                | Contents                                        | Examples                                                                                                                              |
 | ------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/types/`             | TypeScript interfaces and type aliases          | `agent.ts`, `provider.ts`, `components.ts`, `integration.ts`, `sidebar.ts`                                                            |
-| `src/constants/`         | Static values, config objects, enums            | `index.ts` (cookie keys, URLs), `sidebar.ts` (nav config, widths), `settings.ts`                                                      |
+| `src/constants/`         | Static values, config objects, enums, provider configs | `index.ts` (cookie keys, URLs), `sidebar.ts` (nav config, widths), `integrations.tsx` (provider card configs), `toolForm.ts`            |
 | `src/utils/`             | Pure helper functions and utilities             | `helpers.ts` (generateUUID), `date.ts` (date formatting), `agentFormUtils.ts` (form state transforms), `axios.ts`, `notification.tsx` |
 | `src/services/`          | API call functions (thin wrappers around axios) | `agentsService.ts`, `channelService.ts`, `providerService.ts`                                                                         |
 | `src/atoms/`             | Jotai atoms (state + write actions)             | `AgentsAtom.tsx`, `AuthAtom.tsx`, `ProviderAtom.tsx`                                                                                  |
@@ -233,12 +233,14 @@ Keep code organized by responsibility. Every new file must land in the correct d
 ### Rules
 
 1. **Types live in `src/types/`.** Do not define exported interfaces inside atoms, services, or components. Import types from `@/types/<domain>`.
-2. **Constants live in `src/constants/`.** Static config, magic numbers, cookie key names, URL patterns, and nav menus go here. Do not scatter constants across component files.
+2. **Constants live in `src/constants/`.** Static config, magic numbers, cookie key names, URL patterns, nav menus, and provider/integration configs go here. Do not scatter constants across component files. If a constant array contains JSX (e.g., icon elements), use `.tsx` extension.
 3. **Utility functions live in `src/utils/`.** Pure functions (no side effects, no API calls) that are used by multiple files belong in utils. Single-use helpers may stay in their component file.
 4. **Services only do API calls.** Files in `src/services/` must not import Jotai atoms or define types. They accept parameters, call axios, and return data.
 5. **Atoms orchestrate state.** Atoms import from `@/services/` and `@/types/`. Components import atoms. Atoms must not import from components.
 6. **Re-export for backwards compatibility.** When moving a type, constant, or function to its canonical location, leave a re-export in the old file to avoid breaking existing imports. Remove the re-export in a follow-up cleanup.
 7. **One domain per file.** `src/types/agent.ts` holds all agent-related types. `src/constants/sidebar.ts` holds all sidebar constants. Do not split a domain across multiple files in the same directory.
+8. **No inline constants in components.** Config arrays, option lists, provider configs, and static data must be extracted to `src/constants/`. Components should only contain state, effects, handlers, and JSX. If the constant contains JSX icons, use `.tsx` extension for the constants file.
+9. **No reusable helpers in components.** Pure utility functions used across components (formatting, grouping, validation helpers) must be extracted to `src/utils/`. Single-use helpers tightly coupled to one component's state may stay inline.
 
 ---
 
