@@ -56,12 +56,21 @@ def build_custom_tool_schemas(tools: List[Tool]) -> Optional[ToolsSchema]:
     return ToolsSchema(standard_tools=function_schemas)
 
 
-def create_custom_tool_handler(tool: Tool):
+def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = None):
     """Create a handler function for a custom tool that calls the customer's webhook."""
 
     async def handle_tool_call(params: FunctionCallParams) -> None:
+        import time as _time
+
         arguments = params.arguments
         logger.info("Custom tool '{}' called with args: {}", tool.name, arguments)
+        _t_start = _time.monotonic()
+        tool_call_entry = {
+            "tool": tool.name,
+            "tool_type": tool.tool_type,
+            "arguments": arguments,
+            "timestamp": int(_time.time()),
+        }
 
         try:
             # Build request headers
@@ -111,22 +120,33 @@ def create_custom_tool_handler(tool: Tool):
                 result_text = response.text
 
             logger.info("Custom tool '{}' returned status {}", tool.name, response.status_code)
+
+            tool_call_entry["result"] = "success"
+            tool_call_entry["status_code"] = response.status_code
+            tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
+            if tool_call_entries is not None:
+                tool_call_entries.append(tool_call_entry)
+
             await params.result_callback(result_text)
 
         except Exception as e:
             logger.error("Custom tool '{}' failed: {}", tool.name, e)
+            tool_call_entry["result"] = f"error: {str(e)}"
+            tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
+            if tool_call_entries is not None:
+                tool_call_entries.append(tool_call_entry)
             await params.result_callback(f"Error calling tool: {str(e)}")
 
     return handle_tool_call
 
 
-def create_built_in_tool_handler(tool: Tool, caller_number: str, org_id=None) -> Callable:
+def create_built_in_tool_handler(tool: Tool, caller_number: str, org_id=None, tool_call_entries: Optional[list] = None) -> Callable:
     """Create a handler for a built-in tool based on tool_type."""
 
     if tool.tool_type == "send_sms":
-        return _create_send_sms_handler(tool, caller_number)
+        return _create_send_sms_handler(tool, caller_number, tool_call_entries=tool_call_entries)
     elif tool.tool_type == "google_calendar":
-        return _create_google_calendar_handler(tool, org_id=org_id)
+        return _create_google_calendar_handler(tool, org_id=org_id, tool_call_entries=tool_call_entries)
 
     # Fallback: unknown built-in tool type
     async def noop_handler(params: FunctionCallParams) -> None:
@@ -136,13 +156,22 @@ def create_built_in_tool_handler(tool: Tool, caller_number: str, org_id=None) ->
     return noop_handler
 
 
-def _create_send_sms_handler(tool: Tool, caller_number: str) -> Callable:
+def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: Optional[list] = None) -> Callable:
     """Create a handler that sends an SMS via Twilio."""
 
     async def handle_send_sms(params: FunctionCallParams) -> None:
+        import time as _time
+
         arguments = params.arguments
         message = arguments.get("message", "")
         logger.info("Built-in tool 'send_sms' called. Sending SMS to {}", caller_number)
+        _t_start = _time.monotonic()
+        tool_call_entry = {
+            "tool": "send_sms",
+            "tool_type": "send_sms",
+            "arguments": {"message": message, "to": caller_number},
+            "timestamp": int(_time.time()),
+        }
 
         meta = tool.meta_data or {}
         account_sid = meta.get("account_sid")
@@ -151,11 +180,19 @@ def _create_send_sms_handler(tool: Tool, caller_number: str) -> Callable:
 
         if not all([account_sid, auth_token, from_number]):
             logger.error("send_sms tool missing Twilio credentials in meta_data")
+            tool_call_entry["result"] = "error: missing Twilio credentials"
+            tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
+            if tool_call_entries is not None:
+                tool_call_entries.append(tool_call_entry)
             await params.result_callback("Error: SMS tool is not configured. Missing Twilio credentials.")
             return
 
         if not caller_number:
             logger.error("send_sms tool: no caller phone number available")
+            tool_call_entry["result"] = "error: no caller number"
+            tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
+            if tool_call_entries is not None:
+                tool_call_entries.append(tool_call_entry)
             await params.result_callback("Error: Caller phone number is not available for this call.")
             return
 
@@ -174,26 +211,49 @@ def _create_send_sms_handler(tool: Tool, caller_number: str) -> Callable:
 
             if response.status_code == 201:
                 logger.info("SMS sent successfully to {}", caller_number)
+                tool_call_entry["result"] = "success"
+                tool_call_entry["status_code"] = response.status_code
+                tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
+                if tool_call_entries is not None:
+                    tool_call_entries.append(tool_call_entry)
                 await params.result_callback("SMS sent successfully.")
             else:
                 error_detail = response.text
                 logger.error("SMS sending failed: status={} body={}", response.status_code, error_detail)
+                tool_call_entry["result"] = f"error: status {response.status_code}"
+                tool_call_entry["status_code"] = response.status_code
+                tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
+                if tool_call_entries is not None:
+                    tool_call_entries.append(tool_call_entry)
                 await params.result_callback(f"Failed to send SMS: {error_detail}")
 
         except Exception as e:
             logger.error("send_sms tool failed: {}", e)
+            tool_call_entry["result"] = f"error: {str(e)}"
+            tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
+            if tool_call_entries is not None:
+                tool_call_entries.append(tool_call_entry)
             await params.result_callback(f"Error sending SMS: {str(e)}")
 
     return handle_send_sms
 
 
-def _create_google_calendar_handler(tool: Tool, org_id=None) -> Callable:
+def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: Optional[list] = None) -> Callable:
     """Create a handler that creates/checks events via Google Calendar API."""
 
     async def handle_google_calendar(params: FunctionCallParams) -> None:
+        import time as _time
+
         arguments = params.arguments
         action = arguments.get("action", "create_event")
         logger.info("Built-in tool 'google_calendar' called with action='{}', args={}", action, arguments)
+        _t_start = _time.monotonic()
+        tool_call_entry = {
+            "tool": "google_calendar",
+            "tool_type": "google_calendar",
+            "arguments": {"action": action, **{k: v for k, v in arguments.items() if k != "action"}},
+            "timestamp": int(_time.time()),
+        }
 
         meta = tool.meta_data or {}
         calendar_id = meta.get("calendar_id", "primary")
@@ -201,7 +261,14 @@ def _create_google_calendar_handler(tool: Tool, org_id=None) -> Callable:
         # Use org_id from call context; fall back to meta_data for backward compatibility
         effective_org_id = org_id or meta.get("org_id")
 
+        def _log_tool_call(result_str, duration_ms=None):
+            tool_call_entry["result"] = result_str
+            tool_call_entry["duration_ms"] = duration_ms or round((_time.monotonic() - _t_start) * 1000)
+            if tool_call_entries is not None:
+                tool_call_entries.append(tool_call_entry)
+
         if not effective_org_id:
+            _log_tool_call("error: missing org_id")
             await params.result_callback("Error: Google Calendar tool is not configured. Missing org_id.")
             return
 
@@ -212,16 +279,22 @@ def _create_google_calendar_handler(tool: Tool, org_id=None) -> Callable:
 
             with get_db_context() as db:
                 svc = OAuthService(db, org_id=effective_org_id)
-                connection = svc.get_connection_by_provider("google_calendar")
+                # Prefer direct link via oauth_connection_id; fall back to org-level provider lookup
+                if tool.oauth_connection_id:
+                    connection = svc.get_connection(tool.oauth_connection_id)
+                else:
+                    connection = svc.get_connection_by_provider("google_calendar")
                 if not connection:
                     logger.error("google_calendar: no OAuth connection found for org {}", effective_org_id)
+                    _log_tool_call("error: no OAuth connection")
                     await params.result_callback(
                         "Google Calendar is not connected. Please ask the admin to connect Google Calendar in the Integrations settings."
                     )
                     return
-                access_token = svc.get_valid_access_token("google_calendar")
+                access_token = svc.get_valid_access_token_for_connection(connection)
         except HTTPException as e:
             logger.error("google_calendar: OAuth error: {}", e.detail)
+            _log_tool_call(f"error: OAuth - {e.detail}")
             if "reconnect" in str(e.detail).lower():
                 await params.result_callback(
                     "Google Calendar connection has expired. Please ask the admin to reconnect Google Calendar in the Integrations settings."
@@ -231,6 +304,7 @@ def _create_google_calendar_handler(tool: Tool, org_id=None) -> Callable:
             return
         except Exception as e:
             logger.error("google_calendar: unexpected error getting access token: {}", e)
+            _log_tool_call(f"error: {str(e)}")
             await params.result_callback("Google Calendar is temporarily unavailable. Please try again later.")
             return
 
@@ -252,13 +326,16 @@ def _create_google_calendar_handler(tool: Tool, org_id=None) -> Callable:
                 result = f"Unknown action: {action}. Supported actions: create_event, check_availability, list_events"
 
             logger.info("google_calendar action='{}' result: {}", action, result)
+            _log_tool_call("success")
             await params.result_callback(result)
 
         except httpx.TimeoutException:
             logger.error("google_calendar: Google API request timed out")
+            _log_tool_call("error: timeout")
             await params.result_callback("Google Calendar is taking too long to respond. Please try again.")
         except Exception as e:
             logger.error("google_calendar tool failed: {}", e)
+            _log_tool_call(f"error: {str(e)}")
             await params.result_callback(f"Something went wrong with Google Calendar. Please try again later.")
 
     return handle_google_calendar

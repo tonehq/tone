@@ -1231,6 +1231,7 @@ class AgentFactoryService(BaseService):
         audio_buffer = None
         transcript_entries: list[dict] = []
         call_log_updated = {"done": False}
+        tool_call_entries: list[dict] = []
 
         async def _get_call_log_id() -> int | None:
             """Await until call_log_id is available, then return it."""
@@ -1339,6 +1340,7 @@ class AgentFactoryService(BaseService):
                             {"latency": round(l, 3)} for l in latency_observer._latencies
                         ]
                         collected_metrics["turns"] = turn_entries
+                        tool_calls_data = tool_call_entries if tool_call_entries else None
                         with get_db_context() as db:
                             CallLogService(db).complete_call(
                                 call_log_id=call_log_id,
@@ -1346,6 +1348,7 @@ class AgentFactoryService(BaseService):
                                 upload_id=upload_id,
                                 transcript=transcript_data,
                                 metrics=collected_metrics,
+                                tool_calls=tool_calls_data,
                             )
                         call_log_updated["done"] = True
                         logger.info(
@@ -1368,7 +1371,7 @@ class AgentFactoryService(BaseService):
         if agent:
             from core.services.document_tool_service import \
                 register_document_tool
-            doc_tools = register_document_tool(llm, agent.id, agent.organization_id)
+            doc_tools = register_document_tool(llm, agent.id, agent.organization_id, tool_call_entries=tool_call_entries)
 
         # Fetch custom tools for this agent
         custom_tools_schema = None
@@ -1385,9 +1388,9 @@ class AgentFactoryService(BaseService):
                 custom_tools_schema = build_custom_tool_schemas(custom_tools)
                 for tool in custom_tools:
                     if tool.tool_type != "custom":
-                        handler = create_built_in_tool_handler(tool, from_number, org_id=agent.organization_id)
+                        handler = create_built_in_tool_handler(tool, from_number, org_id=agent.organization_id, tool_call_entries=tool_call_entries)
                     else:
-                        handler = create_custom_tool_handler(tool)
+                        handler = create_custom_tool_handler(tool, tool_call_entries=tool_call_entries)
                     llm.register_function(tool.name, handler)
                     logger.info("Registered {} tool handler: {}", tool.tool_type, tool.name)
 
@@ -1640,12 +1643,14 @@ class AgentFactoryService(BaseService):
                     transcript_data = transcript_entries if transcript_entries else None
 
                     collected_metrics = metrics_collector.get_collected_metrics()
+                    tool_calls_data = tool_call_entries if tool_call_entries else None
                     with get_db_context() as db:
                         CallLogService(db).complete_call(
                             call_log_id=call_log_id,
                             audio_file_path=None,
                             transcript=transcript_data,
                             metrics=collected_metrics,
+                            tool_calls=tool_calls_data,
                         )
                     logger.info("Call log completed (fallback): id={}", call_log_id)
                 except Exception as e:

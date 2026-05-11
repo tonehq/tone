@@ -213,6 +213,28 @@ class TestGetAllTools:
         assert response.status_code in (401, 403)
 
 
+# ─── GET /api/v1/tool/get_template_tools ───
+
+class TestGetTemplateTools:
+    """Tests for GET /api/v1/tool/get_template_tools"""
+
+    def test_get_template_tools_success(self, client_as_member):
+        response = client_as_member.get("/api/v1/tool/get_template_tools")
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+
+    def test_get_template_tools_returns_only_templates(self, client_as_member):
+        response = client_as_member.get("/api/v1/tool/get_template_tools")
+        assert response.status_code == 200
+        tools = response.json()
+        for tool in tools:
+            assert tool.get("is_template") is True
+
+    def test_get_template_tools_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get("/api/v1/tool/get_template_tools")
+        assert response.status_code in (401, 403)
+
+
 # ─── GET /api/v1/tool/get_tool ───
 
 class TestGetTool:

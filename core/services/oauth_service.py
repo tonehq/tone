@@ -17,6 +17,7 @@ class OAuthService(BaseService):
     def create_connection(self, data: Dict[str, Any]) -> OAuthConnection:
         existing = self.query(OAuthConnection).filter(
             OAuthConnection.provider == data["provider"],
+            OAuthConnection.user_id == data.get("user_id"),
             OAuthConnection.is_active == True,
         ).first()
         if existing:
@@ -103,7 +104,11 @@ class OAuthService(BaseService):
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"No active OAuth connection found for '{provider}'",
             )
+        return self.get_valid_access_token_for_connection(connection)
 
+    def get_valid_access_token_for_connection(self, connection: 'OAuthConnection') -> str:
+        """Get a valid (non-expired) access token for a specific connection. Refreshes automatically if expired."""
+        provider = connection.provider
         tokens = self.get_decrypted_tokens(connection)
         now = int(time.time())
 
