@@ -50,7 +50,7 @@ def get_document_tool_schema(document_names: List[str]) -> ToolsSchema:
     return ToolsSchema(standard_tools=[function_schema])
 
 
-def create_document_handler(agent_id: int, org_id: Any, api_key: str, doc_ids: List[int], top_k: int = 3, tool_call_entries: Optional[list] = None):
+def create_document_handler(agent_id: int, org_id: Any, api_key: str, doc_ids: List[int], top_k: int = 3, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None):
     """Create the handler function for read_document tool calls.
 
     Args:
@@ -83,6 +83,7 @@ def create_document_handler(agent_id: int, org_id: Any, api_key: str, doc_ids: L
             "tool": "read_document",
             "arguments": {"query": query},
             "timestamp": int(_time.time()),
+            "turn": current_turn["number"] if current_turn else None,
         }
 
         try:
@@ -190,7 +191,7 @@ def get_openai_api_key_for_agent(org_id: Any) -> Optional[str]:
         return decrypt(api_key_record.api_key_encrypted)
 
 
-def register_document_tool(llm: Any, agent_id: int, org_id: Any, tool_call_entries: Optional[list] = None) -> Optional[ToolsSchema]:
+def register_document_tool(llm: Any, agent_id: int, org_id: Any, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None) -> Optional[ToolsSchema]:
     """Main entry point — call this from agent_factory_service after LLM is created.
 
     Checks if the agent has documents, and if so:
@@ -255,7 +256,7 @@ def register_document_tool(llm: Any, agent_id: int, org_id: Any, tool_call_entri
 
     # Build tool schema and handler
     tools_schema = get_document_tool_schema(doc_names)
-    handler = create_document_handler(agent_id, org_id, api_key, doc_ids, tool_call_entries=tool_call_entries)
+    handler = create_document_handler(agent_id, org_id, api_key, doc_ids, tool_call_entries=tool_call_entries, current_turn=current_turn)
 
     # Register handler on the LLM
     llm.register_function("read_document", handler)

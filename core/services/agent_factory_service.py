@@ -1231,7 +1231,11 @@ class AgentFactoryService(BaseService):
         audio_buffer = None
         transcript_entries: list[dict] = []
         call_log_updated = {"done": False}
+        # Every tool handler must append to tool_call_entries with at minimum:
+        # {"tool": ..., "arguments": ..., "timestamp": ..., "turn": current_turn["number"], "result": ..., "duration_ms": ...}
+        # When adding new tool types, pass both tool_call_entries and current_turn to the handler creator.
         tool_call_entries: list[dict] = []
+        current_turn: dict = {"number": 0}
 
         async def _get_call_log_id() -> int | None:
             """Await until call_log_id is available, then return it."""
@@ -1371,7 +1375,7 @@ class AgentFactoryService(BaseService):
         if agent:
             from core.services.document_tool_service import \
                 register_document_tool
-            doc_tools = register_document_tool(llm, agent.id, agent.organization_id, tool_call_entries=tool_call_entries)
+            doc_tools = register_document_tool(llm, agent.id, agent.organization_id, tool_call_entries=tool_call_entries, current_turn=current_turn)
 
         # Fetch custom tools for this agent
         custom_tools_schema = None
@@ -1388,9 +1392,9 @@ class AgentFactoryService(BaseService):
                 custom_tools_schema = build_custom_tool_schemas(custom_tools)
                 for tool in custom_tools:
                     if tool.tool_type != "custom":
-                        handler = create_built_in_tool_handler(tool, from_number, org_id=agent.organization_id, tool_call_entries=tool_call_entries)
+                        handler = create_built_in_tool_handler(tool, from_number, org_id=agent.organization_id, tool_call_entries=tool_call_entries, current_turn=current_turn)
                     else:
-                        handler = create_custom_tool_handler(tool, tool_call_entries=tool_call_entries)
+                        handler = create_custom_tool_handler(tool, tool_call_entries=tool_call_entries, current_turn=current_turn)
                     llm.register_function(tool.name, handler)
                     logger.info("Registered {} tool handler: {}", tool.tool_type, tool.name)
 
@@ -1539,6 +1543,7 @@ class AgentFactoryService(BaseService):
 
         @turn_observer.event_handler("on_turn_started")
         async def on_turn_started(observer, turn_number):
+            current_turn["number"] = turn_number
             logger.info("Turn {} started", turn_number)
 
         @turn_observer.event_handler("on_turn_ended")
