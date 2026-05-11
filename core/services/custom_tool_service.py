@@ -56,7 +56,7 @@ def build_custom_tool_schemas(tools: List[Tool]) -> Optional[ToolsSchema]:
     return ToolsSchema(standard_tools=function_schemas)
 
 
-def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = None):
+def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None):
     """Create a handler function for a custom tool that calls the customer's webhook."""
 
     async def handle_tool_call(params: FunctionCallParams) -> None:
@@ -70,6 +70,7 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
             "tool_type": tool.tool_type,
             "arguments": arguments,
             "timestamp": int(_time.time()),
+            "turn": current_turn["number"] if current_turn else None,
         }
 
         try:
@@ -140,13 +141,13 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
     return handle_tool_call
 
 
-def create_built_in_tool_handler(tool: Tool, caller_number: str, org_id=None, tool_call_entries: Optional[list] = None) -> Callable:
+def create_built_in_tool_handler(tool: Tool, caller_number: str, org_id=None, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None) -> Callable:
     """Create a handler for a built-in tool based on tool_type."""
 
     if tool.tool_type == "send_sms":
-        return _create_send_sms_handler(tool, caller_number, tool_call_entries=tool_call_entries)
+        return _create_send_sms_handler(tool, caller_number, tool_call_entries=tool_call_entries, current_turn=current_turn)
     elif tool.tool_type == "google_calendar":
-        return _create_google_calendar_handler(tool, org_id=org_id, tool_call_entries=tool_call_entries)
+        return _create_google_calendar_handler(tool, org_id=org_id, tool_call_entries=tool_call_entries, current_turn=current_turn)
 
     # Fallback: unknown built-in tool type
     async def noop_handler(params: FunctionCallParams) -> None:
@@ -156,7 +157,7 @@ def create_built_in_tool_handler(tool: Tool, caller_number: str, org_id=None, to
     return noop_handler
 
 
-def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: Optional[list] = None) -> Callable:
+def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None) -> Callable:
     """Create a handler that sends an SMS via Twilio."""
 
     async def handle_send_sms(params: FunctionCallParams) -> None:
@@ -171,6 +172,7 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
             "tool_type": "send_sms",
             "arguments": {"message": message, "to": caller_number},
             "timestamp": int(_time.time()),
+            "turn": current_turn["number"] if current_turn else None,
         }
 
         meta = tool.meta_data or {}
@@ -238,7 +240,7 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
     return handle_send_sms
 
 
-def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: Optional[list] = None) -> Callable:
+def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None) -> Callable:
     """Create a handler that creates/checks events via Google Calendar API."""
 
     async def handle_google_calendar(params: FunctionCallParams) -> None:
@@ -253,6 +255,7 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
             "tool_type": "google_calendar",
             "arguments": {"action": action, **{k: v for k, v in arguments.items() if k != "action"}},
             "timestamp": int(_time.time()),
+            "turn": current_turn["number"] if current_turn else None,
         }
 
         meta = tool.meta_data or {}
