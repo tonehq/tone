@@ -3,8 +3,10 @@
 import { CustomButton, SelectInput, TextAreaField, TextInput } from '@/components/shared';
 import { Form } from '@/components/shared/Form';
 import { Switch } from '@/components/ui/switch';
+import { agentGeneralSchema } from '@/schemas/agent';
 import type { ServiceProvider } from '@/types/provider';
 import { toSelectOptions } from '@/utils/selectUtils';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Bot, Brain, MessageSquare, Trash2 } from 'lucide-react';
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -123,6 +125,7 @@ export default function GeneralTab({
   const [filterWordsInput, setFilterWordsInput] = useState('');
 
   const { control, trigger } = useForm({
+    resolver: zodResolver(agentGeneralSchema),
     mode: 'onChange',
     values: { name: formData.name },
   });
@@ -206,7 +209,6 @@ export default function GeneralTab({
             <TextInput
               name="name"
               control={control}
-              rules={{ required: 'Please enter a name for your agent' }}
               onValueChange={(v) => onFormChange({ name: v })}
             />
           </FormRow>

@@ -259,7 +259,41 @@ Certain UI elements have canonical component implementations. Always use these i
 
 ---
 
-## 11. Form layout and spacing standards
+## 11. Form validation: react-hook-form + Zod (mandatory)
+
+All forms must use `react-hook-form` with `zodResolver` and Zod schemas for validation. This ensures consistent, declarative validation with type-safe form data.
+
+### Required pattern
+
+```typescript
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { type MyFormData, mySchema } from '@/schemas/myDomain';
+
+const { control, handleSubmit } = useForm<MyFormData>({
+  resolver: zodResolver(mySchema),
+  defaultValues: { ... },
+});
+```
+
+### Rules
+
+1. **Zod schemas live in `src/schemas/`.** One file per domain (e.g., `auth.ts`, `tool.ts`, `agent.ts`). Export both the schema and the inferred type (`z.infer<typeof schema>`).
+2. **Always use `zodResolver`.** Do not use inline `rules` prop on form fields. All validation logic belongs in the Zod schema.
+3. **Pass `control` to shared components.** `TextInput`, `TextAreaField`, `SelectInput`, `CheckboxField`, and `RadioGroupField` all support a `control` prop that activates react-hook-form `Controller` integration. When `control` is passed, the component automatically handles value binding, error display, and dirty state.
+4. **Do not use manual `showErrors` + `isValid` patterns.** The `handleSubmit` wrapper from react-hook-form handles validation gating — the submit handler only fires when the form is valid.
+5. **Use `reset()` to populate edit forms.** When loading existing data (edit mode), call `form.reset(loadedValues)` instead of setting individual state variables.
+6. **Do not mix controlled state with react-hook-form.** When a field is managed by `control`, do not also maintain a separate `useState` for that field's value. Use `watch()` or `getValues()` if you need to read field values outside the form.
+
+### Do NOT use
+
+- `useState` + manual `onChange` + `showErrors` flag for form fields that have validation
+- Inline validation like `error={showErrors && !value.trim()}`
+- Manual `isValid` checks before submit — `handleSubmit` gates this automatically
+
+---
+
+## 12. Form layout and spacing standards
 
 All form pages (agent form, settings, etc.) follow consistent spacing rules for visual breathing room and alignment.
 

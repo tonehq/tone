@@ -10,11 +10,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
+import { type PublicKeyFormData, publicKeySchema } from '@/schemas/settings';
 import type { CustomTableColumn } from '@/types/components';
 import { formatNow } from '@/utils/date';
 import { generateUUID } from '@/utils/helpers';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Eye, MoreVertical, Plus, Trash2, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
 
 export interface PublicKeyRow {
   id: string;
@@ -40,19 +43,25 @@ function AddPublicKeyModal({
     fraudProtection: boolean;
   }) => void;
 }) {
-  const [keyName, setKeyName] = useState('');
+  const { control, handleSubmit, reset, formState } = useForm<PublicKeyFormData>({
+    resolver: zodResolver(publicKeySchema),
+    defaultValues: { keyName: '' },
+  });
+
   const [domainInput, setDomainInput] = useState('');
   const [domains, setDomains] = useState<string[]>([]);
   const [abusePrevention, setAbusePrevention] = useState(false);
   const [fraudProtection, setFraudProtection] = useState(false);
 
-  const resetForm = () => {
-    setKeyName('');
-    setDomainInput('');
-    setDomains([]);
-    setAbusePrevention(false);
-    setFraudProtection(false);
-  };
+  useEffect(() => {
+    if (open) {
+      reset({ keyName: '' });
+      setDomainInput('');
+      setDomains([]);
+      setAbusePrevention(false);
+      setFraudProtection(false);
+    }
+  }, [open, reset]);
 
   const handleAddDomain = () => {
     const d = domainInput.trim();
@@ -62,16 +71,14 @@ function AddPublicKeyModal({
     }
   };
 
-  const handleSave = () => {
-    if (keyName.trim()) {
-      onSave({ keyName: keyName.trim(), domains, abusePrevention, fraudProtection });
-      resetForm();
-      onClose();
-    }
+  const onFormSubmit = (data: PublicKeyFormData) => {
+    onSave({ keyName: data.keyName.trim(), domains, abusePrevention, fraudProtection });
+    reset({ keyName: '' });
+    onClose();
   };
 
   const handleClose = () => {
-    resetForm();
+    reset({ keyName: '' });
     onClose();
   };
 
@@ -81,19 +88,17 @@ function AddPublicKeyModal({
       onClose={handleClose}
       title="Add Public Key"
       confirmText="Save"
-      onConfirm={handleSave}
-      confirmDisabled={!keyName.trim()}
+      onConfirm={handleSubmit(onFormSubmit)}
+      confirmDisabled={!formState.isValid}
     >
       <div className="space-y-4">
-        <div>
-          <TextInput
-            name="public-key-name"
-            label="Key Name"
-            placeholder="e.g. Staging-Frontend-PubKey (staging frontend public key)"
-            value={keyName}
-            onChange={(e) => setKeyName(e.target.value)}
-          />
-        </div>
+        <TextInput
+          name="keyName"
+          control={control}
+          label="Key Name"
+          placeholder="e.g. Staging-Frontend-PubKey (staging frontend public key)"
+          isRequired
+        />
 
         <div>
           <p className="mb-1.5 text-sm font-medium">Allowed Domains</p>
