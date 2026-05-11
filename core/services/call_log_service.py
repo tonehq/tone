@@ -83,6 +83,7 @@ class CallLogService(BaseService):
         upload_id: Optional[int] = None,
         transcript: Optional[List[dict]] = None,
         metrics: Optional[dict] = None,
+        tool_calls: Optional[List[dict]] = None,
     ) -> Optional[CallLog]:
         call_log = self.db.query(CallLog).filter(CallLog.id == call_log_id).first()
         if not call_log:
@@ -98,6 +99,8 @@ class CallLogService(BaseService):
         call_log.transcript = transcript
         if metrics:
             call_log.metrics = metrics
+        if tool_calls:
+            call_log.tool_calls = tool_calls
 
         self.db.commit()
         self.db.refresh(call_log)
@@ -256,6 +259,7 @@ class CallLogService(BaseService):
                 "audio_file_path": call_log.audio_file_path,
                 "provider_call_id": call_log.provider_call_id,
                 "metrics": call_log.metrics,
+                "tool_calls": call_log.tool_calls,
             })
 
         return {
@@ -298,4 +302,5 @@ class CallLogService(BaseService):
             "audio_file_path": call_log.audio_file_path,
             "provider_call_id": call_log.provider_call_id,
             "metrics": call_log.metrics,
+            "tool_calls": call_log.tool_calls,
         }

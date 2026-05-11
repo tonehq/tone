@@ -1,16 +1,13 @@
 'use client';
 
 import { CustomButton } from '@/components/shared';
+import { TOOL_TYPE_HEADER } from '@/constants/toolForm';
 import { getTemplateTools } from '@/services/toolService';
 import type { Tool } from '@/types/tool';
-import { ArrowLeft, Code2, MessageSquare, Wrench } from 'lucide-react';
+import { cn } from '@/utils/cn';
+import { ArrowLeft, Code2, Wrench } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
-
-/** Icons for known built-in tool names */
-const BUILTIN_ICONS: Record<string, React.ReactNode> = {
-  send_sms: <MessageSquare size={20} />,
-};
 
 export default function ToolCreatePage() {
   const router = useRouter();
@@ -34,7 +31,6 @@ export default function ToolCreatePage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      {/* ── Header ──────────────────────────────────────────── */}
       <div className="flex shrink-0 items-center justify-between border-b border-border bg-background px-4 py-2">
         <div className="flex items-center gap-2">
           <CustomButton
@@ -50,7 +46,6 @@ export default function ToolCreatePage() {
         </div>
       </div>
 
-      {/* ── Content ─────────────────────────────────────────── */}
       <div className="min-h-0 flex-1 overflow-auto bg-muted/30">
         <div className="mx-auto max-w-[600px] px-6 py-8">
           <div className="text-center">
@@ -61,7 +56,6 @@ export default function ToolCreatePage() {
           </div>
 
           <div className="mt-6 space-y-3">
-            {/* ── Custom tool option ────────────────────────── */}
             <div
               className="group flex cursor-pointer items-start gap-4 rounded-xl border border-border bg-background p-4 shadow-sm transition-all hover:border-primary/40 hover:shadow-md"
               onClick={() => router.push('/tools/create/custom')}
@@ -86,7 +80,6 @@ export default function ToolCreatePage() {
               </div>
             </div>
 
-            {/* ── Built-in templates ────────────────────────── */}
             {loadingTemplates && (
               <div className="space-y-3">
                 {[1, 2].map((i) => (
@@ -98,22 +91,38 @@ export default function ToolCreatePage() {
             {!loadingTemplates &&
               templates.map((template) => {
                 const paramCount = Object.keys(template.parameters?.properties ?? {}).length;
+                const headerConfig = TOOL_TYPE_HEADER[template.tool_type];
+                const IconComponent = headerConfig?.icon ?? Wrench;
+                const iconBg = headerConfig?.bg ?? 'bg-amber-50 dark:bg-amber-500/10';
+                const iconColor = headerConfig?.color ?? 'text-amber-700 dark:text-amber-400';
+
                 return (
                   <div
                     key={template.uuid}
-                    className="group flex cursor-pointer items-start gap-4 rounded-xl border border-border bg-background p-4 shadow-sm transition-all hover:border-amber-400/40 hover:shadow-md"
+                    className="group flex cursor-pointer items-start gap-4 rounded-xl border border-border bg-background p-4 shadow-sm transition-all hover:border-primary/30 hover:shadow-md"
                     onClick={() => handleSelectTemplate(template)}
                   >
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-                      {BUILTIN_ICONS[template.name] ?? <Wrench size={20} />}
+                    <div
+                      className={cn(
+                        'flex size-10 shrink-0 items-center justify-center rounded-lg',
+                        iconBg,
+                      )}
+                    >
+                      <IconComponent size={20} className={iconColor} />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <h3 className="font-mono text-[14px] font-semibold text-foreground">
                           {template.name}
                         </h3>
-                        <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-                          Built-in
+                        <span
+                          className={cn(
+                            'rounded px-1.5 py-0.5 text-[10px] font-medium',
+                            iconBg,
+                            iconColor,
+                          )}
+                        >
+                          {headerConfig?.label ?? 'Built-in'}
                         </span>
                       </div>
                       <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">

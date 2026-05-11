@@ -7,11 +7,14 @@ import {
   TextAreaField,
   TextInput,
 } from '@/components/shared';
+import { type ProviderUpsertFormData, providerUpsertSchema } from '@/schemas/provider';
 import { getApiKeyPlaintext } from '@/services/providerService';
 import type { ServiceProvider, ServiceProviderUpsertPayload } from '@/types/provider';
 import { handleApiError } from '@/utils/helpers';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { Key } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
 
 const PROVIDER_TYPE_OPTIONS = [
   { value: 'llm', label: 'LLM' },
@@ -43,16 +46,16 @@ export default function ProviderUpsertModal({
 }: ProviderUpsertModalProps) {
   const isEdit = !!provider;
 
-  // Provider fields
-  const [name, setName] = useState('');
-  const [displayName, setDisplayName] = useState('');
+  const { control, handleSubmit, reset, formState } = useForm<ProviderUpsertFormData>({
+    resolver: zodResolver(providerUpsertSchema),
+    defaultValues: { name: '', display_name: '', description: '', base_url: '' },
+  });
+
+  // Fields not in the zod schema (selects, checkboxes, api key section)
   const [providerType, setProviderType] = useState('llm');
-  const [description, setDescription] = useState('');
-  const [baseUrl, setBaseUrl] = useState('');
   const [supportsStreaming, setSupportsStreaming] = useState(false);
   const [status, setStatus] = useState('active');
 
-  // API Key fields
   const [apiKeyName, setApiKeyName] = useState('');
   const [apiKeyValue, setApiKeyValue] = useState('');
   const [originalApiKey, setOriginalApiKey] = useState('');
@@ -65,17 +68,18 @@ export default function ProviderUpsertModal({
   useEffect(() => {
     if (!open) return;
     if (provider) {
-      setName(provider.name);
-      setDisplayName(provider.display_name);
+      reset({
+        name: provider.name,
+        display_name: provider.display_name,
+        description: provider.description ?? '',
+        base_url: provider.base_url ?? '',
+      });
       setProviderType(provider.provider_type);
-      setDescription(provider.description ?? '');
-      setBaseUrl(provider.base_url ?? '');
       setSupportsStreaming(provider.supports_streaming ?? false);
       setStatus(provider.status ?? 'active');
       setApiKeyName(provider.api_key?.name ?? '');
       setApiKeyDescription(provider.api_key?.description ?? '');
       setApiKeyStatus(provider.api_key?.status ?? 'active');
-      // Pre-fill plaintext key when editing an existing api_key row
       if (provider.api_key?.id) {
         setLoadingKey(true);
         setApiKeyValue('');
@@ -92,11 +96,8 @@ export default function ProviderUpsertModal({
         setOriginalApiKey('');
       }
     } else {
-      setName('');
-      setDisplayName('');
+      reset({ name: '', display_name: '', description: '', base_url: '' });
       setProviderType('llm');
-      setDescription('');
-      setBaseUrl('');
       setSupportsStreaming(false);
       setStatus('active');
       setApiKeyName('');
@@ -105,62 +106,56 @@ export default function ProviderUpsertModal({
       setApiKeyDescription('');
       setApiKeyStatus('active');
     }
-  }, [open, provider]);
+  }, [open, provider, reset]);
 
-  const handleSubmit = useCallback(async () => {
-    if (!name.trim() || !displayName.trim()) return;
-    if (!isEdit && !apiKeyValue.trim()) return;
-    setSaving(true);
-    try {
-      const trimmedKey = apiKeyValue.trim();
-      // Only send the secret when it actually changed (rotation), or on create
-      const sendSecret = !isEdit ? !!trimmedKey : trimmedKey !== originalApiKey;
-      const payload: ServiceProviderUpsertPayload = {
-        name: name.trim(),
-        display_name: displayName.trim(),
-        provider_type: providerType as 'llm' | 'stt' | 'tts',
-        auth_type: 'api_key',
-        description: description.trim() || undefined,
-        base_url: baseUrl.trim() || undefined,
-        supports_streaming: supportsStreaming,
-        status,
-        api_key: {
-          name: apiKeyName.trim() || `${displayName.trim()} key`,
-          description: apiKeyDescription.trim() || undefined,
-          status: apiKeyStatus,
-          ...(sendSecret && trimmedKey ? { api_key: trimmedKey } : {}),
-          ...(isEdit && provider?.api_key?.id ? { id: provider.api_key.id } : {}),
-        },
-      };
-      if (isEdit) payload.id = provider.id;
-      await onSubmit(payload);
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  }, [
-    name,
-    displayName,
-    providerType,
-    description,
-    baseUrl,
-    supportsStreaming,
-    status,
-    apiKeyName,
-    apiKeyValue,
-    originalApiKey,
-    apiKeyDescription,
-    apiKeyStatus,
-    isEdit,
-    provider,
-    onSubmit,
-    onClose,
-  ]);
+  const onFormSubmit = useCallback(
+    async (data: ProviderUpsertFormData) => {
+      if (!isEdit && !apiKeyValue.trim()) return;
+      setSaving(true);
+      try {
+        const trimmedKey = apiKeyValue.trim();
+        const sendSecret = !isEdit ? !!trimmedKey : trimmedKey !== originalApiKey;
+        const payload: ServiceProviderUpsertPayload = {
+          name: data.name.trim(),
+          display_name: data.display_name.trim(),
+          provider_type: providerType as 'llm' | 'stt' | 'tts',
+          auth_type: 'api_key',
+          description: data.description?.trim() || undefined,
+          base_url: data.base_url?.trim() || undefined,
+          supports_streaming: supportsStreaming,
+          status,
+          api_key: {
+            name: apiKeyName.trim() || `${data.display_name.trim()} key`,
+            description: apiKeyDescription.trim() || undefined,
+            status: apiKeyStatus,
+            ...(sendSecret && trimmedKey ? { api_key: trimmedKey } : {}),
+            ...(isEdit && provider?.api_key?.id ? { id: provider.api_key.id } : {}),
+          },
+        };
+        if (isEdit) payload.id = provider.id;
+        await onSubmit(payload);
+        onClose();
+      } finally {
+        setSaving(false);
+      }
+    },
+    [
+      apiKeyValue,
+      originalApiKey,
+      providerType,
+      supportsStreaming,
+      status,
+      apiKeyName,
+      apiKeyDescription,
+      apiKeyStatus,
+      isEdit,
+      provider,
+      onSubmit,
+      onClose,
+    ],
+  );
 
-  const isValid =
-    name.trim().length > 0 &&
-    displayName.trim().length > 0 &&
-    (isEdit || apiKeyValue.trim().length > 0);
+  const isApiKeyValid = isEdit || apiKeyValue.trim().length > 0;
 
   return (
     <CustomModal
@@ -173,29 +168,26 @@ export default function ProviderUpsertModal({
           : 'Add a new LLM, STT, or TTS service provider.'
       }
       confirmText={isEdit ? 'Save Changes' : 'Create Provider'}
-      onConfirm={handleSubmit}
+      onConfirm={handleSubmit(onFormSubmit)}
       confirmLoading={saving}
-      confirmDisabled={!isValid}
+      confirmDisabled={!formState.isValid || !isApiKeyValid}
       width="sm:max-w-xl"
       className={MODAL_CLASS}
       contentClassName={`pt-2 pb-2 max-h-[70vh] overflow-y-auto ${LABEL_COMPACT}`}
     >
       <div className="grid grid-cols-2 gap-x-3 gap-y-2.5">
-        {/* ── Provider Details ──────────────────────────────────────── */}
         <TextInput
-          name="provider-name"
+          name="name"
+          control={control}
           label="Name"
           placeholder="e.g. openai"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
           isRequired
         />
         <TextInput
-          name="provider-display-name"
+          name="display_name"
+          control={control}
           label="Display Name"
           placeholder="e.g. OpenAI"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
           isRequired
         />
 
@@ -212,22 +204,20 @@ export default function ProviderUpsertModal({
 
         <div className="col-span-2">
           <TextAreaField
-            name="provider-description"
+            name="description"
+            control={control}
             label="Description"
             placeholder="Describe this provider..."
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
             rows={2}
           />
         </div>
 
         <div className="col-span-2">
           <TextInput
-            name="provider-base-url"
+            name="base_url"
+            control={control}
             label="Base URL"
             placeholder="https://api.example.com"
-            value={baseUrl}
-            onChange={(e) => setBaseUrl(e.target.value)}
           />
         </div>
 
@@ -250,7 +240,6 @@ export default function ProviderUpsertModal({
           </div>
         </div>
 
-        {/* ── API Key ──────────────────────────────────────────────── */}
         <div className="col-span-2 mt-1 border-t border-border pt-3">
           <div className="mb-2.5 flex items-center gap-1.5">
             <Key className="size-3.5 text-muted-foreground" />
@@ -265,7 +254,7 @@ export default function ProviderUpsertModal({
             <TextInput
               name="api-key-name"
               label="Key Name"
-              placeholder={`${displayName || 'Provider'} key`}
+              placeholder={`${formState.defaultValues?.display_name || 'Provider'} key`}
               value={apiKeyName}
               onChange={(e) => setApiKeyName(e.target.value)}
             />

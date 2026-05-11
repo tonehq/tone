@@ -28,11 +28,12 @@ def _get_service(claims: JWTClaims, db: Session) -> OAuthService:
 
 @router.get("/connections")
 def get_connections(
+    provider: str = Query(None, description="Filter by provider (e.g. google_calendar)"),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
     svc = _get_service(claims, db)
-    connections = svc.get_connections()
+    connections = svc.get_connections(provider=provider, user_id=int(claims.user_id))
     return [svc.connection_response(c) for c in connections]
 
 

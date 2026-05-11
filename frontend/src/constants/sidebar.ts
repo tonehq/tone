@@ -36,7 +36,7 @@ export const sidebarSections: SidebarSection[] = [
         path: '/service-providers',
         icon: Plug,
       },
-      { key: 'integrations', title: 'Integrations', path: '/settings', icon: Cable },
+      { key: 'integrations', title: 'Integrations', path: '/integrations', icon: Cable },
       { key: 'organizations', title: 'Organizations', path: '/organizations', icon: Building2 },
       { key: 'members', title: 'Members', path: '/members', icon: Users },
     ],

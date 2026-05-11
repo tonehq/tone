@@ -1,16 +1,11 @@
 'use client';
 
 import { CustomModal, TextAreaField, TextInput } from '@/components/shared';
+import { type OrganizationUpsertFormData, organizationUpsertSchema } from '@/schemas/organization';
 import type { OrganizationDetails, OrganizationUpdatePayload } from '@/types/organization';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-
-interface OrganizationFormValues {
-  name: string;
-  description: string;
-  website_url: string;
-  logo_url: string;
-}
 
 interface OrganizationUpsertModalProps {
   open: boolean;
@@ -31,7 +26,8 @@ const OrganizationUpsertModal: React.FC<OrganizationUpsertModalProps> = ({
 }) => {
   const isEdit = !!organization;
 
-  const { control, handleSubmit, reset } = useForm<OrganizationFormValues>({
+  const { control, handleSubmit, reset, formState } = useForm<OrganizationUpsertFormData>({
+    resolver: zodResolver(organizationUpsertSchema),
     defaultValues: {
       name: '',
       description: '',
@@ -55,21 +51,22 @@ const OrganizationUpsertModal: React.FC<OrganizationUpsertModalProps> = ({
     }
   }, [open, organization, reset]);
 
-  const handleFormSubmit = handleSubmit(async (values) => {
+  const onFormSubmit = async (values: OrganizationUpsertFormData) => {
     if (isEdit && organization) {
       const payload: OrganizationUpdatePayload = {};
       if (values.name !== organization.name) payload.name = values.name;
-      if (values.description !== (organization.description ?? ''))
+      if ((values.description ?? '') !== (organization.description ?? ''))
         payload.description = values.description;
-      if (values.website_url !== (organization.website_url ?? ''))
+      if ((values.website_url ?? '') !== (organization.website_url ?? ''))
         payload.website_url = values.website_url;
-      if (values.logo_url !== (organization.logo_url ?? '')) payload.logo_url = values.logo_url;
+      if ((values.logo_url ?? '') !== (organization.logo_url ?? ''))
+        payload.logo_url = values.logo_url;
 
       await onSubmit({ orgId: organization.id, payload });
     } else {
       await onSubmit({ name: values.name });
     }
-  });
+  };
 
   return (
     <CustomModal
@@ -83,7 +80,8 @@ const OrganizationUpsertModal: React.FC<OrganizationUpsertModalProps> = ({
       }
       confirmText={isEdit ? 'Save' : 'Create'}
       confirmLoading={loading}
-      onConfirm={handleFormSubmit}
+      confirmDisabled={!formState.isValid}
+      onConfirm={handleSubmit(onFormSubmit)}
       width="sm:max-w-lg"
     >
       <div className="flex flex-col gap-4">
@@ -92,7 +90,6 @@ const OrganizationUpsertModal: React.FC<OrganizationUpsertModalProps> = ({
           label="Name"
           placeholder="Organization name"
           control={control}
-          rules={{ required: 'Name is required' }}
           isRequired
         />
         {isEdit && (
