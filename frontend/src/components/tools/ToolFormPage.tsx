@@ -1,6 +1,6 @@
 'use client';
 
-import { fetchToolsAtom, upsertToolAtom } from '@/atoms/ToolAtom';
+import { deleteToolAtom, fetchToolsAtom, upsertToolAtom } from '@/atoms/ToolAtom';
 import BuiltInToolForm from '@/components/tools/BuiltInToolForm';
 import CustomToolForm from '@/components/tools/CustomToolForm';
 import type { BuiltInToolFormData, CustomToolFormData } from '@/schemas/tool';
@@ -29,6 +29,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   const isEditMode = !!toolId;
 
   const [, upsertToolAction] = useAtom(upsertToolAtom);
+  const [, deleteToolAction] = useAtom(deleteToolAtom);
   const [, fetchTools] = useAtom(fetchToolsAtom);
 
   const templateId = searchParams.get('template_id');
@@ -47,6 +48,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   const [authPassword, setAuthPassword] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [metaData, setMetaData] = useState<Record<string, string>>({});
+  const [oauthConnectionId, setOauthConnectionId] = useState<number | null>(null);
   const [toolRecord, setToolRecord] = useState<Tool | null>(null);
 
   const [loading, setLoading] = useState(isEditMode);
@@ -77,6 +79,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
       setAuthUsername(cfg.username ?? '');
       setAuthPassword(cfg.password ?? '');
       setMetaData((tool.meta_data ?? {}) as Record<string, string>);
+      setOauthConnectionId(tool.oauth_connection_id ?? null);
       setSaved(true);
     } catch (error) {
       handleApiError(error);
@@ -138,6 +141,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
       tool_type: toolType,
       parameters,
       meta_data: metaData,
+      oauth_connection_id: oauthConnectionId,
       is_active: true,
     };
     await executeSave(payload);
@@ -163,6 +167,18 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   }, []);
 
   const handleBack = useCallback(() => router.push('/tools'), [router]);
+
+  const handleDelete = useCallback(async () => {
+    if (!toolId) return;
+    try {
+      await deleteToolAction(Number(toolId));
+      showToast.success('Tool deleted successfully');
+      await fetchTools();
+      router.push('/tools');
+    } catch (error) {
+      handleApiError(error);
+    }
+  }, [toolId, deleteToolAction, fetchTools, router]);
 
   if (loading) {
     return (
@@ -192,8 +208,11 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
         isEditMode={isEditMode}
         saving={saving}
         saved={saved}
+        oauthConnectionId={oauthConnectionId}
         onMetaDataChange={setMetaData}
+        onOAuthConnectionIdChange={setOauthConnectionId}
         onSave={handleBuiltInSave}
+        onDelete={isEditMode ? handleDelete : undefined}
         onBack={handleBack}
         onDirty={markDirty}
       />

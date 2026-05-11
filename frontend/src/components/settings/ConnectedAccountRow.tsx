@@ -17,8 +17,8 @@ export default function ConnectedAccountRow({
   disconnecting,
 }: ConnectedAccountRowProps) {
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-muted/30 px-3 py-2 transition-colors hover:bg-muted/50">
-      <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-500/15">
+    <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-muted/30 px-3 py-2 transition-colors hover:bg-muted/50 dark:border-border/20 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]">
+      <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-500/10">
         <UserCircle size={12} className="text-emerald-600 dark:text-emerald-400" />
       </div>
       <div className="min-w-0 flex-1">

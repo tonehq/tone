@@ -1,8 +1,10 @@
 import type { OAuthConnection, OAuthProviderStatus } from '@/types/oauth';
 import axiosInstance from '@/utils/axios';
 
-export const getOAuthConnections = async (): Promise<OAuthConnection[]> => {
-  const { data } = await axiosInstance.get<OAuthConnection[]>('/oauth/connections');
+export const getOAuthConnections = async (provider?: string): Promise<OAuthConnection[]> => {
+  const { data } = await axiosInstance.get<OAuthConnection[]>('/oauth/connections', {
+    params: provider ? { provider } : undefined,
+  });
   return data;
 };
 

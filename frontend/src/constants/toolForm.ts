@@ -85,19 +85,19 @@ export const TOOL_TYPE_META_SECTIONS: Record<string, MetaSectionConfig> = {
 export const TOOL_TYPE_HEADER: Record<string, ToolTypeHeaderConfig> = {
   google_calendar: {
     icon: CalendarDays,
-    color: 'text-teal-700 dark:text-teal-300',
+    color: 'text-teal-700 dark:text-teal-400',
     bg: 'bg-teal-100 dark:bg-teal-500/15',
     label: 'Google Calendar',
   },
   send_sms: {
     icon: Shield,
-    color: 'text-amber-700 dark:text-amber-300',
+    color: 'text-amber-700 dark:text-amber-400',
     bg: 'bg-amber-100 dark:bg-amber-500/15',
     label: 'SMS',
   },
   google_sheets: {
     icon: Settings,
-    color: 'text-emerald-700 dark:text-emerald-300',
+    color: 'text-emerald-700 dark:text-emerald-400',
     bg: 'bg-emerald-100 dark:bg-emerald-500/15',
     label: 'Google Sheets',
   },
@@ -122,6 +122,11 @@ export const METHOD_COLORS: Record<string, string> = {
   DELETE: 'bg-red-50 text-red-700 ring-red-600/20 dark:bg-red-500/10 dark:text-red-400',
   PATCH:
     'bg-violet-50 text-violet-700 ring-violet-600/20 dark:bg-violet-500/10 dark:text-violet-400',
+};
+
+export const TOOL_TYPE_OAUTH_PROVIDER: Record<string, string> = {
+  google_calendar: 'google_calendar',
+  google_sheets: 'google_sheets',
 };
 
 export const AUTH_TYPE_OPTIONS = [

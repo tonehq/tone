@@ -12,6 +12,7 @@ export interface Tool {
   auth_type: ToolAuthType | null;
   auth_config: Record<string, string> | null;
   meta_data: Record<string, unknown> | null;
+  oauth_connection_id: number | null;
   is_active: boolean;
   is_template?: boolean;
   created_at: number;
@@ -47,6 +48,7 @@ export interface ToolUpsertPayload {
   auth_type?: ToolAuthType;
   auth_config?: Record<string, string> | null;
   meta_data?: Record<string, unknown> | null;
+  oauth_connection_id?: number | null;
   is_active?: boolean;
 }
 

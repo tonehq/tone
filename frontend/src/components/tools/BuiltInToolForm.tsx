@@ -1,6 +1,6 @@
 'use client';
 
-import { CustomButton, TextAreaField, TextInput } from '@/components/shared';
+import { CustomButton, SelectInput, TextAreaField, TextInput } from '@/components/shared';
 import SettingsSection from '@/components/tools/SettingsSection';
 import {
   DropdownMenu,
@@ -9,8 +9,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { TOOL_TYPE_HEADER, TOOL_TYPE_META_SECTIONS } from '@/constants/toolForm';
+import {
+  TOOL_TYPE_HEADER,
+  TOOL_TYPE_META_SECTIONS,
+  TOOL_TYPE_OAUTH_PROVIDER,
+} from '@/constants/toolForm';
 import { type BuiltInToolFormData, builtInToolSchema } from '@/schemas/tool';
+import { getOAuthConnections } from '@/services/oauthService';
+import type { OAuthConnection } from '@/types/oauth';
 import type { Tool, ToolParametersSchema, ToolType } from '@/types/tool';
 import { cn } from '@/utils/cn';
 import { showToast } from '@/utils/toast';
@@ -19,13 +25,14 @@ import {
   ArrowLeft,
   Check,
   Copy,
+  LinkIcon,
   Loader2,
   MoreVertical,
   Save,
   Settings,
   Trash2,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 interface BuiltInToolFormProps {
@@ -38,8 +45,11 @@ interface BuiltInToolFormProps {
   isEditMode: boolean;
   saving: boolean;
   saved: boolean;
+  oauthConnectionId: number | null;
   onMetaDataChange: (data: Record<string, string>) => void;
+  onOAuthConnectionIdChange: (id: number | null) => void;
   onSave: (data: BuiltInToolFormData) => void;
+  onDelete?: () => void;
   onBack: () => void;
   onDirty: () => void;
 }
@@ -54,16 +64,44 @@ export default function BuiltInToolForm({
   isEditMode,
   saving,
   saved,
+  oauthConnectionId,
   onMetaDataChange,
+  onOAuthConnectionIdChange,
   onSave,
+  onDelete,
   onBack,
   onDirty,
 }: BuiltInToolFormProps) {
   const [uuidCopied, setUuidCopied] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     settings: true,
+    connection: true,
     meta: true,
   });
+
+  // OAuth connections for this tool type
+  const [connections, setConnections] = useState<OAuthConnection[]>([]);
+  const [connectionsLoading, setConnectionsLoading] = useState(false);
+
+  const oauthProvider = TOOL_TYPE_OAUTH_PROVIDER[toolType];
+
+  useEffect(() => {
+    if (!oauthProvider) return;
+    setConnectionsLoading(true);
+    getOAuthConnections(toolType)
+      .then(setConnections)
+      .catch(() => setConnections([]))
+      .finally(() => setConnectionsLoading(false));
+  }, [oauthProvider, toolType]);
+
+  const connectionOptions = useMemo(
+    () =>
+      connections.map((c) => ({
+        value: String(c.id),
+        label: c.user_email ?? `Connection #${c.id}`,
+      })),
+    [connections],
+  );
 
   const { control, handleSubmit, watch, reset } = useForm<BuiltInToolFormData>({
     resolver: zodResolver(builtInToolSchema),
@@ -98,7 +136,6 @@ export default function BuiltInToolForm({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      {/* ── Header bar ──────────────────────────────────────────── */}
       <div className="flex shrink-0 items-center justify-between border-b border-border bg-background px-5 py-3">
         <div className="flex items-center gap-3">
           <CustomButton
@@ -193,7 +230,7 @@ export default function BuiltInToolForm({
                   Copy Tool ID
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" onClick={onBack}>
+                <DropdownMenuItem variant="destructive" onClick={onDelete}>
                   <Trash2 size={14} />
                   Delete Tool
                 </DropdownMenuItem>
@@ -203,9 +240,9 @@ export default function BuiltInToolForm({
         </div>
       </div>
 
-      {/* ── Content ─────────────────────────────────────────────── */}
       <div className="min-h-0 flex-1 overflow-auto bg-muted/20">
         <div className="mx-auto max-w-[700px] space-y-4 px-6 py-6">
+          {/* Tool Settings */}
           <SettingsSection
             title="Tool Settings"
             description="Configure the basic settings for this tool"
@@ -244,6 +281,42 @@ export default function BuiltInToolForm({
             </div>
           </SettingsSection>
 
+          {/* Google Account Connection (only for OAuth tool types) */}
+          {oauthProvider && (
+            <SettingsSection
+              title="Google Account"
+              description="Select which connected Google account this tool should use"
+              icon={LinkIcon}
+              iconColor="text-blue-600 dark:text-blue-400"
+              iconBg="bg-blue-50 dark:bg-blue-500/10"
+              isOpen={openSections.connection}
+              onToggle={() => toggleSection('connection')}
+            >
+              <SelectInput
+                name="oauth-connection"
+                label="Connected Account"
+                options={connectionOptions}
+                value={oauthConnectionId ? String(oauthConnectionId) : ''}
+                onValueChange={(v) => {
+                  onOAuthConnectionIdChange(v ? Number(v) : null);
+                  onDirty();
+                }}
+                loading={connectionsLoading}
+                placeholder="Select a Google account..."
+              />
+              {connections.length === 0 && !connectionsLoading && (
+                <p className="mt-2 text-[12px] text-muted-foreground">
+                  No Google accounts connected.{' '}
+                  <a href="/integrations" className="text-primary hover:underline">
+                    Connect one in Integrations
+                  </a>
+                  .
+                </p>
+              )}
+            </SettingsSection>
+          )}
+
+          {/* Type-specific settings (Calendar ID, Timezone, etc.) */}
           {metaSection && (
             <SettingsSection
               title={metaSection.title}

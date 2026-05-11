@@ -22,8 +22,8 @@ export default function ApiKeyCredentialRow({ row, onEdit, onDelete }: ApiKeyCre
   };
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-muted/30 px-3 py-2 transition-colors hover:bg-muted/50">
-      <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/15">
+    <div className="flex items-center gap-2 rounded-lg border border-border/40 bg-muted/30 px-3 py-2 transition-colors hover:bg-muted/50 dark:border-border/20 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]">
+      <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/10">
         <Key size={10} className="text-amber-600 dark:text-amber-400" />
       </div>
       <div className="min-w-0 flex-1">
