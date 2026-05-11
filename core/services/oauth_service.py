@@ -18,6 +18,7 @@ class OAuthService(BaseService):
         existing = self.query(OAuthConnection).filter(
             OAuthConnection.provider == data["provider"],
             OAuthConnection.user_id == data.get("user_id"),
+            OAuthConnection.user_email == data.get("user_email"),
             OAuthConnection.is_active == True,
         ).first()
         if existing:

@@ -372,13 +372,17 @@ async def _calendar_create_event(base_url: str, headers: dict, arguments: dict, 
     if attendee_email:
         event_body["attendees"] = [{"email": attendee_email}]
 
+    logger.info("google_calendar create_event request url={}/events body={}", base_url, event_body)
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(f"{base_url}/events", headers=headers, json=event_body)
 
+    logger.info("google_calendar create_event response status={} body={}", response.status_code, response.text)
     if response.status_code in (200, 201):
         event = response.json()
+        logger.info("google_calendar create_event SUCCESS: event_id={} status={} htmlLink={}", event.get("id"), event.get("status"), event.get("htmlLink"))
         return f"Event '{title}' created successfully on {date} at {start_time} for {duration_minutes} minutes. Event link: {event.get('htmlLink', 'N/A')}"
     else:
+        logger.error("google_calendar create_event FAILED: status={} body={}", response.status_code, response.text)
         return f"Failed to create event: {response.text}"
 
 

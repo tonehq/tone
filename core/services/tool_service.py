@@ -70,7 +70,7 @@ class ToolService(BaseService):
             )
         # Built-in tools: only allow updating meta_data and is_active
         if tool.tool_type != "custom":
-            allowed = {"meta_data", "is_active"}
+            allowed = {"meta_data", "is_active", "oauth_connection_id"}
             data = {k: v for k, v in data.items() if k in allowed}
         if "name" in data:
             self._check_duplicate_name(data["name"], exclude_id=tool_id)
@@ -101,7 +101,7 @@ class ToolService(BaseService):
                 )
             # Built-in tools: only allow updating meta_data and is_active
             if existing.tool_type != "custom":
-                allowed = {"meta_data", "is_active"}
+                allowed = {"meta_data", "is_active", "oauth_connection_id"}
                 update_data = {k: v for k, v in data.items() if k in allowed}
             else:
                 update_data = {k: v for k, v in data.items() if k != "id"}
