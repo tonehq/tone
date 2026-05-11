@@ -47,10 +47,15 @@ class OAuthService(BaseService):
         self.db.refresh(connection)
         return connection
 
-    def get_connections(self) -> List[OAuthConnection]:
-        return self.query(OAuthConnection).filter(
+    def get_connections(self, provider: Optional[str] = None, user_id: Optional[int] = None) -> List[OAuthConnection]:
+        q = self.query(OAuthConnection).filter(
             OAuthConnection.is_active == True,
-        ).all()
+        )
+        if provider:
+            q = q.filter(OAuthConnection.provider == provider)
+        if user_id is not None:
+            q = q.filter(OAuthConnection.user_id == user_id)
+        return q.all()
 
     def get_connection_by_provider(self, provider: str) -> Optional[OAuthConnection]:
         return self.query(OAuthConnection).filter(
