@@ -1,8 +1,11 @@
 'use client';
 
 import { CustomModal, SelectInput, TextInput } from '@/components/shared';
+import { type AddChannelFormData, addChannelSchema } from '@/schemas/settings';
 import type { IntegrationRow } from '@/types/integration';
-import { useCallback, useEffect, useState } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
 
 const CHANNEL_TYPE_OPTIONS = [
   { label: 'Twilio', value: 'twilio' },
@@ -23,60 +26,47 @@ interface AddChannelModalProps {
   editData?: IntegrationRow | null;
 }
 
-const initialFormState = {
-  name: '',
-  type: 'twilio',
-  auth_token: '',
-  account_sid: '',
-};
-
 export default function AddChannelModal({
   open,
   onClose,
   onSubmit,
   editData,
 }: AddChannelModalProps) {
-  const [name, setName] = useState(initialFormState.name);
-  const [type, setType] = useState(initialFormState.type);
-  const [auth_token, setAuthToken] = useState(initialFormState.auth_token);
-  const [account_sid, setAccountSid] = useState(initialFormState.account_sid);
-  const [saving, setSaving] = useState(false);
-
   const isEdit = Boolean(editData);
+
+  const { control, handleSubmit, reset, formState } = useForm<AddChannelFormData>({
+    resolver: zodResolver(addChannelSchema),
+    defaultValues: { name: '', auth_token: '', account_sid: '' },
+  });
+
+  const [type, setType] = useState('twilio');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open && editData) {
-      setName(editData.name);
-      setType(editData.type ?? initialFormState.type);
-      setAuthToken(editData.auth_token);
-      setAccountSid(editData.account_sid);
+      reset({
+        name: editData.name,
+        auth_token: editData.auth_token,
+        account_sid: editData.account_sid,
+      });
+      setType(editData.type ?? 'twilio');
     } else if (open) {
-      setName(initialFormState.name);
-      setType(initialFormState.type);
-      setAuthToken(initialFormState.auth_token);
-      setAccountSid(initialFormState.account_sid);
+      reset({ name: '', auth_token: '', account_sid: '' });
+      setType('twilio');
     }
-  }, [open, editData]);
+  }, [open, editData, reset]);
 
-  const resetForm = useCallback(() => {
-    setName(initialFormState.name);
-    setType(initialFormState.type);
-    setAuthToken(initialFormState.auth_token);
-    setAccountSid(initialFormState.account_sid);
-  }, []);
-
-  const handleSubmit = async () => {
-    if (!name.trim() || !auth_token.trim() || !account_sid.trim()) return;
+  const onFormSubmit = async (data: AddChannelFormData) => {
     setSaving(true);
     try {
       await onSubmit({
         ...(editData ? { id: editData.id } : {}),
-        name: name.trim(),
+        name: data.name.trim(),
         type,
-        auth_token: auth_token.trim(),
-        account_sid: account_sid.trim(),
+        auth_token: data.auth_token.trim(),
+        account_sid: data.account_sid.trim(),
       });
-      resetForm();
+      reset({ name: '', auth_token: '', account_sid: '' });
       onClose();
     } finally {
       setSaving(false);
@@ -84,7 +74,7 @@ export default function AddChannelModal({
   };
 
   const handleCancel = () => {
-    resetForm();
+    reset({ name: '', auth_token: '', account_sid: '' });
     onClose();
   };
 
@@ -94,52 +84,44 @@ export default function AddChannelModal({
       onClose={handleCancel}
       title={isEdit ? 'Edit API key' : 'Add new API key'}
       confirmText={saving ? 'Saving...' : 'Save'}
-      onConfirm={handleSubmit}
+      onConfirm={handleSubmit(onFormSubmit)}
       confirmLoading={saving}
-      confirmDisabled={!name.trim() || !auth_token.trim() || !account_sid.trim()}
+      confirmDisabled={!formState.isValid}
     >
       <div className="space-y-4">
-        <div>
-          <TextInput
-            name="channel-name"
-            label="Name"
-            placeholder="e.g. Twilio Production"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            disabled={saving}
-          />
-        </div>
-        <div>
-          <SelectInput
-            name="channel-type"
-            label="Type"
-            options={CHANNEL_TYPE_OPTIONS}
-            value={type}
-            onValueChange={setType}
-            disabled={saving}
-          />
-        </div>
-        <div>
-          <TextInput
-            name="channel-auth-token"
-            label="Auth Token"
-            type="password"
-            placeholder="Enter auth token"
-            value={auth_token}
-            onChange={(e) => setAuthToken(e.target.value)}
-            disabled={saving}
-          />
-        </div>
-        <div>
-          <TextInput
-            name="channel-account-sid"
-            label="Account SID"
-            placeholder="Enter account SID"
-            value={account_sid}
-            onChange={(e) => setAccountSid(e.target.value)}
-            disabled={saving}
-          />
-        </div>
+        <TextInput
+          name="name"
+          control={control}
+          label="Name"
+          placeholder="e.g. Twilio Production"
+          isRequired
+          disabled={saving}
+        />
+        <SelectInput
+          name="channel-type"
+          label="Type"
+          options={CHANNEL_TYPE_OPTIONS}
+          value={type}
+          onValueChange={setType}
+          disabled={saving}
+        />
+        <TextInput
+          name="auth_token"
+          control={control}
+          label="Auth Token"
+          type="password"
+          placeholder="Enter auth token"
+          isRequired
+          disabled={saving}
+        />
+        <TextInput
+          name="account_sid"
+          control={control}
+          label="Account SID"
+          placeholder="Enter account SID"
+          isRequired
+          disabled={saving}
+        />
       </div>
     </CustomModal>
   );

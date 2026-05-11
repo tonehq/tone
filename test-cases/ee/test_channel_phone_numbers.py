@@ -203,6 +203,35 @@ class TestGetAssignedPhoneNumbers:
         assert response.status_code in (401, 403)
 
 
+# ─── GET /api/v1/channel_phone_number/get_by_channel ───
+
+class TestGetPhoneNumbersByChannel:
+    """Tests for GET /api/v1/channel_phone_number/get_by_channel"""
+
+    def test_get_by_channel_success(self, client_as_member):
+        channel = _get_or_create_channel(client_as_member, channel_type="twilio")
+        response = client_as_member.get(f"/api/v1/channel_phone_number/get_by_channel?channel_id={channel['id']}")
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+
+    def test_get_by_channel_missing_channel_id(self, client_as_member):
+        response = client_as_member.get("/api/v1/channel_phone_number/get_by_channel")
+        assert response.status_code == 422
+
+    def test_get_by_channel_invalid_channel_id(self, client_as_member):
+        response = client_as_member.get("/api/v1/channel_phone_number/get_by_channel?channel_id=abc")
+        assert response.status_code == 422
+
+    def test_get_by_channel_not_found(self, client_as_member):
+        response = client_as_member.get("/api/v1/channel_phone_number/get_by_channel?channel_id=999999")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_get_by_channel_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get("/api/v1/channel_phone_number/get_by_channel?channel_id=1")
+        assert response.status_code in (401, 403)
+
+
 # ─── GET /api/v1/channel_phone_number/get ───
 
 class TestGetChannelPhoneNumber:

@@ -22,6 +22,7 @@ class CreateToolRequest(BaseModel):
     auth_type: str = "none"
     auth_config: Optional[Dict[str, Any]] = None
     meta_data: Optional[Dict[str, Any]] = None
+    oauth_connection_id: Optional[int] = None
     is_active: bool = True
 
 
@@ -34,6 +35,7 @@ class UpdateToolRequest(BaseModel):
     auth_type: Optional[str] = None
     auth_config: Optional[Dict[str, Any]] = None
     meta_data: Optional[Dict[str, Any]] = None
+    oauth_connection_id: Optional[int] = None
     is_active: Optional[bool] = None
 
 

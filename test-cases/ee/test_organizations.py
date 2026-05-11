@@ -114,6 +114,19 @@ class TestGetOrganizationSettings:
 class TestUpdateOrganizationSettings:
     """Tests for PUT /api/v1/organization/settings"""
 
+    def test_update_settings_success(self, client_as_admin):
+        response = client_as_admin.put("/api/v1/organization/settings", json={"timezone": "UTC"})
+        assert response.status_code in (200, 404)
+
+    def test_update_settings_empty_body(self, client_as_admin):
+        response = client_as_admin.put("/api/v1/organization/settings", json={})
+        assert response.status_code in (200, 400, 404)
+
+    def test_update_settings_as_member_forbidden(self, client_as_member):
+        """Members cannot update settings — requires admin_or_owner."""
+        response = client_as_member.put("/api/v1/organization/settings", json={"timezone": "UTC"})
+        assert response.status_code in (401, 403)
+
     def test_update_settings_unauthenticated(self, client_unauthenticated):
         response = client_unauthenticated.put("/api/v1/organization/settings", json={"timezone": "UTC"})
         assert response.status_code in (401, 403)

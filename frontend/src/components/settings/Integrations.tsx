@@ -5,18 +5,29 @@ import {
   loadableChannelsAtom,
   upsertChannelAtom,
 } from '@/atoms/IntegrationAtom';
-import { CustomButton } from '@/components/shared';
+import ActiveConnectionsSection from '@/components/settings/ActiveConnectionsSection';
+import AvailableIntegrationsSection from '@/components/settings/AvailableIntegrationsSection';
+import { API_KEY_PROVIDERS, OAUTH_PROVIDERS } from '@/constants/integrations';
+import {
+  disconnectOAuth,
+  getOAuthAuthorizeUrl,
+  getOAuthConnections,
+} from '@/services/oauthService';
 import type { IntegrationRow } from '@/types/integration';
+import type { OAuthConnection } from '@/types/oauth';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
-import { Loader2, Plus } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import AddChannelModal from './AddChannelModal';
-import IntegrationsTable from './IntegrationsTable';
 
-export default function Integrations() {
+interface IntegrationsProps {
+  refreshKey?: string | null;
+}
+
+export default function Integrations({ refreshKey }: IntegrationsProps) {
   const [mounted, setMounted] = useState(false);
   const [channelsLoadable] = useAtom(loadableChannelsAtom);
   const [, upsertChannel] = useAtom(upsertChannelAtom);
@@ -24,19 +35,86 @@ export default function Integrations() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editRow, setEditRow] = useState<IntegrationRow | null>(null);
 
+  const [allConnections, setAllConnections] = useState<OAuthConnection[]>([]);
+  const [oauthLoading, setOauthLoading] = useState(true);
+  const [oauthConnecting, setOauthConnecting] = useState<Record<string, boolean>>({});
+  const [disconnectingId, setDisconnectingId] = useState<number | null>(null);
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const handleAdd = () => {
+  const fetchConnections = useCallback(async () => {
+    setOauthLoading(true);
+    try {
+      const connections = await getOAuthConnections();
+      setAllConnections(connections);
+    } catch {
+      setAllConnections([]);
+    } finally {
+      setOauthLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mounted) fetchConnections();
+  }, [mounted, fetchConnections]);
+
+  useEffect(() => {
+    if (refreshKey) fetchConnections();
+  }, [refreshKey, fetchConnections]);
+
+  const getConnectionsForProvider = useCallback(
+    (providerKey: string) =>
+      allConnections.filter((c) => c.provider === providerKey && c.is_active),
+    [allConnections],
+  );
+
+  const handleOAuthConnect = useCallback(async (providerKey: string) => {
+    setOauthConnecting((prev) => ({ ...prev, [providerKey]: true }));
+    try {
+      const authUrl = await getOAuthAuthorizeUrl(providerKey);
+      window.location.href = authUrl;
+    } catch (error) {
+      handleApiError(error);
+      setOauthConnecting((prev) => ({ ...prev, [providerKey]: false }));
+    }
+  }, []);
+
+  const handleOAuthDisconnect = useCallback(async (connectionId: number) => {
+    setDisconnectingId(connectionId);
+    try {
+      await disconnectOAuth(connectionId);
+      setAllConnections((prev) => prev.filter((c) => c.id !== connectionId));
+      showToast.success('Account disconnected');
+    } catch (error) {
+      handleApiError(error);
+    } finally {
+      setDisconnectingId(null);
+    }
+  }, []);
+
+  const rows: IntegrationRow[] = channelsLoadable.state === 'hasData' ? channelsLoadable.data : [];
+
+  const rowsByType = useMemo(() => {
+    const map: Record<string, IntegrationRow[]> = {};
+    for (const row of rows) {
+      const type = (row.type ?? 'twilio').toLowerCase();
+      if (!map[type]) map[type] = [];
+      map[type].push(row);
+    }
+    return map;
+  }, [rows]);
+
+  const handleAddApiKey = useCallback(() => {
     setEditRow(null);
     setModalOpen(true);
-  };
+  }, []);
 
-  const handleEdit = (row: IntegrationRow) => {
+  const handleEdit = useCallback((row: IntegrationRow) => {
     setEditRow(row);
     setModalOpen(true);
-  };
+  }, []);
 
   const handleCloseModal = () => {
     setModalOpen(false);
@@ -71,14 +149,17 @@ export default function Integrations() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    try {
-      await removeChannel(id);
-      showToast.success('Integration deleted successfully');
-    } catch (error) {
-      handleApiError(error);
-    }
-  };
+  const handleDelete = useCallback(
+    async (id: number) => {
+      try {
+        await removeChannel(id);
+        showToast.success('Integration deleted successfully');
+      } catch (error) {
+        handleApiError(error);
+      }
+    },
+    [removeChannel],
+  );
 
   if (!mounted) {
     return (
@@ -88,28 +169,40 @@ export default function Integrations() {
     );
   }
 
-  const isTableLoading = channelsLoadable.state === 'loading';
-  const rows = channelsLoadable.state === 'hasData' ? channelsLoadable.data : [];
-
   return (
     <div className="w-full">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Integrations</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Manage your API keys and service connections
-          </p>
-        </div>
-        <CustomButton type="primary" icon={<Plus size={18} />} onClick={handleAdd}>
-          Add API key
-        </CustomButton>
+      <div className="mb-10">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Integrations</h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          Connect services and manage credentials to power your voice agents.
+        </p>
       </div>
-      <IntegrationsTable
-        rows={rows}
-        loading={isTableLoading}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
+
+      <ActiveConnectionsSection
+        oauthProviders={OAUTH_PROVIDERS}
+        apiKeyProviders={API_KEY_PROVIDERS}
+        getConnectionsForProvider={getConnectionsForProvider}
+        rowsByType={rowsByType}
+        oauthConnecting={oauthConnecting}
+        disconnectingId={disconnectingId}
+        onOAuthConnect={handleOAuthConnect}
+        onOAuthDisconnect={handleOAuthDisconnect}
+        onAddApiKey={handleAddApiKey}
+        onEditRow={handleEdit}
+        onDeleteRow={handleDelete}
       />
+
+      <AvailableIntegrationsSection
+        oauthProviders={OAUTH_PROVIDERS}
+        apiKeyProviders={API_KEY_PROVIDERS}
+        getConnectionsForProvider={getConnectionsForProvider}
+        rowsByType={rowsByType}
+        oauthConnecting={oauthConnecting}
+        oauthLoading={oauthLoading}
+        onOAuthConnect={handleOAuthConnect}
+        onAddApiKey={handleAddApiKey}
+      />
+
       <AddChannelModal
         open={modalOpen}
         onClose={handleCloseModal}

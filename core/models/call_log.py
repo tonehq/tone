@@ -23,3 +23,4 @@ class CallLog(OrgScopedModel):
     ended_at = Column(BigInteger, nullable=True)
     duration_seconds = Column(Integer, nullable=True)
     metrics = Column(JSONB, nullable=True)
+    tool_calls = Column(JSONB, nullable=True)
