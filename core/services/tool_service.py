@@ -1,12 +1,45 @@
+import json
 import time
 import uuid as uuid_lib
 from typing import Dict, Any, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from loguru import logger
 
 from core.services.base import BaseService
 from core.models.tool import Tool, AgentTool
+from core.utils.encryption import encrypt, decrypt
+
+
+def encrypt_auth_config(auth_config: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Encrypt all string values in auth_config before storing in DB."""
+    if not auth_config:
+        return auth_config
+    encrypted = {}
+    for key, value in auth_config.items():
+        if isinstance(value, str) and value:
+            encrypted[key] = encrypt(value)
+        else:
+            encrypted[key] = value
+    return encrypted
+
+
+def decrypt_auth_config(auth_config: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Decrypt all string values in auth_config when reading from DB."""
+    if not auth_config:
+        return auth_config
+    decrypted = {}
+    for key, value in auth_config.items():
+        if isinstance(value, str) and value:
+            try:
+                decrypted[key] = decrypt(value)
+            except Exception:
+                # Value may not be encrypted (e.g. legacy data), return as-is
+                decrypted[key] = value
+        else:
+            decrypted[key] = value
+    return decrypted
 
 
 class ToolService(BaseService):
@@ -58,7 +91,7 @@ class ToolService(BaseService):
             url=data["url"],
             method=data.get("method", "POST"),
             auth_type=data.get("auth_type", "none"),
-            auth_config=data.get("auth_config"),
+            auth_config=encrypt_auth_config(data.get("auth_config")),
             meta_data=data.get("meta_data"),
             oauth_connection_id=data.get("oauth_connection_id"),
             is_active=data.get("is_active", True),
@@ -93,14 +126,16 @@ class ToolService(BaseService):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Template tools cannot be edited",
             )
-        # Built-in tools: only allow updating meta_data and is_active
+        # Built-in tools: only allow updating meta_data, auth_config, and is_active
         if tool.tool_type != "custom":
-            allowed = {"meta_data", "is_active", "oauth_connection_id"}
+            allowed = {"meta_data", "auth_config", "is_active", "oauth_connection_id"}
             data = {k: v for k, v in data.items() if k in allowed}
         if data.get("oauth_connection_id"):
             self._validate_oauth_connection(data["oauth_connection_id"])
         if "name" in data:
             self._check_duplicate_name(data["name"], exclude_id=tool_id)
+        if "auth_config" in data:
+            data["auth_config"] = encrypt_auth_config(data["auth_config"])
         for key, value in data.items():
             if hasattr(tool, key):
                 setattr(tool, key, value)
@@ -126,9 +161,9 @@ class ToolService(BaseService):
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Template tools cannot be edited",
                 )
-            # Built-in tools: only allow updating meta_data and is_active
+            # Built-in tools: only allow updating meta_data, auth_config, and is_active
             if existing.tool_type != "custom":
-                allowed = {"meta_data", "is_active", "oauth_connection_id"}
+                allowed = {"meta_data", "auth_config", "is_active", "oauth_connection_id"}
                 update_data = {k: v for k, v in data.items() if k in allowed}
             else:
                 update_data = {k: v for k, v in data.items() if k != "id"}
@@ -136,6 +171,8 @@ class ToolService(BaseService):
                 self._validate_oauth_connection(update_data["oauth_connection_id"])
             if "name" in update_data:
                 self._check_duplicate_name(update_data["name"], exclude_id=int(tool_id))
+            if "auth_config" in update_data:
+                update_data["auth_config"] = encrypt_auth_config(update_data["auth_config"])
             for key, value in update_data.items():
                 if hasattr(existing, key):
                     setattr(existing, key, value)
@@ -167,7 +204,7 @@ class ToolService(BaseService):
             url=data.get("url"),
             method=data.get("method", "POST"),
             auth_type=data.get("auth_type", "none"),
-            auth_config=data.get("auth_config"),
+            auth_config=encrypt_auth_config(data.get("auth_config")),
             meta_data=data.get("meta_data"),
             oauth_connection_id=data.get("oauth_connection_id"),
             is_active=data.get("is_active", True),
@@ -259,7 +296,7 @@ class ToolService(BaseService):
             "url": tool.url,
             "method": tool.method,
             "auth_type": tool.auth_type,
-            "auth_config": tool.auth_config,
+            "auth_config": decrypt_auth_config(tool.auth_config),
             "meta_data": tool.meta_data,
             "oauth_connection_id": tool.oauth_connection_id,
             "is_active": tool.is_active,

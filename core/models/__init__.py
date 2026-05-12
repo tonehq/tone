@@ -22,3 +22,4 @@ from core.models.call_log import CallLog
 from core.models.document import Document, DocumentChunk
 from core.models.tool import Tool, AgentTool
 from core.models.oauth_connection import OAuthConnection
+from core.models.mcp_server import McpServer, AgentMcpServer
