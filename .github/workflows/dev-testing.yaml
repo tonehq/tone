@@ -1,0 +1,66 @@
+name: Dev-Testing CI/CD
+
+on:
+  push:
+    branches: ["dev-testing"]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            developer390/tone:dev-testing-latest
+            developer390/tone:${{ github.sha }}
+          cache-from: type=registry,ref=developer390/tone:dev-testing-buildcache
+          cache-to: type=registry,ref=developer390/tone:dev-testing-buildcache,mode=max
+          secrets: |
+            pip_extra_index=${{ secrets.PIP_EXTRA_INDEX_URL }}
+
+      - uses: azure/k8s-set-context@v4
+        with:
+          kubeconfig: ${{ secrets.DEV_TESTING_KUBE_CONFIG_JSON }}
+
+      - name: Create namespace
+        run: kubectl create namespace dev-testing --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Substitute IMAGE_TAG in deployment manifests
+        run: |
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/dev-testing/api/deployment.yaml
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/dev-testing/call/deployment.yaml
+
+      - name: Apply all manifests
+        run: |
+          kubectl apply -f build/kubernetes/dev-testing/letsencrypt-prod.yaml
+          kubectl apply -f build/kubernetes/dev-testing/api/service.yaml
+          kubectl apply -f build/kubernetes/dev-testing/api/deployment.yaml
+          kubectl apply -f build/kubernetes/dev-testing/api/certificate.yaml
+          kubectl apply -f build/kubernetes/dev-testing/api/ingress.yaml
+          kubectl apply -f build/kubernetes/dev-testing/call/pdb.yaml
+          kubectl apply -f build/kubernetes/dev-testing/call/service.yaml
+          kubectl apply -f build/kubernetes/dev-testing/call/deployment.yaml
+          kubectl apply -f build/kubernetes/dev-testing/call/certificate.yaml
+          kubectl apply -f build/kubernetes/dev-testing/call/ingress.yaml
+
+      - name: Rollout restart deployments
+        run: |
+          kubectl rollout restart deployment/dev-testing-tone-api-deployment -n dev-testing
+          kubectl rollout restart deployment/dev-testing-tone-call-worker -n dev-testing
+
+      - name: Wait for rollouts
+        run: |
+          kubectl rollout status deployment/dev-testing-tone-api-deployment -n dev-testing --timeout=180s
+          kubectl rollout status deployment/dev-testing-tone-call-worker -n dev-testing --timeout=180s
