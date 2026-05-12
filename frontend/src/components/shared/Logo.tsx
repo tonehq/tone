@@ -18,24 +18,19 @@ const Logo = ({
 }: LogoProps) => (
   <div className={cn('flex items-center gap-2', className)}>
     <svg
-      viewBox="0 0 36 36"
-      className={cn('shrink-0', showTagline ? 'h-7 w-7' : iconOnly ? 'h-7 w-7' : 'h-7 w-7')}
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 32 32"
+      className="h-7 w-7 shrink-0"
       aria-hidden
     >
-      <defs>
-        <linearGradient id="tone-t-vert" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" stopColor="#818cf8" />
-          <stop offset="50%" stopColor="#a78bfa" />
-          <stop offset="100%" stopColor="#c084fc" />
-        </linearGradient>
-        <linearGradient id="tone-t-bar" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#a78bfa" />
-          <stop offset="60%" stopColor="#fbbf24" />
-          <stop offset="100%" stopColor="#f59e0b" />
-        </linearGradient>
-      </defs>
-      <rect x="14.5" y="12" width="11" height="26" rx="5.5" ry="5.5" fill="url(#tone-t-vert)" />
-      <rect x="5" y="6" width="30" height="10" rx="5" ry="5" fill="url(#tone-t-bar)" />
+      <rect width="32" height="32" rx="7" fill="#18202e" />
+      <g fill={inverted ? '#ffffff' : '#ffffff'}>
+        <rect x="7" y="13" width="2" height="6" rx="1" opacity="0.5" />
+        <rect x="11" y="10" width="2" height="12" rx="1" opacity="0.75" />
+        <rect x="15" y="7" width="2" height="18" rx="1" />
+        <rect x="19" y="10" width="2" height="12" rx="1" opacity="0.75" />
+        <rect x="23" y="13" width="2" height="6" rx="1" opacity="0.5" />
+      </g>
     </svg>
     {!iconOnly && (
       <div className="flex flex-col justify-center gap-0 leading-tight">
