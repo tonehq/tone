@@ -116,6 +116,7 @@ metadata:
   namespace: {ENV_NAME}
   labels:
     app: {RESOURCE_PREFIX}tone-call-worker
+    environment: {ENV_NAME}
     component: call
 spec:
   selector:
@@ -137,10 +138,12 @@ metadata:
   namespace: {ENV_NAME}
   annotations:
     kubernetes.io/ingress.class: "nginx"
+    # Timeouts for long-lived voice connections
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    # CORS Configuration
     nginx.ingress.kubernetes.io/enable-cors: "true"
     nginx.ingress.kubernetes.io/cors-allow-origin: "*"
     nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS, PATCH"
@@ -148,9 +151,11 @@ metadata:
     nginx.ingress.kubernetes.io/cors-expose-headers: "Content-Length, Content-Range, Content-Type, X-Request-Id"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/cors-max-age: "3600"
+    # WebSocket support
     nginx.ingress.kubernetes.io/websocket-services: "{RESOURCE_PREFIX}tone-call-service"
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
     nginx.ingress.kubernetes.io/upstream-hash-by: "$request_uri"
+    # TLS
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
 spec:
