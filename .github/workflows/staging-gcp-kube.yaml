@@ -64,21 +64,21 @@ jobs:
 
       - name: Substitute IMAGE_TAG in deployment manifests
         run: |
-          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging-gcp-kube/deployment.yaml
-          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging-gcp-kube/call-deployment.yaml
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging-gcp-kube/api/deployment.yaml
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging-gcp-kube/call/deployment.yaml
 
       - name: Apply all manifests
         run: |
           kubectl apply -f build/kubernetes/staging-gcp-kube/letsencrypt-prod.yaml
-          kubectl apply -f build/kubernetes/staging-gcp-kube/service.yaml
-          kubectl apply -f build/kubernetes/staging-gcp-kube/deployment.yaml
-          kubectl apply -f build/kubernetes/staging-gcp-kube/certificate.yaml
-          kubectl apply -f build/kubernetes/staging-gcp-kube/ingress.yaml
-          kubectl apply -f build/kubernetes/staging-gcp-kube/call-pdb.yaml
-          kubectl apply -f build/kubernetes/staging-gcp-kube/call-service.yaml
-          kubectl apply -f build/kubernetes/staging-gcp-kube/call-deployment.yaml
-          kubectl apply -f build/kubernetes/staging-gcp-kube/call-certificate.yaml
-          kubectl apply -f build/kubernetes/staging-gcp-kube/call-ingress.yaml
+          kubectl apply -f build/kubernetes/staging-gcp-kube/api/service.yaml
+          kubectl apply -f build/kubernetes/staging-gcp-kube/api/deployment.yaml
+          kubectl apply -f build/kubernetes/staging-gcp-kube/api/certificate.yaml
+          kubectl apply -f build/kubernetes/staging-gcp-kube/api/ingress.yaml
+          kubectl apply -f build/kubernetes/staging-gcp-kube/call/pdb.yaml
+          kubectl apply -f build/kubernetes/staging-gcp-kube/call/service.yaml
+          kubectl apply -f build/kubernetes/staging-gcp-kube/call/deployment.yaml
+          kubectl apply -f build/kubernetes/staging-gcp-kube/call/certificate.yaml
+          kubectl apply -f build/kubernetes/staging-gcp-kube/call/ingress.yaml
 
       - name: Rollout restart deployments
         run: |
