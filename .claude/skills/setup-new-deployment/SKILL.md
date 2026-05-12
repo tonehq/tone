@@ -45,7 +45,7 @@ If branch exists, ask user whether to switch to it or abort.
 
 ## Step 3: Generate Kubernetes Manifests
 
-Read and follow `.claude/skills/deployment/generate-kubernetes-deployment/SKILL.md` using all derived values. Do NOT re-ask the user for parameters.
+Read and follow `.claude/skills/generate-kubernetes-deployment/SKILL.md` using all derived values. Do NOT re-ask the user for parameters.
 
 Output structure:
 ```
@@ -66,7 +66,7 @@ build/kubernetes/{ENV_NAME}/
 
 ## Step 4: Generate GitHub Actions Workflow
 
-Read and follow `.claude/skills/deployment/generate-github-actions/SKILL.md` using all derived values.
+Read and follow `.claude/skills/generate-github-actions/SKILL.md` using all derived values.
 
 Output: `.github/workflows/{ENV_NAME}.yaml`
 
