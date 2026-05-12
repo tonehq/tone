@@ -39,7 +39,14 @@ export const cancelInvitation = async (inviteId: number): Promise<void> => {
 export const validateInvitation = async (
   email: string,
   code: string,
-): Promise<{ valid: boolean; email: string; name: string; role: string; user_exists: boolean }> => {
+): Promise<{
+  valid: boolean;
+  email: string;
+  name: string;
+  role: string;
+  user_exists: boolean;
+  has_password: boolean;
+}> => {
   const { data } = await axios.get(
     `/organization/validate_invitation?email=${encodeURIComponent(email)}&code=${encodeURIComponent(code)}`,
   );
@@ -50,6 +57,7 @@ export const acceptInvitationWithPassword = async (payload: {
   email: string;
   code: string;
   password: string;
+  user_tenant_id?: string;
 }): Promise<void> => {
   await axios.post('/organization/accept_invitation_with_password', payload);
 };
