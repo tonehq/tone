@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dev-testing-tone-call-service
+  namespace: dev-testing
+  labels:
+    app: dev-testing-tone-call-worker
+    component: call
+spec:
+  selector:
+    app: dev-testing-tone-call-worker
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+  type: ClusterIP
