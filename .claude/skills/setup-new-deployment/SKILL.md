@@ -74,7 +74,11 @@ Output: `.github/workflows/{ENV_NAME}.yaml`
 
 Print files created and remind user to:
 1. Review generated files
-2. Add required GitHub secrets (`DOCKER_USERNAME`, `DOCKER_PASSWORD`, `{ENV_NAME_UPPER}_KUBE_CONFIG_JSON`, `PIP_EXTRA_INDEX_URL`)
-3. Push the branch to trigger the workflow
+2. Add the following GitHub secrets in your repository settings:
+   - `DOCKER_USERNAME` — DockerHub username
+   - `DOCKER_PASSWORD` — DockerHub password/token
+   - `{ENV_NAME_UPPER}_KUBE_CONFIG_JSON` — Azure AKS kubeconfig JSON (used by `azure/k8s-set-context@v4` in the workflow)
+   - `PIP_EXTRA_INDEX_URL` — Cloudsmith PyPI URL for the private tone-pipecat package
+3. Push the `{BRANCH_NAME}` branch to trigger the workflow
 
 Do NOT commit or push automatically.

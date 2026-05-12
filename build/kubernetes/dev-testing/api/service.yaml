@@ -5,6 +5,7 @@ metadata:
   namespace: dev-testing
   labels:
     app: dev-testing-tone-api
+    environment: dev-testing
 spec:
   selector:
     app: dev-testing-tone-api

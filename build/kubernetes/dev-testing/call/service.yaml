@@ -5,6 +5,7 @@ metadata:
   namespace: dev-testing
   labels:
     app: dev-testing-tone-call-worker
+    environment: dev-testing
     component: call
 spec:
   selector:
