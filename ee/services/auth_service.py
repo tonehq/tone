@@ -11,8 +11,8 @@ from core.models.organization import Organization
 from core.models.member import Member
 from core.models.organization_invite import OrganizationInvite
 from core.models.organization_access_request import OrganizationAccessRequest
-from core.models.enums import UserStatus, Role, InviteStatus, AccessRequestStatus
-from core.utils.security import generate_token
+from core.models.enums import UserStatus, Role, InviteStatus, AccessRequestStatus, AuthProvider
+from core.utils.security import generate_token, hash_password
 from core.middleware.auth import jwt_manager
 
 from shared.config import settings
@@ -431,6 +431,107 @@ class EEAuthService(AuthService):
                 "name": org.name,
                 "slug": org.slug
             },
+            "role": invitation.role.value
+        }
+
+    def validate_invitation_token(self, email: str, token: str) -> Dict[str, Any]:
+        current_time = int(time.time())
+
+        invitation = self.query(OrganizationInvite).filter(
+            OrganizationInvite.email == email,
+            OrganizationInvite.invitation_token == token,
+            OrganizationInvite.status == InviteStatus.PENDING,
+            OrganizationInvite.expires_at > current_time
+        ).first()
+
+        if not invitation:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired invitation"
+            )
+
+        existing_user = self.db.query(User).filter(User.email == email).first()
+        user_exists = existing_user is not None
+        has_password = existing_user.password_hash is not None if existing_user else False
+
+        return {
+            "valid": True,
+            "email": invitation.email,
+            "name": invitation.name,
+            "role": invitation.role.value,
+            "user_exists": user_exists,
+            "has_password": has_password
+        }
+
+    def accept_invitation_with_password(self, email: str, token: str,
+                                        password: str, org_id: UUID) -> Dict[str, Any]:
+        current_time = int(time.time())
+
+        invitation = self.query(OrganizationInvite).filter(
+            OrganizationInvite.email == email,
+            OrganizationInvite.invitation_token == token,
+            OrganizationInvite.organization_id == org_id,
+            OrganizationInvite.status == InviteStatus.PENDING,
+            OrganizationInvite.expires_at > current_time
+        ).first()
+
+        if not invitation:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired invitation"
+            )
+
+        existing_user = self.db.query(User).filter(User.email == email).first()
+        if existing_user and existing_user.password_hash is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User already exists. Please login and accept the invitation."
+            )
+
+        password_hash = hash_password(password)
+
+        if existing_user and existing_user.password_hash is None:
+            existing_user.password_hash = password_hash
+            existing_user.updated_at = current_time
+            user = existing_user
+            self.db.flush()
+        else:
+            user = User(
+                email=email,
+                username=invitation.name,
+                password_hash=password_hash,
+                profile={},
+                auth_provider=AuthProvider.EMAIL,
+                status=UserStatus.ACTIVE,
+                email_verified=True,
+                email_verified_at=current_time,
+                created_at=current_time,
+                updated_at=current_time
+            )
+            self.db.add(user)
+            self.db.flush()
+
+        member = Member(
+            user_id=user.id,
+            organization_id=org_id,
+            role=invitation.role,
+            status='active',
+            created_by=invitation.invited_by,
+            created_at=current_time,
+            updated_at=current_time,
+            joined_at=current_time
+        )
+        self.db.add(member)
+
+        invitation.status = InviteStatus.ACCEPTED
+        invitation.accepted_by = user.id
+        invitation.accepted_at = current_time
+        invitation.updated_at = current_time
+
+        self.db.commit()
+
+        return {
+            "message": "Account created and invitation accepted successfully",
             "role": invitation.role.value
         }
 

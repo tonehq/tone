@@ -470,14 +470,17 @@ class AuthService(BaseService):
                 detail="Invalid or expired invitation"
             )
 
-        user_exists = self.db.query(User).filter(User.email == email).first() is not None
+        existing_user = self.db.query(User).filter(User.email == email).first()
+        user_exists = existing_user is not None
+        has_password = existing_user.password_hash is not None if existing_user else False
 
         return {
             "valid": True,
             "email": invitation.email,
             "name": invitation.name,
             "role": invitation.role.value,
-            "user_exists": user_exists
+            "user_exists": user_exists,
+            "has_password": has_password
         }
 
     def accept_invitation_with_password(self, email: str, token: str,
@@ -498,7 +501,7 @@ class AuthService(BaseService):
             )
 
         existing_user = self.db.query(User).filter(User.email == email).first()
-        if existing_user:
+        if existing_user and existing_user.password_hash is not None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User already exists. Please login and accept the invitation."
@@ -506,21 +509,27 @@ class AuthService(BaseService):
 
         password_hash = hash_password(password)
 
-        user = User(
-            email=email,
-            username=invitation.name,
-            password_hash=password_hash,
-            profile={},
-            auth_provider=AuthProvider.EMAIL,
-            status=UserStatus.ACTIVE,
-            email_verified=True,
-            email_verified_at=current_time,
-            created_at=current_time,
-            updated_at=current_time
-        )
+        if existing_user and existing_user.password_hash is None:
+            existing_user.password_hash = password_hash
+            existing_user.updated_at = current_time
+            user = existing_user
+            self.db.flush()
+        else:
+            user = User(
+                email=email,
+                username=invitation.name,
+                password_hash=password_hash,
+                profile={},
+                auth_provider=AuthProvider.EMAIL,
+                status=UserStatus.ACTIVE,
+                email_verified=True,
+                email_verified_at=current_time,
+                created_at=current_time,
+                updated_at=current_time
+            )
 
-        self.db.add(user)
-        self.db.flush()
+            self.db.add(user)
+            self.db.flush()
 
         org_id = invitation.organization_id if invitation.organization_id else settings.DEFAULT_ORG_ID
         self.upsert(
