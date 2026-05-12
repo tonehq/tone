@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,10 +16,12 @@ import { showToast } from '@/utils/toast';
 const LoginPage = () => {
   const [loader, setLoader] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const prefillEmail = searchParams?.get('email') ?? '';
 
   const { control, handleSubmit } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' },
+    defaultValues: { email: prefillEmail, password: '' },
   });
 
   const onSubmit = async (values: LoginFormData) => {

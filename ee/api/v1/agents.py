@@ -16,7 +16,7 @@ def get_all_agents(
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    return AgentService(db, org_id=UUID(claims.org_id)).get_all_agents(agent_id=agent_id, created_by=claims.user_id)
+    return AgentService(db, org_id=UUID(claims.org_id)).get_all_agents(agent_id=agent_id)
 
 
 @router.get("/get_agent", response_model=Dict[str, Any])
