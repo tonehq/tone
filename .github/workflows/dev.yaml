@@ -40,21 +40,21 @@ jobs:
 
       - name: Substitute IMAGE_TAG in deployment manifests
         run: |
-          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/dev/deployment.yaml
-          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/dev/call-deployment.yaml
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/dev/api/deployment.yaml
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/dev/call/deployment.yaml
 
       - name: Apply all manifests
         run: |
-          kubectl apply -f build/kubernetes/dev/service.yaml
-          kubectl apply -f build/kubernetes/dev/deployment.yaml
-          kubectl apply -f build/kubernetes/dev/ingress.yaml
-          kubectl apply -f build/kubernetes/dev/call-pdb.yaml
-          kubectl apply -f build/kubernetes/dev/call-service.yaml
-          kubectl apply -f build/kubernetes/dev/call-deployment.yaml
-          kubectl apply -f build/kubernetes/dev/call-ingress.yaml
-          kubectl apply -f build/kubernetes/dev/call-certificate.yaml
           kubectl apply -f build/kubernetes/dev/letsencrypt-prod.yaml
-          kubectl apply -f build/kubernetes/dev/certificate.yaml
+          kubectl apply -f build/kubernetes/dev/api/service.yaml
+          kubectl apply -f build/kubernetes/dev/api/deployment.yaml
+          kubectl apply -f build/kubernetes/dev/api/ingress.yaml
+          kubectl apply -f build/kubernetes/dev/api/certificate.yaml
+          kubectl apply -f build/kubernetes/dev/call/pdb.yaml
+          kubectl apply -f build/kubernetes/dev/call/service.yaml
+          kubectl apply -f build/kubernetes/dev/call/deployment.yaml
+          kubectl apply -f build/kubernetes/dev/call/ingress.yaml
+          kubectl apply -f build/kubernetes/dev/call/certificate.yaml
 
       - name: Rollout restart deployments
         run: |
