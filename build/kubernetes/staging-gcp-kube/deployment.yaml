@@ -46,3 +46,5 @@ spec:
                 secretKeyRef:
                   name: infisical-credentials
                   key: project_id
+            - name: INFISICAL_HOST
+              value: "https://secrets.trytone.ai"
