@@ -17,8 +17,10 @@ def get_infisical_secrets() -> dict:
 
         environment = os.getenv("INFISICAL_ENV", os.getenv("ENV", "dev"))
 
+        host = os.getenv("INFISICAL_HOST", "https://secrets.trytone.ai")
+
         client = InfisicalSDKClient(
-            host="https://app.infisical.com",
+            host=host,
             token=token
         )
 

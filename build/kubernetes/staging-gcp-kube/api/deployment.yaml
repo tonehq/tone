@@ -1,23 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: tone-api-deployment
-  namespace: dev
+  name: staging-gcp-kube-tone-api-deployment
+  namespace: staging-gcp-kube
+  labels:
+    app: staging-gcp-kube-tone-api
+    environment: staging-gcp-kube
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: tone-api
+      app: staging-gcp-kube-tone-api
   template:
     metadata:
       labels:
-        app: tone-api
+        app: staging-gcp-kube-tone-api
+        environment: staging-gcp-kube
     spec:
       nodeSelector:
         kubernetes.io/os: linux
       containers:
-        - name: tone-api
-          image: developer390/tone:${IMAGE_TAG}
+        - name: staging-gcp-kube-tone-api
+          image: us-central1-docker.pkg.dev/project-ec49f357-55e7-4d34-b0f/tone/tone-staging-gke:${IMAGE_TAG}
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
@@ -31,7 +35,7 @@ spec:
               memory: "1Gi"
           env:
             - name: ENV
-              value: "dev"
+              value: "staging"
             - name: INFISICAL_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -42,5 +46,5 @@ spec:
                 secretKeyRef:
                   name: infisical-credentials
                   key: project_id
-      imagePullSecrets:
-        - name: dockerhub-auth
+            - name: INFISICAL_HOST
+              value: "https://secrets.trytone.ai"

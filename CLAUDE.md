@@ -112,6 +112,15 @@ The `pipecat/` directory is a custom fork (`tonehq/pipecat`) of the Pipecat AI f
 -For generating test cases
 .claude/skills/test-cases/SKILL.md
 
+-For setting up a new deployment environment (creates branch + k8s manifests + GitHub Actions workflow)
+.claude/skills/deployment/setup-new-deployment/SKILL.md
+
+-For generating Kubernetes deployment manifests only
+.claude/skills/deployment/generate-kubernetes-deployment/SKILL.md
+
+-For generating GitHub Actions CI/CD workflow only
+.claude/skills/deployment/generate-github-actions/SKILL.md
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 

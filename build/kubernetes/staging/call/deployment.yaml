@@ -1,17 +1,17 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: staging-gcp-kube-tone-call-worker
-  namespace: staging-gcp-kube
+  name: staging-tone-call-worker
+  namespace: staging
   labels:
-    app: staging-gcp-kube-tone-call-worker
-    environment: staging-gcp-kube
+    app: staging-tone-call-worker
+    environment: staging
     component: call
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: staging-gcp-kube-tone-call-worker
+      app: staging-tone-call-worker
   strategy:
     type: RollingUpdate
     rollingUpdate:
@@ -20,16 +20,16 @@ spec:
   template:
     metadata:
       labels:
-        app: staging-gcp-kube-tone-call-worker
-        environment: staging-gcp-kube
+        app: staging-tone-call-worker
+        environment: staging
         component: call
     spec:
       nodeSelector:
         kubernetes.io/os: linux
       terminationGracePeriodSeconds: 20
       containers:
-        - name: staging-gcp-kube-tone-call-worker
-          image: us-central1-docker.pkg.dev/project-ec49f357-55e7-4d34-b0f/tone/tone-staging-gke:${IMAGE_TAG}
+        - name: staging-tone-call-worker
+          image: developer390/tone:${IMAGE_TAG}
           imagePullPolicy: Always
           command:
             - uvicorn
@@ -70,6 +70,8 @@ spec:
                 secretKeyRef:
                   name: infisical-credentials
                   key: project_id
+            - name: INFISICAL_HOST
+              value: "https://secrets.trytone.ai"
           livenessProbe:
             httpGet:
               path: /health
@@ -93,3 +95,5 @@ spec:
                   - /bin/sh
                   - -c
                   - "curl -sf http://localhost:8080/drain || true && sleep 280"
+      imagePullSecrets:
+        - name: dockerhub-auth
