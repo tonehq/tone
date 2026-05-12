@@ -48,6 +48,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   const [authPassword, setAuthPassword] = useState('');
   const [isActive, setIsActive] = useState(true);
   const [metaData, setMetaData] = useState<Record<string, string>>({});
+  const [builtInAuthConfig, setBuiltInAuthConfig] = useState<Record<string, string>>({});
   const [oauthConnectionId, setOauthConnectionId] = useState<number | null>(null);
   const [toolRecord, setToolRecord] = useState<Tool | null>(null);
 
@@ -79,6 +80,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
       setAuthUsername(cfg.username ?? '');
       setAuthPassword(cfg.password ?? '');
       setMetaData((tool.meta_data ?? {}) as Record<string, string>);
+      setBuiltInAuthConfig((tool.auth_config ?? {}) as Record<string, string>);
       setOauthConnectionId(tool.oauth_connection_id ?? null);
       setSaved(true);
     } catch (error) {
@@ -134,6 +136,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   };
 
   const handleBuiltInSave = async (data: BuiltInToolFormData) => {
+    const hasAuthConfig = Object.values(builtInAuthConfig).some((v) => v);
     const payload: ToolUpsertPayload = {
       ...(isEditMode ? { id: Number(toolId) } : {}),
       name: data.name.trim(),
@@ -141,6 +144,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
       tool_type: toolType,
       parameters,
       meta_data: metaData,
+      ...(hasAuthConfig ? { auth_config: builtInAuthConfig } : {}),
       oauth_connection_id: oauthConnectionId,
       is_active: true,
     };
@@ -210,6 +214,8 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
         saved={saved}
         oauthConnectionId={oauthConnectionId}
         onMetaDataChange={setMetaData}
+        authConfig={builtInAuthConfig}
+        onAuthConfigChange={setBuiltInAuthConfig}
         onOAuthConnectionIdChange={setOauthConnectionId}
         onSave={handleBuiltInSave}
         onDelete={isEditMode ? handleDelete : undefined}

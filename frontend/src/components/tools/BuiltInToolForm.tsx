@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  TOOL_TYPE_AUTH_SECTIONS,
   TOOL_TYPE_HEADER,
   TOOL_TYPE_META_SECTIONS,
   TOOL_TYPE_OAUTH_PROVIDER,
@@ -40,6 +41,7 @@ interface BuiltInToolFormProps {
   name: string;
   description: string;
   metaData: Record<string, string>;
+  authConfig: Record<string, string>;
   parameters: ToolParametersSchema;
   toolRecord: Tool | null;
   isEditMode: boolean;
@@ -47,6 +49,7 @@ interface BuiltInToolFormProps {
   saved: boolean;
   oauthConnectionId: number | null;
   onMetaDataChange: (data: Record<string, string>) => void;
+  onAuthConfigChange: (data: Record<string, string>) => void;
   onOAuthConnectionIdChange: (id: number | null) => void;
   onSave: (data: BuiltInToolFormData) => void;
   onDelete?: () => void;
@@ -59,6 +62,7 @@ export default function BuiltInToolForm({
   name,
   description,
   metaData,
+  authConfig,
   parameters,
   toolRecord,
   isEditMode,
@@ -66,6 +70,7 @@ export default function BuiltInToolForm({
   saved,
   oauthConnectionId,
   onMetaDataChange,
+  onAuthConfigChange,
   onOAuthConnectionIdChange,
   onSave,
   onDelete,
@@ -116,6 +121,7 @@ export default function BuiltInToolForm({
 
   const headerConfig = TOOL_TYPE_HEADER[toolType];
   const metaSection = TOOL_TYPE_META_SECTIONS[toolType];
+  const authSection = TOOL_TYPE_AUTH_SECTIONS[toolType];
   const HeaderIcon = headerConfig?.icon ?? Settings;
   const paramCount = Object.keys(parameters?.properties ?? {}).length;
 
@@ -313,6 +319,37 @@ export default function BuiltInToolForm({
                   .
                 </p>
               )}
+            </SettingsSection>
+          )}
+
+          {/* Auth credentials (Twilio SID, Auth Token, etc.) */}
+          {authSection && (
+            <SettingsSection
+              title={authSection.title}
+              description={authSection.description}
+              icon={authSection.icon}
+              iconColor={authSection.iconColor}
+              iconBg={authSection.iconBg}
+              isOpen={openSections.meta}
+              onToggle={() => toggleSection('meta')}
+            >
+              <div className="space-y-5">
+                {authSection.fields.map((field) => (
+                  <div key={field.key}>
+                    <TextInput
+                      name={`tool-auth-${field.key}`}
+                      label={field.label}
+                      type={field.type}
+                      placeholder={field.placeholder}
+                      value={authConfig[field.key] ?? ''}
+                      onChange={(e) => {
+                        onAuthConfigChange({ ...authConfig, [field.key]: e.target.value });
+                        onDirty();
+                      }}
+                    />
+                  </div>
+                ))}
+              </div>
             </SettingsSection>
           )}
 

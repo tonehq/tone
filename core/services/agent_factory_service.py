@@ -1398,12 +1398,20 @@ class AgentFactoryService(BaseService):
                     llm.register_function(tool.name, handler)
                     logger.info("Registered {} tool handler: {}", tool.tool_type, tool.name)
 
-        # Combine doc tools and custom tools into one ToolsSchema
+        # Register MCP server tools if agent has linked MCP servers
+        mcp_tools_schema = None
+        if agent:
+            from core.services.mcp_tool_service import register_mcp_tools
+            mcp_tools_schema = await register_mcp_tools(llm, agent.id)
+
+        # Combine doc tools, custom tools, and MCP tools into one ToolsSchema
         all_tool_schemas = []
         if doc_tools:
             all_tool_schemas.extend(doc_tools.standard_tools)
         if custom_tools_schema:
             all_tool_schemas.extend(custom_tools_schema.standard_tools)
+        if mcp_tools_schema:
+            all_tool_schemas.extend(mcp_tools_schema.standard_tools)
 
         if all_tool_schemas:
             from pipecat.adapters.schemas.tools_schema import ToolsSchema
