@@ -58,6 +58,34 @@ def accept_invitation(
     return EEAuthService(db).accept_invitation(email, code, UUID(user_tenant_id))
 
 
+@router.get("/validate_invitation")
+def validate_invitation(
+    email: str = Query(...),
+    code: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    return EEAuthService(db).validate_invitation_token(email, code)
+
+
+@router.post("/accept_invitation_with_password")
+def accept_invitation_with_password(
+    payload: Dict[str, str] = Body(...),
+    db: Session = Depends(get_db)
+):
+    email = payload.get("email")
+    code = payload.get("code")
+    password = payload.get("password")
+    user_tenant_id = payload.get("user_tenant_id")
+
+    if not all([email, code, password, user_tenant_id]):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email, code, password, and user_tenant_id are required"
+        )
+
+    return EEAuthService(db).accept_invitation_with_password(email, code, password, UUID(user_tenant_id))
+
+
 @router.delete("/remove_user_from_organization")
 def remove_user_from_organization(
     user_id: int = Query(...),

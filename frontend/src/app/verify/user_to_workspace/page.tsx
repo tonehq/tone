@@ -17,6 +17,7 @@ interface InviteInfo {
   name: string;
   role: string;
   user_exists: boolean;
+  has_password: boolean;
 }
 
 function AcceptInvitationContent() {
@@ -29,6 +30,7 @@ function AcceptInvitationContent() {
 
   const email = params?.get('email') ?? '';
   const code = params?.get('code') ?? '';
+  const userTenantId = params?.get('user_tenant_id') ?? '';
 
   const validateOnMount = useCallback(async () => {
     if (!email || !code) {
@@ -39,12 +41,12 @@ function AcceptInvitationContent() {
 
     try {
       const result = await validateInvitation(email, code);
-      if (result.user_exists) {
+      if (result.user_exists && result.has_password) {
         showToast.info(
           'Account exists',
           'You already have an account. Please login to accept the invitation.',
         );
-        router.push('/auth/login');
+        router.push(`/auth/login?email=${encodeURIComponent(email)}`);
         return;
       }
       setInviteInfo(result);
@@ -78,13 +80,14 @@ function AcceptInvitationContent() {
         email,
         code,
         password: value['password'].trim(),
+        user_tenant_id: userTenantId,
       });
       showToast.success(
         'Account Created',
         'Your account has been created successfully. Please login.',
       );
       setTimeout(() => {
-        router.push('/auth/login');
+        router.push(`/auth/login?email=${encodeURIComponent(email)}`);
       }, 2000);
     } catch (err) {
       handleApiError(err);
