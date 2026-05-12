@@ -10,15 +10,25 @@ export type LoginFormData = z.infer<typeof loginSchema>;
 export const signupSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Please enter a valid email'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
-  org_name: z
-    .string()
-    .optional()
-    .refine((val) => !val || val.trim().length >= 2, {
-      message: 'Organisation name must be at least 2 characters',
-    }),
 });
 
 export type SignupFormData = z.infer<typeof signupSchema>;
+
+export const onboardOrgSchema = z.object({
+  org_name: z
+    .string()
+    .min(1, 'Organisation name is required')
+    .min(2, 'Organisation name must be at least 2 characters'),
+});
+
+export type OnboardOrgFormData = z.infer<typeof onboardOrgSchema>;
+
+export const inviteMemberSchema = z.object({
+  email: z.string().min(1, 'Email is required').email('Please enter a valid email'),
+  role: z.string().min(1, 'Role is required'),
+});
+
+export type InviteMemberFormData = z.infer<typeof inviteMemberSchema>;
 
 export const forgotPasswordSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Please enter a valid email'),

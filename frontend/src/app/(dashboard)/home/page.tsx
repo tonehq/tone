@@ -1,7 +1,9 @@
 'use client';
 
+import dashboardAtom, { fetchDashboardStatsAtom } from '@/atoms/DashboardAtom';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/utils/cn';
+import { useAtomValue, useSetAtom } from 'jotai';
 import {
   Activity,
   ArrowUpRight,
@@ -12,20 +14,20 @@ import {
   Phone,
   Plus,
   Settings,
-  TrendingUp,
   Users,
   Zap,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useEffect } from 'react';
 
-/* ── Data ─────────────────────────────────────────────────────────────────── */
+/* ── Stat card config ────────────────────────────────────────────────────── */
 
-const stats = [
+const statCards = [
   {
     label: 'Total Agents',
-    value: '6',
-    change: '+2 this week',
-    trend: 'up' as const,
+    key: 'total_agents' as const,
+    suffix: '',
+    subtitle: 'All agents',
     icon: Bot,
     accent: 'from-primary/20 to-primary/5',
     accentBorder: 'border-t-primary',
@@ -33,9 +35,9 @@ const stats = [
   },
   {
     label: 'Active Calls',
-    value: '0',
-    change: 'Real-time',
-    trend: 'neutral' as const,
+    key: 'active_calls' as const,
+    suffix: '',
+    subtitle: 'Real-time',
     icon: Activity,
     accent: 'from-emerald-500/20 to-emerald-500/5',
     accentBorder: 'border-t-emerald-500',
@@ -43,9 +45,9 @@ const stats = [
   },
   {
     label: 'Minutes Used',
-    value: '0',
-    change: 'This month',
-    trend: 'neutral' as const,
+    key: 'minutes_used' as const,
+    suffix: '',
+    subtitle: 'This month',
     icon: Clock,
     accent: 'from-blue-500/20 to-blue-500/5',
     accentBorder: 'border-t-blue-500',
@@ -53,9 +55,9 @@ const stats = [
   },
   {
     label: 'Success Rate',
-    value: '0%',
-    change: 'Last 30 days',
-    trend: 'neutral' as const,
+    key: 'success_rate' as const,
+    suffix: '%',
+    subtitle: 'Last 30 days',
     icon: CheckCircle2,
     accent: 'from-amber-500/20 to-amber-500/5',
     accentBorder: 'border-t-amber-500',
@@ -126,6 +128,13 @@ const quickLinks = [
 /* ── Page ──────────────────────────────────────────────────────────────────── */
 
 export default function HomePage() {
+  const { stats, loading } = useAtomValue(dashboardAtom);
+  const fetchStats = useSetAtom(fetchDashboardStatsAtom);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
   return (
     <div className="animate-page h-full space-y-8 overflow-y-auto p-6 lg:p-8">
       {/* ── Header + Quick Actions ──────────────────────────────────────── */}
@@ -156,51 +165,48 @@ export default function HomePage() {
 
       {/* ── Stat Cards ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <Card
-            key={stat.label}
-            className={cn(
-              'group relative overflow-hidden border-t-2 py-0 transition-all hover:shadow-md',
-              stat.accentBorder,
-            )}
-          >
-            {/* Subtle gradient background */}
-            <div
+        {statCards.map((card) => {
+          const value = loading || !stats ? '--' : `${stats[card.key]}${card.suffix}`;
+
+          return (
+            <Card
+              key={card.label}
               className={cn(
-                'pointer-events-none absolute inset-0 bg-gradient-to-br opacity-0 transition-opacity group-hover:opacity-100',
-                stat.accent,
+                'group relative overflow-hidden border-t-2 py-0 transition-all hover:shadow-md',
+                card.accentBorder,
               )}
-            />
+            >
+              <div
+                className={cn(
+                  'pointer-events-none absolute inset-0 bg-gradient-to-br opacity-0 transition-opacity group-hover:opacity-100',
+                  card.accent,
+                )}
+              />
 
-            <CardContent className="relative px-5 py-4">
-              <div className="mb-3 flex items-center justify-between">
-                <span className="text-[13px] font-medium text-muted-foreground">{stat.label}</span>
-                <div
-                  className={cn(
-                    'flex size-9 items-center justify-center rounded-lg bg-muted/50',
-                    stat.iconColor,
-                  )}
-                >
-                  <stat.icon size={18} />
+              <CardContent className="relative px-5 py-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-[13px] font-medium text-muted-foreground">
+                    {card.label}
+                  </span>
+                  <div
+                    className={cn(
+                      'flex size-9 items-center justify-center rounded-lg bg-muted/50',
+                      card.iconColor,
+                    )}
+                  >
+                    <card.icon size={18} />
+                  </div>
                 </div>
-              </div>
 
-              <div className="text-3xl font-bold tracking-tight text-foreground">{stat.value}</div>
+                <div className="text-3xl font-bold tracking-tight text-foreground">{value}</div>
 
-              <div className="mt-1.5 flex items-center gap-1">
-                {stat.trend === 'up' && <TrendingUp size={12} className="text-emerald-500" />}
-                <span
-                  className={cn(
-                    'text-xs',
-                    stat.trend === 'up' ? 'text-emerald-600' : 'text-muted-foreground',
-                  )}
-                >
-                  {stat.change}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                <div className="mt-1.5 flex items-center gap-1">
+                  <span className="text-xs text-muted-foreground">{card.subtitle}</span>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {/* ── Quick Links ─────────────────────────────────────────────────── */}

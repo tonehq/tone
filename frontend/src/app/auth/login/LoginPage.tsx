@@ -31,7 +31,9 @@ const LoginPage = () => {
 
       if (res) {
         showToast.success('Login Successful', 'Welcome back!', 3);
-        router.push('/home');
+        const hasOrgs = res.organizations && res.organizations.length > 0;
+        const redirect = searchParams?.get('redirect');
+        router.push(hasOrgs ? redirect || '/home' : '/auth/onboard');
       } else {
         showToast.error('Login Failed', 'Please enter email and password', 3);
       }

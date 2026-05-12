@@ -14,7 +14,7 @@ from core.api.v1 import (
     agent_channel_phone_numbers, channel_phone_numbers,
     models as models_router,
     generated_api_keys, channels, voices, call_logs,
-    telephony, documents, tools, oauth, mcp_servers,
+    telephony, documents, tools, oauth, mcp_servers, dashboard,
 )
 import core.models
 
@@ -109,6 +109,7 @@ if ee_enabled:
     api_v1.include_router(ee_tools.router, prefix="/tool", tags=["tool"])
     api_v1.include_router(ee_oauth.router, prefix="/oauth", tags=["oauth"])
     api_v1.include_router(ee_mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
+    api_v1.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
     print("EE edition: Multi-tenant routes loaded")
 else:
     api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -130,6 +131,7 @@ else:
     api_v1.include_router(tools.router, prefix="/tool", tags=["tool"])
     api_v1.include_router(oauth.router, prefix="/oauth", tags=["oauth"])
     api_v1.include_router(mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
+    api_v1.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
     print("Core edition: Single-tenant routes loaded")
 
 
