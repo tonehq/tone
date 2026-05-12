@@ -17,6 +17,7 @@ from core.models.tool import Tool, AgentTool
 def get_custom_tools_for_agent(agent_id: int) -> List[Tool]:
     """Fetch all active custom tools linked to an agent."""
     from core.database.session import get_db_context
+    from core.services.tool_service import decrypt_auth_config
 
     with get_db_context() as db:
         tools = (
@@ -28,6 +29,10 @@ def get_custom_tools_for_agent(agent_id: int) -> List[Tool]:
         # Detach from session so they can be used after db closes
         for tool in tools:
             db.expunge(tool)
+
+    # Decrypt auth_config for runtime use
+    for tool in tools:
+        tool.auth_config = decrypt_auth_config(tool.auth_config)
 
     logger.info("Found {} custom tools for agent {}", len(tools), agent_id)
     return tools
@@ -79,7 +84,7 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
 
             # Add auth headers based on auth_type
             auth_config = tool.auth_config or {}
-            logger.info("Custom tool '{}' auth_type={} auth_config={}", tool.name, tool.auth_type, auth_config)
+            logger.info("Custom tool '{}' auth_type={}", tool.name, tool.auth_type)
             if tool.auth_type == "api_key":
                 header_name = auth_config.get("header", "X-API-Key")
                 headers[header_name] = auth_config.get("value", "")
@@ -175,13 +180,14 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
             "turn": current_turn["number"] if current_turn else None,
         }
 
+        auth = tool.auth_config or {}
         meta = tool.meta_data or {}
-        account_sid = meta.get("account_sid")
-        auth_token = meta.get("auth_token")
+        account_sid = auth.get("account_sid")
+        auth_token = auth.get("auth_token")
         from_number = meta.get("from_number")
 
         if not all([account_sid, auth_token, from_number]):
-            logger.error("send_sms tool missing Twilio credentials in meta_data")
+            logger.error("send_sms tool missing Twilio credentials in auth_config or from_number in meta_data")
             tool_call_entry["result"] = "error: missing Twilio credentials"
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
             if tool_call_entries is not None:

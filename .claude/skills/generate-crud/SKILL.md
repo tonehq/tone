@@ -4,13 +4,31 @@
 
 Apply these rules whenever creating, modifying, or extending CRUD operations (Create, Read, Update, Delete) for any model in this project. This covers: FastAPI services, API routes, and router registration.
 
+## CRITICAL RULES
+
+### 1. Always create EE controller first, then Core
+This project has two editions: **Enterprise (EE)** and **Core**. When creating new API routes:
+1. **First** create the controller in `ee/api/v1/{model_name}s.py` — uses `EEJWTClaims` and `require_ee_org_member` from `ee.middleware.auth`
+2. **Then** create the controller in `core/api/v1/{model_name}s.py` — uses `JWTClaims` and `require_org_member` from `core.middleware.auth`
+3. Both controllers share the **same service** from `core/services/` — never duplicate service logic
+4. Register the EE router in `main_ee.py` and the Core router in `main.py`
+
+The only difference between EE and Core controllers is the **auth middleware**. The route logic, request/response schemas, and service calls are identical.
+
+### 2. No separate Create and Update APIs — use Upsert only
+**Never** create individual `create` and `update` endpoints. Always use a **single upsert endpoint** that handles both:
+- If the request body contains `id` → update the existing record
+- If no `id` → create a new record
+- The upsert endpoint should be `POST /upsert` or `POST /upsert_{model}`
+- Do **not** create `POST /create_{model}` or `PUT /update_{model}` endpoints
+
 ---
 
 ## 1. Service Layer (`core/services/`)
 
 ### Base Class
-- Create a service file named as `{model_name}_service.py)` in core/services.
-- Create a controller file named as `{model_name}s.py)` in core/api/v1.
+- Create a service file named as `{model_name}_service.py` in `core/services/`.
+- Create controller files named as `{model_name}s.py` in **both** `ee/api/v1/` (first) and `core/api/v1/` (second).
 - Every service **must** extend `BaseService` from `core.services.base`.
 - Constructor signature: `def __init__(self, db: Session, user_id: Optional[int] = None)`.
 - Access `self.db` for queries, `self.user_id` and `self.org_id` for context.
@@ -121,26 +139,69 @@ class MyModelService(BaseService):
         return self._response_item(record)
 ```
 
-### Get All with Filters Pattern
-- Optional filter parameters default to `None`.
-- Conditionally chain `.filter()` calls — only apply when the param is provided.
-- Always filter `status == "active"` for soft-deletable models.
+### Get All with Pagination (REQUIRED for collection endpoints)
+- **Every "get all" / "list" endpoint MUST include pagination.** Never return unbounded result sets.
+- Use `page_no` (1-based, default 1) and `page_size` (default 10, max 100) parameters.
+- Always return a paginated response wrapper: `{ data, total, page_no, page_size }`.
+- Optional filter parameters default to `None`. Conditionally chain `.filter()` calls.
 - Always order by `Model.id` for deterministic results.
-- No pagination — return the full list.
+
 ```python
-    def get_all_my_models(self, status_filter: Optional[str] = None) -> List[Dict[str, Any]]:
-        query = self.db.query(MyModel).filter(MyModel.status == "active")
+    def get_all_my_models(
+        self,
+        page_no: int = 1,
+        page_size: int = 10,
+        status_filter: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        query = self.query(MyModel)
 
         if status_filter:
             query = query.filter(MyModel.status == status_filter)
 
-        rows = query.order_by(MyModel.id).all()
-        return [self._response_item(row) for row in rows]
+        total = query.count()
+
+        offset = (page_no - 1) * page_size
+        rows = query.order_by(MyModel.id).offset(offset).limit(page_size).all()
+
+        return {
+            "data": [self._response_item(row) for row in rows],
+            "total": total,
+            "page_no": page_no,
+            "page_size": page_size,
+        }
 ```
+
+**Corresponding route handler must accept and validate pagination params:**
+```python
+@router.post("/list")
+def get_all_my_models(
+    data: Dict[str, Any] = Body(default_factory=dict),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    page_no = int(data.get("page_no", 1) or 1)
+    page_size = int(data.get("page_size", 10) or 10)
+    if page_no < 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="page_no must be >= 1")
+    if page_size < 1 or page_size > 100:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="page_size must be between 1 and 100")
+
+    return MyModelService(db, user_id=claims.user_id).get_all_my_models(
+        page_no=page_no,
+        page_size=page_size,
+    )
+```
+
+**Note:** Use `POST /list` (not `GET`) for paginated collection endpoints so pagination and filter params can be sent in the request body.
 
 **Joined query variant** (when related data is needed):
 ```python
-    def get_all_my_models(self, category: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_all_my_models(
+        self,
+        page_no: int = 1,
+        page_size: int = 10,
+        category: Optional[str] = None,
+    ) -> Dict[str, Any]:
         query = (
             self.db.query(MyModel, RelatedModel)
             .outerjoin(RelatedModel, RelatedModel.my_model_id == MyModel.id)
@@ -149,8 +210,17 @@ class MyModelService(BaseService):
         if category:
             query = query.filter(MyModel.category == category)
 
-        rows = query.order_by(MyModel.id).all()
-        return [self._response_item(model, related) for model, related in rows]
+        total = query.count()
+
+        offset = (page_no - 1) * page_size
+        rows = query.order_by(MyModel.id).offset(offset).limit(page_size).all()
+
+        return {
+            "data": [self._response_item(model, related) for model, related in rows],
+            "total": total,
+            "page_no": page_no,
+            "page_size": page_size,
+        }
 ```
 
 ### Delete Pattern
@@ -235,37 +305,116 @@ router = APIRouter()
 ```
 
 ### Route Patterns
+
+**IMPORTANT:** Only 3 endpoints per model — upsert, get all, get one, and delete. Never create separate create and update endpoints.
+
 | Operation | HTTP Method | Path | Auth Dependency |
 |-----------|------------|------|-----------------|
-| Upsert | `POST` | `/upsert` or `/upsert_{model}` | `require_org_member` or `require_admin_or_owner` |
-| Get all | `GET` | `/list` or `/get_all_{model}s` | `get_jwt_claims` or `require_org_member` |
+| Upsert (create + update) | `POST` | `/upsert` or `/upsert_{model}` | `require_org_member` or `require_admin_or_owner` |
+| List all (paginated) | `POST` | `/list` | `require_org_member` |
 | Get one | `GET` | `/get` | `get_jwt_claims` or `require_org_member` |
 | Delete | `DELETE` | `/delete` | `require_admin_or_owner` |
 
-### Route Template
+**Note:** List endpoints use `POST` (not `GET`) so pagination params (`page_no`, `page_size`) and filters can be sent in the request body.
+
+### EE Controller Template (`ee/api/v1/{model_name}s.py`) — Create this FIRST
 ```python
+from fastapi import APIRouter, Depends, Body, HTTPException, status, Query
+from sqlalchemy.orm import Session
+from typing import Dict, Any
+
+from core.database.session import get_db
+from core.services.my_model_service import MyModelService
+from ee.middleware.auth import require_ee_org_member, EEJWTClaims
+
+router = APIRouter()
+
+
+def _get_service(claims: EEJWTClaims, db: Session) -> MyModelService:
+    from uuid import UUID
+    return MyModelService(db, user_id=claims.user_id, org_id=UUID(claims.org_id))
+
+
+@router.post("/upsert", status_code=status.HTTP_200_OK)
+def upsert_my_model(
+    data: Dict[str, Any] = Body(...),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    return _get_service(claims, db).upsert_my_model(data, created_by=claims.user_id)
+
+@router.post("/list")
+def get_all_my_models(
+    data: Dict[str, Any] = Body(default_factory=dict),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    page_no = int(data.get("page_no", 1) or 1)
+    page_size = int(data.get("page_size", 10) or 10)
+    if page_no < 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="page_no must be >= 1")
+    if page_size < 1 or page_size > 100:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="page_size must be between 1 and 100")
+    return _get_service(claims, db).get_all_my_models(page_no=page_no, page_size=page_size)
+
+@router.get("/get")
+def get_my_model(
+    my_model_id: int = Query(...),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    return _get_service(claims, db).get_my_model(my_model_id)
+
+@router.delete("/delete")
+def delete_my_model(
+    my_model_id: int = Query(...),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    return _get_service(claims, db).delete_my_model(my_model_id)
+```
+
+### Core Controller Template (`core/api/v1/{model_name}s.py`) — Create this SECOND
+```python
+from fastapi import APIRouter, Depends, Body, HTTPException, status, Query
+from sqlalchemy.orm import Session
+from typing import Dict, Any
+from uuid import UUID
+
+from core.database.session import get_db
+from core.services.my_model_service import MyModelService
+from core.middleware.auth import require_org_member, require_admin_or_owner, JWTClaims
+from shared.config import settings
+
+router = APIRouter()
+
+
+def _get_service(claims: JWTClaims, db: Session) -> MyModelService:
+    org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
+    return MyModelService(db, user_id=claims.user_id, org_id=org_id)
+
+
 @router.post("/upsert", status_code=status.HTTP_200_OK)
 def upsert_my_model(
     data: Dict[str, Any] = Body(...),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    name = data.get("name")
-    if not name:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="name is required",
-        )
-    return MyModelService(db, user_id=claims.user_id).upsert_my_model(
-        data, created_by=claims.user_id
-    )
+    return _get_service(claims, db).upsert_my_model(data, created_by=claims.user_id)
 
-@router.get("/list")
+@router.post("/list")
 def get_all_my_models(
+    data: Dict[str, Any] = Body(default_factory=dict),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    return MyModelService(db, user_id=claims.user_id).get_all_my_models()
+    page_no = int(data.get("page_no", 1) or 1)
+    page_size = int(data.get("page_size", 10) or 10)
+    if page_no < 1:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="page_no must be >= 1")
+    if page_size < 1 or page_size > 100:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="page_size must be between 1 and 100")
+    return _get_service(claims, db).get_all_my_models(page_no=page_no, page_size=page_size)
 
 @router.get("/get")
 def get_my_model(
@@ -273,7 +422,7 @@ def get_my_model(
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    return MyModelService(db, user_id=claims.user_id).get_my_model(my_model_id)
+    return _get_service(claims, db).get_my_model(my_model_id)
 
 @router.delete("/delete")
 def delete_my_model(
@@ -281,7 +430,7 @@ def delete_my_model(
     claims: JWTClaims = Depends(require_admin_or_owner),
     db: Session = Depends(get_db),
 ):
-    return MyModelService(db, user_id=claims.user_id).delete_my_model(my_model_id)
+    return _get_service(claims, db).delete_my_model(my_model_id)
 ```
 
 ### Dependency Injection Rules
@@ -298,10 +447,18 @@ def delete_my_model(
 
 ---
 
-## 3. Router Registration (`main.py`)
+## 3. Router Registration
 
-After creating a new router, register it in `main.py` (and `main_ee.py` if applicable):
+After creating new routers, register them in **both** main files:
 
+**`main_ee.py`** (register FIRST):
+```python
+from ee.api.v1 import my_models
+
+api_v1.include_router(my_models.router, prefix="/my-model", tags=["my-model"])
+```
+
+**`main.py`** (register SECOND):
 ```python
 from core.api.v1 import my_models
 
@@ -310,28 +467,34 @@ api_v1.include_router(my_models.router, prefix="/my-model", tags=["my-model"])
 
 - Use **kebab-case** for URL prefixes.
 - Use the **plural or singular model name** matching existing conventions.
+- Both editions must use the **same prefix** and **same tags**.
 
 ---
 
 ## 4. File Checklist
 
-When generating CRUD for a new model, create/modify these files **in order**:
+When generating CRUD for a new model, create/modify these files **in this exact order**:
 
-1. `core/services/{model_name}_service.py` — Implement the service with CRUD methods.
-2. `core/api/v1/{model_name}s.py` — Define API routes.
-3. `main.py` (and `main_ee.py`) — Register the new router.
+1. `core/services/{model_name}_service.py` — Implement the service with CRUD methods (shared by both editions).
+2. `ee/api/v1/{model_name}s.py` — Define EE API routes (uses `EEJWTClaims`, `require_ee_org_member`).
+3. `core/api/v1/{model_name}s.py` — Define Core API routes (uses `JWTClaims`, `require_org_member`).
+4. `main_ee.py` — Register the EE router.
+5. `main.py` — Register the Core router.
 
 ---
 
 ## 5. Rules to Always Follow
 
-1. **Never bypass the service layer** — routes must not contain business logic or direct DB queries.
-2. **Never return ORM objects** from services — always build and return plain dicts.
-3. **Never expose sensitive data** (encrypted keys, password hashes) in API responses.
-4. **Always use UUID for upsert conflict resolution** — not integer `id` or business keys.
-5. **Always set `updated_at = int(time.time())`** when modifying records.
-6. **Always rollback on IntegrityError** — call `self.db.rollback()` before raising HTTPException.
-7. **Always validate required fields** in both the route handler and the service method.
-8. **Always use dependency injection** for DB sessions and auth — never instantiate sessions manually in routes.
-9. **Match existing naming conventions** — check similar models/services/routes before creating new ones.
-10. **Keep routes thin** — input validation and service delegation only; no query logic.
+1. **Always create EE controller first, then Core** — `ee/api/v1/` before `core/api/v1/`. Both share the same service from `core/services/`.
+2. **Never create separate create and update endpoints** — always use a single upsert endpoint. If `id` is in the body → update, otherwise → create.
+3. **Always paginate collection endpoints** — Every "get all" / "list" endpoint must accept `page_no` and `page_size` and return `{ data, total, page_no, page_size }`. Never return unbounded result sets.
+4. **Never bypass the service layer** — routes must not contain business logic or direct DB queries.
+4. **Never return ORM objects** from services — always build and return plain dicts.
+5. **Never expose sensitive data** (encrypted keys, password hashes) in API responses.
+6. **Always use UUID for upsert conflict resolution** — not integer `id` or business keys.
+7. **Always set `updated_at = int(time.time())`** when modifying records.
+8. **Always rollback on IntegrityError** — call `self.db.rollback()` before raising HTTPException.
+9. **Always validate required fields** in both the route handler and the service method.
+10. **Always use dependency injection** for DB sessions and auth — never instantiate sessions manually in routes.
+11. **Match existing naming conventions** — check similar models/services/routes before creating new ones.
+12. **Keep routes thin** — input validation and service delegation only; no query logic.

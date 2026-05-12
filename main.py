@@ -14,7 +14,7 @@ from core.api.v1 import (
     agent_channel_phone_numbers, channel_phone_numbers,
     models as models_router,
     generated_api_keys, channels, voices, call_logs,
-    telephony, documents, tools, oauth,
+    telephony, documents, tools, oauth, mcp_servers,
 )
 import core.models
 
@@ -87,6 +87,7 @@ if ee_enabled:
         documents as ee_documents,
         tools as ee_tools,
         oauth as ee_oauth,
+        mcp_servers as ee_mcp_servers,
     )
 
     api_v1.include_router(ee_auth.router, prefix="/auth", tags=["auth"])
@@ -107,6 +108,7 @@ if ee_enabled:
     api_v1.include_router(ee_documents.router, prefix="/document", tags=["document"])
     api_v1.include_router(ee_tools.router, prefix="/tool", tags=["tool"])
     api_v1.include_router(ee_oauth.router, prefix="/oauth", tags=["oauth"])
+    api_v1.include_router(ee_mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
     print("EE edition: Multi-tenant routes loaded")
 else:
     api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -127,6 +129,7 @@ else:
     api_v1.include_router(documents.router, prefix="/document", tags=["document"])
     api_v1.include_router(tools.router, prefix="/tool", tags=["tool"])
     api_v1.include_router(oauth.router, prefix="/oauth", tags=["oauth"])
+    api_v1.include_router(mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
     print("Core edition: Single-tenant routes loaded")
 
 
