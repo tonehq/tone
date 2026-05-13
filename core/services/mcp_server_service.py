@@ -16,6 +16,11 @@ def encrypt_auth_config(auth_config):
     for key, value in auth_config.items():
         if isinstance(value, str) and value:
             encrypted[key] = encrypt(value)
+        elif key == "headers" and isinstance(value, list):
+            encrypted[key] = [
+                {k: encrypt(v) if isinstance(v, str) and v else v for k, v in h.items()}
+                for h in value
+            ]
         else:
             encrypted[key] = value
     return encrypted
@@ -31,9 +36,21 @@ def decrypt_auth_config(auth_config):
                 decrypted[key] = decrypt(value)
             except Exception:
                 decrypted[key] = value
+        elif key == "headers" and isinstance(value, list):
+            decrypted[key] = [
+                {k: _try_decrypt(v) if isinstance(v, str) and v else v for k, v in h.items()}
+                for h in value
+            ]
         else:
             decrypted[key] = value
     return decrypted
+
+
+def _try_decrypt(value):
+    try:
+        return decrypt(value)
+    except Exception:
+        return value
 
 
 def build_auth_headers(auth_config, already_decrypted=False) -> dict:
@@ -42,7 +59,11 @@ def build_auth_headers(auth_config, already_decrypted=False) -> dict:
         return {}
     decrypted = auth_config if already_decrypted else decrypt_auth_config(auth_config)
     headers = {}
-    if decrypted.get("header_name") and decrypted.get("header_value"):
+    if decrypted.get("headers") and isinstance(decrypted["headers"], list):
+        for h in decrypted["headers"]:
+            if h.get("header_name") and h.get("header_value"):
+                headers[h["header_name"]] = h["header_value"]
+    elif decrypted.get("header_name") and decrypted.get("header_value"):
         headers[decrypted["header_name"]] = decrypted["header_value"]
     elif decrypted.get("api_key"):
         headers["Authorization"] = f"Bearer {decrypted['api_key']}"
