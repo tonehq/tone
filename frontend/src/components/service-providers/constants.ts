@@ -42,3 +42,104 @@ export const STATUS_STYLES: Record<string, string> = {
   active: 'bg-emerald-500',
   inactive: 'bg-zinc-400 dark:bg-zinc-500',
 };
+
+// ── Provider Logos ─────────────────────────────────────────────────
+// Maps a provider's internal name (lowercase, stripped of separators)
+// to a remote favicon/logo URL. Used by ServiceCard / ProviderCard to
+// render the real brand mark instead of a generic icon.
+
+const FAVICON = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+
+// Local assets bundled in /frontend/public — used for brand marks that
+// Google's favicon service doesn't return cleanly (subdomain products,
+// niche providers, etc.). Files live in /public/provider-logos/.
+const LOCAL = (filename: string) => `/provider-logos/${filename}`;
+
+export const PROVIDER_LOGOS: Record<string, string> = {
+  // ── LLM ──
+  openai: FAVICON('openai.com'),
+  anthropic: FAVICON('anthropic.com'),
+  groq: FAVICON('groq.com'),
+  google: FAVICON('google.com'),
+  gemini: LOCAL('gemini.png'),
+  vertexai: FAVICON('cloud.google.com'),
+  mistral: FAVICON('mistral.ai'),
+  cohere: FAVICON('cohere.com'),
+  together: FAVICON('together.ai'),
+  fireworks: FAVICON('fireworks.ai'),
+  xai: FAVICON('x.ai'),
+  grok: FAVICON('x.ai'),
+  perplexity: FAVICON('perplexity.ai'),
+  ollama: FAVICON('ollama.com'),
+  deepseek: FAVICON('deepseek.com'),
+  azure: FAVICON('azure.com'),
+  azureopenai: FAVICON('azure.com'),
+  aws: FAVICON('aws.amazon.com'),
+  bedrock: FAVICON('aws.amazon.com'),
+  amazon: FAVICON('amazon.com'),
+
+  // ── STT ──
+  deepgram: FAVICON('deepgram.com'),
+  assemblyai: FAVICON('assemblyai.com'),
+  whisper: FAVICON('openai.com'),
+  speechmatics: FAVICON('speechmatics.com'),
+  rev: FAVICON('rev.com'),
+  gladia: FAVICON('gladia.io'),
+
+  // ── TTS ──
+  elevenlabs: FAVICON('elevenlabs.io'),
+  cartesia: FAVICON('cartesia.ai'),
+  sonic: LOCAL('sonic.png'),
+  cartesiasonic: LOCAL('sonic.png'),
+  playht: FAVICON('play.ht'),
+  rime: FAVICON('rime.ai'),
+  resemble: FAVICON('resemble.ai'),
+  inworld: FAVICON('inworld.ai'),
+  lmnt: FAVICON('lmnt.com'),
+  smallest: FAVICON('smallest.ai'),
+};
+
+export function getProviderLogoUrl(providerName?: string | null): string | null {
+  if (!providerName) return null;
+  const key = providerName.toLowerCase().replace(/[-_\s./]/g, '');
+
+  // Direct hit
+  if (PROVIDER_LOGOS[key]) return PROVIDER_LOGOS[key];
+
+  // Fallback: strip a trailing "ai" suffix so things like "gemini-ai",
+  // "fireworks-ai", "perplexity-ai" still resolve when only the base
+  // form is registered above. Length > 3 guard avoids stripping
+  // standalone "ai".
+  if (key.endsWith('ai') && key.length > 3) {
+    const stripped = key.slice(0, -2);
+    if (PROVIDER_LOGOS[stripped]) return PROVIDER_LOGOS[stripped];
+  }
+
+  return null;
+}
+
+// ── Service-type sections ──────────────────────────────────────────
+
+export interface ServiceTypeSection {
+  key: 'llm' | 'stt' | 'tts';
+  title: string;
+  description: string;
+}
+
+export const SERVICE_TYPE_SECTIONS: ServiceTypeSection[] = [
+  {
+    key: 'llm',
+    title: 'LLM',
+    description: 'Large Language Models for reasoning and generation',
+  },
+  {
+    key: 'stt',
+    title: 'STT',
+    description: 'Speech-to-Text providers for transcription',
+  },
+  {
+    key: 'tts',
+    title: 'TTS',
+    description: 'Text-to-Speech providers for voice synthesis',
+  },
+];

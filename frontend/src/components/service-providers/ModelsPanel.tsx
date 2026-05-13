@@ -7,6 +7,7 @@ import {
   upsertModelAtom,
 } from '@/atoms/ProviderAtom';
 import ModelUpsertModal from '@/components/service-providers/ModelUpsertModal';
+import ProviderLogo from '@/components/service-providers/ProviderLogo';
 import { ActionMenu, CustomButton, CustomTable } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import type { CustomTableColumn } from '@/types/components';
@@ -16,10 +17,10 @@ import { formatDate } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
-import { Box, BrainCircuit, ChevronLeft, Plus, Search, Server } from 'lucide-react';
+import { Box, BrainCircuit, ChevronLeft, Plus, Search } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { MODELS_PAGE_SIZE, TYPE_BADGE_STYLES, TYPE_ICON_STYLES, TYPE_ICONS } from './constants';
+import { MODELS_PAGE_SIZE, TYPE_BADGE_STYLES } from './constants';
 
 interface ModelsPanelProps {
   selectedProvider: ServiceProvider | null;
@@ -160,6 +161,7 @@ export default function ModelsPanel({ selectedProvider, onBack, compact }: Model
   // ── Columns ──────────────────────────────────────────────────────
 
   const providerType = selectedProvider?.provider_type ?? '';
+  const providerName = selectedProvider?.name ?? '';
 
   const columns: CustomTableColumn<ServiceProviderModel>[] = [
     {
@@ -169,14 +171,12 @@ export default function ModelsPanel({ selectedProvider, onBack, compact }: Model
       sorter: true,
       render: (_value, record) => (
         <div className="flex items-center gap-2.5">
-          <div
-            className={cn(
-              'flex size-7 shrink-0 items-center justify-center rounded-md',
-              TYPE_ICON_STYLES[providerType] ?? 'bg-muted text-muted-foreground',
-            )}
-          >
-            {TYPE_ICONS[providerType] ?? <Box className="size-3.5" />}
-          </div>
+          <ProviderLogo
+            providerName={providerName}
+            serviceType={providerType}
+            className="size-7 rounded-md"
+            imgSize={16}
+          />
           <span className="truncate font-medium text-foreground">{record.name}</span>
         </div>
       ),
@@ -316,14 +316,12 @@ export default function ModelsPanel({ selectedProvider, onBack, compact }: Model
             >
               <ChevronLeft className="size-5" />
             </button>
-            <div
-              className={cn(
-                'flex size-9 items-center justify-center rounded-lg',
-                TYPE_ICON_STYLES[selectedProvider.provider_type] ?? 'bg-muted',
-              )}
-            >
-              {TYPE_ICONS[selectedProvider.provider_type] ?? <Server className="size-4" />}
-            </div>
+            <ProviderLogo
+              providerName={selectedProvider.name}
+              serviceType={selectedProvider.provider_type}
+              className="size-9 rounded-lg"
+              imgSize={22}
+            />
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-semibold text-foreground">

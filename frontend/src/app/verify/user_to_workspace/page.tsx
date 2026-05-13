@@ -2,10 +2,10 @@
 
 import { CustomButton, TextInput } from '@/components/shared';
 import { Form } from '@/components/shared/Form';
+import ToneLoader from '@/components/shared/ToneLoader';
 import { acceptInvitationWithPassword, validateInvitation } from '@/services/userService';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
-import { Loader2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 
@@ -99,10 +99,7 @@ function AcceptInvitationContent() {
   if (validating) {
     return (
       <Container>
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="size-8 animate-spin text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">Validating invitation...</p>
-        </div>
+        <ToneLoader label="Validating invitation..." />
       </Container>
     );
   }

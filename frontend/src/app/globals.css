@@ -245,6 +245,53 @@ body {
   }
 }
 
+/* Tone Loader — branded voice-analyzing animation for AI Voice Agent product */
+@keyframes tone-loader-mic {
+  0%,
+  100% {
+    transform: scale(0.92);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+@keyframes tone-loader-ring {
+  0% {
+    transform: scale(0.65);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+@keyframes tone-loader-label {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* MCP card glow — animated light color gradient breathing across the whole card */
+@keyframes mcp-card-glow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.animate-mcp-card-glow {
+  animation: mcp-card-glow 5s ease-in-out infinite;
+  background-size: 220% 220%;
+}
+
+
 /* Override MUI defaults for cleaner look */
 .MuiButton-root {
   box-shadow: none !important;

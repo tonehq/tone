@@ -54,15 +54,20 @@ export function SidebarOrganization({ isExpanded }: SidebarOrganizationProps) {
   const fetchOrgs = useSetAtom(fetchOrganizationList);
   const switchOrg = useSetAtom(switchOrganizationAtom);
   const [currentOrgId, setCurrentOrgId] = useState('');
+  const [cookieOrgName, setCookieOrgName] = useState('');
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     setCurrentOrgId(Cookies.get(TENANT_ID) || '');
+    setCookieOrgName(getCurrentOrgName());
+    setMounted(true);
     fetchOrgs();
   }, [fetchOrgs]);
 
-  // Derive name: prefer atom list match, then login_data cookie fallback
+  // Derive name: prefer atom list match, then login_data cookie fallback.
+  // Until mounted, render the SSR-stable placeholder to avoid hydration mismatch.
   const currentOrg = orgState.organizationList.find((o) => String(o.id) === String(currentOrgId));
-  const orgName = currentOrg?.name || getCurrentOrgName() || 'My Workspace';
+  const orgName = mounted ? currentOrg?.name || cookieOrgName || 'My Workspace' : 'My Workspace';
   const orgInitial = orgName.charAt(0).toUpperCase();
 
   const handleSwitch = async (orgId: string) => {

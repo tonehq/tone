@@ -9,10 +9,11 @@ import {
   updateMemberRoleAtom,
 } from '@/atoms/SettingsAtom';
 import { CustomButton, CustomTab } from '@/components/shared';
+import ToneLoader from '@/components/shared/ToneLoader';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
-import { Loader2, Mail, UserPlus, Users } from 'lucide-react';
+import { Mail, UserPlus, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import InvitationsTable from './InvitationsTable';
@@ -68,7 +69,7 @@ export default function Members() {
   if (!mounted) {
     return (
       <div className="flex h-full w-full items-center justify-center p-4">
-        <Loader2 className="size-10 animate-spin text-muted-foreground" />
+        <ToneLoader label="Loading members..." />
       </div>
     );
   }

@@ -10,7 +10,9 @@ import {
 import ApiKeyUpsertModal from '@/components/service-providers/ApiKeyUpsertModal';
 import ModelsPanel from '@/components/service-providers/ModelsPanel';
 import ServiceUpsertModal from '@/components/service-providers/ServiceUpsertModal';
+import ProviderLogo from '@/components/service-providers/ProviderLogo';
 import { ActionMenu, CustomButton, CustomTab } from '@/components/shared';
+import ToneLoader from '@/components/shared/ToneLoader';
 import { Badge } from '@/components/ui/badge';
 import {
   deleteApiKey,
@@ -46,7 +48,7 @@ import {
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { STATUS_STYLES, TYPE_BADGE_STYLES, TYPE_ICON_STYLES, TYPE_ICONS } from './constants';
+import { STATUS_STYLES, TYPE_BADGE_STYLES } from './constants';
 
 export default function ServiceProviderDetailPage() {
   const router = useRouter();
@@ -443,14 +445,12 @@ export default function ServiceProviderDetailPage() {
                     key={svc.uuid}
                     className="flex items-start gap-3 rounded-lg border border-border bg-background p-3 transition-colors hover:bg-accent/20"
                   >
-                    <div
-                      className={cn(
-                        'flex size-8 shrink-0 items-center justify-center rounded-md',
-                        TYPE_ICON_STYLES[svc.service_type] ?? 'bg-muted',
-                      )}
-                    >
-                      {TYPE_ICONS[svc.service_type] ?? <Server className="size-3.5" />}
-                    </div>
+                    <ProviderLogo
+                      providerName={svc.service_provider_name ?? provider.name}
+                      serviceType={svc.service_type}
+                      className="size-8 rounded-md"
+                      imgSize={18}
+                    />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5">
                         <span className="truncate text-sm font-medium text-foreground">
@@ -551,7 +551,7 @@ export default function ServiceProviderDetailPage() {
   if (loading) {
     return (
       <div className="animate-page flex h-full items-center justify-center">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        <ToneLoader label="Loading provider..." />
       </div>
     );
   }
@@ -587,14 +587,12 @@ export default function ServiceProviderDetailPage() {
               <ArrowLeft className="size-4" />
             </button>
 
-            <div
-              className={cn(
-                'flex size-12 shrink-0 items-center justify-center rounded-xl',
-                TYPE_ICON_STYLES[typeKey] ?? 'bg-muted text-muted-foreground',
-              )}
-            >
-              {TYPE_ICONS[typeKey] ?? <Server className="size-5" />}
-            </div>
+            <ProviderLogo
+              providerName={provider.name}
+              serviceType={typeKey}
+              className="size-12 rounded-xl"
+              imgSize={28}
+            />
 
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">

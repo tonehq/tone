@@ -20,6 +20,7 @@ class Tool(OrgScopedModel):
     auth_config = Column(JSONB, nullable=True)
     meta_data = Column(JSONB, nullable=True, default=dict)
     oauth_connection_id = Column(BigInteger, ForeignKey('oauth_connections.id', ondelete='SET NULL'), nullable=True, index=True)
+    mcp_server_id = Column(BigInteger, ForeignKey('mcp_servers.id', ondelete='CASCADE'), nullable=True, index=True)
     is_active = Column(Boolean, default=True, nullable=False)
     is_template = Column(Boolean, default=False, nullable=False)
 

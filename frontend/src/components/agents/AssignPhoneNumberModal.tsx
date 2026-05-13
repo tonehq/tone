@@ -1,10 +1,10 @@
 'use client';
 
 import { CustomModal, PhoneNumberDisplay, SelectInput } from '@/components/shared';
+import ToneLoader from '@/components/shared/ToneLoader';
 import { Checkbox } from '@/components/ui/checkbox';
 import { type TwilioPhoneNumber, getTwilioPhoneNumbers } from '@/services/phoneNumberService';
 import { cn } from '@/utils/cn';
-import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 interface PhoneNumberEntry {
@@ -96,8 +96,8 @@ export default function AssignPhoneNumberModal({
         <div>
           <label className="mb-1 block text-sm font-semibold text-foreground">Phone Numbers</label>
           {loading ? (
-            <div className="flex justify-center py-2">
-              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            <div className="flex justify-center py-4">
+              <ToneLoader size="sm" />
             </div>
           ) : phoneNumbers.length === 0 ? (
             <p className="text-sm text-muted-foreground">
