@@ -95,6 +95,18 @@ async def discover_tools(
     return await svc.discover_tools(mcp_server_id)
 
 
+@router.get("/get_mcp_tools")
+async def get_mcp_tools(
+    mcp_server_id: int = Query(..., description="The MCP server ID to fetch tools from"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Return only tool name and description for an MCP server."""
+    svc = _get_service(claims, db)
+    result = await svc.discover_tools(mcp_server_id)
+    return [{"name": t["name"], "description": t["description"]} for t in result["tools"]]
+
+
 @router.delete("/delete_mcp_server", status_code=status.HTTP_200_OK)
 def delete_mcp_server(
     mcp_server_id: int = Query(..., description="The MCP server ID to delete"),
