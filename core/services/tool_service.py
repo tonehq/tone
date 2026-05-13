@@ -69,7 +69,7 @@ class ToolService(BaseService):
 
     def _check_duplicate_name(self, name: str, exclude_id: int = None) -> None:
         """Raise 409 if a tool with the same name already exists in this org."""
-        query = self.query(Tool).filter(Tool.name == name)
+        query = self.query(Tool).filter(Tool.name == name, Tool.tool_type != 'mcp')
         if exclude_id is not None:
             query = query.filter(Tool.id != exclude_id)
         if query.first():
@@ -105,7 +105,7 @@ class ToolService(BaseService):
         return tool
 
     def get_tools(self) -> List[Tool]:
-        return self.query(Tool).all()
+        return self.query(Tool).filter(Tool.tool_type != 'mcp').all()
 
     def get_template_tools(self) -> List[Tool]:
         return self.query(Tool).filter(Tool.is_template == True).all()
@@ -224,6 +224,11 @@ class ToolService(BaseService):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Template tools cannot be deleted",
             )
+        if tool.tool_type == 'mcp':
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="MCP tools cannot be deleted directly. Delete the MCP server instead.",
+            )
         self.db.delete(tool)
         self.db.commit()
         return {"message": "Tool deleted successfully"}
@@ -299,6 +304,7 @@ class ToolService(BaseService):
             "auth_config": decrypt_auth_config(tool.auth_config),
             "meta_data": tool.meta_data,
             "oauth_connection_id": tool.oauth_connection_id,
+            "mcp_server_id": tool.mcp_server_id,
             "is_active": tool.is_active,
             "is_template": tool.is_template,
             "created_at": tool.created_at,

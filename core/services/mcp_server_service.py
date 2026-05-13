@@ -6,6 +6,7 @@ from fastapi import HTTPException, status
 
 from core.services.base import BaseService
 from core.models.mcp_server import McpServer, AgentMcpServer
+from core.models.tool import Tool
 from core.utils.encryption import encrypt, decrypt
 
 
@@ -16,6 +17,11 @@ def encrypt_auth_config(auth_config):
     for key, value in auth_config.items():
         if isinstance(value, str) and value:
             encrypted[key] = encrypt(value)
+        elif key == "headers" and isinstance(value, list):
+            encrypted[key] = [
+                {k: encrypt(v) if isinstance(v, str) and v else v for k, v in h.items()}
+                for h in value
+            ]
         else:
             encrypted[key] = value
     return encrypted
@@ -31,18 +37,34 @@ def decrypt_auth_config(auth_config):
                 decrypted[key] = decrypt(value)
             except Exception:
                 decrypted[key] = value
+        elif key == "headers" and isinstance(value, list):
+            decrypted[key] = [
+                {k: _try_decrypt(v) if isinstance(v, str) and v else v for k, v in h.items()}
+                for h in value
+            ]
         else:
             decrypted[key] = value
     return decrypted
 
 
-def build_auth_headers(auth_config) -> dict:
+def _try_decrypt(value):
+    try:
+        return decrypt(value)
+    except Exception:
+        return value
+
+
+def build_auth_headers(auth_config, already_decrypted=False) -> dict:
     """Build HTTP headers from auth_config."""
     if not auth_config:
         return {}
-    decrypted = decrypt_auth_config(auth_config)
+    decrypted = auth_config if already_decrypted else decrypt_auth_config(auth_config)
     headers = {}
-    if decrypted.get("header_name") and decrypted.get("header_value"):
+    if decrypted.get("headers") and isinstance(decrypted["headers"], list):
+        for h in decrypted["headers"]:
+            if h.get("header_name") and h.get("header_value"):
+                headers[h["header_name"]] = h["header_value"]
+    elif decrypted.get("header_name") and decrypted.get("header_value"):
         headers[decrypted["header_name"]] = decrypted["header_value"]
     elif decrypted.get("api_key"):
         headers["Authorization"] = f"Bearer {decrypted['api_key']}"
@@ -65,6 +87,50 @@ class McpServerService(BaseService):
                 detail=f"An MCP server with name '{name}' already exists in this organization",
             )
 
+    def _sync_mcp_tools(self, mcp_server: McpServer, discovered_tools: list) -> None:
+        """Sync discovered MCP tools into the tools table."""
+        existing_tools = (
+            self.db.query(Tool)
+            .filter(Tool.mcp_server_id == mcp_server.id, Tool.organization_id == self.org_id)
+            .all()
+        )
+        existing_map = {t.name: t for t in existing_tools}
+        discovered_names = {t["name"] for t in discovered_tools}
+
+        # Delete tools no longer present
+        for name, tool in existing_map.items():
+            if name not in discovered_names:
+                self.db.delete(tool)
+
+        now = int(time.time())
+        for dt in discovered_tools:
+            params = {"properties": dt.get("parameters", {}), "required": dt.get("required", [])}
+            if dt["name"] in existing_map:
+                # Update if changed
+                existing_tool = existing_map[dt["name"]]
+                if existing_tool.description != (dt.get("description") or "") or existing_tool.parameters != params:
+                    existing_tool.description = dt.get("description") or ""
+                    existing_tool.parameters = params
+                    existing_tool.updated_at = now
+            else:
+                # Create new
+                import uuid as uuid_lib
+                tool = Tool(
+                    uuid=uuid_lib.uuid4(),
+                    name=dt["name"],
+                    description=dt.get("description") or "",
+                    tool_type="mcp",
+                    parameters=params,
+                    mcp_server_id=mcp_server.id,
+                    organization_id=self.org_id,
+                    is_active=True,
+                    created_at=now,
+                    updated_at=now,
+                )
+                self.db.add(tool)
+
+        self.db.commit()
+
     def _validate_transport_type(self, transport_type: str) -> None:
         if transport_type not in self.VALID_TRANSPORT_TYPES:
             raise HTTPException(
@@ -72,7 +138,7 @@ class McpServerService(BaseService):
                 detail=f"Invalid transport_type '{transport_type}'. Must be one of: {', '.join(self.VALID_TRANSPORT_TYPES)}",
             )
 
-    def upsert_mcp_server(self, data: Dict[str, Any]) -> McpServer:
+    async def upsert_mcp_server(self, data: Dict[str, Any]) -> McpServer:
         """Create or update an MCP server. Send id to update; send name and server_url to create."""
         mcp_server_id = data.get("id")
         now = int(time.time())
@@ -89,6 +155,19 @@ class McpServerService(BaseService):
                 self._check_duplicate_name(update_data["name"], exclude_id=int(mcp_server_id))
             if "transport_type" in update_data:
                 self._validate_transport_type(update_data["transport_type"])
+
+            # Validate connection if connection-related fields changed
+            connection_fields = {"server_url", "transport_type", "auth_config"}
+            validation_result = None
+            if connection_fields & update_data.keys():
+                validate_url = update_data.get("server_url", existing.server_url)
+                validate_transport = update_data.get("transport_type", existing.transport_type)
+                if "auth_config" in update_data:
+                    validate_auth = update_data["auth_config"]
+                else:
+                    validate_auth = decrypt_auth_config(existing.auth_config)
+                validation_result = await self.validate_mcp_connection(validate_url, validate_transport, validate_auth)
+
             if "auth_config" in update_data:
                 update_data["auth_config"] = encrypt_auth_config(update_data["auth_config"])
             for key, value in update_data.items():
@@ -97,6 +176,8 @@ class McpServerService(BaseService):
             existing.updated_at = now
             self.db.commit()
             self.db.refresh(existing)
+            if validation_result:
+                self._sync_mcp_tools(existing, validation_result["tools"])
             return existing
 
         # Create new MCP server
@@ -113,6 +194,12 @@ class McpServerService(BaseService):
         self._check_duplicate_name(data["name"])
         transport_type = data.get("transport_type", "streamable_http")
         self._validate_transport_type(transport_type)
+
+        # Validate connection before persisting
+        validation_result = await self.validate_mcp_connection(
+            data["server_url"], transport_type, data.get("auth_config")
+        )
+
         mcp_server = McpServer(
             uuid=uuid_lib.uuid4(),
             name=data["name"],
@@ -129,6 +216,7 @@ class McpServerService(BaseService):
         self.db.add(mcp_server)
         self.db.commit()
         self.db.refresh(mcp_server)
+        self._sync_mcp_tools(mcp_server, validation_result["tools"])
         return mcp_server
 
     def get_mcp_servers(self) -> List[McpServer]:
@@ -232,16 +320,17 @@ class McpServerService(BaseService):
     def _build_auth_headers(self, auth_config: dict) -> Dict[str, str]:
         return build_auth_headers(auth_config)
 
-    async def discover_tools(self, mcp_server_id: int) -> Dict[str, Any]:
-        """Connect to an MCP server and return its available tools."""
+    async def validate_mcp_connection(
+        self, server_url: str, transport_type: str, auth_config: dict = None
+    ) -> Dict[str, Any]:
+        """Connect to an MCP server with raw (unencrypted) config and return its tools.
+        Raises HTTPException(400) on failure."""
         from mcp.client.session import ClientSession
         from mcp.client.sse import sse_client
         from mcp.client.streamable_http import streamablehttp_client
 
-        mcp_server = self.get_mcp_server(mcp_server_id)
-        server_url = mcp_server.server_url
-        transport_type = mcp_server.transport_type
-        headers = self._build_auth_headers(mcp_server.auth_config)
+        self._validate_transport_type(transport_type)
+        headers = build_auth_headers(auth_config, already_decrypted=True) if auth_config else {}
 
         try:
             if transport_type == "sse":
@@ -254,14 +343,28 @@ class McpServerService(BaseService):
                     async with ClientSession(read, write) as session:
                         await session.initialize()
                         result = await session.list_tools()
-            else:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Unsupported transport type: {transport_type}",
-                )
         except HTTPException:
             raise
         except Exception as e:
+            error_str = str(e).lower()
+            if any(keyword in error_str for keyword in [
+                "nodename nor servname", "name or service not known",
+                "no such host", "getaddrinfo failed", "invalid url",
+                "url", "connection refused", "connect call failed",
+                "unreachable", "timeout", "timed out",
+            ]):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid server URL. Please check the URL and try again.",
+                )
+            if any(keyword in error_str for keyword in [
+                "401", "403", "unauthorized", "forbidden",
+                "authentication", "auth", "token", "api key",
+            ]):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Authentication failed. Please check your token or API key and try again.",
+                )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Failed to connect to MCP server: {str(e)}",
@@ -276,12 +379,21 @@ class McpServerService(BaseService):
                 "required": tool.inputSchema.get("required", []),
             })
 
+        return {"tools": tools, "tool_count": len(tools)}
+
+    async def discover_tools(self, mcp_server_id: int) -> Dict[str, Any]:
+        """Connect to an MCP server and return its available tools."""
+        mcp_server = self.get_mcp_server(mcp_server_id)
+        decrypted_auth = decrypt_auth_config(mcp_server.auth_config)
+        result = await self.validate_mcp_connection(
+            mcp_server.server_url, mcp_server.transport_type, decrypted_auth
+        )
+        self._sync_mcp_tools(mcp_server, result["tools"])
         return {
             "server_name": mcp_server.name,
-            "server_url": server_url,
-            "transport_type": transport_type,
-            "tool_count": len(tools),
-            "tools": tools,
+            "server_url": mcp_server.server_url,
+            "transport_type": mcp_server.transport_type,
+            **result,
         }
 
     def mcp_server_response(self, mcp_server: McpServer) -> Dict[str, Any]:
