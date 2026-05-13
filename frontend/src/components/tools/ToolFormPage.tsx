@@ -1,6 +1,7 @@
 'use client';
 
 import { deleteToolAtom, fetchToolsAtom, upsertToolAtom } from '@/atoms/ToolAtom';
+import ToneLoader from '@/components/shared/ToneLoader';
 import BuiltInToolForm from '@/components/tools/BuiltInToolForm';
 import CustomToolForm from '@/components/tools/CustomToolForm';
 import type { BuiltInToolFormData, CustomToolFormData } from '@/schemas/tool';
@@ -186,16 +187,8 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
 
   if (loading) {
     return (
-      <div className="flex h-full flex-col p-6">
-        <div className="flex items-center gap-3">
-          <div className="size-8 animate-pulse rounded-lg bg-muted" />
-          <div className="h-4 w-28 animate-pulse rounded bg-muted" />
-        </div>
-        <div className="mx-auto mt-8 w-full max-w-[680px] space-y-3">
-          {[80, 60, 100, 48].map((h, i) => (
-            <div key={i} className="animate-pulse rounded-lg bg-muted" style={{ height: h }} />
-          ))}
-        </div>
+      <div className="flex h-full items-center justify-center p-6">
+        <ToneLoader label={isEditMode ? 'Loading tool...' : 'Loading...'} />
       </div>
     );
   }

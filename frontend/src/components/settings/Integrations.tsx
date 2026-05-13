@@ -7,6 +7,7 @@ import {
 } from '@/atoms/IntegrationAtom';
 import ActiveConnectionsSection from '@/components/settings/ActiveConnectionsSection';
 import AvailableIntegrationsSection from '@/components/settings/AvailableIntegrationsSection';
+import ToneLoader from '@/components/shared/ToneLoader';
 import { API_KEY_PROVIDERS, OAUTH_PROVIDERS } from '@/constants/integrations';
 import {
   disconnectOAuth,
@@ -18,7 +19,6 @@ import type { OAuthConnection } from '@/types/oauth';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
-import { Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import AddChannelModal from './AddChannelModal';
@@ -164,7 +164,7 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
   if (!mounted) {
     return (
       <div className="flex h-full w-full items-center justify-center p-4">
-        <Loader2 className="size-10 animate-spin text-muted-foreground" />
+        <ToneLoader label="Loading integrations..." />
       </div>
     );
   }

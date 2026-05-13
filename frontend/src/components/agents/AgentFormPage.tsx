@@ -10,6 +10,7 @@ import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 import AssignPhoneNumberModal from '@/components/agents/AssignPhoneNumberModal';
 import type { TabItem } from '@/components/shared';
 import { CustomButton, CustomModal, CustomTab, PhoneNumberDisplay } from '@/components/shared';
+import ToneLoader from '@/components/shared/ToneLoader';
 import { Badge } from '@/components/ui/badge';
 import { deleteAgent, getAgent, upsertAgent } from '@/services/agentsService';
 import type { AgentFormState } from '@/types/agent';
@@ -383,19 +384,8 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
 
   if (loading) {
     return (
-      <div className="flex h-full flex-col gap-6 p-6">
-        <div className="flex items-center gap-4">
-          <div className="size-11 animate-pulse rounded-xl bg-muted" />
-          <div className="flex-1 space-y-2">
-            <div className="h-5 w-48 animate-pulse rounded-md bg-muted" />
-            <div className="h-4 w-24 animate-pulse rounded-md bg-muted" />
-          </div>
-        </div>
-        <div className="h-10 w-full animate-pulse rounded-lg bg-muted" />
-        <div className="flex-1 space-y-4">
-          <div className="h-32 w-full animate-pulse rounded-xl bg-muted" />
-          <div className="h-32 w-full animate-pulse rounded-xl bg-muted" />
-        </div>
+      <div className="flex h-full items-center justify-center p-6">
+        <ToneLoader label={isEditMode ? 'Loading agent...' : 'Loading...'} />
       </div>
     );
   }

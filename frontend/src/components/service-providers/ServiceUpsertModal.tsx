@@ -7,6 +7,7 @@ import {
   TextAreaField,
   TextInput,
 } from '@/components/shared';
+import ProviderLogo from '@/components/service-providers/ProviderLogo';
 import { type ServiceUpsertFormData, serviceUpsertSchema } from '@/schemas/provider';
 import {
   listApiKeysByProvider,
@@ -93,6 +94,11 @@ export default function ServiceUpsertModal({
           label: p.display_name,
         })),
     [providers, serviceType],
+  );
+
+  const selectedProvider = useMemo(
+    () => providers.find((p) => p.id === Number(selectedProviderId)),
+    [providers, selectedProviderId],
   );
 
   useEffect(() => {
@@ -281,6 +287,25 @@ export default function ServiceUpsertModal({
             disabled={isEdit}
           />
         </div>
+
+        {selectedProvider && (
+          <div className="col-span-2 -mt-1 flex items-center gap-2.5 rounded-lg border border-border bg-muted/30 p-2.5">
+            <ProviderLogo
+              providerName={selectedProvider.name}
+              serviceType={selectedProvider.provider_type}
+              className="size-9 rounded-md"
+              imgSize={20}
+            />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-foreground">
+                {selectedProvider.display_name}
+              </p>
+              <p className="truncate font-mono text-[11px] text-muted-foreground">
+                {selectedProvider.name}
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="col-span-2">
           <TextInput

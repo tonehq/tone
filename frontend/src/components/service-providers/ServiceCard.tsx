@@ -5,8 +5,15 @@ import { Badge } from '@/components/ui/badge';
 import type { Service } from '@/types/provider';
 import { cn } from '@/utils/cn';
 import { Box, Key, Server } from 'lucide-react';
+import { useState } from 'react';
 
-import { STATUS_STYLES, TYPE_BADGE_STYLES, TYPE_ICON_STYLES, TYPE_ICONS } from './constants';
+import {
+  getProviderLogoUrl,
+  STATUS_STYLES,
+  TYPE_BADGE_STYLES,
+  TYPE_ICON_STYLES,
+  TYPE_ICONS,
+} from './constants';
 
 interface ServiceCardProps {
   service: Service;
@@ -19,20 +26,43 @@ export default function ServiceCard({ service, onNavigate, onEdit, onDelete }: S
   const statusKey = (service.status ?? 'active').toLowerCase();
   const typeKey = service.service_type ?? '';
 
+  const [logoFailed, setLogoFailed] = useState(false);
+  const logoUrl = getProviderLogoUrl(service.service_provider_name);
+  const showLogo = !!logoUrl && !logoFailed;
+
   return (
     <div
-      className="group relative flex cursor-pointer flex-col rounded-xl border border-border bg-card p-4 transition-all hover:border-primary/20 hover:shadow-md hover:shadow-primary/5"
+      className={cn(
+        'group relative flex h-full min-h-[148px] cursor-pointer flex-col rounded-xl border bg-background p-4 transition-all duration-300',
+        'border-border/60 shadow-sm dark:border-border/30 dark:bg-card dark:shadow-none',
+        'hover:border-primary hover:bg-primary/[0.02] hover:shadow-md hover:shadow-primary/10',
+        'dark:hover:border-primary dark:hover:bg-primary/[0.04] dark:hover:shadow-none',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
+      )}
       onClick={onNavigate}
     >
       {/* Top row: icon + name + badges + actions */}
       <div className="flex items-start gap-3">
         <div
           className={cn(
-            'flex size-10 shrink-0 items-center justify-center rounded-lg',
-            TYPE_ICON_STYLES[typeKey] ?? 'bg-muted text-muted-foreground',
+            'flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg',
+            showLogo
+              ? 'border border-border bg-white p-1 dark:border-border/60'
+              : (TYPE_ICON_STYLES[typeKey] ?? 'bg-muted text-muted-foreground'),
           )}
         >
-          {TYPE_ICONS[typeKey] ?? <Server className="size-4.5" />}
+          {showLogo ? (
+            <img
+              src={logoUrl ?? ''}
+              alt={service.service_provider_name ?? service.name}
+              width={22}
+              height={22}
+              className="size-[22px] object-contain"
+              onError={() => setLogoFailed(true)}
+            />
+          ) : (
+            (TYPE_ICONS[typeKey] ?? <Server className="size-4.5" />)
+          )}
         </div>
 
         <div className="min-w-0 flex-1">
@@ -52,11 +82,9 @@ export default function ServiceCard({ service, onNavigate, onEdit, onDelete }: S
               </Badge>
             )}
           </div>
-          {service.description && (
-            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-              {service.description}
-            </p>
-          )}
+          <p className="mt-0.5 min-h-[16px] truncate text-[11px] text-muted-foreground">
+            {service.description || ' '}
+          </p>
         </div>
 
         {/* Hover actions */}
@@ -73,6 +101,9 @@ export default function ServiceCard({ service, onNavigate, onEdit, onDelete }: S
           />
         </div>
       </div>
+
+      {/* Spacer pushes the footer to the bottom of the card */}
+      <div className="mt-auto" />
 
       {/* Divider */}
       <div className="my-3 border-t border-border/60" />

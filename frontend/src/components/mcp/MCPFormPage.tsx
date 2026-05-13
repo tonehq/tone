@@ -1,0 +1,905 @@
+/* eslint-disable @typescript-eslint/no-use-before-define */
+'use client';
+
+import { fetchMcpServersAtom, upsertMcpServerAtom } from '@/atoms/MCPAtom';
+import HttpHeadersBuilder from '@/components/mcp/HttpHeadersBuilder';
+import { CustomButton, SliderField, TextAreaField, TextInput } from '@/components/shared';
+import CheckboxField from '@/components/shared/CheckboxField';
+import ToneLoader from '@/components/shared/ToneLoader';
+import SettingsSection from '@/components/tools/SettingsSection';
+import { Switch } from '@/components/ui/switch';
+import { getMcpServer } from '@/services/mcpServerService';
+import type { MCPServer, MCPServerUpsertPayload } from '@/types/mcp';
+import { cn } from '@/utils/cn';
+import { handleApiError } from '@/utils/helpers';
+import { showToast } from '@/utils/toast';
+import { useAtom } from 'jotai';
+import {
+  ArrowLeft,
+  Boxes,
+  Cable,
+  Check,
+  Clock,
+  Globe,
+  KeyRound,
+  Loader2,
+  Power,
+  Save,
+  Settings,
+  Signal,
+  Sparkles,
+} from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { Controller, useFieldArray, useForm } from 'react-hook-form';
+
+type TransportType = 'shttp' | 'sse';
+
+interface HttpHeaderField {
+  key: string;
+  value: string;
+}
+
+interface MCPFormState {
+  name: string;
+  description: string;
+  server_url: string;
+  timeout: number;
+  transport_type: TransportType;
+  use_bearer_token: boolean;
+  bearer_token: string;
+  use_api_key: boolean;
+  api_key: string;
+  http_headers: HttpHeaderField[];
+  is_active: boolean;
+}
+
+const DEFAULT_VALUES: MCPFormState = {
+  name: '',
+  description: '',
+  server_url: '',
+  timeout: 20,
+  transport_type: 'shttp',
+  use_bearer_token: false,
+  bearer_token: '',
+  use_api_key: false,
+  api_key: '',
+  http_headers: [],
+  is_active: true,
+};
+
+function getHostname(url: string): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+
+function getApexDomain(hostname: string): string {
+  const parts = hostname.split('.');
+  if (parts.length <= 2) return hostname;
+  const lastTwo = parts.slice(-2).join('.');
+  const dualTier = new Set(['co.uk', 'com.au', 'co.in', 'co.jp', 'com.br', 'co.nz', 'com.mx']);
+  if (dualTier.has(lastTwo)) return parts.slice(-3).join('.');
+  return lastTwo;
+}
+
+function getFaviconUrl(hostname: string | null): string | null {
+  if (!hostname) return null;
+  return `https://www.google.com/s2/favicons?domain=${getApexDomain(hostname)}&sz=64`;
+}
+
+function serverToFormState(s: MCPServer): MCPFormState {
+  const auth = s.auth_config ?? {};
+  const meta = (s.meta_data ?? {}) as { timeout?: number; http_headers?: Record<string, string> };
+  const headersMap = meta.http_headers ?? {};
+  return {
+    name: s.name ?? '',
+    description: s.description ?? '',
+    server_url: s.server_url ?? '',
+    timeout: typeof meta.timeout === 'number' ? meta.timeout : 20,
+    transport_type: s.transport_type === 'streamable_http' ? 'shttp' : 'sse',
+    use_bearer_token: !!auth.bearer_token,
+    bearer_token: auth.bearer_token ?? '',
+    use_api_key: !!auth.api_key,
+    api_key: auth.api_key ?? '',
+    http_headers: Object.entries(headersMap).map(([key, value]) => ({
+      key,
+      value: String(value),
+    })),
+    is_active: !!s.is_active,
+  };
+}
+
+function formStateToUpsertPayload(s: MCPFormState, id?: number): MCPServerUpsertPayload {
+  const authConfig: Record<string, string> = {};
+  if (s.use_bearer_token && s.bearer_token.trim()) authConfig.bearer_token = s.bearer_token;
+  if (s.use_api_key && s.api_key.trim()) authConfig.api_key = s.api_key;
+
+  const headersMap = Object.fromEntries(
+    s.http_headers.filter((h) => h.key.trim()).map((h) => [h.key.trim(), h.value]),
+  );
+
+  return {
+    ...(id ? { id } : {}),
+    name: s.name,
+    description: s.description,
+    server_url: s.server_url,
+    transport_type: s.transport_type === 'shttp' ? 'streamable_http' : 'sse',
+    auth_config: Object.keys(authConfig).length > 0 ? authConfig : null,
+    meta_data: { timeout: s.timeout, http_headers: headersMap },
+    is_active: s.is_active,
+  };
+}
+
+interface MCPFormPageProps {
+  serverId?: number;
+}
+
+export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
+  const router = useRouter();
+  const isEditMode = typeof serverId === 'number' && Number.isFinite(serverId);
+
+  const [, upsertServer] = useAtom(upsertMcpServerAtom);
+  const [, fetchServers] = useAtom(fetchMcpServersAtom);
+  const [loadingServer, setLoadingServer] = useState<boolean>(isEditMode);
+  const [saving, setSaving] = useState(false);
+
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+    settings: true,
+    server: true,
+    protocol: true,
+    status: true,
+  });
+
+  const toggleSection = (key: string) => {
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const { control, handleSubmit, watch, reset } = useForm<MCPFormState>({
+    defaultValues: DEFAULT_VALUES,
+  });
+
+  const { fields, append, remove, update } = useFieldArray<MCPFormState, 'http_headers', 'id'>({
+    control,
+    name: 'http_headers',
+  });
+
+  useEffect(() => {
+    if (!isEditMode || typeof serverId !== 'number') return;
+    let cancelled = false;
+    setLoadingServer(true);
+    getMcpServer(serverId)
+      .then((server) => {
+        if (!cancelled) reset(serverToFormState(server));
+      })
+      .catch((error) => {
+        if (!cancelled) handleApiError(error);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingServer(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditMode, serverId, reset]);
+
+  const watchedName = watch('name');
+  const watchedDescription = watch('description') ?? '';
+  const watchedIsActive = watch('is_active');
+  const watchedProtocol = watch('transport_type');
+  const watchedTimeout = watch('timeout');
+  const watchedServerUrl = watch('server_url') ?? '';
+
+  const hostname = getHostname(watchedServerUrl);
+  const protocolLabel = watchedProtocol === 'shttp' ? 'SHTTP' : 'SSE';
+
+  const onSave = async (data: MCPFormState) => {
+    const payload = formStateToUpsertPayload(data, isEditMode ? serverId : undefined);
+    console.log('[MCP] save payload', payload);
+    setSaving(true);
+    try {
+      await upsertServer(payload);
+      await fetchServers();
+      showToast.success(
+        isEditMode ? 'MCP server updated successfully' : 'MCP server created successfully',
+      );
+      router.push('/mcp');
+    } catch (error) {
+      handleApiError(error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onBack = () => router.push('/mcp');
+
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      {/* Top bar */}
+      <div className="relative flex shrink-0 items-center justify-between border-b border-border bg-background px-4 py-2">
+        <div className="flex items-center gap-2">
+          <CustomButton
+            type="text"
+            size="icon-sm"
+            onClick={onBack}
+            aria-label="Back"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft size={16} />
+          </CustomButton>
+          <span className="text-[13px] font-medium text-foreground">
+            {watchedName || (isEditMode ? 'Edit MCP Server' : 'New MCP Server')}
+          </span>
+          <StatusPill active={!!watchedIsActive} />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <CustomButton type="default" size="sm" onClick={onBack} disabled={saving}>
+            Cancel
+          </CustomButton>
+          <CustomButton
+            type="primary"
+            size="sm"
+            icon={saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+            onClick={handleSubmit(onSave)}
+            loading={saving}
+          >
+            {isEditMode ? 'Save Changes' : 'Save'}
+          </CustomButton>
+        </div>
+
+        {/* Hairline gradient accent under the top bar */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent"
+        />
+      </div>
+
+      {/* Two-column layout: left rail + form */}
+      <div className="min-h-0 flex-1 overflow-hidden bg-muted/20">
+        <div className="grid h-full grid-cols-1 lg:grid-cols-[260px_1fr]">
+          {/* LEFT RAIL — preview + section nav */}
+          <aside className="hidden border-r border-border bg-background lg:flex lg:flex-col">
+            <div className="sticky top-0 flex flex-col gap-5 px-5 py-6">
+              {/* Preview */}
+              <div>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Preview
+                </span>
+
+                <div className="mt-3 flex items-start gap-2.5">
+                  <PreviewFavicon key={hostname ?? 'none'} hostname={hostname} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-semibold text-foreground">
+                      {watchedName || (
+                        <span className="text-muted-foreground/70">Unnamed server</span>
+                      )}
+                    </p>
+                    <p className="mt-0.5 line-clamp-2 text-[11.5px] leading-relaxed text-muted-foreground">
+                      {watchedDescription || 'Description will appear here.'}
+                    </p>
+                  </div>
+                </div>
+
+                <dl className="mt-3 space-y-1.5 border-t border-border/60 pt-3 text-[11.5px]">
+                  <RailRow label="Protocol">
+                    <span className="font-mono uppercase tracking-wide">{protocolLabel}</span>
+                  </RailRow>
+                  <RailRow label="Host">
+                    {hostname ? (
+                      <span className="block max-w-[140px] truncate font-mono">{hostname}</span>
+                    ) : (
+                      <span className="text-muted-foreground/70">—</span>
+                    )}
+                  </RailRow>
+                  <RailRow label="Timeout">
+                    <span className="font-mono tabular-nums">{watchedTimeout}s</span>
+                  </RailRow>
+                  <RailRow label="Headers">
+                    <span className="font-mono tabular-nums">{fields.length}</span>
+                  </RailRow>
+                </dl>
+              </div>
+            </div>
+          </aside>
+
+          {/* RIGHT COLUMN — scrollable form (scrollbar hidden) */}
+          <div className="relative min-h-0 overflow-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {loadingServer && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70 backdrop-blur-sm">
+                <ToneLoader label="Loading server..." />
+              </div>
+            )}
+            <div className="mx-auto max-w-[760px] space-y-4 px-6 py-6">
+              {/* Header band */}
+              <div
+                className={cn(
+                  'relative overflow-hidden rounded-xl border border-border p-5 sm:p-6',
+                  'bg-gradient-to-br from-primary/5 via-background to-background',
+                  'dark:from-primary/10 dark:via-background dark:to-muted/20',
+                )}
+              >
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-primary/10 blur-3xl dark:bg-primary/15"
+                />
+
+                <div className="relative">
+                  <div className="flex items-center gap-2">
+                    <span className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary">
+                      <Boxes size={15} />
+                    </span>
+                    <h2 className="text-[15px] font-semibold tracking-tight text-foreground">
+                      Configure MCP Server
+                    </h2>
+                  </div>
+                  <p className="mt-1.5 text-[12.5px] leading-relaxed text-muted-foreground">
+                    Set up the endpoint, authentication, and protocol your agents will use to reach
+                    this Model Context Protocol server.
+                  </p>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-1.5">
+                    <Chip icon={<Signal size={11} />} label={protocolLabel} />
+                    <Chip icon={<Clock size={11} />} label={`${watchedTimeout}s timeout`} />
+                    <Chip
+                      icon={<KeyRound size={11} />}
+                      label={`${fields.length} ${fields.length === 1 ? 'header' : 'headers'}`}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Tool Settings */}
+              <SettingsSection
+                title="Tool Settings"
+                description="Configure the basic settings for this server"
+                icon={Settings}
+                iconColor="text-foreground/70"
+                iconBg="bg-foreground/5 dark:bg-foreground/10"
+                isOpen={openSections.settings}
+                onToggle={() => toggleSection('settings')}
+              >
+                <div className="space-y-5">
+                  <TextInput
+                    name="name"
+                    control={control}
+                    rules={{ required: 'Server name is required' }}
+                    label="Server Name"
+                    placeholder="clickup_mcp"
+                    isRequired
+                    className="font-mono"
+                  />
+                  <div className="relative">
+                    <TextAreaField
+                      name="description"
+                      control={control}
+                      label="Description"
+                      placeholder="Describe what this server provides to your agents"
+                      rows={4}
+                      maxLength={1000}
+                    />
+                    <span className="absolute right-0 top-0 text-[11px] tabular-nums text-muted-foreground">
+                      {watchedDescription.length}/1000
+                    </span>
+                  </div>
+                </div>
+              </SettingsSection>
+
+              {/* Server Settings */}
+              <SettingsSection
+                title="Server Settings"
+                description="Endpoint, timeout, authentication, and headers"
+                icon={Globe}
+                iconColor="text-sky-600 dark:text-sky-400"
+                iconBg="bg-sky-50 dark:bg-sky-500/10"
+                isOpen={openSections.server}
+                onToggle={() => toggleSection('server')}
+              >
+                <div className="space-y-6">
+                  <TextAreaField
+                    name="server_url"
+                    control={control}
+                    rules={{ required: 'Server URL is required' }}
+                    label="Server URL"
+                    helperText="Webhook and tool request endpoint."
+                    placeholder="https://api.example.com/mcp"
+                    rows={2}
+                    isRequired
+                  />
+
+                  <Controller
+                    name="timeout"
+                    control={control}
+                    render={({ field }) => (
+                      <div
+                        className={cn(
+                          'rounded-lg border border-border p-4',
+                          'bg-gradient-to-br from-muted/20 to-muted/40',
+                          'dark:from-muted/10 dark:to-muted/30',
+                        )}
+                      >
+                        <div className="grid items-center gap-5 sm:grid-cols-[140px_1fr]">
+                          <TimeoutDial value={Number(field.value ?? 20)} />
+                          <div>
+                            <p className="text-[13px] font-semibold text-foreground">
+                              Request Timeout
+                            </p>
+                            <p className="mt-0.5 text-[12px] text-muted-foreground">
+                              Maximum time to wait for an MCP response before aborting.
+                            </p>
+                            <div className="mt-4">
+                              <SliderField
+                                name="timeout"
+                                value={Number(field.value ?? 20)}
+                                onValueChange={(v) => field.onChange(v)}
+                                min={1}
+                                max={300}
+                                step={1}
+                                showLabels={false}
+                              />
+                              <div className="mt-1 flex justify-between text-[11px] tabular-nums text-muted-foreground">
+                                <span>1 sec</span>
+                                <span>300 sec</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  />
+
+                  <div className="space-y-3 rounded-lg border border-border bg-background p-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <KeyRound size={14} className="text-muted-foreground" />
+                        <p className="text-[13px] font-semibold text-foreground">Authentication</p>
+                      </div>
+                      <p className="mt-0.5 text-[12px] text-muted-foreground">
+                        Optional — enable each method only if your MCP server requires it.
+                      </p>
+                    </div>
+
+                    <Controller
+                      name="use_bearer_token"
+                      control={control}
+                      render={({ field }) => (
+                        <div className="rounded-md border border-border/60 bg-muted/20 p-3">
+                          <CheckboxField
+                            id="mcp-use-bearer-token"
+                            label="Use Bearer Token"
+                            checked={!!field.value}
+                            onCheckedChange={(checked) => field.onChange(!!checked)}
+                          />
+                          {field.value && (
+                            <div className="mt-3 border-t border-border/60 pt-3">
+                              <TextInput
+                                name="bearer_token"
+                                control={control}
+                                type="password"
+                                label="Bearer Token"
+                                placeholder="Enter bearer token"
+                                helperText="Stored under auth_config.bearer_token."
+                                className="font-mono text-[13px]"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    />
+
+                    <Controller
+                      name="use_api_key"
+                      control={control}
+                      render={({ field }) => (
+                        <div className="rounded-md border border-border/60 bg-muted/20 p-3">
+                          <CheckboxField
+                            id="mcp-use-api-key"
+                            label="Use API Key"
+                            checked={!!field.value}
+                            onCheckedChange={(checked) => field.onChange(!!checked)}
+                          />
+                          {field.value && (
+                            <div className="mt-3 border-t border-border/60 pt-3">
+                              <TextInput
+                                name="api_key"
+                                control={control}
+                                type="password"
+                                label="API Key"
+                                placeholder="sk-..."
+                                helperText="Stored under auth_config.api_key."
+                                className="font-mono text-[13px]"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    />
+                  </div>
+
+                  <div>
+                    <div className="mb-2 flex items-end justify-between">
+                      <div>
+                        <p className="text-[13px] font-semibold text-foreground">HTTP Headers</p>
+                        <p className="mt-0.5 text-[12px] text-muted-foreground">
+                          Optional headers sent with every MCP request.
+                        </p>
+                      </div>
+                      {fields.length > 0 && (
+                        <span className="text-[11px] tabular-nums text-muted-foreground">
+                          {fields.length} {fields.length === 1 ? 'header' : 'headers'}
+                        </span>
+                      )}
+                    </div>
+                    <HttpHeadersBuilder
+                      rows={fields.map((f) => ({ id: f.id, key: f.key, value: f.value }))}
+                      onAdd={() => append({ key: '', value: '' })}
+                      onRemove={(id) => {
+                        const idx = fields.findIndex((f) => f.id === id);
+                        if (idx >= 0) remove(idx);
+                      }}
+                      onChange={(id, patch) => {
+                        const idx = fields.findIndex((f) => f.id === id);
+                        if (idx < 0) return;
+                        const current = fields[idx];
+                        update(idx, {
+                          key: patch.key ?? current.key,
+                          value: patch.value ?? current.value,
+                        });
+                      }}
+                    />
+                  </div>
+                </div>
+              </SettingsSection>
+
+              {/* Protocol */}
+              <SettingsSection
+                title="Protocol"
+                description="How packets flow between Tone and your server"
+                icon={Cable}
+                iconColor="text-violet-600 dark:text-violet-400"
+                iconBg="bg-violet-50 dark:bg-violet-500/10"
+                isOpen={openSections.protocol}
+                onToggle={() => toggleSection('protocol')}
+              >
+                <Controller
+                  name="transport_type"
+                  control={control}
+                  render={({ field }) => (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <ProtocolCard
+                        selected={field.value === 'shttp'}
+                        onSelect={() => field.onChange('shttp')}
+                        title="Streamable HTTP"
+                        description="Persistent connection with bidirectional streaming. Recommended for tool-calling agents."
+                        diagram="shttp"
+                        badge="Recommended"
+                      />
+                      <ProtocolCard
+                        selected={field.value === 'sse'}
+                        onSelect={() => field.onChange('sse')}
+                        title="Server-Sent Events"
+                        description="One-way push stream from server. Lightweight, best for read-only events."
+                        diagram="sse"
+                      />
+                    </div>
+                  )}
+                />
+              </SettingsSection>
+
+              {/* Status */}
+              <SettingsSection
+                title="Status"
+                description="Enable or pause this MCP server for your agents"
+                icon={Power}
+                iconColor="text-emerald-600 dark:text-emerald-400"
+                iconBg="bg-emerald-50 dark:bg-emerald-500/10"
+                isOpen={openSections.status}
+                onToggle={() => toggleSection('status')}
+              >
+                <Controller
+                  name="is_active"
+                  control={control}
+                  render={({ field }) => (
+                    <label
+                      htmlFor="mcp-is-active"
+                      className="flex cursor-pointer items-center justify-between gap-4"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-semibold text-foreground">
+                          {field.value ? 'Server is active' : 'Server is paused'}
+                        </p>
+                        <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">
+                          {field.value
+                            ? 'Agents can route tool calls to this MCP server.'
+                            : 'Agents will skip this server until you re-enable it.'}
+                        </p>
+                      </div>
+                      <Switch
+                        id="mcp-is-active"
+                        checked={!!field.value}
+                        onCheckedChange={(checked) => field.onChange(!!checked)}
+                      />
+                    </label>
+                  )}
+                />
+              </SettingsSection>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatusPill({ active, compact = false }: { active: boolean; compact?: boolean }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full text-[10px] font-medium',
+        compact ? 'px-2 py-0.5' : 'px-2 py-0.5',
+        active
+          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
+          : 'bg-muted text-muted-foreground',
+      )}
+    >
+      <span
+        className={cn(
+          'size-1.5 rounded-full',
+          active ? 'animate-pulse bg-emerald-500' : 'bg-muted-foreground/50',
+        )}
+      />
+      {active ? 'Active' : 'Paused'}
+    </span>
+  );
+}
+
+function Chip({ icon, label }: { icon?: React.ReactNode; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/80 px-2 py-0.5 text-[11px] font-medium text-foreground backdrop-blur dark:bg-background/40">
+      {icon && <span className="text-muted-foreground">{icon}</span>}
+      {label}
+    </span>
+  );
+}
+
+function RailRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 text-foreground">{children}</dd>
+    </div>
+  );
+}
+
+function PreviewFavicon({ hostname }: { hostname: string | null }) {
+  const [failed, setFailed] = useState(false);
+  const url = getFaviconUrl(hostname);
+  const show = !!url && !failed;
+  return (
+    <div
+      className={cn(
+        'flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border',
+        show ? 'bg-white p-1 dark:border-border/60' : 'bg-primary/5 dark:bg-primary/10',
+      )}
+    >
+      {show ? (
+        <img
+          src={url ?? ''}
+          alt={hostname ?? 'MCP server icon'}
+          width={20}
+          height={20}
+          className="size-5 object-contain"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <Boxes size={16} className="text-primary" />
+      )}
+    </div>
+  );
+}
+
+function TimeoutDial({ value }: { value: number }) {
+  const min = 1;
+  const max = 300;
+  const pct = Math.max(0, Math.min(1, (value - min) / (max - min)));
+  const size = 132;
+  const stroke = 8;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const arcSpan = c * 0.78;
+  const arc = pct * arcSpan;
+
+  return (
+    <div className="relative mx-auto flex h-[132px] w-[132px] items-center justify-center">
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="-rotate-[130deg]"
+        aria-hidden="true"
+      >
+        <defs>
+          <linearGradient id="mcp-dial-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="currentColor" stopOpacity="0.55" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="1" />
+          </linearGradient>
+        </defs>
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={`${arcSpan} ${c}`}
+          className="text-border"
+        />
+        <g className="text-primary">
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke="url(#mcp-dial-gradient)"
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={`${arc} ${c}`}
+            className="transition-all duration-300"
+          />
+        </g>
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-[30px] font-semibold leading-none tabular-nums tracking-tight text-foreground">
+          {value}
+        </span>
+        <span className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+          seconds
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function ProtocolCard({
+  selected,
+  onSelect,
+  title,
+  description,
+  diagram,
+  badge,
+}: {
+  selected: boolean;
+  onSelect: () => void;
+  title: string;
+  description: string;
+  diagram: 'shttp' | 'sse';
+  badge?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        'group relative flex flex-col gap-3 overflow-hidden rounded-lg border bg-background p-4 text-left transition-all',
+        selected
+          ? 'border-primary ring-2 ring-primary/25 shadow-sm'
+          : 'border-border hover:border-primary/40 hover:bg-muted/20 hover:shadow-sm',
+      )}
+    >
+      {selected && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 rounded-lg bg-gradient-to-br from-primary/[0.06] to-transparent"
+        />
+      )}
+
+      <div className="relative flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-[13px] font-semibold text-foreground">{title}</span>
+          {badge && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9.5px] font-medium text-primary">
+              <Sparkles size={9} />
+              {badge}
+            </span>
+          )}
+        </div>
+        <span
+          className={cn(
+            'flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+            selected ? 'border-primary bg-primary' : 'border-border bg-background',
+          )}
+        >
+          {selected && <Check size={10} className="text-primary-foreground" strokeWidth={3} />}
+        </span>
+      </div>
+
+      <ProtocolDiagram type={diagram} active={selected} />
+
+      <p className="relative text-[12px] leading-relaxed text-muted-foreground">{description}</p>
+    </button>
+  );
+}
+
+function ProtocolDiagram({ type, active }: { type: 'shttp' | 'sse'; active: boolean }) {
+  const gradientId = `mcp-proto-${type}`;
+  return (
+    <div
+      className={cn(
+        'rounded-md border bg-muted/30 px-3 py-2 transition-colors',
+        active ? 'border-primary/30 text-primary' : 'border-border text-muted-foreground',
+      )}
+    >
+      <svg viewBox="0 0 200 48" className="h-10 w-full" aria-hidden="true">
+        <defs>
+          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="currentColor" stopOpacity="0.4" />
+            <stop offset="50%" stopColor="currentColor" stopOpacity="1" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="0.4" />
+          </linearGradient>
+        </defs>
+
+        <circle cx="20" cy="24" r="4" fill="currentColor" />
+        <text
+          x="20"
+          y="44"
+          textAnchor="middle"
+          className="fill-current text-[8px] uppercase tracking-wider opacity-60"
+        >
+          srv
+        </text>
+        <circle cx="180" cy="24" r="4" fill="currentColor" />
+        <text
+          x="180"
+          y="44"
+          textAnchor="middle"
+          className="fill-current text-[8px] uppercase tracking-wider opacity-60"
+        >
+          tone
+        </text>
+
+        {type === 'shttp' ? (
+          <>
+            <path
+              d="M 28 24 Q 50 10 72 24 T 116 24 T 160 24 L 172 24"
+              fill="none"
+              stroke={active ? `url(#${gradientId})` : 'currentColor'}
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+            <path
+              d="M 28 24 Q 50 38 72 24 T 116 24 T 160 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              opacity="0.45"
+              strokeDasharray="2,3"
+            />
+            <polygon points="172,24 168,21 168,27" fill="currentColor" />
+            <polygon points="28,24 32,21 32,27" fill="currentColor" opacity="0.45" />
+          </>
+        ) : (
+          <>
+            <line
+              x1="28"
+              y1="24"
+              x2="172"
+              y2="24"
+              stroke={active ? `url(#${gradientId})` : 'currentColor'}
+              strokeWidth="1.5"
+              strokeDasharray="6,5"
+              strokeLinecap="round"
+            />
+            <circle cx="60" cy="24" r="2.5" fill="currentColor" />
+            <circle cx="100" cy="24" r="2.5" fill="currentColor" />
+            <circle cx="140" cy="24" r="2.5" fill="currentColor" />
+            <polygon points="172,24 167,21 167,27" fill="currentColor" />
+          </>
+        )}
+      </svg>
+    </div>
+  );
+}

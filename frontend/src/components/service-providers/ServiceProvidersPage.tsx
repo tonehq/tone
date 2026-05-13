@@ -3,18 +3,25 @@
 import { fetchServicesAtom, servicesAtom, upsertServiceAtom } from '@/atoms/ProviderAtom';
 import ServiceCard from '@/components/service-providers/ServiceCard';
 import ServiceUpsertModal from '@/components/service-providers/ServiceUpsertModal';
+import SectionTitle from '@/components/settings/SectionTitle';
 import { CustomButton } from '@/components/shared';
+import ToneLoader from '@/components/shared/ToneLoader';
 import { deleteService as deleteServiceApi } from '@/services/providerService';
 import type { Service, ServiceUpsertPayload } from '@/types/provider';
-import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
-import { Loader2, Plug, Plus, Search } from 'lucide-react';
+import { BrainCircuit, Loader2, Mic, Plug, Plus, Search, Volume2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { PROVIDER_TYPE_TABS, SERVICES_PAGE_SIZE } from './constants';
+import { SERVICE_TYPE_SECTIONS, SERVICES_PAGE_SIZE } from './constants';
+
+const SECTION_ICONS: Record<string, { icon: React.ElementType; color: string }> = {
+  llm: { icon: BrainCircuit, color: 'text-violet-600 dark:text-violet-400' },
+  stt: { icon: Mic, color: 'text-sky-600 dark:text-sky-400' },
+  tts: { icon: Volume2, color: 'text-amber-600 dark:text-amber-400' },
+};
 
 export default function ServiceProvidersPage() {
   const router = useRouter();
@@ -25,7 +32,6 @@ export default function ServiceProvidersPage() {
   const hasFetchedRef = useRef(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
@@ -35,12 +41,11 @@ export default function ServiceProvidersPage() {
   const buildParams = useCallback(
     (page: number, nameOverride?: string) => {
       const params: Record<string, unknown> = { page, page_size: SERVICES_PAGE_SIZE };
-      if (activeTab !== 'all') params.service_type = activeTab;
       const name = nameOverride ?? searchQuery;
       if (name.trim()) params.name = name.trim();
       return params;
     },
-    [activeTab, searchQuery],
+    [searchQuery],
   );
 
   // ── Initial Fetch ────────────────────────────────────────────────
@@ -70,18 +75,6 @@ export default function ServiceProvidersPage() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     },
     [],
-  );
-
-  // ── Tab change ───────────────────────────────────────────────────
-
-  const handleTabChange = useCallback(
-    (tab: string) => {
-      setActiveTab(tab);
-      const params: Record<string, unknown> = { page: 1, page_size: SERVICES_PAGE_SIZE };
-      if (tab !== 'all') params.service_type = tab;
-      fetchServices({ params }).catch(handleApiError);
-    },
-    [fetchServices],
   );
 
   // ── Infinite Scroll ──────────────────────────────────────────────
@@ -167,6 +160,16 @@ export default function ServiceProvidersPage() {
 
   const total = servicesState.pagination?.total ?? servicesState.services.length;
 
+  // Group services by service_type for the three sections
+  const servicesByType = useMemo(() => {
+    const groups: Record<string, Service[]> = { llm: [], stt: [], tts: [] };
+    for (const svc of servicesState.services) {
+      const key = (svc.service_type ?? '').toLowerCase();
+      if (key in groups) groups[key].push(svc);
+    }
+    return groups;
+  }, [servicesState.services]);
+
   return (
     <div className="animate-page flex h-full flex-col p-6">
       {/* Header */}
@@ -182,9 +185,9 @@ export default function ServiceProvidersPage() {
         </CustomButton>
       </div>
 
-      {/* Toolbar: Search + Tabs */}
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-        <div className="relative flex-1">
+      {/* Toolbar: Search */}
+      <div className="mb-4">
+        <div className="relative max-w-md">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
@@ -197,49 +200,16 @@ export default function ServiceProvidersPage() {
             className="h-9 w-full cursor-text rounded-lg border border-input bg-background pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground transition-colors focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
           />
         </div>
-        <div className="flex gap-1 rounded-lg border border-border bg-muted/40 p-1">
-          {PROVIDER_TYPE_TABS.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => handleTabChange(tab.key)}
-              className={cn(
-                'flex cursor-pointer items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-all',
-                activeTab === tab.key
-                  ? 'bg-background text-foreground shadow-sm ring-1 ring-border/50'
-                  : 'text-muted-foreground hover:bg-background/50 hover:text-foreground',
-              )}
-            >
-              {tab.icon}
-              <span>{tab.label}</span>
-            </button>
-          ))}
-        </div>
       </div>
 
-      {/* Grid content */}
-      <div ref={scrollContainerRef} className="min-h-0 flex-1 overflow-y-auto">
+      {/* Sections content */}
+      <div
+        ref={scrollContainerRef}
+        className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
         {servicesState.loading ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="size-10 shrink-0 animate-pulse rounded-lg bg-muted" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 w-32 animate-pulse rounded bg-muted" />
-                    <div className="h-3 w-20 animate-pulse rounded bg-muted" />
-                  </div>
-                </div>
-                <div className="border-t border-border/60" />
-                <div className="flex gap-3">
-                  <div className="h-3 w-14 animate-pulse rounded bg-muted" />
-                  <div className="h-3 w-16 animate-pulse rounded bg-muted" />
-                  <div className="h-3 w-20 animate-pulse rounded bg-muted" />
-                </div>
-              </div>
-            ))}
+          <div className="flex h-full items-center justify-center">
+            <ToneLoader label="Loading services..." />
           </div>
         ) : servicesState.services.length === 0 ? (
           <div className="flex flex-col items-center gap-4 py-20">
@@ -264,17 +234,34 @@ export default function ServiceProvidersPage() {
           </div>
         ) : (
           <>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {servicesState.services.map((svc) => (
-                <ServiceCard
-                  key={svc.uuid}
-                  service={svc}
-                  onNavigate={() => router.push(`/service-providers/${svc.service_provider_id}`)}
-                  onEdit={() => openEdit(svc)}
-                  onDelete={() => handleDelete(svc)}
-                />
-              ))}
-            </div>
+            {SERVICE_TYPE_SECTIONS.map((section) => {
+              const sectionServices = servicesByType[section.key] ?? [];
+              if (sectionServices.length === 0) return null;
+              const { icon, color } = SECTION_ICONS[section.key];
+              return (
+                <section key={section.key} className="mb-8">
+                  <SectionTitle
+                    icon={icon}
+                    iconColor={color}
+                    title={section.title}
+                    count={sectionServices.length}
+                  />
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {sectionServices.map((svc) => (
+                      <ServiceCard
+                        key={svc.uuid}
+                        service={svc}
+                        onNavigate={() =>
+                          router.push(`/service-providers/${svc.service_provider_id}`)
+                        }
+                        onEdit={() => openEdit(svc)}
+                        onDelete={() => handleDelete(svc)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
 
             {/* Infinite scroll sentinel */}
             <div ref={sentinelRef} className="shrink-0">

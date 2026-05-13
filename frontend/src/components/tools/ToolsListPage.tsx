@@ -2,8 +2,8 @@
 
 import { deleteToolAtom, fetchToolsAtom, toolsAtom } from '@/atoms/ToolAtom';
 import { ActionMenu, CustomButton, CustomTable, TextInput } from '@/components/shared';
-import type { CustomTableColumn } from '@/types/components';
 import { TOOL_TYPE_HEADER } from '@/constants/toolForm';
+import type { CustomTableColumn } from '@/types/components';
 import type { Tool } from '@/types/tool';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
@@ -217,7 +217,7 @@ export default function ToolsListPage() {
           className="mt-5"
           onClick={() => router.push('/tools/create')}
         >
-          Create Tool
+          Create New Tool
         </CustomButton>
       )}
     </div>
@@ -238,7 +238,7 @@ export default function ToolsListPage() {
           icon={<Plus size={14} />}
           onClick={() => router.push('/tools/create')}
         >
-          Create Tool
+          Create New Tool
         </CustomButton>
       </div>
 

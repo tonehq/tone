@@ -30,7 +30,11 @@ export default function IntegrationCard({
         'bg-background shadow-sm dark:bg-card dark:shadow-none',
         hasItems
           ? 'border-border/80 dark:border-border/50'
-          : 'border-border/60 hover:border-border hover:shadow-md dark:border-border/30 dark:hover:border-border/50 dark:hover:shadow-none',
+          : [
+              'border-border/60 dark:border-border/30',
+              'hover:border-primary hover:bg-primary/[0.02] hover:shadow-md hover:shadow-primary/10',
+              'dark:hover:border-primary dark:hover:bg-primary/[0.04] dark:hover:shadow-none',
+            ],
       )}
     >
       {hasItems && <div className={cn('h-[2px] w-full dark:opacity-60', config.accentColor)} />}

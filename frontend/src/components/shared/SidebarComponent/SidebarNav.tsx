@@ -16,7 +16,12 @@ export function SidebarNav({ isExpanded, onMenuClick }: SidebarNavProps) {
   const isActive = (path: string) => pathname === path || pathname?.startsWith(`${path}/`);
 
   return (
-    <nav className={cn('flex-1 overflow-y-auto py-3', isExpanded ? 'px-3' : 'px-2')}>
+    <nav
+      className={cn(
+        'flex-1 overflow-y-auto py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+        isExpanded ? 'px-3' : 'px-2',
+      )}
+    >
       {sidebarSections.map((section, index) => (
         <div key={section.heading}>
           {isExpanded ? (
