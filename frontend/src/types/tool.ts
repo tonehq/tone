@@ -1,4 +1,4 @@
-export type ToolType = 'custom' | 'send_sms' | 'google_calendar' | 'google_sheets';
+export type ToolType = 'custom' | 'send_sms' | 'google_calendar' | 'google_sheets' | 'mcp';
 
 export interface Tool {
   id: number;
@@ -13,6 +13,7 @@ export interface Tool {
   auth_config: Record<string, string> | null;
   meta_data: Record<string, unknown> | null;
   oauth_connection_id: number | null;
+  mcp_server_id?: number | null;
   is_active: boolean;
   is_template?: boolean;
   created_at: number;

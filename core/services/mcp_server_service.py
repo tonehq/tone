@@ -6,6 +6,7 @@ from fastapi import HTTPException, status
 
 from core.services.base import BaseService
 from core.models.mcp_server import McpServer, AgentMcpServer
+from core.models.tool import Tool
 from core.utils.encryption import encrypt, decrypt
 
 
@@ -86,6 +87,50 @@ class McpServerService(BaseService):
                 detail=f"An MCP server with name '{name}' already exists in this organization",
             )
 
+    def _sync_mcp_tools(self, mcp_server: McpServer, discovered_tools: list) -> None:
+        """Sync discovered MCP tools into the tools table."""
+        existing_tools = (
+            self.db.query(Tool)
+            .filter(Tool.mcp_server_id == mcp_server.id, Tool.organization_id == self.org_id)
+            .all()
+        )
+        existing_map = {t.name: t for t in existing_tools}
+        discovered_names = {t["name"] for t in discovered_tools}
+
+        # Delete tools no longer present
+        for name, tool in existing_map.items():
+            if name not in discovered_names:
+                self.db.delete(tool)
+
+        now = int(time.time())
+        for dt in discovered_tools:
+            params = {"properties": dt.get("parameters", {}), "required": dt.get("required", [])}
+            if dt["name"] in existing_map:
+                # Update if changed
+                existing_tool = existing_map[dt["name"]]
+                if existing_tool.description != (dt.get("description") or "") or existing_tool.parameters != params:
+                    existing_tool.description = dt.get("description") or ""
+                    existing_tool.parameters = params
+                    existing_tool.updated_at = now
+            else:
+                # Create new
+                import uuid as uuid_lib
+                tool = Tool(
+                    uuid=uuid_lib.uuid4(),
+                    name=dt["name"],
+                    description=dt.get("description") or "",
+                    tool_type="mcp",
+                    parameters=params,
+                    mcp_server_id=mcp_server.id,
+                    organization_id=self.org_id,
+                    is_active=True,
+                    created_at=now,
+                    updated_at=now,
+                )
+                self.db.add(tool)
+
+        self.db.commit()
+
     def _validate_transport_type(self, transport_type: str) -> None:
         if transport_type not in self.VALID_TRANSPORT_TYPES:
             raise HTTPException(
@@ -113,6 +158,7 @@ class McpServerService(BaseService):
 
             # Validate connection if connection-related fields changed
             connection_fields = {"server_url", "transport_type", "auth_config"}
+            validation_result = None
             if connection_fields & update_data.keys():
                 validate_url = update_data.get("server_url", existing.server_url)
                 validate_transport = update_data.get("transport_type", existing.transport_type)
@@ -120,7 +166,7 @@ class McpServerService(BaseService):
                     validate_auth = update_data["auth_config"]
                 else:
                     validate_auth = decrypt_auth_config(existing.auth_config)
-                await self.validate_mcp_connection(validate_url, validate_transport, validate_auth)
+                validation_result = await self.validate_mcp_connection(validate_url, validate_transport, validate_auth)
 
             if "auth_config" in update_data:
                 update_data["auth_config"] = encrypt_auth_config(update_data["auth_config"])
@@ -130,6 +176,8 @@ class McpServerService(BaseService):
             existing.updated_at = now
             self.db.commit()
             self.db.refresh(existing)
+            if validation_result:
+                self._sync_mcp_tools(existing, validation_result["tools"])
             return existing
 
         # Create new MCP server
@@ -148,7 +196,7 @@ class McpServerService(BaseService):
         self._validate_transport_type(transport_type)
 
         # Validate connection before persisting
-        await self.validate_mcp_connection(
+        validation_result = await self.validate_mcp_connection(
             data["server_url"], transport_type, data.get("auth_config")
         )
 
@@ -168,6 +216,7 @@ class McpServerService(BaseService):
         self.db.add(mcp_server)
         self.db.commit()
         self.db.refresh(mcp_server)
+        self._sync_mcp_tools(mcp_server, validation_result["tools"])
         return mcp_server
 
     def get_mcp_servers(self) -> List[McpServer]:
@@ -339,6 +388,7 @@ class McpServerService(BaseService):
         result = await self.validate_mcp_connection(
             mcp_server.server_url, mcp_server.transport_type, decrypted_auth
         )
+        self._sync_mcp_tools(mcp_server, result["tools"])
         return {
             "server_name": mcp_server.name,
             "server_url": mcp_server.server_url,
