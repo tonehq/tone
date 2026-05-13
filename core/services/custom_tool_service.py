@@ -172,16 +172,17 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
         message = arguments.get("message", "")
         logger.info("Built-in tool 'send_sms' called. Sending SMS to {}", caller_number)
         _t_start = _time.monotonic()
+        meta = tool.meta_data or {}
+        recipient = meta.get("to_number") or caller_number
         tool_call_entry = {
             "tool": "send_sms",
             "tool_type": "send_sms",
-            "arguments": {"message": message, "to": caller_number},
+            "arguments": {"message": message, "to": recipient},
             "timestamp": int(_time.time()),
             "turn": current_turn["number"] if current_turn else None,
         }
 
         auth = tool.auth_config or {}
-        meta = tool.meta_data or {}
         account_sid = auth.get("account_sid")
         auth_token = auth.get("auth_token")
         from_number = meta.get("from_number")
@@ -195,13 +196,13 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
             await params.result_callback("Error: SMS tool is not configured. Missing Twilio credentials.")
             return
 
-        if not caller_number:
-            logger.error("send_sms tool: no caller phone number available")
-            tool_call_entry["result"] = "error: no caller number"
+        if not recipient:
+            logger.error("send_sms tool: no recipient phone number available")
+            tool_call_entry["result"] = "error: no recipient number"
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
             if tool_call_entries is not None:
                 tool_call_entries.append(tool_call_entry)
-            await params.result_callback("Error: Caller phone number is not available for this call.")
+            await params.result_callback("Error: No recipient phone number is available for this call.")
             return
 
         try:
@@ -212,13 +213,13 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
                     auth=(account_sid, auth_token),
                     data={
                         "From": from_number,
-                        "To": caller_number,
+                        "To": recipient,
                         "Body": message,
                     },
                 )
 
             if response.status_code == 201:
-                logger.info("SMS sent successfully to {}", caller_number)
+                logger.info("SMS sent successfully to {}", recipient)
                 tool_call_entry["result"] = "success"
                 tool_call_entry["status_code"] = response.status_code
                 tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
