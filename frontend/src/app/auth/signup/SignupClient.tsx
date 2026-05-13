@@ -1,26 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 
-import { debounce } from 'lodash';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { GoogleIcon } from '@/components/icons/google';
 import { CustomButton, CustomLink, TextInput } from '@/components/shared';
 import { type SignupFormData, signupSchema } from '@/schemas/auth';
 import { signup } from '@/services/auth/helper';
-import axios from '@/utils/axios';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import Container from '../shared/ContainerComponent';
-
-interface ExistingOrg {
-  id: number;
-  name: string;
-  slug: string;
-  allow_access_requests: boolean;
-}
 
 const SignupClient = () => {
   const [_isLoading, setIsLoading] = useState(true);
@@ -29,12 +20,10 @@ const SignupClient = () => {
   const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [loader, setLoader] = useState(false);
   const [active, setActive] = useState(0);
-  const [existingOrg, setExistingOrg] = useState<ExistingOrg | null>(null);
-  const [_checkingOrg, setCheckingOrg] = useState(false);
 
   const { control, handleSubmit } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
-    defaultValues: { email: '', password: '', org_name: '' },
+    defaultValues: { email: '', password: '' },
   });
 
   useEffect(() => {
@@ -52,52 +41,11 @@ const SignupClient = () => {
     return () => clearTimeout(loadingTimeoutRef.current);
   }, []);
 
-  const checkOrgExists = useCallback(
-    debounce(async (orgName: string) => {
-      if (!orgName || orgName.trim().length < 2) {
-        setExistingOrg(null);
-        return;
-      }
-
-      setCheckingOrg(true);
-      try {
-        const res = await axios.get(
-          `/auth/check_organization_exists?name=${encodeURIComponent(orgName.trim())}`,
-        );
-        if (res.data.exists) {
-          setExistingOrg(res.data.organization);
-        } else {
-          setExistingOrg(null);
-        }
-      } catch {
-        setExistingOrg(null);
-      } finally {
-        setCheckingOrg(false);
-      }
-    }, 500),
-    [],
-  );
-
   const onSubmit = async (values: SignupFormData) => {
-    if (existingOrg) {
-      showToast.warning(
-        'Organization Exists',
-        'An organization with this name already exists. Please choose a different name or request access.',
-        5,
-      );
-      return;
-    }
-
     setLoader(true);
 
     try {
-      const res: any = await signup(
-        values.email,
-        values.password,
-        {},
-        params.get('firebase_uid'),
-        values.org_name,
-      );
+      const res: any = await signup(values.email, values.password, {}, params.get('firebase_uid'));
       showToast.success('Account Created', 'Please check your email for verification', 4);
       if (params.get('firebase_signup') === 'true') {
         router.push('/home');
@@ -145,15 +93,6 @@ const SignupClient = () => {
             placeholder="Create a password"
             isRequired
           />
-          <TextInput
-            name="org_name"
-            control={control}
-            type="text"
-            label="Organisation name (optional)"
-            placeholder="Enter your organisation name"
-            onValueChange={(value) => checkOrgExists(value)}
-          />
-
           <div className="space-y-3">
             <CustomButton loading={loader} type="primary" htmlType="submit" fullWidth>
               Create account

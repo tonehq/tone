@@ -41,3 +41,8 @@ export const updateOrganization = async (
 export const deleteOrganization = async (orgId: string): Promise<void> => {
   await axios.delete('/organization/delete', { params: { org_id: orgId } });
 };
+
+export const switchOrganization = async (orgId: string) => {
+  const { data } = await axios.post('/auth/switch_organization', { organization_id: orgId });
+  return data;
+};

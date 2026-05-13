@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "name": "grill-me",
+  "owner": "vechain",
+  "repo": "vechain-ai-skills",
+  "path": "skills/grill-me",
+  "branch": "main",
+  "sha": "cf415386836c80a6e3c17f112864ab71d5ef3c87",
+  "source": "manual"
+}
