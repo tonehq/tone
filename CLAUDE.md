@@ -125,7 +125,10 @@ The `pipecat/` directory is a custom fork (`tonehq/pipecat`) of the Pipecat AI f
 .claude/skills/provisioning-db/SKILL.md
 
 -For provisioning a Vultr Kubernetes Engine (VKE) cluster with node pools and add-ons
-.claude/skills/provisioning-cluster/SKILL.md
+.claude/skills/provisioning-cluster/provisioning-vultr/SKILL.md
+
+-For complete end-to-end environment provisioning (DB + Secrets + Cluster + Manifests + Migrations in one run)
+.claude/skills/provisioning-environment/SKILL.md
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
