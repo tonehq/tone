@@ -9,7 +9,7 @@ Orchestrate full environment setup: Git branch + Kubernetes manifests + GitHub A
 
 ## Step 1: Get Input from User
 
-Ask the user for these 3 values only:
+Ask the user to type these 3 values as free text. Do NOT use preset option lists — let the user type freely:
 
 | Parameter | Description | Example |
 |-----------|-------------|---------|

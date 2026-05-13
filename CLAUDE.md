@@ -121,6 +121,15 @@ The `pipecat/` directory is a custom fork (`tonehq/pipecat`) of the Pipecat AI f
 -For generating GitHub Actions CI/CD workflow only
 .claude/skills/generate-github-actions/SKILL.md
 
+-For provisioning a Neon database and configuring Infisical secrets for a new environment
+.claude/skills/provisioning-db/SKILL.md
+
+-For provisioning a Vultr Kubernetes Engine (VKE) cluster with node pools and add-ons
+.claude/skills/provisioning-cluster/provisioning-vultr/SKILL.md
+
+-For complete end-to-end environment provisioning (DB + Secrets + Cluster + Manifests + Migrations in one run)
+.claude/skills/provisioning-environment/SKILL.md
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
