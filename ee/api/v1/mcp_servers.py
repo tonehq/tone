@@ -1,7 +1,7 @@
 from uuid import UUID
 from typing import List, Dict, Any
 
-from fastapi import APIRouter, Body, Depends, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -34,15 +34,31 @@ def _get_service(claims: EEJWTClaims, db: Session) -> McpServerService:
 
 
 @router.post("/upsert_mcp_server", status_code=status.HTTP_200_OK)
-def upsert_mcp_server(
+async def upsert_mcp_server(
     data: Dict[str, Any] = Body(...),
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
     """Create or update an MCP server. Send id to update; send name and server_url to create."""
     svc = _get_service(claims, db)
-    mcp_server = svc.upsert_mcp_server(data)
+    mcp_server = await svc.upsert_mcp_server(data)
     return svc.mcp_server_response(mcp_server)
+
+
+@router.post("/validate_mcp_server", status_code=status.HTTP_200_OK)
+async def validate_mcp_server(
+    data: Dict[str, Any] = Body(...),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    """Validate an MCP server connection without creating it. Returns discovered tools on success."""
+    svc = _get_service(claims, db)
+    server_url = data.get("server_url")
+    transport_type = data.get("transport_type", "streamable_http")
+    auth_config = data.get("auth_config")
+    if not server_url:
+        raise HTTPException(status_code=400, detail="server_url is required")
+    return await svc.validate_mcp_connection(server_url, transport_type, auth_config)
 
 
 @router.get("/get_all_mcp_servers")
