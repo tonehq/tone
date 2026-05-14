@@ -64,24 +64,26 @@ async def _async_main(bot_fn, WSRunnerArgs, agent, agent_id, transport_type, cal
         transport_type,
     )
 
-    try:
-        body = {
-            "call_data": call_data,
-            "transport_type": transport_type,
-            "agent_id": agent_id,
-            "agent": agent,
-            "_prefetched_services": prefetched_services,
-        }
-        runner_args = WSRunnerArgs(websocket=pipe_ws, body=body)
-        await bot_fn(runner_args)
-    except Exception:
-        logger.exception("Bot worker pipe error")
-    finally:
+    trace_id = call_data.get("_trace_id", "none")
+    with logger.contextualize(trace_id=trace_id):
         try:
-            os.close(ipc_write_fd)
-        except OSError:
-            pass
-        logger.info("Bot worker subprocess finished: agent_id=%s", agent_id)
+            body = {
+                "call_data": call_data,
+                "transport_type": transport_type,
+                "agent_id": agent_id,
+                "agent": agent,
+                "_prefetched_services": prefetched_services,
+            }
+            runner_args = WSRunnerArgs(websocket=pipe_ws, body=body)
+            await bot_fn(runner_args)
+        except Exception:
+            logger.exception("Bot worker pipe error")
+        finally:
+            try:
+                os.close(ipc_write_fd)
+            except OSError:
+                pass
+            logger.info("Bot worker subprocess finished: agent_id=%s", agent_id)
 
 
 def main():
@@ -93,6 +95,10 @@ def main():
     args = parser.parse_args()
 
     call_data = json.loads(args.call_data)
+
+    # Configure loguru with trace_id format for subprocess
+    from core.logging import setup_logging
+    setup_logging()
 
     # --- Redirect stdout to stderr FIRST (before any imports that might print) ---
     from core.services.pipe_ipc import setup_subprocess_ipc
