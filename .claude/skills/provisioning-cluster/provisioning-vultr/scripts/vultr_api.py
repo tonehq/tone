@@ -24,6 +24,7 @@ Usage:
     python vultr_api.py create-namespace --env-name <ENV> --namespace <NS>
     python vultr_api.py create-secret-generic --env-name <ENV> --namespace <NS> --name <NAME> --literals KEY=VAL ...
     python vultr_api.py create-secret-docker --env-name <ENV> --namespace <NS> --username <USER> --password <PASS>
+    python vultr_api.py install-grafana-alloy --env-name <ENV> --cluster-name <NAME> --loki-url <URL> --loki-user <ID> --prom-url <URL> --prom-user <ID> --api-key <KEY>
     python vultr_api.py verify-cluster --env-name <ENV> --namespace <NS>
 """
 
@@ -762,6 +763,137 @@ def cmd_wait_for_nodes(args):
     sys.exit(1)
 
 
+def cmd_install_grafana_alloy(args):
+    """Install Grafana Alloy DaemonSet for log and metrics collection.
+
+    Deploys Alloy to a 'monitoring' namespace via Helm, configured to push
+    logs to Grafana Cloud Loki and metrics to Grafana Cloud Prometheus.
+    """
+    import tempfile
+    import time
+
+    kc = kubeconfig_path(args.env_name)
+    env = {**os.environ, "KUBECONFIG": kc}
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    template_path = os.path.join(script_dir, "..", "templates", "alloy-values.yaml")
+
+    # Step 1: Add Grafana Helm repo
+    sys.stderr.write("Adding Grafana Helm repo...\n")
+    subprocess.run(
+        ["helm", "repo", "add", "grafana", "https://grafana.github.io/helm-charts"],
+        capture_output=True, text=True, timeout=30, env=env
+    )
+    subprocess.run(
+        ["helm", "repo", "update"],
+        capture_output=True, text=True, timeout=60, env=env
+    )
+
+    # Step 2: Create monitoring namespace
+    sys.stderr.write("Creating monitoring namespace...\n")
+    dry_result = subprocess.run(
+        ["kubectl", "create", "namespace", "monitoring", "--dry-run=client", "-o", "yaml"],
+        capture_output=True, text=True, timeout=10, env=env
+    )
+    apply_result = subprocess.run(
+        ["kubectl", "apply", "-f", "-"],
+        input=dry_result.stdout, capture_output=True, text=True, timeout=15, env=env
+    )
+    if apply_result.returncode != 0:
+        print(json.dumps({"status": "error", "error": apply_result.stderr.strip(), "step": "create_namespace"}))
+        sys.exit(1)
+
+    # Step 3: Create Grafana Cloud credentials secret
+    sys.stderr.write("Creating Grafana Cloud credentials secret...\n")
+    secret_dry = subprocess.run(
+        ["kubectl", "create", "secret", "generic", "grafana-cloud-credentials",
+         "--namespace=monitoring",
+         f"--from-literal=loki-url={args.loki_url}",
+         f"--from-literal=loki-user={args.loki_user}",
+         f"--from-literal=prom-url={args.prom_url}",
+         f"--from-literal=prom-user={args.prom_user}",
+         f"--from-literal=api-key={args.api_key}",
+         "--dry-run=client", "-o", "yaml"],
+        capture_output=True, text=True, timeout=10, env=env
+    )
+    secret_apply = subprocess.run(
+        ["kubectl", "apply", "-f", "-"],
+        input=secret_dry.stdout, capture_output=True, text=True, timeout=15, env=env
+    )
+    if secret_apply.returncode != 0:
+        print(json.dumps({"status": "error", "error": secret_apply.stderr.strip(), "step": "create_secret"}))
+        sys.exit(1)
+
+    # Step 4: Generate values file from template
+    sys.stderr.write("Generating Alloy values from template...\n")
+    if not os.path.exists(template_path):
+        print(json.dumps({"status": "error", "error": f"Template not found: {template_path}"}))
+        sys.exit(1)
+
+    with open(template_path, "r") as f:
+        values_content = f.read()
+
+    values_content = values_content.replace("${CLUSTER_NAME}", args.cluster_name)
+    values_content = values_content.replace("${LOKI_URL}", args.loki_url)
+    values_content = values_content.replace("${LOKI_USER}", args.loki_user)
+    values_content = values_content.replace("${PROM_URL}", args.prom_url)
+    values_content = values_content.replace("${PROM_USER}", args.prom_user)
+    values_content = values_content.replace("${API_KEY}", args.api_key)
+
+    # Write to temp file
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as tmp:
+        tmp.write(values_content)
+        tmp_path = tmp.name
+
+    # Step 5: Helm install Alloy
+    sys.stderr.write("Installing Grafana Alloy via Helm...\n")
+    helm_cmd = [
+        "helm", "upgrade", "--install", "alloy", "grafana/alloy",
+        "--namespace", "monitoring",
+        "--values", tmp_path,
+        "--wait",
+        "--timeout", "120s",
+    ]
+    helm_result = subprocess.run(helm_cmd, capture_output=True, text=True, timeout=180, env=env)
+
+    # Clean up temp file
+    try:
+        os.unlink(tmp_path)
+    except OSError:
+        pass
+
+    if helm_result.returncode != 0:
+        print(json.dumps({
+            "status": "error",
+            "error": helm_result.stderr.strip() or helm_result.stdout.strip(),
+            "step": "helm_install",
+        }))
+        sys.exit(1)
+
+    # Step 6: Verify DaemonSet
+    sys.stderr.write("Verifying Alloy DaemonSet...\n")
+    time.sleep(5)  # Brief pause for DaemonSet to schedule pods
+
+    ds_result = subprocess.run(
+        ["kubectl", "get", "daemonset", "-n", "monitoring", "-o", "wide"],
+        capture_output=True, text=True, timeout=15, env=env
+    )
+
+    pods_result = subprocess.run(
+        ["kubectl", "get", "pods", "-n", "monitoring", "-o", "wide"],
+        capture_output=True, text=True, timeout=15, env=env
+    )
+
+    print(json.dumps({
+        "status": "ok",
+        "cluster_name": args.cluster_name,
+        "namespace": "monitoring",
+        "loki_url": args.loki_url,
+        "prom_url": args.prom_url,
+        "daemonset": ds_result.stdout.strip(),
+        "pods": pods_result.stdout.strip(),
+    }, indent=2))
+
+
 def cmd_verify_cluster(args):
     """Run verification checks on the cluster."""
     results = {}
@@ -889,6 +1021,16 @@ def main():
     p_sd.add_argument("--username", required=True)
     p_sd.add_argument("--password", required=True)
 
+    # Grafana Alloy observability
+    p_alloy = sub.add_parser("install-grafana-alloy", help="Install Grafana Alloy DaemonSet for logs + metrics")
+    p_alloy.add_argument("--env-name", required=True, help="Environment name (for kubeconfig selection)")
+    p_alloy.add_argument("--cluster-name", required=True, help="Cluster label for multi-cluster log separation")
+    p_alloy.add_argument("--loki-url", required=True, help="Grafana Cloud Loki push URL")
+    p_alloy.add_argument("--loki-user", required=True, help="Grafana Cloud Loki instance ID (basic auth username)")
+    p_alloy.add_argument("--prom-url", required=True, help="Grafana Cloud Prometheus remote write URL")
+    p_alloy.add_argument("--prom-user", required=True, help="Grafana Cloud Prometheus instance ID (basic auth username)")
+    p_alloy.add_argument("--api-key", required=True, help="Grafana Cloud API token (basic auth password)")
+
     # Verification
     p_verify = sub.add_parser("verify-cluster", help="Verify cluster setup")
     p_verify.add_argument("--env-name", required=True)
@@ -916,6 +1058,7 @@ def main():
         "create-namespace": cmd_create_namespace,
         "create-secret-generic": cmd_create_secret_generic,
         "create-secret-docker": cmd_create_secret_docker,
+        "install-grafana-alloy": cmd_install_grafana_alloy,
         "verify-cluster": cmd_verify_cluster,
     }
 
