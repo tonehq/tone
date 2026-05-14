@@ -20,6 +20,7 @@ from pipecat.transports.websocket.fastapi import (FastAPIWebsocketParams,
 
 from core.bot import bot, run_bot
 from core.database.session import get_db_context
+from core.logging import make_trace_id
 from core.models.agent import Agent
 from core.serializers.raw_pcm import RawPCMSerializer
 from core.services.bot_runner_service import BotRunnerService
@@ -78,6 +79,10 @@ async def telephony_websocket(websocket: WebSocket):
 
         logger.info("[TIMING] get_bot_for_incoming_call total (+%.3fs)", _time.monotonic() - _t_bot_runner)
 
+        # Generate trace_id for this call
+        trace_id = make_trace_id(agent_id=agent.id if agent else 0)
+        call_data["_trace_id"] = trace_id
+
         # Check if subprocess mode is enabled
         use_subprocess = os.environ.get("USE_SUBPROCESS_BOT", "false").lower() == "true"
         if use_subprocess and agent is not None:
@@ -104,13 +109,14 @@ async def telephony_websocket(websocket: WebSocket):
                     "updated_at": agent.updated_at,
                     "_prefetched_services": prefetched_services,
                 }
-                await SubprocessBotManager.launch(
-                    websocket=websocket,
-                    agent_id=str(agent.id),
-                    transport_type=transport_type,
-                    call_data=call_data,
-                    agent_data=agent_data,
-                )
+                with logger.contextualize(trace_id=trace_id):
+                    await SubprocessBotManager.launch(
+                        websocket=websocket,
+                        agent_id=str(agent.id),
+                        transport_type=transport_type,
+                        call_data=call_data,
+                        agent_data=agent_data,
+                    )
                 return
             except Exception as e:
                 logger.error(
@@ -127,15 +133,17 @@ async def telephony_websocket(websocket: WebSocket):
 
     except Exception as e:
         import traceback
+        trace_id = make_trace_id(agent_id=0)
         logger.warning(
             f"Bot runner service failed, calling bot without pre-parsed data: {e}\n{traceback.format_exc()}"
         )
 
     runner_args = WebSocketRunnerArguments(websocket=websocket, body=body)
     _t_bot_call = _time.monotonic()
-    logger.info("[TIMING] calling bot() at +%.3fs from WS start", _t_bot_call - _t_ws_start)
-    await bot(runner_args)
-    logger.info("[TIMING] bot() finished, total WS duration: %.3fs", _time.monotonic() - _t_ws_start)
+    with logger.contextualize(trace_id=trace_id):
+        logger.info("[TIMING] calling bot() at +%.3fs from WS start", _t_bot_call - _t_ws_start)
+        await bot(runner_args)
+        logger.info("[TIMING] bot() finished, total WS duration: %.3fs", _time.monotonic() - _t_ws_start)
 
 
 @router.websocket("/ws/test")
@@ -206,24 +214,28 @@ async def test_websocket(websocket: WebSocket):
         ),
     )
 
+    trace_id = make_trace_id(agent_id=agent.id)
+
     body = {
         "agent": agent,
         "call_data": {
             "call_id": f"test-{int(_time.time())}",
             "from": "test-client",
             "to": agent_phone or str(agent.id),
+            "_trace_id": trace_id,
         },
         "transport_type": "test",
     }
     runner_args = WebSocketRunnerArguments(websocket=websocket, body=body)
 
-    logger.info("[TEST WS] running pipeline for agent: {} ({})", agent.name, agent.id)
-    try:
-        await run_bot(transport, runner_args)
-    except Exception as e:
-        logger.error("[TEST WS] pipeline error: {}", e)
-    finally:
-        logger.info("[TEST WS] finished, duration: {:.1f}s", _time.monotonic() - _t_start)
+    with logger.contextualize(trace_id=trace_id):
+        logger.info("[TEST WS] running pipeline for agent: {} ({})", agent.name, agent.id)
+        try:
+            await run_bot(transport, runner_args)
+        except Exception as e:
+            logger.error("[TEST WS] pipeline error: {}", e)
+        finally:
+            logger.info("[TEST WS] finished, duration: {:.1f}s", _time.monotonic() - _t_start)
         try:
             await websocket.close()
         except Exception:

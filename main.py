@@ -1,5 +1,9 @@
 import sys
 import os
+
+from core.logging import setup_logging
+setup_logging()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
