@@ -161,13 +161,49 @@ def get_document_names_for_agent(agent_id: int, org_id: Any) -> List[str]:
 
 
 def get_openai_api_key_for_agent(org_id: Any) -> Optional[str]:
-    """Fetch and decrypt the OpenAI API key from DB for embedding."""
+    """Fetch and decrypt the OpenAI API key from DB for embedding.
+
+    Tries new path first (Account with model_provider_menu → ApiKey.account_id),
+    then falls back to old path (ServiceProvider → ApiKey.service_provider_id).
+    """
     from core.database.session import get_db_context
     from core.models.service_provider import ServiceProvider
+    from core.models.account import Account
+    from core.models.model_provider_menu import ModelProviderMenu
     from core.models.api_key import ApiKey
     from core.utils.encryption import decrypt
 
     with get_db_context() as db:
+        # New path: Account linked to ModelProviderMenu
+        mpm = (
+            db.query(ModelProviderMenu)
+            .filter(ModelProviderMenu.name == "openai", ModelProviderMenu.provider_type == "llm")
+            .first()
+        )
+        if mpm:
+            acct = (
+                db.query(Account)
+                .filter(
+                    Account.model_provider_menu_id == mpm.id,
+                    Account.status == "active",
+                    Account.organization_id == org_id,
+                )
+                .first()
+            )
+            if acct:
+                api_key_record = (
+                    db.query(ApiKey)
+                    .filter(
+                        ApiKey.account_id == acct.id,
+                        ApiKey.status == "active",
+                        ApiKey.organization_id == org_id,
+                    )
+                    .first()
+                )
+                if api_key_record and api_key_record.api_key_encrypted:
+                    return decrypt(api_key_record.api_key_encrypted)
+
+        # Old path: ServiceProvider
         provider = (
             db.query(ServiceProvider)
             .filter(ServiceProvider.name == "openai", ServiceProvider.provider_type == "llm")
@@ -206,6 +242,8 @@ def register_document_tool(llm: Any, agent_id: int, org_id: Any, tool_call_entri
     from core.models.document import Document
     from core.models.upload import Upload
     from core.models.service_provider import ServiceProvider
+    from core.models.account import Account
+    from core.models.model_provider_menu import ModelProviderMenu
     from core.models.api_key import ApiKey
     from core.utils.encryption import decrypt
 
@@ -230,29 +268,59 @@ def register_document_tool(llm: Any, agent_id: int, org_id: Any, tool_call_entri
             return None
 
         # Query 2: Fetch OpenAI API key for embedding queries
-        provider = (
-            db.query(ServiceProvider)
-            .filter(ServiceProvider.name == "openai", ServiceProvider.provider_type == "llm")
-            .first()
-        )
-        if not provider:
-            logger.warning("No OpenAI provider found, skipping document tool")
-            return None
+        # Try new path first (Account), then old path (ServiceProvider)
+        api_key = None
 
-        api_key_record = (
-            db.query(ApiKey)
-            .filter(
-                ApiKey.service_provider_id == provider.id,
-                ApiKey.status == "active",
-                ApiKey.organization_id == org_id,
-            )
+        mpm = (
+            db.query(ModelProviderMenu)
+            .filter(ModelProviderMenu.name == "openai", ModelProviderMenu.provider_type == "llm")
             .first()
         )
-        if not api_key_record or not api_key_record.api_key_encrypted:
+        if mpm:
+            acct = (
+                db.query(Account)
+                .filter(
+                    Account.model_provider_menu_id == mpm.id,
+                    Account.status == "active",
+                    Account.organization_id == org_id,
+                )
+                .first()
+            )
+            if acct:
+                api_key_record = (
+                    db.query(ApiKey)
+                    .filter(
+                        ApiKey.account_id == acct.id,
+                        ApiKey.status == "active",
+                        ApiKey.organization_id == org_id,
+                    )
+                    .first()
+                )
+                if api_key_record and api_key_record.api_key_encrypted:
+                    api_key = decrypt(api_key_record.api_key_encrypted)
+
+        if not api_key:
+            provider = (
+                db.query(ServiceProvider)
+                .filter(ServiceProvider.name == "openai", ServiceProvider.provider_type == "llm")
+                .first()
+            )
+            if provider:
+                api_key_record = (
+                    db.query(ApiKey)
+                    .filter(
+                        ApiKey.service_provider_id == provider.id,
+                        ApiKey.status == "active",
+                        ApiKey.organization_id == org_id,
+                    )
+                    .first()
+                )
+                if api_key_record and api_key_record.api_key_encrypted:
+                    api_key = decrypt(api_key_record.api_key_encrypted)
+
+        if not api_key:
             logger.warning("No OpenAI API key found for org {}, skipping document tool", org_id)
             return None
-
-        api_key = decrypt(api_key_record.api_key_encrypted)
 
     # Build tool schema and handler
     tools_schema = get_document_tool_schema(doc_names)

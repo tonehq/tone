@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **tone** (12696 symbols, 50186 relationships, 293 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **Tone** (14367 symbols, 56473 relationships, 296 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -17,7 +17,7 @@ This project is indexed by GitNexus as **tone** (12696 symbols, 50186 relationsh
 
 1. `gitnexus_query({query: "<error or symptom>"})` — find execution flows related to the issue
 2. `gitnexus_context({name: "<suspect function>"})` — see all callers, callees, and process participation
-3. `READ gitnexus://repo/tone/process/{processName}` — trace the full execution flow step by step
+3. `READ gitnexus://repo/Tone/process/{processName}` — trace the full execution flow step by step
 4. For regressions: `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
 
 ## When Refactoring
@@ -56,10 +56,10 @@ This project is indexed by GitNexus as **tone** (12696 symbols, 50186 relationsh
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/tone/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/tone/clusters` | All functional areas |
-| `gitnexus://repo/tone/processes` | All execution flows |
-| `gitnexus://repo/tone/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/Tone/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/Tone/clusters` | All functional areas |
+| `gitnexus://repo/Tone/processes` | All execution flows |
+| `gitnexus://repo/Tone/process/{name}` | Step-by-step execution trace |
 
 ## Self-Check Before Finishing
 
@@ -97,27 +97,5 @@ To check whether embeddings exist, inspect `.gitnexus/meta.json` — the `stats.
 | Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
 | Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
-| Work in the Foundational area (1237 symbols) | `.claude/skills/generated/foundational/SKILL.md` |
-| Work in the Tests area (654 symbols) | `.claude/skills/generated/tests/SKILL.md` |
-| Work in the Services area (447 symbols) | `.claude/skills/generated/services/SKILL.md` |
-| Work in the Cartesia area (347 symbols) | `.claude/skills/generated/cartesia/SKILL.md` |
-| Work in the Test-cases area (250 symbols) | `.claude/skills/generated/test-cases/SKILL.md` |
-| Work in the Realtime area (194 symbols) | `.claude/skills/generated/realtime/SKILL.md` |
-| Work in the Daily area (183 symbols) | `.claude/skills/generated/daily/SKILL.md` |
-| Work in the V1 area (168 symbols) | `.claude/skills/generated/v1/SKILL.md` |
-| Work in the Aggregators area (161 symbols) | `.claude/skills/generated/aggregators/SKILL.md` |
-| Work in the Processors area (145 symbols) | `.claude/skills/generated/processors/SKILL.md` |
-| Work in the Frameworks area (108 symbols) | `.claude/skills/generated/frameworks/SKILL.md` |
-| Work in the Smallwebrtc area (108 symbols) | `.claude/skills/generated/smallwebrtc/SKILL.md` |
-| Work in the Openai_realtime_beta area (102 symbols) | `.claude/skills/generated/openai-realtime-beta/SKILL.md` |
-| Work in the Ui area (94 symbols) | `.claude/skills/generated/ui/SKILL.md` |
-| Work in the Frames area (94 symbols) | `.claude/skills/generated/frames/SKILL.md` |
-| Work in the Websocket area (88 symbols) | `.claude/skills/generated/websocket/SKILL.md` |
-| Work in the Pipeline area (85 symbols) | `.claude/skills/generated/pipeline/SKILL.md` |
-| Work in the Scripts area (77 symbols) | `.claude/skills/generated/scripts/SKILL.md` |
-| Work in the Google area (76 symbols) | `.claude/skills/generated/google/SKILL.md` |
-| Work in the Heygen area (70 symbols) | `.claude/skills/generated/heygen/SKILL.md` |
 
 <!-- gitnexus:end -->
-
-

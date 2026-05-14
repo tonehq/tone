@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 from core.services.base import BaseService
 from core.models.voice import Voice
 from core.models.service_provider import ServiceProvider
+from core.models.model_provider_menu import ModelProviderMenu
 
 class VoiceService(BaseService):
     def __init__(self, db: Session, user_id: Optional[int] = None, org_id=None):
@@ -150,6 +151,125 @@ class VoiceService(BaseService):
         self.db.refresh(voice)
         return voice
 
+
+    def get_voices_by_model_provider_menu_id(self, provider_id: int):
+        """Get voices by model_provider_menu_id with language/gender aggregation."""
+        try:
+            provider = self.db.query(ModelProviderMenu).filter(ModelProviderMenu.id == provider_id).first()
+            if not provider:
+                return "No model provider menu found"
+
+            voices = (
+                self.db.query(Voice)
+                .filter(Voice.model_provider_menu_id == provider_id)
+                .all()
+            )
+
+            if not voices:
+                return "No voices found for this provider"
+
+            result = {
+                "id": provider.id,
+                "uuid": str(provider.uuid),
+                "name": provider.name,
+                "display_name": provider.display_name,
+                "description": provider.description,
+                "provider_type": provider.provider_type,
+                "logo_url": provider.logo_url,
+                "voices": [],
+            }
+
+            languages = set()
+            genders = set()
+
+            for voice in voices:
+                result["voices"].append({
+                    "id": voice.id,
+                    "uuid": str(voice.uuid),
+                    "voice_id": voice.voice_id,
+                    "name": voice.name,
+                    "language": voice.language,
+                    "gender": voice.gender,
+                    "accent": voice.accent,
+                    "description": voice.description,
+                    "sample_url": voice.sample_url,
+                    "created_at": voice.created_at,
+                    "updated_at": voice.updated_at,
+                })
+                if voice.language:
+                    languages.add(voice.language)
+                if voice.gender:
+                    genders.add(voice.gender)
+
+            result["languages"] = sorted(languages)
+            result["genders"] = sorted(genders)
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Error getting voices by model_provider_menu_id: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+    def get_languages_by_model_provider_menu_id(self, provider_id: int):
+        """Get available languages for a model provider menu."""
+        try:
+            voices = (
+                self.db.query(Voice)
+                .filter(Voice.model_provider_menu_id == provider_id)
+                .all()
+            )
+
+            languages = set()
+            for voice in voices:
+                if voice.language_list:
+                    languages.update(voice.language_list)
+
+            return {"languages": sorted(languages)}
+
+        except Exception as e:
+            logger.error(f"Error getting languages by model_provider_menu_id: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(e),
+            )
+
+    def get_voices_by_language_and_model_provider(self, provider_id: int, language: str):
+        """Get voices filtered by model_provider_menu_id and language."""
+        try:
+            voices = (
+                self.db.query(Voice)
+                .filter(
+                    Voice.model_provider_menu_id == provider_id,
+                    Voice.language_list.contains([language]),
+                )
+                .all()
+            )
+
+            seen = set()
+            result = []
+            for voice in voices:
+                if voice.voice_id in seen:
+                    continue
+                seen.add(voice.voice_id)
+                result.append({
+                    "id": voice.id,
+                    "uuid": str(voice.uuid),
+                    "voice_id": voice.voice_id,
+                    "name": voice.name,
+                    "gender": voice.gender,
+                    "accent": voice.accent,
+                    "description": voice.description,
+                    "sample_url": voice.sample_url,
+                })
+
+            return {"voices": result}
+
+        except Exception as e:
+            logger.error(f"Error getting voices by language and model_provider: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(e),
+            )
 
     def delete_voice(self, voice_id: int):
         try:

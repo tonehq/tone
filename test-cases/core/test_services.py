@@ -32,6 +32,7 @@ class TestUpsertService:
         assert resp.json()["name"] == "My STT"
         mock_instance.upsert_service.assert_called_once_with(
             service_provider_id=5,
+            model_provider_menu_id=None,
             name="My STT",
             service_type="stt",
             config={"language": "en"},
@@ -73,6 +74,7 @@ class TestUpsertService:
         assert resp.status_code == 200
         mock_instance.upsert_service.assert_called_once_with(
             service_provider_id=5,
+            model_provider_menu_id=None,
             name="My STT",
             service_type="stt",
             config={"language": "en"},
@@ -89,7 +91,8 @@ class TestUpsertService:
         )
 
     @patch("ee.api.v1.services.ServiceConfigService")
-    def test_missing_service_provider_id(self, mock_service_cls, client_as_admin):
+    def test_missing_provider_id(self, mock_service_cls, client_as_admin):
+        """Neither service_provider_id nor model_provider_menu_id provided."""
         resp = client_as_admin.post(
             "/api/v1/services/upsert",
             json={
@@ -99,7 +102,7 @@ class TestUpsertService:
             },
         )
         assert resp.status_code == 400
-        assert "service_provider_id" in resp.json()["detail"]
+        assert "model_provider_menu_id" in resp.json()["detail"]
 
     @patch("ee.api.v1.services.ServiceConfigService")
     def test_missing_name(self, mock_service_cls, client_as_admin):
@@ -126,7 +129,12 @@ class TestUpsertService:
         assert resp.status_code == 400
 
     @patch("ee.api.v1.services.ServiceConfigService")
-    def test_missing_config(self, mock_service_cls, client_as_admin):
+    def test_config_defaults_to_empty(self, mock_service_cls, client_as_admin):
+        """Config is optional and defaults to {} when omitted."""
+        mock_instance = MagicMock()
+        mock_instance.upsert_service.return_value = {"id": 1}
+        mock_service_cls.return_value = mock_instance
+
         resp = client_as_admin.post(
             "/api/v1/services/upsert",
             json={
@@ -135,7 +143,7 @@ class TestUpsertService:
                 "service_type": "stt",
             },
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 200
 
     @patch("ee.api.v1.services.ServiceConfigService")
     def test_service_error(self, mock_service_cls, client_as_admin):
@@ -304,3 +312,63 @@ class TestDeleteService:
     def test_missing_service_id(self, client_as_admin):
         resp = client_as_admin.delete("/api/v1/services/delete")
         assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/services/upsert — new model_provider_menu_id path
+# ---------------------------------------------------------------------------
+class TestUpsertServiceNewPath:
+    @patch("ee.api.v1.services.ServiceConfigService")
+    def test_with_model_provider_menu_id(self, mock_service_cls, client_as_admin):
+        mock_instance = MagicMock()
+        mock_instance.upsert_service.return_value = {"id": 1, "name": "OpenAI LLM"}
+        mock_service_cls.return_value = mock_instance
+
+        resp = client_as_admin.post(
+            "/api/v1/services/upsert",
+            json={
+                "model_provider_menu_id": 1,
+                "name": "OpenAI LLM",
+                "service_type": "llm",
+                "config": {},
+                "api_key_id": 3,
+            },
+        )
+
+        assert resp.status_code == 200
+        mock_instance.upsert_service.assert_called_once_with(
+            service_provider_id=None,
+            model_provider_menu_id=1,
+            name="OpenAI LLM",
+            service_type="llm",
+            config={},
+            api_key_id=3,
+            description=None,
+            is_default=False,
+            is_public=False,
+            tags=None,
+            service_uuid=None,
+            service_status=None,
+            api_key_value=None,
+            api_key_name=None,
+            additional_credentials=None,
+        )
+
+    @patch("ee.api.v1.services.ServiceConfigService")
+    def test_both_provider_ids(self, mock_service_cls, client_as_admin):
+        """When both service_provider_id and model_provider_menu_id are provided, both are passed."""
+        mock_instance = MagicMock()
+        mock_instance.upsert_service.return_value = {"id": 1}
+        mock_service_cls.return_value = mock_instance
+
+        resp = client_as_admin.post(
+            "/api/v1/services/upsert",
+            json={
+                "service_provider_id": 5,
+                "model_provider_menu_id": 1,
+                "name": "Dual",
+                "service_type": "llm",
+            },
+        )
+
+        assert resp.status_code == 200

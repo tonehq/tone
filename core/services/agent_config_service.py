@@ -39,17 +39,70 @@ def _agent_config_unique_constraint_detail(exc: IntegrityError) -> str:
 
 class AgentConfigService(BaseService):
     CREATED_ATTRS = (
-        "agent_id", "llm_service_id", "tts_service_id", "stt_service_id",
+        "agent_id", "llm_account_id", "tts_account_id", "stt_account_id",
+        "llm_model_instance_id", "tts_model_instance_id", "stt_model_instance_id",
         "first_message", "system_prompt", "end_call_message", "voicemail_message",
         "html_prompt", "status", "llm_metadata", "tts_metadata", "stt_metadata", "agent_metadata",
         "description",
     )
     UPDATABLE_ATTRS = (
-        "llm_service_id", "tts_service_id", "stt_service_id",
+        "llm_account_id", "tts_account_id", "stt_account_id",
+        "llm_model_instance_id", "tts_model_instance_id", "stt_model_instance_id",
         "first_message", "system_prompt", "end_call_message", "voicemail_message",
         "html_prompt", "status", "llm_metadata", "tts_metadata", "stt_metadata", "agent_metadata",
         "description", "updated_at",
     )
+
+    def _resolve_account_and_instance(self, config_data: Dict[str, Any], stype: str):
+        """Auto-resolve account and model_instance from provider + model selection.
+
+        Frontend sends: {stype}_model_provider_menu_id + {stype}_model_menu_id
+        Backend resolves: {stype}_account_id + {stype}_model_instance_id
+        """
+        from core.models.account import Account
+        from core.models.model_instance import ModelInstance
+
+        model_menu_id = config_data.get(f"{stype}_model_menu_id")
+        model_provider_menu_id = config_data.get(f"{stype}_model_provider_menu_id")
+
+        if not model_menu_id:
+            return None
+
+        # Find the user's account for this provider
+        account_query = self.query(Account).filter(
+            Account.status == 'active',
+        )
+        if model_provider_menu_id:
+            account_query = account_query.filter(
+                Account.model_provider_menu_id == int(model_provider_menu_id),
+            )
+        account = account_query.first()
+
+        if not account:
+            logger.warning(
+                "No active account found for %s provider_menu_id=%s",
+                stype, model_provider_menu_id,
+            )
+            return None
+
+        # Find the model instance for this account + model
+        model_instance = self.db.query(ModelInstance).filter(
+            ModelInstance.account_id == account.id,
+            ModelInstance.model_menu_id == int(model_menu_id),
+            ModelInstance.status == 'active',
+        ).first()
+
+        if not model_instance:
+            logger.warning(
+                "No active model_instance found for %s account_id=%s model_menu_id=%s",
+                stype, account.id, model_menu_id,
+            )
+            return {"account_id": account.id, "model_instance_id": None}
+
+        return {
+            "account_id": account.id,
+            "model_instance_id": model_instance.id,
+        }
 
     def upsert_agent_config(self, config_data: Dict[str, Any], auto_commit: bool = True):
         if config_data.get("agent_id") is None:
@@ -86,10 +139,20 @@ class AgentConfigService(BaseService):
             "created_at": now,
             "updated_at": now,
         }
+        # Auto-resolve account + model_instance from provider + model selection
+        for stype in ("llm", "tts", "stt"):
+            resolved = self._resolve_account_and_instance(config_data, stype)
+            if resolved:
+                values[f"{stype}_account_id"] = resolved["account_id"]
+                values[f"{stype}_model_instance_id"] = resolved["model_instance_id"]
+
         for key in self.CREATED_ATTRS:
             if key in ("agent_id", "system_prompt"):
                 continue
             if key in config_data and config_data[key] is not None:
+                # Don't override auto-resolved values
+                if key in values:
+                    continue
                 values[key] = config_data[key]
         # Debug logging for upsert troubleshooting
         existing_in_db = self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent_id).first()

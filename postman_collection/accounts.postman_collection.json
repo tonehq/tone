@@ -1,0 +1,173 @@
+{
+  "info": {
+    "name": "Accounts API",
+    "description": "Auto-generated from core/api/v1/services.py",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/api/v1" },
+    { "key": "authToken", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{authToken}}" }]
+  },
+  "item": [
+    {
+      "name": "Upsert Service",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{baseUrl}}/accounts/upsert", "host": ["{{baseUrl}}"], "path": ["accounts", "upsert"] },
+        "body": { "mode": "raw", "raw": "{\n  \"model_provider_menu_id\": 1,\n  \"name\": \"OpenAI LLM\",\n  \"service_type\": \"llm\",\n  \"config\": {},\n  \"api_key_id\": 1,\n  \"description\": \"OpenAI LLM service\",\n  \"is_default\": true,\n  \"status\": \"active\"\n}", "options": { "raw": { "language": "json" } } }
+      },
+      "response": [
+        {
+          "name": "Create Service - New Path (model_provider_menu_id)",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/accounts/upsert", "host": ["{{baseUrl}}"], "path": ["accounts", "upsert"] }, "body": { "mode": "raw", "raw": "{\n  \"model_provider_menu_id\": 1,\n  \"name\": \"OpenAI LLM\",\n  \"service_type\": \"llm\",\n  \"config\": {},\n  \"api_key_id\": 1,\n  \"description\": \"OpenAI LLM service\",\n  \"is_default\": true,\n  \"status\": \"active\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"c9d0e1f2-a3b4-5678-9abc-789012345678\",\n  \"name\": \"OpenAI LLM\",\n  \"description\": \"OpenAI LLM service\",\n  \"service_type\": \"llm\",\n  \"service_provider_id\": null,\n  \"model_provider_menu_id\": 1,\n  \"api_key_id\": 1,\n  \"api_key_hint\": \"sk-1...wxyz\",\n  \"config\": {},\n  \"status\": \"active\",\n  \"is_default\": true,\n  \"is_public\": false,\n  \"tags\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Create Service - Old Path (service_provider_id, telephony)",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/accounts/upsert", "host": ["{{baseUrl}}"], "path": ["accounts", "upsert"] }, "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 1,\n  \"name\": \"Twilio Telephony\",\n  \"service_type\": \"telephony\",\n  \"config\": {},\n  \"api_key_id\": 5,\n  \"status\": \"active\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 2,\n  \"uuid\": \"d0e1f2a3-b4c5-6789-abcd-890123456789\",\n  \"name\": \"Twilio Telephony\",\n  \"description\": null,\n  \"service_type\": \"telephony\",\n  \"service_provider_id\": 1,\n  \"model_provider_menu_id\": null,\n  \"api_key_id\": 5,\n  \"api_key_hint\": \"AC12...5678\",\n  \"config\": {},\n  \"status\": \"active\",\n  \"is_default\": false,\n  \"is_public\": false,\n  \"tags\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Create Multiple OpenAI Accounts",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/accounts/upsert", "host": ["{{baseUrl}}"], "path": ["accounts", "upsert"] }, "body": { "mode": "raw", "raw": "{\n  \"model_provider_menu_id\": 1,\n  \"name\": \"OpenAI LLM - Account 2\",\n  \"service_type\": \"llm\",\n  \"config\": {},\n  \"api_key_id\": 10,\n  \"description\": \"Second OpenAI account\",\n  \"is_default\": false,\n  \"status\": \"active\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 3,\n  \"uuid\": \"e1f2a3b4-c5d6-7890-bcde-901234567890\",\n  \"name\": \"OpenAI LLM - Account 2\",\n  \"description\": \"Second OpenAI account\",\n  \"service_type\": \"llm\",\n  \"service_provider_id\": null,\n  \"model_provider_menu_id\": 1,\n  \"api_key_id\": 10,\n  \"api_key_hint\": \"sk-2...abcd\",\n  \"config\": {},\n  \"status\": \"active\",\n  \"is_default\": false,\n  \"is_public\": false,\n  \"tags\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Update Service",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/accounts/upsert", "host": ["{{baseUrl}}"], "path": ["accounts", "upsert"] }, "body": { "mode": "raw", "raw": "{\n  \"uuid\": \"c9d0e1f2-a3b4-5678-9abc-789012345678\",\n  \"model_provider_menu_id\": 1,\n  \"name\": \"OpenAI LLM - Updated\",\n  \"service_type\": \"llm\",\n  \"config\": {},\n  \"api_key_id\": 1,\n  \"is_default\": true,\n  \"status\": \"active\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"c9d0e1f2-a3b4-5678-9abc-789012345678\",\n  \"name\": \"OpenAI LLM - Updated\",\n  \"description\": \"OpenAI LLM service\",\n  \"service_type\": \"llm\",\n  \"service_provider_id\": null,\n  \"model_provider_menu_id\": 1,\n  \"api_key_id\": 1,\n  \"api_key_hint\": \"sk-1...wxyz\",\n  \"config\": {},\n  \"status\": \"active\",\n  \"is_default\": true,\n  \"is_public\": false,\n  \"tags\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710288000\n}"
+        },
+        {
+          "name": "Missing Required Fields",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/accounts/upsert", "host": ["{{baseUrl}}"], "path": ["accounts", "upsert"] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"My Service\"\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "Bad Request", "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"name and service_type are required\"\n}"
+        },
+        {
+          "name": "Missing Provider ID",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/accounts/upsert", "host": ["{{baseUrl}}"], "path": ["accounts", "upsert"] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"Test Service\",\n  \"service_type\": \"llm\",\n  \"config\": {}\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "Bad Request", "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Either service_provider_id or model_provider_menu_id is required\"\n}"
+        },
+        {
+          "name": "Duplicate Name + Type in Org",
+          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/accounts/upsert", "host": ["{{baseUrl}}"], "path": ["accounts", "upsert"] }, "body": { "mode": "raw", "raw": "{\n  \"model_provider_menu_id\": 1,\n  \"name\": \"OpenAI LLM\",\n  \"service_type\": \"llm\",\n  \"config\": {},\n  \"api_key_id\": 2\n}", "options": { "raw": { "language": "json" } } } },
+          "status": "Conflict", "code": 409,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"A service with this name and type already exists in this organization\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get All Services",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/accounts/list", "host": ["{{baseUrl}}"], "path": ["accounts", "list"], "query": [{ "key": "service_type", "value": "llm", "description": "Filter by service type (llm, stt, tts)", "disabled": true }] }
+      },
+      "response": [
+        {
+          "name": "Get All Services - Success",
+          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/accounts/list", "host": ["{{baseUrl}}"], "path": ["accounts", "list"] } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"c9d0e1f2-a3b4-5678-9abc-789012345678\",\n    \"name\": \"OpenAI LLM\",\n    \"description\": \"OpenAI LLM service\",\n    \"service_type\": \"llm\",\n    \"service_provider_id\": null,\n    \"model_provider_menu_id\": 1,\n    \"api_key_id\": 1,\n    \"api_key_hint\": \"sk-1...wxyz\",\n    \"config\": {},\n    \"status\": \"active\",\n    \"is_default\": true,\n    \"is_public\": false,\n    \"tags\": null,\n    \"usage_count\": 42,\n    \"last_used_at\": 1710288000,\n    \"created_at\": 1710201600\n  },\n  {\n    \"id\": 2,\n    \"uuid\": \"d0e1f2a3-b4c5-6789-abcd-890123456789\",\n    \"name\": \"Deepgram STT\",\n    \"description\": null,\n    \"service_type\": \"stt\",\n    \"service_provider_id\": null,\n    \"model_provider_menu_id\": 5,\n    \"api_key_id\": 3,\n    \"api_key_hint\": \"dg-1...efgh\",\n    \"config\": {},\n    \"status\": \"active\",\n    \"is_default\": true,\n    \"is_public\": false,\n    \"tags\": null,\n    \"usage_count\": 10,\n    \"last_used_at\": 1710288000,\n    \"created_at\": 1710201600\n  }\n]"
+        },
+        {
+          "name": "Get All Services - Filter by LLM",
+          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/accounts/list?service_type=llm", "host": ["{{baseUrl}}"], "path": ["accounts", "list"], "query": [{ "key": "service_type", "value": "llm" }] } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"c9d0e1f2-a3b4-5678-9abc-789012345678\",\n    \"name\": \"OpenAI LLM\",\n    \"description\": \"OpenAI LLM service\",\n    \"service_type\": \"llm\",\n    \"service_provider_id\": null,\n    \"model_provider_menu_id\": 1,\n    \"api_key_id\": 1,\n    \"api_key_hint\": \"sk-1...wxyz\",\n    \"config\": {},\n    \"status\": \"active\",\n    \"is_default\": true,\n    \"is_public\": false,\n    \"tags\": null,\n    \"usage_count\": 42,\n    \"last_used_at\": 1710288000,\n    \"created_at\": 1710201600\n  }\n]"
+        }
+      ]
+    },
+    {
+      "name": "Get Service",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/accounts/get?account_id=1", "host": ["{{baseUrl}}"], "path": ["accounts", "get"], "query": [{ "key": "account_id", "value": "1" }] }
+      },
+      "response": [
+        {
+          "name": "Get Service - Success",
+          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/accounts/get?account_id=1", "host": ["{{baseUrl}}"], "path": ["accounts", "get"], "query": [{ "key": "account_id", "value": "1" }] } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"c9d0e1f2-a3b4-5678-9abc-789012345678\",\n  \"name\": \"OpenAI LLM\",\n  \"description\": \"OpenAI LLM service\",\n  \"service_type\": \"llm\",\n  \"service_provider_id\": null,\n  \"model_provider_menu_id\": 1,\n  \"api_key_id\": 1,\n  \"api_key_hint\": \"sk-1...wxyz\",\n  \"config\": {},\n  \"status\": \"active\",\n  \"is_default\": true,\n  \"is_public\": false,\n  \"tags\": null,\n  \"usage_count\": 42,\n  \"last_used_at\": 1710288000,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        },
+        {
+          "name": "Get Service - Not Found",
+          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/accounts/get?account_id=9999", "host": ["{{baseUrl}}"], "path": ["accounts", "get"], "query": [{ "key": "account_id", "value": "9999" }] } },
+          "status": "Not Found", "code": 404,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Service not found\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get Default Service",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/accounts/default?service_type=llm", "host": ["{{baseUrl}}"], "path": ["accounts", "default"], "query": [{ "key": "service_type", "value": "llm", "description": "Service type (llm, stt, tts)" }] }
+      },
+      "response": [
+        {
+          "name": "Get Default LLM Service",
+          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/accounts/default?service_type=llm", "host": ["{{baseUrl}}"], "path": ["accounts", "default"], "query": [{ "key": "service_type", "value": "llm" }] } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"c9d0e1f2-a3b4-5678-9abc-789012345678\",\n  \"name\": \"OpenAI LLM\",\n  \"service_type\": \"llm\",\n  \"service_provider_id\": null,\n  \"model_provider_menu_id\": 1,\n  \"api_key_id\": 1,\n  \"api_key_hint\": \"sk-1...wxyz\",\n  \"config\": {},\n  \"status\": \"active\",\n  \"is_default\": true\n}"
+        },
+        {
+          "name": "No Default Found",
+          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/accounts/default?service_type=llm", "host": ["{{baseUrl}}"], "path": ["accounts", "default"], "query": [{ "key": "service_type", "value": "llm" }] } },
+          "status": "Not Found", "code": 404,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"No default service found for type: llm\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Delete Service",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": { "raw": "{{baseUrl}}/accounts/delete?account_id=1", "host": ["{{baseUrl}}"], "path": ["accounts", "delete"], "query": [{ "key": "account_id", "value": "1" }] }
+      },
+      "response": [
+        {
+          "name": "Delete Service - Success",
+          "originalRequest": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/accounts/delete?account_id=1", "host": ["{{baseUrl}}"], "path": ["accounts", "delete"], "query": [{ "key": "account_id", "value": "1" }] } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"message\": \"Service deleted successfully\"\n}"
+        },
+        {
+          "name": "Delete Service - Not Found",
+          "originalRequest": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/accounts/delete?account_id=9999", "host": ["{{baseUrl}}"], "path": ["accounts", "delete"], "query": [{ "key": "account_id", "value": "9999" }] } },
+          "status": "Not Found", "code": 404,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Service not found\"\n}"
+        }
+      ]
+    }
+  ]
+}

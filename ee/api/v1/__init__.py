@@ -4,7 +4,7 @@ from ee.api.v1 import (
     organizations,
     service_providers,
     api_keys,
-    services,
+    accounts,
     agents,
     agent_configs,
     agent_channel_phone_numbers,
@@ -16,4 +16,8 @@ from ee.api.v1 import (
     call_logs,
     telephony,
     documents,
+    model_providers_menu,
+    hosting_providers,
+    model_menu,
+    model_instances,
 )

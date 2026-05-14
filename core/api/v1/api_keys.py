@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.post("/upsert", status_code=status.HTTP_200_OK)
 async def upsert_api_key(
-    service_provider_id: int = Form(...),
+    service_provider_id: Optional[int] = Form(None),
     name: str = Form(...),
     file: Optional[UploadFile] = File(None),
     api_key: Optional[str] = Form(None),
@@ -113,6 +113,34 @@ def list_api_keys_by_provider(
         )
     return ApiKeyService(db, user_id=claims.user_id).list_by_provider(
         service_provider_id=sp_id,
+        status_filter=data.get("status"),
+        page=int(data.get("page") or 1),
+        page_size=int(data.get("page_size") or 20),
+    )
+
+
+@router.post("/list_by_account")
+def list_api_keys_by_account(
+    data: Dict[str, Any] = Body(...),
+    claims: JWTClaims = Depends(get_jwt_claims),
+    db: Session = Depends(get_db),
+):
+    """List api_keys for one account, scoped to caller's org."""
+    account_id = data.get("account_id")
+    if account_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="account_id is required",
+        )
+    try:
+        account_id = int(account_id)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="account_id must be an integer",
+        )
+    return ApiKeyService(db, user_id=claims.user_id).list_by_account(
+        account_id=account_id,
         status_filter=data.get("status"),
         page=int(data.get("page") or 1),
         page_size=int(data.get("page_size") or 20),

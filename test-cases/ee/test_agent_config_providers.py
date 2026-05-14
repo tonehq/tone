@@ -29,7 +29,7 @@ def _resolve_provider(db_session, provider_name, service_type):
     We find the service_provider first, then look up the corresponding service record.
     """
     from core.models.service_provider import ServiceProvider
-    from core.models.service import Service
+    from core.models.account import Account
     from core.models.models import Model
 
     provider = db_session.query(ServiceProvider).filter(
@@ -38,9 +38,9 @@ def _resolve_provider(db_session, provider_name, service_type):
     ).first()
     if not provider:
         return None, None
-    service = db_session.query(Service).filter(
-        Service.service_provider_id == provider.id,
-        Service.service_type == service_type,
+    service = db_session.query(Account).filter(
+        Account.service_provider_id == provider.id,
+        Account.service_type == service_type,
     ).first()
     if not service:
         return None, None

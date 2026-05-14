@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 
 from core.services.base import BaseService
 from core.models.service_provider import ServiceProvider
-from core.models.service import Service
+from core.models.account import Account
 from core.models.models import Model
 from core.models.voice import Voice
 
@@ -153,22 +153,23 @@ class ServiceProviderService(BaseService):
             )
 
         # Exclude TTS providers without active voices (so pagination total stays correct)
-        tts_with_voices_subq = (
+        # Check both old path (service_provider_id) and new path (model_provider_menu_id)
+        tts_with_voices_old = (
             self.db.query(Voice.service_provider_id)
-            .filter(Voice.is_active == True)
+            .filter(Voice.is_active == True, Voice.service_provider_id.isnot(None))
             .distinct()
         )
         query = query.filter(
             or_(
                 ServiceProvider.provider_type != "tts",
-                ServiceProvider.id.in_(tts_with_voices_subq),
+                ServiceProvider.id.in_(tts_with_voices_old),
             )
         )
 
         if exclude_existing_services and self.org_id:
             mapped_ids = (
-                self.db.query(Service.service_provider_id)
-                .filter(Service.organization_id == self.org_id)
+                self.db.query(Account.service_provider_id)
+                .filter(Account.organization_id == self.org_id)
                 .distinct()
                 .all()
             )

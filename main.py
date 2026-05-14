@@ -9,12 +9,14 @@ from core.internal.license import init_license_validator, get_license_info
 from core.internal.capabilities import init_capabilities, is_ee_enabled, get_capabilities
 
 from core.api.v1 import (
-    auth, users, organizations, api_keys, services,
+    auth, users, organizations, api_keys, accounts,
     service_providers, agents, agent_configs,
     agent_channel_phone_numbers, channel_phone_numbers,
     models as models_router,
     generated_api_keys, channels, voices, call_logs,
     telephony, documents, tools, oauth, mcp_servers, dashboard,
+    model_providers_menu, hosting_providers,
+    model_menu as model_menu_router, model_instances,
 )
 import core.models
 
@@ -73,7 +75,7 @@ if ee_enabled:
         organizations as ee_organizations,
         service_providers as ee_service_providers,
         api_keys as ee_api_keys,
-        services as ee_services,
+        accounts as ee_accounts,
         agents as ee_agents,
         agent_configs as ee_agent_configs,
         agent_channel_phone_numbers as ee_agent_channel_phone_numbers,
@@ -88,6 +90,10 @@ if ee_enabled:
         tools as ee_tools,
         oauth as ee_oauth,
         mcp_servers as ee_mcp_servers,
+        model_providers_menu as ee_model_providers_menu,
+        hosting_providers as ee_hosting_providers,
+        model_menu as ee_model_menu,
+        model_instances as ee_model_instances,
     )
 
     api_v1.include_router(ee_auth.router, prefix="/auth", tags=["auth"])
@@ -95,7 +101,7 @@ if ee_enabled:
     api_v1.include_router(ee_organizations.router, prefix="/organization", tags=["organization"])
     api_v1.include_router(ee_service_providers.router, prefix="/service-providers", tags=["service-providers"])
     api_v1.include_router(ee_api_keys.router, prefix="/api-keys", tags=["api-keys"])
-    api_v1.include_router(ee_services.router, prefix="/services", tags=["services"])
+    api_v1.include_router(ee_accounts.router, prefix="/accounts", tags=["accounts"])
     api_v1.include_router(ee_agents.router, prefix="/agent", tags=["agent"])
     api_v1.include_router(ee_agent_configs.router, prefix="/agent_config", tags=["agent_config"])
     api_v1.include_router(ee_agent_channel_phone_numbers.router, prefix="/agent_channel_phone_number", tags=["agent_channel_phone_number"])
@@ -109,6 +115,10 @@ if ee_enabled:
     api_v1.include_router(ee_tools.router, prefix="/tool", tags=["tool"])
     api_v1.include_router(ee_oauth.router, prefix="/oauth", tags=["oauth"])
     api_v1.include_router(ee_mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
+    api_v1.include_router(ee_model_providers_menu.router, prefix="/model-providers-menu", tags=["model-providers-menu"])
+    api_v1.include_router(ee_hosting_providers.router, prefix="/hosting-providers", tags=["hosting-providers"])
+    api_v1.include_router(ee_model_menu.router, prefix="/model-menu", tags=["model-menu"])
+    api_v1.include_router(ee_model_instances.router, prefix="/model-instances", tags=["model-instances"])
     api_v1.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
     print("EE edition: Multi-tenant routes loaded")
 else:
@@ -117,7 +127,7 @@ else:
     api_v1.include_router(organizations.router, prefix="/organization", tags=["organization"])
     api_v1.include_router(service_providers.router, prefix="/service-providers", tags=["service-providers"])
     api_v1.include_router(api_keys.router, prefix="/api-keys", tags=["api-keys"])
-    api_v1.include_router(services.router, prefix="/services", tags=["services"])
+    api_v1.include_router(accounts.router, prefix="/accounts", tags=["accounts"])
     api_v1.include_router(agents.router, prefix="/agent", tags=["agent"])
     api_v1.include_router(agent_configs.router, prefix="/agent_config", tags=["agent_config"])
     api_v1.include_router(agent_channel_phone_numbers.router, prefix="/agent_channel_phone_number", tags=["agent_channel_phone_number"])
@@ -131,6 +141,10 @@ else:
     api_v1.include_router(tools.router, prefix="/tool", tags=["tool"])
     api_v1.include_router(oauth.router, prefix="/oauth", tags=["oauth"])
     api_v1.include_router(mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
+    api_v1.include_router(model_providers_menu.router, prefix="/model-providers-menu", tags=["model-providers-menu"])
+    api_v1.include_router(hosting_providers.router, prefix="/hosting-providers", tags=["hosting-providers"])
+    api_v1.include_router(model_menu_router.router, prefix="/model-menu", tags=["model-menu"])
+    api_v1.include_router(model_instances.router, prefix="/model-instances", tags=["model-instances"])
     api_v1.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
     print("Core edition: Single-tenant routes loaded")
 

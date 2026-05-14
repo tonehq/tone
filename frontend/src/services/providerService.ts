@@ -1,10 +1,11 @@
 import type {
+  Account,
+  AccountUpsertPayload,
+  ModelProviderWithAccounts,
   ModelUpsertPayload,
-  Service,
   ServiceProvider,
   ServiceProviderModel,
   ServiceProviderUpsertPayload,
-  ServiceUpsertPayload,
 } from '@/types/provider';
 import axiosInstance from '@/utils/axios';
 
@@ -63,50 +64,72 @@ export const getServiceProviders = async (providerType?: string): Promise<Servic
   return result.providers;
 };
 
-// ── Services (org-scoped provider instances) ─────────────────────
+// ── Model Providers with Accounts (for agent form dropdowns) ─────
 
-export interface ListServicesParams {
+export const getProvidersWithAccounts = async (
+  providerType?: string,
+): Promise<ModelProviderWithAccounts[]> => {
+  const { data } = await axiosInstance.post('/model-providers-menu/list-with-accounts', {
+    provider_type: providerType,
+  });
+  return Array.isArray(data) ? data : (data?.data ?? []);
+};
+
+// ── Accounts (org-scoped provider instances) ─────────────────────
+
+export interface ListAccountsParams {
   service_type?: string;
   name?: string;
   page?: number;
   page_size?: number;
 }
 
-export interface ListServicesResult {
-  services: Service[];
+export interface ListAccountsResult {
+  accounts: Account[];
   pagination: PaginationInfo;
 }
 
-export const listServices = async (
-  params: ListServicesParams = {},
-): Promise<ListServicesResult> => {
-  const { data } = await axiosInstance.post<PaginatedResponse<Service> | Service[]>(
-    '/services/list',
+export const listAccounts = async (
+  params: ListAccountsParams = {},
+): Promise<ListAccountsResult> => {
+  const { data } = await axiosInstance.post<PaginatedResponse<Account> | Account[]>(
+    '/accounts/list',
     params,
   );
   if (Array.isArray(data)) {
     return {
-      services: data,
+      accounts: data,
       pagination: { page: 1, page_size: data.length, total: data.length, total_pages: 1 },
     };
   }
-  return { services: data?.data ?? [], pagination: data.pagination };
+  return { accounts: data?.data ?? [], pagination: data.pagination };
 };
 
-/** Flat array of all services — used by AgentFormPage loadable atom */
-export const getServices = async (serviceType?: string): Promise<Service[]> => {
-  const result = await listServices(serviceType ? { service_type: serviceType } : {});
-  return result.services;
+/** Flat array of all accounts — used by AgentFormPage loadable atom */
+export const getAccounts = async (serviceType?: string): Promise<Account[]> => {
+  const result = await listAccounts(serviceType ? { service_type: serviceType } : {});
+  return result.accounts;
 };
 
-export const upsertService = async (payload: ServiceUpsertPayload): Promise<Service> => {
-  const { data } = await axiosInstance.post<Service>('/services/upsert', payload);
+export const upsertAccount = async (payload: AccountUpsertPayload): Promise<Account> => {
+  const { data } = await axiosInstance.post<Account>('/accounts/upsert', payload);
   return data;
 };
 
-export const deleteService = async (serviceUuid: string): Promise<void> => {
-  await axiosInstance.delete('/services/delete', { params: { uuid: serviceUuid } });
+export const deleteAccount = async (accountUuid: string): Promise<void> => {
+  await axiosInstance.delete('/accounts/delete', { params: { uuid: accountUuid } });
 };
+
+/** @deprecated Use listAccounts */
+export const listServices = listAccounts as unknown as (
+  params?: ListAccountsParams,
+) => Promise<{ services: Account[]; pagination: PaginationInfo }>;
+/** @deprecated Use getAccounts */
+export const getServices = getAccounts;
+/** @deprecated Use upsertAccount */
+export const upsertService = upsertAccount;
+/** @deprecated Use deleteAccount */
+export const deleteService = deleteAccount;
 
 export const getServiceProvider = async (providerId: number): Promise<ServiceProvider> => {
   const { data } = await axiosInstance.post<ServiceProvider>('/service-providers/get', {
