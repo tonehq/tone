@@ -252,6 +252,7 @@ Use `AskUserQuestion`:
   - `nginx-ingress controller (Recommended)` — Load balancer and ingress routing
   - `cert-manager (Recommended)` — Automatic TLS certificate management
   - `Let's Encrypt ClusterIssuer` — Production certificate issuer (requires cert-manager)
+  - `Grafana Cloud observability` — DaemonSet-based log + metrics collection via Grafana Alloy
 
 ### 7a. nginx-ingress (if selected)
 
@@ -280,6 +281,40 @@ python3 $CLUSTER_SKILL/vultr_api.py apply-cluster-issuer \
   --env-name {ENV_NAME} \
   --manifest-path build/kubernetes/{ENV_NAME}/letsencrypt-prod.yaml
 ```
+
+### 7d. Grafana Cloud observability (if selected)
+
+Deploys Grafana Alloy as a DaemonSet to collect logs and metrics from all nodes and push them to Grafana Cloud.
+
+Use `AskUserQuestion` — batch up to 4 questions per call. Two calls needed (5 inputs total):
+
+**Call 1 (4 questions):**
+- **Q1:** "Enter your Grafana Cloud Loki push URL" — Options: `Type in notes`, `Skip for now`
+- **Q2:** "Enter your Grafana Cloud Loki User/Instance ID (numeric)" — Options: `Type in notes`, `Skip for now`
+- **Q3:** "Enter your Grafana Cloud Prometheus remote write URL" — Options: `Type in notes`, `Skip for now`
+- **Q4:** "Enter your Grafana Cloud Prometheus User/Instance ID (numeric)" — Options: `Type in notes`, `Skip for now`
+
+**Call 2 (1 question):**
+- **Q1:** "Enter your Grafana Cloud API token (with logs:write + metrics:write scopes)" — Options: `Type in notes`, `Skip for now`
+
+If any are skipped, inform the user they can install later using the command below and skip this add-on.
+
+Then execute:
+
+```bash
+python3 $CLUSTER_SKILL/vultr_api.py install-grafana-alloy \
+  --env-name {ENV_NAME} \
+  --cluster-name {CLUSTER_LABEL} \
+  --loki-url "{LOKI_URL}" \
+  --loki-user "{LOKI_USER}" \
+  --prom-url "{PROM_URL}" \
+  --prom-user "{PROM_USER}" \
+  --api-key "{API_KEY}"
+```
+
+Verify from JSON output that `status` is `ok` and DaemonSet pods are running.
+
+**To get Grafana Cloud credentials:** Sign up at grafana.com/products/cloud → Create stack → My Account → Access Policies → Create policy with `logs:write` + `metrics:write` scopes → Generate token. Stack details page shows Loki URL + User ID and Prometheus URL + User ID (they have different user IDs).
 
 ---
 
@@ -397,6 +432,7 @@ Add-ons:
   [{x| }] nginx-ingress controller
   [{x| }] cert-manager
   [{x| }] Let's Encrypt ClusterIssuer
+  [{x| }] Grafana Cloud observability (logs + metrics)
 
 Domains:
   API:  {API_DOMAIN}  → {EXTERNAL_IP}
