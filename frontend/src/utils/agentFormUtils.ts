@@ -3,14 +3,11 @@ import type { AgentFormState, ApiAgent } from '@/types/agent';
 export const defaultFormState = (agentType: 'inbound' | 'outbound'): AgentFormState => ({
   name: agentType === 'inbound' ? 'My Inbound Assistant' : 'My Outbound Assistant',
   description: '',
-  aiModel: null,
   end_call_message: '',
   first_message: '',
   customVocabulary: [],
   filterWords: [],
   language: 'en',
-  voiceProvider: null,
-  sttProvider: null,
   patienceLevel: 'low',
   speechRecognition: 'fast',
   voiceSpeed: 50,
@@ -25,6 +22,12 @@ export const defaultFormState = (agentType: 'inbound' | 'outbound'): AgentFormSt
   llmMetaData: {},
   ttsMetaData: {},
   sttMetaData: {},
+  llmProviderMenuId: null,
+  llmModelMenuId: null,
+  ttsProviderMenuId: null,
+  ttsModelMenuId: null,
+  sttProviderMenuId: null,
+  sttModelMenuId: null,
 });
 
 function parseStringArray(val: string | string[] | null | undefined): string[] {
@@ -71,14 +74,18 @@ export function apiAgentToFormState(
     speechRecognition: (api.speech_recognition as string) ?? defaults.speechRecognition,
     callRecording: parseBoolean(api.call_recording),
     callTranscription: parseBoolean(api.call_transcription),
-    aiModel: api.llm_service_id ?? defaults.aiModel,
-    voiceProvider: api.tts_service_id ?? defaults.voiceProvider,
-    sttProvider: api.stt_service_id ?? defaults.sttProvider,
     phoneNumbers: api.phone_number ?? [],
     channels: api.channels ?? [],
     llmMetaData: (api.llm_meta_data as Record<string, unknown>) ?? {},
     ttsMetaData: (api.tts_meta_data as Record<string, unknown>) ?? {},
     sttMetaData: (api.stt_meta_data as Record<string, unknown>) ?? {},
+    // New provider-based fields (fallback to null if not present)
+    llmProviderMenuId: api.llm_model_provider_menu_id ?? null,
+    llmModelMenuId: api.llm_model_menu_id ?? null,
+    ttsProviderMenuId: api.tts_model_provider_menu_id ?? null,
+    ttsModelMenuId: api.tts_model_menu_id ?? null,
+    sttProviderMenuId: api.stt_model_provider_menu_id ?? null,
+    sttModelMenuId: api.stt_model_menu_id ?? null,
   };
 }
 
@@ -103,9 +110,6 @@ export function formStateToUpsertPayload(
     speech_recognition: form.speechRecognition || null,
     call_recording: form.callRecording,
     call_transcription: form.callTranscription,
-    llm_service_id: form.aiModel,
-    tts_service_id: form.voiceProvider,
-    stt_service_id: form.sttProvider,
     voice_id: form.ttsMetaData?.voice_id ?? null,
     channel: {
       type: 'twilio',
@@ -113,6 +117,13 @@ export function formStateToUpsertPayload(
     llm_meta_data: Object.keys(form.llmMetaData).length ? form.llmMetaData : null,
     tts_meta_data: Object.keys(form.ttsMetaData).length ? form.ttsMetaData : null,
     stt_meta_data: Object.keys(form.sttMetaData).length ? form.sttMetaData : null,
+    // Provider-based resolution
+    llm_model_provider_menu_id: form.llmProviderMenuId,
+    llm_model_menu_id: form.llmModelMenuId,
+    tts_model_provider_menu_id: form.ttsProviderMenuId,
+    tts_model_menu_id: form.ttsModelMenuId,
+    stt_model_provider_menu_id: form.sttProviderMenuId,
+    stt_model_menu_id: form.sttModelMenuId,
   };
   if (existingId != null) payload.id = existingId;
   return payload;

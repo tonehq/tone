@@ -110,16 +110,17 @@ export interface ModelUpsertPayload {
   api_key_id?: number | null;
 }
 
-// ── Services (org-scoped provider instances) ───────────────────────
+// ── Accounts (org-scoped provider instances, formerly "services") ──
 
-export interface Service {
+export interface Account {
   id: number;
   uuid: string;
   name: string;
   display_name?: string;
   description?: string;
   service_type: ProviderType;
-  service_provider_id: number;
+  service_provider_id?: number | null;
+  model_provider_menu_id?: number | null;
   service_provider_name?: string;
   provider_type?: string;
   api_key_id?: number | null;
@@ -137,9 +138,10 @@ export interface Service {
   meta_data_schema: MetaDataSchemaField[] | null;
 }
 
-export interface ServiceUpsertPayload {
+export interface AccountUpsertPayload {
   uuid?: string;
-  service_provider_id: number;
+  service_provider_id?: number | null;
+  model_provider_menu_id?: number | null;
   name: string;
   service_type: string;
   config: Record<string, unknown>;
@@ -153,3 +155,29 @@ export interface ServiceUpsertPayload {
   api_key_name?: string;
   additional_credentials?: Record<string, unknown> | null;
 }
+
+// ── Model Providers with Accounts (for agent form dropdowns) ──
+
+export interface ModelMenuItem {
+  id: number;
+  model_provider_menu_id: number;
+  name: string;
+  meta_data: Record<string, unknown> | null;
+  service_type?: string;
+}
+
+export interface ModelProviderWithAccounts {
+  id: number;
+  uuid: string;
+  name: string;
+  display_name: string;
+  description?: string;
+  provider_type: ProviderType;
+  meta_data_schema: MetaDataSchemaField[] | null;
+  models: ModelMenuItem[];
+}
+
+/** @deprecated Use Account — kept for backward compat */
+export type Service = Account;
+/** @deprecated Use AccountUpsertPayload — kept for backward compat */
+export type ServiceUpsertPayload = AccountUpsertPayload;

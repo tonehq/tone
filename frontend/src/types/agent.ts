@@ -61,12 +61,21 @@ export interface ApiAgent {
   created_by: number;
   created_at: number;
   updated_at: number;
-  llm_service_id: number;
-  tts_service_id: number;
-  stt_service_id: number;
+  llm_account_id: number;
+  tts_account_id: number;
+  stt_account_id: number;
   llm_model_id: number | null;
   tts_model_id: number | null;
   stt_model_id: number | null;
+  llm_model_instance_id?: number | null;
+  tts_model_instance_id?: number | null;
+  stt_model_instance_id?: number | null;
+  llm_model_provider_menu_id?: number | null;
+  tts_model_provider_menu_id?: number | null;
+  stt_model_provider_menu_id?: number | null;
+  llm_model_menu_id?: number | null;
+  tts_model_menu_id?: number | null;
+  stt_model_menu_id?: number | null;
   first_message: string;
   system_prompt: string;
   end_call_message: string;
@@ -92,14 +101,11 @@ export interface AgentsState {
 export interface AgentFormState {
   name: string;
   description: string;
-  aiModel: number | null;
   end_call_message: string;
   first_message: string;
   customVocabulary: string[];
   filterWords: string[];
   language: string;
-  voiceProvider: number | null;
-  sttProvider: number | null;
   patienceLevel: string;
   speechRecognition: string;
   voiceSpeed: number;
@@ -114,4 +120,11 @@ export interface AgentFormState {
   llmMetaData: Record<string, unknown>;
   ttsMetaData: Record<string, unknown>;
   sttMetaData: Record<string, unknown>;
+  // Provider-based fields (model_providers_menu.id + model_menu.id)
+  llmProviderMenuId: number | null;
+  llmModelMenuId: number | null;
+  ttsProviderMenuId: number | null;
+  ttsModelMenuId: number | null;
+  sttProviderMenuId: number | null;
+  sttModelMenuId: number | null;
 }

@@ -9,7 +9,8 @@ class ApiKey(OrgScopedModel):
     __tablename__ = 'api_keys'
 
     uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
-    service_provider_id = Column(BigInteger, ForeignKey('service_providers.id', ondelete='CASCADE'), nullable=False)
+    service_provider_id = Column(BigInteger, ForeignKey('service_providers.id', ondelete='CASCADE'), nullable=True)
+    account_id = Column(BigInteger, ForeignKey('accounts.id', ondelete='SET NULL'), nullable=True)
     name = Column(String, nullable=False)
     description = Column(Text)
     api_key_encrypted = Column(Text, nullable=False)

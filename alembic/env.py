@@ -21,7 +21,7 @@ from core.models.email_verification import EmailVerification
 from core.models.password_reset import PasswordReset
 from core.models.service_provider import ServiceProvider
 from core.models.api_key import ApiKey
-from core.models.service import Service
+from core.models.account import Account
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
 from core.models.agent_channel_phone_numbers import AgentChannelPhoneNumbers
@@ -34,6 +34,11 @@ from core.models.agent_channel import AgentChannel
 from core.models.upload import Upload
 from core.models.call_log import CallLog
 from core.models.document import Document, DocumentChunk
+from core.models.model_provider_menu import ModelProviderMenu
+from core.models.hosting_provider import HostingProvider
+from core.models.model_menu import ModelMenu
+from core.models.model_instance import ModelInstance
+from core.models.account import Account
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

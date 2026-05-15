@@ -52777,7 +52777,58 @@
             "description": "The text message content to send via SMS"
           }
         },
-        "required": ["message"]
+        "required": [
+          "message"
+        ]
+      }
+    },
+    {
+      "name": "google_calendar",
+      "description": "Create events, check availability, and list events on Google Calendar",
+      "tool_type": "google_calendar",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "The action to perform: create_event, check_availability, or list_events"
+          },
+          "title": {
+            "type": "string",
+            "description": "Title of the calendar event (for create_event)"
+          },
+          "date": {
+            "type": "string",
+            "description": "Date in YYYY-MM-DD format"
+          },
+          "start_time": {
+            "type": "string",
+            "description": "Start time in HH:MM format (24-hour)"
+          },
+          "duration_minutes": {
+            "type": "number",
+            "description": "Duration of the event in minutes (default 30)"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description or notes for the event"
+          },
+          "attendee_email": {
+            "type": "string",
+            "description": "Email address of the attendee to invite"
+          },
+          "end_time": {
+            "type": "string",
+            "description": "End time in HH:MM format for check_availability (default 17:00)"
+          },
+          "max_results": {
+            "type": "number",
+            "description": "Maximum number of events to return for list_events (default 5)"
+          }
+        },
+        "required": [
+          "action"
+        ]
       }
     }
   ]

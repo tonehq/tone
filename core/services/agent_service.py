@@ -14,7 +14,8 @@ from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
 from core.models.agent_channel_phone_numbers import AgentChannelPhoneNumbers
 from core.models.service_provider import ServiceProvider
-from core.models.service import Service
+from core.models.account import Account
+from core.models.model_instance import ModelInstance
 from core.models.enums import AgentType
 from core.services.agent_config_service import AgentConfigService
 from core.services.channel_service import ChannelService
@@ -195,10 +196,13 @@ class AgentService(BaseService):
             # Create/update config whenever any config-related field is present.
             CONFIG_TRIGGER_KEYS = (
                 "system_prompt", "html_prompt", "first_message", "end_call_message",
-                "voicemail_message", "llm_service_id", "tts_service_id", "stt_service_id",
+                "voicemail_message", "llm_account_id", "tts_account_id", "stt_account_id",
                 "llm_model_id", "tts_model_id", "stt_model_id",
                 "llm_metadata", "tts_metadata", "stt_metadata",
                 "llm_meta_data", "tts_meta_data", "stt_meta_data",
+                "llm_model_provider_menu_id", "llm_model_menu_id",
+                "tts_model_provider_menu_id", "tts_model_menu_id",
+                "stt_model_provider_menu_id", "stt_model_menu_id",
                 *AGENT_METADATA_KEYS,
             )
             existing_config = self.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).first()
@@ -311,10 +315,45 @@ class AgentService(BaseService):
             llm_meta = config.llm_metadata if isinstance(config.llm_metadata, dict) else {}
             tts_meta = config.tts_metadata if isinstance(config.tts_metadata, dict) else {}
             stt_meta = config.stt_metadata if isinstance(config.stt_metadata, dict) else {}
+
+            # Resolve model_provider_menu_id and model_menu_id from model_instance FKs
+            mi_ids = [
+                mid for mid in [config.llm_model_instance_id, config.tts_model_instance_id, config.stt_model_instance_id]
+                if mid is not None
+            ]
+            mi_lookup = {}
+            if mi_ids:
+                mis = self.db.query(ModelInstance).filter(ModelInstance.id.in_(mi_ids)).all()
+                acct_ids_for_mi = [mi.account_id for mi in mis if mi.account_id]
+                acct_for_mi = {}
+                if acct_ids_for_mi:
+                    accts = self.db.query(Account).filter(Account.id.in_(acct_ids_for_mi)).all()
+                    acct_for_mi = {a.id: a for a in accts}
+                for mi in mis:
+                    acct = acct_for_mi.get(mi.account_id)
+                    mi_lookup[mi.id] = {
+                        "model_provider_menu_id": acct.model_provider_menu_id if acct else None,
+                        "model_menu_id": mi.model_menu_id,
+                    }
+
+            def _mi_field(mi_id, field):
+                if mi_id and mi_id in mi_lookup:
+                    return mi_lookup[mi_id].get(field)
+                return None
+
             item.update({
-                "llm_service_id": config.llm_service_id,
-                "tts_service_id": config.tts_service_id,
-                "stt_service_id": config.stt_service_id,
+                "llm_account_id": config.llm_account_id,
+                "tts_account_id": config.tts_account_id,
+                "stt_account_id": config.stt_account_id,
+                "llm_model_instance_id": config.llm_model_instance_id,
+                "tts_model_instance_id": config.tts_model_instance_id,
+                "stt_model_instance_id": config.stt_model_instance_id,
+                "llm_model_provider_menu_id": _mi_field(config.llm_model_instance_id, "model_provider_menu_id"),
+                "tts_model_provider_menu_id": _mi_field(config.tts_model_instance_id, "model_provider_menu_id"),
+                "stt_model_provider_menu_id": _mi_field(config.stt_model_instance_id, "model_provider_menu_id"),
+                "llm_model_menu_id": _mi_field(config.llm_model_instance_id, "model_menu_id"),
+                "tts_model_menu_id": _mi_field(config.tts_model_instance_id, "model_menu_id"),
+                "stt_model_menu_id": _mi_field(config.stt_model_instance_id, "model_menu_id"),
                 "llm_model_id": llm_meta.get("model_id"),
                 "tts_model_id": tts_meta.get("model_id"),
                 "stt_model_id": stt_meta.get("model_id"),
@@ -390,9 +429,9 @@ class AgentService(BaseService):
             agent_metadata = merged
         config_data = {
             "agent_id": agent_id,
-            "llm_service_id": _get("llm_service_id"),
-            "tts_service_id": _get("tts_service_id"),
-            "stt_service_id": _get("stt_service_id"),
+            "llm_account_id": _get("llm_account_id"),
+            "tts_account_id": _get("tts_account_id"),
+            "stt_account_id": _get("stt_account_id"),
             "first_message": _get("first_message"),
             "system_prompt": system_prompt,
             "end_call_message": _get("end_call_message"),
@@ -403,6 +442,63 @@ class AgentService(BaseService):
             "stt_metadata": stt_metadata,
             "agent_metadata": agent_metadata,
         }
+
+        # Resolve model_instance for each service type via ModelInstance chain:
+        # model_menu_id → ModelInstance (active) → Account (active, org-scoped)
+        # If model_menu_id is not sent but model_provider_menu_id is, find the first
+        # active model instance for that provider (used for TTS voice-based and STT auto selection).
+        from core.models.model_menu import ModelMenu
+
+        for stype in ("llm", "tts", "stt"):
+            mm_id = data.get(f"{stype}_model_menu_id")
+            mpm_id = data.get(f"{stype}_model_provider_menu_id")
+
+            if mm_id is None and mpm_id is not None:
+                # No specific model selected — find the first active model instance for this provider
+                mi = (
+                    self.db.query(ModelInstance)
+                    .join(Account, Account.id == ModelInstance.account_id)
+                    .join(ModelMenu, ModelMenu.id == ModelInstance.model_menu_id)
+                    .filter(
+                        ModelMenu.model_provider_menu_id == int(mpm_id),
+                        ModelInstance.status == 'active',
+                        Account.status == 'active',
+                        Account.organization_id == self.org_id,
+                    )
+                    .order_by(Account.id.asc(), ModelInstance.id.asc())
+                    .first()
+                )
+                if mi:
+                    mm_id = mi.model_menu_id
+                    config_data[f"{stype}_model_instance_id"] = mi.id
+                    config_data[f"{stype}_account_id"] = mi.account_id
+                    meta_key = f"{stype}_metadata"
+                    meta = dict(config_data.get(meta_key) or {})
+                    meta["model_menu_id"] = mi.model_menu_id
+                    config_data[meta_key] = meta
+
+            elif mm_id is not None:
+                # Specific model selected — find matching instance
+                mi = (
+                    self.db.query(ModelInstance)
+                    .join(Account, Account.id == ModelInstance.account_id)
+                    .filter(
+                        ModelInstance.model_menu_id == int(mm_id),
+                        ModelInstance.status == 'active',
+                        Account.status == 'active',
+                        Account.organization_id == self.org_id,
+                    )
+                    .order_by(Account.id.asc())
+                    .first()
+                )
+                if mi:
+                    config_data[f"{stype}_model_instance_id"] = mi.id
+                    config_data[f"{stype}_account_id"] = mi.account_id
+                    meta_key = f"{stype}_metadata"
+                    meta = dict(config_data.get(meta_key) or {})
+                    meta["model_menu_id"] = int(mm_id)
+                    config_data[meta_key] = meta
+
         return config_data
 
     def duplicate_agent(self, agent_id: int, new_name: str, created_by: int):
@@ -460,9 +556,12 @@ class AgentService(BaseService):
                     "uuid": uuid_lib.uuid4(),
                     "agent_id": new_agent.id,
                     "organization_id": self.org_id,
-                    "llm_service_id": source_config.llm_service_id,
-                    "tts_service_id": source_config.tts_service_id,
-                    "stt_service_id": source_config.stt_service_id,
+                    "llm_account_id": source_config.llm_account_id,
+                    "tts_account_id": source_config.tts_account_id,
+                    "stt_account_id": source_config.stt_account_id,
+                    "llm_model_instance_id": source_config.llm_model_instance_id,
+                    "tts_model_instance_id": source_config.tts_model_instance_id,
+                    "stt_model_instance_id": source_config.stt_model_instance_id,
                     "first_message": source_config.first_message,
                     "system_prompt": source_config.system_prompt or "",
                     "end_call_message": source_config.end_call_message,

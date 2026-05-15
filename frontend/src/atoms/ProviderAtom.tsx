@@ -2,30 +2,31 @@ import { atom } from 'jotai';
 import { loadable } from 'jotai/utils';
 
 import {
+  deleteAccount,
   deleteModel,
-  deleteService,
   deleteServiceProvider,
-  getServices,
+  getProvidersWithAccounts,
+  listAccounts,
   listModelsByProvider,
   listServiceProviders,
-  listServices,
+  upsertAccount,
   upsertModel,
-  upsertService,
   upsertServiceProvider,
 } from '@/services/providerService';
 import type {
+  ListAccountsParams,
   ListModelsParams,
   ListProvidersParams,
-  ListServicesParams,
   PaginationInfo,
 } from '@/services/providerService';
 import type {
+  Account,
+  AccountUpsertPayload,
+  ModelProviderWithAccounts,
   ModelUpsertPayload,
-  Service,
   ServiceProvider,
   ServiceProviderModel,
   ServiceProviderUpsertPayload,
-  ServiceUpsertPayload,
 } from '@/types/provider';
 
 // ── Service Providers ──────────────────────────────────────────────
@@ -121,67 +122,67 @@ const deleteModelAtom = atom(null, async (_get, _set, modelId: number) => {
   await deleteModel(modelId);
 });
 
-// ── Services (org-scoped provider instances) ───────────────────────
+// ── Accounts (org-scoped provider instances) ───────────────────────
 
-interface ServicesState {
-  services: Service[];
+interface AccountsState {
+  accounts: Account[];
   pagination: PaginationInfo | null;
   loading: boolean;
   loadingMore: boolean;
 }
 
-const servicesAtom = atom<ServicesState>({
-  services: [],
+const accountsAtom = atom<AccountsState>({
+  accounts: [],
   pagination: null,
   loading: false,
   loadingMore: false,
 });
 
-interface FetchServicesPayload {
-  params?: ListServicesParams;
+interface FetchAccountsPayload {
+  params?: ListAccountsParams;
   append?: boolean;
 }
 
-const fetchServicesAtom = atom(null, async (_get, set, payload?: FetchServicesPayload) => {
+const fetchAccountsAtom = atom(null, async (_get, set, payload?: FetchAccountsPayload) => {
   const params = payload?.params;
   const append = payload?.append ?? false;
 
   if (append) {
-    set(servicesAtom, (prev) => ({ ...prev, loadingMore: true }));
+    set(accountsAtom, (prev) => ({ ...prev, loadingMore: true }));
   } else {
-    set(servicesAtom, (prev) => ({ ...prev, loading: true }));
+    set(accountsAtom, (prev) => ({ ...prev, loading: true }));
   }
 
   try {
-    const result = await listServices(params);
-    set(servicesAtom, (prev) => ({
-      services: append ? [...prev.services, ...result.services] : result.services,
+    const result = await listAccounts(params);
+    set(accountsAtom, (prev) => ({
+      accounts: append ? [...prev.accounts, ...result.accounts] : result.accounts,
       pagination: result.pagination,
       loading: false,
       loadingMore: false,
     }));
   } catch (error) {
-    set(servicesAtom, (prev) => ({ ...prev, loading: false, loadingMore: false }));
+    set(accountsAtom, (prev) => ({ ...prev, loading: false, loadingMore: false }));
     throw error;
   }
 });
 
-const upsertServiceAtom = atom(
+const upsertAccountAtom = atom(
   null,
-  async (_get, _set, payload: ServiceUpsertPayload) => await upsertService(payload),
+  async (_get, _set, payload: AccountUpsertPayload) => await upsertAccount(payload),
 );
 
-const deleteServiceAtom = atom(null, async (_get, _set, uuid: string) => {
-  await deleteService(uuid);
+const deleteAccountAtom = atom(null, async (_get, _set, uuid: string) => {
+  await deleteAccount(uuid);
 });
 
-// ── Loadable atom for AgentFormPage — fetches org-scoped services ──
+// ── Loadable atom for AgentFormPage — fetches org-scoped accounts ──
 
 const providersRefreshAtom = atom(0);
 
-const providersRowsAtom = atom<Promise<Service[]>>(async (get) => {
+const providersRowsAtom = atom<Promise<ModelProviderWithAccounts[]>>(async (get) => {
   get(providersRefreshAtom);
-  return await getServices();
+  return await getProvidersWithAccounts();
 });
 
 const loadableProvidersAtom = loadable(providersRowsAtom);
@@ -189,6 +190,12 @@ const loadableProvidersAtom = loadable(providersRowsAtom);
 const refetchProvidersAtom = atom(null, (_get, set) => {
   set(providersRefreshAtom, (c) => c + 1);
 });
+
+// Backward-compat aliases
+const servicesAtom = accountsAtom;
+const fetchServicesAtom = fetchAccountsAtom;
+const upsertServiceAtom = upsertAccountAtom;
+const deleteServiceAtom = deleteAccountAtom;
 
 export {
   providersAtom,
@@ -199,6 +206,10 @@ export {
   fetchModelsAtom,
   upsertModelAtom,
   deleteModelAtom,
+  accountsAtom,
+  fetchAccountsAtom,
+  upsertAccountAtom,
+  deleteAccountAtom,
   servicesAtom,
   fetchServicesAtom,
   upsertServiceAtom,

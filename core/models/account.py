@@ -5,12 +5,12 @@ import uuid
 from core.models.base import OrgScopedModel
 
 
-class Service(OrgScopedModel):
-    __tablename__ = 'services'
+class Account(OrgScopedModel):
+    __tablename__ = 'accounts'
 
     uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
-    service_provider_id = Column(BigInteger, ForeignKey('service_providers.id', ondelete='CASCADE'), nullable=False)
-    api_key_id = Column(BigInteger, ForeignKey('api_keys.id', ondelete='SET NULL'))
+    model_provider_menu_id = Column(BigInteger, ForeignKey('model_providers_menu.id'), nullable=True)
+    hosting_provider_id = Column(BigInteger, ForeignKey('hosting_providers.id', ondelete='SET NULL'), nullable=True)
     name = Column(String, nullable=False)
     description = Column(Text)
     service_type = Column(String, nullable=False)
@@ -22,4 +22,3 @@ class Service(OrgScopedModel):
     usage_count = Column(Integer, default=0)
     last_used_at = Column(BigInteger)
     created_by = Column(BigInteger, ForeignKey('users.id'))
-

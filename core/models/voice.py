@@ -7,7 +7,7 @@ from core.models.base import TimestampModel
 class Voice(TimestampModel):
     __tablename__ = "voices"
     __table_args__ = (
-    UniqueConstraint("service_provider_id", "voice_id"),
+    UniqueConstraint("model_provider_menu_id", "voice_id"),
 )
 
     uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
@@ -17,8 +17,10 @@ class Voice(TimestampModel):
     gender = Column(String, nullable=True)
     accent = Column(String, nullable=True)
     description = Column(String, nullable=True)
-    service_provider_id = Column(BigInteger, ForeignKey("service_providers.id"), nullable=False)
+    service_provider_id = Column(BigInteger, ForeignKey("service_providers.id"), nullable=True)
     model_id = Column(BigInteger, ForeignKey("models.id"), nullable=True)
+    model_provider_menu_id = Column(BigInteger, ForeignKey("model_providers_menu.id", ondelete="SET NULL"), nullable=True)
+    model_menu_id = Column(BigInteger, ForeignKey("model_menu.id", ondelete="SET NULL"), nullable=True)
     is_active = Column(Boolean, default=True)
     sample_url = Column(String, nullable=True)
     language_list = Column(JSONB, nullable=True)

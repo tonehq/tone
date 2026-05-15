@@ -109,22 +109,22 @@ def get_active_tts_services(db, provider_filter=None):
     Get active TTS services joined with their provider and API key.
     Returns list of dicts: {service_id, provider_name, display_name, provider_id, api_key}
     """
-    from core.models.service import Service
-    from core.models.service_provider import ServiceProvider
+    from core.models.account import Account
+    from core.models.model_provider_menu import ModelProviderMenu
     from core.models.api_key import ApiKey
 
     query = (
-        db.query(Service, ServiceProvider, ApiKey)
-        .join(ServiceProvider, Service.service_provider_id == ServiceProvider.id)
-        .outerjoin(ApiKey, Service.api_key_id == ApiKey.id)
+        db.query(Account, ModelProviderMenu, ApiKey)
+        .join(ModelProviderMenu, Account.model_provider_menu_id == ModelProviderMenu.id)
+        .outerjoin(ApiKey, ApiKey.account_id == Account.id)
         .filter(
-            Service.service_type == "tts",
-            Service.status == "active",
+            Account.service_type == "tts",
+            Account.status == "active",
         )
     )
 
     if provider_filter:
-        query = query.filter(ServiceProvider.name == provider_filter)
+        query = query.filter(ModelProviderMenu.name == provider_filter)
 
     results = []
     for svc, provider, api_key in query.all():

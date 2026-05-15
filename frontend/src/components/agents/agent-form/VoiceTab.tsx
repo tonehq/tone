@@ -4,11 +4,11 @@ import { CustomButton, SelectInput } from '@/components/shared';
 import { Slider } from '@/components/ui/slider';
 import { languages } from '@/data/mockAgents';
 import {
-  getLanguagesByProvider,
-  getVoicesByLanguage,
+  getLanguagesByModelProvider,
+  getVoicesByLanguageAndModelProvider,
   type VoiceItem,
 } from '@/services/voiceService';
-import type { ServiceProvider } from '@/types/provider';
+import type { ModelProviderWithAccounts } from '@/types/provider';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { toSelectOptions } from '@/utils/selectUtils';
@@ -20,8 +20,8 @@ import VoiceSelect from './VoiceSelect';
 
 interface VoiceTabProps {
   formData: AgentVoiceFormData;
-  ttsProviders: ServiceProvider[];
-  sttProviders: ServiceProvider[];
+  ttsProviders: ModelProviderWithAccounts[];
+  sttProviders: ModelProviderWithAccounts[];
   providersLoading?: boolean;
   onFormChange: (partial: Partial<AgentVoiceFormData>) => void;
   onTtsValidityChange?: (handle: DynamicProviderFieldsHandle) => void;
@@ -103,36 +103,37 @@ export default function VoiceTab({
   const sttOptions = toSelectOptions(sttProviders, { valueKey: 'id', labelKey: 'display_name' });
 
   const selectedTtsProvider = useMemo(
-    () => ttsProviders.find((p) => p.id === formData.voiceProvider) ?? null,
-    [ttsProviders, formData.voiceProvider],
+    () => ttsProviders.find((p) => p.id === formData.ttsProviderMenuId) ?? null,
+    [ttsProviders, formData.ttsProviderMenuId],
   );
   const selectedSttProvider = useMemo(
-    () => sttProviders.find((p) => p.id === formData.sttProvider) ?? null,
-    [sttProviders, formData.sttProvider],
+    () => sttProviders.find((p) => p.id === formData.sttProviderMenuId) ?? null,
+    [sttProviders, formData.sttProviderMenuId],
   );
 
-  // Resolve the service_provider_id for voice API calls (voices are linked to providers, not services)
-  const ttsServiceProviderId = selectedTtsProvider?.service_provider_id ?? null;
+  // Provider ID for voice API calls (model_providers_menu.id)
+  const ttsProviderId = selectedTtsProvider?.id ?? null;
 
   // Fetch languages when provider changes
   useEffect(() => {
-    if (!ttsServiceProviderId) {
+    if (!ttsProviderId) {
       setLanguageCodes([]);
       setVoices([]);
       fetchedProviderRef.current = null;
       fetchedLangRef.current = null;
       return;
     }
-    if (fetchedProviderRef.current === ttsServiceProviderId) return;
+    if (fetchedProviderRef.current === ttsProviderId) return;
 
     let cancelled = false;
     setLanguagesLoading(true);
     setVoices([]);
     fetchedLangRef.current = null;
-    getLanguagesByProvider(ttsServiceProviderId)
+
+    getLanguagesByModelProvider(ttsProviderId)
       .then((data) => {
         if (!cancelled) {
-          fetchedProviderRef.current = ttsServiceProviderId;
+          fetchedProviderRef.current = ttsProviderId;
           setLanguageCodes(data ?? []);
         }
       })
@@ -148,28 +149,29 @@ export default function VoiceTab({
     return () => {
       cancelled = true;
     };
-  }, [ttsServiceProviderId]);
+  }, [ttsProviderId]);
 
   // Fetch voices when language changes
   useEffect(() => {
-    if (!ttsServiceProviderId || !formData.language) {
+    if (!ttsProviderId || !formData.language) {
       setVoices([]);
       fetchedLangRef.current = null;
       return;
     }
     if (
-      fetchedLangRef.current?.provider === ttsServiceProviderId &&
+      fetchedLangRef.current?.provider === ttsProviderId &&
       fetchedLangRef.current?.language === formData.language
     )
       return;
 
     let cancelled = false;
     setVoicesLoading(true);
-    getVoicesByLanguage(ttsServiceProviderId, formData.language)
+
+    getVoicesByLanguageAndModelProvider(ttsProviderId, formData.language)
       .then((data) => {
         if (!cancelled) {
           fetchedLangRef.current = {
-            provider: ttsServiceProviderId!,
+            provider: ttsProviderId!,
             language: formData.language,
           };
           setVoices(data ?? []);
@@ -187,7 +189,7 @@ export default function VoiceTab({
     return () => {
       cancelled = true;
     };
-  }, [ttsServiceProviderId, formData.language]);
+  }, [ttsProviderId, formData.language]);
 
   const availableLanguageOptions = useMemo(() => {
     const langMap = new Map(languages.map((l) => [l.value, l]));
@@ -216,11 +218,16 @@ export default function VoiceTab({
           description="Select the service used to generate your agent's voice."
         >
           <SelectInput
-            name="voiceProvider"
-            value={formData.voiceProvider != null ? String(formData.voiceProvider) : ''}
+            name="ttsProviderMenuId"
+            value={formData.ttsProviderMenuId != null ? String(formData.ttsProviderMenuId) : ''}
             onValueChange={(v) => {
               const newId = v ? Number(v) : null;
-              onFormChange({ voiceProvider: newId, ttsMetaData: {}, language: '' });
+              onFormChange({
+                ttsProviderMenuId: newId,
+                ttsModelMenuId: null,
+                ttsMetaData: {},
+                language: '',
+              });
             }}
             options={ttsOptions}
             placeholder="Select a provider"
@@ -228,7 +235,7 @@ export default function VoiceTab({
           />
         </FormRow>
 
-        {formData.voiceProvider != null && (
+        {formData.ttsProviderMenuId != null && (
           <FormRow label="Language" description="Select a language to filter available voices.">
             <SelectInput
               name="voiceLanguage"
@@ -246,7 +253,7 @@ export default function VoiceTab({
           </FormRow>
         )}
 
-        {formData.voiceProvider != null && formData.language && (
+        {formData.ttsProviderMenuId != null && formData.language && (
           <FormRow label="Voice" description="Choose a voice for your agent.">
             <VoiceSelect
               name="voiceId"
@@ -309,11 +316,11 @@ export default function VoiceTab({
           description="Select the service used to transcribe calls to text."
         >
           <SelectInput
-            name="sttProvider"
-            value={formData.sttProvider != null ? String(formData.sttProvider) : ''}
+            name="sttProviderMenuId"
+            value={formData.sttProviderMenuId != null ? String(formData.sttProviderMenuId) : ''}
             onValueChange={(v) => {
               const newId = v ? Number(v) : null;
-              onFormChange({ sttProvider: newId, sttMetaData: {} });
+              onFormChange({ sttProviderMenuId: newId, sttModelMenuId: null, sttMetaData: {} });
             }}
             options={sttOptions}
             placeholder="Select a provider"
