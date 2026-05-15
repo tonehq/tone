@@ -16,7 +16,6 @@ def upsert_account(
     claims: EEJWTClaims = Depends(require_ee_admin_or_owner),
     db: Session = Depends(get_db)
 ):
-    service_provider_id = data.get("service_provider_id")
     model_provider_menu_id = data.get("model_provider_menu_id")
     name = data.get("name")
     service_type = data.get("service_type")
@@ -26,14 +25,13 @@ def upsert_account(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="name and service_type are required"
         )
-    if service_provider_id is None and model_provider_menu_id is None:
+    if model_provider_menu_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Either service_provider_id or model_provider_menu_id is required"
+            detail="model_provider_menu_id is required"
         )
 
     return AccountService(db, org_id=UUID(claims.org_id), user_id=claims.user_id).upsert_account(
-        service_provider_id=service_provider_id,
         model_provider_menu_id=model_provider_menu_id,
         name=name,
         service_type=service_type,

@@ -44,17 +44,14 @@ class AgentFactoryService(BaseService):
 
     def _get_account_and_credentials(
         self, account_id: Optional[int], service_type: str
-    ) -> Optional[Tuple[Model, ServiceProvider, str]]:
+    ) -> Optional[Tuple[Any, Any, str]]:
         """
-        Get the first active Model for the given account and type, plus decrypted API key.
+        Get the ModelProviderMenu and decrypted API key for the given account.
         account_id refers to accounts.id.
 
-        Dual-path resolution:
-        1. NEW path: account.model_provider_menu_id → ModelProviderMenu + ApiKey (from api_keys.account_id)
-        2. OLD path: account.service_provider_id → Model + ServiceProvider → ApiKey (telephony/legacy)
+        Resolves via account.model_provider_menu_id → ModelProviderMenu + ApiKey (from api_keys.account_id).
 
-        Returns (Model/ModelProviderMenu, ServiceProvider/ModelProviderMenu, decrypted_api_key) or None.
-        For the new path, the returned tuple contains (ModelProviderMenu, ModelProviderMenu, api_key).
+        Returns (ModelProviderMenu, ModelProviderMenu, decrypted_api_key) or None.
         The model name is resolved separately from agent_config metadata.
         """
         if not account_id:
@@ -66,12 +63,7 @@ class AgentFactoryService(BaseService):
             print(f"DEBUG _get_account_and_credentials: no Account found for account_id={account_id}")
             return None
 
-        # --- NEW PATH: model_provider_menu_id ---
-        if account.model_provider_menu_id:
-            return self._resolve_via_model_provider_menu(account, service_type)
-
-        # --- OLD PATH: service_provider_id (telephony / legacy) ---
-        return self._resolve_via_service_provider(account, service_type)
+        return self._resolve_via_model_provider_menu(account, service_type)
 
     def _resolve_via_model_provider_menu(
         self, account: Account, service_type: str
@@ -99,47 +91,6 @@ class AgentFactoryService(BaseService):
 
         # Return model_provider as both "model" and "provider" — model name resolved from metadata
         return (model_provider, model_provider, api_key_value)
-
-    def _resolve_via_service_provider(
-        self, account: Account, service_type: str
-    ) -> Optional[Tuple[Model, ServiceProvider, str]]:
-        """Resolve credentials through the old service_provider path (telephony/legacy)."""
-        service_provider_id = account.service_provider_id
-        if not service_provider_id:
-            print(f"DEBUG _resolve_via_service_provider: no service_provider_id on account id={account.id}")
-            return None
-
-        result = (
-            self.db.query(Model, ServiceProvider)
-            .join(ServiceProvider, Model.service_provider_id == ServiceProvider.id)
-            .filter(
-                Model.service_provider_id == service_provider_id,
-                Model.service_type == service_type,
-                Model.status == "active",
-            )
-            .first()
-        )
-        if not result:
-            print(f"DEBUG _resolve_via_service_provider: no active Model found for provider_id={service_provider_id} type={service_type}")
-            return None
-        svc, provider = result
-
-        # Prefer API key from account (via api_keys.account_id), then fallback to provider-level
-        api_key = self.db.query(ApiKey).filter(
-            ApiKey.account_id == account.id, ApiKey.status == 'active'
-        ).order_by(ApiKey.id.desc()).first()
-        api_key_id = api_key.id if api_key else None
-        if not api_key_id:
-            q = self.db.query(ApiKey.id).filter(ApiKey.service_provider_id == service_provider_id)
-            if self.org_id:
-                q = q.filter(ApiKey.organization_id == self.org_id)
-            api_key_id = q.order_by(ApiKey.id.desc()).limit(1).scalar()
-
-        api_key_value = self._decrypt_api_key(api_key_id)
-        if not api_key_value:
-            print(f"DEBUG _resolve_via_service_provider: no api_key resolved for account_id={account.id} provider_id={service_provider_id}")
-            return None
-        return (svc, provider, api_key_value)
 
     def _decrypt_api_key(self, api_key_id: Optional[int]) -> Optional[str]:
         """Decrypt an API key by ID. Returns None if not found or decryption fails."""
@@ -356,23 +307,16 @@ class AgentFactoryService(BaseService):
         if not is_s2s and len(all_acct_ids) < 3:
             return None
 
-        # Query 1.5: Resolve account IDs to service_provider_ids and api_key_ids
-        # Dual-path: accounts may use model_provider_menu_id (new) or service_provider_id (old)
+        # Query 1.5: Resolve account IDs to model_provider_menu_ids and api_key_ids
         _t = _time.monotonic()
         acct_records = self.db.query(Account).filter(Account.id.in_(all_acct_ids)).all()
         acct_lookup = {a.id: a for a in acct_records}
-        # Map: service_type -> service_provider_id (old path)
-        sp_id_map = {}
-        # Map: service_type -> model_provider_menu_id (new path)
         mpm_id_map = {}
         for stype, acct_id in account_id_map.items():
             if acct_id and acct_id in acct_lookup:
                 acct_rec = acct_lookup[acct_id]
                 if acct_rec.model_provider_menu_id:
                     mpm_id_map[stype] = acct_rec.model_provider_menu_id
-                elif acct_rec.service_provider_id:
-                    sp_id_map[stype] = acct_rec.service_provider_id
-        all_sp_ids = list(set(sp_id_map.values()))
         all_mpm_ids = list(set(mpm_id_map.values()))
 
         # Bulk-fetch API keys linked to accounts (reverse FK)
@@ -398,52 +342,21 @@ class AgentFactoryService(BaseService):
             if mmid is not None:
                 model_menu_ids.add(int(mmid))
 
-        # Query 2: Bulk fetch data for both paths
+        # Query 2: Bulk fetch model provider menu data + model names
         _t = _time.monotonic()
-        model_map = {}
         api_key_ids = set()
         model_name_map = {}
 
-        # OLD PATH: Models + ServiceProviders
-        if all_sp_ids or model_name_ids:
-            q2_conditions = []
-            if all_sp_ids:
-                q2_conditions.append(and_(Model.service_provider_id.in_(all_sp_ids), Model.status == "active"))
-            if model_name_ids:
-                q2_conditions.append(Model.id.in_(model_name_ids))
-            rows = (
-                self.db.query(Model, ServiceProvider)
-                .join(ServiceProvider, Model.service_provider_id == ServiceProvider.id)
-                .filter(or_(*q2_conditions))
-                .all()
-            )
+        # Resolve model names from old Model table (for model_id references in metadata)
+        if model_name_ids:
+            from core.models.models import Model as LegacyModel
+            legacy_rows = self.db.query(LegacyModel.id, LegacyModel.name).filter(
+                LegacyModel.id.in_(model_name_ids)
+            ).all()
+            for row in legacy_rows:
+                model_name_map[row.id] = row.name
 
-            for svc, provider in rows:
-                model_name_map[svc.id] = svc.name
-                key = (svc.service_provider_id, svc.service_type)
-                if key not in model_map:
-                    model_map[key] = (svc, provider)
-                    matched_acct_id = None
-                    for aid, a in acct_lookup.items():
-                        if a.service_provider_id == svc.service_provider_id:
-                            matched_acct_id = aid
-                            break
-                    acct_api_key = acct_api_key_map.get(matched_acct_id) if matched_acct_id else None
-                    if acct_api_key:
-                        api_key_ids.add(acct_api_key)
-                    else:
-                        fallback_q = self.db.query(ApiKey.id).filter(
-                            ApiKey.service_provider_id == svc.service_provider_id,
-                            ApiKey.status == "active",
-                        )
-                        if self.org_id:
-                            fallback_q = fallback_q.filter(ApiKey.organization_id == self.org_id)
-                        fallback_key_id = fallback_q.order_by(ApiKey.id.desc()).limit(1).scalar()
-                        if fallback_key_id:
-                            api_key_ids.add(fallback_key_id)
-                            acct_api_key_map[matched_acct_id] = fallback_key_id
-
-        # NEW PATH: Bulk resolve model_provider_menu services
+        # Bulk resolve model_provider_menu services
         mpm_data_map = {}  # service_type -> ModelProviderMenu
         if all_mpm_ids:
             mpm_records = self.db.query(ModelProviderMenu).filter(ModelProviderMenu.id.in_(all_mpm_ids)).all()
@@ -530,61 +443,37 @@ class AgentFactoryService(BaseService):
 
         logger.info("[TIMING] serialize: TOTAL (+%.3fs)", _time.monotonic() - _t_ser)
 
-        # Build service data dicts (dual-path: new model_provider_menu or old service_provider)
+        # Build service data dicts from model_provider_menu path
         def _build_service_data(stype, metadata):
             acct_id = account_id_map.get(stype)
 
-            # NEW PATH: model_provider_menu
-            if stype in mpm_data_map:
-                mpm = mpm_data_map[stype]
-                acct_ak_id = acct_api_key_map.get(acct_id) if acct_id else None
-                api_key = api_key_map.get(acct_ak_id) if acct_ak_id else None
-                if not api_key:
-                    print(f"DEBUG _build_service_data({stype}): new path, no api_key for acct_id={acct_id}")
-                    return None
-                # Model name resolution: model_menu_id → model_id → model (name string from frontend)
-                model_name = None
-                mmid = metadata.get("model_menu_id")
-                if mmid is not None:
-                    model_name = model_name_map.get(f"mm_{int(mmid)}")
-                if not model_name:
-                    mid = metadata.get("model_id")
-                    if mid is not None:
-                        model_name = model_name_map.get(int(mid))
-                if not model_name:
-                    model_name = metadata.get("model")
-                return {
-                    "provider_name": (mpm.name or "").strip().lower(),
-                    "api_key": api_key,
-                    "model_name": model_name,
-                    "metadata": metadata,
-                    "model_meta_data": {},
-                }
+            if stype not in mpm_data_map:
+                print(f"DEBUG _build_service_data({stype}): no model_provider_menu resolved")
+                return None
 
-            # OLD PATH: service_provider
-            sp_id = sp_id_map.get(stype)
-            if not sp_id:
-                print(f"DEBUG _build_service_data({stype}): no sp_id in sp_id_map. sp_id_map={sp_id_map}")
-                return None
-            entry = model_map.get((sp_id, stype))
-            if not entry:
-                print(f"DEBUG _build_service_data({stype}): no entry in model_map for key=({sp_id}, {stype}). model_map_keys={list(model_map.keys())}")
-                return None
-            svc, provider = entry
+            mpm = mpm_data_map[stype]
             acct_ak_id = acct_api_key_map.get(acct_id) if acct_id else None
             api_key = api_key_map.get(acct_ak_id) if acct_ak_id else None
-            print(f"DEBUG _build_service_data({stype}): acct_id={acct_id} acct_ak_id={acct_ak_id} api_key={'present' if api_key else 'MISSING'} api_key_map_keys={list(api_key_map.keys())} acct_api_key_map={acct_api_key_map}")
             if not api_key:
+                print(f"DEBUG _build_service_data({stype}): no api_key for acct_id={acct_id}")
                 return None
-            model_meta = (svc.meta_data or {}) if isinstance(getattr(svc, "meta_data", None), dict) else {}
-            mid = metadata.get("model_id")
-            model_name = model_name_map.get(int(mid)) if mid is not None else None
+            # Model name resolution: model_menu_id → model_id → model (name string from frontend)
+            model_name = None
+            mmid = metadata.get("model_menu_id")
+            if mmid is not None:
+                model_name = model_name_map.get(f"mm_{int(mmid)}")
+            if not model_name:
+                mid = metadata.get("model_id")
+                if mid is not None:
+                    model_name = model_name_map.get(int(mid))
+            if not model_name:
+                model_name = metadata.get("model")
             return {
-                "provider_name": (provider.name or "").strip().lower(),
+                "provider_name": (mpm.name or "").strip().lower(),
                 "api_key": api_key,
                 "model_name": model_name,
                 "metadata": metadata,
-                "model_meta_data": model_meta,
+                "model_meta_data": {},
             }
 
         llm_data = _build_service_data("llm", llm_metadata)

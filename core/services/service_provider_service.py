@@ -8,7 +8,6 @@ from fastapi import HTTPException, status
 
 from core.services.base import BaseService
 from core.models.service_provider import ServiceProvider
-from core.models.account import Account
 from core.models.models import Model
 from core.models.voice import Voice
 
@@ -167,15 +166,9 @@ class ServiceProviderService(BaseService):
         )
 
         if exclude_existing_services and self.org_id:
-            mapped_ids = (
-                self.db.query(Account.service_provider_id)
-                .filter(Account.organization_id == self.org_id)
-                .distinct()
-                .all()
-            )
-            mapped_id_list = [row[0] for row in mapped_ids]
-            if mapped_id_list:
-                query = query.filter(ServiceProvider.id.notin_(mapped_id_list))
+            # Accounts now use model_provider_menu_id, not service_provider_id
+            # No filtering needed here since service providers (e.g. Twilio) are not linked via accounts
+            pass
 
         # Count BEFORE pagination
         total = query.count()

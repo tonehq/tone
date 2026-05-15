@@ -25,29 +25,28 @@ def _create_agent(client, name=None):
 def _resolve_provider(db_session, provider_name, service_type):
     """Look up service ID and first model ID. Returns (service_id, model_id) or (None, None).
 
-    agent_config.*_service_id FKs to services(id), not service_providers(id).
-    We find the service_provider first, then look up the corresponding service record.
+    agent_config.*_service_id FKs to accounts(id).
+    We find the model_provider_menu first, then look up the corresponding account record.
     """
-    from core.models.service_provider import ServiceProvider
+    from core.models.model_provider_menu import ModelProviderMenu
     from core.models.account import Account
-    from core.models.models import Model
+    from core.models.model_menu import ModelMenu
 
-    provider = db_session.query(ServiceProvider).filter(
-        ServiceProvider.name == provider_name,
-        ServiceProvider.provider_type == service_type,
+    provider = db_session.query(ModelProviderMenu).filter(
+        ModelProviderMenu.name == provider_name,
+        ModelProviderMenu.provider_type == service_type,
     ).first()
     if not provider:
         return None, None
     service = db_session.query(Account).filter(
-        Account.service_provider_id == provider.id,
+        Account.model_provider_menu_id == provider.id,
         Account.service_type == service_type,
     ).first()
     if not service:
         return None, None
-    model = db_session.query(Model).filter(
-        Model.service_provider_id == provider.id,
-        Model.service_type == service_type,
-        Model.status == "active",
+    model = db_session.query(ModelMenu).filter(
+        ModelMenu.model_provider_menu_id == provider.id,
+        ModelMenu.status == "active",
     ).first()
     model_id = model.id if model else None
     return service.id, model_id

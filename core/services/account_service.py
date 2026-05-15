@@ -8,8 +8,6 @@ from fastapi import HTTPException, status
 
 from core.services.base import BaseService
 from core.models.account import Account
-from core.models.service_provider import ServiceProvider
-from core.models.models import Model
 from core.models.api_key import ApiKey
 
 
@@ -17,7 +15,7 @@ class AccountService(BaseService):
     def __init__(self, db: Session, user_id: Optional[int] = None, org_id=None):
         super().__init__(db, user_id, org_id=org_id)
 
-    def upsert_account(self, service_provider_id: Optional[int] = None, name: str = "",
+    def upsert_account(self, name: str = "",
                        service_type: str = "",
                        config: Optional[Dict] = None, api_key_id: Optional[int] = None,
                        description: Optional[str] = None,
@@ -44,16 +42,6 @@ class AccountService(BaseService):
                 status_code=status.HTTP_409_CONFLICT,
                 detail="An account with this name and type already exists in this organization"
             )
-
-        if service_provider_id:
-            provider = self.db.query(ServiceProvider).filter(
-                ServiceProvider.id == service_provider_id
-            ).first()
-            if not provider:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Service provider not found"
-                )
 
         if model_provider_menu_id:
             from core.models.model_provider_menu import ModelProviderMenu
@@ -90,7 +78,6 @@ class AccountService(BaseService):
         elif api_key_value:
             from core.services.api_key_service import ApiKeyService
             api_key_result = ApiKeyService(self.db, user_id=self._user_id, org_id=self.org_id).upsert_api_key(
-                service_provider_id=service_provider_id,
                 name=api_key_name or f"{name} key",
                 api_key_value=api_key_value,
                 additional_credentials=additional_credentials,
@@ -105,7 +92,6 @@ class AccountService(BaseService):
 
         values = {
             "uuid": UUID(account_uuid) if account_uuid else uuid_lib.uuid4(),
-            "service_provider_id": service_provider_id,
             "model_provider_menu_id": model_provider_menu_id,
             "hosting_provider_id": hosting_provider_id,
             "name": name,
@@ -124,7 +110,7 @@ class AccountService(BaseService):
             values["status"] = account_status
 
         update_fields = [
-            "service_provider_id", "model_provider_menu_id", "hosting_provider_id", "name",
+            "model_provider_menu_id", "hosting_provider_id", "name",
             "description", "service_type", "config", "is_default", "is_public",
             "tags", "updated_at"
         ]
@@ -185,7 +171,6 @@ class AccountService(BaseService):
             "name": acct.name,
             "description": acct.description,
             "service_type": acct.service_type,
-            "service_provider_id": acct.service_provider_id,
             "model_provider_menu_id": acct.model_provider_menu_id,
             "hosting_provider_id": acct.hosting_provider_id,
             "api_key_id": ak.id if ak else None,
@@ -202,21 +187,14 @@ class AccountService(BaseService):
     def get_all_accounts(self, service_type: Optional[str] = None,
                          page: Optional[int] = None,
                          page_size: Optional[int] = None):
-        from sqlalchemy.orm import aliased
         from core.models.model_provider_menu import ModelProviderMenu
         from core.models.model_menu import ModelMenu
 
-        # Left join both provider paths so accounts with either FK are returned
-        SP = aliased(ServiceProvider)
-        MPM = aliased(ModelProviderMenu)
-
         query = (
             self.query(Account)
-            .outerjoin(SP, Account.service_provider_id == SP.id)
-            .outerjoin(MPM, Account.model_provider_menu_id == MPM.id)
+            .outerjoin(ModelProviderMenu, Account.model_provider_menu_id == ModelProviderMenu.id)
             .filter(Account.status == 'active')
-            .add_entity(SP)
-            .add_entity(MPM)
+            .add_entity(ModelProviderMenu)
         )
 
         if service_type:
@@ -231,7 +209,7 @@ class AccountService(BaseService):
             results = query.all()
 
         # Collect account IDs to batch-fetch api_key hints
-        account_ids = [acct.id for acct, _, _ in results]
+        account_ids = [acct.id for acct, _ in results]
         api_key_hints = {}
         if account_ids:
             hint_rows = self.db.query(ApiKey.account_id, ApiKey.id, ApiKey.api_key_hint).filter(
@@ -241,29 +219,8 @@ class AccountService(BaseService):
                 if row.account_id not in api_key_hints:
                     api_key_hints[row.account_id] = (row.id, row.api_key_hint)
 
-        # Batch-fetch models: old path (Model table) + new path (ModelMenu table)
-        # Old path: models by service_provider_id
-        old_provider_ids = list({acct.service_provider_id for acct, _, _ in results if acct.service_provider_id})
-        models_by_provider: Dict[int, List[Dict[str, Any]]] = {}
-        if old_provider_ids:
-            models = (
-                self.db.query(Model)
-                .filter(Model.service_provider_id.in_(old_provider_ids), Model.status == "active")
-                .order_by(Model.id)
-                .all()
-            )
-            for m in models:
-                models_by_provider.setdefault(m.service_provider_id, []).append({
-                    "id": m.id,
-                    "service_provider_id": m.service_provider_id,
-                    "name": m.name,
-                    "meta_data": m.meta_data,
-                    "created_at": m.created_at,
-                    "updated_at": m.updated_at,
-                })
-
-        # New path: models by model_provider_menu_id (from ModelMenu)
-        mpm_ids = list({acct.model_provider_menu_id for acct, _, _ in results if acct.model_provider_menu_id})
+        # Batch-fetch models by model_provider_menu_id (from ModelMenu)
+        mpm_ids = list({acct.model_provider_menu_id for acct, _ in results if acct.model_provider_menu_id})
         models_by_mpm: Dict[int, List[Dict[str, Any]]] = {}
         if mpm_ids:
             menus = (
@@ -283,18 +240,12 @@ class AccountService(BaseService):
                 })
 
         data = []
-        for acct, sp, mpm in results:
-            # Resolve provider info from whichever path is set
+        for acct, mpm in results:
             if mpm:
                 provider_name = mpm.display_name
                 provider_type = mpm.provider_type
                 acct_models = models_by_mpm.get(mpm.id, [])
                 schema = mpm.meta_data_schema
-            elif sp:
-                provider_name = sp.display_name
-                provider_type = sp.provider_type
-                acct_models = models_by_provider.get(sp.id, [])
-                schema = sp.meta_data_schema
             else:
                 provider_name = None
                 provider_type = acct.service_type
@@ -309,7 +260,6 @@ class AccountService(BaseService):
                 "display_name": acct.name,
                 "description": acct.description,
                 "service_type": acct.service_type,
-                "service_provider_id": acct.service_provider_id,
                 "model_provider_menu_id": acct.model_provider_menu_id,
                 "hosting_provider_id": acct.hosting_provider_id,
                 "service_provider_name": provider_name,
@@ -351,7 +301,7 @@ class AccountService(BaseService):
                 detail="Account not found"
             )
 
-        # Resolve provider from whichever path is set
+        # Resolve provider info
         provider_name = None
         provider_type = acct.service_type
         if acct.model_provider_menu_id:
@@ -359,11 +309,6 @@ class AccountService(BaseService):
             if mpm:
                 provider_name = mpm.display_name
                 provider_type = mpm.provider_type
-        elif acct.service_provider_id:
-            sp = self.db.query(ServiceProvider).filter(ServiceProvider.id == acct.service_provider_id).first()
-            if sp:
-                provider_name = sp.display_name
-                provider_type = sp.provider_type
 
         # Get API key via reverse FK
         ak = self.db.query(ApiKey).filter(
@@ -376,7 +321,6 @@ class AccountService(BaseService):
             "name": acct.name,
             "description": acct.description,
             "service_type": acct.service_type,
-            "service_provider_id": acct.service_provider_id,
             "model_provider_menu_id": acct.model_provider_menu_id,
             "service_provider_name": provider_name,
             "provider_type": provider_type,
@@ -442,10 +386,6 @@ class AccountService(BaseService):
             mpm = self.db.query(ModelProviderMenu).filter(ModelProviderMenu.id == acct.model_provider_menu_id).first()
             if mpm:
                 provider_name = mpm.display_name
-        elif acct.service_provider_id:
-            sp = self.db.query(ServiceProvider).filter(ServiceProvider.id == acct.service_provider_id).first()
-            if sp:
-                provider_name = sp.display_name
 
         # Get API key via reverse FK
         ak = self.db.query(ApiKey).filter(
@@ -457,7 +397,6 @@ class AccountService(BaseService):
             "uuid": str(acct.uuid),
             "name": acct.name,
             "service_type": acct.service_type,
-            "service_provider_id": acct.service_provider_id,
             "model_provider_menu_id": acct.model_provider_menu_id,
             "service_provider_name": provider_name,
             "api_key_id": ak.id if ak else None,

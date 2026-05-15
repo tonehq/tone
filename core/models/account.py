@@ -9,7 +9,6 @@ class Account(OrgScopedModel):
     __tablename__ = 'accounts'
 
     uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
-    service_provider_id = Column(BigInteger, ForeignKey('service_providers.id', ondelete='CASCADE'), nullable=True)
     model_provider_menu_id = Column(BigInteger, ForeignKey('model_providers_menu.id'), nullable=True)
     hosting_provider_id = Column(BigInteger, ForeignKey('hosting_providers.id', ondelete='SET NULL'), nullable=True)
     name = Column(String, nullable=False)
