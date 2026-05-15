@@ -1,0 +1,148 @@
+# Grafana Alloy Helm values for Tone Kubernetes clusters
+# Deploys as a DaemonSet to collect logs and metrics from all nodes
+# and push them to Grafana Cloud (Loki for logs, Prometheus for metrics).
+#
+# Placeholders (replaced by vultr_api.py install-grafana-alloy):
+#   ${CLUSTER_NAME}   — cluster label for multi-cluster identification (e.g., "tone-test", "tone-staging")
+#   ${LOKI_URL}       — Grafana Cloud Loki push URL
+#   ${LOKI_USER}      — Grafana Cloud Loki instance ID (basic auth username)
+#   ${PROM_URL}       — Grafana Cloud Prometheus remote write URL
+#   ${PROM_USER}      — Grafana Cloud Prometheus instance ID (basic auth username)
+#   ${API_KEY}        — Grafana Cloud API token (basic auth password, shared for both)
+
+alloy:
+  configMap:
+    content: |
+      // ──── Kubernetes Discovery ────
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      // ──── Relabel: extract K8s metadata as labels ────
+      discovery.relabel "pod_labels" {
+        targets = discovery.kubernetes.pods.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app"]
+          target_label  = "app"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_environment"]
+          target_label  = "environment"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_component"]
+          target_label  = "component"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_node_name"]
+          target_label  = "node"
+        }
+      }
+
+      // ──── Log Collection from container log files ────
+      loki.source.kubernetes "pod_logs" {
+        targets    = discovery.relabel.pod_labels.output
+        forward_to = [loki.process.filter.receiver]
+      }
+
+      // ──── Log Processing: add cluster label + drop health-check noise ────
+      loki.process "filter" {
+        // Add cluster label for multi-cluster identification
+        stage.static_labels {
+          values = {
+            cluster = "${CLUSTER_NAME}",
+          }
+        }
+
+        // Drop noisy health-check logs
+        stage.drop {
+          expression  = "GET /health"
+          drop_counter_reason = "health_check"
+        }
+        stage.drop {
+          expression  = "GET /ready"
+          drop_counter_reason = "readiness_check"
+        }
+
+        forward_to = [loki.write.grafana_cloud.receiver]
+      }
+
+      // ──── Push logs to Grafana Cloud Loki ────
+      loki.write "grafana_cloud" {
+        endpoint {
+          url = "${LOKI_URL}"
+
+          basic_auth {
+            username = "${LOKI_USER}"
+            password = "${API_KEY}"
+          }
+        }
+        external_labels = {
+          cluster = "${CLUSTER_NAME}",
+        }
+      }
+
+      // ──── Node Metrics: embedded node_exporter ────
+      prometheus.exporter.unix "node" {
+      }
+
+      prometheus.scrape "node_metrics" {
+        targets    = prometheus.exporter.unix.node.targets
+        forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+        scrape_interval = "60s"
+      }
+
+      // ──── Push metrics to Grafana Cloud Prometheus ────
+      prometheus.remote_write "grafana_cloud" {
+        endpoint {
+          url = "${PROM_URL}"
+
+          basic_auth {
+            username = "${PROM_USER}"
+            password = "${API_KEY}"
+          }
+        }
+        external_labels = {
+          cluster = "${CLUSTER_NAME}",
+        }
+      }
+
+  # DaemonSet configuration
+  controller:
+    type: daemonset
+
+  # Tolerate all taints so Alloy runs on every node (including system/tainted nodes)
+  tolerations:
+    - operator: Exists
+
+  # Resource limits — lightweight for edge collection
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+  # Mount host log directories (read-only)
+  mounts:
+    varlog: true
+    dockercontainers: true
+
+  # Security context for reading host logs
+  securityContext:
+    privileged: false
+    runAsUser: 0

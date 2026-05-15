@@ -1426,6 +1426,10 @@ class AgentFactoryService(BaseService):
                             to_number=to_number,
                         )
                         call_log_state["id"] = call_log.id
+                        current_trace = call_data.get("_trace_id", "")
+                        if current_trace:
+                            from core.logging import update_trace_id_with_call_log
+                            call_log_state["trace_id"] = update_trace_id_with_call_log(current_trace, call_log.id)
                         logger.info("[TIMING] create_call_log thread (+%.3fs)", _time.monotonic() - _t)
                 except Exception as e:
                     logger.error("Failed to create call log: {}", e)
@@ -1801,8 +1805,14 @@ class AgentFactoryService(BaseService):
             await task.cancel()
 
         logger.info("[TIMING] run_bot_with_components setup complete, total: %.3fs — starting runner.run()", _time.monotonic() - _t_comp_start)
+
+        # Wait for call_log_id and update trace_id before starting the pipeline
+        await call_log_ready.wait()
+        final_trace_id = call_log_state.get("trace_id") or call_data.get("_trace_id", "none")
+
         runner = PipelineRunner(handle_sigint=getattr(runner_args, "handle_sigint", False))
-        await runner.run(task)
+        with logger.contextualize(trace_id=final_trace_id):
+            await runner.run(task)
 
         # Fallback: if on_audio_data didn't update DB (e.g. no audio captured),
         # update the call log here with whatever we have.

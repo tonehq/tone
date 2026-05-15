@@ -245,10 +245,12 @@ AskUserQuestion (multiSelect):
 - `nginx-ingress controller (Recommended)`
 - `cert-manager (Recommended)`
 - `Let's Encrypt ClusterIssuer`
+- `Grafana Cloud observability` — DaemonSet-based log + metrics collection via Grafana Alloy
 
 If nginx selected: ask replica count (`1`, `2 (Recommended)`, `3`)
 If cert-manager selected: ask replica count
 If ClusterIssuer selected: ask email (no hardcoded options, must type)
+If Grafana Cloud selected: ask 4 questions (Loki URL, Prometheus URL, Instance ID, API Key) — all via "Type in notes" / "Skip for now" options. To get these credentials: sign up at grafana.com/products/cloud → create stack → My Account → Access Policies → create policy with `logs:write` + `metrics:write` → generate token.
 
 ### 5e: Infisical Service Token Name
 
@@ -364,6 +366,7 @@ Launch Agent (type: general-purpose) with this prompt:
 > - nginx: `python3 {CLUSTER_SKILL}/vultr_api.py install-nginx --env-name {ENV_NAME} --replicas {N}`
 > - cert-manager: `python3 {CLUSTER_SKILL}/vultr_api.py install-cert-manager --env-name {ENV_NAME} --replicas {N}`
 > - ClusterIssuer: `python3 {CLUSTER_SKILL}/vultr_api.py apply-cluster-issuer --env-name {ENV_NAME} --manifest-path build/kubernetes/{ENV_NAME}/letsencrypt-prod.yaml`
+> - Grafana Alloy (if selected): `python3 {CLUSTER_SKILL}/vultr_api.py install-grafana-alloy --env-name {ENV_NAME} --cluster-name {CLUSTER_LABEL} --loki-url "{LOKI_URL}" --loki-user "{LOKI_USER}" --prom-url "{PROM_URL}" --prom-user "{PROM_USER}" --api-key "{API_KEY}"`
 >
 > **Return a single JSON object with:** CLUSTER_ID, CLUSTER_LABEL, EXTERNAL_IP, KUBECONFIG_PATH"
 
@@ -477,6 +480,7 @@ ADD-ONS:
   [{x| }] nginx-ingress → {EXTERNAL_IP}
   [{x| }] cert-manager
   [{x| }] Let's Encrypt ClusterIssuer
+  [{x| }] Grafana Cloud observability (logs + metrics)
 
 DOMAINS:
   API:  {API_DOMAIN}  → {EXTERNAL_IP}

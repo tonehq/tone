@@ -35,7 +35,7 @@ spec:
     - host: staging-call.trytone.ai
       http:
         paths:
-          - path: /ws
+          - path: /
             pathType: Prefix
             backend:
               service:
