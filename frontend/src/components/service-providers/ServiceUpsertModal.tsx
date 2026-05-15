@@ -9,11 +9,7 @@ import {
 } from '@/components/shared';
 import ProviderLogo from '@/components/service-providers/ProviderLogo';
 import { type ServiceUpsertFormData, serviceUpsertSchema } from '@/schemas/provider';
-import {
-  listApiKeysByProvider,
-  listServiceProviders,
-  type ApiKeyListRow,
-} from '@/services/providerService';
+import { listServiceProviders, type ApiKeyListRow } from '@/services/providerService';
 import type { Service, ServiceProvider, ServiceUpsertPayload } from '@/types/provider';
 import { handleApiError } from '@/utils/helpers';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -79,7 +75,7 @@ export default function ServiceUpsertModal({
   useEffect(() => {
     if (!open) return;
     setProvidersLoading(true);
-    listServiceProviders({ page_size: 0, exclude_existing_services: true })
+    listServiceProviders({ page_size: 0 })
       .then((result) => setProviders(result.providers))
       .catch(handleApiError)
       .finally(() => setProvidersLoading(false));
@@ -107,15 +103,22 @@ export default function ServiceUpsertModal({
       setApiKeys([]);
       return;
     }
-    listApiKeysByProvider({ service_provider_id: pid, page: 1, page_size: 100 })
-      .then((result) => {
-        setApiKeys(result.keys);
-        if (!isEdit && result.keys.length > 0) {
-          setSelectedApiKeyId(String(result.keys[0].id));
-        }
-      })
-      .catch(handleApiError);
-  }, [selectedProviderId, isEdit]);
+    // In edit mode, show the existing key from the account
+    if (isEdit && service?.api_key_id) {
+      setApiKeys([
+        {
+          id: service.api_key_id,
+          name: service.name,
+          api_key_hint: service.api_key_hint ?? '',
+        } as ApiKeyListRow,
+      ]);
+      setSelectedApiKeyId(String(service.api_key_id));
+    } else {
+      // For new accounts, default to creating a new key
+      setApiKeys([]);
+      setSelectedApiKeyId('__new__');
+    }
+  }, [selectedProviderId, isEdit, service]);
 
   const handleServiceTypeChange = useCallback(
     (val: string) => {
@@ -155,7 +158,7 @@ export default function ServiceUpsertModal({
     if (!open) return;
     if (service) {
       reset({ name: service.name, description: service.description ?? '' });
-      setSelectedProviderId(String(service.service_provider_id));
+      setSelectedProviderId(String(service.model_provider_menu_id));
       setServiceType(service.service_type ?? 'llm');
       setStatus(service.status ?? 'active');
       setIsDefault(service.is_default ?? false);
@@ -203,7 +206,7 @@ export default function ServiceUpsertModal({
       setSaving(true);
       try {
         const payload: ServiceUpsertPayload = {
-          service_provider_id: Number(selectedProviderId),
+          model_provider_menu_id: Number(selectedProviderId),
           name: data.name.trim(),
           service_type: serviceType,
           config,

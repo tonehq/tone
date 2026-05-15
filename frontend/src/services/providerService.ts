@@ -34,7 +34,6 @@ export interface ListProvidersParams {
   sort?: string;
   page?: number;
   page_size?: number;
-  exclude_existing_services?: boolean;
 }
 
 export interface ListProvidersResult {
@@ -46,7 +45,7 @@ export const listServiceProviders = async (
   params: ListProvidersParams = {},
 ): Promise<ListProvidersResult> => {
   const { data } = await axiosInstance.post<PaginatedResponse<ServiceProvider> | ServiceProvider[]>(
-    '/service-providers/list',
+    '/model-providers-menu/list',
     params,
   );
   if (Array.isArray(data)) {
