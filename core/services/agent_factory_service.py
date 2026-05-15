@@ -17,7 +17,10 @@ from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
 from core.models.api_key import ApiKey
 from core.models.models import Model
-from core.models.service import Service
+from core.models.model_instance import ModelInstance
+from core.models.model_menu import ModelMenu
+from core.models.model_provider_menu import ModelProviderMenu
+from core.models.account import Account
 from core.models.service_provider import ServiceProvider
 from core.models.voice import Voice
 from core.services.base import BaseService
@@ -39,64 +42,68 @@ class AgentFactoryService(BaseService):
             .first()
         )
 
-    def _get_service_and_credentials(
-        self, service_id: Optional[int], service_type: str
-    ) -> Optional[Tuple[Model, ServiceProvider, str]]:
+    def _get_account_and_credentials(
+        self, account_id: Optional[int], service_type: str
+    ) -> Optional[Tuple[Any, Any, str]]:
         """
-        Get the first active Model for the given service and type, plus decrypted API key.
-        service_id now refers to services.id (not service_providers.id).
-        Returns (Model, ServiceProvider, decrypted_api_key) or None.
+        Get the ModelProviderMenu and decrypted API key for the given account.
+        account_id refers to accounts.id.
+
+        Resolves via account.model_provider_menu_id → ModelProviderMenu + ApiKey (from api_keys.account_id).
+
+        Returns (ModelProviderMenu, ModelProviderMenu, decrypted_api_key) or None.
+        The model name is resolved separately from agent_config metadata.
         """
-        if not service_id:
+        if not account_id:
             return None
 
-        # Look up the Service record to get service_provider_id and api_key_id
-        service = self.db.query(Service).filter(Service.id == service_id).first()
-        if not service:
-            print(f"DEBUG _get_service_and_credentials: no Service found for service_id={service_id}")
+        # Look up the Account record
+        account = self.db.query(Account).filter(Account.id == account_id).first()
+        if not account:
+            print(f"DEBUG _get_account_and_credentials: no Account found for account_id={account_id}")
             return None
 
-        service_provider_id = service.service_provider_id
+        return self._resolve_via_model_provider_menu(account, service_type)
 
-        result = (
-            self.db.query(Model, ServiceProvider)
-            .join(ServiceProvider, Model.service_provider_id == ServiceProvider.id)
-            .filter(
-                Model.service_provider_id == service_provider_id,
-                Model.service_type == service_type,
-                Model.status == "active",
-            )
-            .first()
-        )
-        if not result:
-            print(f"DEBUG _get_service_and_credentials: no active Model found for provider_id={service_provider_id} type={service_type}")
+    def _resolve_via_model_provider_menu(
+        self, account: Account, service_type: str
+    ) -> Optional[Tuple[Any, Any, str]]:
+        """Resolve credentials through the new model_provider_menu path.
+
+        Account → ModelProviderMenu (provider name) + ApiKey (from api_keys.account_id).
+        Model selection happens at agent_config level, not here.
+        """
+        model_provider = self.db.query(ModelProviderMenu).filter(
+            ModelProviderMenu.id == account.model_provider_menu_id
+        ).first()
+        if not model_provider:
+            print(f"DEBUG _resolve_via_model_provider_menu: no ModelProviderMenu found for id={account.model_provider_menu_id}")
             return None
-        svc, provider = result
 
-        # Prefer API key from Service record, then fallback to provider-level
-        api_key_id = service.api_key_id
-        if not api_key_id:
-            q = self.db.query(ApiKey.id).filter(ApiKey.service_provider_id == service_provider_id)
-            if self.org_id:
-                q = q.filter(ApiKey.organization_id == self.org_id)
-            api_key_id = q.order_by(ApiKey.id.desc()).limit(1).scalar()
-
-        api_key_value = None
-        if api_key_id:
-            api_key = self.db.query(ApiKey).filter(ApiKey.id == api_key_id).first()
-            if api_key and api_key.api_key_encrypted:
-                try:
-                    api_key_value = decrypt(api_key.api_key_encrypted)
-                except Exception as e:
-                    logger.warning("Failed to decrypt API key for model %s: %s", svc.id, e)
-            else:
-                print(f"DEBUG _get_service_and_credentials: api_key record missing or not encrypted for api_key_id={api_key_id}")
-        else:
-            print(f"DEBUG _get_service_and_credentials: no api_key found for service_id={service_id} provider_id={service_provider_id}")
+        # API key from api_keys table via account_id (reverse FK)
+        api_key = self.db.query(ApiKey).filter(
+            ApiKey.account_id == account.id, ApiKey.status == 'active'
+        ).order_by(ApiKey.id.desc()).first()
+        api_key_value = self._decrypt_api_key(api_key.id if api_key else None)
         if not api_key_value:
-            print(f"DEBUG _get_service_and_credentials: no api_key_value resolved for service_id={service_id} type={service_type}")
+            print(f"DEBUG _resolve_via_model_provider_menu: no api_key resolved for account_id={account.id}")
             return None
-        return (svc, provider, api_key_value)
+
+        # Return model_provider as both "model" and "provider" — model name resolved from metadata
+        return (model_provider, model_provider, api_key_value)
+
+    def _decrypt_api_key(self, api_key_id: Optional[int]) -> Optional[str]:
+        """Decrypt an API key by ID. Returns None if not found or decryption fails."""
+        if not api_key_id:
+            return None
+        api_key = self.db.query(ApiKey).filter(ApiKey.id == api_key_id).first()
+        if not api_key or not api_key.api_key_encrypted:
+            return None
+        try:
+            return decrypt(api_key.api_key_encrypted)
+        except Exception as e:
+            logger.warning("Failed to decrypt API key id=%s: %s", api_key_id, e)
+            return None
 
     def _build_input_params(self, service_class, metadata: dict):
         """Convert metadata dict to proper InputParams for a Pipecat service class.
@@ -141,9 +148,22 @@ class AgentFactoryService(BaseService):
         """Look up a Voice record by provider and voice_id, then resolve its model name.
 
         Used by providers like Rime and Sarvam where the model is determined by the voice.
+        Tries new path (model_provider_menu_id) first, falls back to old path (service_provider_id).
         """
         if not voice_id:
             return None
+
+        # New path: try model_provider_menu_id first
+        voice = (
+            self.db.query(Voice)
+            .filter(Voice.model_provider_menu_id == provider_id, Voice.voice_id == voice_id)
+            .first()
+        )
+        if voice and voice.model_menu_id:
+            mm = self.db.query(ModelMenu).filter(ModelMenu.id == voice.model_menu_id).first()
+            return mm.name if mm else None
+
+        # Old path: fallback to service_provider_id
         voice = (
             self.db.query(Voice)
             .filter(Voice.service_provider_id == provider_id, Voice.voice_id == voice_id)
@@ -153,14 +173,15 @@ class AgentFactoryService(BaseService):
             return None
         return self._get_model_name_by_id(voice.model_id)
 
-    def _extract_service_data(self, service_provider_id: Optional[int], service_type: str, metadata: dict) -> Optional[dict]:
+    def _extract_service_data(self, account_id: Optional[int], service_type: str, metadata: dict) -> Optional[dict]:
         """Extract raw service data (provider, key, model) into a JSON-serializable dict.
 
         Used by serialize_agent_bot_data to pre-fetch data for the subprocess.
+        account_id refers to accounts.id.
         """
-        if not service_provider_id:
+        if not account_id:
             return None
-        result = self._get_service_and_credentials(service_provider_id, service_type)
+        result = self._get_account_and_credentials(account_id, service_type)
         if not result:
             return None
         svc, provider, api_key = result
@@ -248,85 +269,118 @@ class AgentFactoryService(BaseService):
             llm_metadata = dict(llm_metadata)  # don't mutate the original
             llm_metadata["system_prompt"] = config.system_prompt
 
-        # Collect all service IDs (these now point to services.id, not service_providers.id)
-        service_id_map = {
-            "llm": config.llm_service_id,
-            "stt": config.stt_service_id,
-            "tts": config.tts_service_id,
+        # Resolve model_instance_ids if set (new path)
+        account_id_map = {
+            "llm": config.llm_account_id,
+            "stt": config.stt_account_id,
+            "tts": config.tts_account_id,
         }
-        all_svc_ids = [sid for sid in service_id_map.values() if sid]
+        mi_id_map = {}
+        for stype_key in ("llm", "stt", "tts"):
+            mi_id = getattr(config, f"{stype_key}_model_instance_id", None)
+            if mi_id:
+                mi_id_map[stype_key] = mi_id
+
+        if mi_id_map:
+            mi_records = self.db.query(ModelInstance).filter(ModelInstance.id.in_(mi_id_map.values())).all()
+            mi_lookup = {mi.id: mi for mi in mi_records}
+            for stype_key, mi_id in mi_id_map.items():
+                mi = mi_lookup.get(mi_id)
+                if mi:
+                    if mi.account_id:
+                        account_id_map[stype_key] = mi.account_id
+                    if mi.model_menu_id:
+                        if stype_key == "llm" and "model_menu_id" not in llm_metadata:
+                            llm_metadata = dict(llm_metadata)
+                            llm_metadata["model_menu_id"] = mi.model_menu_id
+                        elif stype_key == "stt" and "model_menu_id" not in stt_metadata:
+                            stt_metadata = dict(stt_metadata)
+                            stt_metadata["model_menu_id"] = mi.model_menu_id
+                        elif stype_key == "tts" and "model_menu_id" not in tts_metadata:
+                            tts_metadata = dict(tts_metadata)
+                            tts_metadata["model_menu_id"] = mi.model_menu_id
+
+        all_acct_ids = [aid for aid in account_id_map.values() if aid]
         # S2S only needs LLM; standard pipeline needs all 3
-        if not config.llm_service_id:
+        if not account_id_map.get("llm"):
             return None
-        if not is_s2s and len(all_svc_ids) < 3:
+        if not is_s2s and len(all_acct_ids) < 3:
             return None
 
-        # Query 1.5: Resolve service IDs to service_provider_ids and api_key_ids
+        # Query 1.5: Resolve account IDs to model_provider_menu_ids and api_key_ids
         _t = _time.monotonic()
-        svc_records = self.db.query(Service).filter(Service.id.in_(all_svc_ids)).all()
-        svc_lookup = {s.id: s for s in svc_records}
-        # Map: service_type -> service_provider_id
-        sp_id_map = {}
-        svc_api_key_map = {}  # service_id -> api_key_id from Service record
-        for stype, svc_id in service_id_map.items():
-            if svc_id and svc_id in svc_lookup:
-                sp_id_map[stype] = svc_lookup[svc_id].service_provider_id
-                if svc_lookup[svc_id].api_key_id:
-                    svc_api_key_map[svc_id] = svc_lookup[svc_id].api_key_id
-        all_sp_ids = list(set(sp_id_map.values()))
-        logger.info("[TIMING] serialize: Q1.5 resolve Service->provider (+%.3fs)", _time.monotonic() - _t)
+        acct_records = self.db.query(Account).filter(Account.id.in_(all_acct_ids)).all()
+        acct_lookup = {a.id: a for a in acct_records}
+        mpm_id_map = {}
+        for stype, acct_id in account_id_map.items():
+            if acct_id and acct_id in acct_lookup:
+                acct_rec = acct_lookup[acct_id]
+                if acct_rec.model_provider_menu_id:
+                    mpm_id_map[stype] = acct_rec.model_provider_menu_id
+        all_mpm_ids = list(set(mpm_id_map.values()))
 
-        # Collect model_ids for name resolution (needed before Q2)
+        # Bulk-fetch API keys linked to accounts (reverse FK)
+        acct_api_key_map = {}  # account_id -> api_key_id
+        if all_acct_ids:
+            ak_rows = self.db.query(ApiKey.account_id, ApiKey.id).filter(
+                ApiKey.account_id.in_(all_acct_ids), ApiKey.status == 'active'
+            ).order_by(ApiKey.id.desc()).all()
+            for row in ak_rows:
+                if row.account_id not in acct_api_key_map:
+                    acct_api_key_map[row.account_id] = row.id
+        logger.info("[TIMING] serialize: Q1.5 resolve Account->provider (+%.3fs)", _time.monotonic() - _t)
+
+        # Collect model_menu_ids from metadata for name resolution
         metadata_map = {"llm": llm_metadata, "stt": stt_metadata, "tts": tts_metadata}
         model_name_ids = set()
+        model_menu_ids = set()
         for stype, meta in metadata_map.items():
             mid = meta.get("model_id")
             if mid is not None:
                 model_name_ids.add(int(mid))
+            mmid = meta.get("model_menu_id")
+            if mmid is not None:
+                model_menu_ids.add(int(mmid))
 
-        # Query 2: Bulk fetch Models + ServiceProviders + model names (merged Q2+Q4)
+        # Query 2: Bulk fetch model provider menu data + model names
         _t = _time.monotonic()
-        q2_conditions = [and_(Model.service_provider_id.in_(all_sp_ids), Model.status == "active")]
-        if model_name_ids:
-            q2_conditions.append(Model.id.in_(model_name_ids))
-        rows = (
-            self.db.query(Model, ServiceProvider)
-            .join(ServiceProvider, Model.service_provider_id == ServiceProvider.id)
-            .filter(or_(*q2_conditions))
-            .all()
-        )
-        logger.info("[TIMING] serialize: Q2 bulk Models+Providers+names (+%.3fs)", _time.monotonic() - _t)
-
-        # Index by (service_provider_id, service_type) + build model_name_map from same results
-        model_map = {}
         api_key_ids = set()
         model_name_map = {}
-        for svc, provider in rows:
-            model_name_map[svc.id] = svc.name
-            key = (svc.service_provider_id, svc.service_type)
-            if key not in model_map:
-                model_map[key] = (svc, provider)
-                # Get API key from Service record, then fallback to provider-level
-                matched_svc_id = None
-                for sid, s in svc_lookup.items():
-                    if s.service_provider_id == svc.service_provider_id:
-                        matched_svc_id = sid
-                        break
-                svc_api_key = svc_api_key_map.get(matched_svc_id) if matched_svc_id else None
-                if svc_api_key:
-                    api_key_ids.add(svc_api_key)
-                else:
-                    # Fallback: find API key by service_provider_id
-                    fallback_q = self.db.query(ApiKey.id).filter(
-                        ApiKey.service_provider_id == svc.service_provider_id,
-                        ApiKey.status == "active",
-                    )
-                    if self.org_id:
-                        fallback_q = fallback_q.filter(ApiKey.organization_id == self.org_id)
-                    fallback_key_id = fallback_q.order_by(ApiKey.id.desc()).limit(1).scalar()
-                    if fallback_key_id:
-                        api_key_ids.add(fallback_key_id)
-                        svc_api_key_map[matched_svc_id] = fallback_key_id
+
+        # Resolve model names from old Model table (for model_id references in metadata)
+        if model_name_ids:
+            from core.models.models import Model as LegacyModel
+            legacy_rows = self.db.query(LegacyModel.id, LegacyModel.name).filter(
+                LegacyModel.id.in_(model_name_ids)
+            ).all()
+            for row in legacy_rows:
+                model_name_map[row.id] = row.name
+
+        # Bulk resolve model_provider_menu services
+        mpm_data_map = {}  # service_type -> ModelProviderMenu
+        if all_mpm_ids:
+            mpm_records = self.db.query(ModelProviderMenu).filter(ModelProviderMenu.id.in_(all_mpm_ids)).all()
+            mpm_lookup = {mpm.id: mpm for mpm in mpm_records}
+
+            for stype, mpm_id in mpm_id_map.items():
+                mpm = mpm_lookup.get(mpm_id)
+                if not mpm:
+                    continue
+                mpm_data_map[stype] = mpm
+
+                # API key comes from api_keys.account_id (reverse FK)
+                acct_id = account_id_map.get(stype)
+                acct_ak = acct_api_key_map.get(acct_id) if acct_id else None
+                if acct_ak:
+                    api_key_ids.add(acct_ak)
+
+        # Resolve model_menu names for new path (from agent_config metadata)
+        if model_menu_ids:
+            mm_records = self.db.query(ModelMenu).filter(ModelMenu.id.in_(model_menu_ids)).all()
+            for mm in mm_records:
+                model_name_map[f"mm_{mm.id}"] = mm.name
+
+        logger.info("[TIMING] serialize: Q2 bulk Models+Providers+names (+%.3fs)", _time.monotonic() - _t)
 
         # Query 3: Bulk fetch ApiKeys + telephony keys (merged Q3 + telephony creds)
         _t = _time.monotonic()
@@ -389,38 +443,42 @@ class AgentFactoryService(BaseService):
 
         logger.info("[TIMING] serialize: TOTAL (+%.3fs)", _time.monotonic() - _t_ser)
 
-        # Build service data dicts
+        # Build service data dicts from model_provider_menu path
         def _build_service_data(stype, metadata):
-            sp_id = sp_id_map.get(stype)
-            if not sp_id:
-                print(f"DEBUG _build_service_data({stype}): no sp_id in sp_id_map. sp_id_map={sp_id_map}")
+            acct_id = account_id_map.get(stype)
+
+            if stype not in mpm_data_map:
+                print(f"DEBUG _build_service_data({stype}): no model_provider_menu resolved")
                 return None
-            entry = model_map.get((sp_id, stype))
-            if not entry:
-                print(f"DEBUG _build_service_data({stype}): no entry in model_map for key=({sp_id}, {stype}). model_map_keys={list(model_map.keys())}")
-                return None
-            svc, provider = entry
-            # Look up API key from Service record (via svc_api_key_map), not Model
-            svc_id = service_id_map.get(stype)
-            svc_ak_id = svc_api_key_map.get(svc_id) if svc_id else None
-            api_key = api_key_map.get(svc_ak_id) if svc_ak_id else None
-            print(f"DEBUG _build_service_data({stype}): svc_id={svc_id} svc_ak_id={svc_ak_id} api_key={'present' if api_key else 'MISSING'} api_key_map_keys={list(api_key_map.keys())} svc_api_key_map={svc_api_key_map}")
+
+            mpm = mpm_data_map[stype]
+            acct_ak_id = acct_api_key_map.get(acct_id) if acct_id else None
+            api_key = api_key_map.get(acct_ak_id) if acct_ak_id else None
             if not api_key:
+                print(f"DEBUG _build_service_data({stype}): no api_key for acct_id={acct_id}")
                 return None
-            model_meta = (svc.meta_data or {}) if isinstance(getattr(svc, "meta_data", None), dict) else {}
-            mid = metadata.get("model_id")
-            model_name = model_name_map.get(int(mid)) if mid is not None else None
+            # Model name resolution: model_menu_id → model_id → model (name string from frontend)
+            model_name = None
+            mmid = metadata.get("model_menu_id")
+            if mmid is not None:
+                model_name = model_name_map.get(f"mm_{int(mmid)}")
+            if not model_name:
+                mid = metadata.get("model_id")
+                if mid is not None:
+                    model_name = model_name_map.get(int(mid))
+            if not model_name:
+                model_name = metadata.get("model")
             return {
-                "provider_name": (provider.name or "").strip().lower(),
+                "provider_name": (mpm.name or "").strip().lower(),
                 "api_key": api_key,
                 "model_name": model_name,
                 "metadata": metadata,
-                "model_meta_data": model_meta,
+                "model_meta_data": {},
             }
 
         llm_data = _build_service_data("llm", llm_metadata)
-        stt_data = _build_service_data("stt", stt_metadata) if config.stt_service_id else None
-        tts_data = _build_service_data("tts", tts_metadata) if config.tts_service_id else None
+        stt_data = _build_service_data("stt", stt_metadata) if account_id_map.get("stt") else None
+        tts_data = _build_service_data("tts", tts_metadata) if account_id_map.get("tts") else None
         print(f"DEBUG serialize: llm_data={'present' if llm_data else 'NONE'} stt_data={'present' if stt_data else 'NONE'} tts_data={'present' if tts_data else 'NONE'} is_s2s={is_s2s}")
 
         if not llm_data:
@@ -452,7 +510,7 @@ class AgentFactoryService(BaseService):
     def get_llm_for_agent(self, agent: Any, config: Any = None, prefetched: dict = None) -> Optional[Any]:
         """
         Build and return the LLM service instance for the given agent.
-        Uses agent config's llm_service_id (service_provider) and llm_metadata.
+        Uses agent config's llm_account_id and llm_metadata.
         If prefetched is provided, skips all DB queries.
         Returns None if config or credentials are missing or provider is unsupported.
         """
@@ -465,9 +523,9 @@ class AgentFactoryService(BaseService):
         else:
             if config is None:
                 config = self._get_agent_config(agent)
-            if not config or not config.llm_service_id:
+            if not config or not config.llm_account_id:
                 return None
-            result = self._get_service_and_credentials(config.llm_service_id, "llm")
+            result = self._get_account_and_credentials(config.llm_account_id, "llm")
             if not result:
                 return None
             svc, provider, api_key = result
@@ -599,9 +657,9 @@ class AgentFactoryService(BaseService):
         else:
             if config is None:
                 config = self._get_agent_config(agent)
-            if not config or not config.stt_service_id:
+            if not config or not config.stt_account_id:
                 return None
-            result = self._get_service_and_credentials(config.stt_service_id, "stt")
+            result = self._get_account_and_credentials(config.stt_account_id, "stt")
             if not result:
                 return None
             svc, provider, api_key = result
@@ -763,9 +821,9 @@ class AgentFactoryService(BaseService):
         else:
             if config is None:
                 config = self._get_agent_config(agent)
-            if not config or not config.tts_service_id:
+            if not config or not config.tts_account_id:
                 return None
-            result = self._get_service_and_credentials(config.tts_service_id, "tts")
+            result = self._get_account_and_credentials(config.tts_account_id, "tts")
             if not result:
                 return None
             svc, provider, api_key = result
@@ -1124,7 +1182,7 @@ class AgentFactoryService(BaseService):
 
             _t = _time.monotonic()
             llm = self.get_llm_for_agent(agent, config=config)
-            print(f"DEBUG llm_service_id={config.llm_service_id} llm={llm}")
+            print(f"DEBUG llm_account_id={config.llm_account_id} llm={llm}")
             logger.info("[TIMING] get_llm_for_agent (+%.3fs)", _time.monotonic() - _t)
 
             stt = None
@@ -1132,12 +1190,12 @@ class AgentFactoryService(BaseService):
             if not is_s2s:
                 _t = _time.monotonic()
                 stt = self.get_stt_for_agent(agent, config=config)
-                print(f"DEBUG stt_service_id={config.stt_service_id} stt={stt}")
+                print(f"DEBUG stt_account_id={config.stt_account_id} stt={stt}")
                 logger.info("[TIMING] get_stt_for_agent (+%.3fs)", _time.monotonic() - _t)
 
                 _t = _time.monotonic()
                 tts = self.get_tts_for_agent(agent, config=config)
-                print(f"DEBUG tts_service_id={config.tts_service_id} tts={tts}")
+                print(f"DEBUG tts_account_id={config.tts_account_id} tts={tts}")
                 logger.info("[TIMING] get_tts_for_agent (+%.3fs)", _time.monotonic() - _t)
 
             if not llm:

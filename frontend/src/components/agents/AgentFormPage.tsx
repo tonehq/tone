@@ -14,7 +14,7 @@ import ToneLoader from '@/components/shared/ToneLoader';
 import { Badge } from '@/components/ui/badge';
 import { deleteAgent, getAgent, upsertAgent } from '@/services/agentsService';
 import type { AgentFormState } from '@/types/agent';
-import type { ServiceProvider } from '@/types/provider';
+import type { ModelProviderWithAccounts } from '@/types/provider';
 import {
   apiAgentToFormState,
   defaultFormState,
@@ -67,10 +67,9 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
   const ttsHandle = useRef<DynamicProviderFieldsHandle | null>(null);
   const sttHandle = useRef<DynamicProviderFieldsHandle | null>(null);
 
-  // Services from the loadable atom are org-scoped; cast to ServiceProvider for tab compatibility
-  const providers = (providersLoadable.state === 'hasData'
-    ? providersLoadable.data
-    : []) as unknown as ServiceProvider[];
+  const providers = (
+    providersLoadable.state === 'hasData' ? providersLoadable.data : []
+  ) as ModelProviderWithAccounts[];
   const providersLoading = providersLoadable.state === 'loading';
   const llmProviders = providers.filter((p) => p.provider_type === 'llm');
   const ttsProviders = providers.filter((p) => p.provider_type === 'tts');
@@ -222,13 +221,14 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
             formData={{
               name: formData.name,
               description: formData.description,
-              aiModel: formData.aiModel,
               end_call_message: formData.end_call_message,
               first_message: formData.first_message,
               customVocabulary: formData.customVocabulary,
               filterWords: formData.filterWords,
               useRealisticFillerWords: formData.useRealisticFillerWords,
               llmMetaData: formData.llmMetaData,
+              llmProviderMenuId: formData.llmProviderMenuId,
+              llmModelMenuId: formData.llmModelMenuId,
             }}
             llmProviders={llmProviders}
             providersLoading={providersLoading}
@@ -252,8 +252,10 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
             formData={{
               language: formData.language,
               voiceSpeed: formData.voiceSpeed,
-              voiceProvider: formData.voiceProvider,
-              sttProvider: formData.sttProvider,
+              ttsProviderMenuId: formData.ttsProviderMenuId,
+              ttsModelMenuId: formData.ttsModelMenuId,
+              sttProviderMenuId: formData.sttProviderMenuId,
+              sttModelMenuId: formData.sttModelMenuId,
               patienceLevel: formData.patienceLevel as 'low' | 'medium' | 'high',
               speechRecognition: formData.speechRecognition as 'fast' | 'accurate',
               ttsMetaData: formData.ttsMetaData,

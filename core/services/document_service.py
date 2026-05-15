@@ -142,26 +142,51 @@ class DocumentService(BaseService):
         self.db.commit()
 
     def _get_openai_api_key(self) -> str:
-        """Fetch the OpenAI API key from DB: find service_provider(name='openai', provider_type='llm'),
-        then get the api_key linked to it, decrypt and return."""
+        """Fetch the OpenAI API key from DB.
 
+        Tries new path first (Account with model_provider_menu → ApiKey.account_id),
+        then falls back to old path (ServiceProvider → ApiKey.service_provider_id).
+        """
+        # New path: Account linked to ModelProviderMenu
+        from core.models.account import Account
+        from core.models.model_provider_menu import ModelProviderMenu
+
+        mpm = (
+            self.db.query(ModelProviderMenu)
+            .filter(ModelProviderMenu.name == "openai", ModelProviderMenu.provider_type == "llm")
+            .first()
+        )
+        if mpm:
+            acct = (
+                self.db.query(Account)
+                .filter(Account.model_provider_menu_id == mpm.id, Account.status == "active")
+                .first()
+            )
+            if acct:
+                api_key_record = (
+                    self.query(ApiKey)
+                    .filter(ApiKey.account_id == acct.id, ApiKey.status == "active")
+                    .first()
+                )
+                if api_key_record and api_key_record.api_key_encrypted:
+                    return decrypt(api_key_record.api_key_encrypted)
+
+        # Old path: ServiceProvider
         provider = (
             self.db.query(ServiceProvider)
             .filter(ServiceProvider.name == "openai", ServiceProvider.provider_type == "llm")
             .first()
         )
-        if not provider:
-            raise ValueError("OpenAI LLM service provider not found in database")
+        if provider:
+            api_key_record = (
+                self.query(ApiKey)
+                .filter(ApiKey.service_provider_id == provider.id, ApiKey.status == "active")
+                .first()
+            )
+            if api_key_record and api_key_record.api_key_encrypted:
+                return decrypt(api_key_record.api_key_encrypted)
 
-        api_key_record = (
-            self.query(ApiKey)
-            .filter(ApiKey.service_provider_id == provider.id, ApiKey.status == "active")
-            .first()
-        )
-        if not api_key_record or not api_key_record.api_key_encrypted:
-            raise ValueError("No active OpenAI API key found for embedding")
-
-        return decrypt(api_key_record.api_key_encrypted)
+        raise ValueError("No active OpenAI API key found for embedding")
 
     def get_documents_by_agent(
         self,

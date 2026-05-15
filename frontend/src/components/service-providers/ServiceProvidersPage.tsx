@@ -158,17 +158,18 @@ export default function ServiceProvidersPage() {
 
   // ── Render ───────────────────────────────────────────────────────
 
-  const total = servicesState.pagination?.total ?? servicesState.services.length;
+  const services = servicesState.accounts ?? [];
+  const total = servicesState.pagination?.total ?? services.length;
 
   // Group services by service_type for the three sections
   const servicesByType = useMemo(() => {
     const groups: Record<string, Service[]> = { llm: [], stt: [], tts: [] };
-    for (const svc of servicesState.services) {
+    for (const svc of services) {
       const key = (svc.service_type ?? '').toLowerCase();
       if (key in groups) groups[key].push(svc);
     }
     return groups;
-  }, [servicesState.services]);
+  }, [services]);
 
   return (
     <div className="animate-page flex h-full flex-col p-6">
@@ -211,7 +212,7 @@ export default function ServiceProvidersPage() {
           <div className="flex h-full items-center justify-center">
             <ToneLoader label="Loading services..." />
           </div>
-        ) : servicesState.services.length === 0 ? (
+        ) : services.length === 0 ? (
           <div className="flex flex-col items-center gap-4 py-20">
             <div className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/10 to-primary/5">
               <Plug className="size-6 text-primary/60" />
@@ -277,9 +278,9 @@ export default function ServiceProvidersPage() {
       </div>
 
       {/* Footer */}
-      {!servicesState.loading && servicesState.services.length > 0 && (
+      {!servicesState.loading && services.length > 0 && (
         <div className="mt-3 text-center text-xs text-muted-foreground">
-          {servicesState.services.length} of {total} service{total !== 1 ? 's' : ''}
+          {services.length} of {total} service{total !== 1 ? 's' : ''}
         </div>
       )}
 

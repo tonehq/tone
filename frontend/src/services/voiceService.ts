@@ -53,3 +53,24 @@ export const getVoicesByLanguage = async (
   });
   return Array.isArray(data) ? data : (data?.voices ?? []);
 };
+
+// ── New path: by model_provider_menu_id ──────────────────────────
+
+export const getLanguagesByModelProvider = async (
+  modelProviderMenuId: number,
+): Promise<string[]> => {
+  const { data } = await axiosInstance.get('/voice/get_languages_by_model_provider', {
+    params: { model_provider_menu_id: modelProviderMenuId },
+  });
+  return Array.isArray(data) ? data : (data?.languages ?? []);
+};
+
+export const getVoicesByLanguageAndModelProvider = async (
+  modelProviderMenuId: number,
+  language: string,
+): Promise<VoiceItem[]> => {
+  const { data } = await axiosInstance.get('/voice/get_voices_by_language_and_model_provider', {
+    params: { model_provider_menu_id: modelProviderMenuId, language },
+  });
+  return Array.isArray(data) ? data : (data?.voices ?? []);
+};

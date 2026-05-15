@@ -48,6 +48,34 @@ def get_voices_by_language(
     return VoiceService(db).get_voices_by_language(service_provider_id, language)
 
 
+@router.get("/get_voice_by_model_provider")
+def get_voice_by_model_provider(
+    model_provider_menu_id: int = Query(...),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db)
+):
+    return VoiceService(db).get_voices_by_model_provider_menu_id(model_provider_menu_id)
+
+
+@router.get("/get_languages_by_model_provider")
+def get_languages_by_model_provider(
+    model_provider_menu_id: int = Query(...),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db)
+):
+    return VoiceService(db).get_languages_by_model_provider_menu_id(model_provider_menu_id)
+
+
+@router.get("/get_voices_by_language_and_model_provider")
+def get_voices_by_language_and_model_provider(
+    model_provider_menu_id: int = Query(...),
+    language: str = Query(...),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db)
+):
+    return VoiceService(db).get_voices_by_language_and_model_provider(model_provider_menu_id, language)
+
+
 @router.post("/upsert_voice")
 def upsert_voice(
     data: Dict[str, Any] = Body(...),

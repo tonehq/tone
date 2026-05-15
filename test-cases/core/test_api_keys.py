@@ -32,6 +32,7 @@ class TestUpsertApiKey:
         assert data["name"] == "My Key"
         mock_instance.upsert_api_key.assert_called_once_with(
             service_provider_id=10,
+
             name="My Key",
             api_key_value="sk-secret",
             description=None,
@@ -63,6 +64,7 @@ class TestUpsertApiKey:
         assert resp.status_code == 200
         mock_instance.upsert_api_key.assert_called_once_with(
             service_provider_id=10,
+
             name="My Key",
             api_key_value="sk-secret",
             description="A test key",
@@ -74,13 +76,31 @@ class TestUpsertApiKey:
         )
 
     @patch("ee.api.v1.api_keys.ApiKeyService")
-    def test_missing_service_provider_id(self, mock_service_cls, client_as_admin):
+    def test_without_service_provider_id(self, mock_service_cls, client_as_admin):
+        """service_provider_id is now optional — API keys can be linked via account_id instead."""
+        mock_instance = MagicMock()
+        mock_instance.upsert_api_key.return_value = {"id": 1, "name": "My Key"}
+        mock_service_cls.return_value = mock_instance
+
         resp = client_as_admin.post(
             "/api/v1/api-keys/upsert",
-            json={"name": "My Key", "api_key": "sk-secret"},
+            json={
+                "name": "My Key",
+                "api_key": "sk-secret",
+            },
         )
-        assert resp.status_code == 400
-        assert "service_provider_id" in resp.json()["detail"]
+        assert resp.status_code == 200
+        mock_instance.upsert_api_key.assert_called_once_with(
+            service_provider_id=None,
+            name="My Key",
+            api_key_value="sk-secret",
+            description=None,
+            additional_credentials=None,
+            rate_limit_config=None,
+            expires_at=None,
+            key_uuid=None,
+            key_status=None,
+        )
 
     @patch("ee.api.v1.api_keys.ApiKeyService")
     def test_missing_name(self, mock_service_cls, client_as_admin):
@@ -362,3 +382,65 @@ class TestListByProvider:
             json={"service_provider_id": 5},
         )
         assert resp.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/api-keys/list_by_account
+# ---------------------------------------------------------------------------
+class TestListByAccount:
+    @patch("ee.api.v1.api_keys.ApiKeyService")
+    def test_success(self, mock_service_cls, client_as_member):
+        mock_instance = MagicMock()
+        mock_instance.list_by_account.return_value = {
+            "data": [{"id": 1, "name": "Key1"}],
+            "pagination": {"page": 1, "page_size": 20, "total": 1, "total_pages": 1},
+        }
+        mock_service_cls.return_value = mock_instance
+
+        resp = client_as_member.post(
+            "/api/v1/api-keys/list_by_account",
+            json={"account_id": 3},
+        )
+
+        assert resp.status_code == 200
+        mock_instance.list_by_account.assert_called_once_with(
+            account_id=3,
+            status_filter=None,
+            page=1,
+            page_size=20,
+        )
+
+    @patch("ee.api.v1.api_keys.ApiKeyService")
+    def test_with_pagination(self, mock_service_cls, client_as_member):
+        mock_instance = MagicMock()
+        mock_instance.list_by_account.return_value = {
+            "data": [],
+            "pagination": {"page": 2, "page_size": 10, "total": 0, "total_pages": 0},
+        }
+        mock_service_cls.return_value = mock_instance
+
+        resp = client_as_member.post(
+            "/api/v1/api-keys/list_by_account",
+            json={"account_id": 3, "page": 2, "page_size": 10, "status": "active"},
+        )
+
+        assert resp.status_code == 200
+        mock_instance.list_by_account.assert_called_once_with(
+            account_id=3,
+            status_filter="active",
+            page=2,
+            page_size=10,
+        )
+
+    def test_missing_account_id(self, client_as_member):
+        resp = client_as_member.post("/api/v1/api-keys/list_by_account", json={})
+        assert resp.status_code == 400
+        assert "account_id is required" in resp.json()["detail"]
+
+    def test_invalid_account_id(self, client_as_member):
+        resp = client_as_member.post(
+            "/api/v1/api-keys/list_by_account",
+            json={"account_id": "abc"},
+        )
+        assert resp.status_code == 400
+        assert "integer" in resp.json()["detail"]

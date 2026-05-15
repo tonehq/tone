@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional
 
 from core.database.session import get_db
 from core.services.service_provider_service import ServiceProviderService
-from core.services.service_service import ServiceConfigService
+from core.services.account_service import AccountService
 from core.middleware.auth import get_jwt_claims, require_admin_or_owner, JWTClaims
 from shared.config import settings
 
@@ -99,7 +99,7 @@ def upsert_service_provider(
     if isinstance(api_key, dict):
         api_key_value = api_key.get("api_key")
         service_status = "active" if api_key_value or api_key.get("id") else "inactive"
-        ServiceConfigService(db, user_id=claims.user_id, org_id=org_id).upsert_service(
+        AccountService(db, user_id=claims.user_id, org_id=org_id).upsert_account(
             service_provider_id=result["id"],
             name=f"{display_name} {provider_type.upper()}",
             service_type=provider_type,
@@ -110,7 +110,7 @@ def upsert_service_provider(
             additional_credentials=api_key.get("additional_credentials"),
             description=data.get("description"),
             is_default=True,
-            service_status=service_status,
+            account_status=service_status,
         )
 
     return result

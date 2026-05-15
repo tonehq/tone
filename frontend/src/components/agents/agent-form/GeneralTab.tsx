@@ -4,7 +4,7 @@ import { CustomButton, SelectInput, TextAreaField, TextInput } from '@/component
 import { Form } from '@/components/shared/Form';
 import { Switch } from '@/components/ui/switch';
 import { agentGeneralSchema } from '@/schemas/agent';
-import type { ServiceProvider } from '@/types/provider';
+import type { ModelProviderWithAccounts } from '@/types/provider';
 import { toSelectOptions } from '@/utils/selectUtils';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Bot, Brain, MessageSquare, Trash2 } from 'lucide-react';
@@ -19,7 +19,7 @@ export interface GeneralTabHandle {
 
 interface GeneralTabProps {
   formData: AgentGeneralFormData;
-  llmProviders: ServiceProvider[];
+  llmProviders: ModelProviderWithAccounts[];
   providersLoading?: boolean;
   onFormChange: (partial: Partial<AgentGeneralFormData>) => void;
   onDeleteAgent: () => void;
@@ -135,8 +135,8 @@ export default function GeneralTab({
   }, [onGeneralValidityChange, trigger]);
 
   const selectedLlmProvider = useMemo(
-    () => llmProviders.find((p) => p.id === formData.aiModel) ?? null,
-    [llmProviders, formData.aiModel],
+    () => llmProviders.find((p) => p.id === formData.llmProviderMenuId) ?? null,
+    [llmProviders, formData.llmProviderMenuId],
   );
 
   const handleFinish = (values: Record<string, string>) => {
@@ -146,7 +146,6 @@ export default function GeneralTab({
 
     const next: Partial<AgentGeneralFormData> = {
       name: values.name ?? formData.name,
-      aiModel: values.aiModel ? Number(values.aiModel) : formData.aiModel,
       customVocabulary: customVocabulary ?? formData.customVocabulary,
       filterWords: filterWords ?? formData.filterWords,
       useRealisticFillerWords: useRealisticFillerWords ?? formData.useRealisticFillerWords,
@@ -233,13 +232,16 @@ export default function GeneralTab({
           title="AI Configuration"
           description="Choose the AI model powering your agent."
         >
-          <FormRow label="AI Model" description="Opt for speed or depth to suit your agent's role.">
+          <FormRow
+            label="AI Provider"
+            description="Opt for speed or depth to suit your agent's role."
+          >
             <SelectInput
-              name="aiModel"
-              value={formData.aiModel != null ? String(formData.aiModel) : ''}
+              name="llmProviderMenuId"
+              value={formData.llmProviderMenuId != null ? String(formData.llmProviderMenuId) : ''}
               onValueChange={(v) => {
                 const newId = v ? Number(v) : null;
-                onFormChange({ aiModel: newId, llmMetaData: {} });
+                onFormChange({ llmProviderMenuId: newId, llmModelMenuId: null, llmMetaData: {} });
               }}
               placeholder="Select a provider"
               options={toSelectOptions(llmProviders, {
@@ -253,17 +255,22 @@ export default function GeneralTab({
           {selectedLlmProvider?.models?.length ? (
             <FormRow label="Model" description="Choose a model for your agent.">
               <SelectInput
-                name="llmModel"
-                value={formData.llmMetaData.model != null ? String(formData.llmMetaData.model) : ''}
+                name="llmModelMenuId"
+                value={formData.llmModelMenuId != null ? String(formData.llmModelMenuId) : ''}
                 onValueChange={(v) => {
+                  const modelId = v ? Number(v) : null;
+                  const selectedModel = selectedLlmProvider.models.find((m) => m.id === modelId);
                   onFormChange({
-                    llmMetaData: { ...formData.llmMetaData, model: v || null },
+                    llmModelMenuId: modelId,
+                    llmMetaData: {
+                      ...formData.llmMetaData,
+                      model: selectedModel?.name || null,
+                    },
                   });
                 }}
                 options={toSelectOptions(selectedLlmProvider.models, {
-                  valueKey: 'name',
+                  valueKey: 'id',
                   labelKey: 'name',
-                  valueFormatter: (m) => (m.meta_data as Record<string, string>)?.model ?? m.name,
                 })}
                 placeholder="Select a model"
                 position="popper"

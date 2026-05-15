@@ -73,6 +73,45 @@
       ]
     },
     {
+      "name": "Get Voice By Model Provider",
+      "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/voice/get_voice_by_model_provider?model_provider_menu_id=1", "host": ["{{baseUrl}}"], "path": ["voice", "get_voice_by_model_provider"], "query": [{ "key": "model_provider_menu_id", "value": "1", "description": "The model provider menu ID to filter voices by" }] } },
+      "response": [
+        {
+          "name": "Get Voice By Model Provider - Success",
+          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/voice/get_voice_by_model_provider?model_provider_menu_id=1", "host": ["{{baseUrl}}"], "path": ["voice", "get_voice_by_model_provider"], "query": [{ "key": "model_provider_menu_id", "value": "1" }] } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 1,\n  \"name\": \"ElevenLabs\",\n  \"voices\": [\n    {\n      \"id\": 1,\n      \"uuid\": \"f2a3b4c5-d6e7-8901-abcd-012345678901\",\n      \"voice_id\": \"21m00Tcm4TlvDq8ikWAM\",\n      \"name\": \"Rachel\",\n      \"language\": \"en\",\n      \"gender\": \"female\",\n      \"accent\": \"american\",\n      \"description\": \"A warm and friendly voice\",\n      \"sample_url\": \"https://example.com/samples/rachel.mp3\",\n      \"created_at\": 1710201600,\n      \"updated_at\": 1710201600\n    }\n  ],\n  \"languages\": [\"en\"],\n  \"genders\": [\"female\"]\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get Languages By Model Provider",
+      "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/voice/get_languages_by_model_provider?model_provider_menu_id=1", "host": ["{{baseUrl}}"], "path": ["voice", "get_languages_by_model_provider"], "query": [{ "key": "model_provider_menu_id", "value": "1", "description": "The model provider menu ID" }] } },
+      "response": [
+        {
+          "name": "Get Languages By Model Provider - Success",
+          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/voice/get_languages_by_model_provider?model_provider_menu_id=1", "host": ["{{baseUrl}}"], "path": ["voice", "get_languages_by_model_provider"], "query": [{ "key": "model_provider_menu_id", "value": "1" }] } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"languages\": [\"de\", \"en\", \"es\", \"fr\", \"ja\", \"ko\", \"pt\", \"zh\"]\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get Voices By Language And Model Provider",
+      "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/voice/get_voices_by_language_and_model_provider?model_provider_menu_id=1&language=en", "host": ["{{baseUrl}}"], "path": ["voice", "get_voices_by_language_and_model_provider"], "query": [{ "key": "model_provider_menu_id", "value": "1", "description": "The model provider menu ID" }, { "key": "language", "value": "en" }] } },
+      "response": [
+        {
+          "name": "Get Voices By Language And Model Provider - Success",
+          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/voice/get_voices_by_language_and_model_provider?model_provider_menu_id=1&language=en", "host": ["{{baseUrl}}"], "path": ["voice", "get_voices_by_language_and_model_provider"], "query": [{ "key": "model_provider_menu_id", "value": "1" }, { "key": "language", "value": "en" }] } },
+          "status": "OK", "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"voices\": [\n    {\n      \"id\": 1,\n      \"uuid\": \"f2a3b4c5-d6e7-8901-abcd-012345678901\",\n      \"voice_id\": \"21m00Tcm4TlvDq8ikWAM\",\n      \"name\": \"Rachel\",\n      \"gender\": \"female\",\n      \"accent\": \"american\",\n      \"description\": \"A warm and friendly voice\",\n      \"sample_url\": \"https://example.com/samples/rachel.mp3\"\n    }\n  ]\n}"
+        }
+      ]
+    },
+    {
       "name": "Upsert Voice",
       "request": {
         "method": "POST",
