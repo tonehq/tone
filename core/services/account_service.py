@@ -130,7 +130,7 @@ class AccountService(BaseService):
         # Link the API key to this account (reverse FK direction)
         if api_key_id:
             self.db.query(ApiKey).filter(ApiKey.id == api_key_id).update({"account_id": acct.id})
-            self.db.flush()
+            self.db.commit()
 
         # Auto-create ModelInstances for this account (only on new account creation)
         if acct and acct.model_provider_menu_id and not account_uuid:
@@ -155,7 +155,7 @@ class AccountService(BaseService):
                         status='active',
                     )
                     self.db.add(mi)
-            self.db.flush()
+            self.db.commit()
 
         # Fetch api_key_hint
         api_key_hint = None
