@@ -53,3 +53,4 @@ class ChannelType(enum.Enum):
     WEB = "web"
     GOOGLE_MEET = "google_meet"
     ZOOM = "zoom"
+    TELNYX = 'telnyx'

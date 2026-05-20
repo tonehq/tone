@@ -23,7 +23,7 @@ interface ApiKeyUpsertModalProps {
   open: boolean;
   onClose: () => void;
   onSaved: () => void | Promise<void>;
-  serviceProviderId: number;
+  accountId: number;
   apiKey?: ApiKeyListRow | null;
 }
 
@@ -31,7 +31,7 @@ export default function ApiKeyUpsertModal({
   open,
   onClose,
   onSaved,
-  serviceProviderId,
+  accountId,
   apiKey,
 }: ApiKeyUpsertModalProps) {
   const isEdit = !!apiKey;
@@ -89,7 +89,7 @@ export default function ApiKeyUpsertModal({
       setSaving(true);
       try {
         await upsertApiKey({
-          service_provider_id: serviceProviderId,
+          account_id: accountId,
           name: data.name.trim(),
           api_key: trimmed || originalSecret,
           description: data.description?.trim() || undefined,
@@ -105,7 +105,7 @@ export default function ApiKeyUpsertModal({
         setSaving(false);
       }
     },
-    [isEdit, originalSecret, status, serviceProviderId, apiKey, onSaved, onClose],
+    [isEdit, originalSecret, status, accountId, apiKey, onSaved, onClose],
   );
 
   return (
@@ -139,7 +139,7 @@ export default function ApiKeyUpsertModal({
           placeholder={loadingKey ? 'Loading...' : 'sk-...'}
           type="password"
           disabled={loadingKey}
-          isRequired={!isEdit}
+          isRequired
         />
         <TextInput
           name="description"

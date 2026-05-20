@@ -94,12 +94,14 @@ def get_twilio_phone_numbers(
 @router.get("/get_phone_number_list_to_buy", status_code=status.HTTP_200_OK)
 def get_phone_number_list_to_buy(
     type: str = Query(..., description="The channel type (e.g. twilio, exotel)"),
+    channel_id: int = Query(None, description="Optional specific channel ID"),
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
     return ChannelPhoneNumbersService(db, org_id=UUID(claims.org_id)).get_phone_number_list_to_buy(
         channel_type=type,
         user_id=claims.user_id,
+        channel_id=channel_id,
     )
 
 

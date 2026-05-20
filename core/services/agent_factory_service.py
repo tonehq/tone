@@ -227,7 +227,7 @@ class AgentFactoryService(BaseService):
                     logger.warning("Failed to decrypt %s key %s: %s", provider_name, ak.id, e)
         return creds
 
-    def serialize_agent_bot_data(self, agent: Any, transport_type: str = None) -> Optional[dict]:
+    def serialize_agent_bot_data(self, agent: Any, transport_type: str = None, call_data: dict = None) -> Optional[dict]:
         """Pre-fetch all data needed to build LLM/STT/TTS services into a JSON-serializable dict.
 
         Called in the main process so the subprocess can build services without DB queries.
@@ -402,18 +402,36 @@ class AgentFactoryService(BaseService):
                 telephony_filter = and_(telephony_filter, ApiKey.organization_id == self.org_id)
             q3_filters.append(telephony_filter)
 
-        # Try channels table first for telephony creds (org-scoped)
-        if transport_type == "twilio" and hasattr(agent, "organization_id") and agent.organization_id:
+        # Try channels table first for telephony creds
+        # Prefer channel_id from call_data (resolved from AgentChannelPhoneNumbers)
+        # then fall back to agent's linked channel, then org-scoped type lookup
+        if transport_type == "twilio":
             from core.models.channel import Channel
             from core.models.enums import ChannelType
 
-            channel = (
-                self.db.query(Channel)
-                .filter(Channel.type == ChannelType.TWILIO, Channel.organization_id == agent.organization_id)
-                .first()
-            )
-            if channel and channel.meta_data:
-                meta = channel.meta_data
+            resolved_channel = None
+            _channel_id = call_data.get("_channel_id") if call_data else None
+            if _channel_id:
+                resolved_channel = self.db.query(Channel).filter(Channel.id == _channel_id).first()
+            if not resolved_channel:
+                # Try agent's linked Twilio channel via AgentChannel
+                from core.models.agent_channel import AgentChannel as AC
+                agent_channel_link = (
+                    self.db.query(AC)
+                    .join(Channel, Channel.id == AC.channel_id)
+                    .filter(AC.agent_id == agent.id, Channel.type == ChannelType.TWILIO)
+                    .first()
+                )
+                if agent_channel_link:
+                    resolved_channel = self.db.query(Channel).filter(Channel.id == agent_channel_link.channel_id).first()
+            if not resolved_channel and hasattr(agent, "organization_id") and agent.organization_id:
+                resolved_channel = (
+                    self.db.query(Channel)
+                    .filter(Channel.type == ChannelType.TWILIO, Channel.organization_id == agent.organization_id)
+                    .first()
+                )
+            if resolved_channel and resolved_channel.meta_data:
+                meta = resolved_channel.meta_data
                 account_sid = meta.get("account_sid")
                 auth_token = meta.get("auth_token")
                 if account_sid and auth_token:

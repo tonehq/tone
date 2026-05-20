@@ -1,29 +1,22 @@
 'use client';
 
-import {
-  deleteProviderAtom,
-  fetchModelsAtom,
-  modelsAtom,
-  upsertServiceAtom,
-} from '@/atoms/ProviderAtom';
+import { deleteProviderAtom, fetchModelsAtom, modelsAtom } from '@/atoms/ProviderAtom';
 
 import ApiKeyUpsertModal from '@/components/service-providers/ApiKeyUpsertModal';
 import ModelsPanel from '@/components/service-providers/ModelsPanel';
-import ServiceUpsertModal from '@/components/service-providers/ServiceUpsertModal';
+
 import ProviderLogo from '@/components/service-providers/ProviderLogo';
 import { ActionMenu, CustomButton, CustomTab } from '@/components/shared';
 import ToneLoader from '@/components/shared/ToneLoader';
 import { Badge } from '@/components/ui/badge';
 import {
   deleteApiKey,
-  deleteService as deleteServiceApi,
   getApiKeyPlaintext,
   getServiceProvider,
-  listApiKeysByProvider,
-  listServices,
+  listApiKeysByAccount,
   type ApiKeyListRow,
 } from '@/services/providerService';
-import type { Service, ServiceProvider, ServiceUpsertPayload } from '@/types/provider';
+import type { ServiceProvider } from '@/types/provider';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
@@ -39,13 +32,10 @@ import {
   Globe,
   Key,
   Loader2,
-  Pencil,
-  Plug,
   Plus,
-  Server,
   Trash2,
 } from 'lucide-react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { STATUS_STYLES, TYPE_BADGE_STYLES } from './constants';
@@ -53,12 +43,14 @@ import { STATUS_STYLES, TYPE_BADGE_STYLES } from './constants';
 export default function ServiceProviderDetailPage() {
   const router = useRouter();
   const params = useParams<{ providerId: string }>();
+  const searchParams = useSearchParams();
   const providerId = Number(params.providerId);
+  const accountId = searchParams.get('accountId') ? Number(searchParams.get('accountId')) : null;
+  const accountNameParam = searchParams.get('accountName');
 
   const [modelsState] = useAtom(modelsAtom);
   const [, fetchModels] = useAtom(fetchModelsAtom);
   const [, removeProvider] = useAtom(deleteProviderAtom);
-  const [, upsertSvc] = useAtom(upsertServiceAtom);
 
   const [provider, setProvider] = useState<ServiceProvider | null>(null);
   const [loading, setLoading] = useState(true);
@@ -73,43 +65,23 @@ export default function ServiceProviderDetailPage() {
   const [revealedKeyValue, setRevealedKeyValue] = useState<string | null>(null);
   const [revealingKeyId, setRevealingKeyId] = useState<number | null>(null);
 
-  // Services
-  const [services, setServices] = useState<Service[]>([]);
-  const [servicesLoading, setServicesLoading] = useState(false);
-  const [serviceModalOpen, setServiceModalOpen] = useState(false);
-  const [editingService, setEditingService] = useState<Service | null>(null);
-
   // ── Data loading ─────────────────────────────────────────────────
 
   const loadKeys = useCallback(async () => {
-    if (!Number.isFinite(providerId)) return;
+    if (!accountId) {
+      setKeys([]);
+      return;
+    }
     setKeysLoading(true);
     try {
-      const result = await listApiKeysByProvider({
-        service_provider_id: providerId,
-        page: 1,
-        page_size: 100,
-      });
+      const result = await listApiKeysByAccount({ account_id: accountId, page: 1, page_size: 100 });
       setKeys(result.keys);
     } catch (error) {
       handleApiError(error);
     } finally {
       setKeysLoading(false);
     }
-  }, [providerId]);
-
-  const loadServices = useCallback(async () => {
-    if (!Number.isFinite(providerId)) return;
-    setServicesLoading(true);
-    try {
-      const result = await listServices({});
-      setServices(result.services.filter((s) => s.service_provider_id === providerId));
-    } catch (error) {
-      handleApiError(error);
-    } finally {
-      setServicesLoading(false);
-    }
-  }, [providerId]);
+  }, [accountId]);
 
   const loadProvider = useCallback(async () => {
     if (!Number.isFinite(providerId)) return;
@@ -119,18 +91,17 @@ export default function ServiceProviderDetailPage() {
     try {
       const data = await getServiceProvider(providerId);
       setProvider(data);
-      fetchModels({ service_provider_id: providerId, page: 1, page_size: 10 }).catch(
+      fetchModels({ model_provider_menu_id: providerId, page: 1, page_size: 10 }).catch(
         handleApiError,
       );
       loadKeys();
-      loadServices();
     } catch (error) {
       handleApiError(error);
       setProvider(null);
     } finally {
       setLoading(false);
     }
-  }, [providerId, fetchModels, loadKeys, loadServices]);
+  }, [providerId, fetchModels, loadKeys]);
 
   useEffect(() => {
     loadProvider();
@@ -185,35 +156,6 @@ export default function ServiceProviderDetailPage() {
   const handleKeySaved = useCallback(async () => {
     await loadKeys();
   }, [loadKeys]);
-
-  // ── Service handlers ─────────────────────────────────────────────
-
-  const handleServiceSubmit = useCallback(
-    async (payload: ServiceUpsertPayload) => {
-      try {
-        await upsertSvc(payload);
-        showToast.success(payload.uuid ? 'Service updated' : 'Service created');
-        await loadServices();
-      } catch (error) {
-        handleApiError(error);
-        throw error;
-      }
-    },
-    [upsertSvc, loadServices],
-  );
-
-  const handleDeleteService = useCallback(
-    async (svc: Service) => {
-      try {
-        await deleteServiceApi(svc.uuid);
-        showToast.success('Service deleted');
-        await loadServices();
-      } catch (error) {
-        handleApiError(error);
-      }
-    },
-    [loadServices],
-  );
 
   // ── Provider handlers ────────────────────────────────────────────
 
@@ -387,131 +329,6 @@ export default function ServiceProviderDetailPage() {
         ),
       },
       {
-        key: 'services',
-        label: (
-          <span className="flex items-center gap-1.5">
-            <Plug className="size-3.5" />
-            Services
-            <span className="ml-0.5 rounded-full bg-muted px-1.5 py-px text-[10px] tabular-nums text-muted-foreground">
-              {services.length}
-            </span>
-          </span>
-        ),
-        children: (
-          <div className="h-full overflow-auto px-6 py-5">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">
-                Org-scoped service configurations linked to this provider
-              </p>
-              <CustomButton
-                type="primary"
-                size="sm"
-                icon={<Plus />}
-                onClick={() => {
-                  setEditingService(null);
-                  setServiceModalOpen(true);
-                }}
-              >
-                Add Service
-              </CustomButton>
-            </div>
-            {servicesLoading && services.length === 0 ? (
-              <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" />
-                Loading...
-              </div>
-            ) : services.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 py-10">
-                <div className="flex size-11 items-center justify-center rounded-xl bg-muted">
-                  <Plug className="size-5 text-muted-foreground" />
-                </div>
-                <p className="text-xs text-muted-foreground">No services configured yet</p>
-                <CustomButton
-                  type="default"
-                  size="sm"
-                  icon={<Plus />}
-                  onClick={() => {
-                    setEditingService(null);
-                    setServiceModalOpen(true);
-                  }}
-                >
-                  Create Service
-                </CustomButton>
-              </div>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {services.map((svc) => (
-                  <div
-                    key={svc.uuid}
-                    className="flex items-start gap-3 rounded-lg border border-border bg-background p-3 transition-colors hover:bg-accent/20"
-                  >
-                    <ProviderLogo
-                      providerName={svc.service_provider_name ?? provider.name}
-                      serviceType={svc.service_type}
-                      className="size-8 rounded-md"
-                      imgSize={18}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="truncate text-sm font-medium text-foreground">
-                          {svc.name}
-                        </span>
-                        <Badge
-                          className={cn(
-                            'text-[9px] font-semibold uppercase',
-                            TYPE_BADGE_STYLES[svc.service_type],
-                          )}
-                        >
-                          {svc.service_type}
-                        </Badge>
-                        {svc.is_default && (
-                          <Badge className="bg-primary/10 text-[9px] text-primary hover:bg-primary/10">
-                            Default
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <span
-                            className={cn(
-                              'size-1.5 rounded-full',
-                              svc.status === 'active' ? 'bg-emerald-500' : 'bg-zinc-400',
-                            )}
-                          />
-                          {svc.status}
-                        </span>
-                        {svc.api_key_hint && (
-                          <>
-                            <span className="text-border">&middot;</span>
-                            <span className="flex items-center gap-0.5 font-mono">
-                              <Key className="size-2.5" />
-                              {svc.api_key_hint}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    <div
-                      onClick={(e) => e.stopPropagation()}
-                      onPointerDown={(e) => e.stopPropagation()}
-                    >
-                      <ActionMenu
-                        onEdit={() => {
-                          setEditingService(svc);
-                          setServiceModalOpen(true);
-                        }}
-                        onDelete={() => handleDeleteService(svc)}
-                        itemName={svc.name}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ),
-      },
-      {
         key: 'models',
         label: (
           <span className="flex items-center gap-1.5">
@@ -536,13 +353,10 @@ export default function ServiceProviderDetailPage() {
     revealedKeyId,
     revealedKeyValue,
     revealingKeyId,
-    services,
-    servicesLoading,
     modelsState.pagination,
     handleReveal,
     handleCopy,
     handleDeleteKey,
-    handleDeleteService,
     goBack,
   ]);
 
@@ -560,7 +374,7 @@ export default function ServiceProviderDetailPage() {
     return (
       <div className="animate-page flex h-full flex-col items-center justify-center gap-4 p-6">
         <div className="flex size-14 items-center justify-center rounded-2xl bg-muted">
-          <Server className="size-6 text-muted-foreground" />
+          <AlertCircle className="size-6 text-muted-foreground" />
         </div>
         <p className="text-sm font-medium text-foreground">Service provider not found</p>
         <CustomButton type="default" icon={<ArrowLeft />} onClick={goBack}>
@@ -596,8 +410,8 @@ export default function ServiceProviderDetailPage() {
 
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-xl font-semibold tracking-tight text-foreground">
-                  {provider.display_name}
+                <h1 className="text-xl font-bold tracking-tight text-foreground">
+                  {accountNameParam ?? provider.display_name}
                 </h1>
                 <Badge
                   className={cn(
@@ -636,30 +450,17 @@ export default function ServiceProviderDetailPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {!provider.is_system && (
             <CustomButton
-              type="default"
+              type="danger"
               size="sm"
-              icon={<Pencil />}
-              onClick={() => {
-                setEditingService(services.length > 0 ? services[0] : null);
-                setServiceModalOpen(true);
-              }}
+              icon={<Trash2 />}
+              onClick={handleDelete}
+              loading={deleting}
             >
-              Edit
+              Delete
             </CustomButton>
-            {!provider.is_system && (
-              <CustomButton
-                type="danger"
-                size="sm"
-                icon={<Trash2 />}
-                onClick={handleDelete}
-                loading={deleting}
-              >
-                Delete
-              </CustomButton>
-            )}
-          </div>
+          )}
         </div>
       </div>
 
@@ -680,15 +481,8 @@ export default function ServiceProviderDetailPage() {
         open={keyModalOpen}
         onClose={() => setKeyModalOpen(false)}
         onSaved={handleKeySaved}
-        serviceProviderId={providerId}
+        accountId={accountId!}
         apiKey={editingKey}
-      />
-
-      <ServiceUpsertModal
-        open={serviceModalOpen}
-        onClose={() => setServiceModalOpen(false)}
-        onSubmit={handleServiceSubmit}
-        service={editingService}
       />
     </div>
   );

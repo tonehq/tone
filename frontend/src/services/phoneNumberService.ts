@@ -16,9 +16,11 @@ export interface AssignedPhoneNumber {
 export const getTwilioPhoneNumbers = async (
   type: string = 'twilio',
   agentId?: number,
+  channelId?: number,
 ): Promise<TwilioPhoneNumber[]> => {
   const params: Record<string, string | number> = { type };
   if (agentId != null) params.agent_id = agentId;
+  if (channelId != null) params.channel_id = channelId;
   const { data } = await axiosInstance.get<TwilioPhoneNumber[]>(
     '/channel_phone_number/get_twilio_phone_numbers',
     { params },

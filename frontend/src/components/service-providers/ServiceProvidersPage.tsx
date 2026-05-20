@@ -253,7 +253,9 @@ export default function ServiceProvidersPage() {
                         key={svc.uuid}
                         service={svc}
                         onNavigate={() =>
-                          router.push(`/service-providers/${svc.service_provider_id}`)
+                          router.push(
+                            `/service-providers/${svc.model_provider_menu_id}?accountId=${svc.id}&accountName=${encodeURIComponent(svc.name)}`,
+                          )
                         }
                         onEdit={() => openEdit(svc)}
                         onDelete={() => handleDelete(svc)}

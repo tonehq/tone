@@ -14,6 +14,7 @@ router = APIRouter()
 @router.post("/upsert", status_code=status.HTTP_200_OK)
 async def upsert_api_key(
     service_provider_id: Optional[int] = Form(None),
+    account_id: Optional[int] = Form(None),
     name: str = Form(...),
     file: Optional[UploadFile] = File(None),
     api_key: Optional[str] = Form(None),
@@ -72,6 +73,7 @@ async def upsert_api_key(
 
     return ApiKeyService(db, org_id=UUID(claims.org_id), user_id=claims.user_id).upsert_api_key(
         service_provider_id=service_provider_id,
+        account_id=account_id,
         name=name,
         api_key_value=api_key_value,
         description=description,
