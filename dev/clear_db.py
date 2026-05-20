@@ -9,7 +9,7 @@ Usage:
 from sqlalchemy import create_engine, text
 
 # ── Hardcoded DB connection ──────────────────────────────────────────────
-DATABASE_URL = "postgresql://neondb_owner:npg_6MIP1wKAkFQh@ep-round-pond-anxl0114-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+DATABASE_URL = "postgresql://neondb_owner:npg_QSh4dqZ2NXpV@ep-solitary-block-ame1uzci-pooler.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 # ─────────────────────────────────────────────────────────────────────────
 
 # Deletion order: children first, parents last.
@@ -82,8 +82,27 @@ def clear_database():
     engine = create_engine(DATABASE_URL)
 
     with engine.begin() as conn:
-        all_tables = ", ".join(f'"{t}"' for t in TABLES_IN_DELETE_ORDER)
-        print(f"Truncating {len(TABLES_IN_DELETE_ORDER)} tables...")
+        # Get tables that actually exist in the database
+        result = conn.execute(text(
+            "SELECT tablename FROM pg_tables WHERE schemaname = 'public'"
+        ))
+        existing_tables = {row[0] for row in result}
+
+        # Filter to only tables that exist, preserving dependency order
+        tables_to_clear = [t for t in TABLES_IN_DELETE_ORDER if t in existing_tables]
+
+        # Also find any tables in DB not in our list (except alembic_version)
+        unlisted = existing_tables - set(TABLES_IN_DELETE_ORDER) - {"alembic_version"}
+        if unlisted:
+            print(f"Note: Found extra tables not in delete order: {unlisted}")
+            tables_to_clear = list(unlisted) + tables_to_clear
+
+        if not tables_to_clear:
+            print("No tables to truncate.")
+            return
+
+        all_tables = ", ".join(f'"{t}"' for t in tables_to_clear)
+        print(f"Truncating {len(tables_to_clear)} tables...")
         conn.execute(text(f"TRUNCATE TABLE {all_tables} CASCADE"))
 
     print("All data cleared successfully.")

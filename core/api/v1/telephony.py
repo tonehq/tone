@@ -65,7 +65,7 @@ async def telephony_websocket(websocket: WebSocket):
                     AgentFactoryService
                 factory = AgentFactoryService(db)
                 # Pass transport_type so telephony creds are fetched in the same DB session
-                prefetched_services = factory.serialize_agent_bot_data(agent, transport_type=transport_type)
+                prefetched_services = factory.serialize_agent_bot_data(agent, transport_type=transport_type, call_data=call_data)
                 # Extract telephony creds from prefetched data into call_data
                 if prefetched_services and "_telephony_creds" in prefetched_services:
                     telephony_creds = prefetched_services.pop("_telephony_creds")

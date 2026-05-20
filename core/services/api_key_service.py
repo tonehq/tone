@@ -22,8 +22,20 @@ class ApiKeyService(BaseService):
                        rate_limit_config: Optional[Dict] = None,
                        expires_at: Optional[int] = None,
                        key_uuid: Optional[str] = None,
-                       key_status: Optional[str] = None) -> Dict[str, Any]:
+                       key_status: Optional[str] = None,
+                       account_id: Optional[int] = None) -> Dict[str, Any]:
         current_time = int(time.time())
+
+        if not name or not name.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="name is required"
+            )
+        if not api_key_value or not api_key_value.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="api_key is required"
+            )
 
         if service_provider_id:
             provider = self.db.query(ServiceProvider).filter(
@@ -33,6 +45,15 @@ class ApiKeyService(BaseService):
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Service provider not found"
+                )
+
+        if account_id:
+            from core.models.account import Account
+            acct = self.db.query(Account).filter(Account.id == account_id).first()
+            if not acct:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Account not found"
                 )
 
         # Generate hint: for JSON credentials show project_id, else show first/last chars
@@ -50,6 +71,7 @@ class ApiKeyService(BaseService):
         values = {
             "uuid": UUID(key_uuid) if key_uuid else uuid_lib.uuid4(),
             "service_provider_id": service_provider_id,
+            "account_id": account_id,
             "name": name,
             "description": description,
             "api_key_encrypted": encrypt(api_key_value),

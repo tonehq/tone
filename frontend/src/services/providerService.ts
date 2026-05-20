@@ -131,7 +131,7 @@ export const upsertService = upsertAccount;
 export const deleteService = deleteAccount;
 
 export const getServiceProvider = async (providerId: number): Promise<ServiceProvider> => {
-  const { data } = await axiosInstance.post<ServiceProvider>('/service-providers/get', {
+  const { data } = await axiosInstance.post<ServiceProvider>('/model-providers-menu/get', {
     provider_id: providerId,
   });
   return data;
@@ -201,7 +201,7 @@ export interface ApiKeyListRow {
 }
 
 export interface ListApiKeysParams {
-  service_provider_id: number;
+  account_id: number;
   status?: string;
   page?: number;
   page_size?: number;
@@ -212,18 +212,26 @@ export interface ListApiKeysResult {
   pagination: PaginationInfo;
 }
 
-export const listApiKeysByProvider = async (
+export const listApiKeysByAccount = async (
   params: ListApiKeysParams,
 ): Promise<ListApiKeysResult> => {
   const { data } = await axiosInstance.post<{ data: ApiKeyListRow[]; pagination: PaginationInfo }>(
-    '/api-keys/list_by_provider',
+    '/api-keys/list_by_account',
     params,
   );
   return { keys: data.data ?? [], pagination: data.pagination };
 };
 
-export interface ApiKeyUpsertInput {
+/** @deprecated Use listApiKeysByAccount */
+export const listApiKeysByProvider = listApiKeysByAccount as unknown as (params: {
   service_provider_id: number;
+  status?: string;
+  page?: number;
+  page_size?: number;
+}) => Promise<ListApiKeysResult>;
+
+export interface ApiKeyUpsertInput {
+  account_id: number;
   name: string;
   api_key: string;
   description?: string;
@@ -234,7 +242,7 @@ export interface ApiKeyUpsertInput {
 export const upsertApiKey = async (input: ApiKeyUpsertInput): Promise<ApiKeyListRow> => {
   // Backend uses multipart/form-data
   const form = new FormData();
-  form.append('service_provider_id', String(input.service_provider_id));
+  form.append('account_id', String(input.account_id));
   form.append('name', input.name);
   form.append('api_key', input.api_key);
   if (input.description) form.append('description', input.description);
@@ -251,7 +259,7 @@ export const deleteApiKey = async (apiKeyId: number): Promise<void> => {
 // ── Models ─────────────────────────────────────────────────────────
 
 export interface ListModelsParams {
-  service_provider_id: number;
+  model_provider_menu_id: number;
   name?: string;
   status?: string;
   service_type?: string;
@@ -268,7 +276,7 @@ export interface ListModelsResult {
 export const listModelsByProvider = async (params: ListModelsParams): Promise<ListModelsResult> => {
   const { data } = await axiosInstance.post<
     PaginatedResponse<ServiceProviderModel> | ServiceProviderModel[]
-  >('/model/get_models_by_provider', params);
+  >('/model-menu/get_models_by_provider', params);
   if (Array.isArray(data)) {
     return {
       models: data,
@@ -283,19 +291,22 @@ export const getModelsByProvider = async (
   serviceProviderId: number,
 ): Promise<ServiceProviderModel[]> => {
   const result = await listModelsByProvider({
-    service_provider_id: serviceProviderId,
+    model_provider_menu_id: serviceProviderId,
     page_size: 100,
   });
   return result.models;
 };
 
 export const upsertModel = async (payload: ModelUpsertPayload): Promise<ServiceProviderModel> => {
-  const { data } = await axiosInstance.post<ServiceProviderModel>('/model/upsert_model', payload);
+  const { data } = await axiosInstance.post<ServiceProviderModel>(
+    '/model-menu/upsert_model',
+    payload,
+  );
   return data;
 };
 
 export const deleteModel = async (modelId: number): Promise<void> => {
-  await axiosInstance.delete('/model/delete_model', {
+  await axiosInstance.delete('/model-menu/delete_model', {
     params: { model_id: modelId },
   });
 };

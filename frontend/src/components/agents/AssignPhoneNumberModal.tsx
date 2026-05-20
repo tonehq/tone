@@ -3,9 +3,21 @@
 import { CustomModal, PhoneNumberDisplay, SelectInput } from '@/components/shared';
 import ToneLoader from '@/components/shared/ToneLoader';
 import { Checkbox } from '@/components/ui/checkbox';
+import { getChannelsByType } from '@/services/channelService';
 import { type TwilioPhoneNumber, getTwilioPhoneNumbers } from '@/services/phoneNumberService';
 import { cn } from '@/utils/cn';
 import { useCallback, useEffect, useState } from 'react';
+
+const PROVIDER_OPTIONS = [
+  { value: 'twilio', label: 'Twilio' },
+  { value: 'exotel', label: 'Exotel' },
+  { value: 'telnyx', label: 'Telnyx' },
+];
+
+interface ChannelOption {
+  id: number;
+  name: string;
+}
 
 interface PhoneNumberEntry {
   type: string;
@@ -18,6 +30,7 @@ interface AssignPhoneNumberModalProps {
   onAssign: (phoneNumbers: PhoneNumberEntry[]) => Promise<void>;
   currentPhoneNumbers?: PhoneNumberEntry[];
   agentId?: number;
+  channelId?: number | null;
 }
 
 export default function AssignPhoneNumberModal({
@@ -26,8 +39,14 @@ export default function AssignPhoneNumberModal({
   onAssign,
   currentPhoneNumbers = [],
   agentId,
+  channelId: initialChannelId,
 }: AssignPhoneNumberModalProps) {
   const [provider, setProvider] = useState('twilio');
+  const [channels, setChannels] = useState<ChannelOption[]>([]);
+  const [selectedChannelId, setSelectedChannelId] = useState<number | null>(
+    initialChannelId ?? null,
+  );
+  const [loadingChannels, setLoadingChannels] = useState(false);
   const [phoneNumbers, setPhoneNumbers] = useState<TwilioPhoneNumber[]>([]);
   const [selectedNos, setSelectedNos] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -35,24 +54,86 @@ export default function AssignPhoneNumberModal({
 
   const myAssignedNos = currentPhoneNumbers.map((p) => p.no);
 
+  // Sync initial channelId prop when modal opens
+  useEffect(() => {
+    if (open && initialChannelId) {
+      setSelectedChannelId(initialChannelId);
+    }
+  }, [open, initialChannelId]);
+
+  // Fetch channels when provider changes
+  const fetchChannels = useCallback(
+    async (type: string) => {
+      setLoadingChannels(true);
+      try {
+        const data = await getChannelsByType(type);
+        const opts = data.map((c: any) => ({ id: c.id, name: c.name }));
+        setChannels(opts);
+        // Auto-select if only one channel or if initialChannelId matches
+        if (opts.length === 1) {
+          setSelectedChannelId(opts[0].id);
+        } else if (initialChannelId && opts.some((c: ChannelOption) => c.id === initialChannelId)) {
+          setSelectedChannelId(initialChannelId);
+        }
+      } catch {
+        setChannels([]);
+      } finally {
+        setLoadingChannels(false);
+      }
+    },
+    [initialChannelId],
+  );
+
+  useEffect(() => {
+    if (open) {
+      fetchChannels(provider);
+    }
+  }, [open, provider, fetchChannels]);
+
+  // Fetch phone numbers when channel is selected
   const fetchNumbers = useCallback(async () => {
+    if (!selectedChannelId) {
+      setPhoneNumbers([]);
+      return;
+    }
     setLoading(true);
     try {
-      const twilioData = await getTwilioPhoneNumbers(provider, agentId);
-      setPhoneNumbers(twilioData);
+      const data = await getTwilioPhoneNumbers(provider, agentId, selectedChannelId);
+      setPhoneNumbers(data);
     } catch {
       setPhoneNumbers([]);
     } finally {
       setLoading(false);
     }
-  }, [provider, agentId]);
+  }, [provider, agentId, selectedChannelId]);
 
   useEffect(() => {
-    if (open) {
+    if (open && selectedChannelId) {
       fetchNumbers();
       setSelectedNos(currentPhoneNumbers.map((p) => p.no));
     }
-  }, [open, fetchNumbers, currentPhoneNumbers]);
+  }, [open, selectedChannelId, fetchNumbers, currentPhoneNumbers]);
+
+  // Reset state when modal opens
+  useEffect(() => {
+    if (open) {
+      setSelectedNos(currentPhoneNumbers.map((p) => p.no));
+    }
+  }, [open, currentPhoneNumbers]);
+
+  const handleProviderChange = (value: string) => {
+    setProvider(value);
+    setSelectedChannelId(null);
+    setChannels([]);
+    setPhoneNumbers([]);
+    setSelectedNos(currentPhoneNumbers.map((p) => p.no));
+  };
+
+  const handleChannelChange = (value: string) => {
+    setSelectedChannelId(value ? Number(value) : null);
+    setPhoneNumbers([]);
+    setSelectedNos(currentPhoneNumbers.map((p) => p.no));
+  };
 
   const toggleNumber = (no: string) => {
     if (myAssignedNos.includes(no)) return;
@@ -89,19 +170,38 @@ export default function AssignPhoneNumberModal({
           name="provider"
           label="Service Provider"
           value={provider}
-          onValueChange={setProvider}
-          options={[{ value: 'twilio', label: 'Twilio' }]}
+          onValueChange={handleProviderChange}
+          options={PROVIDER_OPTIONS}
+        />
+
+        <SelectInput
+          name="channel"
+          label="Channel"
+          value={selectedChannelId?.toString() ?? ''}
+          onValueChange={handleChannelChange}
+          options={channels.map((c) => ({ value: c.id.toString(), label: c.name }))}
+          placeholder={
+            loadingChannels
+              ? 'Loading channels...'
+              : channels.length === 0
+                ? 'No channels found'
+                : 'Select a channel'
+          }
         />
 
         <div>
           <label className="mb-1 block text-sm font-semibold text-foreground">Phone Numbers</label>
-          {loading ? (
+          {!selectedChannelId ? (
+            <p className="text-sm text-muted-foreground">
+              Select a channel to see available numbers.
+            </p>
+          ) : loading ? (
             <div className="flex justify-center py-4">
               <ToneLoader size="sm" />
             </div>
           ) : phoneNumbers.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              No phone numbers found. Please configure your Twilio integration first.
+              No phone numbers found. Please configure your integration first.
             </p>
           ) : (
             <div className="max-h-48 space-y-2 overflow-y-auto rounded-md border border-border p-2">

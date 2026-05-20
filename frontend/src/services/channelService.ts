@@ -3,6 +3,7 @@ import axiosInstance from '@/utils/axios';
 export interface ChannelApiResponse {
   id: number;
   name: string;
+  type: string | null;
   auth_token: string;
   account_sid: string;
   created_at: string;
@@ -30,4 +31,11 @@ export const upsertChannel = async (payload: {
 
 export const deleteChannel = async (channelId: number): Promise<void> => {
   await axiosInstance.delete('/channel/delete', { params: { channel_id: channelId } });
+};
+
+export const getChannelsByType = async (type: string): Promise<ChannelApiResponse[]> => {
+  const { data } = await axiosInstance.get<ChannelApiResponse[]>('/channel/list_by_type', {
+    params: { type },
+  });
+  return data ?? [];
 };

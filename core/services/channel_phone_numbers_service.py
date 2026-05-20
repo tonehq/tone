@@ -228,32 +228,43 @@ class ChannelPhoneNumbersService(BaseService):
             if number.phone_number not in taken_numbers
         ]
 
-    def get_phone_number_list_to_buy(self, channel_type: str, user_id: int):
+    def get_phone_number_list_to_buy(self, channel_type: str, user_id: int, channel_id: int = None):
         from core.models.enums import ChannelType
         from requests.auth import HTTPBasicAuth
 
-        type_name = channel_type.strip().upper()
-        channel_enum = None
-        for ct in ChannelType:
-            if ct.name == type_name:
-                channel_enum = ct
-                break
-        if channel_enum is None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid channel type: {channel_type}",
-            )
+        # If channel_id provided, use it directly
+        if channel_id:
+            channel = self.query(Channel).filter(Channel.id == channel_id).first()
+            if not channel:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Channel not found",
+                )
+        else:
+            type_name = channel_type.strip().upper()
+            channel_enum = None
+            for ct in ChannelType:
+                if ct.name == type_name:
+                    channel_enum = ct
+                    break
+            if channel_enum is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid channel type: {channel_type}",
+                )
 
-        channel = (
-            self.query(Channel)
-            .filter(Channel.type == channel_enum, Channel.created_by == user_id)
-            .first()
-        )
-        if not channel:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No channel found with type: {channel_type} for the current user",
+            channel = (
+                self.query(Channel)
+                .filter(Channel.type == channel_enum, Channel.created_by == user_id)
+                .first()
             )
+            if not channel:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"No channel found with type: {channel_type} for the current user",
+                )
+
+        channel_enum = channel.type
 
         meta_data = channel.meta_data if isinstance(channel.meta_data, dict) else {}
 

@@ -54,13 +54,6 @@ class ChannelService(BaseService):
                 if ct.name == type_str:
                     channel_enum = ct
                     break
-            if channel_enum is not None:
-                duplicate = self.query(Channel).filter(Channel.type == channel_enum).first()
-                if duplicate:
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail=f"A {channel_enum.value.capitalize()} channel already exists. Only one channel per type is allowed.",
-                    )
             channel_uuid = uuid_lib.uuid4()
 
         now = int(time.time())
@@ -133,6 +126,24 @@ class ChannelService(BaseService):
             )
 
         return self._response_item(record)
+
+    def get_channels_by_type(self, channel_type: str) -> List[Dict[str, Any]]:
+        from core.models.enums import ChannelType
+
+        type_name = channel_type.strip().upper()
+        channel_enum = None
+        for ct in ChannelType:
+            if ct.name == type_name:
+                channel_enum = ct
+                break
+        if channel_enum is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid channel type: {channel_type}",
+            )
+
+        rows = self.query(Channel).filter(Channel.type == channel_enum).order_by(Channel.id).all()
+        return [self._response_item(row) for row in rows]
 
     def delete_channel(self, channel_id: int) -> Dict[str, str]:
         record = self.query(Channel).filter(Channel.id == channel_id).first()

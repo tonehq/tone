@@ -52,7 +52,7 @@ export default function ModelsPanel({ selectedProvider, onBack, compact }: Model
     setModelPage(1);
     setModelSearch('');
     fetchModels({
-      service_provider_id: selectedProvider.id,
+      model_provider_menu_id: selectedProvider.id,
       page: 1,
       page_size: modelPageSize,
     }).catch(handleApiError);
@@ -64,12 +64,12 @@ export default function ModelsPanel({ selectedProvider, onBack, compact }: Model
     (page: number, pageSize: number, nameOverride?: string) => {
       if (!selectedProvider) return null;
       const params: {
-        service_provider_id: number;
+        model_provider_menu_id: number;
         page: number;
         page_size: number;
         name?: string;
       } = {
-        service_provider_id: selectedProvider.id,
+        model_provider_menu_id: selectedProvider.id,
         page,
         page_size: pageSize,
       };

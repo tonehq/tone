@@ -11,7 +11,7 @@ export type ProviderUpsertFormData = z.infer<typeof providerUpsertSchema>;
 
 export const apiKeyUpsertSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  api_key: z.string().optional(),
+  api_key: z.string().min(1, 'API key is required'),
   description: z.string().optional(),
 });
 

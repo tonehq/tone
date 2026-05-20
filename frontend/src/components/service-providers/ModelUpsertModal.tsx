@@ -78,7 +78,7 @@ export default function ModelUpsertModal({
       setSaving(true);
       try {
         const payload: ModelUpsertPayload = {
-          service_provider_id: serviceProviderId,
+          model_provider_menu_id: serviceProviderId,
           name: data.name.trim(),
           service_type: defaultServiceType,
           status,
