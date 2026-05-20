@@ -41,21 +41,31 @@ from pipecat.runner.types import (
 load_dotenv(override=True)
 
 
-def _get_twilio_credentials(org_id=None) -> dict:
+def _get_twilio_credentials(org_id=None, channel_id=None) -> dict:
     """Fetch Twilio account_sid and auth_token.
 
-    Tries the channels table first (org-scoped), then falls back to
-    the api_keys table (global).
+    If channel_id is provided, looks up that specific channel first.
+    Then tries org-scoped channel lookup, then falls back to api_keys table.
     Returns {"account_sid": ..., "auth_token": ...}.
     """
     from core.database.session import get_db_context
 
     with get_db_context() as db:
-        # Try channels table first (per-org credentials)
-        if org_id:
-            from core.models.channel import Channel
-            from core.models.enums import ChannelType
+        from core.models.channel import Channel
+        from core.models.enums import ChannelType
 
+        # Try specific channel first
+        if channel_id:
+            channel = db.query(Channel).filter(Channel.id == channel_id).first()
+            if channel and channel.meta_data:
+                meta = channel.meta_data
+                account_sid = meta.get("account_sid")
+                auth_token = meta.get("auth_token")
+                if account_sid and auth_token:
+                    return {"account_sid": account_sid, "auth_token": auth_token}
+
+        # Try channels table (per-org credentials)
+        if org_id:
             channel = (
                 db.query(Channel)
                 .filter(Channel.type == ChannelType.TWILIO, Channel.organization_id == org_id)
@@ -347,7 +357,7 @@ def _create_serializer(transport_type: str, call_data: dict):
     """
     if transport_type == "twilio":
         # Reuse credentials cached by BotRunnerService if available
-        twilio_creds = call_data.get("_twilio_creds") or _get_twilio_credentials(org_id=call_data.get("_org_id"))
+        twilio_creds = call_data.get("_twilio_creds") or _get_twilio_credentials(org_id=call_data.get("_org_id"), channel_id=call_data.get("_channel_id"))
         return TwilioFrameSerializer(
             stream_sid=call_data["stream_id"],
             call_sid=call_data["call_id"],
@@ -403,7 +413,7 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
         # Fetch from/to only if not already present (BotRunnerService enriches call_data)
         if transport_type == "twilio" and not call_data.get("from"):
             _t = _time.monotonic()
-            call_info = await get_call_info(transport_type, call_data.get("call_id", ""), org_id=call_data.get("_org_id"))
+            call_info = await get_call_info(transport_type, call_data.get("call_id", ""), org_id=call_data.get("_org_id"), call_data=call_data)
             logger.info("[TIMING] bot() get_call_info Twilio API (+%.3fs)", _time.monotonic() - _t)
             if call_info:
                 call_data["from"] = call_info.get("from_number", "")
@@ -473,7 +483,7 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
     await run_bot(transport, runner_args)
     logger.info("[TIMING] bot() run_bot finished (+%.3fs), total bot(): %.3fs", _time.monotonic() - _t, _time.monotonic() - _t_bot_start)
 
-async def get_call_info(transport_type: str, call_sid: str, org_id=None) -> dict:
+async def get_call_info(transport_type: str, call_sid: str, org_id=None, call_data: dict = None) -> dict:
     """Fetch call information from the telephony provider's REST API.
 
     Currently only Twilio is supported for call info lookup via REST API.
@@ -490,7 +500,7 @@ async def get_call_info(transport_type: str, call_sid: str, org_id=None) -> dict
     if transport_type != "twilio":
         return {}
 
-    twilio_creds = _get_twilio_credentials(org_id=org_id)
+    twilio_creds = _get_twilio_credentials(org_id=org_id, channel_id=call_data.get("_channel_id") if call_data else None)
     account_sid = twilio_creds.get("account_sid")
     auth_token = twilio_creds.get("auth_token")
 

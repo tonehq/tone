@@ -105,13 +105,16 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
   const handleAssignPhoneNumbers = async (phoneNumbers: { type: string; no: string }[]) => {
     setAssigning(true);
     try {
-      const channel = formData?.channels?.find((channel: any) => channel.type === 'twilio');
+      const channel = formData.channelId
+        ? formData?.channels?.find((c: any) => c.id === formData.channelId)
+        : formData?.channels?.find((c: any) => c.type === 'twilio');
+      const providerType = phoneNumbers[0]?.type || channel?.type || 'twilio';
       const payload = {
         phone_number: phoneNumbers,
         phone_number_sid: channel?.meta_data?.account_sid,
         phone_number_auth_token: channel?.meta_data?.auth_token,
-        provider: 'twilio',
-        channel_id: channel?.id,
+        provider: providerType,
+        channel_id: formData.channelId || channel?.id,
         agent_id: agentId ? Number(agentId) : undefined,
         country_code: '+1',
         number_type: 'international',
@@ -487,6 +490,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         currentPhoneNumbers={formData.phoneNumbers}
         onAssign={handleAssignPhoneNumbers}
         agentId={agentId ? Number(agentId) : undefined}
+        channelId={formData.channelId}
       />
 
       <CustomModal

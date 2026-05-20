@@ -102,7 +102,7 @@ export interface ServiceProviderUpsertPayload {
 
 export interface ModelUpsertPayload {
   id?: number;
-  service_provider_id: number;
+  model_provider_menu_id: number;
   name: string;
   service_type?: string;
   status?: string;

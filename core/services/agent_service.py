@@ -163,34 +163,42 @@ class AgentService(BaseService):
             agent = self.query(Agent).filter(Agent.uuid == agent_uuid).first()
 
             channel_data = agent_data.get("channel")
-            if channel_data and channel_data.get("type"):
+            if channel_data:
                 channel_svc = ChannelService(self.db, user_id=self.user_id, org_id=self.org_id)
-                channel = channel_svc.get_or_create_channel_by_type(
-                    channel_type=channel_data["type"],
-                    meta_data=channel_data.get("meta_data"),
-                    created_by=created_by,
-                    auto_commit=False,
-                )
-                existing_link = (
-                    self.query(AgentChannel)
-                    .filter(AgentChannel.agent_id == agent.id, AgentChannel.channel_id == channel.id)
-                    .first()
-                )
-                if not existing_link:
-                    now_link = int(time.time())
-                    self.upsert(
-                        model=AgentChannel,
-                        values={
-                            "uuid": uuid_lib.uuid4(),
-                            "agent_id": agent.id,
-                            "channel_id": channel.id,
-                            "created_at": now_link,
-                            "updated_at": now_link,
-                        },
-                        conflict_fields=["uuid"],
-                        update_fields=["updated_at"],
+                channel = None
+                if channel_data.get("id"):
+                    from core.models.channel import Channel as ChannelModel
+                    channel = self.query(ChannelModel).filter(ChannelModel.id == int(channel_data["id"])).first()
+                    if not channel:
+                        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found")
+                elif channel_data.get("type"):
+                    channel = channel_svc.get_or_create_channel_by_type(
+                        channel_type=channel_data["type"],
+                        meta_data=channel_data.get("meta_data"),
+                        created_by=created_by,
                         auto_commit=False,
                     )
+                if channel:
+                    existing_link = (
+                        self.query(AgentChannel)
+                        .filter(AgentChannel.agent_id == agent.id, AgentChannel.channel_id == channel.id)
+                        .first()
+                    )
+                    if not existing_link:
+                        now_link = int(time.time())
+                        self.upsert(
+                            model=AgentChannel,
+                            values={
+                                "uuid": uuid_lib.uuid4(),
+                                "agent_id": agent.id,
+                                "channel_id": channel.id,
+                                "created_at": now_link,
+                                "updated_at": now_link,
+                            },
+                            conflict_fields=["uuid"],
+                            update_fields=["updated_at"],
+                            auto_commit=False,
+                        )
 
             # When id present: edit both agent and agent_config. When id absent: create agent then create agent_config.
             # Create/update config whenever any config-related field is present.
@@ -627,6 +635,23 @@ class AgentService(BaseService):
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Agent not found",
             )
+        from core.models.call_log import CallLog
+        from core.models.upload import Upload
+        from core.models.document import Document, DocumentChunk
+        from core.models.tool import AgentTool
+        from core.models.mcp_server import AgentMcpServer
+
+        # Break circular FK between call_logs and uploads before deleting
+        self.query(CallLog).filter(CallLog.agent_id == agent.id).update({"upload_id": None}, synchronize_session=False)
+        self.query(Upload).filter(Upload.agent_id == agent.id).update({"call_log_id": None}, synchronize_session=False)
+        doc_ids = [d.id for d in self.query(Document).filter(Document.agent_id == agent.id).all()]
+        if doc_ids:
+            self.query(DocumentChunk).filter(DocumentChunk.document_id.in_(doc_ids)).delete(synchronize_session=False)
+        self.query(Document).filter(Document.agent_id == agent.id).delete()
+        self.query(Upload).filter(Upload.agent_id == agent.id).delete()
+        self.query(CallLog).filter(CallLog.agent_id == agent.id).delete()
+        self.query(AgentTool).filter(AgentTool.agent_id == agent.id).delete()
+        self.query(AgentMcpServer).filter(AgentMcpServer.agent_id == agent.id).delete()
         self.query(AgentChannelPhoneNumbers).filter(AgentChannelPhoneNumbers.agent_id == agent.id).delete()
         self.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).delete()
         self.query(AgentChannel).filter(AgentChannel.agent_id == agent.id).delete()

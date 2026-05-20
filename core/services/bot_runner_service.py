@@ -72,17 +72,24 @@ class BotRunnerService(BaseService):
 
         return result
 
-    def _get_twilio_credentials_from_channel(self, org_id=None) -> dict:
-        """Fetch Twilio account_sid and auth_token from the channels table (org-scoped).
+    def _get_twilio_credentials_from_channel(self, org_id=None, channel_id=None) -> dict:
+        """Fetch Twilio account_sid and auth_token from the channels table.
 
-        Looks up the Twilio channel for the given org_id and extracts credentials
-        from channel.meta_data. This is the preferred method as it supports
-        per-organization Twilio accounts.
-
+        If channel_id is provided, looks up that specific channel.
+        Otherwise falls back to org-scoped type-based lookup.
         Falls back to _get_twilio_credentials_from_api_keys() if no channel found.
         """
         from core.models.channel import Channel
         from core.models.enums import ChannelType
+
+        if channel_id:
+            channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
+            if channel and channel.meta_data:
+                meta = channel.meta_data
+                account_sid = meta.get("account_sid")
+                auth_token = meta.get("auth_token")
+                if account_sid and auth_token:
+                    return {"account_sid": account_sid, "auth_token": auth_token}
 
         if org_id:
             channel = (
@@ -130,18 +137,18 @@ class BotRunnerService(BaseService):
 
         return creds
 
-    def _get_twilio_credentials(self) -> dict:
-        """Fetch Twilio credentials — tries channels table first, then api_keys."""
-        return self._get_twilio_credentials_from_channel(org_id=self.org_id)
+    def _get_twilio_credentials(self, channel_id=None) -> dict:
+        """Fetch Twilio credentials — tries channel_id first, then org-scoped, then api_keys."""
+        return self._get_twilio_credentials_from_channel(org_id=self.org_id, channel_id=channel_id)
 
-    async def _fetch_twilio_call_info(self, call_sid: str, call_data: Dict[str, Any]) -> Optional[str]:
+    async def _fetch_twilio_call_info(self, call_sid: str, call_data: Dict[str, Any], channel_id=None) -> Optional[str]:
         """Fetch call info from Twilio REST API and enrich call_data with from/to and credentials.
 
         Stores 'from', 'to', and '_twilio_creds' into call_data so downstream code
         (bot.py, _create_serializer) can reuse them without duplicate DB/API calls.
         Returns the 'to' number or None.
         """
-        twilio_creds = self._get_twilio_credentials()
+        twilio_creds = self._get_twilio_credentials(channel_id=channel_id)
         account_sid = twilio_creds.get("account_sid")
         auth_token = twilio_creds.get("auth_token")
 
@@ -278,7 +285,7 @@ class BotRunnerService(BaseService):
             call_sid = call_data.get("call_id")
             if not call_sid:
                 return None
-            return await self._fetch_twilio_call_info(call_sid, call_data)
+            return await self._fetch_twilio_call_info(call_sid, call_data, channel_id=call_data.get("_channel_id"))
 
         elif transport_type == "telnyx":
             # Telnyx provides 'to' directly in WebSocket start message
@@ -347,6 +354,14 @@ class BotRunnerService(BaseService):
                 agent.id,
                 agent.name,
             )
+            # Resolve channel_id from AgentChannelPhoneNumbers for credential lookup
+            phone_record = (
+                self.db.query(AgentChannelPhoneNumbers)
+                .filter(AgentChannelPhoneNumbers.phone_number == to_number, AgentChannelPhoneNumbers.agent_id == agent.id)
+                .first()
+            )
+            if phone_record and phone_record.channel_id:
+                call_data["_channel_id"] = phone_record.channel_id
         else:
             logger.warning("No agent found for phone number: %s", to_number)
 
