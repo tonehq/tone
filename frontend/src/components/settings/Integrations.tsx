@@ -34,6 +34,7 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
   const [, removeChannel] = useAtom(deleteChannelAtom);
   const [modalOpen, setModalOpen] = useState(false);
   const [editRow, setEditRow] = useState<IntegrationRow | null>(null);
+  const [selectedProviderKey, setSelectedProviderKey] = useState<string | null>(null);
 
   const [allConnections, setAllConnections] = useState<OAuthConnection[]>([]);
   const [oauthLoading, setOauthLoading] = useState(true);
@@ -106,19 +107,22 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
     return map;
   }, [rows]);
 
-  const handleAddApiKey = useCallback(() => {
+  const handleAddApiKey = useCallback((providerKey: string) => {
     setEditRow(null);
+    setSelectedProviderKey(providerKey);
     setModalOpen(true);
   }, []);
 
   const handleEdit = useCallback((row: IntegrationRow) => {
     setEditRow(row);
+    setSelectedProviderKey(row.type ?? null);
     setModalOpen(true);
   }, []);
 
   const handleCloseModal = () => {
     setModalOpen(false);
     setEditRow(null);
+    setSelectedProviderKey(null);
   };
 
   const handleSubmit = async (data: {
@@ -208,6 +212,7 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
         onClose={handleCloseModal}
         onSubmit={handleSubmit}
         editData={editRow}
+        providerKey={selectedProviderKey}
       />
     </div>
   );

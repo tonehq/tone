@@ -29,7 +29,8 @@
           "mode": "raw",
           "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"securePassword123\",\n  \"username\": \"johndoe\",\n  \"profile\": {\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\"\n  }\n}",
           "options": { "raw": { "language": "json" } }
-        }
+        },
+        "auth": { "type": "noauth" }
       },
       "response": [
         {
@@ -55,7 +56,7 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"message\": \"User created successfully. Please verify your email.\",\n  \"user\": {\n    \"id\": 1,\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"email\": \"user@example.com\",\n    \"username\": \"johndoe\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"status\": \"PENDING\",\n    \"email_verified\": false,\n    \"auth_provider\": \"EMAIL\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n}"
+          "body": "{\n  \"user_id\": 1,\n  \"email\": \"user@example.com\",\n  \"username\": \"johndoe\",\n  \"status\": \"pending\",\n  \"message\": \"User created successfully. Please verify your email.\"\n}"
         },
         {
           "name": "Signup - Missing Fields",
@@ -81,6 +82,56 @@
             { "key": "Content-Type", "value": "application/json" }
           ],
           "body": "{\n  \"detail\": \"Email and password are required\"\n}"
+        },
+        {
+          "name": "Signup - Duplicate Email",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/signup",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "signup"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"existing@example.com\",\n  \"password\": \"securePassword123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"User with this email already exists\"\n}"
+        },
+        {
+          "name": "Signup - Username Taken",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/signup",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "signup"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"newuser@example.com\",\n  \"password\": \"securePassword123\",\n  \"username\": \"existinguser\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Username already taken\"\n}"
         }
       ]
     },
@@ -101,7 +152,8 @@
           "mode": "raw",
           "raw": "{\n  \"email\": \"user@example.com\",\n  \"profile\": {\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\"\n  }\n}",
           "options": { "raw": { "language": "json" } }
-        }
+        },
+        "auth": { "type": "noauth" }
       },
       "response": [
         {
@@ -128,7 +180,59 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"message\": \"User created successfully via Firebase.\",\n  \"user\": {\n    \"id\": 1,\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"email\": \"user@example.com\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"status\": \"ACTIVE\",\n    \"email_verified\": true,\n    \"auth_provider\": \"FIREBASE\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  },\n  \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n}"
+          "body": "{\n  \"user_id\": 1,\n  \"email\": \"user@example.com\",\n  \"status\": \"active\",\n  \"message\": \"User authenticated with Firebase successfully\"\n}"
+        },
+        {
+          "name": "Signup With Firebase - Missing Email",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{firebaseToken}}" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/signup_with_firebase",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "signup_with_firebase"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"profile\": {}\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Email is required\"\n}"
+        },
+        {
+          "name": "Signup With Firebase - Invalid Authorization Header",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "InvalidToken" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/signup_with_firebase",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "signup_with_firebase"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Unauthorized",
+          "code": 401,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Invalid authorization header\"\n}"
         }
       ]
     },
@@ -144,7 +248,8 @@
           "query": [
             { "key": "email", "value": "user@example.com" }
           ]
-        }
+        },
+        "auth": { "type": "noauth" }
       },
       "response": [
         {
@@ -166,7 +271,49 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"message\": \"Verification email sent successfully.\"\n}"
+          "body": "{\n  \"message\": \"Verification email sent successfully\"\n}"
+        },
+        {
+          "name": "Resend Verification Email - User Not Found",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/resend_verification_email?email=nonexistent@example.com",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "resend_verification_email"],
+              "query": [
+                { "key": "email", "value": "nonexistent@example.com" }
+              ]
+            }
+          },
+          "status": "Not Found",
+          "code": 404,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"User not found\"\n}"
+        },
+        {
+          "name": "Resend Verification Email - Already Verified",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/resend_verification_email?email=verified@example.com",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "resend_verification_email"],
+              "query": [
+                { "key": "email", "value": "verified@example.com" }
+              ]
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Email already verified\"\n}"
         }
       ]
     },
@@ -184,7 +331,8 @@
             { "key": "code", "value": "123456" },
             { "key": "user_id", "value": "1" }
           ]
-        }
+        },
+        "auth": { "type": "noauth" }
       },
       "response": [
         {
@@ -208,7 +356,53 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"message\": \"Email verified successfully.\",\n  \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n}"
+          "body": "{\n  \"message\": \"Email verified successfully\"\n}"
+        },
+        {
+          "name": "Verify User Email - Invalid Or Expired Code",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify_user_email?email=user@example.com&code=000000&user_id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "verify_user_email"],
+              "query": [
+                { "key": "email", "value": "user@example.com" },
+                { "key": "code", "value": "000000" },
+                { "key": "user_id", "value": "1" }
+              ]
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Invalid or expired verification code\"\n}"
+        },
+        {
+          "name": "Verify User Email - Max Attempts Exceeded",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/verify_user_email?email=user@example.com&code=123456&user_id=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "verify_user_email"],
+              "query": [
+                { "key": "email", "value": "user@example.com" },
+                { "key": "code", "value": "123456" },
+                { "key": "user_id", "value": "1" }
+              ]
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Maximum verification attempts exceeded\"\n}"
         }
       ]
     },
@@ -228,7 +422,8 @@
           "mode": "raw",
           "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"securePassword123\"\n}",
           "options": { "raw": { "language": "json" } }
-        }
+        },
+        "auth": { "type": "noauth" }
       },
       "response": [
         {
@@ -254,7 +449,32 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n  \"token_type\": \"bearer\",\n  \"user\": {\n    \"id\": 1,\n    \"uuid\": \"a1b2c3d4-e5f6-7890-abcd-ef1234567890\",\n    \"email\": \"user@example.com\",\n    \"username\": \"johndoe\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"status\": \"ACTIVE\",\n    \"email_verified\": true\n  },\n  \"organization\": {\n    \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"name\": \"My Organization\",\n    \"slug\": \"my-organization\",\n    \"role\": \"OWNER\"\n  }\n}"
+          "body": "{\n  \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n  \"token_type\": \"bearer\",\n  \"user_id\": 1,\n  \"email\": \"user@example.com\",\n  \"org_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"role\": \"owner\"\n}"
+        },
+        {
+          "name": "Login - Missing Fields",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Email and password are required\"\n}"
         },
         {
           "name": "Login - Invalid Credentials",
@@ -280,6 +500,31 @@
             { "key": "Content-Type", "value": "application/json" }
           ],
           "body": "{\n  \"detail\": \"Invalid email or password\"\n}"
+        },
+        {
+          "name": "Login - Account Not Active",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"unverified@example.com\",\n  \"password\": \"securePassword123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Unauthorized",
+          "code": 401,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Account not active. Please verify your email.\"\n}"
         }
       ]
     },
@@ -295,7 +540,8 @@
           "query": [
             { "key": "email", "value": "user@example.com" }
           ]
-        }
+        },
+        "auth": { "type": "noauth" }
       },
       "response": [
         {
@@ -317,7 +563,7 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"message\": \"Password reset email sent successfully.\"\n}"
+          "body": "{\n  \"message\": \"If the email exists, you will receive a password reset link\"\n}"
         }
       ]
     },
@@ -335,7 +581,8 @@
             { "key": "password", "value": "newPassword123" },
             { "key": "token", "value": "reset-token-here" }
           ]
-        }
+        },
+        "auth": { "type": "noauth" }
       },
       "response": [
         {
@@ -359,7 +606,53 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"message\": \"Password reset successfully.\"\n}"
+          "body": "{\n  \"message\": \"Password reset successfully\"\n}"
+        },
+        {
+          "name": "Accept Forgot Password - Invalid Or Expired Token",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/acceptForgotPassword?email=user@example.com&password=newPassword123&token=invalid-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "acceptForgotPassword"],
+              "query": [
+                { "key": "email", "value": "user@example.com" },
+                { "key": "password", "value": "newPassword123" },
+                { "key": "token", "value": "invalid-token" }
+              ]
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Invalid or expired reset token\"\n}"
+        },
+        {
+          "name": "Accept Forgot Password - User Not Found",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/acceptForgotPassword?email=deleted@example.com&password=newPassword123&token=valid-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "acceptForgotPassword"],
+              "query": [
+                { "key": "email", "value": "deleted@example.com" },
+                { "key": "password", "value": "newPassword123" },
+                { "key": "token", "value": "valid-token" }
+              ]
+            }
+          },
+          "status": "Not Found",
+          "code": 404,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"User not found\"\n}"
         }
       ]
     },
@@ -465,7 +758,7 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n  \"token_type\": \"bearer\",\n  \"organization\": {\n    \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"name\": \"My Organization\",\n    \"role\": \"OWNER\"\n  }\n}"
+          "body": "{\n  \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\",\n  \"token_type\": \"bearer\",\n  \"organization\": {\n    \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"name\": \"My Organization\",\n    \"role\": \"owner\"\n  }\n}"
         },
         {
           "name": "[EE] Switch Organization - Missing Organization ID",

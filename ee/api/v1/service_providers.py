@@ -96,7 +96,6 @@ def upsert_service_provider(
         api_key_value = api_key.get("api_key")
         service_status = "active" if api_key_value or api_key.get("id") else "inactive"
         AccountService(db, org_id=org_id, user_id=claims.user_id).upsert_account(
-            service_provider_id=result["id"],
             name=f"{display_name} {provider_type.upper()}",
             service_type=provider_type,
             config={},

@@ -2,10 +2,14 @@
 
 Source: ee/api/v1/services.py
 Integration tests — real DB, real endpoints, no mocks.
+
+SKIPPED: The /api/v1/services/ endpoint has been removed and replaced by /api/v1/accounts/.
 """
 
 import pytest
 import uuid
+
+pytestmark = pytest.mark.skip(reason="services endpoint removed, replaced by accounts")
 
 
 # ─── Helpers ───

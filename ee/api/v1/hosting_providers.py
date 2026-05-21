@@ -60,9 +60,27 @@ def upsert_hosting_provider(
     claims: EEJWTClaims = Depends(require_ee_admin_or_owner),
     db: Session = Depends(get_db),
 ):
+    name = data.get("name")
+    display_name = data.get("display_name")
+
+    if not all([name, display_name]):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="name and display_name are required",
+        )
+
     return HostingProviderService(
         db, org_id=UUID(claims.org_id), user_id=claims.user_id
-    ).upsert_hosting_provider(data)
+    ).upsert_hosting_provider(
+        name=name,
+        display_name=display_name,
+        description=data.get("description"),
+        logo_url=data.get("logo_url"),
+        website_url=data.get("website_url"),
+        is_system=data.get("is_system", False),
+        provider_status=data.get("status"),
+        provider_id=data.get("id"),
+    )
 
 
 @router.post("/list")
