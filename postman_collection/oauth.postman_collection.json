@@ -1,0 +1,197 @@
+{
+  "info": {
+    "name": "OAuth API",
+    "description": "Auto-generated from core/api/v1/oauth.py",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8000/api/v1" },
+    { "key": "authToken", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{authToken}}" }]
+  },
+  "item": [
+    {
+      "name": "Get Connections",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/oauth/connections?provider=google_calendar",
+          "host": ["{{baseUrl}}"],
+          "path": ["oauth", "connections"],
+          "query": [
+            { "key": "provider", "value": "google_calendar", "description": "Filter by provider (optional)", "disabled": true }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Get Connections - Success",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "[\n  {\n    \"id\": 1,\n    \"provider\": \"google_calendar\",\n    \"user_email\": \"user@gmail.com\",\n    \"scopes\": \"https://www.googleapis.com/auth/calendar\",\n    \"created_at\": \"2026-01-15T10:00:00\",\n    \"updated_at\": \"2026-01-15T10:00:00\"\n  }\n]"
+        },
+        {
+          "name": "Get Connections - Empty",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "[]"
+        }
+      ]
+    },
+    {
+      "name": "Get Connection By Provider",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/oauth/connection?provider=google_calendar",
+          "host": ["{{baseUrl}}"],
+          "path": ["oauth", "connection"],
+          "query": [
+            { "key": "provider", "value": "google_calendar" }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Get Connection By Provider - Connected",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 1,\n  \"provider\": \"google_calendar\",\n  \"user_email\": \"user@gmail.com\",\n  \"scopes\": \"https://www.googleapis.com/auth/calendar\",\n  \"connected\": true,\n  \"created_at\": \"2026-01-15T10:00:00\",\n  \"updated_at\": \"2026-01-15T10:00:00\"\n}"
+        },
+        {
+          "name": "Get Connection By Provider - Not Connected",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"connected\": false,\n  \"provider\": \"google_calendar\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Disconnect",
+      "request": {
+        "method": "DELETE",
+        "url": {
+          "raw": "{{baseUrl}}/oauth/disconnect?connection_id=1",
+          "host": ["{{baseUrl}}"],
+          "path": ["oauth", "disconnect"],
+          "query": [
+            { "key": "connection_id", "value": "1" }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "Disconnect - Success",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"message\": \"Connection deleted successfully\"\n}"
+        },
+        {
+          "name": "Disconnect - Not Found",
+          "status": "Not Found",
+          "code": 404,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Connection not found\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "List Providers",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/oauth/providers",
+          "host": ["{{baseUrl}}"],
+          "path": ["oauth", "providers"]
+        }
+      },
+      "response": [
+        {
+          "name": "List Providers - Success",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"providers\": [\n    {\n      \"name\": \"google_calendar\",\n      \"display_name\": \"Google Calendar\",\n      \"scopes\": \"https://www.googleapis.com/auth/calendar\"\n    }\n  ]\n}"
+        }
+      ]
+    },
+    {
+      "name": "Authorize",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/oauth/google_calendar/authorize",
+          "host": ["{{baseUrl}}"],
+          "path": ["oauth", "google_calendar", "authorize"]
+        }
+      },
+      "response": [
+        {
+          "name": "Authorize - Success",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"auth_url\": \"https://accounts.google.com/o/oauth2/v2/auth?client_id=...&redirect_uri=...&response_type=code&scope=...&state=...&access_type=offline&prompt=consent\"\n}"
+        },
+        {
+          "name": "Authorize - Unsupported Provider",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Unsupported provider: invalid_provider\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Callback",
+      "request": {
+        "auth": { "type": "noauth" },
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/oauth/google_calendar/callback?code=auth_code_here&state=org_id:user_id:google_calendar",
+          "host": ["{{baseUrl}}"],
+          "path": ["oauth", "google_calendar", "callback"],
+          "query": [
+            { "key": "code", "value": "auth_code_here" },
+            { "key": "state", "value": "org_id:user_id:google_calendar" }
+          ]
+        },
+        "description": "OAuth callback endpoint. Provider redirects here with an auth code. Exchanges code for tokens and stores them. Redirects to frontend integrations page."
+      },
+      "response": [
+        {
+          "name": "Callback - Success (Redirect)",
+          "status": "Temporary Redirect",
+          "code": 307,
+          "header": [
+            { "key": "Location", "value": "http://localhost:3000/integrations?provider=google_calendar&status=success" }
+          ],
+          "body": ""
+        },
+        {
+          "name": "Callback - Invalid State",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Invalid state parameter\"\n}"
+        },
+        {
+          "name": "Callback - Token Exchange Failed",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Token exchange failed: ...\"\n}"
+        }
+      ]
+    }
+  ]
+}

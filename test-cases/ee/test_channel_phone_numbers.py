@@ -1,6 +1,7 @@
 """Tests for Channel Phone Numbers API endpoints (EE edition).
 
-Source: ee/api/v1/channel_phone_numbers.py, ee/api/v1/agent_channel_phone_numbers.py
+Source: ee/api/v1/channel_phone_numbers.py
+Postman: channel_phone_numbers.postman_collection.json
 Integration tests — real DB, real endpoints, no mocks.
 """
 
@@ -12,11 +13,9 @@ import uuid
 
 def _get_or_create_channel(client, channel_type="twilio"):
     """Get an existing channel of the given type, or create one. Returns JSON."""
-    # Try to get existing channel of this type (one per type constraint)
     resp = client.get(f"/api/v1/channel/get_by_type?type={channel_type}")
     if resp.status_code == 200:
         return resp.json()
-    # Create new
     data = {
         "name": f"test-channel-{uuid.uuid4().hex[:8]}",
         "type": channel_type,
@@ -27,188 +26,135 @@ def _get_or_create_channel(client, channel_type="twilio"):
     return resp.json()
 
 
-# ─── GET /api/v1/agent_channel_phone_number/get_channel_phone_numbers ───
-
-class TestGetChannelPhoneNumbers:
-    """Tests for GET /api/v1/agent_channel_phone_number/get_channel_phone_numbers"""
-
-    def test_get_phone_numbers_missing_channel_id(self, client_as_member):
-        response = client_as_member.get("/api/v1/agent_channel_phone_number/get_channel_phone_numbers")
-        assert response.status_code == 422
-
-    def test_get_phone_numbers_invalid_channel_id(self, client_as_member):
-        response = client_as_member.get("/api/v1/agent_channel_phone_number/get_channel_phone_numbers?channel_id=abc")
-        assert response.status_code == 422
-
-    def test_get_phone_numbers_unauthenticated(self, client_unauthenticated):
-        response = client_unauthenticated.get("/api/v1/agent_channel_phone_number/get_channel_phone_numbers?channel_id=1")
-        assert response.status_code in (401, 403)
+def _create_phone_number(client, channel_id):
+    """Create a phone number record via upsert and return JSON."""
+    payload = {
+        "phone_number": f"+1555{uuid.uuid4().hex[:7]}",
+        "phone_number_sid": f"PN{uuid.uuid4().hex[:10]}",
+        "provider": "twilio",
+        "channel_id": channel_id,
+    }
+    resp = client.post("/api/v1/channel_phone_number/upsert", json=payload)
+    assert resp.status_code == 200
+    return resp.json()
 
 
-# ─── POST /api/v1/agent_channel_phone_number/upsert_channel_phone_number ───
+# ─── POST /api/v1/channel_phone_number/upsert ───
 
 class TestUpsertChannelPhoneNumber:
-    """Tests for POST /api/v1/agent_channel_phone_number/upsert_channel_phone_number"""
+    """Tests for POST /api/v1/channel_phone_number/upsert
 
-    def test_upsert_phone_number_missing_phone_number(self, client_as_member):
-        response = client_as_member.post(
-            "/api/v1/agent_channel_phone_number/upsert_channel_phone_number",
-            json={"phone_number_sid": "sid", "phone_number_auth_token": "tok", "provider": "twilio"}
-        )
-        assert response.status_code == 400
+    Postman examples:
+      - Upsert - Success (200)
+      - Upsert - Missing Phone Number (400)
+      - Upsert - Missing SID (400)
+      - Upsert - Missing Provider (400)
+      - Upsert - Missing Channel ID (400)
+    """
 
-    def test_upsert_phone_number_missing_sid(self, client_as_member):
-        response = client_as_member.post(
-            "/api/v1/agent_channel_phone_number/upsert_channel_phone_number",
-            json={"phone_number": "+15551234567", "phone_number_auth_token": "tok", "provider": "twilio"}
-        )
-        assert response.status_code == 400
-
-    def test_upsert_phone_number_missing_auth_token(self, client_as_member):
-        response = client_as_member.post(
-            "/api/v1/agent_channel_phone_number/upsert_channel_phone_number",
-            json={"phone_number": "+15551234567", "phone_number_sid": "sid", "provider": "twilio"}
-        )
-        assert response.status_code == 400
-
-    def test_upsert_phone_number_missing_provider(self, client_as_member):
-        response = client_as_member.post(
-            "/api/v1/agent_channel_phone_number/upsert_channel_phone_number",
-            json={"phone_number": "+15551234567", "phone_number_sid": "sid", "phone_number_auth_token": "tok"}
-        )
-        assert response.status_code == 400
-
-    def test_upsert_phone_number_empty_body(self, client_as_member):
-        response = client_as_member.post(
-            "/api/v1/agent_channel_phone_number/upsert_channel_phone_number", json={}
-        )
-        assert response.status_code == 400
-
-    def test_upsert_phone_number_unauthenticated(self, client_unauthenticated):
-        response = client_unauthenticated.post(
-            "/api/v1/agent_channel_phone_number/upsert_channel_phone_number",
-            json={"phone_number": "+15551234567", "phone_number_sid": "s", "phone_number_auth_token": "t", "provider": "twilio"}
-        )
-        assert response.status_code in (401, 403)
-
-    def test_upsert_phone_number_missing_channel_id(self, client_as_member):
-        """Postman: Missing channel_id — API accepts null channel_id."""
-        response = client_as_member.post(
-            "/api/v1/agent_channel_phone_number/upsert_channel_phone_number",
-            json={
-                "phone_number": f"+1555{uuid.uuid4().hex[:7]}",
-                "phone_number_sid": "sid123",
-                "phone_number_auth_token": "tok123",
-                "provider": "twilio",
-            }
-        )
-        assert response.status_code in (200, 409)
-
-    def test_upsert_phone_number_channel_not_found(self, client_as_member):
-        """Postman: Channel Not Found (channel_id=999999)."""
-        response = client_as_member.post(
-            "/api/v1/agent_channel_phone_number/upsert_channel_phone_number",
-            json={
-                "phone_number": "+15551234567",
-                "phone_number_sid": "sid123",
-                "phone_number_auth_token": "tok123",
-                "provider": "twilio",
-                "channel_id": 999999,
-            }
-        )
-        assert response.status_code in (400, 404)
-
-    def test_upsert_twilio_with_new_fields(self, client_as_member):
-        """Postman: Create Twilio Phone Number with country_code, number_type, capabilities."""
+    def test_upsert_success(self, client_as_member):
+        """Postman: Upsert - Success (200)."""
         channel = _get_or_create_channel(client_as_member, channel_type="twilio")
-        response = client_as_member.post(
-            "/api/v1/agent_channel_phone_number/upsert_channel_phone_number",
-            json={
-                "phone_number": f"+1555{uuid.uuid4().hex[:7]}",
-                "phone_number_sid": f"PN{uuid.uuid4().hex[:10]}",
-                "phone_number_auth_token": "auth_token_test",
-                "provider": "twilio",
-                "channel_id": channel["id"],
-                "country_code": "US",
-                "number_type": "local",
-                "friendly_name": "Test Number",
-                "capabilities": {"voice": True, "sms": True, "mms": False},
-            }
-        )
-        assert response.status_code in (200, 400, 409)
+        resp = client_as_member.post("/api/v1/channel_phone_number/upsert", json={
+            "phone_number": f"+1234{uuid.uuid4().hex[:6]}",
+            "phone_number_sid": f"PN{uuid.uuid4().hex[:8]}",
+            "provider": "twilio",
+            "channel_id": channel["id"],
+        })
+        assert resp.status_code in (200, 409)
+        if resp.status_code == 200:
+            data = resp.json()
+            assert "id" in data
+            assert data["provider"] == "twilio"
 
-    def test_upsert_exotel_phone_number(self, client_as_member):
-        """Postman: Create Exotel Phone Number."""
-        channel = _get_or_create_channel(client_as_member, channel_type="exotel")
-        response = client_as_member.post(
-            "/api/v1/agent_channel_phone_number/upsert_channel_phone_number",
-            json={
-                "phone_number": f"+91{uuid.uuid4().hex[:10]}",
-                "phone_number_sid": f"exo{uuid.uuid4().hex[:8]}",
-                "phone_number_auth_token": "exo_auth",
-                "provider": "exotel",
-                "channel_id": channel["id"],
-                "country_code": "IN",
-                "number_type": "virtual",
-            }
-        )
-        assert response.status_code in (200, 400, 409)
-
-
-# ─── POST /api/v1/agent_channel_phone_number/detach_channel_phone_number ───
-
-class TestDetachChannelPhoneNumber:
-    """Tests for POST /api/v1/agent_channel_phone_number/detach_channel_phone_number"""
-
-    def test_detach_phone_number_missing_channel_id(self, client_as_member):
-        response = client_as_member.post(
-            "/api/v1/agent_channel_phone_number/detach_channel_phone_number",
-            json={"phone_number": "+15551234567"}
-        )
+    def test_upsert_missing_phone_number(self, client_as_member):
+        """Postman: Upsert - Missing Phone Number (400)."""
+        response = client_as_member.post("/api/v1/channel_phone_number/upsert", json={
+            "phone_number_sid": "PN123",
+            "provider": "twilio",
+            "channel_id": 1,
+        })
         assert response.status_code == 400
 
-    def test_detach_phone_number_missing_phone_number(self, client_as_member):
-        response = client_as_member.post(
-            "/api/v1/agent_channel_phone_number/detach_channel_phone_number",
-            json={"channel_id": 1}
-        )
+    def test_upsert_missing_sid(self, client_as_member):
+        """Postman: Upsert - Missing SID (400)."""
+        response = client_as_member.post("/api/v1/channel_phone_number/upsert", json={
+            "phone_number": "+1234567890",
+            "provider": "twilio",
+            "channel_id": 1,
+        })
         assert response.status_code == 400
 
-    def test_detach_phone_number_empty_body(self, client_as_member):
-        response = client_as_member.post(
-            "/api/v1/agent_channel_phone_number/detach_channel_phone_number", json={}
-        )
+    def test_upsert_missing_provider(self, client_as_member):
+        """Postman: Upsert - Missing Provider (400)."""
+        response = client_as_member.post("/api/v1/channel_phone_number/upsert", json={
+            "phone_number": "+1234567890",
+            "phone_number_sid": "PN123",
+            "channel_id": 1,
+        })
         assert response.status_code == 400
 
-    def test_detach_phone_number_unauthenticated(self, client_unauthenticated):
-        response = client_unauthenticated.post(
-            "/api/v1/agent_channel_phone_number/detach_channel_phone_number",
-            json={"channel_id": 1, "phone_number": "+15551234567"}
-        )
+    def test_upsert_missing_channel_id(self, client_as_member):
+        """Postman: Upsert - Missing Channel ID (400)."""
+        response = client_as_member.post("/api/v1/channel_phone_number/upsert", json={
+            "phone_number": "+1234567890",
+            "phone_number_sid": "PN123",
+            "provider": "twilio",
+        })
+        assert response.status_code == 400
+
+    def test_upsert_empty_body(self, client_as_member):
+        response = client_as_member.post("/api/v1/channel_phone_number/upsert", json={})
+        assert response.status_code == 400
+
+    def test_upsert_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.post("/api/v1/channel_phone_number/upsert", json={
+            "phone_number": "+1234567890",
+            "phone_number_sid": "PN123",
+            "provider": "twilio",
+            "channel_id": 1,
+        })
         assert response.status_code in (401, 403)
 
 
-# ─── GET /api/v1/agent_channel_phone_number/get_assigned_phone_numbers ───
+# ─── GET /api/v1/channel_phone_number/list ───
 
-class TestGetAssignedPhoneNumbers:
-    """Tests for GET /api/v1/agent_channel_phone_number/get_assigned_phone_numbers"""
+class TestGetAllChannelPhoneNumbers:
+    """Tests for GET /api/v1/channel_phone_number/list
 
-    def test_get_assigned_numbers_returns_200(self, client_as_member):
-        response = client_as_member.get("/api/v1/agent_channel_phone_number/get_assigned_phone_numbers")
+    Postman examples:
+      - Get All - Success (200)
+    """
+
+    def test_get_all_returns_200(self, client_as_member):
+        """Postman: Get All - Success (200)."""
+        response = client_as_member.get("/api/v1/channel_phone_number/list")
         assert response.status_code == 200
         assert isinstance(response.json(), list)
 
-    def test_get_assigned_numbers_unauthenticated(self, client_unauthenticated):
-        response = client_unauthenticated.get("/api/v1/agent_channel_phone_number/get_assigned_phone_numbers")
+    def test_get_all_with_channel_id_filter(self, client_as_member):
+        """Optional channel_id filter."""
+        channel = _get_or_create_channel(client_as_member, channel_type="twilio")
+        response = client_as_member.get(f"/api/v1/channel_phone_number/list?channel_id={channel['id']}")
+        assert response.status_code == 200
+        assert isinstance(response.json(), list)
+
+    def test_get_all_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.get("/api/v1/channel_phone_number/list")
         assert response.status_code in (401, 403)
 
 
 # ─── GET /api/v1/channel_phone_number/get_by_channel ───
 
 class TestGetPhoneNumbersByChannel:
-    """Tests for GET /api/v1/channel_phone_number/get_by_channel"""
+    """Tests for GET /api/v1/channel_phone_number/get_by_channel?channel_id=
+
+    Postman examples:
+      - Get By Channel - Success (200)
+    """
 
     def test_get_by_channel_success(self, client_as_member):
+        """Postman: Get By Channel - Success (200)."""
         channel = _get_or_create_channel(client_as_member, channel_type="twilio")
         response = client_as_member.get(f"/api/v1/channel_phone_number/get_by_channel?channel_id={channel['id']}")
         assert response.status_code == 200
@@ -223,6 +169,7 @@ class TestGetPhoneNumbersByChannel:
         assert response.status_code == 422
 
     def test_get_by_channel_not_found(self, client_as_member):
+        """Non-existent channel_id returns empty list."""
         response = client_as_member.get("/api/v1/channel_phone_number/get_by_channel?channel_id=999999")
         assert response.status_code == 200
         assert response.json() == []
@@ -235,7 +182,17 @@ class TestGetPhoneNumbersByChannel:
 # ─── GET /api/v1/channel_phone_number/get ───
 
 class TestGetChannelPhoneNumber:
-    """Tests for GET /api/v1/channel_phone_number/get"""
+    """Tests for GET /api/v1/channel_phone_number/get?phone_number_id=
+
+    Postman examples:
+      - Get - Success (200)
+      - Get - Not Found (404)
+    """
+
+    def test_get_phone_number_not_found(self, client_as_member):
+        """Postman: Get - Not Found (404)."""
+        response = client_as_member.get("/api/v1/channel_phone_number/get?phone_number_id=999999")
+        assert response.status_code in (404, 400)
 
     def test_get_phone_number_missing_id(self, client_as_member):
         response = client_as_member.get("/api/v1/channel_phone_number/get")
@@ -245,10 +202,6 @@ class TestGetChannelPhoneNumber:
         response = client_as_member.get("/api/v1/channel_phone_number/get?phone_number_id=abc")
         assert response.status_code == 422
 
-    def test_get_phone_number_not_found(self, client_as_member):
-        response = client_as_member.get("/api/v1/channel_phone_number/get?phone_number_id=999999")
-        assert response.status_code in (404, 400)
-
     def test_get_phone_number_unauthenticated(self, client_unauthenticated):
         response = client_unauthenticated.get("/api/v1/channel_phone_number/get?phone_number_id=1")
         assert response.status_code in (401, 403)
@@ -257,7 +210,11 @@ class TestGetChannelPhoneNumber:
 # ─── DELETE /api/v1/channel_phone_number/delete ───
 
 class TestDeleteChannelPhoneNumber:
-    """Tests for DELETE /api/v1/channel_phone_number/delete"""
+    """Tests for DELETE /api/v1/channel_phone_number/delete?phone_number_id=
+
+    Postman examples:
+      - Delete - Success (200)
+    """
 
     def test_delete_phone_number_missing_id(self, client_as_member):
         response = client_as_member.delete("/api/v1/channel_phone_number/delete")
@@ -279,7 +236,11 @@ class TestDeleteChannelPhoneNumber:
 # ─── GET /api/v1/channel_phone_number/get_twilio_phone_numbers ───
 
 class TestGetTwilioPhoneNumbers:
-    """Tests for GET /api/v1/channel_phone_number/get_twilio_phone_numbers"""
+    """Tests for GET /api/v1/channel_phone_number/get_twilio_phone_numbers?type=
+
+    Postman examples:
+      - Get Twilio Numbers - Success (200)
+    """
 
     def test_get_twilio_numbers_missing_type(self, client_as_member):
         response = client_as_member.get("/api/v1/channel_phone_number/get_twilio_phone_numbers")
@@ -289,8 +250,15 @@ class TestGetTwilioPhoneNumbers:
         response = client_unauthenticated.get("/api/v1/channel_phone_number/get_twilio_phone_numbers?type=twilio")
         assert response.status_code in (401, 403)
 
+    def test_get_twilio_numbers_with_optional_params(self, client_as_member):
+        """Optional channel_id and agent_id query params."""
+        response = client_as_member.get(
+            "/api/v1/channel_phone_number/get_twilio_phone_numbers?type=twilio&channel_id=1&agent_id=1"
+        )
+        assert response.status_code in (200, 400, 404)
+
     def test_get_twilio_numbers_invalid_type(self, client_as_member):
-        """Postman: Invalid Channel Type."""
+        """Invalid Channel Type."""
         response = client_as_member.get("/api/v1/channel_phone_number/get_twilio_phone_numbers?type=invalid_type")
         assert response.status_code in (200, 400, 404)
 
@@ -298,7 +266,11 @@ class TestGetTwilioPhoneNumbers:
 # ─── GET /api/v1/channel_phone_number/get_phone_number_list_to_buy ───
 
 class TestGetPhoneNumberListToBuy:
-    """Tests for GET /api/v1/channel_phone_number/get_phone_number_list_to_buy"""
+    """Tests for GET /api/v1/channel_phone_number/get_phone_number_list_to_buy?type=
+
+    Postman examples:
+      - Get Numbers To Buy - Success (200)
+    """
 
     def test_get_list_to_buy_missing_type(self, client_as_member):
         response = client_as_member.get("/api/v1/channel_phone_number/get_phone_number_list_to_buy")
@@ -308,19 +280,34 @@ class TestGetPhoneNumberListToBuy:
         response = client_unauthenticated.get("/api/v1/channel_phone_number/get_phone_number_list_to_buy?type=twilio")
         assert response.status_code in (401, 403)
 
+    def test_get_list_to_buy_with_channel_id(self, client_as_member):
+        """Optional channel_id param."""
+        response = client_as_member.get(
+            "/api/v1/channel_phone_number/get_phone_number_list_to_buy?type=twilio&channel_id=1"
+        )
+        assert response.status_code in (200, 400, 404)
+
 
 # ─── POST /api/v1/channel_phone_number/buy_phone_number ───
 
 class TestBuyPhoneNumber:
-    """Tests for POST /api/v1/channel_phone_number/buy_phone_number"""
+    """Tests for POST /api/v1/channel_phone_number/buy_phone_number
+
+    Postman examples:
+      - Buy Number - Success (200)
+      - Buy Number - Missing Phone (400)
+      - Buy Number - Missing Channel Name (400)
+    """
 
     def test_buy_phone_number_missing_phone_number(self, client_as_member):
+        """Postman: Buy Number - Missing Phone (400)."""
         response = client_as_member.post("/api/v1/channel_phone_number/buy_phone_number", json={
             "channel_name": "Main Twilio"
         })
         assert response.status_code == 400
 
     def test_buy_phone_number_missing_channel_name(self, client_as_member):
+        """Postman: Buy Number - Missing Channel Name (400)."""
         response = client_as_member.post("/api/v1/channel_phone_number/buy_phone_number", json={
             "phone_number": "+15559876543"
         })
@@ -337,7 +324,7 @@ class TestBuyPhoneNumber:
         assert response.status_code in (401, 403)
 
     def test_buy_phone_number_channel_not_found(self, client_as_member):
-        """Postman: Channel Not Found when buying."""
+        """Channel Not Found when buying."""
         response = client_as_member.post("/api/v1/channel_phone_number/buy_phone_number", json={
             "phone_number": "+15559876543", "channel_name": "nonexistent-channel-xyz"
         })

@@ -14,7 +14,7 @@ interface AvailableIntegrationsSectionProps {
   oauthConnecting: Record<string, boolean>;
   oauthLoading: boolean;
   onOAuthConnect: (key: string) => void;
-  onAddApiKey: () => void;
+  onAddApiKey: (providerKey: string) => void;
 }
 
 export default function AvailableIntegrationsSection({
@@ -74,7 +74,7 @@ export default function AvailableIntegrationsSection({
                 actionLabel="Add API Key"
                 actionIcon={<Plus size={12} />}
                 actionLoading={false}
-                onAction={onAddApiKey}
+                onAction={() => onAddApiKey(provider.key)}
               />
             ))}
           </div>

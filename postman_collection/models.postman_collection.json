@@ -16,43 +16,33 @@
     {
       "name": "Get Models By Provider",
       "request": {
-        "method": "GET",
-        "header": [],
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
         "url": {
-          "raw": "{{baseUrl}}/model/get_models_by_provider?service_provider_id=1",
+          "raw": "{{baseUrl}}/model/get_models_by_provider",
           "host": ["{{baseUrl}}"],
-          "path": ["model", "get_models_by_provider"],
-          "query": [{ "key": "service_provider_id", "value": "1", "description": "The service provider ID to fetch models for" }]
+          "path": ["model", "get_models_by_provider"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"service_provider_id\": 1,\n  \"name\": \"gpt\",\n  \"status\": \"active\",\n  \"service_type\": \"llm\",\n  \"sort\": \"-created_at\",\n  \"page\": 1,\n  \"page_size\": 10\n}",
+          "options": { "raw": { "language": "json" } }
         }
       },
       "response": [
         {
-          "name": "Get Models - LLM Provider (OpenAI)",
-          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/model/get_models_by_provider?service_provider_id=1", "host": ["{{baseUrl}}"], "path": ["model", "get_models_by_provider"], "query": [{ "key": "service_provider_id", "value": "1" }] } },
-          "status": "OK", "code": 200,
+          "name": "Get Models By Provider - Success",
+          "status": "OK",
+          "code": 200,
           "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "[\n  {\n    \"id\": 1,\n    \"service_provider_id\": 1,\n    \"name\": \"gpt-4o\",\n    \"meta_data\": {\"model\": \"gpt-4o\", \"max_tokens\": 8192, \"context_window\": 128000},\n    \"api_key_id\": null,\n    \"status\": \"active\",\n    \"service_type\": \"llm\",\n    \"meta_data_schema\": null,\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  },\n  {\n    \"id\": 2,\n    \"service_provider_id\": 1,\n    \"name\": \"gpt-4o-mini\",\n    \"meta_data\": {\"model\": \"gpt-4o-mini\", \"max_tokens\": 4096, \"context_window\": 128000},\n    \"api_key_id\": null,\n    \"status\": \"active\",\n    \"service_type\": \"llm\",\n    \"meta_data_schema\": null,\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
+          "body": "{\n  \"data\": [\n    {\n      \"id\": 1,\n      \"name\": \"gpt-4o\",\n      \"service_type\": \"llm\",\n      \"status\": \"active\",\n      \"service_provider_id\": 1\n    }\n  ],\n  \"pagination\": {\n    \"page\": 1,\n    \"page_size\": 10,\n    \"total\": 1,\n    \"total_pages\": 1\n  }\n}"
         },
         {
-          "name": "Get Models - STT Provider (Deepgram)",
-          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/model/get_models_by_provider?service_provider_id=3", "host": ["{{baseUrl}}"], "path": ["model", "get_models_by_provider"], "query": [{ "key": "service_provider_id", "value": "3" }] } },
-          "status": "OK", "code": 200,
+          "name": "Get Models By Provider - Missing ID",
+          "status": "Bad Request",
+          "code": 400,
           "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "[\n  {\n    \"id\": 10,\n    \"service_provider_id\": 3,\n    \"name\": \"nova-2-general\",\n    \"meta_data\": {\"model\": \"nova-2-general\", \"languages\": [\"en\", \"es\", \"fr\"]},\n    \"api_key_id\": null,\n    \"status\": \"active\",\n    \"service_type\": \"stt\",\n    \"meta_data_schema\": null,\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
-        },
-        {
-          "name": "Get Models - TTS Provider (Cartesia)",
-          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/model/get_models_by_provider?service_provider_id=6", "host": ["{{baseUrl}}"], "path": ["model", "get_models_by_provider"], "query": [{ "key": "service_provider_id", "value": "6" }] } },
-          "status": "OK", "code": 200,
-          "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "[\n  {\n    \"id\": 20,\n    \"service_provider_id\": 6,\n    \"name\": \"sonic-3\",\n    \"meta_data\": {\"model\": \"sonic-3\", \"languages\": [\"en\"]},\n    \"api_key_id\": null,\n    \"status\": \"active\",\n    \"service_type\": \"tts\",\n    \"meta_data_schema\": null,\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
-        },
-        {
-          "name": "Get Models - Empty (No Models for Provider)",
-          "originalRequest": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/model/get_models_by_provider?service_provider_id=99", "host": ["{{baseUrl}}"], "path": ["model", "get_models_by_provider"], "query": [{ "key": "service_provider_id", "value": "99" }] } },
-          "status": "OK", "code": 200,
-          "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "[]"
+          "body": "{\n  \"detail\": \"service_provider_id is required\"\n}"
         }
       ]
     },
@@ -61,107 +51,24 @@
       "request": {
         "method": "POST",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "url": { "raw": "{{baseUrl}}/model/upsert_model", "host": ["{{baseUrl}}"], "path": ["model", "upsert_model"] },
-        "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 1,\n  \"name\": \"gpt-4o\",\n  \"meta_data\": {\"model\": \"gpt-4o\", \"max_tokens\": 8192, \"context_window\": 128000},\n  \"status\": \"active\",\n  \"service_type\": \"llm\"\n}", "options": { "raw": { "language": "json" } } }
+        "url": {
+          "raw": "{{baseUrl}}/model/upsert_model",
+          "host": ["{{baseUrl}}"],
+          "path": ["model", "upsert_model"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"service_provider_id\": 1,\n  \"name\": \"gpt-4o\",\n  \"service_type\": \"llm\",\n  \"meta_data\": {},\n  \"status\": \"active\"\n}",
+          "options": { "raw": { "language": "json" } }
+        }
       },
       "response": [
         {
-          "name": "Create LLM Model (OpenAI GPT-4o)",
-          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/model/upsert_model", "host": ["{{baseUrl}}"], "path": ["model", "upsert_model"] }, "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 1,\n  \"name\": \"gpt-4o\",\n  \"meta_data\": {\"model\": \"gpt-4o\", \"max_tokens\": 8192, \"context_window\": 128000},\n  \"status\": \"active\",\n  \"service_type\": \"llm\"\n}", "options": { "raw": { "language": "json" } } } },
-          "status": "OK", "code": 200,
+          "name": "Upsert Model - Create",
+          "status": "OK",
+          "code": 200,
           "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"id\": 1,\n  \"service_provider_id\": 1,\n  \"name\": \"gpt-4o\",\n  \"meta_data\": {\"model\": \"gpt-4o\", \"max_tokens\": 8192, \"context_window\": 128000},\n  \"api_key_id\": null,\n  \"status\": \"active\",\n  \"service_type\": \"llm\",\n  \"meta_data_schema\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
-        },
-        {
-          "name": "Create LLM Model (Anthropic Claude)",
-          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/model/upsert_model", "host": ["{{baseUrl}}"], "path": ["model", "upsert_model"] }, "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 2,\n  \"name\": \"claude-sonnet-4-5\",\n  \"meta_data\": {\"model\": \"claude-sonnet-4-5\", \"max_tokens\": 4096, \"context_window\": 200000},\n  \"status\": \"active\",\n  \"service_type\": \"llm\"\n}", "options": { "raw": { "language": "json" } } } },
-          "status": "OK", "code": 200,
-          "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"id\": 3,\n  \"service_provider_id\": 2,\n  \"name\": \"claude-sonnet-4-5\",\n  \"meta_data\": {\"model\": \"claude-sonnet-4-5\", \"max_tokens\": 4096, \"context_window\": 200000},\n  \"api_key_id\": null,\n  \"status\": \"active\",\n  \"service_type\": \"llm\",\n  \"meta_data_schema\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
-        },
-        {
-          "name": "Create LLM Model (Google Gemini)",
-          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/model/upsert_model", "host": ["{{baseUrl}}"], "path": ["model", "upsert_model"] }, "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 7,\n  \"name\": \"gemini-2.5-pro\",\n  \"meta_data\": {\"model\": \"gemini-2.5-pro\", \"max_tokens\": 8192, \"context_window\": 1000000},\n  \"status\": \"active\",\n  \"service_type\": \"llm\"\n}", "options": { "raw": { "language": "json" } } } },
-          "status": "OK", "code": 200,
-          "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"id\": 4,\n  \"service_provider_id\": 7,\n  \"name\": \"gemini-2.5-pro\",\n  \"meta_data\": {\"model\": \"gemini-2.5-pro\", \"max_tokens\": 8192, \"context_window\": 1000000},\n  \"api_key_id\": null,\n  \"status\": \"active\",\n  \"service_type\": \"llm\",\n  \"meta_data_schema\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
-        },
-        {
-          "name": "Create STT Model (Deepgram Nova-2)",
-          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/model/upsert_model", "host": ["{{baseUrl}}"], "path": ["model", "upsert_model"] }, "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 3,\n  \"name\": \"nova-2-general\",\n  \"meta_data\": {\"model\": \"nova-2-general\", \"languages\": [\"en\", \"es\", \"fr\"]},\n  \"status\": \"active\",\n  \"service_type\": \"stt\"\n}", "options": { "raw": { "language": "json" } } } },
-          "status": "OK", "code": 200,
-          "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"id\": 10,\n  \"service_provider_id\": 3,\n  \"name\": \"nova-2-general\",\n  \"meta_data\": {\"model\": \"nova-2-general\", \"languages\": [\"en\", \"es\", \"fr\"]},\n  \"api_key_id\": null,\n  \"status\": \"active\",\n  \"service_type\": \"stt\",\n  \"meta_data_schema\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
-        },
-        {
-          "name": "Create STT Model (Google STT)",
-          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/model/upsert_model", "host": ["{{baseUrl}}"], "path": ["model", "upsert_model"] }, "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 4,\n  \"name\": \"chirp_3\",\n  \"meta_data\": {\"model\": \"chirp_3\", \"language_codes\": [\"en-US\"]},\n  \"status\": \"active\",\n  \"service_type\": \"stt\"\n}", "options": { "raw": { "language": "json" } } } },
-          "status": "OK", "code": 200,
-          "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"id\": 11,\n  \"service_provider_id\": 4,\n  \"name\": \"chirp_3\",\n  \"meta_data\": {\"model\": \"chirp_3\", \"language_codes\": [\"en-US\"]},\n  \"api_key_id\": null,\n  \"status\": \"active\",\n  \"service_type\": \"stt\",\n  \"meta_data_schema\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
-        },
-        {
-          "name": "Create TTS Model (ElevenLabs)",
-          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/model/upsert_model", "host": ["{{baseUrl}}"], "path": ["model", "upsert_model"] }, "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 5,\n  \"name\": \"eleven_v3\",\n  \"meta_data\": {\"model\": \"eleven_v3\", \"supported_languages\": [\"en\", \"es\"]},\n  \"status\": \"active\",\n  \"service_type\": \"tts\"\n}", "options": { "raw": { "language": "json" } } } },
-          "status": "OK", "code": 200,
-          "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"id\": 20,\n  \"service_provider_id\": 5,\n  \"name\": \"eleven_v3\",\n  \"meta_data\": {\"model\": \"eleven_v3\", \"supported_languages\": [\"en\", \"es\"]},\n  \"api_key_id\": null,\n  \"status\": \"active\",\n  \"service_type\": \"tts\",\n  \"meta_data_schema\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
-        },
-        {
-          "name": "Create TTS Model (OpenAI TTS)",
-          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/model/upsert_model", "host": ["{{baseUrl}}"], "path": ["model", "upsert_model"] }, "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 1,\n  \"name\": \"gpt-4o-mini-tts\",\n  \"meta_data\": {\"model\": \"gpt-4o-mini-tts\", \"voices\": [\"alloy\", \"echo\", \"fable\"]},\n  \"status\": \"active\",\n  \"service_type\": \"tts\"\n}", "options": { "raw": { "language": "json" } } } },
-          "status": "OK", "code": 200,
-          "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"id\": 21,\n  \"service_provider_id\": 1,\n  \"name\": \"gpt-4o-mini-tts\",\n  \"meta_data\": {\"model\": \"gpt-4o-mini-tts\", \"voices\": [\"alloy\", \"echo\", \"fable\"]},\n  \"api_key_id\": null,\n  \"status\": \"active\",\n  \"service_type\": \"tts\",\n  \"meta_data_schema\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
-        },
-        {
-          "name": "Create TTS Model (Cartesia)",
-          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/model/upsert_model", "host": ["{{baseUrl}}"], "path": ["model", "upsert_model"] }, "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 6,\n  \"name\": \"sonic-3\",\n  \"meta_data\": {\"model\": \"sonic-3\", \"languages\": [\"en\"]},\n  \"status\": \"active\",\n  \"service_type\": \"tts\"\n}", "options": { "raw": { "language": "json" } } } },
-          "status": "OK", "code": 200,
-          "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"id\": 22,\n  \"service_provider_id\": 6,\n  \"name\": \"sonic-3\",\n  \"meta_data\": {\"model\": \"sonic-3\", \"languages\": [\"en\"]},\n  \"api_key_id\": null,\n  \"status\": \"active\",\n  \"service_type\": \"tts\",\n  \"meta_data_schema\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
-        },
-        {
-          "name": "Update Model",
-          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/model/upsert_model", "host": ["{{baseUrl}}"], "path": ["model", "upsert_model"] }, "body": { "mode": "raw", "raw": "{\n  \"id\": 1,\n  \"name\": \"gpt-4o-updated\",\n  \"meta_data\": {\"model\": \"gpt-4o\", \"max_tokens\": 16384, \"context_window\": 128000}\n}", "options": { "raw": { "language": "json" } } } },
-          "status": "OK", "code": 200,
-          "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"id\": 1,\n  \"service_provider_id\": 1,\n  \"name\": \"gpt-4o-updated\",\n  \"meta_data\": {\"model\": \"gpt-4o\", \"max_tokens\": 16384, \"context_window\": 128000},\n  \"api_key_id\": null,\n  \"status\": \"active\",\n  \"service_type\": \"llm\",\n  \"meta_data_schema\": null,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710288000\n}"
-        },
-        {
-          "name": "Create Model with meta_data_schema",
-          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/model/upsert_model", "host": ["{{baseUrl}}"], "path": ["model", "upsert_model"] }, "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 1,\n  \"name\": \"gpt-4-turbo\",\n  \"meta_data\": {\"model\": \"gpt-4-turbo\", \"max_tokens\": 4096},\n  \"meta_data_schema\": {\"frequency_penalty\": {\"type\": \"number\", \"min\": 0, \"max\": 2, \"default\": 0}, \"temperature\": {\"type\": \"number\", \"min\": 0, \"max\": 2, \"default\": 1}},\n  \"status\": \"active\",\n  \"service_type\": \"llm\"\n}", "options": { "raw": { "language": "json" } } } },
-          "status": "OK", "code": 200,
-          "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"id\": 5,\n  \"service_provider_id\": 1,\n  \"name\": \"gpt-4-turbo\",\n  \"meta_data\": {\"model\": \"gpt-4-turbo\", \"max_tokens\": 4096},\n  \"api_key_id\": null,\n  \"status\": \"active\",\n  \"service_type\": \"llm\",\n  \"meta_data_schema\": {\"frequency_penalty\": {\"type\": \"number\", \"min\": 0, \"max\": 2, \"default\": 0}, \"temperature\": {\"type\": \"number\", \"min\": 0, \"max\": 2, \"default\": 1}},\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
-        },
-        {
-          "name": "Missing service_provider_id on Create",
-          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/model/upsert_model", "host": ["{{baseUrl}}"], "path": ["model", "upsert_model"] }, "body": { "mode": "raw", "raw": "{\n  \"name\": \"some-model\",\n  \"service_type\": \"llm\"\n}", "options": { "raw": { "language": "json" } } } },
-          "status": "Bad Request", "code": 400,
-          "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"detail\": \"service_provider_id is required when creating a new model\"\n}"
-        },
-        {
-          "name": "Missing name on Create",
-          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/model/upsert_model", "host": ["{{baseUrl}}"], "path": ["model", "upsert_model"] }, "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 1,\n  \"service_type\": \"llm\"\n}", "options": { "raw": { "language": "json" } } } },
-          "status": "Bad Request", "code": 400,
-          "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"detail\": \"name is required when creating a new model\"\n}"
-        },
-        {
-          "name": "Service Provider Not Found",
-          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/model/upsert_model", "host": ["{{baseUrl}}"], "path": ["model", "upsert_model"] }, "body": { "mode": "raw", "raw": "{\n  \"service_provider_id\": 9999,\n  \"name\": \"test-model\",\n  \"service_type\": \"llm\"\n}", "options": { "raw": { "language": "json" } } } },
-          "status": "Not Found", "code": 404,
-          "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"detail\": \"Service provider not found\"\n}"
-        },
-        {
-          "name": "Model Not Found on Update",
-          "originalRequest": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }], "url": { "raw": "{{baseUrl}}/model/upsert_model", "host": ["{{baseUrl}}"], "path": ["model", "upsert_model"] }, "body": { "mode": "raw", "raw": "{\n  \"id\": 9999,\n  \"name\": \"updated-name\"\n}", "options": { "raw": { "language": "json" } } } },
-          "status": "Not Found", "code": 404,
-          "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"detail\": \"Model not found\"\n}"
+          "body": "{\n  \"id\": 1,\n  \"name\": \"gpt-4o\",\n  \"service_type\": \"llm\",\n  \"status\": \"active\",\n  \"service_provider_id\": 1\n}"
         }
       ]
     },
@@ -169,28 +76,20 @@
       "name": "Delete Model",
       "request": {
         "method": "DELETE",
-        "header": [],
         "url": {
           "raw": "{{baseUrl}}/model/delete_model?model_id=1",
           "host": ["{{baseUrl}}"],
           "path": ["model", "delete_model"],
-          "query": [{ "key": "model_id", "value": "1", "description": "The model ID to delete" }]
+          "query": [{ "key": "model_id", "value": "1" }]
         }
       },
       "response": [
         {
           "name": "Delete Model - Success",
-          "originalRequest": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/model/delete_model?model_id=1", "host": ["{{baseUrl}}"], "path": ["model", "delete_model"], "query": [{ "key": "model_id", "value": "1" }] } },
-          "status": "OK", "code": 200,
+          "status": "OK",
+          "code": 200,
           "header": [{ "key": "Content-Type", "value": "application/json" }],
           "body": "{\n  \"message\": \"Model deleted successfully\"\n}"
-        },
-        {
-          "name": "Delete Model - Not Found",
-          "originalRequest": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/model/delete_model?model_id=9999", "host": ["{{baseUrl}}"], "path": ["model", "delete_model"], "query": [{ "key": "model_id", "value": "9999" }] } },
-          "status": "Not Found", "code": 404,
-          "header": [{ "key": "Content-Type", "value": "application/json" }],
-          "body": "{\n  \"detail\": \"Model not found\"\n}"
         }
       ]
     }

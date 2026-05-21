@@ -60,9 +60,35 @@ def upsert_model_provider_menu(
     claims: EEJWTClaims = Depends(require_ee_admin_or_owner),
     db: Session = Depends(get_db),
 ):
+    name = data.get("name")
+    display_name = data.get("display_name")
+    provider_type = data.get("provider_type")
+    auth_type = data.get("auth_type")
+
+    if not all([name, display_name, provider_type, auth_type]):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="name, display_name, provider_type, and auth_type are required",
+        )
+
     return ModelProviderMenuService(
         db, org_id=UUID(claims.org_id), user_id=claims.user_id
-    ).upsert_model_provider_menu(data)
+    ).upsert_model_provider_menu(
+        name=name,
+        display_name=display_name,
+        provider_type=provider_type,
+        auth_type=auth_type,
+        description=data.get("description"),
+        logo_url=data.get("logo_url"),
+        website_url=data.get("website_url"),
+        documentation_url=data.get("documentation_url"),
+        base_url=data.get("base_url"),
+        supports_streaming=data.get("supports_streaming", False),
+        config_schema=data.get("config_schema"),
+        is_system=data.get("is_system", False),
+        provider_status=data.get("status"),
+        provider_id=data.get("id"),
+    )
 
 
 @router.post("/list")

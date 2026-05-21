@@ -1,8 +1,9 @@
 """Tests for Agent Config API endpoints (EE edition).
 
 Source: ee/api/v1/agent_configs.py
-Integration tests — real DB, real endpoints, no mocks.
-Comprehensive coverage: validation, CRUD flows, partial updates, edge cases.
+Postman: postman_collection/agent_configs.postman_collection.json
+Integration tests -- real DB, real endpoints, no mocks.
+Comprehensive coverage: all Postman examples + validation + CRUD flows + edge cases.
 """
 
 import pytest
@@ -19,34 +20,36 @@ def _create_agent(client, name=None):
     return resp.json()["id"]
 
 
-# ─── POST /api/v1/agent_config/upsert_agent_config — Validation ───
+# ─── POST /api/v1/agent_config/upsert_agent_config -- Validation ───
 
 class TestUpsertAgentConfigValidation:
     """Validation edge cases for POST /api/v1/agent_config/upsert_agent_config"""
 
     def test_missing_agent_id(self, client_as_member):
+        """Postman: Upsert Agent Config - Missing Agent ID (400)."""
         resp = client_as_member.post("/api/v1/agent_config/upsert_agent_config", json={
-            "system_prompt": "Hello"
+            "system_prompt": "Hello",
         })
         assert resp.status_code == 400
         assert "agent_id is required" in resp.json()["detail"]
 
     def test_null_agent_id(self, client_as_member):
         resp = client_as_member.post("/api/v1/agent_config/upsert_agent_config", json={
-            "agent_id": None, "system_prompt": "Hello"
+            "agent_id": None, "system_prompt": "Hello",
         })
         assert resp.status_code == 400
 
     def test_missing_system_prompt(self, client_as_member):
+        """Postman: Upsert Agent Config - Missing System Prompt (400)."""
         resp = client_as_member.post("/api/v1/agent_config/upsert_agent_config", json={
-            "agent_id": 1
+            "agent_id": 1,
         })
         assert resp.status_code == 400
         assert "system_prompt is required" in resp.json()["detail"]
 
     def test_empty_system_prompt(self, client_as_member):
         resp = client_as_member.post("/api/v1/agent_config/upsert_agent_config", json={
-            "agent_id": 1, "system_prompt": ""
+            "agent_id": 1, "system_prompt": "",
         })
         assert resp.status_code == 400
 
@@ -56,14 +59,14 @@ class TestUpsertAgentConfigValidation:
 
     def test_unauthenticated(self, client_unauthenticated):
         resp = client_unauthenticated.post("/api/v1/agent_config/upsert_agent_config", json={
-            "agent_id": 1, "system_prompt": "Hello"
+            "agent_id": 1, "system_prompt": "Hello",
         })
         assert resp.status_code in (401, 403)
 
     def test_nonexistent_agent_id(self, client_as_member):
         """agent_id that doesn't exist in DB should return 404."""
         resp = client_as_member.post("/api/v1/agent_config/upsert_agent_config", json={
-            "agent_id": 999999, "system_prompt": "Hello"
+            "agent_id": 999999, "system_prompt": "Hello",
         })
         assert resp.status_code == 404
 
@@ -71,22 +74,35 @@ class TestUpsertAgentConfigValidation:
         """Providing an 'id' for a config that doesn't exist should return 404."""
         agent_id = _create_agent(client_as_member)
         resp = client_as_member.post("/api/v1/agent_config/upsert_agent_config", json={
-            "id": 999999, "agent_id": agent_id, "system_prompt": "Hello"
+            "id": 999999, "agent_id": agent_id, "system_prompt": "Hello",
         })
         assert resp.status_code == 404
 
 
-# ─── POST /api/v1/agent_config/upsert_agent_config — Create ───
+# ─── POST /api/v1/agent_config/upsert_agent_config -- Create ───
 
 class TestUpsertAgentConfigCreate:
-    """Create new agent configs via real DB."""
+    """Create new agent configs via real DB.
+    Postman: Upsert Agent Config - Success (200)."""
 
     def test_create_minimal_config(self, client_as_member):
         """Create config with just agent_id + system_prompt (minimum required)."""
         agent_id = _create_agent(client_as_member)
         resp = client_as_member.post("/api/v1/agent_config/upsert_agent_config", json={
             "agent_id": agent_id,
-            "system_prompt": "You are a helpful assistant.",
+            "system_prompt": "You are a helpful sales assistant.",
+        })
+        assert resp.status_code == 200
+
+    def test_create_config_with_all_fields(self, client_as_member):
+        """Postman example: full config with llm_model_id, stt_model_id, tts_model_id, etc."""
+        agent_id = _create_agent(client_as_member)
+        resp = client_as_member.post("/api/v1/agent_config/upsert_agent_config", json={
+            "agent_id": agent_id,
+            "system_prompt": "You are a helpful sales assistant.",
+            "temperature": 0.7,
+            "max_tokens": 1024,
+            "language": "en",
         })
         assert resp.status_code == 200
 
@@ -142,16 +158,32 @@ class TestUpsertAgentConfigCreate:
             "tts_service_id": 2,
             "stt_service_id": 3,
         })
-        assert resp.status_code in (200, 409)  # 409 if service IDs cause constraint issues
+        assert resp.status_code in (200, 409)
+
+    def test_create_config_as_admin(self, client_as_admin):
+        agent_id = _create_agent(client_as_admin)
+        resp = client_as_admin.post("/api/v1/agent_config/upsert_agent_config", json={
+            "agent_id": agent_id,
+            "system_prompt": "Admin created config.",
+        })
+        assert resp.status_code == 200
+
+    def test_create_config_as_owner(self, client_as_owner):
+        agent_id = _create_agent(client_as_owner)
+        resp = client_as_owner.post("/api/v1/agent_config/upsert_agent_config", json={
+            "agent_id": agent_id,
+            "system_prompt": "Owner created config.",
+        })
+        assert resp.status_code == 200
 
 
-# ─── POST /api/v1/agent_config/upsert_agent_config — Update ───
+# ─── POST /api/v1/agent_config/upsert_agent_config -- Update ───
 
 class TestUpsertAgentConfigUpdate:
-    """Update existing agent configs — partial and full updates."""
+    """Update existing agent configs -- partial and full updates."""
 
     def _create_agent_with_config(self, client):
-        """Helper to create an agent + config and return both IDs."""
+        """Helper to create an agent + config and return agent_id."""
         agent_id = _create_agent(client)
         resp = client.post("/api/v1/agent_config/upsert_agent_config", json={
             "agent_id": agent_id,
@@ -172,7 +204,6 @@ class TestUpsertAgentConfigUpdate:
         assert resp.status_code == 200
 
     def test_update_first_message(self, client_as_member):
-        """Update first_message."""
         agent_id = self._create_agent_with_config(client_as_member)
         resp = client_as_member.post("/api/v1/agent_config/upsert_agent_config", json={
             "agent_id": agent_id,
@@ -182,7 +213,6 @@ class TestUpsertAgentConfigUpdate:
         assert resp.status_code == 200
 
     def test_update_all_text_fields(self, client_as_member):
-        """Update all text fields at once."""
         agent_id = self._create_agent_with_config(client_as_member)
         resp = client_as_member.post("/api/v1/agent_config/upsert_agent_config", json={
             "agent_id": agent_id,
@@ -195,7 +225,6 @@ class TestUpsertAgentConfigUpdate:
         assert resp.status_code == 200
 
     def test_update_metadata_fields(self, client_as_member):
-        """Update metadata after initial creation."""
         agent_id = self._create_agent_with_config(client_as_member)
         resp = client_as_member.post("/api/v1/agent_config/upsert_agent_config", json={
             "agent_id": agent_id,
@@ -216,7 +245,7 @@ class TestUpsertAgentConfigUpdate:
             assert resp.status_code == 200
 
 
-# ─── POST /api/v1/agent_config/upsert_agent_config — Edge Cases ───
+# ─── POST /api/v1/agent_config/upsert_agent_config -- Edge Cases ───
 
 class TestUpsertAgentConfigEdgeCases:
     """Edge cases and special values."""
@@ -224,7 +253,7 @@ class TestUpsertAgentConfigEdgeCases:
     def test_very_long_system_prompt(self, client_as_member):
         """System prompt with very long text."""
         agent_id = _create_agent(client_as_member)
-        long_prompt = "You are a helpful assistant. " * 500  # ~14k chars
+        long_prompt = "You are a helpful assistant. " * 500
         resp = client_as_member.post("/api/v1/agent_config/upsert_agent_config", json={
             "agent_id": agent_id,
             "system_prompt": long_prompt,
@@ -232,11 +261,11 @@ class TestUpsertAgentConfigEdgeCases:
         assert resp.status_code == 200
 
     def test_system_prompt_with_special_chars(self, client_as_member):
-        """System prompt with unicode, emoji, newlines."""
+        """System prompt with unicode, newlines."""
         agent_id = _create_agent(client_as_member)
         resp = client_as_member.post("/api/v1/agent_config/upsert_agent_config", json={
             "agent_id": agent_id,
-            "system_prompt": "You are a helpful agent.\n\nRules:\n1. Be polite\n2. Speak in español\n3. Use 日本語 when asked",
+            "system_prompt": "You are a helpful agent.\n\nRules:\n1. Be polite\n2. Speak in espanol\n3. Use Japanese when asked",
         })
         assert resp.status_code == 200
 

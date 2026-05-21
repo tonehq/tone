@@ -14,106 +14,50 @@
   },
   "item": [
     {
-      "name": "Upsert Api Key",
+      "name": "Upsert API Key",
       "request": {
         "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
+        "header": [],
         "url": {
           "raw": "{{baseUrl}}/api-keys/upsert",
           "host": ["{{baseUrl}}"],
           "path": ["api-keys", "upsert"]
         },
         "body": {
-          "mode": "raw",
-          "raw": "{\n  \"service_provider_id\": 1,\n  \"name\": \"My OpenAI Key\",\n  \"api_key\": \"sk-example-key-here\",\n  \"description\": \"Production API key for OpenAI\",\n  \"additional_credentials\": {},\n  \"rate_limit_config\": {},\n  \"expires_at\": null,\n  \"uuid\": null,\n  \"status\": \"active\"\n}",
-          "options": { "raw": { "language": "json" } }
+          "mode": "formdata",
+          "formdata": [
+            { "key": "name", "value": "OpenAI Key", "type": "text" },
+            { "key": "api_key", "value": "sk-...", "type": "text" },
+            { "key": "account_id", "value": "1", "type": "text" },
+            { "key": "service_provider_id", "value": "1", "type": "text", "disabled": true },
+            { "key": "description", "value": "Production OpenAI key", "type": "text" },
+            { "key": "file", "type": "file", "description": "Upload key file instead of text (optional)", "disabled": true },
+            { "key": "additional_credentials", "value": "{}", "type": "text", "disabled": true },
+            { "key": "uuid", "value": "", "type": "text", "description": "Provide to update existing key", "disabled": true }
+          ]
         }
       },
       "response": [
         {
-          "name": "Upsert Api Key - Create",
-          "originalRequest": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api-keys/upsert",
-              "host": ["{{baseUrl}}"],
-              "path": ["api-keys", "upsert"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"service_provider_id\": 1,\n  \"name\": \"My OpenAI Key\",\n  \"api_key\": \"sk-example-key-here\",\n  \"description\": \"Production API key\",\n  \"additional_credentials\": {},\n  \"rate_limit_config\": {},\n  \"expires_at\": null,\n  \"status\": \"active\"\n}",
-              "options": { "raw": { "language": "json" } }
-            }
-          },
+          "name": "Upsert API Key - Create",
           "status": "OK",
           "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "{\n  \"id\": 1,\n  \"uuid\": \"e5f6a7b8-c9d0-1234-efgh-345678901234\",\n  \"service_provider_id\": 1,\n  \"name\": \"My OpenAI Key\",\n  \"description\": \"Production API key\",\n  \"api_key_hint\": \"*here\",\n  \"additional_credentials\": {},\n  \"status\": \"active\",\n  \"is_valid\": false,\n  \"last_validated_at\": null,\n  \"validation_error\": null,\n  \"last_used_at\": null,\n  \"usage_count\": 0,\n  \"rate_limit_config\": {},\n  \"created_by\": 1,\n  \"expires_at\": null,\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"name\": \"OpenAI Key\",\n  \"status\": \"active\",\n  \"account_id\": 1,\n  \"created_at\": \"2026-01-15T10:00:00\",\n  \"updated_at\": \"2026-01-15T10:00:00\"\n}"
         },
         {
-          "name": "Upsert Api Key - Update",
-          "originalRequest": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api-keys/upsert",
-              "host": ["{{baseUrl}}"],
-              "path": ["api-keys", "upsert"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"uuid\": \"e5f6a7b8-c9d0-1234-efgh-345678901234\",\n  \"service_provider_id\": 1,\n  \"name\": \"My OpenAI Key - Updated\",\n  \"api_key\": \"sk-new-key-here\",\n  \"description\": \"Updated production API key\",\n  \"status\": \"active\"\n}",
-              "options": { "raw": { "language": "json" } }
-            }
-          },
-          "status": "OK",
-          "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "{\n  \"id\": 1,\n  \"uuid\": \"e5f6a7b8-c9d0-1234-efgh-345678901234\",\n  \"service_provider_id\": 1,\n  \"name\": \"My OpenAI Key - Updated\",\n  \"description\": \"Updated production API key\",\n  \"api_key_hint\": \"*here\",\n  \"status\": \"active\",\n  \"is_valid\": false,\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710288000\n}"
-        },
-        {
-          "name": "Upsert Api Key - Missing Fields",
-          "originalRequest": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api-keys/upsert",
-              "host": ["{{baseUrl}}"],
-              "path": ["api-keys", "upsert"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"My Key\"\n}",
-              "options": { "raw": { "language": "json" } }
-            }
-          },
+          "name": "Upsert API Key - Missing Key",
           "status": "Bad Request",
           "code": 400,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "{\n  \"detail\": \"service_provider_id, name, and api_key are required\"\n}"
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Either a file or api_key must be provided\"\n}"
         }
       ]
     },
     {
-      "name": "Get All Api Keys",
+      "name": "Get All API Keys",
       "request": {
         "method": "GET",
-        "header": [],
         "url": {
           "raw": "{{baseUrl}}/api-keys/list",
           "host": ["{{baseUrl}}"],
@@ -122,108 +66,134 @@
       },
       "response": [
         {
-          "name": "Get All Api Keys - Success",
-          "originalRequest": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api-keys/list",
-              "host": ["{{baseUrl}}"],
-              "path": ["api-keys", "list"]
-            }
-          },
+          "name": "Get All API Keys - Success",
           "status": "OK",
           "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"e5f6a7b8-c9d0-1234-efgh-345678901234\",\n    \"service_provider_id\": 1,\n    \"name\": \"My OpenAI Key\",\n    \"description\": \"Production API key\",\n    \"api_key_hint\": \"*here\",\n    \"status\": \"active\",\n    \"is_valid\": true,\n    \"last_validated_at\": 1710201600,\n    \"usage_count\": 42,\n    \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n]"
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "[\n  {\n    \"id\": 1,\n    \"uuid\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"name\": \"OpenAI Key\",\n    \"status\": \"active\",\n    \"account_id\": 1\n  }\n]"
         }
       ]
     },
     {
-      "name": "Get Api Key",
+      "name": "List API Keys By Provider",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{baseUrl}}/api-keys/list_by_provider",
+          "host": ["{{baseUrl}}"],
+          "path": ["api-keys", "list_by_provider"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"service_provider_id\": 1,\n  \"status\": \"active\",\n  \"page\": 1,\n  \"page_size\": 20\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      },
+      "response": [
+        {
+          "name": "List By Provider - Success",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"data\": [\n    {\n      \"id\": 1,\n      \"name\": \"OpenAI Key\",\n      \"status\": \"active\"\n    }\n  ],\n  \"pagination\": {\n    \"page\": 1,\n    \"page_size\": 20,\n    \"total\": 1\n  }\n}"
+        },
+        {
+          "name": "List By Provider - Missing ID",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"service_provider_id is required\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "List API Keys By Account",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{baseUrl}}/api-keys/list_by_account",
+          "host": ["{{baseUrl}}"],
+          "path": ["api-keys", "list_by_account"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"account_id\": 1,\n  \"status\": \"active\",\n  \"page\": 1,\n  \"page_size\": 20\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      },
+      "response": [
+        {
+          "name": "List By Account - Success",
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"data\": [\n    {\n      \"id\": 1,\n      \"name\": \"OpenAI Key\",\n      \"status\": \"active\"\n    }\n  ],\n  \"pagination\": {\n    \"page\": 1,\n    \"page_size\": 20,\n    \"total\": 1\n  }\n}"
+        },
+        {
+          "name": "List By Account - Missing ID",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"account_id is required\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Get API Key",
       "request": {
         "method": "GET",
-        "header": [],
         "url": {
           "raw": "{{baseUrl}}/api-keys/get?api_key_id=1",
           "host": ["{{baseUrl}}"],
           "path": ["api-keys", "get"],
-          "query": [
-            { "key": "api_key_id", "value": "1" }
-          ]
+          "query": [{ "key": "api_key_id", "value": "1" }]
         }
       },
       "response": [
         {
-          "name": "Get Api Key - Success",
-          "originalRequest": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api-keys/get?api_key_id=1",
-              "host": ["{{baseUrl}}"],
-              "path": ["api-keys", "get"],
-              "query": [
-                { "key": "api_key_id", "value": "1" }
-              ]
-            }
-          },
+          "name": "Get API Key - Success",
           "status": "OK",
           "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "{\n  \"id\": 1,\n  \"uuid\": \"e5f6a7b8-c9d0-1234-efgh-345678901234\",\n  \"service_provider_id\": 1,\n  \"name\": \"My OpenAI Key\",\n  \"description\": \"Production API key\",\n  \"api_key_hint\": \"*here\",\n  \"additional_credentials\": {},\n  \"status\": \"active\",\n  \"is_valid\": true,\n  \"last_validated_at\": 1710201600,\n  \"validation_error\": null,\n  \"last_used_at\": 1710288000,\n  \"usage_count\": 42,\n  \"rate_limit_config\": {},\n  \"created_by\": 1,\n  \"expires_at\": null,\n  \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 1,\n  \"uuid\": \"550e8400-e29b-41d4-a716-446655440000\",\n  \"name\": \"OpenAI Key\",\n  \"status\": \"active\",\n  \"account_id\": 1\n}"
+        },
+        {
+          "name": "Get API Key - Not Found",
+          "status": "Not Found",
+          "code": 404,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"API key not found\"\n}"
         }
       ]
     },
     {
-      "name": "Delete Api Key",
+      "name": "Delete API Key",
       "request": {
         "method": "DELETE",
-        "header": [],
         "url": {
           "raw": "{{baseUrl}}/api-keys/delete?api_key_id=1",
           "host": ["{{baseUrl}}"],
           "path": ["api-keys", "delete"],
-          "query": [
-            { "key": "api_key_id", "value": "1" }
-          ]
+          "query": [{ "key": "api_key_id", "value": "1" }]
         }
       },
       "response": [
         {
-          "name": "Delete Api Key - Success",
-          "originalRequest": {
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api-keys/delete?api_key_id=1",
-              "host": ["{{baseUrl}}"],
-              "path": ["api-keys", "delete"],
-              "query": [
-                { "key": "api_key_id", "value": "1" }
-              ]
-            }
-          },
+          "name": "Delete API Key - Success",
           "status": "OK",
           "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
           "body": "{\n  \"message\": \"API key deleted successfully\"\n}"
         }
       ]
     },
     {
-      "name": "Validate Api Key",
+      "name": "Validate API Key",
       "request": {
         "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
         "url": {
           "raw": "{{baseUrl}}/api-keys/validate",
           "host": ["{{baseUrl}}"],
@@ -237,100 +207,18 @@
       },
       "response": [
         {
-          "name": "Validate Api Key - Valid",
-          "originalRequest": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api-keys/validate",
-              "host": ["{{baseUrl}}"],
-              "path": ["api-keys", "validate"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"api_key_id\": 1,\n  \"is_valid\": true,\n  \"validation_error\": null\n}",
-              "options": { "raw": { "language": "json" } }
-            }
-          },
+          "name": "Validate API Key - Success",
           "status": "OK",
           "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "{\n  \"id\": 1,\n  \"is_valid\": true,\n  \"last_validated_at\": 1710288000,\n  \"validation_error\": null\n}"
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": 1,\n  \"is_valid\": true,\n  \"validated_at\": \"2026-01-15T10:00:00\"\n}"
         },
         {
-          "name": "Validate Api Key - Invalid",
-          "originalRequest": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api-keys/validate",
-              "host": ["{{baseUrl}}"],
-              "path": ["api-keys", "validate"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"api_key_id\": 1,\n  \"is_valid\": false,\n  \"validation_error\": \"API key expired or revoked\"\n}",
-              "options": { "raw": { "language": "json" } }
-            }
-          },
-          "status": "OK",
-          "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "{\n  \"id\": 1,\n  \"is_valid\": false,\n  \"last_validated_at\": 1710288000,\n  \"validation_error\": \"API key expired or revoked\"\n}"
-        }
-      ]
-    },
-    {
-      "name": "List API Keys By Account",
-      "request": {
-        "method": "POST",
-        "header": [
-          { "key": "Content-Type", "value": "application/json" }
-        ],
-        "url": {
-          "raw": "{{baseUrl}}/api-keys/list_by_account",
-          "host": ["{{baseUrl}}"],
-          "path": ["api-keys", "list_by_account"]
-        },
-        "body": {
-          "mode": "raw",
-          "raw": "{\n  \"account_id\": 1,\n  \"page\": 1,\n  \"page_size\": 20\n}",
-          "options": { "raw": { "language": "json" } }
-        }
-      },
-      "response": [
-        {
-          "name": "List API Keys By Account - Success",
-          "originalRequest": {
-            "method": "POST",
-            "header": [
-              { "key": "Content-Type", "value": "application/json" }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api-keys/list_by_account",
-              "host": ["{{baseUrl}}"],
-              "path": ["api-keys", "list_by_account"]
-            },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"account_id\": 1,\n  \"page\": 1,\n  \"page_size\": 20\n}",
-              "options": { "raw": { "language": "json" } }
-            }
-          },
-          "status": "OK",
-          "code": 200,
-          "header": [
-            { "key": "Content-Type", "value": "application/json" }
-          ],
-          "body": "{\n  \"items\": [\n    {\n      \"id\": 1,\n      \"uuid\": \"e5f6a7b8-c9d0-1234-efgh-345678901234\",\n      \"account_id\": 1,\n      \"name\": \"My Account Key\",\n      \"description\": \"Account API key\",\n      \"api_key_hint\": \"*here\",\n      \"status\": \"active\",\n      \"is_valid\": true,\n      \"last_validated_at\": 1710201600,\n      \"usage_count\": 10,\n      \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n      \"created_at\": 1710201600,\n      \"updated_at\": 1710201600\n    }\n  ],\n  \"total\": 1,\n  \"page\": 1,\n  \"page_size\": 20\n}"
+          "name": "Validate API Key - Missing Fields",
+          "status": "Bad Request",
+          "code": 400,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"api_key_id and is_valid are required\"\n}"
         }
       ]
     }

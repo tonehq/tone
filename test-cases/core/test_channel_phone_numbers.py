@@ -1,6 +1,7 @@
 """Tests for Channel Phone Numbers API endpoints (Core edition).
 
 Source: core/api/v1/channel_phone_numbers.py
+Postman: channel_phone_numbers.postman_collection.json
 """
 
 import pytest
@@ -23,7 +24,7 @@ def sample_phone_number():
         "phone_number": "+1234567890",
         "phone_number_sid": "PN123",
         "provider": "twilio",
-        "channel_id": 10,
+        "channel_id": 1,
     }
 
 
@@ -36,7 +37,7 @@ def sample_phone_numbers(sample_phone_number):
             "phone_number": "+0987654321",
             "phone_number_sid": "PN456",
             "provider": "twilio",
-            "channel_id": 10,
+            "channel_id": 1,
         },
     ]
 
@@ -47,7 +48,7 @@ def upsert_payload():
         "phone_number": "+1234567890",
         "phone_number_sid": "PN123",
         "provider": "twilio",
-        "channel_id": 10,
+        "channel_id": 1,
     }
 
 
@@ -67,7 +68,7 @@ def public_client(mock_db):
 class TestUpsertChannelPhoneNumber:
     """Tests for POST /api/v1/channel_phone_number/upsert"""
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_success(self, mock_service_cls, client_as_member, upsert_payload, sample_phone_number):
         mock_service_cls.return_value.upsert_channel_phone_number.return_value = (
             sample_phone_number
@@ -76,6 +77,9 @@ class TestUpsertChannelPhoneNumber:
             "/api/v1/channel_phone_number/upsert", json=upsert_payload
         )
         assert resp.status_code == 200
+        data = resp.json()
+        assert data["phone_number"] == "+1234567890"
+        assert data["phone_number_sid"] == "PN123"
         mock_service_cls.return_value.upsert_channel_phone_number.assert_called_once_with(
             upsert_payload,
         )
@@ -83,7 +87,7 @@ class TestUpsertChannelPhoneNumber:
     def test_missing_phone_number(self, client_as_member):
         resp = client_as_member.post(
             "/api/v1/channel_phone_number/upsert",
-            json={"phone_number_sid": "PN1", "provider": "twilio", "channel_id": 10},
+            json={"phone_number_sid": "PN1", "provider": "twilio", "channel_id": 1},
         )
         assert resp.status_code == 400
         assert "phone_number" in resp.json()["detail"].lower()
@@ -91,7 +95,7 @@ class TestUpsertChannelPhoneNumber:
     def test_missing_phone_number_sid(self, client_as_member):
         resp = client_as_member.post(
             "/api/v1/channel_phone_number/upsert",
-            json={"phone_number": "+1", "provider": "twilio", "channel_id": 10},
+            json={"phone_number": "+1", "provider": "twilio", "channel_id": 1},
         )
         assert resp.status_code == 400
         assert "phone_number_sid" in resp.json()["detail"].lower()
@@ -99,7 +103,7 @@ class TestUpsertChannelPhoneNumber:
     def test_missing_provider(self, client_as_member):
         resp = client_as_member.post(
             "/api/v1/channel_phone_number/upsert",
-            json={"phone_number": "+1", "phone_number_sid": "PN1", "channel_id": 10},
+            json={"phone_number": "+1", "phone_number_sid": "PN1", "channel_id": 1},
         )
         assert resp.status_code == 400
         assert "provider" in resp.json()["detail"].lower()
@@ -118,10 +122,10 @@ class TestUpsertChannelPhoneNumber:
         )
         assert resp.status_code in (401, 403)
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_service_error(self, mock_service_cls, client_as_member, upsert_payload):
-        mock_service_cls.return_value.upsert_channel_phone_number.side_effect = Exception(
-            "DB error"
+        mock_service_cls.return_value.upsert_channel_phone_number.side_effect = HTTPException(
+            status_code=500, detail="DB error"
         )
         resp = client_as_member.post(
             "/api/v1/channel_phone_number/upsert", json=upsert_payload
@@ -136,32 +140,33 @@ class TestUpsertChannelPhoneNumber:
 class TestListChannelPhoneNumbers:
     """Tests for GET /api/v1/channel_phone_number/list"""
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_success(self, mock_service_cls, client_as_member, sample_phone_numbers):
         mock_service_cls.return_value.get_all_channel_phone_numbers.return_value = (
             sample_phone_numbers
         )
         resp = client_as_member.get("/api/v1/channel_phone_number/list")
         assert resp.status_code == 200
-        assert len(resp.json()) == 2
+        data = resp.json()
+        assert len(data) == 2
         mock_service_cls.return_value.get_all_channel_phone_numbers.assert_called_once_with(
             channel_id=None,
         )
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_with_channel_id_filter(self, mock_service_cls, client_as_member, sample_phone_numbers):
         mock_service_cls.return_value.get_all_channel_phone_numbers.return_value = (
             sample_phone_numbers
         )
         resp = client_as_member.get(
-            "/api/v1/channel_phone_number/list", params={"channel_id": 10}
+            "/api/v1/channel_phone_number/list", params={"channel_id": 1}
         )
         assert resp.status_code == 200
         mock_service_cls.return_value.get_all_channel_phone_numbers.assert_called_once_with(
-            channel_id=10,
+            channel_id=1,
         )
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_empty(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_all_channel_phone_numbers.return_value = []
         resp = client_as_member.get("/api/v1/channel_phone_number/list")
@@ -172,10 +177,10 @@ class TestListChannelPhoneNumbers:
         resp = client_unauthenticated.get("/api/v1/channel_phone_number/list")
         assert resp.status_code in (401, 403)
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_service_error(self, mock_service_cls, client_as_member):
-        mock_service_cls.return_value.get_all_channel_phone_numbers.side_effect = Exception(
-            "DB error"
+        mock_service_cls.return_value.get_all_channel_phone_numbers.side_effect = HTTPException(
+            status_code=500, detail="DB error"
         )
         resp = client_as_member.get("/api/v1/channel_phone_number/list")
         assert resp.status_code in (500, 422, 400)
@@ -188,18 +193,19 @@ class TestListChannelPhoneNumbers:
 class TestGetPhoneNumbersByChannel:
     """Tests for GET /api/v1/channel_phone_number/get_by_channel"""
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_success(self, mock_service_cls, client_as_member, sample_phone_numbers):
         mock_service_cls.return_value.get_all_channel_phone_numbers.return_value = (
             sample_phone_numbers
         )
         resp = client_as_member.get(
-            "/api/v1/channel_phone_number/get_by_channel", params={"channel_id": 10}
+            "/api/v1/channel_phone_number/get_by_channel", params={"channel_id": 1}
         )
         assert resp.status_code == 200
-        assert len(resp.json()) == 2
+        data = resp.json()
+        assert len(data) == 2
         mock_service_cls.return_value.get_all_channel_phone_numbers.assert_called_once_with(
-            channel_id=10,
+            channel_id=1,
         )
 
     def test_missing_channel_id(self, client_as_member):
@@ -208,17 +214,17 @@ class TestGetPhoneNumbersByChannel:
 
     def test_unauthenticated(self, client_unauthenticated):
         resp = client_unauthenticated.get(
-            "/api/v1/channel_phone_number/get_by_channel", params={"channel_id": 10}
+            "/api/v1/channel_phone_number/get_by_channel", params={"channel_id": 1}
         )
         assert resp.status_code in (401, 403)
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_service_error(self, mock_service_cls, client_as_member):
-        mock_service_cls.return_value.get_all_channel_phone_numbers.side_effect = Exception(
-            "DB error"
+        mock_service_cls.return_value.get_all_channel_phone_numbers.side_effect = HTTPException(
+            status_code=500, detail="DB error"
         )
         resp = client_as_member.get(
-            "/api/v1/channel_phone_number/get_by_channel", params={"channel_id": 10}
+            "/api/v1/channel_phone_number/get_by_channel", params={"channel_id": 1}
         )
         assert resp.status_code in (500, 422, 400)
 
@@ -230,23 +236,28 @@ class TestGetPhoneNumbersByChannel:
 class TestGetChannelPhoneNumber:
     """Tests for GET /api/v1/channel_phone_number/get"""
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_success(self, mock_service_cls, client_as_member, sample_phone_number):
         mock_service_cls.return_value.get_channel_phone_number.return_value = sample_phone_number
         resp = client_as_member.get(
             "/api/v1/channel_phone_number/get", params={"phone_number_id": 1}
         )
         assert resp.status_code == 200
-        assert resp.json()["id"] == 1
+        data = resp.json()
+        assert data["id"] == 1
+        assert data["phone_number"] == "+1234567890"
         mock_service_cls.return_value.get_channel_phone_number.assert_called_once_with(1)
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_not_found(self, mock_service_cls, client_as_member):
-        mock_service_cls.return_value.get_channel_phone_number.return_value = None
+        mock_service_cls.return_value.get_channel_phone_number.side_effect = HTTPException(
+            status_code=404, detail="Phone number not found"
+        )
         resp = client_as_member.get(
             "/api/v1/channel_phone_number/get", params={"phone_number_id": 999}
         )
-        assert resp.status_code == 200
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "Phone number not found"
 
     def test_missing_phone_number_id(self, client_as_member):
         resp = client_as_member.get("/api/v1/channel_phone_number/get")
@@ -258,9 +269,11 @@ class TestGetChannelPhoneNumber:
         )
         assert resp.status_code in (401, 403)
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_service_error(self, mock_service_cls, client_as_member):
-        mock_service_cls.return_value.get_channel_phone_number.side_effect = HTTPException(status_code=500, detail="DB error")
+        mock_service_cls.return_value.get_channel_phone_number.side_effect = HTTPException(
+            status_code=500, detail="DB error"
+        )
         resp = client_as_member.get(
             "/api/v1/channel_phone_number/get", params={"phone_number_id": 1}
         )
@@ -274,15 +287,16 @@ class TestGetChannelPhoneNumber:
 class TestDeleteChannelPhoneNumber:
     """Tests for DELETE /api/v1/channel_phone_number/delete"""
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_success(self, mock_service_cls, client_as_admin):
         mock_service_cls.return_value.delete_channel_phone_number.return_value = {
-            "message": "deleted"
+            "message": "Phone number deleted successfully"
         }
         resp = client_as_admin.delete(
             "/api/v1/channel_phone_number/delete", params={"phone_number_id": 1}
         )
         assert resp.status_code == 200
+        assert resp.json()["message"] == "Phone number deleted successfully"
         mock_service_cls.return_value.delete_channel_phone_number.assert_called_once_with(1)
 
     def test_missing_phone_number_id(self, client_as_admin):
@@ -295,10 +309,10 @@ class TestDeleteChannelPhoneNumber:
         )
         assert resp.status_code in (401, 403)
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_service_error(self, mock_service_cls, client_as_admin):
-        mock_service_cls.return_value.delete_channel_phone_number.side_effect = Exception(
-            "DB error"
+        mock_service_cls.return_value.delete_channel_phone_number.side_effect = HTTPException(
+            status_code=500, detail="DB error"
         )
         resp = client_as_admin.delete(
             "/api/v1/channel_phone_number/delete", params={"phone_number_id": 1}
@@ -313,38 +327,46 @@ class TestDeleteChannelPhoneNumber:
 class TestGetTwilioPhoneNumbers:
     """Tests for GET /api/v1/channel_phone_number/get_twilio_phone_numbers (public)"""
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
-    def test_success(self, mock_service_cls, public_client, sample_phone_numbers):
-        mock_service_cls.return_value.get_twilio_phone_numbers.return_value = sample_phone_numbers
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    def test_success(self, mock_service_cls, public_client):
+        mock_service_cls.return_value.get_twilio_phone_numbers.return_value = [
+            {"phone_number": "+1234567890", "friendly_name": "My Number", "sid": "PN123"}
+        ]
         resp = public_client.get(
             "/api/v1/channel_phone_number/get_twilio_phone_numbers",
             params={"type": "twilio"},
         )
         assert resp.status_code == 200
-        assert len(resp.json()) == 2
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["phone_number"] == "+1234567890"
         mock_service_cls.return_value.get_twilio_phone_numbers.assert_called_once_with(
             channel_type="twilio", channel_id=None, agent_id=None,
         )
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
-    def test_with_optional_params(self, mock_service_cls, public_client, sample_phone_numbers):
-        mock_service_cls.return_value.get_twilio_phone_numbers.return_value = sample_phone_numbers
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    def test_with_optional_params(self, mock_service_cls, public_client):
+        mock_service_cls.return_value.get_twilio_phone_numbers.return_value = []
         resp = public_client.get(
             "/api/v1/channel_phone_number/get_twilio_phone_numbers",
-            params={"type": "twilio", "channel_id": 10, "agent_id": 5},
+            params={"type": "twilio", "channel_id": 1, "agent_id": 5},
         )
         assert resp.status_code == 200
         mock_service_cls.return_value.get_twilio_phone_numbers.assert_called_once_with(
-            channel_type="twilio", channel_id=10, agent_id=5,
+            channel_type="twilio", channel_id=1, agent_id=5,
         )
 
     def test_missing_type(self, public_client):
-        resp = public_client.get("/api/v1/channel_phone_number/get_twilio_phone_numbers")
+        resp = public_client.get(
+            "/api/v1/channel_phone_number/get_twilio_phone_numbers"
+        )
         assert resp.status_code == 422
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_service_error(self, mock_service_cls, public_client):
-        mock_service_cls.return_value.get_twilio_phone_numbers.side_effect = Exception("err")
+        mock_service_cls.return_value.get_twilio_phone_numbers.side_effect = HTTPException(
+            status_code=500, detail="err"
+        )
         resp = public_client.get(
             "/api/v1/channel_phone_number/get_twilio_phone_numbers",
             params={"type": "twilio"},
@@ -359,19 +381,21 @@ class TestGetTwilioPhoneNumbers:
 class TestGetPhoneNumberListToBuy:
     """Tests for GET /api/v1/channel_phone_number/get_phone_number_list_to_buy"""
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.get_phone_number_list_to_buy.return_value = [
-            {"phone_number": "+1111111111", "friendly_name": "US Number"}
+            {"phone_number": "+1987654321", "friendly_name": "Available Number", "region": "US"}
         ]
         resp = client_as_member.get(
             "/api/v1/channel_phone_number/get_phone_number_list_to_buy",
             params={"type": "twilio"},
         )
         assert resp.status_code == 200
-        assert len(resp.json()) == 1
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["phone_number"] == "+1987654321"
         mock_service_cls.return_value.get_phone_number_list_to_buy.assert_called_once_with(
-            channel_type="twilio", user_id=ANY,
+            channel_type="twilio", user_id=ANY, channel_id=None,
         )
 
     def test_missing_type(self, client_as_member):
@@ -387,9 +411,11 @@ class TestGetPhoneNumberListToBuy:
         )
         assert resp.status_code in (401, 403)
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_service_error(self, mock_service_cls, client_as_member):
-        mock_service_cls.return_value.get_phone_number_list_to_buy.side_effect = Exception("err")
+        mock_service_cls.return_value.get_phone_number_list_to_buy.side_effect = HTTPException(
+            status_code=500, detail="err"
+        )
         resp = client_as_member.get(
             "/api/v1/channel_phone_number/get_phone_number_list_to_buy",
             params={"type": "twilio"},
@@ -404,18 +430,22 @@ class TestGetPhoneNumberListToBuy:
 class TestBuyPhoneNumber:
     """Tests for POST /api/v1/channel_phone_number/buy_phone_number"""
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_success(self, mock_service_cls, client_as_member):
         mock_service_cls.return_value.buy_phone_number.return_value = {
-            "message": "Phone number purchased"
+            "message": "Phone number purchased successfully",
+            "phone_number": "+1987654321",
         }
         resp = client_as_member.post(
             "/api/v1/channel_phone_number/buy_phone_number",
-            json={"phone_number": "+1234567890", "channel_name": "twilio"},
+            json={"phone_number": "+1987654321", "channel_name": "Twilio Channel"},
         )
         assert resp.status_code == 200
+        data = resp.json()
+        assert data["message"] == "Phone number purchased successfully"
+        assert data["phone_number"] == "+1987654321"
         mock_service_cls.return_value.buy_phone_number.assert_called_once_with(
-            data={"phone_number": "+1234567890", "channel_name": "twilio"},
+            data={"phone_number": "+1987654321", "channel_name": "Twilio Channel"},
             user_id=ANY,
         )
 
@@ -442,9 +472,11 @@ class TestBuyPhoneNumber:
         )
         assert resp.status_code in (401, 403)
 
-    @patch("ee.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
+    @patch("core.api.v1.channel_phone_numbers.ChannelPhoneNumbersService")
     def test_service_error(self, mock_service_cls, client_as_member):
-        mock_service_cls.return_value.buy_phone_number.side_effect = Exception("err")
+        mock_service_cls.return_value.buy_phone_number.side_effect = HTTPException(
+            status_code=500, detail="err"
+        )
         resp = client_as_member.post(
             "/api/v1/channel_phone_number/buy_phone_number",
             json={"phone_number": "+1234567890", "channel_name": "twilio"},
