@@ -23,9 +23,9 @@ def _create_agent(client, name=None):
 
 
 def _resolve_provider(db_session, provider_name, service_type):
-    """Look up service ID and first model ID. Returns (service_id, model_id) or (None, None).
+    """Look up account ID and first model ID. Returns (account_id, model_id) or (None, None).
 
-    agent_config.*_service_id FKs to accounts(id).
+    agent_config.*_account_id FKs to accounts(id).
     We find the model_provider_menu first, then look up the corresponding account record.
     """
     from core.models.model_provider_menu import ModelProviderMenu
@@ -95,7 +95,7 @@ class TestLLMProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -118,7 +118,7 @@ class TestLLMProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -140,7 +140,7 @@ class TestLLMProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -164,7 +164,7 @@ class TestLLMProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -189,7 +189,7 @@ class TestLLMProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -214,7 +214,7 @@ class TestLLMProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -238,7 +238,7 @@ class TestLLMProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -262,7 +262,7 @@ class TestLLMProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -286,7 +286,7 @@ class TestLLMProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -310,7 +310,7 @@ class TestLLMProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -334,7 +334,7 @@ class TestLLMProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -358,7 +358,7 @@ class TestLLMProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -382,7 +382,7 @@ class TestLLMProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -406,7 +406,7 @@ class TestLLMProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -430,7 +430,7 @@ class TestLLMProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -454,7 +454,7 @@ class TestLLMProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -478,7 +478,7 @@ class TestLLMProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -503,7 +503,7 @@ class TestLLMProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -529,7 +529,7 @@ class TestSTTProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            stt_service_id=provider_id,
+            stt_account_id=provider_id,
             stt_metadata=stt_metadata,
         )
         assert resp.status_code == 200
@@ -550,7 +550,7 @@ class TestSTTProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            stt_service_id=provider_id,
+            stt_account_id=provider_id,
             stt_metadata=stt_metadata,
         )
         assert resp.status_code == 200
@@ -571,7 +571,7 @@ class TestSTTProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            stt_service_id=provider_id,
+            stt_account_id=provider_id,
             stt_metadata=stt_metadata,
         )
         assert resp.status_code == 200
@@ -591,7 +591,7 @@ class TestSTTProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            stt_service_id=provider_id,
+            stt_account_id=provider_id,
             stt_metadata=stt_metadata,
         )
         assert resp.status_code == 200
@@ -613,7 +613,7 @@ class TestSTTProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            stt_service_id=provider_id,
+            stt_account_id=provider_id,
             stt_metadata=stt_metadata,
         )
         assert resp.status_code == 200
@@ -633,7 +633,7 @@ class TestSTTProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            stt_service_id=provider_id,
+            stt_account_id=provider_id,
             stt_metadata=stt_metadata,
         )
         assert resp.status_code == 200
@@ -654,7 +654,7 @@ class TestSTTProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            stt_service_id=provider_id,
+            stt_account_id=provider_id,
             stt_metadata=stt_metadata,
         )
         assert resp.status_code == 200
@@ -674,7 +674,7 @@ class TestSTTProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            stt_service_id=provider_id,
+            stt_account_id=provider_id,
             stt_metadata=stt_metadata,
         )
         assert resp.status_code == 200
@@ -697,7 +697,7 @@ class TestSTTProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            stt_service_id=provider_id,
+            stt_account_id=provider_id,
             stt_metadata=stt_metadata,
         )
         assert resp.status_code == 200
@@ -715,7 +715,7 @@ class TestSTTProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            stt_service_id=provider_id,
+            stt_account_id=provider_id,
             stt_metadata=stt_metadata,
         )
         assert resp.status_code == 200
@@ -730,7 +730,7 @@ class TestSTTProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            stt_service_id=provider_id,
+            stt_account_id=provider_id,
             stt_metadata=stt_metadata,
         )
         assert resp.status_code == 200
@@ -748,7 +748,7 @@ class TestSTTProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            stt_service_id=provider_id,
+            stt_account_id=provider_id,
             stt_metadata=stt_metadata,
         )
         assert resp.status_code == 200
@@ -773,7 +773,7 @@ class TestSTTProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            stt_service_id=provider_id,
+            stt_account_id=provider_id,
             stt_metadata=stt_metadata,
         )
         assert resp.status_code == 200
@@ -801,7 +801,7 @@ class TestSTTProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            stt_service_id=provider_id,
+            stt_account_id=provider_id,
             stt_metadata=stt_metadata,
         )
         assert resp.status_code == 200
@@ -823,7 +823,7 @@ class TestSTTProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            stt_service_id=provider_id,
+            stt_account_id=provider_id,
             stt_metadata=stt_metadata,
         )
         assert resp.status_code == 200
@@ -852,7 +852,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -873,7 +873,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -900,7 +900,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -923,7 +923,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -942,7 +942,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -962,7 +962,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -981,7 +981,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -1005,7 +1005,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -1029,7 +1029,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -1053,7 +1053,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -1077,7 +1077,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -1097,7 +1097,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -1116,7 +1116,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -1137,7 +1137,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -1157,7 +1157,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -1176,7 +1176,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -1197,7 +1197,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -1217,7 +1217,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -1236,7 +1236,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -1262,7 +1262,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -1286,7 +1286,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -1313,7 +1313,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -1333,7 +1333,7 @@ class TestTTSProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            tts_service_id=provider_id,
+            tts_account_id=provider_id,
             tts_metadata=tts_metadata,
         )
         assert resp.status_code == 200
@@ -1360,7 +1360,7 @@ class TestS2SProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -1382,7 +1382,7 @@ class TestS2SProviderConfigs:
         }
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=provider_id,
+            llm_account_id=provider_id,
             llm_metadata=llm_metadata,
         )
         assert resp.status_code == 200
@@ -1421,11 +1421,11 @@ class TestProviderSwitching:
         # Create full pipeline with OpenAI LLM
         resp1 = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=openai_pid,
+            llm_account_id=openai_pid,
             llm_metadata={"model_id": openai_mid, "temperature": 0.7, "frequency_penalty": 0.5},
-            stt_service_id=stt_pid,
+            stt_account_id=stt_pid,
             stt_metadata={"model_id": stt_mid, "sample_rate": 16000, "language": "en"},
-            tts_service_id=tts_pid,
+            tts_account_id=tts_pid,
             tts_metadata={"model_id": tts_mid, "voice_id": "e07c00bc-4134-4eae-9ea4-1a55fb45746b", "language": "en"},
         )
         assert resp1.status_code == 200
@@ -1436,18 +1436,18 @@ class TestProviderSwitching:
         resp2 = _upsert_config(
             client_as_member, agent_id,
             uuid=data1["uuid"],
-            llm_service_id=anthropic_pid,
+            llm_account_id=anthropic_pid,
             llm_metadata={"model_id": anthropic_mid, "temperature": 0.9, "enable_prompt_caching": True, "max_tokens": 2048},
-            stt_service_id=stt_pid,
+            stt_account_id=stt_pid,
             stt_metadata={"model_id": stt_mid, "sample_rate": 16000, "language": "en"},
-            tts_service_id=tts_pid,
+            tts_account_id=tts_pid,
             tts_metadata={"model_id": tts_mid, "voice_id": "e07c00bc-4134-4eae-9ea4-1a55fb45746b", "language": "en"},
         )
         assert resp2.status_code == 200
         data2 = resp2.json()
         assert data2["llm_metadata"]["temperature"] == 0.9
         assert data2["llm_metadata"]["enable_prompt_caching"] is True
-        assert data2["llm_service_id"] == anthropic_pid
+        assert data2["llm_account_id"] == anthropic_pid
 
     def test_switch_stt_deepgram_to_openai(self, client_as_member, db_session):
         """Switch STT provider from Deepgram to OpenAI."""
@@ -1469,11 +1469,11 @@ class TestProviderSwitching:
         # Create full pipeline with Deepgram STT
         resp1 = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=llm_pid,
+            llm_account_id=llm_pid,
             llm_metadata={"model_id": llm_mid, "temperature": 0.7},
-            stt_service_id=dg_pid,
+            stt_account_id=dg_pid,
             stt_metadata={"model_id": dg_mid, "sample_rate": 16000, "language": "en"},
-            tts_service_id=tts_pid,
+            tts_account_id=tts_pid,
             tts_metadata={"model_id": tts_mid, "voice_id": "e07c00bc-4134-4eae-9ea4-1a55fb45746b", "language": "en"},
         )
         assert resp1.status_code == 200
@@ -1484,17 +1484,17 @@ class TestProviderSwitching:
         resp2 = _upsert_config(
             client_as_member, agent_id,
             uuid=data1["uuid"],
-            llm_service_id=llm_pid,
+            llm_account_id=llm_pid,
             llm_metadata={"model_id": llm_mid, "temperature": 0.7},
-            stt_service_id=oai_stt_pid,
+            stt_account_id=oai_stt_pid,
             stt_metadata={"model_id": oai_stt_mid, "language": "en", "prompt": "Transcribe support calls", "temperature": 0.0},
-            tts_service_id=tts_pid,
+            tts_account_id=tts_pid,
             tts_metadata={"model_id": tts_mid, "voice_id": "e07c00bc-4134-4eae-9ea4-1a55fb45746b", "language": "en"},
         )
         assert resp2.status_code == 200
         data2 = resp2.json()
         assert data2["stt_metadata"]["prompt"] == "Transcribe support calls"
-        assert data2["stt_service_id"] == oai_stt_pid
+        assert data2["stt_account_id"] == oai_stt_pid
 
     def test_switch_tts_cartesia_to_elevenlabs(self, client_as_member, db_session):
         """Switch TTS provider from Cartesia to ElevenLabs."""
@@ -1514,11 +1514,11 @@ class TestProviderSwitching:
         # Create full pipeline with Cartesia TTS
         resp1 = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=llm_pid,
+            llm_account_id=llm_pid,
             llm_metadata={"model_id": llm_mid, "temperature": 0.7},
-            stt_service_id=stt_pid,
+            stt_account_id=stt_pid,
             stt_metadata={"model_id": stt_mid, "sample_rate": 16000, "language": "en"},
-            tts_service_id=cart_pid,
+            tts_account_id=cart_pid,
             tts_metadata={"model_id": cart_mid, "voice_id": "e07c00bc-4134-4eae-9ea4-1a55fb45746b", "language": "en", "speed": "normal"},
         )
         assert resp1.status_code == 200
@@ -1528,18 +1528,18 @@ class TestProviderSwitching:
         resp2 = _upsert_config(
             client_as_member, agent_id,
             uuid=data1["uuid"],
-            llm_service_id=llm_pid,
+            llm_account_id=llm_pid,
             llm_metadata={"model_id": llm_mid, "temperature": 0.7},
-            stt_service_id=stt_pid,
+            stt_account_id=stt_pid,
             stt_metadata={"model_id": stt_mid, "sample_rate": 16000, "language": "en"},
-            tts_service_id=el_pid,
+            tts_account_id=el_pid,
             tts_metadata={"model_id": el_mid, "voice_id": "CwhRBWXzGAHq8TQ4Fs17", "language": "en", "stability": 0.5, "similarity_boost": 0.75},
         )
         assert resp2.status_code == 200
         data2 = resp2.json()
         assert data2["tts_metadata"]["voice_id"] == "CwhRBWXzGAHq8TQ4Fs17"
         assert data2["tts_metadata"]["stability"] == 0.5
-        assert data2["tts_service_id"] == el_pid
+        assert data2["tts_account_id"] == el_pid
 
 
 # ─── Combined Pipeline ───
@@ -1563,7 +1563,7 @@ class TestCombinedPipeline:
         agent_id = _create_agent(client_as_member)
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=llm_pid,
+            llm_account_id=llm_pid,
             llm_metadata={
                 "model_id": llm_mid,
                 "temperature": 0.7,
@@ -1571,13 +1571,13 @@ class TestCombinedPipeline:
                 "presence_penalty": 0.3,
                 "max_completion_tokens": 2048,
             },
-            stt_service_id=stt_pid,
+            stt_account_id=stt_pid,
             stt_metadata={
                 "model_id": stt_mid,
                 "sample_rate": 16000,
                 "language": "en",
             },
-            tts_service_id=tts_pid,
+            tts_account_id=tts_pid,
             tts_metadata={
                 "model_id": tts_mid,
                 "voice_id": "e07c00bc-4134-4eae-9ea4-1a55fb45746b",
@@ -1587,9 +1587,9 @@ class TestCombinedPipeline:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert data["llm_service_id"] == llm_pid
-        assert data["stt_service_id"] == stt_pid
-        assert data["tts_service_id"] == tts_pid
+        assert data["llm_account_id"] == llm_pid
+        assert data["stt_account_id"] == stt_pid
+        assert data["tts_account_id"] == tts_pid
         assert data["llm_metadata"]["temperature"] == 0.7
         assert data["stt_metadata"]["language"] == "en"
         assert data["tts_metadata"]["voice_id"] == "e07c00bc-4134-4eae-9ea4-1a55fb45746b"
@@ -1609,7 +1609,7 @@ class TestCombinedPipeline:
         agent_id = _create_agent(client_as_member)
         resp = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=llm_pid,
+            llm_account_id=llm_pid,
             llm_metadata={
                 "model_id": llm_mid,
                 "temperature": 0.7,
@@ -1618,14 +1618,14 @@ class TestCombinedPipeline:
                 "top_k": 40,
                 "top_p": 0.9,
             },
-            stt_service_id=stt_pid,
+            stt_account_id=stt_pid,
             stt_metadata={
                 "model_id": stt_mid,
                 "language": "en",
                 "prompt": "Transcribe customer support calls",
                 "temperature": 0.0,
             },
-            tts_service_id=tts_pid,
+            tts_account_id=tts_pid,
             tts_metadata={
                 "model_id": tts_mid,
                 "voice_id": "CwhRBWXzGAHq8TQ4Fs17",
@@ -1639,9 +1639,9 @@ class TestCombinedPipeline:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert data["llm_service_id"] == llm_pid
-        assert data["stt_service_id"] == stt_pid
-        assert data["tts_service_id"] == tts_pid
+        assert data["llm_account_id"] == llm_pid
+        assert data["stt_account_id"] == stt_pid
+        assert data["tts_account_id"] == tts_pid
         assert data["llm_metadata"]["enable_prompt_caching"] is True
         assert data["stt_metadata"]["prompt"] == "Transcribe customer support calls"
         assert data["tts_metadata"]["stability"] == 0.5
@@ -1673,11 +1673,11 @@ class TestProviderMetadataUpdate:
         # Create full pipeline with temperature 0.7
         resp1 = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=llm_pid,
+            llm_account_id=llm_pid,
             llm_metadata={"model_id": llm_mid, "temperature": 0.7, "frequency_penalty": 0.5},
-            stt_service_id=stt_pid,
+            stt_account_id=stt_pid,
             stt_metadata={"model_id": stt_mid, "sample_rate": 16000, "language": "en"},
-            tts_service_id=tts_pid,
+            tts_account_id=tts_pid,
             tts_metadata={"model_id": tts_mid, "voice_id": "e07c00bc-4134-4eae-9ea4-1a55fb45746b", "language": "en"},
         )
         assert resp1.status_code == 200
@@ -1688,11 +1688,11 @@ class TestProviderMetadataUpdate:
         resp2 = _upsert_config(
             client_as_member, agent_id,
             uuid=data1["uuid"],
-            llm_service_id=llm_pid,
+            llm_account_id=llm_pid,
             llm_metadata={"model_id": llm_mid, "temperature": 0.9, "frequency_penalty": 0.5},
-            stt_service_id=stt_pid,
+            stt_account_id=stt_pid,
             stt_metadata={"model_id": stt_mid, "sample_rate": 16000, "language": "en"},
-            tts_service_id=tts_pid,
+            tts_account_id=tts_pid,
             tts_metadata={"model_id": tts_mid, "voice_id": "e07c00bc-4134-4eae-9ea4-1a55fb45746b", "language": "en"},
         )
         assert resp2.status_code == 200
@@ -1714,11 +1714,11 @@ class TestProviderMetadataUpdate:
         # Create full pipeline with language en
         resp1 = _upsert_config(
             client_as_member, agent_id,
-            llm_service_id=llm_pid,
+            llm_account_id=llm_pid,
             llm_metadata={"model_id": llm_mid, "temperature": 0.7},
-            stt_service_id=stt_pid,
+            stt_account_id=stt_pid,
             stt_metadata={"model_id": stt_mid, "sample_rate": 16000, "language": "en"},
-            tts_service_id=tts_pid,
+            tts_account_id=tts_pid,
             tts_metadata={"model_id": tts_mid, "voice_id": "e07c00bc-4134-4eae-9ea4-1a55fb45746b", "language": "en"},
         )
         assert resp1.status_code == 200
@@ -1729,11 +1729,11 @@ class TestProviderMetadataUpdate:
         resp2 = _upsert_config(
             client_as_member, agent_id,
             uuid=data1["uuid"],
-            llm_service_id=llm_pid,
+            llm_account_id=llm_pid,
             llm_metadata={"model_id": llm_mid, "temperature": 0.7},
-            stt_service_id=stt_pid,
+            stt_account_id=stt_pid,
             stt_metadata={"model_id": stt_mid, "sample_rate": 16000, "language": "es"},
-            tts_service_id=tts_pid,
+            tts_account_id=tts_pid,
             tts_metadata={"model_id": tts_mid, "voice_id": "e07c00bc-4134-4eae-9ea4-1a55fb45746b", "language": "en"},
         )
         assert resp2.status_code == 200

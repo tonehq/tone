@@ -1,6 +1,6 @@
 {
   "info": {
-    "name": "Organization API",
+    "name": "Organizations API",
     "description": "Auto-generated from core/api/v1/organizations.py",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
@@ -33,7 +33,7 @@
       },
       "response": [
         {
-          "name": "Invite User - Success",
+          "name": "Invite User To Organization - Success",
           "originalRequest": {
             "method": "POST",
             "header": [
@@ -55,10 +55,10 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"message\": \"Invitation sent successfully.\",\n  \"invite\": {\n    \"id\": 1,\n    \"uuid\": \"d4e5f6a7-b8c9-0123-defg-234567890123\",\n    \"email\": \"jane@example.com\",\n    \"name\": \"Jane Smith\",\n    \"role\": \"MEMBER\",\n    \"status\": \"PENDING\",\n    \"invitation_token\": \"inv_abc123def456\",\n    \"expires_at\": 1710806400,\n    \"invited_by\": 1,\n    \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600\n  }\n}"
+          "body": "{\n  \"id\": 1,\n  \"email\": \"jane@example.com\",\n  \"role\": \"member\",\n  \"status\": \"pending\",\n  \"expires_at\": 1710806400\n}"
         },
         {
-          "name": "Invite User - Missing Fields",
+          "name": "Invite User To Organization - Missing Fields",
           "originalRequest": {
             "method": "POST",
             "header": [
@@ -83,7 +83,82 @@
           "body": "{\n  \"detail\": \"Name, email, and role are required\"\n}"
         },
         {
-          "name": "Invite User - Member Limit Reached",
+          "name": "Invite User To Organization - Invalid Role",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/organization/invite_user_to_organization",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "invite_user_to_organization"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jane Smith\",\n  \"email\": \"jane@example.com\",\n  \"role\": \"superadmin\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Invalid role\"\n}"
+        },
+        {
+          "name": "Invite User To Organization - Already A Member",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/organization/invite_user_to_organization",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "invite_user_to_organization"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Existing User\",\n  \"email\": \"existing@example.com\",\n  \"role\": \"member\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"User is already a member of the organization\"\n}"
+        },
+        {
+          "name": "Invite User To Organization - Pending Invitation Exists",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/organization/invite_user_to_organization",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "invite_user_to_organization"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jane Smith\",\n  \"email\": \"pending@example.com\",\n  \"role\": \"member\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Pending invitation already exists\"\n}"
+        },
+        {
+          "name": "Invite User To Organization - Member Limit Reached",
           "originalRequest": {
             "method": "POST",
             "header": [
@@ -115,12 +190,12 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "{{baseUrl}}/organization/accept_invitation?email=jane@example.com&code=invite-code-here",
+          "raw": "{{baseUrl}}/organization/accept_invitation?email=jane@example.com&code=invite-token-here",
           "host": ["{{baseUrl}}"],
           "path": ["organization", "accept_invitation"],
           "query": [
             { "key": "email", "value": "jane@example.com" },
-            { "key": "code", "value": "invite-code-here" }
+            { "key": "code", "value": "invite-token-here" }
           ]
         },
         "auth": { "type": "noauth" }
@@ -132,12 +207,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/organization/accept_invitation?email=jane@example.com&code=invite-code-here",
+              "raw": "{{baseUrl}}/organization/accept_invitation?email=jane@example.com&code=invite-token-here",
               "host": ["{{baseUrl}}"],
               "path": ["organization", "accept_invitation"],
               "query": [
                 { "key": "email", "value": "jane@example.com" },
-                { "key": "code", "value": "invite-code-here" }
+                { "key": "code", "value": "invite-token-here" }
               ]
             }
           },
@@ -146,7 +221,73 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"message\": \"Invitation accepted successfully.\",\n  \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n}"
+          "body": "{\n  \"message\": \"Invitation accepted successfully\",\n  \"role\": \"member\"\n}"
+        },
+        {
+          "name": "Accept Invitation - Invalid Or Expired",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organization/accept_invitation?email=jane@example.com&code=invalid-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "accept_invitation"],
+              "query": [
+                { "key": "email", "value": "jane@example.com" },
+                { "key": "code", "value": "invalid-token" }
+              ]
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Invalid or expired invitation\"\n}"
+        },
+        {
+          "name": "Accept Invitation - User Not Signed Up",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organization/accept_invitation?email=nosignup@example.com&code=invite-token-here",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "accept_invitation"],
+              "query": [
+                { "key": "email", "value": "nosignup@example.com" },
+                { "key": "code", "value": "invite-token-here" }
+              ]
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Please sign up first before accepting the invitation\"\n}"
+        },
+        {
+          "name": "Accept Invitation - Already A Member",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organization/accept_invitation?email=existing@example.com&code=invite-token-here",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "accept_invitation"],
+              "query": [
+                { "key": "email", "value": "existing@example.com" },
+                { "key": "code", "value": "invite-token-here" }
+              ]
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"You are already a member\"\n}"
         }
       ]
     },
@@ -156,12 +297,12 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "{{baseUrl}}/organization/validate_invitation?email=jane@example.com&code=invite-code-here",
+          "raw": "{{baseUrl}}/organization/validate_invitation?email=jane@example.com&code=invite-token-here",
           "host": ["{{baseUrl}}"],
           "path": ["organization", "validate_invitation"],
           "query": [
             { "key": "email", "value": "jane@example.com" },
-            { "key": "code", "value": "invite-code-here" }
+            { "key": "code", "value": "invite-token-here" }
           ]
         },
         "auth": { "type": "noauth" }
@@ -173,12 +314,12 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/organization/validate_invitation?email=jane@example.com&code=invite-code-here",
+              "raw": "{{baseUrl}}/organization/validate_invitation?email=jane@example.com&code=invite-token-here",
               "host": ["{{baseUrl}}"],
               "path": ["organization", "validate_invitation"],
               "query": [
                 { "key": "email", "value": "jane@example.com" },
-                { "key": "code", "value": "invite-code-here" }
+                { "key": "code", "value": "invite-token-here" }
               ]
             }
           },
@@ -187,7 +328,29 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"valid\": true,\n  \"invite\": {\n    \"email\": \"jane@example.com\",\n    \"name\": \"Jane Smith\",\n    \"role\": \"MEMBER\",\n    \"organization_name\": \"My Organization\",\n    \"status\": \"PENDING\",\n    \"expires_at\": 1710806400\n  }\n}"
+          "body": "{\n  \"valid\": true,\n  \"email\": \"jane@example.com\",\n  \"name\": \"Jane Smith\",\n  \"role\": \"member\",\n  \"user_exists\": true,\n  \"has_password\": true\n}"
+        },
+        {
+          "name": "Validate Invitation - Invalid Or Expired",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organization/validate_invitation?email=jane@example.com&code=bad-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "validate_invitation"],
+              "query": [
+                { "key": "email", "value": "jane@example.com" },
+                { "key": "code", "value": "bad-token" }
+              ]
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Invalid or expired invitation\"\n}"
         }
       ]
     },
@@ -205,7 +368,7 @@
         },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"email\": \"jane@example.com\",\n  \"code\": \"invite-code-here\",\n  \"password\": \"securePassword123\"\n}",
+          "raw": "{\n  \"email\": \"jane@example.com\",\n  \"code\": \"invite-token-here\",\n  \"password\": \"securePassword123\"\n}",
           "options": { "raw": { "language": "json" } }
         },
         "auth": { "type": "noauth" }
@@ -225,7 +388,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"jane@example.com\",\n  \"code\": \"invite-code-here\",\n  \"password\": \"securePassword123\"\n}",
+              "raw": "{\n  \"email\": \"jane@example.com\",\n  \"code\": \"invite-token-here\",\n  \"password\": \"securePassword123\"\n}",
               "options": { "raw": { "language": "json" } }
             }
           },
@@ -234,7 +397,7 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"message\": \"Invitation accepted and password set successfully.\",\n  \"access_token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...\"\n}"
+          "body": "{\n  \"message\": \"Account created and invitation accepted successfully\",\n  \"role\": \"member\"\n}"
         },
         {
           "name": "Accept Invitation With Password - Missing Fields",
@@ -260,6 +423,56 @@
             { "key": "Content-Type", "value": "application/json" }
           ],
           "body": "{\n  \"detail\": \"Email, code, and password are required\"\n}"
+        },
+        {
+          "name": "Accept Invitation With Password - Invalid Or Expired",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/organization/accept_invitation_with_password",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "accept_invitation_with_password"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"jane@example.com\",\n  \"code\": \"invalid-token\",\n  \"password\": \"securePassword123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Invalid or expired invitation\"\n}"
+        },
+        {
+          "name": "Accept Invitation With Password - User Already Has Password",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/organization/accept_invitation_with_password",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "accept_invitation_with_password"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"existing@example.com\",\n  \"code\": \"invite-token-here\",\n  \"password\": \"securePassword123\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"User already exists. Please login and accept the invitation.\"\n}"
         }
       ]
     },
@@ -297,7 +510,28 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"message\": \"Invitation cancelled successfully.\"\n}"
+          "body": "{\n  \"message\": \"Invitation cancelled successfully\"\n}"
+        },
+        {
+          "name": "Cancel Invitation - Not Found",
+          "originalRequest": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organization/cancel_invitation?invite_id=9999",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "cancel_invitation"],
+              "query": [
+                { "key": "invite_id", "value": "9999" }
+              ]
+            }
+          },
+          "status": "Not Found",
+          "code": 404,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Pending invitation not found\"\n}"
         }
       ]
     },
@@ -307,17 +541,59 @@
         "method": "DELETE",
         "header": [],
         "url": {
-          "raw": "{{baseUrl}}/organization/remove_user_from_organization?user_id=1",
+          "raw": "{{baseUrl}}/organization/remove_user_from_organization?user_id=3",
           "host": ["{{baseUrl}}"],
           "path": ["organization", "remove_user_from_organization"],
           "query": [
-            { "key": "user_id", "value": "1" }
+            { "key": "user_id", "value": "3" }
           ]
         }
       },
       "response": [
         {
-          "name": "Remove User - Success",
+          "name": "Remove User From Organization - Success",
+          "originalRequest": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organization/remove_user_from_organization?user_id=3",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "remove_user_from_organization"],
+              "query": [
+                { "key": "user_id", "value": "3" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"message\": \"Member removed successfully\"\n}"
+        },
+        {
+          "name": "Remove User From Organization - Not Found",
+          "originalRequest": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organization/remove_user_from_organization?user_id=9999",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "remove_user_from_organization"],
+              "query": [
+                { "key": "user_id", "value": "9999" }
+              ]
+            }
+          },
+          "status": "Not Found",
+          "code": 404,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Member not found\"\n}"
+        },
+        {
+          "name": "Remove User From Organization - Cannot Remove Last Owner",
           "originalRequest": {
             "method": "DELETE",
             "header": [],
@@ -330,12 +606,12 @@
               ]
             }
           },
-          "status": "OK",
-          "code": 200,
+          "status": "Bad Request",
+          "code": 400,
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"message\": \"User removed from organization successfully.\"\n}"
+          "body": "{\n  \"detail\": \"Cannot remove the last owner\"\n}"
         }
       ]
     },
@@ -345,11 +621,11 @@
         "method": "POST",
         "header": [],
         "url": {
-          "raw": "{{baseUrl}}/organization/update_member_role?member_id=1&role=admin",
+          "raw": "{{baseUrl}}/organization/update_member_role?member_id=2&role=admin",
           "host": ["{{baseUrl}}"],
           "path": ["organization", "update_member_role"],
           "query": [
-            { "key": "member_id", "value": "1", "description": "The member ID to update" },
+            { "key": "member_id", "value": "2", "description": "The member ID to update" },
             { "key": "role", "value": "admin", "description": "New role (owner, admin, member, viewer)" }
           ]
         }
@@ -357,6 +633,94 @@
       "response": [
         {
           "name": "Update Member Role - Success",
+          "originalRequest": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organization/update_member_role?member_id=2&role=admin",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "update_member_role"],
+              "query": [
+                { "key": "member_id", "value": "2" },
+                { "key": "role", "value": "admin" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"member_id\": 2,\n  \"role\": \"admin\",\n  \"message\": \"Role updated successfully\"\n}"
+        },
+        {
+          "name": "Update Member Role - Invalid Role",
+          "originalRequest": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organization/update_member_role?member_id=2&role=superadmin",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "update_member_role"],
+              "query": [
+                { "key": "member_id", "value": "2" },
+                { "key": "role", "value": "superadmin" }
+              ]
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Invalid role\"\n}"
+        },
+        {
+          "name": "Update Member Role - Member Not Found",
+          "originalRequest": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organization/update_member_role?member_id=9999&role=admin",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "update_member_role"],
+              "query": [
+                { "key": "member_id", "value": "9999" },
+                { "key": "role", "value": "admin" }
+              ]
+            }
+          },
+          "status": "Not Found",
+          "code": 404,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Member not found\"\n}"
+        },
+        {
+          "name": "Update Member Role - Cannot Change Last Owner",
+          "originalRequest": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organization/update_member_role?member_id=1&role=member",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "update_member_role"],
+              "query": [
+                { "key": "member_id", "value": "1" },
+                { "key": "role", "value": "member" }
+              ]
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Cannot change role of the last owner\"\n}"
+        },
+        {
+          "name": "Update Member Role - Admin Cannot Modify Owner",
           "originalRequest": {
             "method": "POST",
             "header": [],
@@ -370,12 +734,12 @@
               ]
             }
           },
-          "status": "OK",
-          "code": 200,
+          "status": "Forbidden",
+          "code": 403,
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"message\": \"Member role updated successfully.\",\n  \"member\": {\n    \"id\": 1,\n    \"user_id\": 2,\n    \"role\": \"ADMIN\",\n    \"status\": \"active\",\n    \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"joined_at\": 1710201600,\n    \"last_activity_at\": 1710288000\n  }\n}"
+          "body": "{\n  \"detail\": \"Admins cannot modify owner roles\"\n}"
         }
       ]
     },
@@ -407,7 +771,7 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"name\": \"My Organization\",\n  \"slug\": \"my-organization\",\n  \"description\": \"A voice agent organization\",\n  \"logo_url\": null,\n  \"website_url\": null,\n  \"settings\": {},\n  \"capabilities\": [],\n  \"status\": \"ACTIVE\",\n  \"created_by\": 1,\n  \"subscription_plan\": \"free\",\n  \"subscription_status\": \"active\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+          "body": "{}"
         }
       ]
     },
@@ -425,7 +789,7 @@
         },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"name\": \"My Organization\",\n  \"description\": \"Updated organization description\",\n  \"logo_url\": \"https://example.com/logo.png\",\n  \"website_url\": \"https://example.com\",\n  \"settings\": {\n    \"default_role\": \"member\",\n    \"allow_signups\": true\n  }\n}",
+          "raw": "{\n  \"default_role\": \"member\",\n  \"allow_signups\": true,\n  \"notification_email\": \"admin@example.com\"\n}",
           "options": { "raw": { "language": "json" } }
         }
       },
@@ -444,7 +808,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"My Organization\",\n  \"description\": \"Updated organization description\",\n  \"settings\": {\"default_role\": \"member\", \"allow_signups\": true}\n}",
+              "raw": "{\n  \"default_role\": \"member\",\n  \"allow_signups\": true,\n  \"notification_email\": \"admin@example.com\"\n}",
               "options": { "raw": { "language": "json" } }
             }
           },
@@ -453,7 +817,7 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"name\": \"My Organization\",\n  \"slug\": \"my-organization\",\n  \"description\": \"Updated organization description\",\n  \"logo_url\": null,\n  \"website_url\": null,\n  \"settings\": {\"default_role\": \"member\", \"allow_signups\": true},\n  \"capabilities\": [],\n  \"status\": \"ACTIVE\",\n  \"subscription_plan\": \"free\",\n  \"subscription_status\": \"active\",\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710288000\n}"
+          "body": "{\n  \"message\": \"Settings updated successfully\",\n  \"settings\": {\n    \"default_role\": \"member\",\n    \"allow_signups\": true,\n    \"notification_email\": \"admin@example.com\"\n  }\n}"
         }
       ]
     },
@@ -485,7 +849,25 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "[\n  {\n    \"id\": 1,\n    \"user_id\": 5,\n    \"status\": \"PENDING\",\n    \"message\": \"I would like to join your organization.\",\n    \"reviewed_by\": null,\n    \"reviewed_at\": null,\n    \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"created_at\": 1710201600,\n    \"updated_at\": 1710201600,\n    \"user\": {\n      \"id\": 5,\n      \"email\": \"requester@example.com\",\n      \"first_name\": \"Bob\",\n      \"last_name\": \"Jones\"\n    }\n  }\n]"
+          "body": "[\n  {\n    \"id\": 1,\n    \"user_id\": 5,\n    \"email\": \"requester@example.com\",\n    \"username\": \"requester1\",\n    \"message\": \"I would like to join your organization.\",\n    \"created_at\": 1710201600\n  }\n]"
+        },
+        {
+          "name": "Get Access Requests - Empty",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organization/access_requests",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "access_requests"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "[]"
         }
       ]
     },
@@ -531,7 +913,7 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"message\": \"Access request approved successfully.\"\n}"
+          "body": "{\n  \"message\": \"Access request approved\"\n}"
         },
         {
           "name": "Handle Access Request - Reject",
@@ -556,7 +938,107 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"message\": \"Access request rejected successfully.\"\n}"
+          "body": "{\n  \"message\": \"Access request rejected\"\n}"
+        },
+        {
+          "name": "Handle Access Request - Missing Fields",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/organization/handle_access_request",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "handle_access_request"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Request ID and action are required\"\n}"
+        },
+        {
+          "name": "Handle Access Request - Not Found",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/organization/handle_access_request",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "handle_access_request"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": 9999,\n  \"action\": \"approve\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Not Found",
+          "code": 404,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Access request not found\"\n}"
+        },
+        {
+          "name": "Handle Access Request - Already Processed",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/organization/handle_access_request",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "handle_access_request"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": 1,\n  \"action\": \"approve\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"This request has already been processed\"\n}"
+        },
+        {
+          "name": "Handle Access Request - Invalid Action",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/organization/handle_access_request",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "handle_access_request"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": 1,\n  \"action\": \"ban\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"detail\": \"Invalid action. Use 'approve' or 'reject'\"\n}"
         }
       ]
     },
@@ -588,7 +1070,7 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "[\n  {\"name\": \"OWNER\", \"description\": \"Full access to all resources\"},\n  {\"name\": \"ADMIN\", \"description\": \"Administrative access\"},\n  {\"name\": \"MEMBER\", \"description\": \"Standard member access\"},\n  {\"name\": \"VIEWER\", \"description\": \"Read-only access\"}\n]"
+          "body": "[\n  { \"role\": \"owner\", \"description\": \"Full access to organization\" },\n  { \"role\": \"admin\", \"description\": \"Administrative access\" },\n  { \"role\": \"member\", \"description\": \"Standard member access\" },\n  { \"role\": \"viewer\", \"description\": \"Read-only access\" }\n]"
         }
       ]
     },
@@ -620,12 +1102,30 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "[\n  {\n    \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"name\": \"My Organization\",\n    \"slug\": \"my-organization\",\n    \"role\": \"OWNER\",\n    \"status\": \"ACTIVE\"\n  },\n  {\n    \"id\": \"c3d4e5f6-a7b8-9012-cdef-234567890123\",\n    \"name\": \"Second Org\",\n    \"slug\": \"second-org\",\n    \"role\": \"MEMBER\",\n    \"status\": \"ACTIVE\"\n  }\n]"
+          "body": "[\n  {\n    \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"name\": \"My Organization\",\n    \"slug\": \"my-organization\",\n    \"role\": \"owner\",\n    \"status\": \"active\"\n  },\n  {\n    \"id\": \"c3d4e5f6-a7b8-9012-cdef-234567890123\",\n    \"name\": \"Second Org\",\n    \"slug\": \"second-org\",\n    \"role\": \"member\",\n    \"status\": \"active\"\n  }\n]"
+        },
+        {
+          "name": "[EE] Get Associated Tenants - Empty",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organization/get_associated_tenants",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "get_associated_tenants"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "[]"
         }
       ]
     },
     {
-      "name": "[EE] Create Tenant",
+      "name": "[EE] Create Tenants",
       "request": {
         "method": "POST",
         "header": [],
@@ -640,7 +1140,7 @@
       },
       "response": [
         {
-          "name": "[EE] Create Tenant - Success",
+          "name": "[EE] Create Tenants - Success",
           "originalRequest": {
             "method": "POST",
             "header": [],
@@ -658,7 +1158,7 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"id\": \"d4e5f6a7-b8c9-0123-defg-345678901234\",\n  \"name\": \"New Organization\",\n  \"slug\": \"new-organization\",\n  \"status\": \"ACTIVE\",\n  \"created_by\": 1,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+          "body": "{\n  \"id\": \"d4e5f6a7-b8c9-0123-def0-345678901234\",\n  \"name\": \"New Organization\",\n  \"slug\": \"new-organization\",\n  \"status\": \"active\",\n  \"created_by\": 1,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
         }
       ]
     },
@@ -704,10 +1204,10 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "{\n  \"message\": \"Access request submitted successfully.\",\n  \"request\": {\n    \"id\": 1,\n    \"user_id\": 5,\n    \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"status\": \"PENDING\",\n    \"message\": \"I would like to join your organization.\",\n    \"created_at\": 1710201600\n  }\n}"
+          "body": "{\n  \"message\": \"Access request submitted successfully\",\n  \"request\": {\n    \"id\": 1,\n    \"user_id\": 5,\n    \"organization_id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n    \"status\": \"pending\",\n    \"message\": \"I would like to join your organization.\",\n    \"created_at\": 1710201600\n  }\n}"
         },
         {
-          "name": "[EE] Request Access - Missing org_id",
+          "name": "[EE] Request Access - Missing Org ID",
           "originalRequest": {
             "method": "POST",
             "header": [
@@ -761,7 +1261,7 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "[\n  {\n    \"id\": 1,\n    \"user_id\": 1,\n    \"email\": \"owner@example.com\",\n    \"username\": \"owneruser\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"role\": \"OWNER\",\n    \"status\": \"ACTIVE\",\n    \"joined_at\": 1710201600,\n    \"last_activity_at\": 1710288000\n  },\n  {\n    \"id\": 2,\n    \"user_id\": 2,\n    \"email\": \"member@example.com\",\n    \"username\": \"memberuser\",\n    \"first_name\": \"Jane\",\n    \"last_name\": \"Smith\",\n    \"role\": \"MEMBER\",\n    \"status\": \"ACTIVE\",\n    \"joined_at\": 1710288000,\n    \"last_activity_at\": 1710374400\n  }\n]"
+          "body": "[\n  {\n    \"member_id\": 1,\n    \"user_id\": 1,\n    \"email\": \"owner@example.com\",\n    \"username\": \"owneruser\",\n    \"first_name\": \"John\",\n    \"last_name\": \"Doe\",\n    \"role\": \"owner\",\n    \"status\": \"active\",\n    \"joined_at\": 1710201600,\n    \"last_activity_at\": 1710288000\n  },\n  {\n    \"member_id\": 2,\n    \"user_id\": 2,\n    \"email\": \"member@example.com\",\n    \"username\": \"memberuser\",\n    \"first_name\": \"Jane\",\n    \"last_name\": \"Smith\",\n    \"role\": \"member\",\n    \"status\": \"active\",\n    \"joined_at\": 1710288000,\n    \"last_activity_at\": 1710374400\n  }\n]"
         }
       ]
     },
@@ -793,7 +1293,153 @@
           "header": [
             { "key": "Content-Type", "value": "application/json" }
           ],
-          "body": "[\n  {\n    \"id\": 1,\n    \"email\": \"invited@example.com\",\n    \"name\": \"Invited User\",\n    \"role\": \"MEMBER\",\n    \"status\": \"PENDING\",\n    \"invited_by\": 1,\n    \"expires_at\": 1710806400,\n    \"created_at\": 1710201600\n  }\n]"
+          "body": "[\n  {\n    \"member_id\": 5,\n    \"email\": \"invited@example.com\",\n    \"username\": \"Invited User\",\n    \"name\": \"Invited User\",\n    \"role\": \"member\",\n    \"status\": \"pending\"\n  }\n]"
+        },
+        {
+          "name": "[EE] Get Invited Users - Empty",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organization/invited_users",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "invited_users"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "[]"
+        }
+      ]
+    },
+    {
+      "name": "[EE] Get Organization Details",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/organization/details?org_id=b2c3d4e5-f6a7-8901-bcde-f12345678901",
+          "host": ["{{baseUrl}}"],
+          "path": ["organization", "details"],
+          "query": [
+            { "key": "org_id", "value": "b2c3d4e5-f6a7-8901-bcde-f12345678901", "description": "Organization UUID" }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "[EE] Get Organization Details - Success",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organization/details?org_id=b2c3d4e5-f6a7-8901-bcde-f12345678901",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "details"],
+              "query": [
+                { "key": "org_id", "value": "b2c3d4e5-f6a7-8901-bcde-f12345678901" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"name\": \"My Organization\",\n  \"slug\": \"my-organization\",\n  \"description\": \"A voice agent organization\",\n  \"status\": \"active\",\n  \"created_by\": 1,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710201600\n}"
+        }
+      ]
+    },
+    {
+      "name": "[EE] Update Organization Details",
+      "request": {
+        "method": "PUT",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/organization/details?org_id=b2c3d4e5-f6a7-8901-bcde-f12345678901",
+          "host": ["{{baseUrl}}"],
+          "path": ["organization", "details"],
+          "query": [
+            { "key": "org_id", "value": "b2c3d4e5-f6a7-8901-bcde-f12345678901", "description": "Organization UUID" }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Updated Organization Name\",\n  \"description\": \"Updated description\"\n}",
+          "options": { "raw": { "language": "json" } }
+        }
+      },
+      "response": [
+        {
+          "name": "[EE] Update Organization Details - Success",
+          "originalRequest": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/organization/details?org_id=b2c3d4e5-f6a7-8901-bcde-f12345678901",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "details"],
+              "query": [
+                { "key": "org_id", "value": "b2c3d4e5-f6a7-8901-bcde-f12345678901" }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Organization Name\",\n  \"description\": \"Updated description\"\n}",
+              "options": { "raw": { "language": "json" } }
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"id\": \"b2c3d4e5-f6a7-8901-bcde-f12345678901\",\n  \"name\": \"Updated Organization Name\",\n  \"slug\": \"my-organization\",\n  \"description\": \"Updated description\",\n  \"status\": \"active\",\n  \"created_by\": 1,\n  \"created_at\": 1710201600,\n  \"updated_at\": 1710288000\n}"
+        }
+      ]
+    },
+    {
+      "name": "[EE] Delete Organization",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/organization/delete?org_id=b2c3d4e5-f6a7-8901-bcde-f12345678901",
+          "host": ["{{baseUrl}}"],
+          "path": ["organization", "delete"],
+          "query": [
+            { "key": "org_id", "value": "b2c3d4e5-f6a7-8901-bcde-f12345678901", "description": "Organization UUID" }
+          ]
+        }
+      },
+      "response": [
+        {
+          "name": "[EE] Delete Organization - Success",
+          "originalRequest": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/organization/delete?org_id=b2c3d4e5-f6a7-8901-bcde-f12345678901",
+              "host": ["{{baseUrl}}"],
+              "path": ["organization", "delete"],
+              "query": [
+                { "key": "org_id", "value": "b2c3d4e5-f6a7-8901-bcde-f12345678901" }
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            { "key": "Content-Type", "value": "application/json" }
+          ],
+          "body": "{\n  \"message\": \"Organization deleted successfully\"\n}"
         }
       ]
     }

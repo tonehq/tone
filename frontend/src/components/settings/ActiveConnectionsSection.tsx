@@ -18,7 +18,7 @@ interface ActiveConnectionsSectionProps {
   disconnectingId: number | null;
   onOAuthConnect: (key: string) => void;
   onOAuthDisconnect: (id: number) => void;
-  onAddApiKey: () => void;
+  onAddApiKey: (providerKey: string) => void;
   onEditRow: (row: IntegrationRow) => void;
   onDeleteRow: (id: number) => void;
 }
@@ -81,7 +81,7 @@ export default function ActiveConnectionsSection({
               actionLabel="Add Key"
               actionIcon={<Plus size={12} />}
               actionLoading={false}
-              onAction={onAddApiKey}
+              onAction={() => onAddApiKey(provider.key)}
             >
               {providerRows.map((row) => (
                 <ApiKeyCredentialRow

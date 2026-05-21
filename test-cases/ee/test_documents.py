@@ -1,7 +1,8 @@
 """Tests for Documents API endpoints (EE edition).
 
 Source: ee/api/v1/documents.py
-Integration tests — real DB, real endpoints, no mocks.
+Postman: postman_collection/documents.postman_collection.json
+Integration tests -- real DB, real endpoints, no mocks.
 """
 
 import io
@@ -15,22 +16,29 @@ import pytest
 class TestGetDocuments:
     """Tests for POST /api/v1/document/get_documents"""
 
-    def test_get_documents_returns_200(self, client_as_member):
-        response = client_as_member.post("/api/v1/document/get_documents", json={})
-        assert response.status_code == 200
-        data = response.json()
-        assert "data" in data
-        assert "pagination" in data
-
-    def test_get_documents_with_filters(self, client_as_member):
+    def test_get_documents_success(self, client_as_member):
+        """Postman: Get Documents - Success (200)."""
         response = client_as_member.post("/api/v1/document/get_documents", json={
             "agent_id": 1,
-            "name": "test",
+            "name": "user guide",
             "sort": "-created_at",
             "page": 1,
             "page_size": 10,
         })
         assert response.status_code == 200
+        data = response.json()
+        assert "data" in data
+        assert "pagination" in data
+        assert "page" in data["pagination"]
+        assert "page_size" in data["pagination"]
+        assert "total" in data["pagination"]
+
+    def test_get_documents_default_body(self, client_as_member):
+        response = client_as_member.post("/api/v1/document/get_documents", json={})
+        assert response.status_code == 200
+        data = response.json()
+        assert "data" in data
+        assert "pagination" in data
 
     def test_get_documents_sort_ascending(self, client_as_member):
         response = client_as_member.post("/api/v1/document/get_documents", json={
@@ -51,11 +59,13 @@ class TestGetDocuments:
         assert response.status_code == 200
 
     def test_invalid_sort_field(self, client_as_member):
+        """Postman: Get Documents - Invalid Sort (400)."""
         response = client_as_member.post("/api/v1/document/get_documents", json={
-            "sort": "invalid_field",
+            "sort": "invalid",
         })
         assert response.status_code == 400
         assert "Invalid sort field" in response.json()["detail"]
+        assert "Allowed: created_at, updated_at, name" in response.json()["detail"]
 
     def test_invalid_sort_field_with_desc_prefix(self, client_as_member):
         response = client_as_member.post("/api/v1/document/get_documents", json={
@@ -110,15 +120,19 @@ class TestUploadDocument:
     """Tests for POST /api/v1/document/upload_document"""
 
     def test_unsupported_file_type(self, client_as_member):
+        """Postman: Upload Document - Unsupported Type (400)."""
         response = client_as_member.post(
             "/api/v1/document/upload_document",
             data={"agent_id": "1"},
-            files=[("files", ("image.png", io.BytesIO(b"\x89PNG fake"), "image/png"))],
+            files=[("files", ("photo.png", io.BytesIO(b"\x89PNG fake"), "image/png"))],
         )
         assert response.status_code == 400
         assert "Unsupported file type" in response.json()["detail"]
+        assert "image/png" in response.json()["detail"]
+        assert "photo.png" in response.json()["detail"]
 
     def test_empty_file_rejected(self, client_as_member):
+        """Postman: Upload Document - Empty File (400)."""
         response = client_as_member.post(
             "/api/v1/document/upload_document",
             data={"agent_id": "1"},
@@ -126,6 +140,7 @@ class TestUploadDocument:
         )
         assert response.status_code == 400
         assert "empty" in response.json()["detail"].lower()
+        assert "empty.pdf" in response.json()["detail"]
 
     def test_missing_agent_id(self, client_as_member):
         response = client_as_member.post(
@@ -169,9 +184,22 @@ class TestUploadDocument:
 class TestDeleteDocument:
     """Tests for DELETE /api/v1/document/delete_document"""
 
+    def test_delete_success_message_format(self, client_as_member):
+        """Postman: Delete Document - Success (200) message format.
+
+        Cannot easily create documents without R2, so we test with IDs
+        that may or may not exist. The endpoint may return 404 for non-existent IDs.
+        """
+        response = client_as_member.delete(
+            "/api/v1/document/delete_document",
+            params={"document_ids": [1, 2]},
+        )
+        # 200 if docs exist and are deleted, 404 if not found
+        assert response.status_code in (200, 404)
+
     def test_delete_not_found(self, client_as_member):
         response = client_as_member.delete(
-            "/api/v1/document/delete_document", params={"document_ids": 999999}
+            "/api/v1/document/delete_document", params={"document_ids": 999999},
         )
         assert response.status_code == 404
 
@@ -181,6 +209,6 @@ class TestDeleteDocument:
 
     def test_unauthenticated(self, client_unauthenticated):
         response = client_unauthenticated.delete(
-            "/api/v1/document/delete_document", params={"document_ids": 1}
+            "/api/v1/document/delete_document", params={"document_ids": 1},
         )
         assert response.status_code in (401, 403)

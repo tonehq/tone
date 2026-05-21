@@ -24,6 +24,7 @@ interface AddChannelModalProps {
     account_sid: string;
   }) => Promise<void>;
   editData?: IntegrationRow | null;
+  providerKey?: string | null;
 }
 
 export default function AddChannelModal({
@@ -31,6 +32,7 @@ export default function AddChannelModal({
   onClose,
   onSubmit,
   editData,
+  providerKey,
 }: AddChannelModalProps) {
   const isEdit = Boolean(editData);
 
@@ -52,9 +54,9 @@ export default function AddChannelModal({
       setType(editData.type ?? 'twilio');
     } else if (open) {
       reset({ name: '', auth_token: '', account_sid: '' });
-      setType('twilio');
+      setType(providerKey ?? 'twilio');
     }
-  }, [open, editData, reset]);
+  }, [open, editData, providerKey, reset]);
 
   const onFormSubmit = async (data: AddChannelFormData) => {
     setSaving(true);
@@ -103,7 +105,7 @@ export default function AddChannelModal({
           options={CHANNEL_TYPE_OPTIONS}
           value={type}
           onValueChange={setType}
-          disabled={saving}
+          disabled={saving || !!providerKey || isEdit}
         />
         <TextInput
           name="auth_token"

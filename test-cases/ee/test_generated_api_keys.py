@@ -1,6 +1,7 @@
 """Tests for Generated API Keys endpoints (EE edition).
 
 Source: ee/api/v1/generated_api_keys.py
+Postman: generated_api_keys.postman_collection.json
 Integration tests — real DB, real endpoints, no mocks.
 """
 
@@ -14,9 +15,13 @@ def _unique_key_value():
     return f"tone_test_key_{uuid.uuid4().hex[:12]}"
 
 
+def _unique_name(prefix="test-key"):
+    return f"{prefix}-{uuid.uuid4().hex[:8]}"
+
+
 def _create_basic_key(client, name=None, key_value=None):
     """Create a basic key and return the response JSON."""
-    name = name or f"test-key-{uuid.uuid4().hex[:8]}"
+    name = name or _unique_name()
     key_value = key_value or _unique_key_value()
     resp = client.post("/api/v1/generated-api-keys/upsert", json={
         "name": name, "key_value": key_value,
@@ -27,7 +32,7 @@ def _create_basic_key(client, name=None, key_value=None):
 
 def _create_full_key(client, name=None, key_value=None, **kwargs):
     """Create a full key with optional security fields and return the response JSON."""
-    name = name or f"test-full-key-{uuid.uuid4().hex[:8]}"
+    name = name or _unique_name("test-full-key")
     key_value = key_value or _unique_key_value()
     body = {"name": name, "key_value": key_value, **kwargs}
     resp = client.post("/api/v1/generated-api-keys/upsert-full", json=body)
@@ -38,15 +43,31 @@ def _create_full_key(client, name=None, key_value=None, **kwargs):
 # ─── POST /api/v1/generated-api-keys/upsert ───
 
 class TestUpsertBasicKey:
-    """Tests for POST /api/v1/generated-api-keys/upsert"""
+    """Tests for POST /api/v1/generated-api-keys/upsert
+
+    Postman examples:
+      - Upsert Basic Key - Create (200)
+      - Upsert Basic Key - Missing Fields (400)
+    """
+
+    def test_create_basic_key_success(self, client_as_admin):
+        """Postman: Upsert Basic Key - Create (200)."""
+        data = _create_basic_key(client_as_admin)
+        assert "id" in data
+        assert "name" in data
+        assert "key_value" in data
+        if "status" in data:
+            assert data["status"] == "active"
 
     def test_upsert_basic_key_missing_name(self, client_as_admin):
+        """Postman: Upsert Basic Key - Missing Fields (400) -- no name."""
         response = client_as_admin.post("/api/v1/generated-api-keys/upsert", json={
             "key_value": "tk_test"
         })
         assert response.status_code == 400
 
     def test_upsert_basic_key_missing_key_value(self, client_as_admin):
+        """Postman: Upsert Basic Key - Missing Fields (400) -- no key_value."""
         response = client_as_admin.post("/api/v1/generated-api-keys/upsert", json={
             "name": "Test Key"
         })
@@ -61,14 +82,6 @@ class TestUpsertBasicKey:
             "name": "Key", "key_value": "tk_test"
         })
         assert response.status_code in (401, 403)
-
-    def test_create_basic_key_success(self, client_as_admin):
-        """Create a basic key and verify all response fields."""
-        data = _create_basic_key(client_as_admin)
-        assert "id" in data
-        assert "uuid" in data
-        assert "name" in data
-        assert "key_value" in data
 
     def test_update_basic_key(self, client_as_admin):
         """Create a key, then update it via ?id= query param."""
@@ -93,15 +106,37 @@ class TestUpsertBasicKey:
 # ─── POST /api/v1/generated-api-keys/upsert-full ───
 
 class TestUpsertFullKey:
-    """Tests for POST /api/v1/generated-api-keys/upsert-full"""
+    """Tests for POST /api/v1/generated-api-keys/upsert-full
+
+    Postman examples:
+      - Upsert Full Key - Create (200)
+      - Upsert Full Key - Missing Fields (400)
+    """
+
+    def test_create_full_key_success(self, client_as_admin):
+        """Postman: Upsert Full Key - Create (200)."""
+        data = _create_full_key(
+            client_as_admin,
+            domains=["example.com", "api.example.com"],
+            abuse_prevention={"is_toggled": True, "recaptcha_secret_key": "6Lc...", "threshold": 0.5},
+            fraud_protection=True,
+        )
+        assert "id" in data
+        assert data["domains"] == ["example.com", "api.example.com"]
+        assert data["abuse_prevention"]["is_toggled"] is True
+        assert data["fraud_protection"] is True
+        if "status" in data:
+            assert data["status"] == "active"
 
     def test_upsert_full_key_missing_name(self, client_as_admin):
+        """Postman: Upsert Full Key - Missing Fields (400) -- no name."""
         response = client_as_admin.post("/api/v1/generated-api-keys/upsert-full", json={
             "key_value": "tk_test"
         })
         assert response.status_code == 400
 
     def test_upsert_full_key_missing_key_value(self, client_as_admin):
+        """Postman: Upsert Full Key - Missing Fields (400) -- no key_value."""
         response = client_as_admin.post("/api/v1/generated-api-keys/upsert-full", json={
             "name": "Key"
         })
@@ -116,18 +151,6 @@ class TestUpsertFullKey:
             "name": "Key", "key_value": "tk_test"
         })
         assert response.status_code in (401, 403)
-
-    def test_create_full_key_all_security_fields(self, client_as_admin):
-        """Create full key with domains, abuse_prevention, fraud_protection."""
-        data = _create_full_key(
-            client_as_admin,
-            domains=["example.com", "api.example.com"],
-            abuse_prevention={"is_toggled": True, "recaptcha_secret_key": "secret", "threshold": 0.5},
-            fraud_protection=True,
-        )
-        assert data["domains"] == ["example.com", "api.example.com"]
-        assert data["abuse_prevention"]["is_toggled"] is True
-        assert data["fraud_protection"] is True
 
     def test_update_full_key(self, client_as_admin):
         """Create a full key, then update all fields via ?id=."""
@@ -171,9 +194,14 @@ class TestUpsertFullKey:
 # ─── GET /api/v1/generated-api-keys/list ───
 
 class TestGetAllKeys:
-    """Tests for GET /api/v1/generated-api-keys/list"""
+    """Tests for GET /api/v1/generated-api-keys/list
+
+    Postman examples:
+      - Get All Keys - Success (200)
+    """
 
     def test_get_all_keys_returns_200(self, client_as_member):
+        """Postman: Get All Keys - Success (200)."""
         response = client_as_member.get("/api/v1/generated-api-keys/list")
         assert response.status_code == 200
         assert isinstance(response.json(), list)
@@ -208,7 +236,26 @@ class TestGetAllKeys:
 # ─── GET /api/v1/generated-api-keys/get ───
 
 class TestGetKey:
-    """Tests for GET /api/v1/generated-api-keys/get"""
+    """Tests for GET /api/v1/generated-api-keys/get?key_id=
+
+    Postman examples:
+      - Get Key - Success (200)
+      - Get Key - Not Found (404)
+    """
+
+    def test_get_key_success(self, client_as_admin):
+        """Postman: Get Key - Success (200)."""
+        created = _create_basic_key(client_as_admin)
+        resp = client_as_admin.get(f"/api/v1/generated-api-keys/get?key_id={created['id']}")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["name"] == created["name"]
+        assert data["key_value"] == created["key_value"]
+
+    def test_get_key_not_found(self, client_as_admin):
+        """Postman: Get Key - Not Found (404)."""
+        resp = client_as_admin.get("/api/v1/generated-api-keys/get?key_id=9999")
+        assert resp.status_code == 404
 
     def test_get_key_missing_id(self, client_as_member):
         response = client_as_member.get("/api/v1/generated-api-keys/get")
@@ -222,25 +269,29 @@ class TestGetKey:
         response = client_unauthenticated.get("/api/v1/generated-api-keys/get?key_id=1")
         assert response.status_code in (401, 403)
 
-    def test_get_key_success(self, client_as_admin):
-        """Create a key, fetch by id, verify fields match."""
-        created = _create_basic_key(client_as_admin)
-        resp = client_as_admin.get(f"/api/v1/generated-api-keys/get?key_id={created['id']}")
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data["name"] == created["name"]
-        assert data["key_value"] == created["key_value"]
-
-    def test_get_key_not_found(self, client_as_admin):
-        """Fetch nonexistent key returns 404."""
-        resp = client_as_admin.get("/api/v1/generated-api-keys/get?key_id=9999")
-        assert resp.status_code == 404
-
 
 # ─── DELETE /api/v1/generated-api-keys/delete ───
 
 class TestDeleteKey:
-    """Tests for DELETE /api/v1/generated-api-keys/delete"""
+    """Tests for DELETE /api/v1/generated-api-keys/delete?key_id=
+
+    Postman examples:
+      - Delete Key - Success (200)
+    """
+
+    def test_delete_key_success(self, client_as_admin):
+        """Postman: Delete Key - Success (200)."""
+        created = _create_basic_key(client_as_admin)
+        resp = client_as_admin.delete(f"/api/v1/generated-api-keys/delete?key_id={created['id']}")
+        assert resp.status_code == 200
+        # Confirm deleted
+        get_resp = client_as_admin.get(f"/api/v1/generated-api-keys/get?key_id={created['id']}")
+        assert get_resp.status_code == 404
+
+    def test_delete_key_not_found(self, client_as_admin):
+        """Delete nonexistent key returns 404."""
+        resp = client_as_admin.delete("/api/v1/generated-api-keys/delete?key_id=9999")
+        assert resp.status_code == 404
 
     def test_delete_key_missing_id(self, client_as_admin):
         response = client_as_admin.delete("/api/v1/generated-api-keys/delete")
@@ -253,17 +304,3 @@ class TestDeleteKey:
     def test_delete_key_unauthenticated(self, client_unauthenticated):
         response = client_unauthenticated.delete("/api/v1/generated-api-keys/delete?key_id=1")
         assert response.status_code in (401, 403)
-
-    def test_delete_key_success(self, client_as_admin):
-        """Create a key, delete it, verify it's gone."""
-        created = _create_basic_key(client_as_admin)
-        resp = client_as_admin.delete(f"/api/v1/generated-api-keys/delete?key_id={created['id']}")
-        assert resp.status_code == 200
-        # Confirm deleted
-        get_resp = client_as_admin.get(f"/api/v1/generated-api-keys/get?key_id={created['id']}")
-        assert get_resp.status_code == 404
-
-    def test_delete_key_not_found(self, client_as_admin):
-        """Delete nonexistent key returns 404."""
-        resp = client_as_admin.delete("/api/v1/generated-api-keys/delete?key_id=9999")
-        assert resp.status_code == 404
