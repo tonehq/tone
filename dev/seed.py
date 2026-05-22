@@ -201,8 +201,14 @@ def seed_from_configs(db, org_name, email, password):
 
     # --- Phase 1: Insert ModelProvider records ---
     provider_map = {}  # config index -> ModelProvider object
+    seen_providers = {}  # provider_id_str -> ModelProvider object
     for i, config in enumerate(all_providers):
         provider_id_str = config["name"]  # e.g. "openai", "deepgram"
+
+        if provider_id_str in seen_providers:
+            provider_map[i] = seen_providers[provider_id_str]
+            continue
+
         slug = _slugify(config["display_name"])
 
         mp = ModelProvider(
@@ -214,6 +220,7 @@ def seed_from_configs(db, org_name, email, password):
         )
         db.add(mp)
         provider_map[i] = mp
+        seen_providers[provider_id_str] = mp
         stats["model_providers_created"] += 1
 
     db.flush()
@@ -228,6 +235,9 @@ def seed_from_configs(db, org_name, email, password):
 
         for model_spec in config.get("models") or []:
             model_name = model_spec.get("name") or "default"
+
+            if (mp.id, model_name) in model_name_to_obj:
+                continue
 
             m = Model(
                 provider_id=mp.id,
@@ -277,7 +287,7 @@ def seed_from_configs(db, org_name, email, password):
                 accent=voice_spec.get("accent"),
                 name=voice_spec.get("name"),
                 gender=voice_spec.get("gender"),
-                description=voice_spec.get("description"),
+                description=(voice_spec.get("description") or "")[:200] or None,
                 language_list=voice_spec.get("language_list"),
                 sample_url=voice_spec.get("sample_url"),
                 is_active=True,
@@ -326,6 +336,7 @@ def seed_from_configs(db, org_name, email, password):
     db.flush()
 
     # --- Phase 5: Insert ApiKey records (from env vars) ---
+    seen_api_keys = set()  # track provider IDs already keyed
     for i, config in enumerate(all_providers):
         api_key_env = config.get("api_key_env")
         api_key_value = _get_api_key_from_env(api_key_env)
@@ -338,6 +349,10 @@ def seed_from_configs(db, org_name, email, password):
             continue
 
         mp = provider_map[i]
+
+        if mp.id in seen_api_keys:
+            continue
+        seen_api_keys.add(mp.id)
 
         api_key = ApiKey(
             organization_id=org_id,
@@ -352,16 +367,16 @@ def seed_from_configs(db, org_name, email, password):
     db.flush()
 
     # --- Phase 6: Insert built-in Tool records ---
-    for tool_spec in data.get("built_in_tools", []):
-        tool = Tool(
-            organization_id=org_id,
-            name=tool_spec["name"],
-            description=tool_spec.get("description"),
-            tool_type=tool_spec.get("tool_type", "built_in"),
-            action_params_schema=tool_spec.get("parameters"),
-        )
-        db.add(tool)
-        stats["tools_created"] += 1
+    # for tool_spec in data.get("built_in_tools", []):
+    #     tool = Tool(
+    #         organization_id=org_id,
+    #         name=tool_spec["name"],
+    #         description=tool_spec.get("description"),
+    #         tool_type=tool_spec.get("tool_type", "built_in"),
+    #         action_params_schema=tool_spec.get("parameters"),
+    #     )
+    #     db.add(tool)
+    #     stats["tools_created"] += 1
 
     db.commit()
     return stats
