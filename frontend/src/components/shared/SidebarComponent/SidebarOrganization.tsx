@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useAtom, useSetAtom } from 'jotai';
-import Cookies from 'js-cookie';
 import { Check, ChevronDown } from 'lucide-react';
 
 import { CustomButton } from '@/components/shared';
@@ -15,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { TENANT_ID } from '@/constants';
+import { LOGIN_DATA, TENANT_ID } from '@/constants';
 import organizationAtom, {
   fetchOrganizationList,
   switchOrganizationAtom,
@@ -29,10 +28,11 @@ export interface SidebarOrganizationProps {
 
 function getCurrentOrgName(): string {
   try {
-    const loginDataRaw = Cookies.get('login_data');
+    if (typeof window === 'undefined') return '';
+    const loginDataRaw = localStorage.getItem(LOGIN_DATA);
     if (!loginDataRaw) return '';
     const loginData = JSON.parse(loginDataRaw);
-    const tenantId = Cookies.get(TENANT_ID) || '';
+    const tenantId = localStorage.getItem(TENANT_ID) || '';
     const orgs = loginData.organizations;
     if (Array.isArray(orgs)) {
       const match = orgs.find((o: any) => String(o.id) === String(tenantId));
@@ -58,7 +58,7 @@ export function SidebarOrganization({ isExpanded }: SidebarOrganizationProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setCurrentOrgId(Cookies.get(TENANT_ID) || '');
+    setCurrentOrgId(typeof window !== 'undefined' ? localStorage.getItem(TENANT_ID) || '' : '');
     setCookieOrgName(getCurrentOrgName());
     setMounted(true);
     fetchOrgs();

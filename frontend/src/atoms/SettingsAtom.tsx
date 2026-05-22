@@ -3,41 +3,93 @@ import { loadable } from 'jotai/utils';
 
 import {
   cancelInvitation,
-  getAllInvitedUsersForOrganization,
-  getAllUsersForOrganization,
   inviteUserToOrganization,
+  pagedGetAllInvitedUsersForOrganization,
+  pagedGetAllUsersForOrganization,
   removeOrganizationMember,
+  resendInvitation,
   updateOrganizationMemberRole,
 } from '@/services/userService';
-
+import type { ListRequest, ListResponse } from '@/types/list';
 import { OrganizationInviteApi, OrganizationMemberApi } from '@/types/settings/members';
 
-// Trigger to force refetch in loadable atoms
+const DEFAULT_PARAMS: ListRequest = {
+  page: 1,
+  page_size: 10,
+  sort_order: 'desc',
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// Members
+// ────────────────────────────────────────────────────────────────────────────
+
 const membersRefreshAtom = atom(0);
-const invitationsRefreshAtom = atom(0);
+const membersParamsAtom = atom<ListRequest>({ ...DEFAULT_PARAMS });
 
-const membersRowsAtom = atom<Promise<OrganizationMemberApi[]>>(async (get) => {
+const membersPagedAtom = atom<Promise<ListResponse<OrganizationMemberApi>>>(async (get) => {
   get(membersRefreshAtom);
-  const apiData = (await getAllUsersForOrganization()) as OrganizationMemberApi[];
-  return apiData;
+  return pagedGetAllUsersForOrganization(get(membersParamsAtom));
 });
 
-const invitationsRowsAtom = atom<Promise<OrganizationInviteApi[]>>(async (get) => {
-  get(invitationsRefreshAtom);
-  const apiData = (await getAllInvitedUsersForOrganization()) as OrganizationInviteApi[];
-  return apiData;
-});
+const loadableMembersPagedAtom = loadable(membersPagedAtom);
 
-const loadableMembersRowsAtom = loadable(membersRowsAtom);
-const loadableInvitationsRowsAtom = loadable(invitationsRowsAtom);
+const setMembersParamsAtom = atom(null, (get, set, patch: Partial<ListRequest>) => {
+  const current = get(membersParamsAtom);
+  // Reset to page 1 whenever filters/search/sort change, so users don't see
+  // an empty page when their result set shrinks.
+  const resetsPage =
+    'search' in patch ||
+    'sort_by' in patch ||
+    'sort_order' in patch ||
+    'filters' in patch ||
+    'page_size' in patch;
+  set(membersParamsAtom, {
+    ...current,
+    ...patch,
+    page: resetsPage ? 1 : (patch.page ?? current.page),
+  });
+});
 
 const refetchMembersAtom = atom(null, (_get, set) => {
   set(membersRefreshAtom, (c) => c + 1);
 });
 
+// ────────────────────────────────────────────────────────────────────────────
+// Invitations
+// ────────────────────────────────────────────────────────────────────────────
+
+const invitationsRefreshAtom = atom(0);
+const invitationsParamsAtom = atom<ListRequest>({ ...DEFAULT_PARAMS });
+
+const invitationsPagedAtom = atom<Promise<ListResponse<OrganizationInviteApi>>>(async (get) => {
+  get(invitationsRefreshAtom);
+  return pagedGetAllInvitedUsersForOrganization(get(invitationsParamsAtom));
+});
+
+const loadableInvitationsPagedAtom = loadable(invitationsPagedAtom);
+
+const setInvitationsParamsAtom = atom(null, (get, set, patch: Partial<ListRequest>) => {
+  const current = get(invitationsParamsAtom);
+  const resetsPage =
+    'search' in patch ||
+    'sort_by' in patch ||
+    'sort_order' in patch ||
+    'filters' in patch ||
+    'page_size' in patch;
+  set(invitationsParamsAtom, {
+    ...current,
+    ...patch,
+    page: resetsPage ? 1 : (patch.page ?? current.page),
+  });
+});
+
 const refetchInvitationsAtom = atom(null, (_get, set) => {
   set(invitationsRefreshAtom, (c) => c + 1);
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// Mutations
+// ────────────────────────────────────────────────────────────────────────────
 
 const inviteUserToOrganizationAtom = atom(
   null,
@@ -47,7 +99,6 @@ const inviteUserToOrganizationAtom = atom(
   },
 );
 
-// Action: update member role and refresh members
 const updateMemberRoleAtom = atom(
   null,
   async (_get, set, payload: { memberId: number; role: string }) => {
@@ -56,25 +107,33 @@ const updateMemberRoleAtom = atom(
   },
 );
 
-// Action: remove member and refresh members
 const removeMemberAtom = atom(null, async (_get, set, userId: number) => {
   await removeOrganizationMember(userId);
   set(membersRefreshAtom, (c) => c + 1);
 });
 
-// Action: cancel invitation and refresh invitations
 const cancelInvitationAtom = atom(null, async (_get, set, inviteId: number) => {
   await cancelInvitation(inviteId);
   set(invitationsRefreshAtom, (c) => c + 1);
 });
 
+const resendInvitationAtom = atom(null, async (_get, set, inviteId: number) => {
+  await resendInvitation(inviteId);
+  set(invitationsRefreshAtom, (c) => c + 1);
+});
+
 export {
   cancelInvitationAtom,
+  invitationsParamsAtom,
   inviteUserToOrganizationAtom,
-  loadableInvitationsRowsAtom,
-  loadableMembersRowsAtom,
+  loadableInvitationsPagedAtom,
+  loadableMembersPagedAtom,
+  membersParamsAtom,
   refetchInvitationsAtom,
   refetchMembersAtom,
   removeMemberAtom,
+  resendInvitationAtom,
+  setInvitationsParamsAtom,
+  setMembersParamsAtom,
   updateMemberRoleAtom,
 };

@@ -6,6 +6,7 @@ __pycache__/
 # C extensions
 *.so
 *alembic.ini
+conductor.json
 
 # Distribution / packaging
 .Python
@@ -15,6 +16,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!frontend/src/lib/
 lib64/
 parts/
 sdist/

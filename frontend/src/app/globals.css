@@ -1,7 +1,10 @@
 @import 'tailwindcss';
 
-/* Tailwind v4 theme (built-in CSS linter may warn "Unknown at rule" — set "css.lint.unknownAtRules": "ignore" in .vscode/settings.json) */
 @theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-display);
+
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
   --color-card: hsl(var(--card));
@@ -24,135 +27,130 @@
   --color-sidebar: hsl(var(--sidebar));
   --color-sidebar-foreground: hsl(var(--sidebar-foreground));
   --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 }
 
-/* ── Light Mode (Portkey-inspired) ──────────────────────────────────────────── */
-:root {
-  --background: 0 0% 100%;
-  --foreground: 240 7% 6%;
-  --card: 0 0% 100%;
-  --card-foreground: 240 7% 6%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 240 7% 6%;
-  --primary: 268 47% 54%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 240 5% 96%;
-  --secondary-foreground: 240 6% 10%;
-  --muted: 240 5% 96%;
-  --muted-foreground: 240 4% 35%;
-  --accent: 240 5% 96%;
-  --accent-foreground: 240 6% 10%;
-  --destructive: 0 84% 50%;
-  --destructive-foreground: 0 0% 100%;
-  --border: 240 6% 90%;
-  --input: 240 6% 90%;
-  --ring: 268 47% 54%;
-  --sidebar: 0 0% 98%;
-  --sidebar-foreground: 240 7% 6%;
-  --sidebar-accent: 268 47% 54% / 0.08;
-  --radius: 0.5rem;
-}
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 9%;
+    --primary: 243 75% 59%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 243 75% 59%;
+    --radius: 0.5rem;
+    --sidebar: 0 0% 98.5%;
+    --sidebar-foreground: 0 0% 9%;
+    --sidebar-accent: 0 0% 92%;
+    --sidebar-border: 0 0% 91%;
+  }
 
-/* ── Dark Mode (Portkey-inspired) ───────────────────────────────────────────── */
-.dark {
-  --background: 240 4% 6%;
-  --foreground: 0 0% 98%;
-  --card: 240 3% 10%;
-  --card-foreground: 0 0% 98%;
-  --popover: 240 3% 10%;
-  --popover-foreground: 0 0% 98%;
-  --primary: 268 47% 54%;
-  --primary-foreground: 0 0% 100%;
-  --secondary: 240 3% 16%;
-  --secondary-foreground: 0 0% 98%;
-  --muted: 240 3% 16%;
-  --muted-foreground: 240 4% 64%;
-  --accent: 240 3% 16%;
-  --accent-foreground: 0 0% 98%;
-  --destructive: 0 63% 31%;
-  --destructive-foreground: 0 0% 98%;
-  --border: 240 3% 16%;
-  --input: 240 3% 16%;
-  --ring: 268 47% 54%;
-  --sidebar: 240 4% 5%;
-  --sidebar-foreground: 0 0% 98%;
-  --sidebar-accent: 268 47% 54% / 0.12;
+  .dark {
+    --background: 220 6% 7%;
+    --foreground: 0 0% 95%;
+    --card: 220 6% 9%;
+    --card-foreground: 0 0% 95%;
+    --popover: 220 6% 9%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 243 75% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 6% 14%;
+    --secondary-foreground: 0 0% 95%;
+    --muted: 220 6% 14%;
+    --muted-foreground: 220 4% 55%;
+    --accent: 220 6% 14%;
+    --accent-foreground: 0 0% 95%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --success: 142 71% 40%;
+    --success-foreground: 0 0% 98%;
+    --warning: 38 92% 45%;
+    --warning-foreground: 0 0% 98%;
+    --border: 220 6% 16%;
+    --input: 220 6% 16%;
+    --ring: 243 75% 65%;
+    --sidebar: 220 8% 5.5%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-accent: 220 6% 12%;
+    --sidebar-border: 220 6% 13%;
+  }
 }
 
 @layer base {
   * {
     border-color: hsl(var(--border));
   }
+  html,
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
+    height: 100%;
+    overflow: hidden;
   }
 }
 
-/* ── Existing global styles ────────────────────────────────────────────────── */
-
-* {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  height: 100%;
-  max-width: 100vw;
-  overflow: hidden;
-  font-family:
-    'Inter',
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    Roboto,
-    'Helvetica Neue',
-    Arial,
-    sans-serif;
-}
-
-/* Selection color */
 ::selection {
   background-color: hsl(var(--primary) / 0.2);
   color: hsl(var(--foreground));
 }
 
-/* Scrollbar styling */
+/* ── Scrollbar ── */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
-
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: transparent;
 }
-
-.dark ::-webkit-scrollbar-track {
-  background: hsl(240 3% 10%);
-}
-
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
+  background: hsl(var(--muted-foreground) / 0.2);
+  border-radius: 3px;
 }
-
-.dark ::-webkit-scrollbar-thumb {
-  background: hsl(240 3% 25%);
-}
-
 ::-webkit-scrollbar-thumb:hover {
-  background: #a1a1a1;
+  background: hsl(var(--muted-foreground) / 0.35);
 }
 
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: hsl(240 3% 35%);
+/* ── Page transition ── */
+.animate-page {
+  animation: pageIn 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes pageIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-/* Custom animations */
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -168,84 +166,7 @@ body {
   animation: fadeIn 0.3s ease-out forwards;
 }
 
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.animate-page {
-  animation: slideUp 0.3s ease-out;
-}
-
-/* Auth page decorative animations */
-@keyframes auth-float-1 {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  33% {
-    transform: translate(15px, -25px) scale(1.05);
-  }
-  66% {
-    transform: translate(-10px, 15px) scale(0.95);
-  }
-}
-
-@keyframes auth-float-2 {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(-20px, 25px) scale(1.1);
-  }
-}
-
-@keyframes auth-float-3 {
-  0%,
-  100% {
-    transform: translate(0, 0);
-  }
-  33% {
-    transform: translate(25px, 12px);
-  }
-  66% {
-    transform: translate(-15px, -18px);
-  }
-}
-
-@keyframes audio-bar {
-  0%,
-  100% {
-    transform: scaleY(0.3);
-  }
-  50% {
-    transform: scaleY(1);
-  }
-}
-
-@keyframes pulse-ring {
-  0% {
-    transform: scale(0.9);
-    opacity: 0.6;
-  }
-  50% {
-    transform: scale(1.1);
-    opacity: 0.2;
-  }
-  100% {
-    transform: scale(0.9);
-    opacity: 0.6;
-  }
-}
-
-/* Tone Loader — branded voice-analyzing animation for AI Voice Agent product */
+/* ── Tone loader (branded voice-analyzing animation) ── */
 @keyframes tone-loader-mic {
   0%,
   100% {
@@ -275,36 +196,20 @@ body {
   }
 }
 
-/* MCP card glow — animated light color gradient breathing across the whole card */
-@keyframes mcp-card-glow {
-  0%,
-  100% {
-    background-position: 0% 50%;
-  }
-  50% {
-    background-position: 100% 50%;
-  }
+/* ── Subtle grain overlay for depth ── */
+.grain::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.015;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
 }
 
-.animate-mcp-card-glow {
-  animation: mcp-card-glow 5s ease-in-out infinite;
-  background-size: 220% 220%;
-}
-
-
-/* Override MUI defaults for cleaner look */
-.MuiButton-root {
-  box-shadow: none !important;
-}
-
-.MuiPaper-elevation1 {
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
-}
-
-.MuiPaper-elevation2 {
-  box-shadow:
-    0 4px 6px -1px rgba(0, 0, 0, 0.1),
-    0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+/* Tab panel transitions */
+[role='tabpanel'] {
+  animation: fadeIn 0.2s ease-out;
 }
 
 /* ProseMirror / TipTap editor styles */
@@ -313,63 +218,32 @@ body {
   padding-left: 1.5em;
   margin: 0.5em 0;
 }
-
 .ProseMirror ol {
   list-style: decimal;
   padding-left: 1.5em;
   margin: 0.5em 0;
 }
-
 .ProseMirror li {
   margin: 0.25em 0;
 }
-
 .ProseMirror li p {
   margin: 0;
 }
-
 .ProseMirror h1 {
   font-size: 1.5em;
   font-weight: 700;
   margin: 0.75em 0 0.5em;
 }
-
 .ProseMirror h2 {
   font-size: 1.25em;
   font-weight: 600;
   margin: 0.75em 0 0.5em;
 }
-
 .ProseMirror h3 {
   font-size: 1.1em;
   font-weight: 600;
   margin: 0.5em 0 0.25em;
 }
-
 .ProseMirror p {
   margin: 0.25em 0;
-}
-
-/* Tab panel transitions */
-[role='tabpanel'] {
-  animation: fadeIn 0.2s ease-out;
-}
-
-/* Hover card shadow utility */
-.hover-card-shadow {
-  transition:
-    box-shadow 0.2s ease,
-    border-color 0.2s ease;
-}
-
-.hover-card-shadow:hover {
-  box-shadow:
-    0 4px 12px -2px rgba(0, 0, 0, 0.08),
-    0 2px 6px -2px rgba(0, 0, 0, 0.04);
-}
-
-.dark .hover-card-shadow:hover {
-  box-shadow:
-    0 4px 12px -2px rgba(0, 0, 0, 0.3),
-    0 2px 6px -2px rgba(0, 0, 0, 0.2);
 }

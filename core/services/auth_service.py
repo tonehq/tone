@@ -1,9 +1,12 @@
+import logging
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Optional, Dict, Any
 import time
 from uuid import UUID
 from fastapi import HTTPException, status
+
+logger = logging.getLogger(__name__)
 
 from core.services.base import BaseService
 from core.models.user import User
@@ -374,7 +377,10 @@ class AuthService(BaseService):
         )
         invitation = self.db.query(OrganizationInvite).filter(OrganizationInvite.uuid == invite_uuid).first()
 
-        invite_url = f"{settings.APPLICATION_URL}/verify/user_to_workspace?email={email}&code={invitation.invitation_token}"
+        invite_url = (
+            f"{settings.APPLICATION_URL}/accept-invite"
+            f"?token={invitation.invitation_token}"
+        )
 
         mail_service = MailService()
         mail_service.send_invite_email(email, invite_url)
@@ -501,11 +507,41 @@ class AuthService(BaseService):
             )
 
         existing_user = self.db.query(User).filter(User.email == email).first()
+
+        # Existing account with a password — skip the password parameter and
+        # just attach the membership row so the user shows up in the new org
+        # next time they sign in.
         if existing_user and existing_user.password_hash is not None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User already exists. Please login and accept the invitation."
+            user = existing_user
+            self.db.flush()
+            org_id = invitation.organization_id if invitation.organization_id else settings.DEFAULT_ORG_ID
+            self.upsert(
+                model=Member,
+                values={
+                    "user_id": user.id,
+                    "role": invitation.role,
+                    "status": "active",
+                    "created_by": invitation.invited_by,
+                    "created_at": current_time,
+                    "updated_at": current_time,
+                    "joined_at": current_time,
+                    "organization_id": org_id,
+                },
+                conflict_fields=["organization_id", "user_id"],
+                update_fields=["role", "status", "updated_at", "joined_at"],
+                auto_commit=False,
             )
+            invitation.status = InviteStatus.ACCEPTED
+            invitation.accepted_by = user.id
+            invitation.accepted_at = current_time
+            invitation.updated_at = current_time
+            self.db.commit()
+            return {
+                "message": "You have been added to the organization. Please sign in to continue.",
+                "account_exists": True,
+                "email": email,
+                "requires_login": True,
+            }
 
         password_hash = hash_password(password)
 
@@ -577,6 +613,47 @@ class AuthService(BaseService):
         self.db.commit()
 
         return {"message": "Invitation cancelled successfully"}
+
+    def resend_invitation(self, invite_id: int) -> Dict[str, str]:
+        invitation = (
+            self.db.query(OrganizationInvite)
+            .filter(
+                OrganizationInvite.id == invite_id,
+                OrganizationInvite.status == InviteStatus.PENDING,
+            )
+            .first()
+        )
+        if not invitation:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Pending invitation not found",
+            )
+
+        current_time = int(time.time())
+        # Rotate the token + extend expiry so the previous email link stops
+        # working once a new one is sent.
+        invitation.invitation_token = generate_token()
+        invitation.expires_at = current_time + (7 * 24 * 3600)
+        invitation.updated_at = current_time
+        self.db.commit()
+        self.db.refresh(invitation)
+
+        invite_url = (
+            f"{settings.APPLICATION_URL}/accept-invite"
+            f"?token={invitation.invitation_token}"
+        )
+        try:
+            MailService().send_invite_email(invitation.email, invite_url)
+        except Exception:
+            logger.exception(
+                "Failed to resend invitation email to %s", invitation.email
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Couldn't send the invitation email. Please try again.",
+            )
+
+        return {"message": "Invitation re-sent successfully"}
 
     def remove_user_from_organization(self, user_id: int) -> Dict[str, str]:
         member = self.db.query(Member).filter(
@@ -825,7 +902,10 @@ class AuthService(BaseService):
         self.db.add(reset)
         self.db.commit()
 
-        verification_url = f"{settings.APPLICATION_URL}/auth/reset-password?token={reset.token}&email={user.email}"
+        verification_url = (
+            f"{settings.APPLICATION_URL}/reset-password"
+            f"?token={reset.token}&email={user.email}"
+        )
 
         mail_service = MailService()
         mail_service.send_forgot_password_email(email, verification_url)
@@ -864,3 +944,462 @@ class AuthService(BaseService):
         self.db.commit()
 
         return {"message": "Password reset successfully"}
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # tone-test shaped helpers
+    # New surface area; mirrors tone-test's AuthService contract.
+    # ─────────────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def user_to_dict(user: User) -> Dict[str, Any]:
+        profile = user.profile or {}
+        return {
+            "id": str(user.id),
+            "email": user.email,
+            "first_name": user.first_name or profile.get("first_name"),
+            "last_name": user.last_name or profile.get("last_name"),
+            "avatar_url": user.avatar_url,
+            "is_active": user.status == UserStatus.ACTIVE,
+            "is_verified": bool(user.email_verified),
+            "auth_provider": user.auth_provider.value if user.auth_provider else None,
+            "last_login_at": user.last_login_at,
+        }
+
+    @staticmethod
+    def org_to_dict(org: Optional[Organization]) -> Optional[Dict[str, Any]]:
+        if not org:
+            return None
+        return {
+            "id": str(org.id),
+            "name": org.name,
+            "slug": org.slug,
+            "description": org.description,
+            "logo_url": org.logo_url,
+            "subscription_plan": org.subscription_plan,
+            "subscription_status": org.subscription_status,
+            "status": org.status.value if org.status else None,
+        }
+
+    def _membership_for(self, user_id: int) -> Optional[Member]:
+        return (
+            self.db.query(Member)
+            .filter(Member.user_id == user_id, Member.status == "active")
+            .first()
+        )
+
+    def _build_auth_tokens(self, user: User, organization: Optional[Organization] = None,
+                            email_verification_token: Optional[str] = None) -> Dict[str, Any]:
+        member = self._membership_for(user.id)
+        org_id = str(organization.id) if organization else (
+            str(member.organization_id) if member else None
+        )
+        role = member.role.value if member else None
+
+        access_token = jwt_manager.create_access_token(
+            user_id=user.id, email=user.email, org_id=org_id, role=role
+        )
+        refresh_token = jwt_manager.create_refresh_token(
+            user_id=user.id, email=user.email, org_id=org_id
+        )
+        org = organization or (
+            self.db.query(Organization).filter(Organization.id == member.organization_id).first()
+            if member else None
+        )
+
+        user_payload = self.user_to_dict(user)
+        if role:
+            user_payload["role"] = role
+        payload = {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "expires_in": jwt_manager.access_token_expire_seconds(),
+            "user": user_payload,
+            "organization": self.org_to_dict(org),
+            "role": role,
+        }
+        if email_verification_token:
+            payload["email_verification_token"] = email_verification_token
+        return payload
+
+    def signup_v2(
+        self,
+        email: str,
+        password: str,
+        first_name: str,
+        last_name: str,
+        organization_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        current_time = int(time.time())
+
+        if self.db.query(User).filter(User.email == email).first():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="User with this email already exists",
+            )
+
+        password_hash = hash_password(password)
+        profile = {"first_name": first_name, "last_name": last_name}
+        user = User(
+            email=email,
+            password_hash=password_hash,
+            first_name=first_name,
+            last_name=last_name,
+            profile=profile,
+            auth_provider=AuthProvider.EMAIL,
+            status=UserStatus.PENDING,
+            email_verified=False,
+            created_at=current_time,
+            updated_at=current_time,
+        )
+        self.db.add(user)
+        self.db.flush()
+
+        normalized_org_name = (organization_name or "").strip()
+        created_new_org = bool(normalized_org_name)
+        if created_new_org:
+            slug_base = "".join(
+                ch.lower() if ch.isalnum() else "-" for ch in normalized_org_name
+            ).strip("-") or f"org-{user.id}"
+            slug = slug_base
+            suffix = 1
+            while self.db.query(Organization).filter(Organization.slug == slug).first():
+                suffix += 1
+                slug = f"{slug_base}-{suffix}"
+            org = Organization(
+                name=normalized_org_name,
+                slug=slug,
+                status=OrganizationStatus.ACTIVE,
+                created_by=user.id,
+                subscription_plan="free",
+                subscription_status="active",
+                created_at=current_time,
+                updated_at=current_time,
+            )
+            self.db.add(org)
+            self.db.flush()
+        else:
+            org = self.ensure_default_organization(user.id)
+
+        member = Member(
+            user_id=user.id,
+            organization_id=org.id,
+            role=Role.OWNER if created_new_org else Role.MEMBER,
+            status="active",
+            created_by=user.id,
+            created_at=current_time,
+            updated_at=current_time,
+            joined_at=current_time,
+        )
+        self.db.add(member)
+
+        verification = self.create_email_verification(user.id, email)
+        verification_url = (
+            f"{settings.APPLICATION_URL}/verify-email"
+            f"?token={verification.token}"
+        )
+        try:
+            MailService().send_signup_email(email, verification_url, first_name or email.split("@")[0])
+        except Exception:
+            logger.exception("Failed to send signup verification email to %s", email)
+
+        self.db.commit()
+        self.db.refresh(user)
+
+        return self._build_auth_tokens(user, org, email_verification_token=verification.token)
+
+    def login_v2(self, email: str, password: str) -> Dict[str, Any]:
+        user = self.db.query(User).filter(User.email == email).first()
+        if not user or not user.password_hash or not verify_password(password, user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password",
+            )
+        if not user.email_verified:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Account not active. Please verify your email.",
+            )
+        if user.status != UserStatus.ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Account is not active. Please contact support.",
+            )
+        user.last_login_at = int(time.time())
+        self.db.commit()
+        member = self._membership_for(user.id)
+        org = (
+            self.db.query(Organization).filter(Organization.id == member.organization_id).first()
+            if member else None
+        )
+        return self._build_auth_tokens(user, org)
+
+    def refresh_tokens(self, refresh_token: str) -> Dict[str, Any]:
+        payload = jwt_manager.decode_refresh_token(refresh_token)
+        user_id = payload.get("user_id")
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user or user.status != UserStatus.ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found or inactive",
+            )
+        member = self._membership_for(user.id)
+        org = (
+            self.db.query(Organization).filter(Organization.id == member.organization_id).first()
+            if member else None
+        )
+        return self._build_auth_tokens(user, org)
+
+    def verify_email_by_token(self, token: str) -> Dict[str, str]:
+        current_time = int(time.time())
+        verification = (
+            self.db.query(EmailVerification)
+            .filter(
+                EmailVerification.token == token,
+                EmailVerification.verified == False,
+                EmailVerification.expires_at > current_time,
+            )
+            .first()
+        )
+        if not verification:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired verification token",
+            )
+        verification.verified = True
+        verification.verified_at = current_time
+        verification.updated_at = current_time
+
+        user = self.db.query(User).filter(User.id == verification.user_id).first()
+        if user:
+            user.email_verified = True
+            user.email_verified_at = current_time
+            user.status = UserStatus.ACTIVE
+            user.updated_at = current_time
+        self.db.commit()
+        return {"message": "Email verified successfully"}
+
+    def request_password_reset(self, email: str) -> Dict[str, str]:
+        return self.forgot_password(email)
+
+    def reset_password_by_token(self, token: str, new_password: str) -> Dict[str, str]:
+        current_time = int(time.time())
+        reset = (
+            self.db.query(PasswordReset)
+            .filter(
+                PasswordReset.token == token,
+                PasswordReset.used == False,
+                PasswordReset.expires_at > current_time,
+            )
+            .first()
+        )
+        if not reset:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired reset token",
+            )
+        user = self.db.query(User).filter(User.id == reset.user_id).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+        user.password_hash = hash_password(new_password)
+        user.updated_at = current_time
+        reset.used = True
+        reset.used_at = current_time
+        self.db.commit()
+        return {"message": "Password reset successfully"}
+
+    def change_password_for_user(self, user_id: int, new_password: str) -> Dict[str, str]:
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+        user.password_hash = hash_password(new_password)
+        user.updated_at = int(time.time())
+        self.db.commit()
+        return {"message": "Password changed successfully"}
+
+    def validate_invitation_by_token(self, token: str) -> Dict[str, Any]:
+        current_time = int(time.time())
+        invitation = (
+            self.db.query(OrganizationInvite)
+            .filter(
+                OrganizationInvite.invitation_token == token,
+                OrganizationInvite.status == InviteStatus.PENDING,
+                OrganizationInvite.expires_at > current_time,
+            )
+            .first()
+        )
+        if not invitation:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired invitation",
+            )
+        existing_user = self.db.query(User).filter(User.email == invitation.email).first()
+        org_id = invitation.organization_id or settings.DEFAULT_ORG_ID
+        org = self.db.query(Organization).filter(Organization.id == org_id).first()
+        return {
+            "valid": True,
+            "email": invitation.email,
+            "role": invitation.role.value,
+            "organization_id": str(org_id) if org_id else None,
+            "organization_name": org.name if org else "",
+            "account_exists": existing_user is not None and existing_user.password_hash is not None,
+        }
+
+    def accept_invitation_by_token(
+        self,
+        token: str,
+        password: Optional[str] = None,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        current_user_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        current_time = int(time.time())
+        invitation = (
+            self.db.query(OrganizationInvite)
+            .filter(
+                OrganizationInvite.invitation_token == token,
+                OrganizationInvite.status == InviteStatus.PENDING,
+                OrganizationInvite.expires_at > current_time,
+            )
+            .first()
+        )
+        if not invitation:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired invitation",
+            )
+
+        org_id = invitation.organization_id or settings.DEFAULT_ORG_ID
+
+        target_user: Optional[User] = None
+        if current_user_id:
+            target_user = self.db.query(User).filter(User.id == current_user_id).first()
+            if target_user and target_user.email != invitation.email:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="This invitation was sent to a different email address.",
+                )
+
+        existing_account = (
+            self.db.query(User).filter(User.email == invitation.email).first()
+        )
+        if not target_user:
+            target_user = existing_account
+
+        if target_user and target_user.password_hash:
+            # Existing account — upsert the membership so the user shows up
+            # in the new org immediately.
+            self.upsert(
+                model=Member,
+                values={
+                    "user_id": target_user.id,
+                    "role": invitation.role,
+                    "status": "active",
+                    "created_by": invitation.invited_by,
+                    "created_at": current_time,
+                    "updated_at": current_time,
+                    "joined_at": current_time,
+                    "organization_id": org_id,
+                },
+                conflict_fields=["organization_id", "user_id"],
+                update_fields=["role", "status", "updated_at", "joined_at"],
+                auto_commit=False,
+            )
+            invitation.status = InviteStatus.ACCEPTED
+            invitation.accepted_by = target_user.id
+            invitation.accepted_at = current_time
+            invitation.updated_at = current_time
+            self.db.commit()
+
+            # Issue auth tokens only when the caller is already authenticated
+            # as the target user — an anonymous link-clicker gets a success
+            # response and is asked to sign in to access the new org.
+            if current_user_id and current_user_id == target_user.id:
+                org = self.db.query(Organization).filter(Organization.id == org_id).first()
+                return self._build_auth_tokens(target_user, org)
+            return {
+                "message": "You have been added to the organization. Please sign in to continue.",
+                "account_exists": True,
+                "email": invitation.email,
+                "requires_login": True,
+            }
+
+        if not password:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="password is required to create a new account",
+            )
+
+        password_hash = hash_password(password)
+        if target_user and not target_user.password_hash:
+            target_user.password_hash = password_hash
+            if first_name:
+                target_user.first_name = first_name
+            if last_name:
+                target_user.last_name = last_name
+            target_user.updated_at = current_time
+            user = target_user
+        else:
+            user = User(
+                email=invitation.email,
+                password_hash=password_hash,
+                first_name=first_name,
+                last_name=last_name,
+                profile={"first_name": first_name, "last_name": last_name},
+                auth_provider=AuthProvider.EMAIL,
+                status=UserStatus.ACTIVE,
+                email_verified=True,
+                email_verified_at=current_time,
+                created_at=current_time,
+                updated_at=current_time,
+            )
+            self.db.add(user)
+            self.db.flush()
+
+        self.upsert(
+            model=Member,
+            values={
+                "user_id": user.id,
+                "role": invitation.role,
+                "status": "active",
+                "created_by": invitation.invited_by,
+                "created_at": current_time,
+                "updated_at": current_time,
+                "joined_at": current_time,
+                "organization_id": org_id,
+            },
+            conflict_fields=["organization_id", "user_id"],
+            update_fields=["role", "status", "updated_at", "joined_at"],
+            auto_commit=False,
+        )
+        invitation.status = InviteStatus.ACCEPTED
+        invitation.accepted_by = user.id
+        invitation.accepted_at = current_time
+        invitation.updated_at = current_time
+        self.db.commit()
+
+        org = self.db.query(Organization).filter(Organization.id == org_id).first()
+        return self._build_auth_tokens(user, org)
+
+    def get_user_me(self, user_id: int) -> Dict[str, Any]:
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+        return self.user_to_dict(user)
+
+    def get_organization_me(self, user_id: int) -> Optional[Dict[str, Any]]:
+        member = self._membership_for(user_id)
+        if not member:
+            return None
+        org = (
+            self.db.query(Organization)
+            .filter(Organization.id == member.organization_id)
+            .first()
+        )
+        return self.org_to_dict(org)

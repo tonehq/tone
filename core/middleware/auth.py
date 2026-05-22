@@ -20,6 +20,7 @@ class JWTClaims(BaseModel):
     email: str
     exp: int
     iat: int
+    type: Optional[str] = "access"
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -37,6 +38,10 @@ class JWTManager:
         self.secret_key = settings.JWT_SECRET_KEY
         self.algorithm = settings.JWT_ALGORITHM
         self.access_token_expire_hours = settings.ACCESS_TOKEN_EXPIRE_HOURS
+        self.refresh_token_expire_days = getattr(settings, "REFRESH_TOKEN_EXPIRE_DAYS", 30)
+
+    def access_token_expire_seconds(self) -> int:
+        return self.access_token_expire_hours * 3600
 
     def create_access_token(
         self,
@@ -51,12 +56,55 @@ class JWTManager:
             "email": email,
             "org_id": str(org_id) if org_id else None,
             "role": role,
+            "type": "access",
             "iat": current_time,
             "exp": current_time + (self.access_token_expire_hours * 3600)
         }
 
         token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
         return token
+
+    def create_refresh_token(
+        self,
+        user_id: int,
+        email: str,
+        org_id: Optional[Union[str, int, UUID]] = None,
+    ) -> str:
+        current_time = int(time.time())
+        payload = {
+            "user_id": user_id,
+            "email": email,
+            "org_id": str(org_id) if org_id else None,
+            "type": "refresh",
+            "iat": current_time,
+            "exp": current_time + (self.refresh_token_expire_days * 86400),
+        }
+        return jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
+
+    def decode_refresh_token(self, token: str) -> Dict[str, Any]:
+        try:
+            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+            if payload.get("type") != "refresh":
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Not a refresh token",
+                )
+            if payload.get("exp", 0) < int(time.time()):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Refresh token expired",
+                )
+            return payload
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token expired",
+            )
+        except JWTError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token",
+            )
 
     def decode_token(self, token: str) -> JWTClaims:
         try:

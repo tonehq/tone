@@ -1,3 +1,5 @@
+import { listRequest, pagedListRequest } from '@/services/listHelpers';
+import type { ListRequest } from '@/types/list';
 import type {
   OrganizationCreateResponse,
   OrganizationDetails,
@@ -7,10 +9,11 @@ import type {
 } from '@/types/organization';
 import axios from '@/utils/axios';
 
-export const getAssociatedTenants = async (): Promise<OrganizationListItem[]> => {
-  const { data } = await axios.get<OrganizationListItem[]>('/organization/get_associated_tenants');
-  return data ?? [];
-};
+export const getAssociatedTenants = (request: ListRequest = {}) =>
+  listRequest<OrganizationListItem>('/organization/get_associated_tenants', request);
+
+export const pagedGetAssociatedTenants = (request: ListRequest = {}) =>
+  pagedListRequest<OrganizationListItem>('/organization/get_associated_tenants', request);
 
 export const getOrganizationDetails = async (orgId: string): Promise<OrganizationDetails> => {
   const { data } = await axios.get<OrganizationDetails>('/organization/details', {
