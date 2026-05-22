@@ -33,6 +33,10 @@ export interface CustomTableProps<TRow> {
   skeletonRows?: number;
   searchable?: boolean;
   searchPlaceholder?: string;
+  /** Controlled search value — pair with onSearchChange to drive search externally. */
+  searchValue?: string;
+  /** When provided, the search input becomes controlled and no internal filtering happens. */
+  onSearchChange?: (value: string) => void;
   pagination?: CustomTablePagination | false;
   emptyState?: React.ReactNode;
   onRowClick?: (record: TRow, index: number) => void;

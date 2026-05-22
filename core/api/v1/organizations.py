@@ -115,6 +115,15 @@ def cancel_invitation(
     return AuthService(db, user_id=claims.user_id).cancel_invitation(invite_id)
 
 
+@router.post("/resend_invitation")
+def resend_invitation(
+    invite_id: int = Query(...),
+    claims: JWTClaims = Depends(require_admin_or_owner),
+    db: Session = Depends(get_db),
+):
+    return AuthService(db, user_id=claims.user_id).resend_invitation(invite_id)
+
+
 @router.delete("/remove_user_from_organization")
 def remove_user_from_organization(
     user_id: int = Query(...),

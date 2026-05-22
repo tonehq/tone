@@ -377,7 +377,10 @@ class AuthService(BaseService):
         )
         invitation = self.db.query(OrganizationInvite).filter(OrganizationInvite.uuid == invite_uuid).first()
 
-        invite_url = f"{settings.APPLICATION_URL}/verify/user_to_workspace?email={email}&code={invitation.invitation_token}"
+        invite_url = (
+            f"{settings.APPLICATION_URL}/accept-invite"
+            f"?token={invitation.invitation_token}"
+        )
 
         mail_service = MailService()
         mail_service.send_invite_email(email, invite_url)
@@ -504,11 +507,41 @@ class AuthService(BaseService):
             )
 
         existing_user = self.db.query(User).filter(User.email == email).first()
+
+        # Existing account with a password — skip the password parameter and
+        # just attach the membership row so the user shows up in the new org
+        # next time they sign in.
         if existing_user and existing_user.password_hash is not None:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User already exists. Please login and accept the invitation."
+            user = existing_user
+            self.db.flush()
+            org_id = invitation.organization_id if invitation.organization_id else settings.DEFAULT_ORG_ID
+            self.upsert(
+                model=Member,
+                values={
+                    "user_id": user.id,
+                    "role": invitation.role,
+                    "status": "active",
+                    "created_by": invitation.invited_by,
+                    "created_at": current_time,
+                    "updated_at": current_time,
+                    "joined_at": current_time,
+                    "organization_id": org_id,
+                },
+                conflict_fields=["organization_id", "user_id"],
+                update_fields=["role", "status", "updated_at", "joined_at"],
+                auto_commit=False,
             )
+            invitation.status = InviteStatus.ACCEPTED
+            invitation.accepted_by = user.id
+            invitation.accepted_at = current_time
+            invitation.updated_at = current_time
+            self.db.commit()
+            return {
+                "message": "You have been added to the organization. Please sign in to continue.",
+                "account_exists": True,
+                "email": email,
+                "requires_login": True,
+            }
 
         password_hash = hash_password(password)
 
@@ -580,6 +613,47 @@ class AuthService(BaseService):
         self.db.commit()
 
         return {"message": "Invitation cancelled successfully"}
+
+    def resend_invitation(self, invite_id: int) -> Dict[str, str]:
+        invitation = (
+            self.db.query(OrganizationInvite)
+            .filter(
+                OrganizationInvite.id == invite_id,
+                OrganizationInvite.status == InviteStatus.PENDING,
+            )
+            .first()
+        )
+        if not invitation:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Pending invitation not found",
+            )
+
+        current_time = int(time.time())
+        # Rotate the token + extend expiry so the previous email link stops
+        # working once a new one is sent.
+        invitation.invitation_token = generate_token()
+        invitation.expires_at = current_time + (7 * 24 * 3600)
+        invitation.updated_at = current_time
+        self.db.commit()
+        self.db.refresh(invitation)
+
+        invite_url = (
+            f"{settings.APPLICATION_URL}/accept-invite"
+            f"?token={invitation.invitation_token}"
+        )
+        try:
+            MailService().send_invite_email(invitation.email, invite_url)
+        except Exception:
+            logger.exception(
+                "Failed to resend invitation email to %s", invitation.email
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Couldn't send the invitation email. Please try again.",
+            )
+
+        return {"message": "Invitation re-sent successfully"}
 
     def remove_user_from_organization(self, user_id: int) -> Dict[str, str]:
         member = self.db.query(Member).filter(
@@ -1214,17 +1288,11 @@ class AuthService(BaseService):
             self.db.query(User).filter(User.email == invitation.email).first()
         )
         if not target_user:
-            # An anonymous caller cannot accept on behalf of an existing
-            # password-protected account — the invite token alone is not
-            # sufficient proof of identity.
-            if existing_account and existing_account.password_hash:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Please sign in to accept this invitation.",
-                )
             target_user = existing_account
 
         if target_user and target_user.password_hash:
+            # Existing account — upsert the membership so the user shows up
+            # in the new org immediately.
             self.upsert(
                 model=Member,
                 values={
@@ -1246,8 +1314,19 @@ class AuthService(BaseService):
             invitation.accepted_at = current_time
             invitation.updated_at = current_time
             self.db.commit()
-            org = self.db.query(Organization).filter(Organization.id == org_id).first()
-            return self._build_auth_tokens(target_user, org)
+
+            # Issue auth tokens only when the caller is already authenticated
+            # as the target user — an anonymous link-clicker gets a success
+            # response and is asked to sign in to access the new org.
+            if current_user_id and current_user_id == target_user.id:
+                org = self.db.query(Organization).filter(Organization.id == org_id).first()
+                return self._build_auth_tokens(target_user, org)
+            return {
+                "message": "You have been added to the organization. Please sign in to continue.",
+                "account_exists": True,
+                "email": invitation.email,
+                "requires_login": True,
+            }
 
         if not password:
             raise HTTPException(

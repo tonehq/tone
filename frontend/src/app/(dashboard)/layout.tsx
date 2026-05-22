@@ -8,11 +8,13 @@ import { Sidebar } from '@/components/layout/sidebar';
 import { AppLoader, ErrorBoundary } from '@/components/shared';
 import { ACCESS_TOKEN } from '@/constants';
 import { NavigationProvider, useNavigation } from '@/contexts/navigation';
+import { getAssociatedTenants } from '@/services/organizationService';
 import { useAuthStore } from '@/stores/auth';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const hydrate = useAuthStore((s) => s.hydrate);
+  const setOrganizations = useAuthStore((s) => s.setOrganizations);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -24,7 +26,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     }
     hydrate();
     setReady(true);
-  }, [hydrate, router]);
+
+    // Pull the full list of orgs the user belongs to and seed the auth store
+    // so the sidebar switcher shows every workspace, not just the active one.
+    (async () => {
+      try {
+        const orgs = await getAssociatedTenants({ page: 1, page_size: 200 });
+        setOrganizations(orgs.map((o) => ({ id: o.id, name: o.name, role: o.role })));
+      } catch {
+        // Sidebar will gracefully fall back to "one workspace" copy.
+      }
+    })();
+  }, [hydrate, router, setOrganizations]);
 
   if (!ready) return <AppLoader />;
 

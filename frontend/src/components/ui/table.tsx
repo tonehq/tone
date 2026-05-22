@@ -115,6 +115,14 @@ function TableCaption({ className, ...props }: React.ComponentProps<'caption'>) 
 /*  DataTable — TanStack-powered rendering                                    */
 /* -------------------------------------------------------------------------- */
 
+type TableDensity = 'compact' | 'cozy' | 'comfortable';
+
+const DENSITY_CELL_CLASS: Record<TableDensity, string> = {
+  compact: 'px-3 py-2',
+  cozy: 'px-4 py-3.5',
+  comfortable: 'px-5 py-5',
+};
+
 interface DataTableProps<TData> {
   table: TanStackTable<TData>;
   rows?: TanStackRow<TData>[];
@@ -123,6 +131,7 @@ interface DataTableProps<TData> {
   emptyState?: React.ReactNode;
   onRowClick?: (record: TData, index: number) => void;
   getRowKey?: (record: TData) => string | number;
+  density?: TableDensity;
 }
 
 function DataTableInner<TData>(
@@ -134,9 +143,11 @@ function DataTableInner<TData>(
     emptyState,
     onRowClick,
     getRowKey,
+    density = 'cozy',
   }: DataTableProps<TData>,
   _ref: React.Ref<HTMLTableElement>,
 ) {
+  const cellPadding = DENSITY_CELL_CLASS[density];
   const displayRows = rows ?? table.getRowModel().rows;
   const headerGroup = table.getHeaderGroups()[0];
   const visibleColumns = table.getVisibleLeafColumns();
@@ -188,7 +199,7 @@ function DataTableInner<TData>(
                 <TableCell
                   key={col.id}
                   className={cn(
-                    'px-4 py-3.5',
+                    cellPadding,
                     alignClass(col.columnDef.meta?.align),
                     col.columnDef.meta?.width,
                   )}
@@ -234,7 +245,8 @@ function DataTableInner<TData>(
                   <TableCell
                     key={cell.id}
                     className={cn(
-                      'px-4 py-3.5 text-sm',
+                      cellPadding,
+                      'text-sm',
                       alignClass(meta?.align),
                       meta?.width,
                       meta?.className,

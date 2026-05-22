@@ -286,7 +286,17 @@ export function Sidebar() {
                           <button
                             key={org.id}
                             type="button"
-                            onClick={() => setActiveOrgId(String(org.id))}
+                            onClick={() => {
+                              if (String(org.id) === String(activeOrgId ?? organization?.id)) {
+                                return;
+                              }
+                              setActiveOrgId(String(org.id));
+                              // Reload so the new tenant_id header is picked up
+                              // by every in-flight & queued request.
+                              if (typeof window !== 'undefined') {
+                                window.location.reload();
+                              }
+                            }}
                             className={cn(
                               'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors',
                               isActive

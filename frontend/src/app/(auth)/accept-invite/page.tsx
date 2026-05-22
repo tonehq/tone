@@ -19,7 +19,8 @@ function AcceptInviteContent() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
-  const token = searchParams.get('token') || '';
+  // `code` is the legacy query name (older invite emails). Accept either.
+  const token = searchParams.get('token') || searchParams.get('code') || '';
   const { user, setLoginResponse } = useAuthStore();
 
   const { data: invitation, isLoading, error } = useValidateInvitation(token);
@@ -30,6 +31,41 @@ function AcceptInviteContent() {
     defaultValues: { first_name: '', last_name: '', password: '', confirm_password: '' },
   });
 
+  const handleAcceptResult = (result: Awaited<ReturnType<typeof acceptInvitation.mutateAsync>>) => {
+    if (result?.access_token) {
+      setLoginResponse(result);
+      showToast.success(
+        'Joined!',
+        invitation
+          ? `You're now a member of ${invitation.organization_name}.`
+          : 'You joined the workspace.',
+      );
+      router.push('/home');
+      return;
+    }
+    // Anonymous accept for an existing account — server added the membership
+    // but didn't issue tokens. Redirect to login so the user can sign in
+    // and pick up the new workspace.
+    showToast.success(
+      'Added to workspace',
+      invitation
+        ? `Please sign in to access ${invitation.organization_name}.`
+        : 'Please sign in to continue.',
+    );
+    router.push('/login');
+  };
+
+  const refreshUserState = async () => {
+    // Drop the invitation query first — re-validating an ACCEPTED token returns
+    // 400 and would render the "Invalid invitation" card on top of our redirect.
+    queryClient.removeQueries({ queryKey: ['invitation', token] });
+    // Refresh the rest of the cache (me, my-org, etc.) so the next page sees
+    // the new membership immediately.
+    await queryClient.invalidateQueries({
+      predicate: (q) => q.queryKey?.[0] !== 'invitation',
+    });
+  };
+
   const onSubmitNewUser = async (values: AcceptInviteFormData) => {
     try {
       const result = await acceptInvitation.mutateAsync({
@@ -38,10 +74,8 @@ function AcceptInviteContent() {
         first_name: values.first_name,
         last_name: values.last_name,
       });
-      if (result.access_token) setLoginResponse(result);
-      await queryClient.invalidateQueries();
-      showToast.success('Welcome!', 'Your account has been created.');
-      router.push('/home');
+      await refreshUserState();
+      handleAcceptResult(result);
     } catch (err) {
       handleApiError(err);
     }
@@ -49,15 +83,9 @@ function AcceptInviteContent() {
 
   const onAcceptAsExistingUser = async () => {
     try {
-      await acceptInvitation.mutateAsync({ token });
-      await queryClient.invalidateQueries();
-      showToast.success(
-        'Joined!',
-        invitation
-          ? `You're now a member of ${invitation.organization_name}.`
-          : 'You joined the workspace.',
-      );
-      router.push('/home');
+      const result = await acceptInvitation.mutateAsync({ token });
+      await refreshUserState();
+      handleAcceptResult(result);
     } catch (err) {
       handleApiError(err);
     }
@@ -134,11 +162,22 @@ function AcceptInviteContent() {
           </div>
         }
         title={`Join ${invitation.organization_name}`}
-        description={`Sign in to accept this invitation as a ${invitation.role}.`}
+        description={`${invitation.email} already has a Tone account. Accept to add it to ${invitation.organization_name}, then sign in.`}
       >
-        <Link href={`/login?next=${encodeURIComponent(`/accept-invite?token=${token}`)}`}>
-          <Button className="w-full">Sign in to continue</Button>
-        </Link>
+        <div className="flex flex-col gap-2">
+          <Button
+            className="w-full"
+            loading={acceptInvitation.isPending}
+            onClick={onAcceptAsExistingUser}
+          >
+            Accept invitation
+          </Button>
+          <Link href={`/login?next=${encodeURIComponent(`/accept-invite?token=${token}`)}`}>
+            <Button variant="outline" className="w-full" type="button">
+              Sign in first
+            </Button>
+          </Link>
+        </div>
       </CustomCard>
     );
   }

@@ -1,17 +1,19 @@
+import { listRequest, pagedListRequest } from '@/services/listHelpers';
+import type { ListRequest } from '@/types/list';
 import type { OrganizationInviteApi, OrganizationMemberApi } from '@/types/settings/members';
 import axios from '@/utils/axios';
 
-export const getAllUsersForOrganization = async (): Promise<OrganizationMemberApi[]> => {
-  const { data } = await axios.get<OrganizationMemberApi[]>('/user/get_all_users_for_organization');
-  return data ?? [];
-};
+export const getAllUsersForOrganization = (request: ListRequest = {}) =>
+  listRequest<OrganizationMemberApi>('/user/get_all_users_for_organization', request);
 
-export const getAllInvitedUsersForOrganization = async (): Promise<OrganizationInviteApi[]> => {
-  const { data } = await axios.get<OrganizationInviteApi[]>(
-    '/user/get_all_invited_users_for_organization',
-  );
-  return data ?? [];
-};
+export const pagedGetAllUsersForOrganization = (request: ListRequest = {}) =>
+  pagedListRequest<OrganizationMemberApi>('/user/get_all_users_for_organization', request);
+
+export const getAllInvitedUsersForOrganization = (request: ListRequest = {}) =>
+  listRequest<OrganizationInviteApi>('/user/get_all_invited_users_for_organization', request);
+
+export const pagedGetAllInvitedUsersForOrganization = (request: ListRequest = {}) =>
+  pagedListRequest<OrganizationInviteApi>('/user/get_all_invited_users_for_organization', request);
 
 export const inviteUserToOrganization = async (payload: {
   name: string;
@@ -34,6 +36,10 @@ export const removeOrganizationMember = async (userId: number): Promise<void> =>
 
 export const cancelInvitation = async (inviteId: number): Promise<void> => {
   await axios.delete(`/organization/cancel_invitation?invite_id=${inviteId}`);
+};
+
+export const resendInvitation = async (inviteId: number): Promise<void> => {
+  await axios.post(`/organization/resend_invitation?invite_id=${inviteId}`);
 };
 
 export const validateInvitation = async (

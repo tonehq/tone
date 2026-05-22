@@ -16,6 +16,7 @@ import MultiSelectField from './MultiSelectField';
 import PageLoader from './PageLoader';
 import { PhoneNumberDisplay } from './PhoneNumberDisplay';
 import RadioGroupField from './RadioGroupField';
+import SearchBar from './SearchBar';
 import SearchableSelect from './SearchableSelect';
 import SelectInput from './SelectInput';
 import SliderField from './SliderField';
@@ -70,6 +71,7 @@ export {
   PageLoader,
   PhoneNumberDisplay,
   RadioGroupField,
+  SearchBar,
   SearchableSelect,
   SelectInput,
   SliderField,
