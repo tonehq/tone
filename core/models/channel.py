@@ -1,22 +1,17 @@
 import uuid
 
-from sqlalchemy import Column, BigInteger, String, Enum
+from sqlalchemy import Column, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from sqlalchemy.orm import relationship
 
 from core.models.base import OrgScopedModel
-from core.models.enums import ChannelType
 
 
 class Channel(OrgScopedModel):
-    __tablename__ = 'channels'
+    __tablename__ = "channels"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "name", name="uq_channels_org_name"),
+    )
 
-    uuid = Column[UUID](UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
-    name = Column[str](String, nullable=False)
-    type = Column(Enum(ChannelType, name="channeltype", values_callable=lambda e: [i.value for i in e]), nullable=False)
-    created_by = Column(BigInteger, nullable=True)
-    meta_data = Column(JSONB, nullable=True, default={})
-
-    phone_numbers = relationship("ChannelPhoneNumber", back_populates="channel")
-    agent_phone_numbers = relationship("AgentChannelPhoneNumbers", back_populates="channel")
-    agents = relationship("Agent", secondary="agent_channels", back_populates="channels")
+    name = Column(String(120), nullable=False)
+    channel_type = Column(String(50), nullable=False)  # daily | twilio | vonage | websocket
+    encrypted_config = Column(JSONB, nullable=True)

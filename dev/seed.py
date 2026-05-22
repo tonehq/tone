@@ -1,21 +1,18 @@
 """
-Seed script for initial Tone setup.
+Seed script for initial Tone v2 setup.
 Run from project root: python dev/seed.py   or   python -m dev.seed
 
 Prompts the installer for organization name, owner email, and password,
 then seeds:
 - User (owner)
 - Organization
-- Member (linking user to org as OWNER)
-- ModelProviderMenu records (LLM, STT, TTS model creators)
-- HostingProvider records (model hosts)
-- HostingProviderModel records (which hosts serve which creators)
-- ModelMenu records (available models)
-- ModelInstance records (model deployed on a host)
-- ApiKey records (from environment variables, linked to hosting providers)
-- Service records (one per provider that has an API key, linked to model instances)
-- Voice records (for TTS providers that have voices defined)
-- ServiceProvider records (telephony only, if present in dev-data.json)
+- Member (linking user to org as owner)
+- ModelProvider records (LLM, STT, TTS)
+- Model records (per provider)
+- ModelVoice records (for TTS providers that have voices)
+- ModelLanguage records (for STT providers that have languages)
+- ApiKey records (from environment variables, linked to providers)
+- Tool records (built-in tools)
 """
 import os
 import sys
@@ -115,36 +112,30 @@ def prompt_setup_inputs():
 def seed_user(db, email, password):
     """Create the seed user. Returns the user record."""
     from core.models.user import User
-    from core.models.enums import UserStatus, AuthProvider
     from core.utils.security import hash_password
-
-    username = email.split("@")[0]
 
     user = User(
         email=email,
-        username=username,
-        password_hash=hash_password(password),
-        auth_provider=AuthProvider.EMAIL,
-        status=UserStatus.ACTIVE,
-        email_verified=True,
+        full_name=email.split("@")[0],
+        encrypted_password=hash_password(password),
+        is_email_verified=True,
+        is_active=True,
     )
     db.add(user)
     db.flush()
     return user
 
 
-def seed_organization(db, user, org_name):
+def seed_organization(db, org_name):
     """Create the seed organization. Returns the organization record."""
     from core.models.organization import Organization
-    from core.models.enums import OrganizationStatus
 
     slug = _slugify(org_name)
 
     org = Organization(
         name=org_name,
         slug=slug,
-        status=OrganizationStatus.ACTIVE,
-        created_by=user.id,
+        is_active=True,
     )
     db.add(org)
     db.flush()
@@ -152,18 +143,14 @@ def seed_organization(db, user, org_name):
 
 
 def seed_member(db, user, org):
-    """Create the member linking user to organization. Returns the member record."""
+    """Create the member linking user to organization as owner."""
     from core.models.member import Member
-    from core.models.enums import Role
-    import time
 
     member = Member(
         organization_id=org.id,
         user_id=user.id,
-        role=Role.OWNER,
-        status="active",
-        created_by=user.id,
-        joined_at=int(time.time()),
+        role="owner",
+        is_active=True,
     )
     db.add(member)
     db.flush()
@@ -172,133 +159,173 @@ def seed_member(db, user, org):
 
 def seed_from_configs(db, org_name, email, password):
     """
-    Seed user, org, member, providers, models, API keys, and voices.
+    Seed user, org, member, providers, models, API keys, voices, and tools.
     Inserts all records directly (assumes fresh database).
     """
-    from core.models.voice import Voice
+    from core.models.model_provider import ModelProvider
+    from core.models.model import Model
+    from core.models.model_voice import ModelVoice
+    from core.models.model_language import ModelLanguage
     from core.models.api_key import ApiKey
-    from core.models.account import Account
     from core.models.tool import Tool
-    from core.models.model_provider_menu import ModelProviderMenu
-    from core.models.hosting_provider import HostingProvider
-    from core.models.model_menu import ModelMenu
-    from core.models.model_instance import ModelInstance
     from core.utils.encryption import encrypt
 
-    # 0. Create seed user, organization, and member first
+    # 0. Create seed user, organization, and member
     user = seed_user(db, email, password)
-    user_id = user.id
-
-    org = seed_organization(db, user, org_name)
-    org_id = org.id
-
+    org = seed_organization(db, org_name)
     seed_member(db, user, org)
 
+    # Set default_organization_id on user
+    user.default_organization_id = org.id
+
+    org_id = org.id
+
     stats = {
+        "model_providers_created": 0,
+        "models_created": 0,
+        "model_voices_created": 0,
+        "model_languages_created": 0,
         "api_keys_created": 0,
         "api_keys_none": 0,
-        "services_created": 0,
-        "voices_created": 0,
         "tools_created": 0,
-        "model_provider_menus_created": 0,
-        "hosting_providers_created": 0,
-        "model_menus_created": 0,
-        "model_instances_created": 0,
     }
 
     # Load all provider configs from JSON
     data = load_seed_data()
 
-    # Combine all providers (LLM, STT, TTS) into a single list for processing
+    # Combine all providers (LLM, STT, TTS) into a single list
     all_providers = []
     all_providers.extend(data.get("llm_providers", []))
     all_providers.extend(data.get("stt_providers", []))
     all_providers.extend(data.get("tts_providers", []))
 
-    # --- Phase 1: Insert ModelProviderMenu (LLM/STT/TTS) ---
-    model_provider_menu_map = {}  # config index -> ModelProviderMenu object
+    # --- Phase 1: Insert ModelProvider records ---
+    provider_map = {}  # config index -> ModelProvider object
     for i, config in enumerate(all_providers):
-        if config["provider_type"] == "telephony":
-            continue
-        mpm = ModelProviderMenu(
-            name=config["name"],
+        provider_id_str = config["name"]  # e.g. "openai", "deepgram"
+        slug = _slugify(config["display_name"])
+
+        mp = ModelProvider(
+            provider_id=provider_id_str,
+            slug=slug,
             display_name=config["display_name"],
-            provider_type=config["provider_type"],
-            auth_type="api_key",
-            description=config.get("description") or f"Model provider: {config['display_name']} ({config['provider_type']})",
-            status=config.get("status", "active"),
-            is_system=True,
-            meta_data_schema=config.get("meta_data_schema"),
+            description=config.get("description"),
+            is_active=config.get("status", "active") == "active",
         )
-        db.add(mpm)
-        model_provider_menu_map[i] = mpm
-        stats["model_provider_menus_created"] += 1
+        db.add(mp)
+        provider_map[i] = mp
+        stats["model_providers_created"] += 1
 
     db.flush()
 
-    # --- Phase 2: Insert HostingProviders + join table ---
-    # For initial seed, each model creator is also its own default host
-    hosting_provider_map = {}  # config index -> HostingProvider object
+    # --- Phase 2: Insert Model records ---
+    model_name_to_obj = {}  # (provider_uuid, model_name) -> Model object
     for i, config in enumerate(all_providers):
-        if config["provider_type"] == "telephony" or i not in model_provider_menu_map:
+        if i not in provider_map:
             continue
-        hp = HostingProvider(
-            name=config["name"],
-            display_name=config["display_name"],
-            description=config.get("description") or f"Hosting provider: {config['display_name']}",
-            status=config.get("status", "active"),
-            is_system=True,
-        )
-        db.add(hp)
-        hosting_provider_map[i] = hp
-        stats["hosting_providers_created"] += 1
+        mp = provider_map[i]
+        kind = config["provider_type"]  # llm | stt | tts
 
-    db.flush()
-
-    # --- Phase 3: Insert ModelMenu ---
-    model_menu_name_to_obj = {}  # (mpm_id, model_name) -> ModelMenu object
-    for i, config in enumerate(all_providers):
-        if config["provider_type"] == "telephony" or i not in model_provider_menu_map:
-            continue
-        mpm = model_provider_menu_map[i]
         for model_spec in config.get("models") or []:
             model_name = model_spec.get("name") or "default"
-            mm = ModelMenu(
-                model_provider_menu_id=mpm.id,
+
+            m = Model(
+                provider_id=mp.id,
+                kind=kind,
                 name=model_name,
-                service_type=config["provider_type"],
-                status="active",
-                meta_data=model_spec.get("meta_data"),
+                display_name=model_name,
+                is_active=True,
             )
-            db.add(mm)
-            model_menu_name_to_obj[(mpm.id, model_name)] = mm
-            stats["model_menus_created"] += 1
+            db.add(m)
+            model_name_to_obj[(mp.id, model_name)] = m
+            stats["models_created"] += 1
 
     db.flush()
 
-    # --- Phase 4: Insert ModelInstance ---
-    model_instance_map = {}  # (mpm_id, model_name) -> ModelInstance object
+    # --- Phase 3: Insert ModelVoice records (TTS providers) ---
     for i, config in enumerate(all_providers):
-        if config["provider_type"] == "telephony" or i not in model_provider_menu_map:
+        if i not in provider_map:
             continue
-        mpm = model_provider_menu_map[i]
-        for model_spec in config.get("models") or []:
-            model_name = model_spec.get("name") or "default"
-            mm = model_menu_name_to_obj.get((mpm.id, model_name))
-            if not mm:
+        mp = provider_map[i]
+        voices_spec = config.get("voices") or []
+        seen_voice_ids = set()
+
+        for voice_spec in voices_spec:
+            voice_id = voice_spec.get("voice_id")
+            if not voice_id or voice_id in seen_voice_ids:
                 continue
-            mi = ModelInstance(
-                model_menu_id=mm.id,
-                status="active",
+            seen_voice_ids.add(voice_id)
+
+            # Find the model this voice belongs to
+            voice_model_name = voice_spec.get("model_name")
+            model_obj = None
+            if voice_model_name:
+                model_obj = model_name_to_obj.get((mp.id, voice_model_name))
+
+            # If no specific model, try first model of this provider
+            if not model_obj:
+                for key, obj in model_name_to_obj.items():
+                    if key[0] == mp.id:
+                        model_obj = obj
+                        break
+
+            if not model_obj:
+                continue  # skip voice if no model found
+
+            mv = ModelVoice(
+                model_id=model_obj.id,
+                accent=voice_spec.get("accent"),
+                name=voice_spec.get("name"),
+                gender=voice_spec.get("gender"),
+                description=voice_spec.get("description"),
+                language_list=voice_spec.get("language_list"),
+                sample_url=voice_spec.get("sample_url"),
+                is_active=True,
             )
-            db.add(mi)
-            model_instance_map[(mpm.id, model_name)] = mi
-            stats["model_instances_created"] += 1
+            db.add(mv)
+            stats["model_voices_created"] += 1
 
     db.flush()
 
-    # --- Phase 5: Insert API keys ---
-    api_key_obj_map = {}  # config index -> ApiKey object
+    # --- Phase 4: Insert ModelLanguage records (STT providers with language_list) ---
+    seen_model_languages = set()
+    for i, config in enumerate(all_providers):
+        if i not in provider_map:
+            continue
+        mp = provider_map[i]
+
+        # Extract languages from voices or from model meta_data
+        for voice_spec in config.get("voices") or []:
+            lang_list = voice_spec.get("language_list") or []
+            voice_model_name = voice_spec.get("model_name")
+            model_obj = None
+            if voice_model_name:
+                model_obj = model_name_to_obj.get((mp.id, voice_model_name))
+            if not model_obj:
+                for key, obj in model_name_to_obj.items():
+                    if key[0] == mp.id:
+                        model_obj = obj
+                        break
+            if not model_obj:
+                continue
+
+            for lang in lang_list:
+                key = (model_obj.id, lang)
+                if key in seen_model_languages:
+                    continue
+                seen_model_languages.add(key)
+
+                ml = ModelLanguage(
+                    model_id=model_obj.id,
+                    name=lang,
+                    is_active=True,
+                )
+                db.add(ml)
+                stats["model_languages_created"] += 1
+
+    db.flush()
+
+    # --- Phase 5: Insert ApiKey records (from env vars) ---
     for i, config in enumerate(all_providers):
         api_key_env = config.get("api_key_env")
         api_key_value = _get_api_key_from_env(api_key_env)
@@ -307,124 +334,36 @@ def seed_from_configs(db, org_name, email, password):
             stats["api_keys_none"] += 1
             continue
 
-        if i not in model_provider_menu_map:
+        if i not in provider_map:
             continue
 
-        hint = api_key_value[:4] + "..." + api_key_value[-4:] if len(api_key_value) > 8 else "****"
+        mp = provider_map[i]
 
         api_key = ApiKey(
             organization_id=org_id,
-            name="seed",
-            api_key_encrypted=encrypt(api_key_value),
-            api_key_hint=hint,
-            status="active",
-            created_by=user_id,
+            provider_id=mp.id,
+            label="seed",
+            encrypted_key=encrypt(api_key_value),
+            is_active=True,
         )
         db.add(api_key)
-        api_key_obj_map[i] = api_key
         stats["api_keys_created"] += 1
 
     db.flush()
 
-    # --- Phase 6: Insert Account records (linked to hosting provider + model provider menu) ---
-    for i, config in enumerate(all_providers):
-        if i not in api_key_obj_map:
-            continue
-
-        provider_type = config["provider_type"]
-        api_key_obj = api_key_obj_map[i]
-        mpm = model_provider_menu_map.get(i)
-
-        hp = hosting_provider_map.get(i)
-        account = Account(
-            model_provider_menu_id=mpm.id if mpm else None,
-            hosting_provider_id=hp.id if hp else None,
-            organization_id=org_id,
-            name=f"{config['display_name']} {provider_type.upper()}",
-            description=config.get("description") or f"{config['display_name']} {provider_type} account",
-            service_type=provider_type,
-            config={},
-            status=config.get("status", "active"),
-            is_default=True,
-            created_by=user_id,
-        )
-
-        db.add(account)
-        db.flush()
-
-        # Link the API key to this account (reverse FK direction)
-        api_key_obj.account_id = account.id
-
-        # Link existing model instances to this account
-        if mpm:
-            mpm_model_menu_ids = [
-                mm.id for mm in db.query(ModelMenu).filter(
-                    ModelMenu.model_provider_menu_id == mpm.id
-                ).all()
-            ]
-            if mpm_model_menu_ids:
-                db.query(ModelInstance).filter(
-                    ModelInstance.model_menu_id.in_(mpm_model_menu_ids),
-                    ModelInstance.account_id.is_(None),
-                ).update({"account_id": account.id}, synchronize_session=False)
-
-        stats["services_created"] += 1
-
-    db.flush()
-
-    # --- Phase 7: Insert voices ---
-    # Use model_provider_menu_id + model_menu_id (new path)
-    # service_provider_id and model_id are left NULL for LLM/STT/TTS
-    for i, config in enumerate(all_providers):
-        mpm = model_provider_menu_map.get(i)
-        if not mpm:
-            continue  # skip telephony — no voices for telephony
-        voices_spec = config.get("voices") or []
-        seen_voice_ids = set()
-        for voice_spec in voices_spec:
-            voice_id = voice_spec.get("voice_id")
-            if not voice_id or voice_id in seen_voice_ids:
-                continue
-            seen_voice_ids.add(voice_id)
-
-            voice_model_menu_id = None
-            voice_model_name = voice_spec.get("model_name")
-            if voice_model_name:
-                mm_obj = model_menu_name_to_obj.get((mpm.id, voice_model_name))
-                if mm_obj:
-                    voice_model_menu_id = mm_obj.id
-
-            voice = Voice(
-                model_provider_menu_id=mpm.id,
-                model_menu_id=voice_model_menu_id,
-                voice_id=voice_id,
-                name=voice_spec.get("name"),
-                language=voice_spec.get("language") or "",
-                language_list=voice_spec.get("language_list"),
-                gender=voice_spec.get("gender"),
-                accent=voice_spec.get("accent"),
-                description=voice_spec.get("description"),
-                sample_url=voice_spec.get("sample_url"),
-                is_active=True,
-            )
-            db.add(voice)
-            stats["voices_created"] += 1
-
-    # --- Phase 8: Insert built-in tools ---
+    # --- Phase 6: Insert built-in Tool records ---
     for tool_spec in data.get("built_in_tools", []):
         tool = Tool(
             organization_id=org_id,
             name=tool_spec["name"],
-            description=tool_spec["description"],
+            description=tool_spec.get("description"),
             tool_type=tool_spec.get("tool_type", "built_in"),
-            parameters=tool_spec.get("parameters"),
-            is_active=True,
-            is_template=True,
+            action_params_schema=tool_spec.get("parameters"),
         )
         db.add(tool)
         stats["tools_created"] += 1
 
-    db.commit()  # Single commit: everything becomes permanent
+    db.commit()
     return stats
 
 
@@ -446,17 +385,15 @@ def main():
         stats = seed_from_configs(db, org_name, email, password)
 
         print(f"\n✓ Setup complete:")
-        print(f"   User:      created ({email})")
-        print(f"   Org:       created ({org_name})")
-        print(f"   Member:    created")
-        print(f"   API keys:  {stats['api_keys_created']} created, {stats['api_keys_none']} no env key")
-        print(f"   Services:  {stats['services_created']} created")
-        print(f"   Voices:    {stats['voices_created']} created")
-        print(f"   Tools:     {stats['tools_created']} created")
-        print(f"   Model Provider Menus: {stats['model_provider_menus_created']} created")
-        print(f"   Hosting Providers:    {stats['hosting_providers_created']} created")
-        print(f"   Model Menus:          {stats['model_menus_created']} created")
-        print(f"   Model Instances:      {stats['model_instances_created']} created")
+        print(f"   User:             created ({email})")
+        print(f"   Org:              created ({org_name})")
+        print(f"   Member:           created")
+        print(f"   Model Providers:  {stats['model_providers_created']} created")
+        print(f"   Models:           {stats['models_created']} created")
+        print(f"   Model Voices:     {stats['model_voices_created']} created")
+        print(f"   Model Languages:  {stats['model_languages_created']} created")
+        print(f"   API keys:         {stats['api_keys_created']} created, {stats['api_keys_none']} no env key")
+        print(f"   Tools:            {stats['tools_created']} created")
     finally:
         db.close()
 

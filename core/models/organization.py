@@ -1,29 +1,25 @@
-from sqlalchemy import Column, BigInteger, String, Text, Enum, ForeignKey, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
-import time
+from datetime import datetime, timezone
+
+from sqlalchemy import Column, String, Boolean, DateTime, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID
 
 from core.database.base import Base
-from core.models.enums import OrganizationStatus
 
 
 class Organization(Base):
-    __tablename__ = 'organizations'
+    __tablename__ = "organizations"
     __table_args__ = (
-        UniqueConstraint('slug', name='org_slug_unique'),
+        UniqueConstraint("name", name="uq_organizations_name"),
+        UniqueConstraint("slug", name="uq_organizations_slug"),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String, nullable=False)
-    slug = Column(String, nullable=False, index=True)
-    description = Column(Text)
-    logo_url = Column(String)
-    website_url = Column(String)
-    settings = Column(JSONB, default={})
-    capabilities = Column(JSONB, default=[])
-    status = Column(Enum(OrganizationStatus), default=OrganizationStatus.ACTIVE)
-    created_by = Column(BigInteger, ForeignKey('users.id'), nullable=False)
-    subscription_plan = Column(String, default='free')
-    subscription_status = Column(String, default='active')
-    created_at = Column(BigInteger, nullable=False, default=lambda: int(time.time()))
-    updated_at = Column(BigInteger, nullable=False, default=lambda: int(time.time()))
+    name = Column(String(120), nullable=False)
+    slug = Column(String(50), nullable=False)
+    description = Column(String(500), nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    archived_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))

@@ -1,18 +1,20 @@
 import uuid
 
-from sqlalchemy import Column, BigInteger, String, ForeignKey
+from sqlalchemy import Column, String, Boolean, Integer, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 
 from core.models.base import OrgScopedModel
 
 
 class Upload(OrgScopedModel):
-    __tablename__ = 'uploads'
+    __tablename__ = "uploads"
 
-    uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
-    r2_object_key = Column(String, nullable=False)
-    agent_id = Column(BigInteger, ForeignKey('agents.id'), nullable=False, index=True)
-    call_log_id = Column(BigInteger, ForeignKey('call_logs.id'), nullable=True, index=True)
-    file_name = Column(String, nullable=True)
-    content_type = Column(String, nullable=True, default='audio/mpeg')
-    file_size_bytes = Column(BigInteger, nullable=True)
+    container_name = Column(String(120), nullable=False)
+    file_path = Column(String(1000), nullable=True)
+    file_type = Column(String(50), nullable=True)
+    size_bytes = Column(Integer, nullable=True)
+    purpose = Column(String(50), nullable=False)  # kb_document | recording | ...
+    created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    archived_at = Column(DateTime(timezone=True), nullable=True)
