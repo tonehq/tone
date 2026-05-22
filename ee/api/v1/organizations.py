@@ -4,18 +4,50 @@ from typing import Dict, Any
 from uuid import UUID
 
 from core.database.session import get_db
+from core.schemas.list_request import ListRequest, apply_list_request
 from ee.services.auth_service import EEAuthService
 from ee.middleware.auth import get_ee_jwt_claims, get_ee_current_user, require_ee_org_member, require_ee_admin_or_owner, EEJWTClaims
 
 router = APIRouter()
 
 
-@router.get("/get_associated_tenants")
-def get_associated_tenants(
+@router.get("/me")
+def get_organization_me(
     claims: EEJWTClaims = Depends(get_ee_jwt_claims),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    return EEAuthService(db).get_associated_organizations(claims.user_id)
+    return EEAuthService(db).get_organization_me(claims.user_id)
+
+
+ORG_SEARCH_FIELDS = ["name", "slug", "role"]
+
+
+@router.post("/get_associated_tenants")
+def get_associated_tenants(
+    list_req: ListRequest = Body(default_factory=ListRequest),
+    claims: EEJWTClaims = Depends(get_ee_jwt_claims),
+    db: Session = Depends(get_db),
+):
+    rows = EEAuthService(db).get_associated_organizations(claims.user_id)
+    return apply_list_request(rows, list_req, searchable_fields=ORG_SEARCH_FIELDS)
+
+
+@router.delete("/cancel_invitation")
+def cancel_invitation(
+    invite_id: int = Query(...),
+    claims: EEJWTClaims = Depends(require_ee_admin_or_owner),
+    db: Session = Depends(get_db),
+):
+    return EEAuthService(db, user_id=claims.user_id).cancel_invitation(invite_id)
+
+
+@router.post("/resend_invitation")
+def resend_invitation(
+    invite_id: int = Query(...),
+    claims: EEJWTClaims = Depends(require_ee_admin_or_owner),
+    db: Session = Depends(get_db),
+):
+    return EEAuthService(db, user_id=claims.user_id).resend_invitation(invite_id)
 
 
 @router.post("/create_tenants")

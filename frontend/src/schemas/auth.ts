@@ -8,8 +8,11 @@ export const loginSchema = z.object({
 export type LoginFormData = z.infer<typeof loginSchema>;
 
 export const signupSchema = z.object({
+  first_name: z.string().min(1, 'First name is required'),
+  last_name: z.string().min(1, 'Last name is required'),
   email: z.string().min(1, 'Email is required').email('Please enter a valid email'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
+  organization_name: z.string().optional(),
 });
 
 export type SignupFormData = z.infer<typeof signupSchema>;
@@ -47,3 +50,17 @@ export const resetPasswordSchema = z
   });
 
 export type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
+
+export const acceptInviteSchema = z
+  .object({
+    first_name: z.string().min(1, 'First name is required'),
+    last_name: z.string().min(1, 'Last name is required'),
+    password: z.string().min(8, 'Password must be at least 8 characters'),
+    confirm_password: z.string().min(1, 'Please confirm your password'),
+  })
+  .refine((data) => data.password === data.confirm_password, {
+    message: 'Passwords do not match',
+    path: ['confirm_password'],
+  });
+
+export type AcceptInviteFormData = z.infer<typeof acceptInviteSchema>;

@@ -348,7 +348,10 @@ class EEAuthService(AuthService):
         self.db.commit()
         self.db.refresh(invitation)
 
-        invite_url = f"{settings.APPLICATION_URL}/verify/user_to_workspace?email={email}&code={invitation.invitation_token}&user_tenant_id={org_id}"
+        invite_url = (
+            f"{settings.APPLICATION_URL}/accept-invite"
+            f"?token={invitation.invitation_token}"
+        )
 
         mail_service = MailService()
         mail_service.send_invite_email(email, invite_url)

@@ -2188,6 +2188,18 @@
     postcss "^8.5.6"
     tailwindcss "4.2.1"
 
+"@tanstack/query-core@5.100.11":
+  version "5.100.11"
+  resolved "https://registry.yarnpkg.com/@tanstack/query-core/-/query-core-5.100.11.tgz#fdf273bec49277600311a4c552e2c2d95f4df73b"
+  integrity sha512-lmE0994apShXPj8CUxgx4ch5yUJhE9k/+tVwihBvPOyerACWdBocfFg24t8+0RhtlTd7tEgchDkhlCxNssvDxw==
+
+"@tanstack/react-query@^5.100.11":
+  version "5.100.11"
+  resolved "https://registry.yarnpkg.com/@tanstack/react-query/-/react-query-5.100.11.tgz#096005bf2868be2f5798c9a48e8f3f7f08c77f20"
+  integrity sha512-J0f9s5x3LE1450nNNfYx+e/n0DMa0uOBdFJUy5r0RvmsXd4nB/n0rbHtHI1vYXhikNFan+wf51p6Tmp4c8ucrg==
+  dependencies:
+    "@tanstack/query-core" "5.100.11"
+
 "@tanstack/react-table@^8.21.3":
   version "8.21.3"
   resolved "https://registry.npmjs.org/@tanstack/react-table/-/react-table-8.21.3.tgz"
@@ -3350,6 +3362,11 @@ data-view-byte-offset@^1.0.1:
     es-errors "^1.3.0"
     is-data-view "^1.0.1"
 
+date-fns@^4.2.1:
+  version "4.2.1"
+  resolved "https://registry.yarnpkg.com/date-fns/-/date-fns-4.2.1.tgz#94092832dc4711781540e29102b35da84f8c378c"
+  integrity sha512-37RhSdxaG1suen6VDCza6rNrQfooyQh57HFVPwQGEq2QWliVLzPQZ8Oa017weOu+HZCnzI7N3Pf/wyoBKfEqrA==
+
 dayjs@^1.11.19:
   version "1.11.19"
   resolved "https://registry.npmjs.org/dayjs/-/dayjs-1.11.19.tgz"
@@ -4214,6 +4231,15 @@ fraction.js@^4.3.7:
   resolved "https://registry.npmjs.org/fraction.js/-/fraction.js-4.3.7.tgz"
   integrity sha512-ZsDfxO51wGAXREY55a7la9LScWpwv9RxIrYABrlvOFBlH/ShPnrtsXeuUIfXKKOVicNxQ+o8JTbJvjS4M89yew==
 
+framer-motion@^12.40.0:
+  version "12.40.0"
+  resolved "https://registry.yarnpkg.com/framer-motion/-/framer-motion-12.40.0.tgz#68e53aecd51c8a8a62b565f059b418bef2add0e2"
+  integrity sha512-uaBd3qC1v3KQqBEjwTUd183K6PbS+j0yR9w9VmEOLWA/tnUcSn8Xa3uck7t4dgpDoUss8xQTcj8W2L07lrnLFg==
+  dependencies:
+    motion-dom "^12.40.0"
+    motion-utils "^12.39.0"
+    tslib "^2.4.0"
+
 fresh@^2.0.0:
   version "2.0.0"
   resolved "https://registry.npmjs.org/fresh/-/fresh-2.0.0.tgz"
@@ -4264,6 +4290,11 @@ fzf@^0.5.2:
   version "0.5.2"
   resolved "https://registry.npmjs.org/fzf/-/fzf-0.5.2.tgz"
   integrity sha512-Tt4kuxLXFKHy8KT40zwsUPUkg1CrsgY25FxA2U/j/0WgEDCk3ddc/zLTCCcbSHX9FcKtLuVaDGtGE/STWC+j3Q==
+
+geist@^1.7.1:
+  version "1.7.1"
+  resolved "https://registry.yarnpkg.com/geist/-/geist-1.7.1.tgz#8a8d24e2c14751bde65efef3239730e055c1b96c"
+  integrity sha512-XF8DM30ODhDu0Ng5S2kOS8j4ZkG/6z2fKWAiFJA7wG0Hc92ZXgjYLrwbD9bVU4nGVzwboPtG+QtaPGsfgnXLaA==
 
 gensync@^1.0.0-beta.2:
   version "1.0.0-beta.2"
@@ -5308,6 +5339,18 @@ minimist@^1.2.0, minimist@^1.2.6:
   version "1.2.8"
   resolved "https://registry.npmjs.org/minimist/-/minimist-1.2.8.tgz"
   integrity sha512-2yyAR8qBkN3YuheJanUpWC5U3bb5osDywNB8RzDVlDwDHbocAJveqqj1u8+SVD7jkWT4yvsHCpWqqWqAxb0zCA==
+
+motion-dom@^12.40.0:
+  version "12.40.0"
+  resolved "https://registry.yarnpkg.com/motion-dom/-/motion-dom-12.40.0.tgz#95fb411ac72e8adbaf5f1b17b8f07783da223bee"
+  integrity sha512-HxU3ZaBwNPVQUBQf1xxgq+7JrPNZvjLVxgbpEZL7RrWJnsxOf0/OM+yrHG9ogLQ31Do/r57Oz2gQWPK+6q62mg==
+  dependencies:
+    motion-utils "^12.39.0"
+
+motion-utils@^12.39.0:
+  version "12.39.0"
+  resolved "https://registry.yarnpkg.com/motion-utils/-/motion-utils-12.39.0.tgz#e1c66f0e912999804bc5e69b4630c3bc794ef29f"
+  integrity sha512-8nadJAJjTtqRkmRF36FoJTrywK9nnFmnPwnSMyxaOCU7GDjN9RTMJIxx9De8ErM+vpPhMccr/6fo5WciyQLnMQ==
 
 ms@^2.1.1, ms@^2.1.3:
   version "2.1.3"
@@ -7271,3 +7314,8 @@ zod@^3.24.1:
   version "4.3.6"
   resolved "https://registry.npmjs.org/zod/-/zod-4.3.6.tgz"
   integrity sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==
+
+zustand@^5.0.13:
+  version "5.0.13"
+  resolved "https://registry.yarnpkg.com/zustand/-/zustand-5.0.13.tgz#06995c126e8903cd27100af04da91c36ae3051ed"
+  integrity sha512-efI2tVaVQPqtOh114loML/Z80Y4NP3yc+Ff0fYiZJPauNeWZeIp/bRFD7I9bfmCOYBh/PHxlglQ9+wvlwnPikQ==

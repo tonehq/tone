@@ -24,6 +24,7 @@
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "@tailwindcss/postcss": "^4.2.1",
+    "@tanstack/react-query": "^5.100.11",
     "@tanstack/react-table": "^8.21.3",
     "@tiptap/extension-heading": "^3.18.0",
     "@tiptap/extension-link": "^3.18.0",
@@ -40,8 +41,11 @@
     "clsx": "^2.1.1",
     "cookies-next": "^6.1.0",
     "country-flag-icons": "^1.6.15",
+    "date-fns": "^4.2.1",
     "dayjs": "^1.11.19",
     "firebase": "^12.2.1",
+    "framer-motion": "^12.40.0",
+    "geist": "^1.7.1",
     "jotai": "^2.13.1",
     "js-cookie": "^3.0.5",
     "lodash": "^4.17.21",
@@ -58,7 +62,8 @@
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.1",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "zustand": "^5.0.13"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
