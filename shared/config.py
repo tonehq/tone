@@ -51,6 +51,7 @@ class Settings:
         self.JWT_SECRET_KEY: str = get_secret("JWT_SECRET_KEY", "your-secret-key-here")
         self.JWT_ALGORITHM: str = "HS256"
         self.ACCESS_TOKEN_EXPIRE_HOURS: int = 24
+        self.REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
         self.ENVIRONMENT: str = get_secret("ENV", "development")
 

@@ -10,6 +10,14 @@ from ee.middleware.auth import get_ee_jwt_claims, get_ee_current_user, require_e
 router = APIRouter()
 
 
+@router.get("/me")
+def get_organization_me(
+    claims: EEJWTClaims = Depends(get_ee_jwt_claims),
+    db: Session = Depends(get_db),
+):
+    return EEAuthService(db).get_organization_me(claims.user_id)
+
+
 @router.get("/get_associated_tenants")
 def get_associated_tenants(
     claims: EEJWTClaims = Depends(get_ee_jwt_claims),

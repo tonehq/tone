@@ -41,6 +41,14 @@ def check_member_limit(db: Session):
             )
 
 
+@router.get("/me")
+def get_organization_me(
+    claims: JWTClaims = Depends(get_jwt_claims),
+    db: Session = Depends(get_db),
+):
+    return AuthService(db).get_organization_me(claims.user_id)
+
+
 @router.post("/invite_user_to_organization")
 def invite_user_to_organization(
     invite_data: Dict[str, str] = Body(...),

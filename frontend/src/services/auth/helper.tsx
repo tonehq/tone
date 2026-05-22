@@ -1,32 +1,23 @@
-import Cookies from 'js-cookie';
-
-import { ACCESS_TOKEN, FIREBASE_SIGNUP, SIGNUP, TENANT_ID } from '@/constants';
+import { ACCESS_TOKEN, FIREBASE_SIGNUP, LOGIN_DATA, SIGNUP, TENANT_ID } from '@/constants';
 
 import axios from '@/utils/axios';
-import { decodeJWT } from '@/utils/jwt';
 import { handleApiError } from '@/utils/helpers';
 
 export const setToken = async (LogInData: any) => {
-  const decoded = decodeJWT(LogInData['access_token']);
-  Cookies.set(ACCESS_TOKEN, LogInData['access_token'], {
-    expires: new Date(decoded.exp * 1000),
-  });
+  if (typeof window === 'undefined') return LogInData;
 
-  Cookies.set('user_id', LogInData?.['user_id'], {
-    expires: new Date(decoded.exp * 1000),
-  });
+  if (LogInData?.access_token) {
+    localStorage.setItem(ACCESS_TOKEN, LogInData.access_token);
+  }
+  if (LogInData?.user_id != null) {
+    localStorage.setItem('user_id', String(LogInData.user_id));
+  }
+  localStorage.setItem(LOGIN_DATA, JSON.stringify(LogInData));
 
-  Cookies.set('login_data', JSON.stringify(LogInData), {
-    expires: new Date(decoded.exp * 1000),
-  });
-
-  Cookies.set(
-    TENANT_ID,
-    LogInData['organizations']?.length ? LogInData['organizations']?.[0]?.['id'] : '',
-    {
-      expires: new Date(decoded.exp * 1000),
-    },
-  );
+  const orgs = LogInData?.organizations;
+  if (Array.isArray(orgs) && orgs.length > 0 && orgs[0]?.id) {
+    localStorage.setItem(TENANT_ID, String(orgs[0].id));
+  }
 
   return LogInData;
 };
@@ -37,7 +28,6 @@ export const login = async (email: string, password: string) => {
     password,
   });
   setToken(LogInData);
-
   return LogInData;
 };
 
@@ -48,9 +38,7 @@ export const createteam = async (data: string) => {
 
 export const forgotPassword = async (email: string) => {
   const { data } = await axios.get('/auth/forget-password', {
-    params: {
-      email,
-    },
+    params: { email },
   });
   return data;
 };
@@ -66,15 +54,8 @@ export const signup = async (
     return await axios
       .post(
         FIREBASE_SIGNUP,
-        {
-          email,
-          profile,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${firebase_token}`,
-          },
-        },
+        { email, profile },
+        { headers: { Authorization: `Bearer ${firebase_token}` } },
       )
       .then((res) => {
         setToken(res.data);
@@ -82,14 +63,13 @@ export const signup = async (
       .catch((err) => {
         handleApiError(err);
       });
-  } else {
-    return await axios.post(SIGNUP, {
-      email,
-      password,
-      profile,
-      org_name,
-    });
   }
+  return await axios.post(SIGNUP, {
+    email,
+    password,
+    profile,
+    org_name,
+  });
 };
 
 export const getOrganization = async () => {
