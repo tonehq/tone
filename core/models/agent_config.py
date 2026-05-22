@@ -1,33 +1,30 @@
-from sqlalchemy import Column, BigInteger, String, ForeignKey, Text, UniqueConstraint
 import uuid
-from sqlalchemy.dialects.postgresql import UUID, JSON
+
+from sqlalchemy import Column, String, Integer, Boolean, Text, ForeignKey, DateTime, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+
 from core.models.base import OrgScopedModel
 
 
 class AgentConfig(OrgScopedModel):
-    __tablename__ = 'agent_configs'
+    __tablename__ = "agent_configs"
     __table_args__ = (
-        UniqueConstraint('organization_id', 'agent_id', name='agent_config_org_agent_unique'),
+        UniqueConstraint("agent_id", "version", name="uq_agent_configs_agent_version"),
     )
 
-    uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
-    agent_id = Column(BigInteger, ForeignKey('agents.id'), nullable=False)
-    
-    llm_account_id = Column(BigInteger, ForeignKey('accounts.id'))
-    tts_account_id = Column(BigInteger, ForeignKey('accounts.id'))
-    stt_account_id = Column(BigInteger, ForeignKey('accounts.id'))
-    llm_model_instance_id = Column(BigInteger, ForeignKey('model_instance.id', ondelete='SET NULL'), nullable=True)
-    tts_model_instance_id = Column(BigInteger, ForeignKey('model_instance.id', ondelete='SET NULL'), nullable=True)
-    stt_model_instance_id = Column(BigInteger, ForeignKey('model_instance.id', ondelete='SET NULL'), nullable=True)
-    first_message = Column(Text, nullable=True)
-    system_prompt = Column(Text, nullable=True, default="")
-    end_call_message = Column(Text, nullable=True)
-    voicemail_message = Column(Text, nullable=True)
-    status = Column(String, default="active")
-    html_prompt = Column(Text, nullable=True)
-
-    llm_metadata = Column(JSON, nullable=True, default={})
-    tts_metadata = Column(JSON, nullable=True, default={})  
-    stt_metadata = Column(JSON, nullable=True, default={})
-    agent_metadata = Column(JSON, nullable=True, default={})
-    description = Column(Text, nullable=True)
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    version = Column(Integer, nullable=False)
+    canvas_label = Column(String(200), nullable=True)
+    is_default = Column(Boolean, nullable=False, default=False)
+    published_at = Column(DateTime(timezone=True), nullable=True)
+    first_message = Column(String(1000), nullable=True)
+    system_prompt_template = Column(Text, nullable=True)
+    conversation_history_token_limit = Column(Integer, nullable=True)
+    language_id = Column(UUID(as_uuid=True), ForeignKey("model_languages.id", ondelete="SET NULL"), nullable=True)
+    knowledge_model_id = Column(UUID(as_uuid=True), ForeignKey("models.id", ondelete="SET NULL"), nullable=True)
+    voice_settings = Column(JSONB, nullable=True)
+    stt_settings = Column(JSONB, nullable=True)
+    conversation_settings = Column(JSONB, nullable=True)
+    created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    archived_at = Column(DateTime(timezone=True), nullable=True)

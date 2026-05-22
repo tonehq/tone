@@ -1,19 +1,19 @@
-from sqlalchemy import Column, BigInteger, String, Enum, ForeignKey, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB
+import uuid
+
+from sqlalchemy import Column, String, Boolean, ForeignKey, DateTime, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID
 
 from core.models.base import OrgScopedModel
-from core.models.enums import Role
 
 
 class Member(OrgScopedModel):
-    __tablename__ = 'members'
-    __table_args__ = (UniqueConstraint('organization_id', 'user_id', name='member_org_user_unique'),)
+    __tablename__ = "members"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "user_id", name="uq_members_org_user"),
+    )
 
-    user_id = Column(BigInteger, ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    role = Column(Enum(Role), default=Role.MEMBER)
-    custom_permissions = Column(JSONB, default=[])
-    status = Column(String, default='active')
-    created_by = Column(BigInteger, ForeignKey('users.id'))
-    joined_at = Column(BigInteger)
-    last_activity_at = Column(BigInteger)
-
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String(20), nullable=False, default="member")  # owner | admin | member | observer
+    is_active = Column(Boolean, nullable=False, default=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+    archived_at = Column(DateTime(timezone=True), nullable=True)
