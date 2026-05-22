@@ -12,33 +12,30 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from shared.config import settings
 from core.database.base import Base
 
+# Import all models so Base.metadata is populated
 from core.models.organization import Organization
-from core.models.user import User
-from core.models.member import Member
-from core.models.organization_invite import OrganizationInvite
-from core.models.organization_access_request import OrganizationAccessRequest
-from core.models.email_verification import EmailVerification
-from core.models.password_reset import PasswordReset
-from core.models.service_provider import ServiceProvider
-from core.models.api_key import ApiKey
-from core.models.account import Account
+from core.models.model_provider import ModelProvider
+from core.models.model import Model
+from core.models.model_voice import ModelVoice
+from core.models.model_language import ModelLanguage
+from core.models.channel import Channel
+from core.models.phone_number import PhoneNumber
+from core.models.upload import Upload
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
-from core.models.agent_channel_phone_numbers import AgentChannelPhoneNumbers
-from core.models.channel_phone_numbers import ChannelPhoneNumber
-from core.models.models import Model
-from core.models.voice import Voice
-from core.models.generated_api_key import GeneratedApiKey
-from core.models.channel import Channel
-from core.models.agent_channel import AgentChannel
-from core.models.upload import Upload
-from core.models.call_log import CallLog
-from core.models.document import Document, DocumentChunk
-from core.models.model_provider_menu import ModelProviderMenu
-from core.models.hosting_provider import HostingProvider
-from core.models.model_menu import ModelMenu
-from core.models.model_instance import ModelInstance
-from core.models.account import Account
+from core.models.agent_knowledge_base import AgentKnowledgeBase
+from core.models.agent_mcp_server import AgentMcpServer
+from core.models.agent_tool import AgentTool
+from core.models.user import User
+from core.models.email_request import EmailRequest
+from core.models.invite import Invite
+from core.models.member import Member
+from core.models.oauth_connection import OAuthConnection
+from core.models.api_key import ApiKey
+from core.models.mcp_server import McpServer
+from core.models.tool import Tool
+from core.models.call import Call
+from core.models.webhook import Webhook
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -53,28 +50,11 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
-
-# other values from the config, defined by the needs of env.py,
-# can be acquired:
-# my_important_option = config.get_main_option("my_important_option")
-# ... etc.
 
 
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode.
-
-    This configures the context with just a URL
-    and not an Engine, though an Engine is acceptable
-    here as well.  By skipping the Engine creation
-    we don't even need a DBAPI to be available.
-
-    Calls to context.execute() here emit the given string to the
-    script output.
-
-    """
+    """Run migrations in 'offline' mode."""
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
@@ -88,12 +68,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode.
-
-    In this scenario we need to create an Engine
-    and associate a connection with the context.
-
-    """
+    """Run migrations in 'online' mode."""
     connectable = engine_from_config(
         config.get_section(config.config_ini_section),
         prefix="sqlalchemy.",

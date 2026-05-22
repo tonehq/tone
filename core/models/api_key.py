@@ -1,28 +1,18 @@
-from sqlalchemy import Column, BigInteger, String, Boolean, Text, Integer, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
+
+from sqlalchemy import Column, String, Boolean, ForeignKey, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID
 
 from core.models.base import OrgScopedModel
 
 
 class ApiKey(OrgScopedModel):
-    __tablename__ = 'api_keys'
+    __tablename__ = "api_keys"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "provider_id", "label", name="uq_api_keys_org_provider_label"),
+    )
 
-    uuid = Column(UUID(as_uuid=True), default=uuid.uuid4, unique=True, nullable=False)
-    service_provider_id = Column(BigInteger, ForeignKey('service_providers.id', ondelete='CASCADE'), nullable=True)
-    account_id = Column(BigInteger, ForeignKey('accounts.id', ondelete='SET NULL'), nullable=True)
-    name = Column(String, nullable=False)
-    description = Column(Text)
-    api_key_encrypted = Column(Text, nullable=False)
-    api_key_hint = Column(String)
-    additional_credentials = Column(JSONB)
-    status = Column(String, default='active')
-    is_valid = Column(Boolean, default=False)
-    last_validated_at = Column(BigInteger)
-    validation_error = Column(Text)
-    last_used_at = Column(BigInteger)
-    usage_count = Column(Integer, default=0)
-    rate_limit_config = Column(JSONB)
-    created_by = Column(BigInteger, ForeignKey('users.id'))
-    expires_at = Column(BigInteger)
-
+    provider_id = Column(UUID(as_uuid=True), ForeignKey("model_providers.id"), nullable=False)
+    label = Column(String(80), nullable=True)
+    encrypted_key = Column(String, nullable=False)
+    is_active = Column(Boolean, nullable=False, default=True)
