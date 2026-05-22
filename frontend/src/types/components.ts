@@ -23,6 +23,8 @@ export interface CustomTableSortState {
   order: 'asc' | 'desc';
 }
 
+export type CustomTableDensity = 'compact' | 'cozy' | 'comfortable';
+
 export interface CustomTableProps<TRow> {
   columns: CustomTableColumn<TRow>[];
   dataSource: TRow[];
@@ -36,6 +38,22 @@ export interface CustomTableProps<TRow> {
   onRowClick?: (record: TRow, index: number) => void;
   onSortChange?: (sort: CustomTableSortState | null) => void;
   className?: string;
+  /** Custom toolbar content rendered to the right of the search bar. */
+  toolbar?: React.ReactNode;
+  /** Show a refresh button in the toolbar — calls back when clicked. */
+  onRefresh?: () => void | Promise<void>;
+  /** Whether the refresh button shows a spinner. */
+  refreshing?: boolean;
+  /** Show a density (compact/cozy/comfortable) toggle in the toolbar. */
+  enableDensityToggle?: boolean;
+  /** Initial density when the toggle is enabled. */
+  initialDensity?: CustomTableDensity;
+  /** Show a column-visibility menu in the toolbar. */
+  enableColumnVisibility?: boolean;
+  /** Title displayed above the toolbar (small, optional). */
+  title?: React.ReactNode;
+  /** Description displayed under the title. */
+  description?: React.ReactNode;
 }
 
 export interface TextInputBaseProps extends Omit<React.ComponentProps<'input'>, 'size'> {

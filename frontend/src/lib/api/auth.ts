@@ -1,8 +1,8 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 
-import axios from '@/utils/axios';
-import type { AuthLoginResponse, InvitationValidation, Organization, User } from '@/types/auth';
 import type { AcceptInviteFormData, LoginFormData, SignupFormData } from '@/schemas/auth';
+import type { AuthLoginResponse, InvitationValidation, Organization, User } from '@/types/auth';
+import axios from '@/utils/axios';
 
 export interface AcceptInvitationPayload {
   token: string;
@@ -35,11 +35,11 @@ export const authApi = {
     return data;
   },
   me: async (): Promise<User> => {
-    const { data } = await axios.get<User>('/users/me');
+    const { data } = await axios.get<User>('/user/me');
     return data;
   },
   myOrg: async (): Promise<Organization | null> => {
-    const { data } = await axios.get<Organization | null>('/org/me');
+    const { data } = await axios.get<Organization | null>('/organization/me');
     return data;
   },
   forgotPassword: async (email: string) => {

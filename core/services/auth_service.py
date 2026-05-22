@@ -828,7 +828,10 @@ class AuthService(BaseService):
         self.db.add(reset)
         self.db.commit()
 
-        verification_url = f"{settings.APPLICATION_URL}/auth/reset-password?token={reset.token}&email={user.email}"
+        verification_url = (
+            f"{settings.APPLICATION_URL}/reset-password"
+            f"?token={reset.token}&email={user.email}"
+        )
 
         mail_service = MailService()
         mail_service.send_forgot_password_email(email, verification_url)
