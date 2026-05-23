@@ -45,8 +45,8 @@ export const STATUS_STYLES: Record<string, string> = {
 
 // ── Provider Logos ─────────────────────────────────────────────────
 // Maps a provider's internal name (lowercase, stripped of separators)
-// to a remote favicon/logo URL. Used by ServiceCard / ProviderCard to
-// render the real brand mark instead of a generic icon.
+// to a remote favicon/logo URL. Used by ServiceCard to render the real
+// brand mark instead of a generic icon.
 
 const FAVICON = (domain: string) => `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 

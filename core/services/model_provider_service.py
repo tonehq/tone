@@ -191,6 +191,32 @@ class ModelProviderService(BaseService):
             q = q.filter(ApiKey.id != keep_id)
         q.update({ApiKey.is_default: False}, synchronize_session=False)
 
+    def _assert_label_unique(
+        self,
+        *,
+        provider_id: UUID,
+        label: str | None,
+        exclude_id: UUID | None = None,
+    ) -> None:
+        """Pre-check the partial unique constraint ``uq_api_keys_org_provider_label``
+        so a duplicate label returns a clean 409 instead of bubbling up as a
+        500 IntegrityError from the DB layer. NULL labels are not constrained
+        (Postgres treats NULLs as distinct), matching the index semantics."""
+        if not label:
+            return
+        q = self.db.query(ApiKey.id).filter(
+            ApiKey.organization_id == self.org_id,
+            ApiKey.provider_id == provider_id,
+            ApiKey.label == label,
+        )
+        if exclude_id is not None:
+            q = q.filter(ApiKey.id != exclude_id)
+        if q.first():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An API key with this label already exists for the provider.",
+            )
+
     def _service_record(self, service_id: UUID) -> ApiKey:
         record = (
             self.db.query(ApiKey)
@@ -342,6 +368,8 @@ class ModelProviderService(BaseService):
                 detail="config must be a JSON object",
             )
 
+        self._assert_label_unique(provider_id=provider_id, label=label)
+
         if is_default:
             self._flip_other_defaults(service_type=service_type, keep_id=None)
 
@@ -424,8 +452,17 @@ class ModelProviderService(BaseService):
             record.service_type = new_service_type
 
         if "label" in body:
-            v = (body.get("label") or "").strip()
-            record.label = v or None
+            record.label = (body.get("label") or "").strip() or None
+
+        # Re-check label uniqueness after both provider_id and label have been
+        # applied — either change alone can collide with an existing row under
+        # uq_api_keys_org_provider_label.
+        if "provider_id" in body or "label" in body:
+            self._assert_label_unique(
+                provider_id=record.provider_id,
+                label=record.label,
+                exclude_id=record.id,
+            )
         if "description" in body:
             v = (body.get("description") or "").strip()
             record.description = v or None
