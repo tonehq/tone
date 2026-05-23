@@ -14,7 +14,7 @@ import { useCallback, useEffect, useState } from 'react';
 import ToolPickerModal from './ToolPickerModal';
 
 interface ToolsTabProps {
-  agentId?: number;
+  agentId?: string;
   isEditMode: boolean;
 }
 
@@ -32,7 +32,7 @@ export default function ToolsTab({ agentId, isEditMode }: ToolsTabProps) {
 
   const [attachedTools, setAttachedTools] = useState<Tool[]>([]);
   const [loadingAttached, setLoadingAttached] = useState(false);
-  const [detachingToolId, setDetachingToolId] = useState<number | null>(null);
+  const [detachingToolId, setDetachingToolId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const loadAttachedTools = useCallback(async () => {
@@ -59,7 +59,7 @@ export default function ToolsTab({ agentId, isEditMode }: ToolsTabProps) {
   }, [isEditMode, agentId, loadAttachedTools]);
 
   const handleAttach = useCallback(
-    async (toolIds: number[]) => {
+    async (toolIds: string[]) => {
       if (!agentId) return;
       try {
         for (const toolId of toolIds) {
