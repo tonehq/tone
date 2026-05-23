@@ -13,15 +13,27 @@ const dashboardAtom = atom<DashboardState>({
   loading: false,
 });
 
-export const fetchDashboardStatsAtom = atom(null, async (_get, set) => {
+// In-flight de-dupe — guards against React 19 Strict Mode's intentional
+// double-mount (and any parent re-render that calls the setter twice) so we
+// only fire one network request per mount cycle. The shared promise is
+// awaited by any concurrent callers so they all observe the same result.
+let inFlight: Promise<void> | null = null;
+
+export const fetchDashboardStatsAtom = atom(null, (_get, set) => {
+  if (inFlight) return inFlight;
   set(dashboardAtom, (prev) => ({ ...prev, loading: true }));
-  try {
-    const stats = await getDashboardStats();
-    set(dashboardAtom, { stats, loading: false });
-  } catch (error) {
-    set(dashboardAtom, (prev) => ({ ...prev, loading: false }));
-    handleApiError(error);
-  }
+  inFlight = (async () => {
+    try {
+      const stats = await getDashboardStats();
+      set(dashboardAtom, { stats, loading: false });
+    } catch (error) {
+      set(dashboardAtom, (prev) => ({ ...prev, loading: false }));
+      handleApiError(error);
+    } finally {
+      inFlight = null;
+    }
+  })();
+  return inFlight;
 });
 
 export default dashboardAtom;
