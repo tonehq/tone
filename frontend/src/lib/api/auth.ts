@@ -106,12 +106,13 @@ export function useChangePassword() {
   return useMutation({ mutationFn: authApi.changePassword });
 }
 
-export function useValidateInvitation(token: string) {
+export function useValidateInvitation(token: string, enabled: boolean = true) {
   return useQuery({
     queryKey: ['invitation', token],
     queryFn: () => authApi.validateInvitation(token),
-    enabled: !!token,
+    enabled: !!token && enabled,
     retry: false,
+    refetchOnWindowFocus: false,
   });
 }
 

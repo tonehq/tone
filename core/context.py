@@ -7,7 +7,7 @@ from uuid import UUID
 @dataclass
 class TenantContext:
     org_id: Optional[Union[str, UUID]] = None
-    user_id: Optional[int] = None
+    user_id: Optional[Union[str, UUID]] = None
     role: Optional[str] = None
 
 
@@ -18,7 +18,7 @@ def get_tenant_context() -> TenantContext:
     return _tenant_context.get()
 
 
-def set_tenant_context(org_id: Union[str, UUID] = None, user_id: int = None, role: str = None) -> None:
+def set_tenant_context(org_id: Union[str, UUID] = None, user_id: Union[str, UUID] = None, role: str = None) -> None:
     _tenant_context.set(TenantContext(org_id=org_id, user_id=user_id, role=role))
 
 
@@ -26,7 +26,7 @@ def get_current_org_id() -> Optional[Union[str, UUID]]:
     return _tenant_context.get().org_id
 
 
-def get_current_user_id() -> Optional[int]:
+def get_current_user_id() -> Optional[Union[str, UUID]]:
     return _tenant_context.get().user_id
 
 

@@ -1,46 +1,53 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Body, Query, Header
+from typing import Any, Dict, Optional
+
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from typing import Dict, Any, Optional
 
 from core.database.session import get_db
+from core.middleware.auth import (
+    JWTClaims,
+    get_jwt_claims,
+    get_optional_jwt_claims,
+)
 from core.services.auth_service import AuthService
-from core.middleware.auth import get_jwt_claims, get_optional_jwt_claims, JWTClaims, jwt_manager
 
 router = APIRouter()
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# tone-test shaped routes (preferred frontend surface)
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Modern routes (preferred frontend surface) ─────────────────────────
 
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
 def signup(user_data: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
     email = user_data.get("email")
     password = user_data.get("password")
-    first_name = user_data.get("first_name") or (user_data.get("profile") or {}).get("first_name")
-    last_name = user_data.get("last_name") or (user_data.get("profile") or {}).get("last_name")
-    organization_name = user_data.get("organization_name") or user_data.get("org_name")
-    username = user_data.get("username")
+    profile = user_data.get("profile") or {}
+    first_name = user_data.get("first_name") or profile.get("first_name")
+    last_name = user_data.get("last_name") or profile.get("last_name")
+    organization_name = (
+        user_data.get("organization_name")
+        or user_data.get("org_name")
+        or profile.get("org_name")
+    )
 
     if not email or not password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email and password are required",
         )
-
-    if first_name and last_name:
-        return AuthService(db).signup_v2(
-            email=email,
-            password=password,
-            first_name=first_name,
-            last_name=last_name,
-            organization_name=organization_name,
+    if not first_name:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="first_name is required",
         )
 
-    # Legacy signup path (username + profile) — preserved for backward compat.
-    profile = user_data.get("profile") or {}
-    return AuthService(db).signup(email, password, username, profile)
+    return AuthService(db).signup_v2(
+        email=email,
+        password=password,
+        first_name=first_name,
+        last_name=last_name or "",
+        organization_name=organization_name,
+    )
 
 
 @router.post("/login")
@@ -68,8 +75,6 @@ def refresh(body: Dict[str, str] = Body(...), db: Session = Depends(get_db)):
 
 @router.post("/logout")
 def logout(_: Dict[str, Any] = Body(default={})):
-    # Stateless JWTs — client is responsible for discarding tokens.
-    # A future implementation can blacklist the refresh_token here.
     return {"message": "Logged out"}
 
 
@@ -129,6 +134,15 @@ def change_password(
     return AuthService(db).change_password_for_user(claims.user_id, new_password)
 
 
+@router.get("/me")
+def get_me(claims: JWTClaims = Depends(get_jwt_claims), db: Session = Depends(get_db)):
+    svc = AuthService(db)
+    return {
+        "user": svc.get_user_me(claims.user_id),
+        "organization": svc.get_organization_me(claims.user_id),
+    }
+
+
 @router.get("/validate-invitation")
 def validate_invitation(token: str = Query(...), db: Session = Depends(get_db)):
     return AuthService(db).validate_invitation_by_token(token)
@@ -154,62 +168,14 @@ def accept_invitation(
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Legacy routes (kept for backward compatibility — used by older clients).
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-@router.post("/signup_with_firebase", status_code=status.HTTP_201_CREATED)
-def signup_with_firebase(
-    user_data: Dict[str, Any] = Body(...),
-    authorization: str = Header(...),
-    db: Session = Depends(get_db),
-):
-    email = user_data.get("email")
-    profile = user_data.get("profile")
-
-    if not email:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email is required",
-        )
-
-    if not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authorization header",
-        )
-
-    firebase_token = authorization.split("Bearer ")[1]
-
-    return AuthService(db).signup_with_firebase(firebase_token, email, profile)
+# ── Legacy aliases (kept for older clients) ────────────────────────────
 
 
 @router.get("/resend_verification_email")
-def resend_verification_email(email: str = Query(...), db: Session = Depends(get_db)):
+def resend_verification_email_legacy(email: str = Query(...), db: Session = Depends(get_db)):
     return AuthService(db).resend_verification_email(email)
 
 
-@router.get("/verify_user_email")
-def verify_user_email(
-    email: str = Query(...),
-    code: str = Query(...),
-    user_id: int = Query(...),
-    db: Session = Depends(get_db),
-):
-    return AuthService(db).verify_user_email(email, code, user_id)
-
-
 @router.get("/forget-password")
-def forget_password(email: str = Query(...), db: Session = Depends(get_db)):
+def forget_password_legacy(email: str = Query(...), db: Session = Depends(get_db)):
     return AuthService(db).forgot_password(email)
-
-
-@router.get("/acceptForgotPassword")
-def accept_forgot_password(
-    email: str = Query(...),
-    password: str = Query(...),
-    token: str = Query(...),
-    db: Session = Depends(get_db),
-):
-    return AuthService(db).accept_forgot_password(email, password, token)

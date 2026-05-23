@@ -52,11 +52,18 @@ export default function Members() {
   }, []);
 
   const handleInviteSubmit = async (data: { name: string; email: string; role: string }) => {
-    await inviteUser(data);
-    showToast.success('Invitation sent successfully');
+    try {
+      await inviteUser(data);
+      showToast.success('Invitation sent successfully');
+    } catch (err) {
+      // Surface a toast so the user sees the failure even if the modal closes,
+      // then re-throw so the modal's catch can also set the inline field error.
+      handleApiError(err);
+      throw err;
+    }
   };
 
-  const handleRoleChange = async (memberId: number, role: string) => {
+  const handleRoleChange = async (memberId: string, role: string) => {
     try {
       await updateRole({ memberId, role });
       showToast.success('Role updated successfully');
@@ -65,7 +72,7 @@ export default function Members() {
     }
   };
 
-  const handleDeleteMember = async (userId: number) => {
+  const handleDeleteMember = async (userId: string) => {
     try {
       await removeMember(userId);
       showToast.success('Member removed successfully');
@@ -74,7 +81,7 @@ export default function Members() {
     }
   };
 
-  const handleCancelInvitation = async (inviteId: number) => {
+  const handleCancelInvitation = async (inviteId: string) => {
     try {
       await cancelInvite(inviteId);
       showToast.success('Invitation cancelled');
@@ -83,7 +90,7 @@ export default function Members() {
     }
   };
 
-  const handleResendInvitation = async (inviteId: number) => {
+  const handleResendInvitation = async (inviteId: string) => {
     try {
       await resendInvite(inviteId);
       showToast.success('Invitation re-sent');
