@@ -7,16 +7,37 @@ description: Generate a complete card-grid listing page with infinite scroll, se
 
 Generates a fully wired **card-grid listing page** for the Tone frontend. Use this skill when the entity is better represented as cards (key-value previews, profile-like data, config objects) rather than a table. Produces a Next.js `page.tsx` plus split components for the card, grid, skeleton, and form modal.
 
-**Reference implementation:** Test Profiles page (`frontend/app/(dashboard)/test-profiles/page.tsx` + `frontend/components/test-profile/`)
+**Reference implementation:** Organizations page (`frontend/src/components/organizations/OrganizationListPage.tsx` + `OrganizationCard.tsx`)
+
+## IMPORTANT: Pre-Generation Checks
+
+Before generating, **always read these files** to detect the actual frontend patterns:
+
+1. **`frontend/src/components/shared/index.tsx`** — List of available shared components. Verify which exist before using them (e.g. `PageHeader`, `EmptyState`, `StatusBadge` may NOT exist).
+2. **`frontend/src/atoms/`** — Check if the project uses Jotai atoms (not React Query). If Jotai atoms exist, use that pattern.
+3. **`frontend/src/services/listHelpers.ts`** — Check if `listRequest`/`pagedListRequest` exist for the `POST /list` pattern.
+4. **`frontend/src/types/list.ts`** — Check `ListRequest`/`ListResponse` types.
+5. **`frontend/src/utils/toast.ts`** and **`frontend/src/utils/helpers.ts`** — Check actual import paths for `showToast` and `handleApiError`.
+6. **An existing card-grid page** (e.g. OrganizationListPage) — Match the established pattern.
+
+### Current Project Facts (updated 2026-05-23):
+- **State management**: Jotai atoms in `src/atoms/`, **NOT** React Query. Use `useAtom` pattern.
+- **Service layer**: `src/services/` with `listRequest` from `src/services/listHelpers.ts` for `POST /list`.
+- **Toast/errors**: `showToast` from `@/utils/toast`, `handleApiError` from `@/utils/helpers`.
+- **Types**: Entity-specific type files in `src/types/` (e.g. `src/types/mcp.ts`), not a single `index.ts`.
+- **IDs are UUID strings**: All entity `id` fields are `string`, not `number`.
+- **Non-existent components**: `PageHeader`, `EmptyState`, `StatusBadge` do NOT exist in shared. Build empty states inline or as entity-specific components.
+- **Available shared components**: `ActionMenu`, `CustomButton`, `CustomModal`, `CustomTable`, `SearchBar`, `SelectInput`, `TextInput`, `TextAreaField`, `CustomCard`, `SliderField`, `CheckboxField`, `RadioGroupField`, `MultiSelectField`, `CustomTooltip`, `Divider`, `Form`, `Logo`, `ThemeToggle`.
 
 ## Hard constraints
 
-- **DO NOT modify** shared components (`PageHeader`, `EmptyState`, `StatusBadge`, `SearchBar`, `SelectInput`, `CustomModal`, `ActionMenu`, `TextInput`, `TextAreaField`, `Button`). Use them as-is from `@/components/shared`.
+- **DO NOT modify** shared components. Use them as-is from `@/components/shared`.
+- **DO NOT reference non-existent shared components** — always verify against `@/components/shared/index.tsx` first.
 - **DO NOT invent new component abstractions** — compose from existing shared components only.
-- **DO NOT add dependencies** — use only libraries already in `package.json` (`framer-motion`, `@tanstack/react-query`, `lucide-react`, `sonner`, etc.).
-- **DO NOT hardcode data** — all data comes from React Query hooks backed by the backend API.
-- **Always use `showToast` and `handleApiError`** from `@/lib/toast` — never use raw `toast` from sonner.
-- **Always use `useInfiniteQuery`** for the list hook — card grids use infinite scroll, not classic pagination.
+- **DO NOT add dependencies** — use only libraries already in `package.json` (`framer-motion`, `lucide-react`, etc.).
+- **DO NOT hardcode data** — all data comes from Jotai atoms backed by the service layer.
+- **Always use `showToast` and `handleApiError`** from `@/utils/toast` and `@/utils/helpers` — never use raw `toast` from sonner.
+- **Detect the state management pattern** — use Jotai if atoms exist, React Query only if `useQuery`/`useMutation` are the established pattern.
 - **Always verify** the backend endpoint exists before generating.
 - **Always split into components** — never put everything in a single page file.
 
@@ -39,9 +60,9 @@ Read these files to understand the entity shape:
 1. **Backend model** — e.g. `core/models/<entity>.py` → column names, types, JSONB fields
 2. **Backend controller** — e.g. `core/api/v1/<entity_plural>.py` → endpoint structure, allowed sort/filter fields
 3. **Backend service** — e.g. `core/services/<entity>_service.py` → business logic, validation
-4. **Frontend types** — `frontend/types/index.ts` → check if interface already exists
-5. **Frontend API hooks** — `frontend/lib/api/` → check if hooks already exist
-6. **Existing page** — check if `frontend/app/(dashboard)/<route>/page.tsx` already exists
+4. **Frontend types** — check `frontend/src/types/<entity>.ts` or `frontend/src/types/index.ts` for existing interface
+5. **Frontend state** — check `frontend/src/atoms/` for existing Jotai atoms, or `frontend/src/services/` for service functions
+6. **Existing page** — check if `frontend/src/app/(dashboard)/<route>/page.tsx` or `frontend/src/components/<entity>/` already exists
 
 ## Phase 2 — Generate files
 
@@ -63,45 +84,65 @@ export interface <Entity> {
 }
 ```
 
-### File 2: API hooks
+### File 2: Service + Atoms (Jotai pattern — current project default)
 
-**Path:** `frontend/lib/api/<entity-slug>.ts`
-
-Pattern — uses `useInfiniteQuery` for list, `useMutation` for CUD:
+**Service file:** `frontend/src/services/<entitySlug>Service.ts`
 
 ```typescript
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import api from "./client";
-import type { Paginated, <Entity> } from "@/types";
+import { listRequest } from '@/services/listHelpers';
+import type { ListRequest } from '@/types/list';
+import type { <Entity>, <Entity>UpsertPayload } from '@/types/<entity-slug>';
+import axiosInstance from '@/utils/axios';
 
-const KEY = "<entity-slug>";
-const PAGE_SIZE = 12;
+export const list<Entities> = (request: ListRequest = {}): Promise<<Entity>[]> =>
+  listRequest<<Entity>>('/<entity-prefix>/list', request);
 
-export const <entity>Api = {
-  list: (p?: Record<string, unknown>) => api.post<Paginated<Entity>>("/<entity-slug>/list", p || {}).then((r) => r.data),
-  get: (id: string) => api.get<Entity>(`/<entity-slug>/${id}`).then((r) => r.data),
-  create: (d: Record<string, unknown>) => api.post<Entity>("/<entity-slug>", d).then((r) => r.data),
-  update: (id: string, d: Record<string, unknown>) => api.patch<Entity>(`/<entity-slug>/${id}`, d).then((r) => r.data),
-  delete: (id: string) => api.delete(`/<entity-slug>/${id}`),
+export const get<Entity> = async (id: string): Promise<<Entity>> => {
+  const { data } = await axiosInstance.get<<Entity>>('/<entity-prefix>/get', { params: { <entity>_id: id } });
+  return data;
 };
 
-export const use<Entities> = (filters?: Record<string, unknown>) =>
-  useInfiniteQuery({
-    queryKey: [KEY, filters],
-    queryFn: ({ pageParam = 1 }) =>
-      <entity>Api.list({ ...filters, page: pageParam, page_size: PAGE_SIZE }),
-    initialPageParam: 1,
-    getNextPageParam: (lastPage) => {
-      const totalPages = Math.ceil(lastPage.total / lastPage.page_size);
-      return lastPage.page < totalPages ? lastPage.page + 1 : undefined;
-    },
-  });
+export const upsert<Entity> = async (payload: <Entity>UpsertPayload): Promise<<Entity>> => {
+  const { data } = await axiosInstance.post<<Entity>>('/<entity-prefix>/upsert', payload);
+  return data;
+};
 
-export const use<Entity> = (id: string) => useQuery({ queryKey: [KEY, id], queryFn: () => <entity>Api.get(id), enabled: !!id });
-export const useCreate<Entity> = () => { const qc = useQueryClient(); return useMutation({ mutationFn: <entity>Api.create, onSuccess: () => qc.invalidateQueries({ queryKey: [KEY] }) }); };
-export const useUpdate<Entity> = () => { const qc = useQueryClient(); return useMutation({ mutationFn: ({ id, data }: { id: string; data: Record<string, unknown> }) => <entity>Api.update(id, data), onSuccess: () => qc.invalidateQueries({ queryKey: [KEY] }) }); };
-export const useDelete<Entity> = () => { const qc = useQueryClient(); return useMutation({ mutationFn: <entity>Api.delete, onSuccess: () => qc.invalidateQueries({ queryKey: [KEY] }) }); };
+export const delete<Entity> = async (id: string): Promise<void> => {
+  await axiosInstance.delete('/<entity-prefix>/delete', { params: { <entity>_id: id } });
+};
 ```
+
+**Atoms file:** `frontend/src/atoms/<Entity>Atom.tsx`
+
+```typescript
+import { list<Entities>, upsert<Entity>, delete<Entity> } from '@/services/<entitySlug>Service';
+import type { <Entity>, <Entity>UpsertPayload, <Entities>State } from '@/types/<entity-slug>';
+import { atom } from 'jotai';
+
+const <entities>Atom = atom<<Entities>State>({ items: [], loading: false });
+
+const fetch<Entities>Atom = atom(null, async (_get, set) => {
+  set(<entities>Atom, (prev) => ({ ...prev, loading: true }));
+  try {
+    const items = await list<Entities>();
+    set(<entities>Atom, { items: items ?? [], loading: false });
+  } catch (error) {
+    set(<entities>Atom, (prev) => ({ ...prev, loading: false }));
+    throw error;
+  }
+});
+
+const upsert<Entity>Atom = atom(null, async (_get, _set, payload: <Entity>UpsertPayload): Promise<<Entity>> =>
+  await upsert<Entity>(payload));
+
+const delete<Entity>Atom = atom(null, async (_get, _set, id: string) => {
+  await delete<Entity>(id);
+});
+
+export { <entities>Atom, fetch<Entities>Atom, upsert<Entity>Atom, delete<Entity>Atom };
+```
+
+**Note:** If the project uses React Query instead of Jotai (check `src/atoms/` vs `src/lib/api/`), generate `useInfiniteQuery` hooks instead. Always match the existing pattern.
 
 ### File 3: Card component
 
@@ -129,7 +170,7 @@ export const cardVariants = {
 };
 ```
 
-Key imports: `ActionMenu`, `StatusBadge` from `@/components/shared`, `Button` from `@/components/ui/button`, `Card`, `Separator` from `@/components/ui/primitives`, `motion` from `framer-motion`, `Hash` from `lucide-react`.
+Key imports: `ActionMenu` from `@/components/shared`, `Card`, `CardContent` from `@/components/ui/card`, `motion` from `framer-motion`, icons from `lucide-react`. **Do NOT import `StatusBadge` — it does not exist. Build status indicators inline.**
 
 ### File 4: Grid component with infinite scroll
 
@@ -279,10 +320,10 @@ Show filters when: `profiles.length > 0 || search || statusFilter !== "all"`.
 
 ## Toast & error handling
 
-- **Always import** `{ handleApiError, showToast }` from `@/lib/toast`
+- **Always import** `showToast` from `@/utils/toast` and `handleApiError` from `@/utils/helpers`
 - **Never import** `toast` from `sonner` directly
 - `showToast.success("Message")` for success
-- `handleApiError(err)` for catch blocks — handles string detail, object `{ errors: { field: "msg" } }`, and fallback
+- `handleApiError(err)` for catch blocks — extracts `error.response.data.detail` and shows error toast
 
 ## Output checklist
 
