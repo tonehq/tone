@@ -133,7 +133,7 @@ The `pipecat/` directory is a custom fork (`tonehq/pipecat`) of the Pipecat AI f
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **curitiba** (6144 symbols, 16326 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **curitiba** (6143 symbols, 16326 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
