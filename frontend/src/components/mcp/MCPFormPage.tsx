@@ -113,7 +113,7 @@ function serverToFormState(s: MCPServer): MCPFormState {
   };
 }
 
-function formStateToUpsertPayload(s: MCPFormState, id?: number): MCPServerUpsertPayload {
+function formStateToUpsertPayload(s: MCPFormState, id?: string): MCPServerUpsertPayload {
   const authConfig: Record<string, string> = {};
   if (s.use_bearer_token && s.bearer_token.trim()) authConfig.bearer_token = s.bearer_token;
   if (s.use_api_key && s.api_key.trim()) authConfig.api_key = s.api_key;
@@ -135,12 +135,12 @@ function formStateToUpsertPayload(s: MCPFormState, id?: number): MCPServerUpsert
 }
 
 interface MCPFormPageProps {
-  serverId?: number;
+  serverId?: string;
 }
 
 export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
   const router = useRouter();
-  const isEditMode = typeof serverId === 'number' && Number.isFinite(serverId);
+  const isEditMode = typeof serverId === 'string' && serverId.length > 0;
 
   const [, upsertServer] = useAtom(upsertMcpServerAtom);
   const [, fetchServers] = useAtom(fetchMcpServersAtom);
@@ -168,7 +168,7 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
   });
 
   useEffect(() => {
-    if (!isEditMode || typeof serverId !== 'number') return;
+    if (!isEditMode || !serverId) return;
     let cancelled = false;
     setLoadingServer(true);
     getMcpServer(serverId)

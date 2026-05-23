@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, String, ForeignKey, UniqueConstraint
+from sqlalchemy import Boolean, Column, String, Text, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from core.models.base import OrgScopedModel
@@ -13,9 +13,12 @@ class Tool(OrgScopedModel):
     )
 
     name = Column(String(120), nullable=False)
-    description = Column(String(500), nullable=True)
+    description = Column(Text, nullable=True)
     tool_type = Column(String(80), nullable=False)
     action_params_schema = Column(JSONB, nullable=True)
     trigger_phrases = Column(JSONB, nullable=True)
     entity = Column(JSONB, nullable=True)
+    parameters = Column(JSONB, nullable=True)
+    mcp_server_id = Column(UUID(as_uuid=True), ForeignKey("mcp_servers.id", ondelete="CASCADE"), nullable=True)
     oauth_connection_id = Column(UUID(as_uuid=True), ForeignKey("oauth_connections.id", ondelete="SET NULL"), nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
