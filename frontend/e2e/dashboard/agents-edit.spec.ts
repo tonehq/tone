@@ -354,10 +354,10 @@ test.describe('Edit Agent Page', () => {
       await mockGetAgentAPI(page, MOCK_AGENT_WITH_PHONE);
       await page.goto('/agents/edit/inbound/3');
       await page.waitForFunction(
-    () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
-    null,
-    { timeout: 10_000 },
-  );
+        () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
+        null,
+        { timeout: 10_000 },
+      );
     });
 
     test('shows phone numbers in assign number tab', async ({ page }) => {
@@ -389,10 +389,10 @@ test.describe('Edit Agent Page', () => {
       await mockGetAgentAPI(page, MOCK_AGENT_MINIMAL);
       await page.goto('/agents/edit/outbound/2');
       await page.waitForFunction(
-    () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
-    null,
-    { timeout: 10_000 },
-  );
+        () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
+        null,
+        { timeout: 10_000 },
+      );
     });
 
     test('shows agent name and Outbound badge', async ({ page }) => {
@@ -459,10 +459,10 @@ test.describe('Edit Agent Page', () => {
       await mockGetAgentAPI(page);
       await page.goto(EDIT_URL);
       await page.waitForFunction(
-    () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
-    null,
-    { timeout: 10_000 },
-  );
+        () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
+        null,
+        { timeout: 10_000 },
+      );
     });
 
     test('modifies all fields and sends correct updated payload', async ({ page }) => {
@@ -535,7 +535,6 @@ test.describe('Edit Agent Page', () => {
       await page.locator('input[name="name"]').fill('Renamed Agent');
       await expect(page.getByRole('heading', { name: 'Renamed Agent', level: 1 })).toBeVisible();
     });
-
   });
 
   // ── 10. Save Flow ───────────────────────────────────────────────────────────
@@ -641,10 +640,10 @@ test.describe('Edit Agent Page', () => {
       await page.unrouteAll({ behavior: 'wait' });
       await page.goto(EDIT_URL);
       await page.waitForFunction(
-      () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
-      null,
-      { timeout: 15_000 },
-    );
+        () => document.querySelectorAll('[class*="animate-pulse"]').length === 0,
+        null,
+        { timeout: 15_000 },
+      );
 
       const hasError = await page
         .locator('[data-sonner-toast]', { hasText: 'Agent not found' })

@@ -13,15 +13,15 @@ from core.internal.license import init_license_validator, get_license_info
 from core.internal.capabilities import init_capabilities, is_ee_enabled, get_capabilities
 
 from core.api.v1 import (
-    auth, users, organizations, agent_configs, channels, oauth,
+    auth, users, organizations, agent_configs, channels, oauth, knowledge_base, agents,
 )
 # NOTE: the following routers reference dropped pre-v2 models (account,
-# document, voice, model_instance, hosting_provider, etc.) and currently
+# voice, model_instance, hosting_provider, etc.) and currently
 # fail to import. They are temporarily disabled so the server can boot
 # with the v2 auth schema:
 #   api_keys, accounts, service_providers, agents,
 #   agent_channel_phone_numbers, channel_phone_numbers, models,
-#   generated_api_keys, voices, call_logs, telephony, documents, tools,
+#   generated_api_keys, voices, call_logs, telephony, tools,
 #   mcp_servers, dashboard, model_providers_menu, hosting_providers,
 #   model_menu, model_instances
 import core.models
@@ -84,6 +84,8 @@ if ee_enabled:
     from ee.api.v1 import agent_configs as ee_agent_configs
     from ee.api.v1 import channels as ee_channels
     from ee.api.v1 import oauth as ee_oauth
+    from ee.api.v1 import knowledge_base as ee_knowledge_base
+    from ee.api.v1 import agents as ee_agents
 
     api_v1.include_router(ee_auth.router, prefix="/auth", tags=["auth"])
     api_v1.include_router(ee_users.router, prefix="/user", tags=["users"])
@@ -91,6 +93,8 @@ if ee_enabled:
     api_v1.include_router(ee_agent_configs.router, prefix="/agent_config", tags=["agent_config"])
     api_v1.include_router(ee_channels.router, prefix="/channel", tags=["channel"])
     api_v1.include_router(ee_oauth.router, prefix="/oauth", tags=["oauth"])
+    api_v1.include_router(ee_knowledge_base.router, prefix="/knowledge-base", tags=["knowledge-base"])
+    api_v1.include_router(ee_agents.router, prefix="/agent", tags=["agent"])
     print("EE edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
 else:
     api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -99,6 +103,8 @@ else:
     api_v1.include_router(agent_configs.router, prefix="/agent_config", tags=["agent_config"])
     api_v1.include_router(channels.router, prefix="/channel", tags=["channel"])
     api_v1.include_router(oauth.router, prefix="/oauth", tags=["oauth"])
+    api_v1.include_router(knowledge_base.router, prefix="/knowledge-base", tags=["knowledge-base"])
+    api_v1.include_router(agents.router, prefix="/agent", tags=["agent"])
     print("Core edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
 
 

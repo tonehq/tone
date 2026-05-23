@@ -41,6 +41,10 @@ export interface CustomTableProps<TRow> {
   emptyState?: React.ReactNode;
   onRowClick?: (record: TRow, index: number) => void;
   onSortChange?: (sort: CustomTableSortState | null) => void;
+  /** Seeds the table's sort state on first render so the header reflects a
+   * server-side default. The page is still responsible for sending the
+   * matching `sort_by` value on its initial request. */
+  initialSort?: CustomTableSortState | null;
   className?: string;
   /** Custom toolbar content rendered to the right of the search bar. */
   toolbar?: React.ReactNode;

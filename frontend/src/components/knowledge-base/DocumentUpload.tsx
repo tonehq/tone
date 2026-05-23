@@ -1,15 +1,14 @@
 'use client';
 
-import { cn } from '@/utils/cn';
-import { Upload, FileText, FileSpreadsheet, FileCode, File, X, CloudUpload } from 'lucide-react';
+import { CloudUpload, File, FileCode, FileSpreadsheet, FileText, Upload, X } from 'lucide-react';
 import React, { useCallback, useRef, useState } from 'react';
 
 import CustomButton from '@/components/shared/CustomButton';
 import SelectInput from '@/components/shared/SelectInput';
-
-import { uploadDocuments } from '@/services/knowledgeBaseService';
+import { useUploadKnowledgeBase } from '@/lib/api/knowledge-base';
 import type { ApiAgent } from '@/types/agent';
 import type { SelectOption } from '@/types/components';
+import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
@@ -62,13 +61,14 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const [files, setFiles] = useState<File[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   const [isDragging, setIsDragging] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const agentOptions: SelectOption[] = agents.map((a) => ({
-    label: a.name,
-    value: String(a.id),
-  }));
+  const uploadMutation = useUploadKnowledgeBase();
+
+  const agentOptions: SelectOption[] = agents
+    .filter((a) => !!a.uuid)
+    .map((a) => ({ label: a.name, value: a.uuid as string }));
 
   const validateFile = useCallback((f: File): boolean => {
     const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
@@ -87,14 +87,11 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
     (newFiles: FileList | File[]) => {
       const validated: File[] = [];
       for (const f of Array.from(newFiles)) {
-        // Skip duplicates by name + size
         const isDuplicate = files.some((ef) => ef.name === f.name && ef.size === f.size);
         if (isDuplicate) continue;
         if (validateFile(f)) validated.push(f);
       }
-      if (validated.length > 0) {
-        setFiles((prev) => [...prev, ...validated]);
-      }
+      if (validated.length > 0) setFiles((prev) => [...prev, ...validated]);
     },
     [validateFile, files],
   );
@@ -120,56 +117,76 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
-      if (e.dataTransfer.files.length > 0) {
-        addFiles(e.dataTransfer.files);
-      }
+      if (e.dataTransfer.files.length > 0) addFiles(e.dataTransfer.files);
     },
     [addFiles],
   );
 
   const handleInputChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files.length > 0) {
-        addFiles(e.target.files);
-      }
+      if (e.target.files && e.target.files.length > 0) addFiles(e.target.files);
       e.target.value = '';
     },
     [addFiles],
   );
 
+  const uploading = uploadMutation.isPending || progress != null;
+
   const handleUpload = async () => {
     if (files.length === 0 || !selectedAgentId) return;
+    const queue = files;
+    const total = queue.length;
+    const failed: File[] = [];
+    let succeeded = 0;
+    let lastError: unknown = null;
 
-    setUploading(true);
-    try {
-      await uploadDocuments(selectedAgentId, files);
-      const label = files.length === 1 ? 'Document uploaded' : `${files.length} documents uploaded`;
-      showToast.success(label, 'Your documents have been uploaded successfully.');
-      setFiles([]);
+    setProgress({ done: 0, total });
+    for (let i = 0; i < queue.length; i += 1) {
+      try {
+        await uploadMutation.mutateAsync({ agentId: selectedAgentId, file: queue[i] });
+        succeeded += 1;
+      } catch (error) {
+        failed.push(queue[i]);
+        lastError = error;
+      }
+      setProgress({ done: i + 1, total });
+    }
+    setProgress(null);
+
+    // Keep only the failed files so the user can retry them without re-uploading duplicates.
+    setFiles(failed);
+
+    if (failed.length === 0) {
+      const label = total === 1 ? 'Document uploaded' : `${total} documents uploaded`;
+      showToast.success(label, 'Your documents are now part of the knowledge base.');
       setSelectedAgentId('');
       onUploadSuccess();
-    } catch (error) {
-      handleApiError(error);
-    } finally {
-      setUploading(false);
+    } else if (succeeded === 0) {
+      handleApiError(lastError);
+    } else {
+      // Leave the modal open with the failed files still listed so the user
+      // can retry them. The per-file mutation already invalidates the table.
+      showToast.error(
+        `${succeeded} of ${total} uploaded`,
+        `${failed.length} failed — retry the remaining files.`,
+      );
     }
   };
 
   return (
     <div className="flex min-w-0 flex-col gap-5 overflow-hidden">
-      {/* Agent selector */}
       <SelectInput
         name="agent"
         label="Agent"
-        placeholder="Select an agent"
+        placeholder={agentOptions.length === 0 ? 'No agents available' : 'Select an agent'}
         options={agentOptions}
         value={selectedAgentId}
         onValueChange={setSelectedAgentId}
         loading={agentsLoading}
+        disabled={agentOptions.length === 0}
         isRequired
       />
 
-      {/* Drop zone */}
       <div>
         <label className="mb-1.5 block text-sm font-medium text-foreground">
           Documents <span className="text-destructive">*</span>
@@ -180,40 +197,43 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
           onDrop={handleDrop}
           onClick={() => fileInputRef.current?.click()}
           className={cn(
-            'relative flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed transition-all',
+            'relative flex min-h-[148px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition-all',
             isDragging
-              ? 'border-primary bg-primary/5'
-              : 'border-border hover:border-primary/40 hover:bg-accent/50',
+              ? 'scale-[1.01] border-primary bg-primary/10'
+              : 'border-border hover:border-primary/50 hover:bg-accent/40',
           )}
         >
-          <div className="flex flex-col items-center gap-3 px-6 py-6">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <CloudUpload className="size-6 text-primary" />
+          <div className="flex flex-col items-center gap-3 px-6 py-7">
+            <div
+              className={cn(
+                'flex h-12 w-12 items-center justify-center rounded-2xl transition-colors',
+                isDragging ? 'bg-primary text-primary-foreground' : 'bg-primary/10 text-primary',
+              )}
+            >
+              <CloudUpload className="size-6" />
             </div>
             <div className="text-center">
               <p className="text-sm text-foreground">
-                Drag and drop files here or{' '}
-                <span className="font-medium text-primary underline underline-offset-2">
-                  click to browse
+                Drag &amp; drop or{' '}
+                <span className="font-medium text-primary underline-offset-2 hover:underline">
+                  browse files
                 </span>
               </p>
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                Supported: PDF, TXT, CSV, JSON, DOCX
+              <p className="mt-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
+                PDF · DOCX · TXT · CSV · JSON · max 10 MB each
               </p>
-              <p className="text-xs text-muted-foreground">Max file size: 10 MB</p>
             </div>
           </div>
         </div>
 
-        {/* Selected files list */}
         {files.length > 0 && (
           <div className="mt-3 space-y-2">
             {files.map((file, index) => (
               <div
                 key={`${file.name}-${file.size}`}
-                className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 px-4 py-2.5"
+                className="flex items-center gap-3 rounded-xl border border-border bg-muted/40 px-3.5 py-2.5"
               >
-                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-background ring-1 ring-border">
                   {getFileIcon(file.name)}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -243,7 +263,26 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
         />
       </div>
 
-      {/* Upload button */}
+      {progress && progress.total > 1 && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>
+              Uploading {progress.done + (progress.done < progress.total ? 1 : 0)} of{' '}
+              {progress.total}
+            </span>
+            <span className="tabular-nums">
+              {Math.round((progress.done / progress.total) * 100)}%
+            </span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary transition-all duration-300"
+              style={{ width: `${(progress.done / progress.total) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       <CustomButton
         type="primary"
         fullWidth
@@ -252,7 +291,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
         onClick={handleUpload}
         icon={<Upload className="size-4" />}
       >
-        {files.length > 1 ? `Upload ${files.length} Documents` : 'Upload Document'}
+        {files.length > 1 ? `Upload ${files.length} files` : 'Upload document'}
       </CustomButton>
     </div>
   );

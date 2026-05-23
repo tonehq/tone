@@ -56,6 +56,7 @@ def list_records(
     page_size: int = 20,
     filters: Optional[List] = None,
     order_by=None,
+    options: Optional[List] = None,
 ) -> Tuple[List, int]:
     """
     Paginated list with filters. Returns (items, total).
@@ -63,6 +64,7 @@ def list_records(
     - Automatically filters by organization_id if model has that column.
     - `filters` is a list of SQLAlchemy filter expressions.
     - `order_by` is a SQLAlchemy order_by clause.
+    - `options` is a list of SQLAlchemy loader options (e.g. joinedload).
     """
     query = db.query(model)
     if hasattr(model, "organization_id") and organization_id:
@@ -75,6 +77,8 @@ def list_records(
     total = query.count()
     if order_by is not None:
         query = query.order_by(order_by)
+    if options:
+        query = query.options(*options)
     offset = (page - 1) * page_size
     items = query.offset(offset).limit(page_size).all()
     return items, total
