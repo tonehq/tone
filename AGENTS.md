@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **Tone** (14367 symbols, 56473 relationships, 296 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **curitiba** (6148 symbols, 16326 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -17,7 +17,7 @@ This project is indexed by GitNexus as **Tone** (14367 symbols, 56473 relationsh
 
 1. `gitnexus_query({query: "<error or symptom>"})` — find execution flows related to the issue
 2. `gitnexus_context({name: "<suspect function>"})` — see all callers, callees, and process participation
-3. `READ gitnexus://repo/Tone/process/{processName}` — trace the full execution flow step by step
+3. `READ gitnexus://repo/curitiba/process/{processName}` — trace the full execution flow step by step
 4. For regressions: `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
 
 ## When Refactoring
@@ -56,10 +56,10 @@ This project is indexed by GitNexus as **Tone** (14367 symbols, 56473 relationsh
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/Tone/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/Tone/clusters` | All functional areas |
-| `gitnexus://repo/Tone/processes` | All execution flows |
-| `gitnexus://repo/Tone/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/curitiba/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/curitiba/clusters` | All functional areas |
+| `gitnexus://repo/curitiba/processes` | All execution flows |
+| `gitnexus://repo/curitiba/process/{name}` | Step-by-step execution trace |
 
 ## Self-Check Before Finishing
 
