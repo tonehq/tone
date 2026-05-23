@@ -77,7 +77,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     heading: 'Settings',
     items: [
-      { label: 'Services', href: '/service-providers', icon: Plug },
+      { label: 'Model Providers', href: '/model-providers', icon: Plug },
       { label: 'Integrations', href: '/integrations', icon: Cable },
       { label: 'Phone Numbers', href: '/phone-numbers', icon: Phone },
       { label: 'Organizations', href: '/organizations', icon: Building2 },

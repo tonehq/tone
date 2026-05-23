@@ -36,7 +36,7 @@ export async function pagedListRequest<T>(
       page_size: body.page_size ?? data.length,
     };
   }
-  // Handle { data: [...], pagination: {...} } envelope from backend
+  // Handle { data: [...], pagination: {...} } envelope from legacy backends.
   if ('data' in data && 'pagination' in data) {
     const d = data as { data: T[]; pagination: { total: number; page: number; page_size: number } };
     return {
@@ -45,6 +45,11 @@ export async function pagedListRequest<T>(
       page: d.pagination.page,
       page_size: d.pagination.page_size,
     };
+  }
+  // Handle { items, total, page, page_size } envelope used by card_page-style endpoints.
+  if ('items' in data && Array.isArray((data as { items: T[] }).items) && 'total' in data) {
+    const d = data as { items: T[]; total: number; page: number; page_size: number };
+    return { rows: d.items, total: d.total, page: d.page, page_size: d.page_size };
   }
   return data as ListResponse<T>;
 }

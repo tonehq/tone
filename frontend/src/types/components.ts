@@ -268,3 +268,17 @@ export interface CustomModalProps {
   contentClassName?: string;
   showCloseButton?: boolean;
 }
+
+export interface CustomDrawerProps {
+  open: boolean;
+  onClose: () => void;
+  title?: React.ReactNode;
+  description?: string;
+  children?: React.ReactNode;
+  footer?: React.ReactNode | null;
+  side?: 'left' | 'right' | 'top' | 'bottom';
+  width?: string;
+  className?: string;
+  contentClassName?: string;
+  showCloseButton?: boolean;
+}

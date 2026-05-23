@@ -1,489 +1,791 @@
 'use client';
 
-import { deleteProviderAtom, fetchModelsAtom, modelsAtom } from '@/atoms/ProviderAtom';
-
-import ApiKeyUpsertModal from '@/components/service-providers/ApiKeyUpsertModal';
-import ModelsPanel from '@/components/service-providers/ModelsPanel';
-
-import ProviderLogo from '@/components/service-providers/ProviderLogo';
-import { ActionMenu, CustomButton, CustomTab } from '@/components/shared';
-import ToneLoader from '@/components/shared/ToneLoader';
-import { Badge } from '@/components/ui/badge';
-import {
-  deleteApiKey,
-  getApiKeyPlaintext,
-  getServiceProvider,
-  listApiKeysByAccount,
-  type ApiKeyListRow,
-} from '@/services/providerService';
-import type { ServiceProvider } from '@/types/provider';
-import { cn } from '@/utils/cn';
-import { handleApiError } from '@/utils/helpers';
-import { showToast } from '@/utils/toast';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useAtom } from 'jotai';
-import {
-  AlertCircle,
-  ArrowLeft,
-  Box,
-  CheckCircle2,
-  Copy,
-  Eye,
-  EyeOff,
-  Globe,
-  Key,
-  Loader2,
-  Plus,
-  Trash2,
-} from 'lucide-react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft, KeyRound, Layers, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useParams, useRouter } from 'next/navigation';
+import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { STATUS_STYLES, TYPE_BADGE_STYLES } from './constants';
+import {
+  deleteProviderModelAtom,
+  fetchProviderKeysAtom,
+  fetchProviderModelsAtom,
+  providerKeysAtom,
+  providerModelsAtom,
+  upsertProviderModelAtom,
+  upsertServiceAtom,
+} from '@/atoms/ServicesAtom';
+import { CustomButton, CustomModal, CustomTable, SearchBar } from '@/components/shared';
+import { Badge } from '@/components/ui/badge';
+import { deleteService, listProviderCatalog } from '@/services/servicesService';
+import type { ModelUpsertPayload } from '@/services/servicesService';
+import type { CustomTableColumn, CustomTableSortState } from '@/types/components';
+import type {
+  ProviderCatalogItem,
+  ProviderModel,
+  Service,
+  ServiceKind,
+  ServiceUpsertPayload,
+} from '@/types/service';
+import { cn } from '@/utils/cn';
+import { formatDate } from '@/utils/date';
+import { handleApiError } from '@/utils/helpers';
+import { showToast } from '@/utils/toast';
+
+import ApiKeyCreateDrawer from './api-key-create-drawer';
+import ApiKeyEditDrawer from './api-key-edit-drawer';
+import ModelFormDrawer from './model-form-drawer';
+import ProviderLogo from './ProviderLogo';
+import { TYPE_BADGE_STYLES } from './constants';
+
+const KEYS_PAGE_SIZE = 20;
+const MODELS_PAGE_SIZE = 20;
 
 export default function ServiceProviderDetailPage() {
   const router = useRouter();
   const params = useParams<{ providerId: string }>();
-  const searchParams = useSearchParams();
-  const providerId = Number(params.providerId);
-  const accountId = searchParams.get('accountId') ? Number(searchParams.get('accountId')) : null;
-  const accountNameParam = searchParams.get('accountName');
+  const providerId = params?.providerId;
 
-  const [modelsState] = useAtom(modelsAtom);
-  const [, fetchModels] = useAtom(fetchModelsAtom);
-  const [, removeProvider] = useAtom(deleteProviderAtom);
+  const [keysState] = useAtom(providerKeysAtom);
+  const [modelsState] = useAtom(providerModelsAtom);
+  const [, fetchKeys] = useAtom(fetchProviderKeysAtom);
+  const [, fetchModels] = useAtom(fetchProviderModelsAtom);
+  const [, upsertService] = useAtom(upsertServiceAtom);
+  const [, upsertProviderModel] = useAtom(upsertProviderModelAtom);
+  const [, deleteProviderModel] = useAtom(deleteProviderModelAtom);
 
-  const [provider, setProvider] = useState<ServiceProvider | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [provider, setProvider] = useState<ProviderCatalogItem | null>(null);
+  const [providerLoading, setProviderLoading] = useState(true);
+
+  // ─── keys panel local state ───────────────────────────────────────────────
+  const [keysSearch, setKeysSearch] = useState('');
+  const [keysPage, setKeysPage] = useState(1);
+  const [keysSort, setKeysSort] = useState('-updated_at');
+
+  // ─── models panel local state ─────────────────────────────────────────────
+  const [modelsSearch, setModelsSearch] = useState('');
+  const [modelsPage, setModelsPage] = useState(1);
+  const [modelsSort, setModelsSort] = useState('name');
+
+  // ─── drawer + delete modal state ──────────────────────────────────────────
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editing, setEditing] = useState<Service | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Service | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  // API Keys
-  const [keys, setKeys] = useState<ApiKeyListRow[]>([]);
-  const [keysLoading, setKeysLoading] = useState(false);
-  const [keyModalOpen, setKeyModalOpen] = useState(false);
-  const [editingKey, setEditingKey] = useState<ApiKeyListRow | null>(null);
-  const [revealedKeyId, setRevealedKeyId] = useState<number | null>(null);
-  const [revealedKeyValue, setRevealedKeyValue] = useState<string | null>(null);
-  const [revealingKeyId, setRevealingKeyId] = useState<number | null>(null);
+  // ─── model drawer + delete modal state ────────────────────────────────────
+  const [modelDrawerOpen, setModelDrawerOpen] = useState(false);
+  const [editingModel, setEditingModel] = useState<ProviderModel | null>(null);
+  const [isSavingModel, setIsSavingModel] = useState(false);
+  const [modelDeleteTarget, setModelDeleteTarget] = useState<ProviderModel | null>(null);
+  const [deletingModel, setDeletingModel] = useState(false);
 
-  // ── Data loading ─────────────────────────────────────────────────
+  // ─── tab state ────────────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<'keys' | 'models'>('keys');
 
-  const loadKeys = useCallback(async () => {
-    if (!accountId) {
-      setKeys([]);
-      return;
-    }
-    setKeysLoading(true);
-    try {
-      const result = await listApiKeysByAccount({ account_id: accountId, page: 1, page_size: 100 });
-      setKeys(result.keys);
-    } catch (error) {
-      handleApiError(error);
-    } finally {
-      setKeysLoading(false);
-    }
-  }, [accountId]);
+  // ─── load provider info via catalog (small, cached) ───────────────────────
+  useEffect(() => {
+    if (!providerId) return;
+    let cancelled = false;
+    setProviderLoading(true);
+    listProviderCatalog()
+      .then((items) => {
+        if (cancelled) return;
+        const match = items.find((p) => p.id === providerId) ?? null;
+        setProvider(match);
+      })
+      .catch((err) => {
+        if (!cancelled) handleApiError(err);
+      })
+      .finally(() => {
+        if (!cancelled) setProviderLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [providerId]);
 
-  const loadProvider = useCallback(async () => {
-    if (!Number.isFinite(providerId)) return;
-    setLoading(true);
-    setRevealedKeyId(null);
-    setRevealedKeyValue(null);
-    try {
-      const data = await getServiceProvider(providerId);
-      setProvider(data);
-      fetchModels({ model_provider_menu_id: providerId, page: 1, page_size: 10 }).catch(
-        handleApiError,
-      );
-      loadKeys();
-    } catch (error) {
-      handleApiError(error);
-      setProvider(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [providerId, fetchModels, loadKeys]);
+  // ─── load keys + models ───────────────────────────────────────────────────
+  const reloadKeys = useCallback(() => {
+    if (!providerId) return Promise.resolve();
+    return fetchKeys({
+      providerId,
+      params: {
+        page: keysPage,
+        page_size: KEYS_PAGE_SIZE,
+        search: keysSearch || undefined,
+        sort_by: keysSort,
+      },
+    });
+  }, [providerId, keysPage, keysSearch, keysSort, fetchKeys]);
+
+  const reloadModels = useCallback(() => {
+    if (!providerId) return Promise.resolve();
+    return fetchModels({
+      providerId,
+      params: {
+        page: modelsPage,
+        page_size: MODELS_PAGE_SIZE,
+        search: modelsSearch || undefined,
+        sort_by: modelsSort,
+      },
+    });
+  }, [providerId, modelsPage, modelsSearch, modelsSort, fetchModels]);
 
   useEffect(() => {
-    loadProvider();
-  }, [loadProvider]);
+    reloadKeys().catch(handleApiError);
+  }, [reloadKeys]);
 
-  // ── API Key handlers ─────────────────────────────────────────────
+  useEffect(() => {
+    reloadModels().catch(handleApiError);
+  }, [reloadModels]);
 
-  const handleReveal = useCallback(
-    async (keyId: number) => {
-      if (revealedKeyId === keyId) {
-        setRevealedKeyId(null);
-        setRevealedKeyValue(null);
-        return;
-      }
-      setRevealingKeyId(keyId);
+  // ─── handlers ─────────────────────────────────────────────────────────────
+  const handleAddKey = () => {
+    setCreateOpen(true);
+  };
+
+  const handleEditKey = (svc: Service) => {
+    setEditing(svc);
+  };
+
+  const handleCreateKey = useCallback(
+    async (payload: ServiceUpsertPayload) => {
+      setIsSaving(true);
       try {
-        const detail = await getApiKeyPlaintext(keyId);
-        setRevealedKeyId(keyId);
-        setRevealedKeyValue(detail.api_key);
-      } catch (error) {
-        handleApiError(error);
+        await upsertService({ values: payload });
+        showToast.success('API key created');
+        setCreateOpen(false);
+        await reloadKeys();
+      } catch (err) {
+        handleApiError(err);
       } finally {
-        setRevealingKeyId(null);
+        setIsSaving(false);
       }
     },
-    [revealedKeyId],
+    [upsertService, reloadKeys],
   );
 
-  const handleCopy = useCallback(async (keyId: number) => {
-    try {
-      const detail = await getApiKeyPlaintext(keyId);
-      await navigator.clipboard.writeText(detail.api_key);
-      showToast.success('Copied to clipboard');
-    } catch (error) {
-      handleApiError(error);
-    }
-  }, []);
-
-  const handleDeleteKey = useCallback(
-    async (row: ApiKeyListRow) => {
+  const handleUpdateKey = useCallback(
+    async (payload: Partial<ServiceUpsertPayload>, id: string) => {
+      setIsSaving(true);
       try {
-        await deleteApiKey(row.id);
-        showToast.success('API key deleted');
-        await loadKeys();
-      } catch (error) {
-        handleApiError(error);
+        await upsertService({ id, values: payload as ServiceUpsertPayload });
+        showToast.success('API key updated');
+        setEditing(null);
+        await reloadKeys();
+      } catch (err) {
+        handleApiError(err);
+      } finally {
+        setIsSaving(false);
       }
     },
-    [loadKeys],
+    [upsertService, reloadKeys],
   );
 
-  const handleKeySaved = useCallback(async () => {
-    await loadKeys();
-  }, [loadKeys]);
-
-  // ── Provider handlers ────────────────────────────────────────────
-
-  const handleDelete = useCallback(async () => {
-    if (!provider) return;
-    if (provider.is_system) {
-      showToast.error('System providers cannot be deleted');
-      return;
-    }
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await removeProvider(provider.id);
-      showToast.success('Provider deleted');
-      router.push('/service-providers');
-    } catch (error) {
-      handleApiError(error);
+      await deleteService(deleteTarget.id);
+      showToast.success('API key deleted');
+      setDeleteTarget(null);
+      await reloadKeys();
+    } catch (err) {
+      handleApiError(err);
     } finally {
       setDeleting(false);
     }
-  }, [provider, removeProvider, router]);
+  };
 
-  const goBack = useCallback(() => router.push('/service-providers'), [router]);
+  const handleAddModel = () => {
+    setEditingModel(null);
+    setModelDrawerOpen(true);
+  };
 
-  // ── Tab content ──────────────────────────────────────────────────
+  const handleEditModel = (m: ProviderModel) => {
+    setEditingModel(m);
+    setModelDrawerOpen(true);
+  };
 
-  const tabItems = useMemo(() => {
-    if (!provider) return [];
+  const handleSubmitModel = useCallback(
+    async (payload: ModelUpsertPayload, id?: string) => {
+      if (!providerId) return;
+      setIsSavingModel(true);
+      try {
+        await upsertProviderModel({ providerId, modelId: id, values: payload });
+        showToast.success(id ? 'Model updated' : 'Model created');
+        setModelDrawerOpen(false);
+        setEditingModel(null);
+        await reloadModels();
+      } catch (err) {
+        handleApiError(err);
+      } finally {
+        setIsSavingModel(false);
+      }
+    },
+    [providerId, upsertProviderModel, reloadModels],
+  );
 
-    return [
+  const handleConfirmDeleteModel = async () => {
+    if (!modelDeleteTarget || !providerId) return;
+    setDeletingModel(true);
+    try {
+      await deleteProviderModel({ providerId, modelId: modelDeleteTarget.id });
+      showToast.success('Model deleted');
+      setModelDeleteTarget(null);
+      await reloadModels();
+    } catch (err) {
+      handleApiError(err);
+    } finally {
+      setDeletingModel(false);
+    }
+  };
+
+  const handleKeysSearch = useCallback((value: string) => {
+    setKeysSearch(value);
+    setKeysPage(1);
+  }, []);
+  const handleKeysSort = useCallback((s: CustomTableSortState | null) => {
+    setKeysPage(1);
+    if (!s) return setKeysSort('-updated_at');
+    setKeysSort(s.order === 'desc' ? `-${s.field}` : s.field);
+  }, []);
+  const handleModelsSearch = useCallback((value: string) => {
+    setModelsSearch(value);
+    setModelsPage(1);
+  }, []);
+  const handleModelsSort = useCallback((s: CustomTableSortState | null) => {
+    setModelsPage(1);
+    if (!s) return setModelsSort('name');
+    setModelsSort(s.order === 'desc' ? `-${s.field}` : s.field);
+  }, []);
+
+  // ─── columns ──────────────────────────────────────────────────────────────
+  const keysColumns = useMemo<CustomTableColumn<Service>[]>(
+    () => [
       {
-        key: 'keys',
-        label: (
-          <span className="flex items-center gap-1.5">
-            <Key className="size-3.5" />
-            API Keys
-            <span className="ml-0.5 rounded-full bg-muted px-1.5 py-px text-[10px] tabular-nums text-muted-foreground">
-              {keys.length}
+        key: 'label',
+        title: 'Name',
+        dataIndex: 'label',
+        sorter: true,
+        render: (_v, r) => (
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate text-sm font-medium text-foreground" title={r.label ?? ''}>
+              {r.label || '—'}
             </span>
-          </span>
-        ),
-        children: (
-          <div className="h-full overflow-auto px-6 py-5">
-            <div className="mb-3 flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">
-                Credentials used by services and models for this provider
-              </p>
-              <CustomButton
-                type="primary"
-                size="sm"
-                icon={<Plus />}
-                onClick={() => {
-                  setEditingKey(null);
-                  setKeyModalOpen(true);
-                }}
-              >
-                Add Key
-              </CustomButton>
-            </div>
-            {keysLoading && keys.length === 0 ? (
-              <div className="flex items-center justify-center gap-2 py-8 text-xs text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" />
-                Loading...
-              </div>
-            ) : keys.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 py-10">
-                <div className="flex size-11 items-center justify-center rounded-xl bg-muted">
-                  <Key className="size-5 text-muted-foreground" />
-                </div>
-                <p className="text-xs text-muted-foreground">No API keys yet</p>
-                <CustomButton
-                  type="default"
-                  size="sm"
-                  icon={<Plus />}
-                  onClick={() => {
-                    setEditingKey(null);
-                    setKeyModalOpen(true);
-                  }}
-                >
-                  Add Key
-                </CustomButton>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {keys.map((row) => {
-                  const isRevealed = revealedKeyId === row.id;
-                  const isRevLoading = revealingKeyId === row.id;
-                  const displayValue =
-                    isRevealed && revealedKeyValue ? revealedKeyValue : row.api_key_hint;
-                  return (
-                    <div
-                      key={row.id}
-                      className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-background px-4 py-3 transition-colors hover:bg-accent/20"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium text-foreground">{row.name}</div>
-                        {row.description && (
-                          <p className="text-[11px] text-muted-foreground">{row.description}</p>
-                        )}
-                      </div>
-
-                      {/* Key value display */}
-                      <div className="flex items-center gap-1 rounded-md bg-muted/50 px-2.5 py-1.5">
-                        <span className="max-w-[200px] truncate font-mono text-xs text-foreground">
-                          {isRevLoading ? '...' : displayValue}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleReveal(row.id)}
-                          disabled={isRevLoading}
-                          className="flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-50"
-                        >
-                          {isRevLoading ? (
-                            <Loader2 className="size-3 animate-spin" />
-                          ) : isRevealed ? (
-                            <EyeOff className="size-3" />
-                          ) : (
-                            <Eye className="size-3" />
-                          )}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(row.id)}
-                          className="flex size-6 cursor-pointer items-center justify-center rounded text-muted-foreground hover:text-foreground"
-                        >
-                          <Copy className="size-3" />
-                        </button>
-                      </div>
-
-                      {/* Status + Validation */}
-                      <div className="flex items-center gap-3">
-                        <span className="flex items-center gap-1 text-[11px] capitalize text-muted-foreground">
-                          <span
-                            className={cn(
-                              'size-1.5 rounded-full',
-                              row.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500',
-                            )}
-                          />
-                          {row.status}
-                        </span>
-                        <span
-                          className={cn(
-                            'flex items-center gap-1 text-[11px]',
-                            row.is_valid
-                              ? 'text-emerald-600 dark:text-emerald-400'
-                              : 'text-amber-600 dark:text-amber-400',
-                          )}
-                        >
-                          {row.is_valid ? (
-                            <CheckCircle2 className="size-3.5" />
-                          ) : (
-                            <AlertCircle className="size-3.5" />
-                          )}
-                          {row.is_valid ? 'Valid' : 'Unverified'}
-                        </span>
-                      </div>
-
-                      <ActionMenu
-                        onEdit={() => {
-                          setEditingKey(row);
-                          setKeyModalOpen(true);
-                        }}
-                        onDelete={() => handleDeleteKey(row)}
-                        itemName={row.name}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
+            {r.description && (
+              <span className="truncate text-xs text-muted-foreground">{r.description}</span>
             )}
           </div>
         ),
       },
       {
-        key: 'models',
-        label: (
-          <span className="flex items-center gap-1.5">
-            <Box className="size-3.5" />
-            Models
-            <span className="ml-0.5 rounded-full bg-muted px-1.5 py-px text-[10px] tabular-nums text-muted-foreground">
-              {modelsState.pagination?.total ?? provider.models?.length ?? 0}
-            </span>
+        key: 'service_type',
+        title: 'Type',
+        dataIndex: 'service_type',
+        sorter: true,
+        width: 'w-[100px]',
+        render: (_v, r) => (
+          <Badge
+            className={cn(
+              'px-2 py-0 text-[10px] font-semibold uppercase tracking-wider',
+              TYPE_BADGE_STYLES[r.service_type] ?? '',
+            )}
+          >
+            {r.service_type}
+          </Badge>
+        ),
+      },
+      {
+        key: 'is_default',
+        title: 'Default',
+        dataIndex: 'is_default',
+        sorter: true,
+        width: 'w-[90px]',
+        render: (_v, r) =>
+          r.is_default ? (
+            <Badge variant="outline" className="border-primary/40 text-primary">
+              Default
+            </Badge>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          ),
+      },
+      {
+        key: 'is_active',
+        title: 'Status',
+        dataIndex: 'is_active',
+        sorter: true,
+        width: 'w-[110px]',
+        render: (_v, r) => (
+          <span
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
+              r.is_active
+                ? 'bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/20 dark:text-emerald-400'
+                : 'bg-muted text-muted-foreground ring-1 ring-border',
+            )}
+          >
+            <span
+              className={cn(
+                'h-1.5 w-1.5 rounded-full',
+                r.is_active ? 'bg-emerald-500' : 'bg-muted-foreground/40',
+              )}
+            />
+            {r.is_active ? 'Active' : 'Inactive'}
           </span>
         ),
-        children: (
-          <div className="flex h-full min-h-0 flex-col overflow-hidden">
-            <ModelsPanel selectedProvider={provider} onBack={goBack} compact />
+      },
+      {
+        key: 'updated_at',
+        title: 'Last updated',
+        dataIndex: 'updated_at',
+        sorter: true,
+        width: 'w-[180px]',
+        render: (v) => (
+          <span className="text-sm tabular-nums text-muted-foreground">
+            {v ? formatDate(v as number) : '—'}
+          </span>
+        ),
+      },
+      {
+        key: 'actions',
+        title: '',
+        align: 'right',
+        width: 'w-[64px]',
+        render: (_v, r) => (
+          <CustomButton
+            type="text"
+            size="icon-xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDeleteTarget(r);
+            }}
+            aria-label="Delete API key"
+            className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+          >
+            <Trash2 className="size-4" />
+          </CustomButton>
+        ),
+      },
+    ],
+    [],
+  );
+
+  const modelsColumns = useMemo<CustomTableColumn<ProviderModel>[]>(
+    () => [
+      {
+        key: 'name',
+        title: 'Name',
+        dataIndex: 'name',
+        sorter: true,
+        render: (_v, m) => (
+          <div className="flex min-w-0 flex-col">
+            <span className="truncate text-sm font-medium text-foreground">
+              {m.display_name || m.name}
+            </span>
+            {m.display_name && m.display_name !== m.name && (
+              <span className="truncate text-xs text-muted-foreground">{m.name}</span>
+            )}
           </div>
         ),
       },
-    ];
-  }, [
-    provider,
-    keys,
-    keysLoading,
-    revealedKeyId,
-    revealedKeyValue,
-    revealingKeyId,
-    modelsState.pagination,
-    handleReveal,
-    handleCopy,
-    handleDeleteKey,
-    goBack,
-  ]);
+      {
+        key: 'kind',
+        title: 'Kind',
+        dataIndex: 'kind',
+        sorter: true,
+        width: 'w-[100px]',
+        render: (_v, m) => (
+          <Badge
+            className={cn(
+              'px-2 py-0 text-[10px] font-semibold uppercase tracking-wider',
+              TYPE_BADGE_STYLES[m.kind] ?? '',
+            )}
+          >
+            {m.kind}
+          </Badge>
+        ),
+      },
+      {
+        key: 'description',
+        title: 'Description',
+        dataIndex: 'description',
+        render: (_v, m) => (
+          <span className="line-clamp-2 text-sm text-muted-foreground">{m.description ?? '—'}</span>
+        ),
+      },
+      {
+        key: 'is_active',
+        title: 'Status',
+        dataIndex: 'is_active',
+        sorter: true,
+        width: 'w-[110px]',
+        render: (_v, m) => (
+          <span
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
+              m.is_active
+                ? 'bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/20 dark:text-emerald-400'
+                : 'bg-muted text-muted-foreground ring-1 ring-border',
+            )}
+          >
+            <span
+              className={cn(
+                'h-1.5 w-1.5 rounded-full',
+                m.is_active ? 'bg-emerald-500' : 'bg-muted-foreground/40',
+              )}
+            />
+            {m.is_active ? 'Active' : 'Inactive'}
+          </span>
+        ),
+      },
+      {
+        key: 'updated_at',
+        title: 'Last updated',
+        dataIndex: 'updated_at',
+        sorter: true,
+        width: 'w-[180px]',
+        render: (v) => (
+          <span className="text-sm tabular-nums text-muted-foreground">
+            {v ? formatDate(v as number) : '—'}
+          </span>
+        ),
+      },
+      {
+        key: 'actions',
+        title: '',
+        align: 'right',
+        width: 'w-[96px]',
+        render: (_v, m) => (
+          <div className="flex items-center justify-end gap-1">
+            <CustomButton
+              type="text"
+              size="icon-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleEditModel(m);
+              }}
+              aria-label="Edit model"
+              className="text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <Pencil className="size-4" />
+            </CustomButton>
+            <CustomButton
+              type="text"
+              size="icon-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                setModelDeleteTarget(m);
+              }}
+              aria-label="Delete model"
+              className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="size-4" />
+            </CustomButton>
+          </div>
+        ),
+      },
+    ],
+    [],
+  );
 
-  // ── Loading / Not found ────────────────────────────────────────
-
-  if (loading) {
-    return (
-      <div className="animate-page flex h-full items-center justify-center">
-        <ToneLoader label="Loading provider..." />
-      </div>
-    );
-  }
-
-  if (!provider) {
-    return (
-      <div className="animate-page flex h-full flex-col items-center justify-center gap-4 p-6">
-        <div className="flex size-14 items-center justify-center rounded-2xl bg-muted">
-          <AlertCircle className="size-6 text-muted-foreground" />
-        </div>
-        <p className="text-sm font-medium text-foreground">Service provider not found</p>
-        <CustomButton type="default" icon={<ArrowLeft />} onClick={goBack}>
-          Back to services
-        </CustomButton>
-      </div>
-    );
-  }
-
-  const typeKey = provider.provider_type ?? '';
-  const statusKey = (provider.status ?? 'active').toLowerCase();
+  // ─── render ───────────────────────────────────────────────────────────────
+  const isKeysTab = activeTab === 'keys';
 
   return (
-    <div className="animate-page flex h-full flex-col overflow-hidden">
-      {/* ── Header ──────────────────────────────────────────────────── */}
-      <div className="shrink-0 border-b border-border bg-card px-6 py-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-4">
-            <button
-              onClick={goBack}
-              className="flex size-9 cursor-pointer items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              aria-label="Back"
-            >
-              <ArrowLeft className="size-4" />
-            </button>
+    <div className="animate-page flex h-full min-h-0 flex-col gap-2">
+      {/* back nav */}
+      <div className="shrink-0">
+        <CustomButton
+          type="text"
+          size="sm"
+          icon={<ArrowLeft className="size-4" />}
+          onClick={() => router.push('/model-providers')}
+          className="-ml-2 text-muted-foreground hover:text-foreground"
+        >
+          Back to Model Providers
+        </CustomButton>
+      </div>
 
-            <ProviderLogo
-              providerName={provider.name}
-              serviceType={typeKey}
-              className="size-12 rounded-xl"
-              imgSize={28}
-            />
+      {/* tight inline header */}
+      <header className="flex shrink-0 items-center gap-3">
+        <ProviderLogo
+          providerName={provider?.slug}
+          serviceType={provider?.kinds[0] ?? ''}
+          className="size-10"
+        />
+        <div className="min-w-0 flex-1">
+          <h1 className="font-display text-2xl font-semibold leading-tight tracking-tight text-foreground">
+            {providerLoading ? 'Loading…' : (provider?.display_name ?? 'Unknown provider')}
+          </h1>
+          {provider?.description && (
+            <p className="truncate text-xs text-muted-foreground">{provider.description}</p>
+          )}
+        </div>
+      </header>
 
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-xl font-bold tracking-tight text-foreground">
-                  {accountNameParam ?? provider.display_name}
-                </h1>
-                <Badge
-                  className={cn(
-                    'text-[10px] font-semibold uppercase tracking-wider',
-                    TYPE_BADGE_STYLES[typeKey] ?? 'bg-muted text-muted-foreground',
-                  )}
-                >
-                  {typeKey}
-                </Badge>
-                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <span
-                    className={cn(
-                      'size-2 rounded-full',
-                      STATUS_STYLES[statusKey] ?? STATUS_STYLES.inactive,
-                    )}
-                  />
-                  <span className="capitalize">{statusKey}</span>
-                </span>
-                {provider.is_system && (
-                  <Badge className="bg-muted text-[10px] font-medium text-muted-foreground hover:bg-muted">
-                    System
-                  </Badge>
-                )}
-              </div>
-
-              <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                <span className="font-mono">{provider.name}</span>
-                {provider.description && <span>{provider.description}</span>}
-                {provider.base_url && (
-                  <span className="flex items-center gap-1">
-                    <Globe className="size-3" />
-                    <span className="font-mono">{provider.base_url}</span>
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {!provider.is_system && (
-            <CustomButton
-              type="danger"
-              size="sm"
-              icon={<Trash2 />}
-              onClick={handleDelete}
-              loading={deleting}
-            >
-              Delete
-            </CustomButton>
+      {/* tab strip + per-tab toolbar */}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border">
+        <div className="relative -mb-px flex items-center gap-1">
+          <TabButton
+            active={isKeysTab}
+            onClick={() => setActiveTab('keys')}
+            icon={<KeyRound className="size-3.5" />}
+            label="API Keys"
+            count={keysState.total}
+          />
+          <TabButton
+            active={!isKeysTab}
+            onClick={() => setActiveTab('models')}
+            icon={<Layers className="size-3.5" />}
+            label="Models"
+            count={modelsState.total}
+          />
+        </div>
+        <div className="flex items-center gap-2 pb-2">
+          {isKeysTab ? (
+            <>
+              <SearchBar
+                placeholder="Search keys…"
+                value={keysSearch}
+                onSearch={handleKeysSearch}
+                debounceMs={300}
+                containerClassName="max-w-[220px]"
+              />
+              <CustomButton
+                type="primary"
+                size="sm"
+                icon={<Plus className="size-4" />}
+                onClick={handleAddKey}
+              >
+                Add API key
+              </CustomButton>
+            </>
+          ) : (
+            <>
+              <SearchBar
+                placeholder="Search models…"
+                value={modelsSearch}
+                onSearch={handleModelsSearch}
+                debounceMs={300}
+                containerClassName="max-w-[220px]"
+              />
+              <CustomButton
+                type="primary"
+                size="sm"
+                icon={<Plus className="size-4" />}
+                onClick={handleAddModel}
+              >
+                Add model
+              </CustomButton>
+            </>
           )}
         </div>
       </div>
 
-      {/* ── Tabbed content ──────────────────────────────────────────── */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <CustomTab
-          items={tabItems}
-          defaultActiveKey="keys"
-          className="flex min-h-0 flex-1 flex-col overflow-hidden"
-          tabBarClassName="shrink-0 border-b border-border bg-background px-6"
-          contentClassName="min-h-0 flex-1 overflow-hidden"
-        />
+      {/* table panes — animated swap; this is the only scroll surface */}
+      <div className="mt-2 flex min-h-0 flex-1 flex-col">
+        <AnimatePresence mode="wait">
+          {isKeysTab ? (
+            <motion.div
+              key="keys"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              <CustomTable
+                columns={keysColumns}
+                dataSource={keysState.items}
+                rowKey="id"
+                loading={keysState.loading}
+                onRowClick={(r) => handleEditKey(r)}
+                onSortChange={handleKeysSort}
+                initialSort={{ field: 'updated_at', order: 'desc' }}
+                pagination={{
+                  current: keysPage,
+                  pageSize: KEYS_PAGE_SIZE,
+                  total: keysState.total,
+                  onChange: (p) => setKeysPage(p),
+                }}
+                emptyState={
+                  <div className="flex flex-col items-center gap-3 py-12 text-center">
+                    <KeyRound className="size-8 text-muted-foreground" />
+                    <p className="text-sm font-medium text-foreground">
+                      No API keys for this provider
+                    </p>
+                    <p className="max-w-xs text-xs text-muted-foreground">
+                      Add a key to start using this provider in your agents.
+                    </p>
+                    <CustomButton
+                      type="primary"
+                      size="sm"
+                      icon={<Plus className="size-4" />}
+                      onClick={handleAddKey}
+                    >
+                      Add API key
+                    </CustomButton>
+                  </div>
+                }
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="models"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              <CustomTable
+                columns={modelsColumns}
+                dataSource={modelsState.items}
+                rowKey="id"
+                loading={modelsState.loading}
+                onRowClick={(r) => handleEditModel(r)}
+                onSortChange={handleModelsSort}
+                initialSort={{ field: 'name', order: 'asc' }}
+                pagination={{
+                  current: modelsPage,
+                  pageSize: MODELS_PAGE_SIZE,
+                  total: modelsState.total,
+                  onChange: (p) => setModelsPage(p),
+                }}
+                emptyState={
+                  <div className="flex flex-col items-center gap-3 py-12 text-center">
+                    <Layers className="size-8 text-muted-foreground" />
+                    <p className="text-sm font-medium text-foreground">No models registered</p>
+                    <p className="max-w-xs text-xs text-muted-foreground">
+                      Add a model to make it available in the catalog for this provider.
+                    </p>
+                    <CustomButton
+                      type="primary"
+                      size="sm"
+                      icon={<Plus className="size-4" />}
+                      onClick={handleAddModel}
+                    >
+                      Add model
+                    </CustomButton>
+                  </div>
+                }
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* ── Modals ──────────────────────────────────────────────────── */}
+      {/* create drawer */}
+      <ApiKeyCreateDrawer
+        open={createOpen}
+        lockedProviderId={providerId}
+        defaultServiceType={(provider?.kinds[0] as ServiceKind) ?? null}
+        onClose={() => setCreateOpen(false)}
+        onSubmit={handleCreateKey}
+        isPending={isSaving}
+      />
 
-      <ApiKeyUpsertModal
-        open={keyModalOpen}
-        onClose={() => setKeyModalOpen(false)}
-        onSaved={handleKeySaved}
-        accountId={accountId!}
-        apiKey={editingKey}
+      {/* edit drawer */}
+      <ApiKeyEditDrawer
+        open={!!editing}
+        editing={editing}
+        onClose={() => setEditing(null)}
+        onSubmit={handleUpdateKey}
+        isPending={isSaving}
+      />
+
+      {/* delete confirm */}
+      <CustomModal
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete API key"
+        description={
+          deleteTarget
+            ? `Delete "${deleteTarget.label || 'this API key'}"? This action cannot be undone.`
+            : ''
+        }
+        confirmText="Delete"
+        confirmType="danger"
+        confirmLoading={deleting}
+        onConfirm={handleConfirmDelete}
+      />
+
+      {/* model drawer */}
+      <ModelFormDrawer
+        open={modelDrawerOpen}
+        editing={editingModel}
+        defaultKind={(provider?.kinds[0] as ServiceKind) ?? null}
+        allowedKinds={(provider?.kinds as ServiceKind[]) ?? undefined}
+        onClose={() => {
+          setModelDrawerOpen(false);
+          setEditingModel(null);
+        }}
+        onSubmit={handleSubmitModel}
+        isPending={isSavingModel}
+      />
+
+      {/* model delete confirm */}
+      <CustomModal
+        open={!!modelDeleteTarget}
+        onClose={() => !deletingModel && setModelDeleteTarget(null)}
+        title="Delete model"
+        description={
+          modelDeleteTarget
+            ? `Delete "${modelDeleteTarget.display_name || modelDeleteTarget.name}"? Agents referencing this model will fail until they're reconfigured.`
+            : ''
+        }
+        confirmText="Delete"
+        confirmType="danger"
+        confirmLoading={deletingModel}
+        onConfirm={handleConfirmDeleteModel}
       />
     </div>
+  );
+}
+
+// ─── tab button (inline, underline indicator) ──────────────────────────────
+interface TabButtonProps {
+  active: boolean;
+  onClick: () => void;
+  icon?: React.ReactNode;
+  label: string;
+  count?: number;
+  muted?: boolean;
+}
+
+function TabButton({ active, onClick, icon, label, count, muted }: TabButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={cn(
+        'relative -mb-px inline-flex cursor-pointer items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors',
+        active
+          ? muted
+            ? 'border-foreground/60 text-foreground'
+            : 'border-primary text-primary'
+          : 'border-transparent text-muted-foreground hover:text-foreground',
+      )}
+    >
+      {icon}
+      <span>{label}</span>
+      {typeof count === 'number' && count > 0 && (
+        <Badge
+          variant="secondary"
+          className={cn(
+            'h-5 px-1.5 text-[10px] tabular-nums',
+            active && !muted && 'bg-primary/10 text-primary hover:bg-primary/10',
+          )}
+        >
+          {count}
+        </Badge>
+      )}
+    </button>
   );
 }
