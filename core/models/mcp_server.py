@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, String, ForeignKey, UniqueConstraint
+from sqlalchemy import Boolean, Column, String, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from core.models.base import OrgScopedModel
@@ -17,4 +17,8 @@ class McpServer(OrgScopedModel):
     server_url = Column(String(500), nullable=False)
     endpoint = Column(String(500), nullable=True)
     icon = Column(String(255), nullable=True)
+    transport_type = Column(String(50), nullable=False, default="streamable_http")
+    auth_config = Column(JSONB, nullable=True)
+    meta_data = Column(JSONB, nullable=True)
+    is_active = Column(Boolean, nullable=False, default=True)
     oauth_connection_id = Column(UUID(as_uuid=True), ForeignKey("oauth_connections.id", ondelete="SET NULL"), nullable=True)
