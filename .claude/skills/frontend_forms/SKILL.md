@@ -5,6 +5,24 @@ description: Generate create/edit forms for the Tone frontend. Supports three la
 
 # frontend_forms — Form generator (Tone)
 
+## IMPORTANT: Pre-Generation Checks
+
+Before generating, **always read these files** to detect actual project patterns:
+
+1. **`frontend/src/components/shared/index.tsx`** — Verify which shared components exist.
+2. **`frontend/src/atoms/`** — Check if Jotai atoms exist (use Jotai pattern, not React Query).
+3. **`frontend/src/utils/toast.ts`** and **`frontend/src/utils/helpers.ts`** — Actual paths for `showToast` and `handleApiError`.
+4. **`frontend/src/services/`** — Check existing service pattern (axiosInstance from `@/utils/axios`).
+5. **An existing form page** (e.g. MCPFormPage, AgentFormPage) — Match established pattern.
+
+### Current Project Facts (updated 2026-05-23):
+- **State management**: Jotai atoms, NOT React Query.
+- **Toast/errors**: `showToast` from `@/utils/toast`, `handleApiError` from `@/utils/helpers`. **Never use raw `toast` from sonner.**
+- **Service layer**: `src/services/` with `axiosInstance` from `@/utils/axios`.
+- **Schemas**: `src/schemas/` (not `src/lib/schemas/`).
+- **IDs are UUID strings**: All entity `id` fields are `string`.
+- **CustomButton**: Use `CustomButton` from `@/components/shared`, NOT `Button` from `@/components/ui/button` in page code.
+
 Generates a fully wired **create/edit form** for any entity. Supports three container modes:
 
 | Mode | When | Component |
@@ -109,11 +127,11 @@ const handleCreate = async () => {
   setIsCreating(true);
   try {
     await create<Entity>.mutateAsync(createForm);
-    toast.success("<Entity> created");
+    showToast.success("<Entity> created");
     setCreateOpen(false);
     setCreateForm({ name: "", description: "" });
   } catch (err: any) {
-    toast.error(err?.response?.data?.detail || "Failed to create");
+    handleApiError(err?.response?.data?.detail || "Failed to create");
   }
   setIsCreating(false);
 };
@@ -183,15 +201,15 @@ const onSubmit = async (values: Create<Entity>FormData) => {
   try {
     if (editingItem) {
       await update<Entity>.mutateAsync({ id: editingItem.id, data: values });
-      toast.success("<Entity> updated");
+      showToast.success("<Entity> updated");
     } else {
       await create<Entity>.mutateAsync(values);
-      toast.success("<Entity> created");
+      showToast.success("<Entity> created");
     }
     setDrawerOpen(false);
     setEditingItem(null);
   } catch (err: any) {
-    toast.error(err?.response?.data?.detail || "Failed to save");
+    handleApiError(err?.response?.data?.detail || "Failed to save");
   }
 };
 
@@ -246,7 +264,8 @@ For complex forms (11+ fields, multi-section). Dedicated route at `/<entity>/new
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toast } from "sonner";
+import { showToast } from "@/utils/toast";
+import { handleApiError } from "@/utils/helpers";
 import { create<Entity>Schema, type Create<Entity>FormData } from "@/lib/schemas/<entity>";
 import { useCreate<Entity> } from "@/lib/api/<entity>";
 import { Form, TextInput, TextAreaField, SelectInput, CheckboxField } from "@/components/shared";
@@ -265,10 +284,10 @@ export default function New<Entity>Page() {
   const onSubmit = async (values: Create<Entity>FormData) => {
     try {
       const result = await create.mutateAsync(values);
-      toast.success("<Entity> created");
+      showToast.success("<Entity> created");
       router.push(`/<entity>/${result.id}`);
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Failed to create");
+      handleApiError(err?.response?.data?.detail || "Failed to create");
     }
   };
 
