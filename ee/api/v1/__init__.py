@@ -1,23 +1,2 @@
-from ee.api.v1 import (
-    auth,
-    users,
-    organizations,
-    service_providers,
-    api_keys,
-    accounts,
-    agents,
-    agent_configs,
-    agent_channel_phone_numbers,
-    channel_phone_numbers,
-    models,
-    generated_api_keys,
-    channels,
-    voices,
-    call_logs,
-    telephony,
-    documents,
-    model_providers_menu,
-    hosting_providers,
-    model_menu,
-    model_instances,
-)
+# Routers are imported individually from ``main.py`` to avoid pulling in
+# siblings that still reference dropped pre-v2 models.

@@ -9,7 +9,7 @@ T = TypeVar('T')
 
 
 class BaseService:
-    def __init__(self, db: Session, user_id: Optional[int] = None, org_id: Optional[Union[str, UUID]] = None):
+    def __init__(self, db: Session, user_id: Optional[Union[str, UUID]] = None, org_id: Optional[Union[str, UUID]] = None):
         self.db = db
         self._user_id = user_id
         self._org_id = org_id
@@ -19,7 +19,7 @@ class BaseService:
         return self._org_id or get_current_org_id()
 
     @property
-    def user_id(self) -> Optional[int]:
+    def user_id(self) -> Optional[Union[str, UUID]]:
         return self._user_id or get_current_user_id()
 
     def query(self, model: Type[T]) -> Query:

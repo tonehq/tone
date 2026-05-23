@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Sidebar } from '@/components/layout/sidebar';
 import { AppLoader, ErrorBoundary } from '@/components/shared';
@@ -16,6 +16,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const hydrate = useAuthStore((s) => s.hydrate);
   const setOrganizations = useAuthStore((s) => s.setOrganizations);
   const [ready, setReady] = useState(false);
+  // Guard against React StrictMode double-invoke firing the org fetch twice in dev.
+  const orgFetchStarted = useRef(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -27,16 +29,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     hydrate();
     setReady(true);
 
+    if (orgFetchStarted.current) return;
+    orgFetchStarted.current = true;
+
     // Pull the full list of orgs the user belongs to and seed the auth store
     // so the sidebar switcher shows every workspace, not just the active one.
+    const controller = new AbortController();
     (async () => {
       try {
         const orgs = await getAssociatedTenants({ page: 1, page_size: 200 });
-        setOrganizations(orgs.map((o) => ({ id: o.id, name: o.name, role: o.role })));
+        if (!controller.signal.aborted) {
+          setOrganizations(orgs.map((o) => ({ id: o.id, name: o.name, role: o.role })));
+        }
       } catch {
         // Sidebar will gracefully fall back to "one workspace" copy.
       }
     })();
+    return () => controller.abort();
   }, [hydrate, router, setOrganizations]);
 
   if (!ready) return <AppLoader />;

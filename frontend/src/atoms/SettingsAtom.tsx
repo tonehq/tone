@@ -101,23 +101,23 @@ const inviteUserToOrganizationAtom = atom(
 
 const updateMemberRoleAtom = atom(
   null,
-  async (_get, set, payload: { memberId: number; role: string }) => {
+  async (_get, set, payload: { memberId: string; role: string }) => {
     await updateOrganizationMemberRole(payload.memberId, payload.role);
     set(membersRefreshAtom, (c) => c + 1);
   },
 );
 
-const removeMemberAtom = atom(null, async (_get, set, userId: number) => {
+const removeMemberAtom = atom(null, async (_get, set, userId: string) => {
   await removeOrganizationMember(userId);
   set(membersRefreshAtom, (c) => c + 1);
 });
 
-const cancelInvitationAtom = atom(null, async (_get, set, inviteId: number) => {
+const cancelInvitationAtom = atom(null, async (_get, set, inviteId: string) => {
   await cancelInvitation(inviteId);
   set(invitationsRefreshAtom, (c) => c + 1);
 });
 
-const resendInvitationAtom = atom(null, async (_get, set, inviteId: number) => {
+const resendInvitationAtom = atom(null, async (_get, set, inviteId: string) => {
   await resendInvitation(inviteId);
   set(invitationsRefreshAtom, (c) => c + 1);
 });
