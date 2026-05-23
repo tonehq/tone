@@ -3,6 +3,7 @@ import AppLoader from './AppLoader';
 import CheckboxField from './CheckboxField';
 import CustomButton from './CustomButton';
 import CustomCard from './CustomCard';
+import CustomDrawer from './CustomDrawer';
 import CustomLink from './CustomLink';
 import CustomModal from './CustomModal';
 import CustomTab from './CustomTab';
@@ -26,6 +27,7 @@ import { ThemeToggle } from './ThemeToggle';
 
 export type {
   CheckboxFieldBaseProps,
+  CustomDrawerProps,
   CustomModalProps,
   CustomTableColumn,
   CustomTablePagination,
@@ -58,6 +60,7 @@ export {
   CheckboxField,
   CustomButton,
   CustomCard,
+  CustomDrawer,
   CustomLink,
   CustomModal,
   CustomTab,

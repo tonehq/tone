@@ -49,7 +49,7 @@ const PlainTextAreaField = forwardRef<HTMLTextAreaElement, TextAreaFieldBaseProp
     }
 
     return (
-      <>
+      <div>
         {label && (
           <Label htmlFor={name} className={cn('mb-1.5', labelClassName)}>
             {label}
@@ -82,7 +82,7 @@ const PlainTextAreaField = forwardRef<HTMLTextAreaElement, TextAreaFieldBaseProp
             {helperText}
           </p>
         )}
-      </>
+      </div>
     );
   },
 );

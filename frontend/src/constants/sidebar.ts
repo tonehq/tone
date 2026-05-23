@@ -43,9 +43,9 @@ export const sidebarSections: SidebarSection[] = [
     heading: 'SETTINGS',
     items: [
       {
-        key: 'service-providers',
-        title: 'Services',
-        path: '/service-providers',
+        key: 'model-providers',
+        title: 'Model Providers',
+        path: '/model-providers',
         icon: Plug,
       },
       { key: 'integrations', title: 'Integrations', path: '/integrations', icon: Cable },
