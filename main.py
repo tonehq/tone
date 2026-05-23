@@ -14,6 +14,7 @@ from core.internal.capabilities import init_capabilities, is_ee_enabled, get_cap
 
 from core.api.v1 import (
     auth, users, organizations, agent_configs, channels, oauth,
+    mcp_servers,
 )
 # NOTE: the following routers reference dropped pre-v2 models (account,
 # document, voice, model_instance, hosting_provider, etc.) and currently
@@ -22,7 +23,7 @@ from core.api.v1 import (
 #   api_keys, accounts, service_providers, agents,
 #   agent_channel_phone_numbers, channel_phone_numbers, models,
 #   generated_api_keys, voices, call_logs, telephony, documents, tools,
-#   mcp_servers, dashboard, model_providers_menu, hosting_providers,
+#   dashboard, model_providers_menu, hosting_providers,
 #   model_menu, model_instances
 import core.models
 
@@ -84,6 +85,7 @@ if ee_enabled:
     from ee.api.v1 import agent_configs as ee_agent_configs
     from ee.api.v1 import channels as ee_channels
     from ee.api.v1 import oauth as ee_oauth
+    from ee.api.v1 import mcp_servers as ee_mcp_servers
 
     api_v1.include_router(ee_auth.router, prefix="/auth", tags=["auth"])
     api_v1.include_router(ee_users.router, prefix="/user", tags=["users"])
@@ -91,6 +93,7 @@ if ee_enabled:
     api_v1.include_router(ee_agent_configs.router, prefix="/agent_config", tags=["agent_config"])
     api_v1.include_router(ee_channels.router, prefix="/channel", tags=["channel"])
     api_v1.include_router(ee_oauth.router, prefix="/oauth", tags=["oauth"])
+    api_v1.include_router(ee_mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
     print("EE edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
 else:
     api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -99,6 +102,7 @@ else:
     api_v1.include_router(agent_configs.router, prefix="/agent_config", tags=["agent_config"])
     api_v1.include_router(channels.router, prefix="/channel", tags=["channel"])
     api_v1.include_router(oauth.router, prefix="/oauth", tags=["oauth"])
+    api_v1.include_router(mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
     print("Core edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
 
 

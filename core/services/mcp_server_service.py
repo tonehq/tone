@@ -1,11 +1,14 @@
-import time
 import uuid as uuid_lib
+from datetime import datetime, timezone
 from typing import Dict, Any, List
 
 from fastapi import HTTPException, status
 
+from sqlalchemy import asc, desc, or_
+
 from core.services.base import BaseService
-from core.models.mcp_server import McpServer, AgentMcpServer
+from core.models.mcp_server import McpServer
+from core.models.agent_mcp_server import AgentMcpServer
 from core.models.tool import Tool
 from core.utils.encryption import encrypt, decrypt
 
@@ -77,7 +80,7 @@ class McpServerService(BaseService):
 
     VALID_TRANSPORT_TYPES = {"sse", "streamable_http"}
 
-    def _check_duplicate_name(self, name: str, exclude_id: int = None) -> None:
+    def _check_duplicate_name(self, name: str, exclude_id=None) -> None:
         query = self.query(McpServer).filter(McpServer.name == name)
         if exclude_id is not None:
             query = query.filter(McpServer.id != exclude_id)
@@ -102,7 +105,7 @@ class McpServerService(BaseService):
             if name not in discovered_names:
                 self.db.delete(tool)
 
-        now = int(time.time())
+        now = datetime.now(timezone.utc)
         for dt in discovered_tools:
             params = {"properties": dt.get("parameters", {}), "required": dt.get("required", [])}
             if dt["name"] in existing_map:
@@ -114,9 +117,8 @@ class McpServerService(BaseService):
                     existing_tool.updated_at = now
             else:
                 # Create new
-                import uuid as uuid_lib
                 tool = Tool(
-                    uuid=uuid_lib.uuid4(),
+                    id=uuid_lib.uuid4(),
                     name=dt["name"],
                     description=dt.get("description") or "",
                     tool_type="mcp",
@@ -141,10 +143,10 @@ class McpServerService(BaseService):
     async def upsert_mcp_server(self, data: Dict[str, Any]) -> McpServer:
         """Create or update an MCP server. Send id to update; send name and server_url to create."""
         mcp_server_id = data.get("id")
-        now = int(time.time())
+        now = datetime.now(timezone.utc)
 
         if mcp_server_id is not None:
-            existing = self.query(McpServer).filter(McpServer.id == int(mcp_server_id)).first()
+            existing = self.query(McpServer).filter(McpServer.id == mcp_server_id).first()
             if not existing:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -152,7 +154,7 @@ class McpServerService(BaseService):
                 )
             update_data = {k: v for k, v in data.items() if k != "id"}
             if "name" in update_data:
-                self._check_duplicate_name(update_data["name"], exclude_id=int(mcp_server_id))
+                self._check_duplicate_name(update_data["name"], exclude_id=mcp_server_id)
             if "transport_type" in update_data:
                 self._validate_transport_type(update_data["transport_type"])
 
@@ -201,7 +203,7 @@ class McpServerService(BaseService):
         )
 
         mcp_server = McpServer(
-            uuid=uuid_lib.uuid4(),
+            id=uuid_lib.uuid4(),
             name=data["name"],
             description=data.get("description"),
             server_url=data["server_url"],
@@ -222,7 +224,68 @@ class McpServerService(BaseService):
     def get_mcp_servers(self) -> List[McpServer]:
         return self.query(McpServer).all()
 
-    def get_mcp_server(self, mcp_server_id: int) -> McpServer:
+    def list_mcp_servers(
+        self,
+        search: str = None,
+        is_active: bool = None,
+        sort_by: str = "created_at",
+        sort_order: str = "desc",
+        page: int = 1,
+        page_size: int = None,
+    ) -> Dict[str, Any]:
+        """List MCP servers with search, filter, sort, and pagination.
+
+        Returns {"data": [...], "pagination": {...}}.
+        """
+        query = self.query(McpServer)
+
+        if search:
+            query = query.filter(
+                or_(
+                    McpServer.name.ilike(f"%{search}%"),
+                    McpServer.description.ilike(f"%{search}%"),
+                    McpServer.server_url.ilike(f"%{search}%"),
+                )
+            )
+
+        if is_active is not None:
+            query = query.filter(McpServer.is_active == is_active)
+
+        total = query.count()
+
+        sort_column_map = {
+            "created_at": McpServer.created_at,
+            "updated_at": McpServer.updated_at,
+            "name": McpServer.name,
+        }
+        sort_column = sort_column_map.get(sort_by, McpServer.created_at)
+        order_func = asc if sort_order == "asc" else desc
+        ordered_query = query.order_by(order_func(sort_column), McpServer.id)
+
+        if page_size is not None:
+            offset = (page - 1) * page_size
+            servers = ordered_query.offset(offset).limit(page_size).all()
+        else:
+            servers = ordered_query.all()
+
+        data = [self.mcp_server_response(s) for s in servers]
+
+        if page_size is not None:
+            total_pages = (total + page_size - 1) // page_size
+        else:
+            total_pages = 1
+
+        return {
+            "data": data,
+            "pagination": {
+                "page": page,
+                "page_size": page_size if page_size is not None else total,
+                "total": total,
+                "total_pages": total_pages,
+            },
+        }
+
+    def get_mcp_server(self, mcp_server_id) -> McpServer:
         mcp_server = self.query(McpServer).filter(McpServer.id == mcp_server_id).first()
         if not mcp_server:
             raise HTTPException(
@@ -231,7 +294,7 @@ class McpServerService(BaseService):
             )
         return mcp_server
 
-    def delete_mcp_server(self, mcp_server_id: int) -> Dict[str, str]:
+    def delete_mcp_server(self, mcp_server_id) -> Dict[str, str]:
         mcp_server = self.get_mcp_server(mcp_server_id)
         self.db.delete(mcp_server)
         self.db.commit()
@@ -251,7 +314,7 @@ class McpServerService(BaseService):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="MCP server is already attached to all specified agents",
             )
-        now = int(time.time())
+        now = datetime.now(timezone.utc)
         for agent_id in new_ids:
             self.db.add(AgentMcpServer(
                 agent_id=agent_id,
@@ -398,8 +461,7 @@ class McpServerService(BaseService):
 
     def mcp_server_response(self, mcp_server: McpServer) -> Dict[str, Any]:
         return {
-            "id": mcp_server.id,
-            "uuid": str(mcp_server.uuid),
+            "id": str(mcp_server.id),
             "name": mcp_server.name,
             "description": mcp_server.description,
             "server_url": mcp_server.server_url,
