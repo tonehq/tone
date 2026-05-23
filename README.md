@@ -89,7 +89,10 @@ We believe in democratizing AI voice technology through open source solutions. O
    ```bash
    # Create virtual environment (requires Python 3.10+)
    python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+   # Activate the virtual environment
+   source venv/bin/activate          # macOS / Linux
+   # venv\Scripts\activate           # Windows (PowerShell/CMD)
 
    # Install dependencies
    pip install -r requirements.txt
@@ -106,8 +109,11 @@ We believe in democratizing AI voice technology through open source solutions. O
    # Seed service providers, models, and voices
    python dev/seed.py
 
-   # Start the backend server
-   python main.py
+   # Start the backend server with uvicorn (auto-reload for development)
+   uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+   # Enterprise edition
+   # uvicorn main_ee:app --host 0.0.0.0 --port 8000 --reload
    ```
 
    **Seed Data (`dev/seed.py`)**
@@ -131,8 +137,12 @@ We believe in democratizing AI voice technology through open source solutions. O
 3. **Frontend Setup**
    ```bash
    cd frontend
+
+   # Install dependencies
    npm install
-   npm start
+
+   # Start the frontend dev server (Next.js + Turbopack on :3000)
+   npm run dev
    ```
 
 4. **Access the application**
