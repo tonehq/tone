@@ -17,8 +17,8 @@ interface InvitationsTableProps {
   params: ListRequest;
   onParamsChange: (patch: Partial<ListRequest>) => void;
   loading?: boolean;
-  onCancel: (inviteId: number) => Promise<void>;
-  onResend?: (inviteId: number) => Promise<void>;
+  onCancel: (inviteId: string) => Promise<void>;
+  onResend?: (inviteId: string) => Promise<void>;
   onRefresh?: () => Promise<void> | void;
   refreshing?: boolean;
 }
@@ -43,9 +43,9 @@ export default function InvitationsTable({
 }: InvitationsTableProps) {
   const [cancelTarget, setCancelTarget] = useState<OrganizationInviteApi | null>(null);
   const [cancelling, setCancelling] = useState(false);
-  const [resendingId, setResendingId] = useState<number | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
 
-  const handleResend = async (id: number) => {
+  const handleResend = async (id: string) => {
     if (!onResend) return;
     setResendingId(id);
     try {

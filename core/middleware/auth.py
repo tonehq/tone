@@ -14,8 +14,8 @@ from core.internal.capabilities import is_ee_enabled
 security = HTTPBearer()
 
 class JWTClaims(BaseModel):
-    user_id: int
-    org_id: Optional[Union[str, int]] = None
+    user_id: str
+    org_id: Optional[str] = None
     role: Optional[str] = None
     email: str
     exp: int
@@ -32,6 +32,13 @@ class JWTClaims(BaseModel):
             "iat": self.iat
         }
 
+    @property
+    def user_uuid(self) -> Optional[UUID]:
+        try:
+            return UUID(self.user_id) if self.user_id else None
+        except (ValueError, TypeError):
+            return None
+
 
 class JWTManager:
     def __init__(self):
@@ -45,14 +52,14 @@ class JWTManager:
 
     def create_access_token(
         self,
-        user_id: int,
+        user_id: Union[str, UUID],
         email: str,
-        org_id: Optional[Union[str, int, UUID]] = None,
+        org_id: Optional[Union[str, UUID]] = None,
         role: Optional[str] = None
     ) -> str:
         current_time = int(time.time())
         payload = {
-            "user_id": user_id,
+            "user_id": str(user_id),
             "email": email,
             "org_id": str(org_id) if org_id else None,
             "role": role,
@@ -66,13 +73,13 @@ class JWTManager:
 
     def create_refresh_token(
         self,
-        user_id: int,
+        user_id: Union[str, UUID],
         email: str,
-        org_id: Optional[Union[str, int, UUID]] = None,
+        org_id: Optional[Union[str, UUID]] = None,
     ) -> str:
         current_time = int(time.time())
         payload = {
-            "user_id": user_id,
+            "user_id": str(user_id),
             "email": email,
             "org_id": str(org_id) if org_id else None,
             "type": "refresh",

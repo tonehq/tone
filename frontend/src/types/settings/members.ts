@@ -1,19 +1,19 @@
 export interface OrganizationMemberApi {
-  member_id: number;
-  user_id: number;
+  member_id: string;
+  user_id: string;
   email: string;
   username: string;
   first_name: string | null;
   last_name: string | null;
   role: string;
   status: string;
-  joined_at: number | null;
-  last_activity_at: number | null;
+  joined_at: string | null;
+  last_activity_at: string | null;
   [key: string]: unknown;
 }
 
 export interface OrganizationInviteApi {
-  member_id: number;
+  member_id: string;
   email: string;
   username: string;
   name: string;

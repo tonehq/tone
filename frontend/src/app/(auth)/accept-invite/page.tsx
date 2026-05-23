@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
@@ -22,8 +22,11 @@ function AcceptInviteContent() {
   // `code` is the legacy query name (older invite emails). Accept either.
   const token = searchParams.get('token') || searchParams.get('code') || '';
   const { user, setLoginResponse } = useAuthStore();
+  // Stop revalidating once the user has consumed the invite — otherwise the
+  // post-accept refresh refetches the now-accepted token and returns 400.
+  const [accepted, setAccepted] = useState(false);
 
-  const { data: invitation, isLoading, error } = useValidateInvitation(token);
+  const { data: invitation, isLoading, error } = useValidateInvitation(token, !accepted);
   const acceptInvitation = useAcceptInvitation();
 
   const { control, handleSubmit } = useForm<AcceptInviteFormData>({
@@ -56,9 +59,11 @@ function AcceptInviteContent() {
   };
 
   const refreshUserState = async () => {
-    // Drop the invitation query first — re-validating an ACCEPTED token returns
-    // 400 and would render the "Invalid invitation" card on top of our redirect.
-    queryClient.removeQueries({ queryKey: ['invitation', token] });
+    // Mark accepted FIRST so useValidateInvitation flips to enabled=false
+    // before we touch the cache — otherwise React Query refetches the now-
+    // consumed token and returns 400.
+    setAccepted(true);
+    queryClient.cancelQueries({ queryKey: ['invitation', token] });
     // Refresh the rest of the cache (me, my-org, etc.) so the next page sees
     // the new membership immediately.
     await queryClient.invalidateQueries({

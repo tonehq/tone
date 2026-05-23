@@ -24,22 +24,26 @@ export const inviteUserToOrganization = async (payload: {
 };
 
 export const updateOrganizationMemberRole = async (
-  memberId: number,
+  memberId: string,
   role: string,
 ): Promise<void> => {
-  await axios.post(`/organization/update_member_role?member_id=${memberId}&role=${role}`);
+  await axios.post(
+    `/organization/update_member_role?member_id=${encodeURIComponent(memberId)}&role=${encodeURIComponent(role)}`,
+  );
 };
 
-export const removeOrganizationMember = async (userId: number): Promise<void> => {
-  await axios.delete(`/organization/remove_user_from_organization?user_id=${userId}`);
+export const removeOrganizationMember = async (userId: string): Promise<void> => {
+  await axios.delete(
+    `/organization/remove_user_from_organization?user_id=${encodeURIComponent(userId)}`,
+  );
 };
 
-export const cancelInvitation = async (inviteId: number): Promise<void> => {
-  await axios.delete(`/organization/cancel_invitation?invite_id=${inviteId}`);
+export const cancelInvitation = async (inviteId: string): Promise<void> => {
+  await axios.delete(`/organization/cancel_invitation?invite_id=${encodeURIComponent(inviteId)}`);
 };
 
-export const resendInvitation = async (inviteId: number): Promise<void> => {
-  await axios.post(`/organization/resend_invitation?invite_id=${inviteId}`);
+export const resendInvitation = async (inviteId: string): Promise<void> => {
+  await axios.post(`/organization/resend_invitation?invite_id=${encodeURIComponent(inviteId)}`);
 };
 
 export const validateInvitation = async (

@@ -13,15 +13,17 @@ from core.internal.license import init_license_validator, get_license_info
 from core.internal.capabilities import init_capabilities, is_ee_enabled, get_capabilities
 
 from core.api.v1 import (
-    auth, users, organizations, api_keys, accounts,
-    service_providers, agents, agent_configs,
-    agent_channel_phone_numbers, channel_phone_numbers,
-    models as models_router,
-    generated_api_keys, channels, voices, call_logs,
-    telephony, documents, tools, oauth, mcp_servers, dashboard,
-    model_providers_menu, hosting_providers,
-    model_menu as model_menu_router, model_instances,
+    auth, users, organizations, agent_configs, channels, oauth,
 )
+# NOTE: the following routers reference dropped pre-v2 models (account,
+# document, voice, model_instance, hosting_provider, etc.) and currently
+# fail to import. They are temporarily disabled so the server can boot
+# with the v2 auth schema:
+#   api_keys, accounts, service_providers, agents,
+#   agent_channel_phone_numbers, channel_phone_numbers, models,
+#   generated_api_keys, voices, call_logs, telephony, documents, tools,
+#   mcp_servers, dashboard, model_providers_menu, hosting_providers,
+#   model_menu, model_instances
 import core.models
 
 skip_license = settings.SKIP_LICENSE_CHECK
@@ -73,84 +75,31 @@ api_v1.add_middleware(
 )
 
 if ee_enabled:
-    from ee.api.v1 import (
-        auth as ee_auth,
-        users as ee_users,
-        organizations as ee_organizations,
-        service_providers as ee_service_providers,
-        api_keys as ee_api_keys,
-        accounts as ee_accounts,
-        agents as ee_agents,
-        agent_configs as ee_agent_configs,
-        agent_channel_phone_numbers as ee_agent_channel_phone_numbers,
-        channel_phone_numbers as ee_channel_phone_numbers,
-        models as ee_models,
-        generated_api_keys as ee_generated_api_keys,
-        channels as ee_channels,
-        voices as ee_voices,
-        call_logs as ee_call_logs,
-        telephony as ee_telephony,
-        documents as ee_documents,
-        tools as ee_tools,
-        oauth as ee_oauth,
-        mcp_servers as ee_mcp_servers,
-        model_providers_menu as ee_model_providers_menu,
-        hosting_providers as ee_hosting_providers,
-        model_menu as ee_model_menu,
-        model_instances as ee_model_instances,
-    )
+    # EE routers are imported individually because ``ee/api/v1/__init__.py``
+    # no longer eagerly imports siblings (some still reference dropped
+    # pre-v2 models).
+    from ee.api.v1 import auth as ee_auth
+    from ee.api.v1 import users as ee_users
+    from ee.api.v1 import organizations as ee_organizations
+    from ee.api.v1 import agent_configs as ee_agent_configs
+    from ee.api.v1 import channels as ee_channels
+    from ee.api.v1 import oauth as ee_oauth
 
     api_v1.include_router(ee_auth.router, prefix="/auth", tags=["auth"])
     api_v1.include_router(ee_users.router, prefix="/user", tags=["users"])
     api_v1.include_router(ee_organizations.router, prefix="/organization", tags=["organization"])
-    api_v1.include_router(ee_service_providers.router, prefix="/service-providers", tags=["service-providers"])
-    api_v1.include_router(ee_api_keys.router, prefix="/api-keys", tags=["api-keys"])
-    api_v1.include_router(ee_accounts.router, prefix="/accounts", tags=["accounts"])
-    api_v1.include_router(ee_agents.router, prefix="/agent", tags=["agent"])
     api_v1.include_router(ee_agent_configs.router, prefix="/agent_config", tags=["agent_config"])
-    api_v1.include_router(ee_agent_channel_phone_numbers.router, prefix="/agent_channel_phone_number", tags=["agent_channel_phone_number"])
-    api_v1.include_router(ee_channel_phone_numbers.router, prefix="/channel_phone_number", tags=["channel_phone_number"])
-    api_v1.include_router(ee_models.router, prefix="/model", tags=["model"])
-    api_v1.include_router(ee_generated_api_keys.router, prefix="/generated-api-keys", tags=["generated-api-keys"])
     api_v1.include_router(ee_channels.router, prefix="/channel", tags=["channel"])
-    api_v1.include_router(ee_voices.router, prefix="/voice", tags=["voice"])
-    api_v1.include_router(ee_call_logs.router, prefix="/call-log", tags=["call-log"])
-    api_v1.include_router(ee_documents.router, prefix="/document", tags=["document"])
-    api_v1.include_router(ee_tools.router, prefix="/tool", tags=["tool"])
     api_v1.include_router(ee_oauth.router, prefix="/oauth", tags=["oauth"])
-    api_v1.include_router(ee_mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
-    api_v1.include_router(ee_model_providers_menu.router, prefix="/model-providers-menu", tags=["model-providers-menu"])
-    api_v1.include_router(ee_hosting_providers.router, prefix="/hosting-providers", tags=["hosting-providers"])
-    api_v1.include_router(ee_model_menu.router, prefix="/model-menu", tags=["model-menu"])
-    api_v1.include_router(ee_model_instances.router, prefix="/model-instances", tags=["model-instances"])
-    api_v1.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
-    print("EE edition: Multi-tenant routes loaded")
+    print("EE edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
 else:
     api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
     api_v1.include_router(users.router, prefix="/user", tags=["users"])
     api_v1.include_router(organizations.router, prefix="/organization", tags=["organization"])
-    api_v1.include_router(service_providers.router, prefix="/service-providers", tags=["service-providers"])
-    api_v1.include_router(api_keys.router, prefix="/api-keys", tags=["api-keys"])
-    api_v1.include_router(accounts.router, prefix="/accounts", tags=["accounts"])
-    api_v1.include_router(agents.router, prefix="/agent", tags=["agent"])
     api_v1.include_router(agent_configs.router, prefix="/agent_config", tags=["agent_config"])
-    api_v1.include_router(agent_channel_phone_numbers.router, prefix="/agent_channel_phone_number", tags=["agent_channel_phone_number"])
-    api_v1.include_router(channel_phone_numbers.router, prefix="/channel_phone_number", tags=["channel_phone_number"])
-    api_v1.include_router(models_router.router, prefix="/model", tags=["model"])
-    api_v1.include_router(generated_api_keys.router, prefix="/generated-api-keys", tags=["generated-api-keys"])
     api_v1.include_router(channels.router, prefix="/channel", tags=["channel"])
-    api_v1.include_router(voices.router, prefix="/voice", tags=["voice"])
-    api_v1.include_router(call_logs.router, prefix="/call-log", tags=["call-log"])
-    api_v1.include_router(documents.router, prefix="/document", tags=["document"])
-    api_v1.include_router(tools.router, prefix="/tool", tags=["tool"])
     api_v1.include_router(oauth.router, prefix="/oauth", tags=["oauth"])
-    api_v1.include_router(mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
-    api_v1.include_router(model_providers_menu.router, prefix="/model-providers-menu", tags=["model-providers-menu"])
-    api_v1.include_router(hosting_providers.router, prefix="/hosting-providers", tags=["hosting-providers"])
-    api_v1.include_router(model_menu_router.router, prefix="/model-menu", tags=["model-menu"])
-    api_v1.include_router(model_instances.router, prefix="/model-instances", tags=["model-instances"])
-    api_v1.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
-    print("Core edition: Single-tenant routes loaded")
+    print("Core edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
 
 
 @api_v1.get("/capabilities", tags=["system"])
@@ -160,11 +109,8 @@ def get_capabilities_endpoint():
 
 app.mount("/api/v1", api_v1)
 
-# Public telephony WebSocket — no auth required, mounted at root for provider compatibility
-if ee_enabled:
-    app.include_router(ee_telephony.router, tags=["telephony"])
-else:
-    app.include_router(telephony.router, tags=["telephony"])
+# Telephony router temporarily disabled — depends on AgentChannel/CallLog
+# models that were dropped in the v2 schema revamp.
 
 
 @app.on_event("startup")

@@ -16,8 +16,8 @@ interface MembersTableProps {
   params: ListRequest;
   onParamsChange: (patch: Partial<ListRequest>) => void;
   loading?: boolean;
-  onRoleChange: (memberId: number, role: string) => Promise<void>;
-  onDelete: (userId: number) => Promise<void>;
+  onRoleChange: (memberId: string, role: string) => Promise<void>;
+  onDelete: (userId: string) => Promise<void>;
   onRefresh?: () => Promise<void> | void;
   refreshing?: boolean;
 }
@@ -58,12 +58,16 @@ export default function MembersTable({
 }: MembersTableProps) {
   const [deleteTarget, setDeleteTarget] = useState<OrganizationMemberApi | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [updatingRoleId, setUpdatingRoleId] = useState<number | null>(null);
+  const [updatingRoleId, setUpdatingRoleId] = useState<string | null>(null);
 
   const roleFilter = (params.filters?.role as string | undefined) ?? 'all';
+  // Owners stay deletable as long as another owner remains. Only the LAST
+  // owner is locked to keep the org from ending up ownerless.
+  const ownerCount = rows.filter((r) => r.role === 'owner').length;
+  const isLastOwner = (record: OrganizationMemberApi) => record.role === 'owner' && ownerCount <= 1;
 
   const handleRoleChange = useCallback(
-    async (memberId: number, role: string) => {
+    async (memberId: string, role: string) => {
       setUpdatingRoleId(memberId);
       try {
         await onRoleChange(memberId, role);
@@ -129,15 +133,18 @@ export default function MembersTable({
       width: 'w-40',
       sorter: true,
       render: (_value, record) => {
-        const isOwner = record.role === 'owner';
         const isUpdating = updatingRoleId === record.member_id;
+        // Lock role only for the last remaining owner — otherwise demoting
+        // them would leave the org without an owner. Any other owner can be
+        // re-assigned to a different role.
+        const lockRole = isLastOwner(record);
         return (
           <SelectInput
             name={`role-${record.member_id}`}
             options={ROLE_OPTIONS}
             value={record.role}
             onValueChange={(val) => handleRoleChange(record.member_id, val)}
-            disabled={isOwner || isUpdating}
+            disabled={lockRole || isUpdating}
             loading={isUpdating}
             size="sm"
           />
@@ -170,17 +177,17 @@ export default function MembersTable({
       title: '',
       width: 'w-16',
       render: (_value, record) => {
-        const isOwner = record.role === 'owner';
+        const lockDelete = isLastOwner(record);
         return (
           <CustomButton
             type="text"
             size="icon-xs"
-            disabled={isOwner}
+            disabled={lockDelete}
             onClick={(e) => {
               e.stopPropagation();
               setDeleteTarget(record);
             }}
-            aria-label="Remove member"
+            aria-label={lockDelete ? 'Cannot remove the last owner' : 'Remove member'}
             className="text-muted-foreground hover:text-destructive"
           >
             <Trash2 className="size-4" />
