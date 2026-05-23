@@ -6,37 +6,57 @@ from core.models.agent import Agent
 from core.models.call import Call
 from core.services.base import BaseService
 
+# Bound "active" to a recent window so a single stuck row (crash, missed
+# hangup event) can't inflate the metric forever. Anything older than this
+# with a NULL ended_at is treated as orphaned, not in-flight.
+ACTIVE_CALL_WINDOW = timedelta(hours=1)
+
 
 class DashboardService(BaseService):
-    """Aggregate per-org metrics for the home dashboard. Uses the v2 ``calls``
-    table (no ``status`` column) — "active" = call not yet ended, "successful"
-    = call ended with non-zero duration."""
+    """Aggregate per-org metrics for the home dashboard.
+
+    Uses the v2 ``calls`` table (no ``status`` column):
+      - "active"     = started within ``ACTIVE_CALL_WINDOW`` and not yet ended
+      - "successful" = ended with non-zero duration
+
+    NOTE: the live voice pipeline does not yet write to ``calls``; these
+    metrics will report 0 until the pipeline cut-over lands.
+    """
 
     def get_stats(self) -> dict:
         now = datetime.now(timezone.utc)
         start_of_month = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
         thirty_days_ago = now - timedelta(days=30)
+        active_since = now - ACTIVE_CALL_WINDOW
 
         total_agents = (
             self.query(Agent).filter(Agent.deleted_at.is_(None)).count()
         )
 
-        active_calls = self.query(Call).filter(Call.ended_at.is_(None)).count()
+        active_calls = (
+            self.query(Call)
+            .filter(Call.ended_at.is_(None), Call.started_at >= active_since)
+            .count()
+        )
 
         total_seconds = (
             self.query(Call)
             .with_entities(func.coalesce(func.sum(Call.duration_seconds), 0))
             .filter(Call.started_at >= start_of_month)
             .scalar()
-            or 0
         )
-        minutes_used = round(int(total_seconds) / 60, 1)
+        minutes_used = round(total_seconds / 60, 1)
 
-        total_calls_30d = (
-            self.query(Call).filter(Call.started_at >= thirty_days_ago).count()
+        finished_calls_30d = (
+            self.query(Call)
+            .filter(
+                Call.started_at >= thirty_days_ago,
+                Call.ended_at.isnot(None),
+            )
+            .count()
         )
-        if total_calls_30d > 0:
-            completed_calls_30d = (
+        if finished_calls_30d > 0:
+            successful_calls_30d = (
                 self.query(Call)
                 .filter(
                     Call.started_at >= thirty_days_ago,
@@ -45,7 +65,7 @@ class DashboardService(BaseService):
                 )
                 .count()
             )
-            success_rate = round((completed_calls_30d / total_calls_30d) * 100, 1)
+            success_rate = round((successful_calls_30d / finished_calls_30d) * 100, 1)
         else:
             success_rate = 0.0
 

@@ -13,10 +13,10 @@ const dashboardAtom = atom<DashboardState>({
   loading: false,
 });
 
-// In-flight de-dupe — guards against React 19 Strict Mode's intentional
-// double-mount (and any parent re-render that calls the setter twice) so we
-// only fire one network request per mount cycle. The shared promise is
-// awaited by any concurrent callers so they all observe the same result.
+// Module-scoped in-flight de-dupe: every caller of fetchDashboardStatsAtom
+// (Strict Mode double-mount, re-renders that re-invoke the setter, sibling
+// components subscribed to the atom) shares the same promise while a request
+// is in flight, and a fresh request only fires once the previous one settles.
 let inFlight: Promise<void> | null = null;
 
 export const fetchDashboardStatsAtom = atom(null, (_get, set) => {
