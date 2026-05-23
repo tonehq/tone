@@ -14,7 +14,7 @@ from core.internal.capabilities import init_capabilities, is_ee_enabled, get_cap
 
 from core.api.v1 import (
     auth, users, organizations, agent_configs, channels, oauth,
-    knowledge_base, agents, mcp_servers, services,
+    knowledge_base, agents, mcp_servers, services, tools,
 )
 # NOTE: the following routers reference dropped pre-v2 models (account,
 # voice, model_instance, hosting_provider, etc.) and currently
@@ -22,7 +22,7 @@ from core.api.v1 import (
 # with the v2 auth schema:
 #   api_keys, accounts, service_providers, agents,
 #   agent_channel_phone_numbers, channel_phone_numbers, models,
-#   generated_api_keys, voices, call_logs, telephony, tools,
+#   generated_api_keys, voices, call_logs, telephony,
 #   dashboard, model_providers_menu, hosting_providers,
 #   model_menu, model_instances
 import core.models
@@ -89,6 +89,7 @@ if ee_enabled:
     from ee.api.v1 import agents as ee_agents
     from ee.api.v1 import mcp_servers as ee_mcp_servers
     from ee.api.v1 import services as ee_services
+    from ee.api.v1 import tools as ee_tools
 
     api_v1.include_router(ee_auth.router, prefix="/auth", tags=["auth"])
     api_v1.include_router(ee_users.router, prefix="/user", tags=["users"])
@@ -100,6 +101,7 @@ if ee_enabled:
     api_v1.include_router(ee_agents.router, prefix="/agent", tags=["agent"])
     api_v1.include_router(ee_mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
     api_v1.include_router(ee_services.router, prefix="/services", tags=["services"])
+    api_v1.include_router(ee_tools.router, prefix="/tool", tags=["tool"])
     print("EE edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
 else:
     api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -112,6 +114,7 @@ else:
     api_v1.include_router(agents.router, prefix="/agent", tags=["agent"])
     api_v1.include_router(mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
     api_v1.include_router(services.router, prefix="/services", tags=["services"])
+    api_v1.include_router(tools.router, prefix="/tool", tags=["tool"])
     print("Core edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
 
 

@@ -23,7 +23,7 @@ const upsertToolAtom = atom(
   async (_get, _set, payload: ToolUpsertPayload): Promise<Tool> => await upsertTool(payload),
 );
 
-const deleteToolAtom = atom(null, async (_get, _set, toolId: number) => {
+const deleteToolAtom = atom(null, async (_get, _set, toolId: string) => {
   await deleteTool(toolId);
 });
 

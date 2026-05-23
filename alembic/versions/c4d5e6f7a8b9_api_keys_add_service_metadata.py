@@ -6,7 +6,7 @@ ApiKey per (org, service_type)" — the service layer also does an atomic
 flip-others-to-false inside the same DB transaction.
 
 Revision ID: c4d5e6f7a8b9
-Revises: b3c4d5e6f7a8
+Revises: 389d07c1be1d
 Create Date: 2026-05-23
 
 """
@@ -16,7 +16,7 @@ from sqlalchemy.dialects import postgresql
 
 
 revision = "c4d5e6f7a8b9"
-down_revision = "b3c4d5e6f7a8"
+down_revision = "389d07c1be1d"
 branch_labels = None
 depends_on = None
 
