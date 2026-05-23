@@ -311,13 +311,13 @@ Applies **performance-checklist.md** in full across all eight sub-areas:
 | Sub-area                | Key signals for this project                                                                                                                       |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | React Rendering         | Jotai `useAtom` subscriptions — subscribe only to the atom slice needed; avoid subscribing to large atoms just to read one field                   |
-| Next.js & SSR           | ThemeRegistry uses Emotion SSR — do not add additional style injection that conflicts; keep Server Components free of `useTheme()`                 |
-| Bundle & Code Splitting | MUI is tree-shaken by default — always import from `@mui/material/Button` not `@mui/material`; use `next/dynamic` for heavy form tabs              |
+| Next.js & SSR           | Keep Server Components free of client-only hooks; use `'use client'` at the lowest level needed                                                    |
+| Bundle & Code Splitting | Prefer shadcn/Tailwind primitives over heavy component libraries; use `next/dynamic` for heavy form tabs                                           |
 | Network & API           | All API calls go through `src/services/` → `src/utils/axios.ts`; verify no N+1 patterns in Jotai write atoms that loop over IDs                    |
 | Core Web Vitals         | LCP, INP, CLS — check `next/image` usage, font loading via `next/font`, and that Jotai atom loads do not cause layout shifts                       |
 | Memory Management       | Write atoms that start polling or timers must expose a cleanup; `useEffect` in components must clean up axios calls with `AbortController`         |
 | State Management        | Jotai `loadable` is used for async atoms — ensure loading/error/data states are all handled in UI; do not access `.data` without checking `.state` |
-| Asset & CSS             | MUI `sx` prop with object literals creates new references each render — extract static `sx` objects outside the component or use `styled()`        |
+| Asset & CSS             | Prefer Tailwind utility classes over inline style objects; extract shared variants with `cva` or shared component presets                          |
 
 #### 7. Code Quality
 
@@ -333,8 +333,8 @@ Applies **code-quality-checklist.md** in full — error handling, TypeScript qua
 - Interactive `div`/`span` with `onClick` → use `<button>` or add `role` + keyboard handler
 - `<img>` without `alt`; form inputs without `<label>` or `aria-label`
 - Heading hierarchy skipped; missing `aria-live` on toasts / alerts
-- Focus not trapped in MUI `Dialog` / `Drawer` (MUI handles this by default — verify it is not disabled)
-- **This project**: MUI components are accessible by default — flag any prop that overrides this (e.g., `disablePortal`, `disableEnforceFocus` on dialogs)
+- Focus not trapped in dialog/drawer components — Radix primitives (used by shadcn) handle this by default; verify any custom modal traps focus and restores it on close
+- **This project**: prefer Radix/shadcn primitives for any new dialog, drawer, popover, or menu — they ship correct ARIA, keyboard, and focus behavior out of the box
 
 #### 9. Dead Code / Removal Candidates
 
@@ -411,7 +411,7 @@ Write-only atoms (e.g., `atom(null, async (_get, set, payload) => {...})`) are t
 
 **Authentication**: Firebase is used alongside JWT. Auth state is persisted in cookies (`tone_access_token`, `org_tenant_id`, `login_data`). Constants for cookie key names are in `src/constants/index.ts`.
 
-**UI**: Material UI v6 with a custom theme defined in `src/utils/theme.ts`. Primary color is `#8b5cf6` (purple). The theme is provided via `src/components/ThemeRegistry.tsx` which handles MUI + Emotion SSR setup for Next.js. Use `useTheme()` to access theme values in components. **Direction**: Prefer **shadcn** (`src/components/ui/`) and **Tailwind** for new UI; use **lucide-react** or `src/components/icons/` (e.g. brand icons) instead of `@mui/icons-material`. MUI removal is planned; see `.claude/rules.md` §5.
+**UI**: shadcn/ui primitives in `src/components/ui/` styled with Tailwind v4 and theme tokens from `src/app/globals.css` (CSS variables for color, radius, etc.). The root font is **Geist Sans** (loaded via `next/font` in `src/app/layout.tsx`, exposed as `--font-geist-sans` and bound to Tailwind's `font-sans`); `font-mono` resolves to Geist Mono. Dark mode is handled by `next-themes`. Use **lucide-react** for icons (or `src/components/icons/` for brand marks). The codebase is MUI-free — do not introduce `@mui/*` or `@emotion/*` packages.
 
 **Shared components**: `src/components/shared/` holds reusable form/UI pieces (TextInput, CustomButton, Form, CheckboxField, RadioGroupField, SelectInput, TextAreaField, CustomLink). Each form component is **unified** — passing a `control` prop activates RHF `Controller` integration automatically (no separate `Form*` wrapper needed). Component prop types are defined in `src/types/components.ts`. To understand or use them without reading each file, read **`docs/shared-components.md`** (single reference, lower token usage). When adding or changing a shared component, update that doc.
 

@@ -61,9 +61,7 @@ export default function SignupPage() {
   return (
     <div className="animate-page">
       <div className="mb-8">
-        <h2 className="font-display text-[28px] font-semibold tracking-tight">
-          Create your account
-        </h2>
+        <h2 className="text-[28px] font-semibold tracking-tight">Create your account</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           Start building AI voice agents in minutes
         </p>

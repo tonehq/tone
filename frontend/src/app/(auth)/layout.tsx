@@ -121,7 +121,7 @@ function BrandedPanel() {
           visible: { transition: { staggerChildren: 0.12, delayChildren: 0.3 } },
         }}
       >
-        <h1 className="font-display text-[clamp(2rem,4vw,3.25rem)] font-semibold leading-[1.05] tracking-[-0.02em] text-white">
+        <h1 className="text-[clamp(2rem,4vw,3.25rem)] font-semibold leading-[1.05] tracking-[-0.02em] text-white">
           <motion.span
             className="block text-white"
             variants={{
@@ -357,7 +357,7 @@ function StatCard({ stat }: { stat: (typeof STATS)[number] }) {
         <stat.icon className="h-3.5 w-3.5 text-violet-200" />
       </div>
       <span
-        className="font-display text-[22px] font-semibold leading-none tracking-tight text-white"
+        className="text-[22px] font-semibold leading-none tracking-tight text-white"
         style={{ transform: 'translateZ(30px)' }}
       >
         {stat.value}

@@ -61,7 +61,7 @@ function ResetPasswordContent() {
 
   return (
     <div className="animate-page">
-      <h2 className="font-display text-[28px] font-semibold tracking-tight">Set new password</h2>
+      <h2 className="text-[28px] font-semibold tracking-tight">Set new password</h2>
       <p className="mt-2 text-sm text-muted-foreground">Enter your new password below</p>
       <Form handleSubmit={handleSubmit} onSubmit={onSubmit} className="mt-6">
         <TextInput

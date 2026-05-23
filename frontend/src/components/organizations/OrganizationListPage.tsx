@@ -44,7 +44,7 @@ function StatChip({ label, value, icon: Icon, accent }: StatChipProps) {
         <Icon className="h-4 w-4" />
       </div>
       <div className="leading-tight">
-        <p className="font-display text-[20px] font-semibold tracking-tight">{value}</p>
+        <p className="text-[20px] font-semibold tracking-tight">{value}</p>
         <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
       </div>
     </div>
@@ -171,9 +171,7 @@ const OrganizationListPage: React.FC = () => {
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
       >
         <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-            Organizations
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Organizations</h1>
           <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
             Manage your workspaces and team collaboration
           </p>
