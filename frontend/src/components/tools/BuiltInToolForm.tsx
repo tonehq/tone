@@ -47,10 +47,10 @@ interface BuiltInToolFormProps {
   isEditMode: boolean;
   saving: boolean;
   saved: boolean;
-  oauthConnectionId: number | null;
+  oauthConnectionId: string | null;
   onMetaDataChange: (data: Record<string, string>) => void;
   onAuthConfigChange: (data: Record<string, string>) => void;
-  onOAuthConnectionIdChange: (id: number | null) => void;
+  onOAuthConnectionIdChange: (id: string | null) => void;
   onSave: (data: BuiltInToolFormData) => void;
   onDelete?: () => void;
   onBack: () => void;
@@ -304,7 +304,7 @@ export default function BuiltInToolForm({
                 options={connectionOptions}
                 value={oauthConnectionId ? String(oauthConnectionId) : ''}
                 onValueChange={(v) => {
-                  onOAuthConnectionIdChange(v ? Number(v) : null);
+                  onOAuthConnectionIdChange(v || null);
                   onDirty();
                 }}
                 loading={connectionsLoading}

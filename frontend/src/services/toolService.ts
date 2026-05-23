@@ -14,14 +14,14 @@ export const getAllTools = async (): Promise<Tool[]> => {
   return [];
 };
 
-export const getTool = async (toolId: number): Promise<Tool> => {
+export const getTool = async (toolId: string): Promise<Tool> => {
   const { data } = await axiosInstance.get<Tool>('/tool/get_tool', {
     params: { tool_id: toolId },
   });
   return data;
 };
 
-export const deleteTool = async (toolId: number): Promise<void> => {
+export const deleteTool = async (toolId: string): Promise<void> => {
   await axiosInstance.delete('/tool/delete_tool', { params: { tool_id: toolId } });
 };
 
@@ -41,7 +41,7 @@ export const getTemplateTools = async (): Promise<Tool[]> => {
   return [];
 };
 
-export const getToolsByAgent = async (agentId: number): Promise<Tool[]> => {
+export const getToolsByAgent = async (agentId: string): Promise<Tool[]> => {
   const { data } = await axiosInstance.get<Tool[]>('/tool/get_tools_by_agent', {
     params: { agent_id: agentId },
   });

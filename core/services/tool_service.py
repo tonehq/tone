@@ -1,6 +1,6 @@
 import json
-import time
 import uuid as uuid_lib
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 from uuid import UUID
 
@@ -8,7 +8,8 @@ from fastapi import HTTPException, status
 from loguru import logger
 
 from core.services.base import BaseService
-from core.models.tool import Tool, AgentTool
+from core.models.tool import Tool
+from core.models.agent_tool import AgentTool
 from core.utils.encryption import encrypt, decrypt
 
 
@@ -67,7 +68,7 @@ class ToolService(BaseService):
                 detail="OAuth connection is no longer active. Please reconnect.",
             )
 
-    def _check_duplicate_name(self, name: str, exclude_id: int = None) -> None:
+    def _check_duplicate_name(self, name: str, exclude_id=None) -> None:
         """Raise 409 if a tool with the same name already exists in this org."""
         query = self.query(Tool).filter(Tool.name == name, Tool.tool_type != 'mcp')
         if exclude_id is not None:
@@ -82,9 +83,9 @@ class ToolService(BaseService):
         self._check_duplicate_name(data["name"])
         if data.get("oauth_connection_id"):
             self._validate_oauth_connection(data["oauth_connection_id"])
-        now = int(time.time())
+        now = datetime.now(timezone.utc)
         tool = Tool(
-            uuid=uuid_lib.uuid4(),
+            id=uuid_lib.uuid4(),
             name=data["name"],
             description=data["description"],
             parameters=data.get("parameters", {}),
@@ -110,7 +111,7 @@ class ToolService(BaseService):
     def get_template_tools(self) -> List[Tool]:
         return self.query(Tool).filter(Tool.is_template == True).all()
 
-    def get_tool(self, tool_id: int) -> Tool:
+    def get_tool(self, tool_id) -> Tool:
         tool = self.query(Tool).filter(Tool.id == tool_id).first()
         if not tool:
             raise HTTPException(
@@ -119,7 +120,7 @@ class ToolService(BaseService):
             )
         return tool
 
-    def update_tool(self, tool_id: int, data: Dict[str, Any]) -> Tool:
+    def update_tool(self, tool_id, data: Dict[str, Any]) -> Tool:
         tool = self.get_tool(tool_id)
         if tool.is_template:
             raise HTTPException(
@@ -147,10 +148,10 @@ class ToolService(BaseService):
     def upsert_tool(self, data: Dict[str, Any]) -> Tool:
         """Create or update a tool. Send id to update; send name and description to create."""
         tool_id = data.get("id")
-        now = int(time.time())
+        now = datetime.now(timezone.utc)
 
         if tool_id is not None:
-            existing = self.query(Tool).filter(Tool.id == int(tool_id)).first()
+            existing = self.query(Tool).filter(Tool.id == tool_id).first()
             if not existing:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
@@ -170,7 +171,7 @@ class ToolService(BaseService):
             if update_data.get("oauth_connection_id"):
                 self._validate_oauth_connection(update_data["oauth_connection_id"])
             if "name" in update_data:
-                self._check_duplicate_name(update_data["name"], exclude_id=int(tool_id))
+                self._check_duplicate_name(update_data["name"], exclude_id=tool_id)
             if "auth_config" in update_data:
                 update_data["auth_config"] = encrypt_auth_config(update_data["auth_config"])
             for key, value in update_data.items():
@@ -196,7 +197,7 @@ class ToolService(BaseService):
         if data.get("oauth_connection_id"):
             self._validate_oauth_connection(data["oauth_connection_id"])
         tool = Tool(
-            uuid=uuid_lib.uuid4(),
+            id=uuid_lib.uuid4(),
             name=data["name"],
             description=data["description"],
             tool_type=data.get("tool_type", "custom"),
@@ -217,7 +218,7 @@ class ToolService(BaseService):
         self.db.refresh(tool)
         return tool
 
-    def delete_tool(self, tool_id: int) -> Dict[str, str]:
+    def delete_tool(self, tool_id) -> Dict[str, str]:
         tool = self.get_tool(tool_id)
         if tool.is_template:
             raise HTTPException(
@@ -233,7 +234,7 @@ class ToolService(BaseService):
         self.db.commit()
         return {"message": "Tool deleted successfully"}
 
-    def attach_tool_to_agents(self, agent_ids: List[int], tool_id: int) -> List[AgentTool]:
+    def attach_tool_to_agents(self, agent_ids: List, tool_id) -> List[AgentTool]:
         # Verify tool exists
         self.get_tool(tool_id)
 
@@ -252,7 +253,7 @@ class ToolService(BaseService):
                 detail="Tool is already attached to all specified agents",
             )
 
-        now = int(time.time())
+        now = datetime.now(timezone.utc)
         agent_tools = []
         for agent_id in new_ids:
             agent_tool = AgentTool(
@@ -266,7 +267,7 @@ class ToolService(BaseService):
         self.db.commit()
         return agent_tools
 
-    def detach_tool_from_agents(self, agent_ids: List[int], tool_id: int) -> Dict[str, str]:
+    def detach_tool_from_agents(self, agent_ids: List, tool_id) -> Dict[str, str]:
         agent_tools = (
             self.db.query(AgentTool)
             .filter(AgentTool.tool_id == tool_id, AgentTool.agent_id.in_(agent_ids))
@@ -282,7 +283,7 @@ class ToolService(BaseService):
         self.db.commit()
         return {"message": f"Tool detached from {len(agent_tools)} agent(s) successfully"}
 
-    def get_tools_by_agent(self, agent_id: int) -> List[Tool]:
+    def get_tools_by_agent(self, agent_id) -> List[Tool]:
         return (
             self.query(Tool)
             .join(AgentTool, AgentTool.tool_id == Tool.id)
@@ -292,8 +293,7 @@ class ToolService(BaseService):
 
     def tool_response(self, tool: Tool) -> Dict[str, Any]:
         return {
-            "id": tool.id,
-            "uuid": str(tool.uuid),
+            "id": str(tool.id),
             "name": tool.name,
             "description": tool.description,
             "tool_type": tool.tool_type,

@@ -1,8 +1,8 @@
 export type ToolType = 'custom' | 'send_sms' | 'google_calendar' | 'google_sheets' | 'mcp';
 
 export interface Tool {
-  id: number;
-  uuid: string;
+  id: string;
+  uuid?: string;
   name: string;
   description: string;
   tool_type: ToolType;
@@ -12,12 +12,12 @@ export interface Tool {
   auth_type: ToolAuthType | null;
   auth_config: Record<string, string> | null;
   meta_data: Record<string, unknown> | null;
-  oauth_connection_id: number | null;
-  mcp_server_id?: number | null;
+  oauth_connection_id: string | null;
+  mcp_server_id?: string | null;
   is_active: boolean;
   is_template?: boolean;
-  created_at: number;
-  updated_at: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export type ToolAuthType = 'none' | 'api_key' | 'bearer' | 'basic';
@@ -39,7 +39,7 @@ export interface ToolParametersSchema {
 }
 
 export interface ToolUpsertPayload {
-  id?: number;
+  id?: string;
   name?: string;
   description?: string;
   tool_type?: ToolType;
@@ -49,13 +49,13 @@ export interface ToolUpsertPayload {
   auth_type?: ToolAuthType;
   auth_config?: Record<string, string> | null;
   meta_data?: Record<string, unknown> | null;
-  oauth_connection_id?: number | null;
+  oauth_connection_id?: string | null;
   is_active?: boolean;
 }
 
 export interface ToolAttachPayload {
-  tool_id: number;
-  agent_ids: number[];
+  tool_id: string;
+  agent_ids: string[];
 }
 
 export interface ToolsState {
