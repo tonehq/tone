@@ -66,7 +66,7 @@ function LoginPageInner() {
   return (
     <>
       <motion.div className="mb-8" variants={fadeUp}>
-        <h2 className="font-display text-[28px] font-semibold tracking-tight">Welcome back</h2>
+        <h2 className="text-[28px] font-semibold tracking-tight">Welcome back</h2>
         <p className="mt-2 text-sm text-muted-foreground">
           Enter your credentials to access your account
         </p>

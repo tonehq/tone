@@ -47,7 +47,7 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="animate-page">
-      <h2 className="font-display text-[28px] font-semibold tracking-tight">Reset password</h2>
+      <h2 className="text-[28px] font-semibold tracking-tight">Reset password</h2>
       <p className="mt-2 text-sm text-muted-foreground">
         Enter your email and we&apos;ll send you a reset link
       </p>

@@ -182,9 +182,7 @@ export default function Members() {
     <div className="w-full">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-foreground">
-            Members
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Members</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Manage your team and invite new members
           </p>
