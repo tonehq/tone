@@ -221,9 +221,6 @@ class McpServerService(BaseService):
         self._sync_mcp_tools(mcp_server, validation_result["tools"])
         return mcp_server
 
-    def get_mcp_servers(self) -> List[McpServer]:
-        return self.query(McpServer).all()
-
     def list_mcp_servers(
         self,
         search: str = None,
@@ -300,7 +297,7 @@ class McpServerService(BaseService):
         self.db.commit()
         return {"message": "MCP server deleted successfully"}
 
-    def attach_to_agents(self, mcp_server_id: int, agent_ids: List[int], selected_tools: List[str] = None) -> None:
+    def attach_to_agents(self, mcp_server_id, agent_ids: List, selected_tools: List[str] = None) -> None:
         self.get_mcp_server(mcp_server_id)
         existing = (
             self.db.query(AgentMcpServer.agent_id)
@@ -325,7 +322,7 @@ class McpServerService(BaseService):
             ))
         self.db.commit()
 
-    def update_agent_mcp_server(self, mcp_server_id: int, agent_id: int, selected_tools: List[str]) -> Dict[str, Any]:
+    def update_agent_mcp_server(self, mcp_server_id, agent_id, selected_tools: List[str]) -> Dict[str, Any]:
         link = (
             self.db.query(AgentMcpServer)
             .filter(AgentMcpServer.mcp_server_id == mcp_server_id, AgentMcpServer.agent_id == agent_id)
@@ -337,7 +334,7 @@ class McpServerService(BaseService):
                 detail="MCP server is not attached to this agent",
             )
         link.selected_tools = selected_tools
-        link.updated_at = int(time.time())
+        link.updated_at = datetime.now(timezone.utc)
         self.db.commit()
         self.db.refresh(link)
         return {
@@ -346,7 +343,7 @@ class McpServerService(BaseService):
             "selected_tools": link.selected_tools,
         }
 
-    def detach_from_agents(self, mcp_server_id: int, agent_ids: List[int]) -> Dict[str, str]:
+    def detach_from_agents(self, mcp_server_id, agent_ids: List) -> Dict[str, str]:
         links = (
             self.db.query(AgentMcpServer)
             .filter(AgentMcpServer.mcp_server_id == mcp_server_id, AgentMcpServer.agent_id.in_(agent_ids))
@@ -362,7 +359,7 @@ class McpServerService(BaseService):
         self.db.commit()
         return {"message": f"MCP server detached from {len(links)} agent(s) successfully"}
 
-    def get_mcp_servers_by_agent(self, agent_id: int) -> List[Dict[str, Any]]:
+    def get_mcp_servers_by_agent(self, agent_id) -> List[Dict[str, Any]]:
         results = (
             self.db.query(McpServer, AgentMcpServer.selected_tools)
             .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)
@@ -379,9 +376,6 @@ class McpServerService(BaseService):
             resp["selected_tools"] = selected_tools
             output.append(resp)
         return output
-
-    def _build_auth_headers(self, auth_config: dict) -> Dict[str, str]:
-        return build_auth_headers(auth_config)
 
     async def validate_mcp_connection(
         self, server_url: str, transport_type: str, auth_config: dict = None
@@ -444,7 +438,7 @@ class McpServerService(BaseService):
 
         return {"tools": tools, "tool_count": len(tools)}
 
-    async def discover_tools(self, mcp_server_id: int) -> Dict[str, Any]:
+    async def discover_tools(self, mcp_server_id) -> Dict[str, Any]:
         """Connect to an MCP server and return its available tools."""
         mcp_server = self.get_mcp_server(mcp_server_id)
         decrypted_auth = decrypt_auth_config(mcp_server.auth_config)

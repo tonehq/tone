@@ -1,5 +1,5 @@
 from uuid import UUID
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from core.database.session import get_db
 from core.services.mcp_server_service import McpServerService
 from core.middleware.auth import require_org_member, JWTClaims
+from core.utils.pagination import parse_sort, parse_page
 from shared.config import settings
 
 router = APIRouter()
@@ -15,61 +16,20 @@ router = APIRouter()
 _ALLOWED_SORT_FIELDS = {"created_at", "updated_at", "name"}
 
 
-def _parse_sort(sort: Optional[str], allowed: set, default: str = "-created_at"):
-    """Parse '-field' / 'field' into (sort_by, sort_order). Validates against allowed set."""
-    raw = sort or default
-    if raw.startswith("-"):
-        sort_by, sort_order = raw[1:], "desc"
-    else:
-        sort_by, sort_order = raw, "asc"
-    if sort_by not in allowed:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid sort field: {sort_by}. Allowed: {', '.join(sorted(allowed))}",
-        )
-    return sort_by, sort_order
-
-
-def _parse_page(data: Dict[str, Any]):
-    """Extract and validate page / page_size from a dict body."""
-    try:
-        page = int(data.get("page", 1) or 1)
-        raw_page_size = data.get("page_size")
-        page_size = None if raw_page_size is None else int(raw_page_size)
-    except (TypeError, ValueError):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="page and page_size must be integers",
-        )
-    if page < 1:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="page must be >= 1",
-        )
-    if page_size is not None and page_size < 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="page_size must be >= 0",
-        )
-    if page_size == 0:
-        page_size = None
-    return page, page_size
-
-
 class AttachMcpServerRequest(BaseModel):
     mcp_server_id: str
-    agent_ids: List[int]
+    agent_ids: List[str]
     selected_tools: List[str] = None
 
 
 class DetachMcpServerRequest(BaseModel):
     mcp_server_id: str
-    agent_ids: List[int]
+    agent_ids: List[str]
 
 
 class UpdateAgentMcpServerRequest(BaseModel):
     mcp_server_id: str
-    agent_id: int
+    agent_id: str
     selected_tools: List[str]
 
 
@@ -94,8 +54,8 @@ def list_mcp_servers(
       page_size?: int,         # None/0 means "all"
     }
     """
-    sort_by, sort_order = _parse_sort(data.get("sort"), _ALLOWED_SORT_FIELDS)
-    page, page_size = _parse_page(data)
+    sort_by, sort_order = parse_sort(data.get("sort"), _ALLOWED_SORT_FIELDS)
+    page, page_size = parse_page(data)
 
     is_active = data.get("is_active")
     if is_active is not None:
@@ -138,16 +98,6 @@ async def validate_mcp_server(
     if not server_url:
         raise HTTPException(status_code=400, detail="server_url is required")
     return await svc.validate_mcp_connection(server_url, transport_type, auth_config)
-
-
-@router.get("/get_all_mcp_servers")
-def get_all_mcp_servers(
-    claims: JWTClaims = Depends(require_org_member),
-    db: Session = Depends(get_db),
-):
-    svc = _get_service(claims, db)
-    servers = svc.get_mcp_servers()
-    return [svc.mcp_server_response(s) for s in servers]
 
 
 @router.get("/get_mcp_server")
@@ -228,7 +178,7 @@ def update_agent_mcp_server(
 
 @router.get("/get_mcp_servers_by_agent")
 def get_mcp_servers_by_agent(
-    agent_id: int = Query(..., description="The agent ID to fetch MCP servers for"),
+    agent_id: str = Query(..., description="The agent ID to fetch MCP servers for"),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
