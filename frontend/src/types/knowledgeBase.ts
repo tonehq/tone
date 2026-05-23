@@ -1,12 +1,11 @@
 export interface KnowledgeBaseDocument {
-  id: number;
-  uuid: string;
-  upload_id: number;
-  agent_id: number;
+  id: string;
+  upload_id: string;
+  agent_id: string;
   file_name: string;
   content_type: string;
   file_size_bytes: number;
-  url: string;
+  url?: string | null;
   status: 'processing' | 'ready' | 'failed';
   meta_data: Record<string, unknown>;
   created_at: number;

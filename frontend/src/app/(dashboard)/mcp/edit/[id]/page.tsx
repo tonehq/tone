@@ -6,11 +6,11 @@ import { Suspense } from 'react';
 
 export default function EditMCPPage() {
   const params = useParams<{ id: string }>();
-  const serverId = Number(params?.id);
+  const serverId = params?.id;
 
   return (
     <Suspense>
-      <MCPFormPage serverId={Number.isFinite(serverId) ? serverId : undefined} />
+      <MCPFormPage serverId={serverId} />
     </Suspense>
   );
 }

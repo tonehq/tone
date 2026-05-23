@@ -104,7 +104,7 @@ If any of the above checks fail, read and follow the setup guide:
 - Installing className utilities (`clsx`, `tailwind-merge`, `class-variance-authority`)
 - Creating the `cn()` utility in `src/lib/utils.ts` (clsx + tailwind-merge)
 - Initializing shadcn/ui with the project's theme colors
-- Configuring CSS variables that match the existing MUI theme
+- Configuring CSS variables that match the project's design tokens
 - Updating `globals.css` with theme tokens
 
 After running setup, re-verify all checks in 2a–2d pass.
@@ -121,8 +121,8 @@ Read ALL reference files before generating any component. Do not skip any.
 
 Also read the project theme files to ensure consistency:
 
-- `src/lib/theme.ts` — centralized theme constants (colors, semantic aliases, presets)
-- `src/utils/theme.ts` — MUI theme with custom tokens (source of truth for color values)
+- `src/constants/theme.ts` — centralized theme constants (semantic color aliases, component presets)
+- `src/app/globals.css` — Tailwind theme tokens and CSS variables (source of truth for color values)
 
 ---
 
@@ -318,7 +318,7 @@ className = 'rounded-2xl'; // 12px (--radius-2xl)
 
 ```typescript
 className = 'shadow-xs'; // Subtle — inputs
-className = 'shadow-sm'; // Cards (MUI Card default)
+className = 'shadow-sm'; // Cards (default elevation)
 className = 'shadow-md'; // Elevated panels
 className = 'shadow-lg'; // Dialogs, dropdowns
 ```
@@ -326,7 +326,7 @@ className = 'shadow-lg'; // Dialogs, dropdowns
 **Spacing follows Tailwind defaults** (4px base unit):
 
 ```typescript
-className = 'p-2'; // 8px  (MUI button padding)
+className = 'p-2'; // 8px  (default button padding)
 className = 'px-4'; // 16px
 className = 'gap-2'; // 8px
 className = 'h-[42px]'; // 42px (project button height)
@@ -335,11 +335,11 @@ className = 'h-[42px]'; // 42px (project button height)
 ### 6d. Styling rules
 
 1. **Use `cn()` for ALL className composition** — combines `clsx` + `tailwind-merge`
-2. **Use Tailwind utility classes** — not inline styles or `sx` prop
+2. **Use Tailwind utility classes** — not inline styles
 3. **Use CSS variables for theme colors** — not hardcoded hex values
 4. **Support `className` prop on every component** — allows consumer overrides
 5. **Use `cva` (class-variance-authority)** for components with multiple variants
-6. **Never mix MUI `sx` prop with Tailwind** — pick one per component (Tailwind for new components)
+6. **No CSS-in-JS** — the project is Tailwind/shadcn only; do not introduce `@emotion`, `styled-components`, or `@mui/*`
 
 ### 6d-1. `cn()` usage patterns (MUST follow)
 
@@ -641,10 +641,10 @@ After presenting the summary, ask:
 - **Shared components docs**: After creating or changing any shared component, update `frontend/docs/shared-components.md` (props table + example + exports list). This doc is the single reference for shared UI and reduces token usage.
 - **Exports**: Both named and default export on every component
 - **TypeScript**: Use `interface` over `type` for props. Use `React.FC<Props>` pattern
-- **No MUI mixing**: New shared components use shadcn/Tailwind exclusively. Do not import from `@mui/material`
-- **Theme imports**: Always import `presets` and `semantic` from `@/lib/theme` — use presets for standard patterns (buttons, inputs, cards, badges) and semantic for intent-based one-off styling
-- **Theme consistency**: Always use palette Tailwind classes that reference CSS variables (`bg-purple-500`, `text-gray-800`, `border-slate-200`) — never hardcode hex colors
+- **shadcn/Tailwind only**: All shared components use shadcn/Tailwind exclusively. Do not introduce `@mui/*`, `@emotion/*`, or `styled-components`
+- **Theme imports**: Always import `presets` and `semantic` from `@/constants/theme` — use presets for standard patterns (buttons, inputs, cards, badges) and semantic for intent-based one-off styling
+- **Theme consistency**: Always use semantic Tailwind classes that reference CSS variables (`bg-primary`, `text-foreground`, `border-border`) — never hardcode hex colors
 - **Accessibility**: Every interactive element must be keyboard-accessible with proper ARIA attributes
-- **Icons**: Use `lucide-react` — do not use `@mui/icons-material` in shadcn components
+- **Icons**: Use `lucide-react` for everything; `src/components/icons/` is reserved for brand marks
 - **Responsive**: Use Tailwind responsive prefixes (`sm:`, `md:`, `lg:`) for responsive behavior
 - **Dark mode ready**: All colors flow through CSS variables in `globals.css` — to add dark mode, add a `.dark` variant in globals and the entire app updates automatically

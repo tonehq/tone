@@ -11,8 +11,8 @@ interface ToolPickerModalProps {
   open: boolean;
   onClose: () => void;
   allTools: Tool[];
-  attachedToolIds: number[];
-  onAttach: (toolIds: number[]) => Promise<void>;
+  attachedToolIds: string[];
+  onAttach: (toolIds: string[]) => Promise<void>;
   loading?: boolean;
 }
 
@@ -33,7 +33,7 @@ export default function ToolPickerModal({
   loading,
 }: ToolPickerModalProps) {
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [attaching, setAttaching] = useState(false);
 
   const availableTools = useMemo(() => {
@@ -48,7 +48,7 @@ export default function ToolPickerModal({
     return filtered;
   }, [allTools, attachedToolIds, search]);
 
-  const toggleSelect = (toolId: number) => {
+  const toggleSelect = (toolId: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(toolId)) next.delete(toolId);

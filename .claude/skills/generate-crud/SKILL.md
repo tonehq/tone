@@ -4,6 +4,20 @@
 
 Apply these rules whenever creating, modifying, or extending CRUD operations (Create, Read, Update, Delete) for any model in this project. This covers: FastAPI services, API routes, and router registration.
 
+## IMPORTANT: Pre-Generation Checks
+
+Before generating any CRUD code, **always read these files first** to align with the actual schema:
+
+1. **`core/models/base.py`** — Check the base model's PK type (`id` column), timestamp type (`created_at`/`updated_at`), and whether a separate `uuid` column exists.
+2. **`core/utils/pagination.py`** — Use `parse_sort()` and `parse_page()` from here. **Never duplicate pagination helpers inline in routers.**
+3. **`core/services/base.py`** — Check `BaseService` constructor signature and `query()` method.
+4. **`main.py`** — Check how existing routers are imported and mounted.
+
+### Current Base Model Facts (updated 2026-05-23):
+- **PK is UUID**: `id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)` — there is **no separate `uuid` column** and **no integer `id`**.
+- **Timestamps are datetime**: `created_at = Column(DateTime(timezone=True))` — use `datetime.now(timezone.utc)`, **not** `int(time.time())`.
+- **All IDs are strings in API responses**: `"id": str(record.id)` — never cast to `int()`.
+
 ## CRITICAL RULES
 
 ### 1. Always create EE controller first, then Core
@@ -49,12 +63,13 @@ The only difference between EE and Core controllers is the **auth middleware**. 
 ### Service Imports Template
 ```python
 # Standard library
-import time
 import uuid as uuid_lib
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional
 
 # SQLAlchemy
 from sqlalchemy.orm import Session
+from sqlalchemy import asc, desc, or_
 from sqlalchemy.exc import IntegrityError
 
 # FastAPI
@@ -82,19 +97,18 @@ class MyModelService(BaseService):
                 detail="name is required",
             )
 
-        # Determine UUID
+        # Determine ID (UUID primary key)
         model_id = data.get("id")
         if model_id is not None:
-            existing = self.db.query(MyModel).filter(MyModel.id == int(model_id)).first()
+            existing = self.db.query(MyModel).filter(MyModel.id == model_id).first()
             if not existing:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="MyModel not found")
-            model_uuid = existing.uuid
         else:
-            model_uuid = uuid_lib.uuid4()
+            model_id = uuid_lib.uuid4()
 
-        now = int(time.time())
+        now = datetime.now(timezone.utc)
         values = {
-            "uuid": model_uuid,
+            "id": model_id,
             "name": data["name"],
             "created_by": created_by,
             "created_at": now,
@@ -127,7 +141,7 @@ class MyModelService(BaseService):
 
 ### Get One Pattern
 ```python
-    def get_my_model(self, my_model_id: int) -> Dict[str, Any]:
+    def get_my_model(self, my_model_id) -> Dict[str, Any]:
         record = self.db.query(MyModel).filter(MyModel.id == my_model_id).first()
 
         if not record:
@@ -228,7 +242,7 @@ def get_all_my_models(
 - Return `{"message": "..."}` on success.
 - Add business-rule guards before deleting if needed (e.g., `is_system` flag).
 ```python
-    def delete_my_model(self, my_model_id: int) -> Dict[str, str]:
+    def delete_my_model(self, my_model_id) -> Dict[str, str]:
         record = self.db.query(MyModel).filter(MyModel.id == my_model_id).first()
 
         if not record:
@@ -253,8 +267,7 @@ def get_all_my_models(
 ```python
     def _response_item(self, record: MyModel) -> Dict[str, Any]:
         return {
-            "id": record.id,
-            "uuid": str(record.uuid),
+            "id": str(record.id),
             "name": record.name,
             "description": record.description,
             "status": record.status,
@@ -359,7 +372,7 @@ def get_all_my_models(
 
 @router.get("/get")
 def get_my_model(
-    my_model_id: int = Query(...),
+    my_model_id: str = Query(...),
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
@@ -367,7 +380,7 @@ def get_my_model(
 
 @router.delete("/delete")
 def delete_my_model(
-    my_model_id: int = Query(...),
+    my_model_id: str = Query(...),
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
@@ -418,7 +431,7 @@ def get_all_my_models(
 
 @router.get("/get")
 def get_my_model(
-    my_model_id: int = Query(...),
+    my_model_id: str = Query(...),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
@@ -426,7 +439,7 @@ def get_my_model(
 
 @router.delete("/delete")
 def delete_my_model(
-    my_model_id: int = Query(...),
+    my_model_id: str = Query(...),
     claims: JWTClaims = Depends(require_admin_or_owner),
     db: Session = Depends(get_db),
 ):
@@ -492,7 +505,7 @@ When generating CRUD for a new model, create/modify these files **in this exact 
 4. **Never return ORM objects** from services — always build and return plain dicts.
 5. **Never expose sensitive data** (encrypted keys, password hashes) in API responses.
 6. **Always use UUID for upsert conflict resolution** — not integer `id` or business keys.
-7. **Always set `updated_at = int(time.time())`** when modifying records.
+7. **Always set `updated_at = datetime.now(timezone.utc)`** when modifying records. Do NOT use `int(time.time())`.
 8. **Always rollback on IntegrityError** — call `self.db.rollback()` before raising HTTPException.
 9. **Always validate required fields** in both the route handler and the service method.
 10. **Always use dependency injection** for DB sessions and auth — never instantiate sessions manually in routes.

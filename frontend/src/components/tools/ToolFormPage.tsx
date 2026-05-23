@@ -50,7 +50,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   const [isActive, setIsActive] = useState(true);
   const [metaData, setMetaData] = useState<Record<string, string>>({});
   const [builtInAuthConfig, setBuiltInAuthConfig] = useState<Record<string, string>>({});
-  const [oauthConnectionId, setOauthConnectionId] = useState<number | null>(null);
+  const [oauthConnectionId, setOauthConnectionId] = useState<string | null>(null);
   const [toolRecord, setToolRecord] = useState<Tool | null>(null);
 
   const [loading, setLoading] = useState(isEditMode);
@@ -64,7 +64,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
     if (!toolId) return;
     setLoading(true);
     try {
-      const tool: Tool = await getTool(Number(toolId));
+      const tool: Tool = await getTool(toolId);
       setToolRecord(tool);
       setToolType(tool.tool_type ?? 'custom');
       setName(tool.name ?? '');
@@ -99,7 +99,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   useEffect(() => {
     if (!templateId || isEditMode) return;
     setLoading(true);
-    getTool(Number(templateId))
+    getTool(templateId)
       .then((template) => {
         setToolType(template.tool_type ?? 'custom');
         setParameters(template.parameters ?? {});
@@ -139,7 +139,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   const handleBuiltInSave = async (data: BuiltInToolFormData) => {
     const hasAuthConfig = Object.values(builtInAuthConfig).some((v) => v);
     const payload: ToolUpsertPayload = {
-      ...(isEditMode ? { id: Number(toolId) } : {}),
+      ...(isEditMode && toolId ? { id: toolId } : {}),
       name: data.name.trim(),
       description: data.description.trim(),
       tool_type: toolType,
@@ -154,7 +154,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
 
   const handleCustomSave = async (data: CustomToolFormData) => {
     const payload: ToolUpsertPayload = {
-      ...(isEditMode ? { id: Number(toolId) } : {}),
+      ...(isEditMode && toolId ? { id: toolId } : {}),
       name: data.name.trim(),
       description: data.description.trim(),
       url: data.url.trim(),
@@ -176,7 +176,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   const handleDelete = useCallback(async () => {
     if (!toolId) return;
     try {
-      await deleteToolAction(Number(toolId));
+      await deleteToolAction(toolId);
       showToast.success('Tool deleted successfully');
       await fetchTools();
       router.push('/tools');

@@ -64,6 +64,14 @@ export const getServiceProviders = async (providerType?: string): Promise<Servic
 };
 
 // ── Model Providers with Accounts (for agent form dropdowns) ─────
+//
+// TODO(v2-agents): backed by the disabled `/model-providers-menu/*` router and
+// will 404 on dev/staging until the agent CRUD endpoints are migrated to v2
+// UUIDs. The legacy shape uses integer IDs and is wired through
+// `agentFormUtils.formStateToUpsertPayload` → `llm_model_provider_menu_id`
+// (int). Repointing this call alone to `/services/providers/catalog` is not
+// enough — the form's save path also needs the v2 agent endpoints. Tracked
+// for the v2 agent pipeline migration.
 
 export const getProvidersWithAccounts = async (
   providerType?: string,
