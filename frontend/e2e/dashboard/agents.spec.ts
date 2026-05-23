@@ -161,7 +161,9 @@ test.describe('Agents List Page', () => {
 
     test('shows outbound agent type badge', async ({ page }) => {
       const tableBody = page.locator('tbody');
-      await expect(tableBody.getByText('Outbound', { exact: true })).toBeVisible({ timeout: 5_000 });
+      await expect(tableBody.getByText('Outbound', { exact: true })).toBeVisible({
+        timeout: 5_000,
+      });
     });
 
     test('shows phone number for agents that have one', async ({ page }) => {

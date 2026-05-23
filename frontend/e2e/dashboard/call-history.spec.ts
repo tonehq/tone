@@ -69,7 +69,12 @@ test.describe('Call History Page', () => {
   test.describe('Filter Modal', () => {
     test.afterEach(async ({ page }) => {
       // Close any open dialog to prevent state leakage
-      if (await page.getByRole('dialog').isVisible().catch(() => false)) {
+      if (
+        await page
+          .getByRole('dialog')
+          .isVisible()
+          .catch(() => false)
+      ) {
         await page.keyboard.press('Escape');
         await expect(page.getByRole('dialog')).not.toBeVisible();
       }
@@ -121,7 +126,12 @@ test.describe('Call History Page', () => {
   // ── 3. Sort Modal ────────────────────────────────────────────────────────
   test.describe('Sort Modal', () => {
     test.afterEach(async ({ page }) => {
-      if (await page.getByRole('dialog').isVisible().catch(() => false)) {
+      if (
+        await page
+          .getByRole('dialog')
+          .isVisible()
+          .catch(() => false)
+      ) {
         await page.keyboard.press('Escape');
         await expect(page.getByRole('dialog')).not.toBeVisible();
       }

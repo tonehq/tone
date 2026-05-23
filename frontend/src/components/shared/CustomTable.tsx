@@ -74,8 +74,14 @@ function CustomTableInner<TRow>({
   enableColumnVisibility = false,
   title,
   description,
+  initialSort = null,
 }: CustomTableProps<TRow>) {
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [sorting, setSorting] = useState<SortingState>(() => {
+    if (!initialSort) return [];
+    const col = columns.find((c) => (c.dataIndex ?? c.key) === initialSort.field);
+    if (!col) return [];
+    return [{ id: col.key, desc: initialSort.order === 'desc' }];
+  });
   const [internalSearch, setInternalSearch] = useState('');
   const [density, setDensity] = useState<CustomTableDensity>(initialDensity);
 
