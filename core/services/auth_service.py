@@ -709,6 +709,26 @@ class AuthService(BaseService):
             )
         return user.to_dict()
 
+    UPDATABLE_PROFILE_FIELDS = ("first_name", "last_name", "avatar_url")
+
+    def update_user_me(
+        self,
+        user_id: Union[str, uuid.UUID],
+        data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        uid = _user_uuid(user_id)
+        user = self.db.query(User).filter(User.id == uid).first() if uid else None
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+            )
+        for field in self.UPDATABLE_PROFILE_FIELDS:
+            if field in data and data[field] is not None:
+                setattr(user, field, data[field])
+        self.db.commit()
+        self.db.refresh(user)
+        return user.to_dict()
+
     def get_organization_me(self, user_id: Union[str, uuid.UUID]) -> Optional[Dict[str, Any]]:
         member = self._membership_for(user_id)
         if not member:
