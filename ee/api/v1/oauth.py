@@ -1,17 +1,19 @@
 import time
 import urllib.parse
+from typing import Any, Dict
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, Query, status, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from core.config import settings
 from core.database.session import get_db
-from core.services.oauth_service import OAuthService
 from core.services.oauth_providers import get_provider_config, get_supported_providers
-from ee.middleware.auth import require_ee_org_member, EEJWTClaims
+from core.services.oauth_service import OAuthService
+from core.utils.auth_helpers import require_org_id
+from ee.middleware.auth import EEJWTClaims, require_ee_org_member
 
 router = APIRouter()
 
@@ -19,7 +21,7 @@ BACKEND_URL = settings.BASE_API_URL.rstrip("/")
 
 
 def _get_service(claims: EEJWTClaims, db: Session) -> OAuthService:
-    return OAuthService(db, org_id=UUID(claims.org_id))
+    return OAuthService(db, org_id=require_org_id(claims.org_id))
 
 
 # ─── CRUD endpoints ───
@@ -32,8 +34,19 @@ def get_connections(
     db: Session = Depends(get_db),
 ):
     svc = _get_service(claims, db)
-    connections = svc.get_connections(provider=provider, user_id=int(claims.user_id))
+    connections = svc.get_connections(provider=provider, user_id=claims.user_id)
     return [svc.connection_response(c) for c in connections]
+
+
+@router.post("/list")
+def list_connections(
+    body: Dict[str, Any] = Body(default={}),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    return _get_service(claims, db).list_connections(
+        provider_slug=body.get("provider_slug"),
+    )
 
 
 @router.get("/connection")
@@ -51,12 +64,11 @@ def get_connection_by_provider(
 
 @router.delete("/disconnect", status_code=status.HTTP_200_OK)
 def disconnect(
-    connection_id: int = Query(..., description="The connection ID to delete"),
+    connection_id: str = Query(..., description="The connection UUID to delete"),
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    svc = _get_service(claims, db)
-    return svc.delete_connection(connection_id)
+    return _get_service(claims, db).delete_connection(connection_id)
 
 
 @router.get("/providers")
@@ -77,12 +89,13 @@ def authorize(
         raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
 
     if not config["client_id"] or not config["client_secret"]:
-        raise HTTPException(status_code=500, detail=f"OAuth credentials not configured for {provider}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"OAuth credentials not configured for {provider}",
+        )
 
     state = f"{claims.org_id}:{claims.user_id}:{provider}"
     callback_url = f"{BACKEND_URL}/oauth/{provider}/callback"
-
-    print("callback_url", callback_url)
 
     params = {
         "client_id": config["client_id"],
@@ -112,7 +125,7 @@ def callback(
     try:
         org_id_str, user_id_str, state_provider = state.split(":")
         org_id = UUID(org_id_str)
-        user_id = int(user_id_str)
+        user_id = UUID(user_id_str)
     except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="Invalid state parameter")
 
@@ -133,7 +146,9 @@ def callback(
         response = client.post(config["token_url"], data=token_data)
 
     if response.status_code != 200:
-        raise HTTPException(status_code=400, detail=f"Token exchange failed: {response.text}")
+        raise HTTPException(
+            status_code=400, detail=f"Token exchange failed: {response.text}"
+        )
 
     tokens = response.json()
     access_token = tokens.get("access_token")
@@ -141,7 +156,9 @@ def callback(
     expires_in = tokens.get("expires_in")
 
     if not access_token:
-        raise HTTPException(status_code=400, detail="No access token received from provider")
+        raise HTTPException(
+            status_code=400, detail="No access token received from provider"
+        )
 
     token_expiry = int(time.time()) + expires_in if expires_in else None
 
@@ -159,15 +176,17 @@ def callback(
             pass
 
     svc = OAuthService(db, org_id=org_id)
-    connection = svc.create_connection({
-        "provider": provider,
+    svc.create_connection({
+        "provider_slug": provider,
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_expiry": token_expiry,
         "scopes": config["scopes"],
         "user_email": user_email,
-        "user_id": user_id,
+        "created_by_user_id": user_id,
     })
 
     frontend_url = settings.APPLICATION_URL.rstrip("/")
-    return RedirectResponse(url=f"{frontend_url}/integrations?provider={provider}&status=success")
+    return RedirectResponse(
+        url=f"{frontend_url}/integrations?provider={provider}&status=success"
+    )

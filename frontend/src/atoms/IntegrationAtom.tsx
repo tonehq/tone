@@ -1,53 +1,69 @@
-import { deleteChannel, getChannels, upsertChannel } from '@/services/channelService';
-import type { IntegrationRow } from '@/types/integration';
-import { formatDate } from '@/utils/date';
+import {
+  deleteChannel as deleteChannelApi,
+  listChannels,
+  upsertChannel as upsertChannelApi,
+} from '@/services/channelService';
+import type { Channel, ChannelUpsertPayload } from '@/types/integration';
 import { atom } from 'jotai';
-import { loadable } from 'jotai/utils';
 
-interface TwilioMetaData {
-  account_sid: string;
-  auth_token: string;
+interface ChannelsState {
+  items: Channel[];
+  status: 'idle' | 'loading' | 'error';
+  error: string | null;
+  initialized: boolean;
 }
 
-const channelsRefreshAtom = atom(0);
+const initialState: ChannelsState = {
+  items: [],
+  status: 'idle',
+  error: null,
+  initialized: false,
+};
 
-const channelsRowsAtom = atom<Promise<IntegrationRow[]>>(async (get) => {
-  get(channelsRefreshAtom);
-  const apiData = await getChannels();
-  return apiData.map((row: any) => ({
-    id: row.id,
-    name: row.name,
-    type: row.type,
-    auth_token: row.meta_data.auth_token ?? '••••••••',
-    account_sid: row.meta_data.account_sid ?? '',
-    createdAt: row.created_at ? formatDate(Number(row.created_at)) : '-',
-  }));
+const channelsStateAtom = atom<ChannelsState>(initialState);
+
+const channelsAtom = atom((get) => get(channelsStateAtom));
+
+const fetchChannelsAtom = atom(null, async (get, set): Promise<void> => {
+  const current = get(channelsStateAtom);
+  if (current.status === 'loading') return;
+  set(channelsStateAtom, { ...current, status: 'loading', error: null });
+  try {
+    const items = await listChannels();
+    set(channelsStateAtom, {
+      items,
+      status: 'idle',
+      error: null,
+      initialized: true,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to load channels';
+    set(channelsStateAtom, { ...current, status: 'error', error: message });
+    throw err;
+  }
 });
 
-const loadableChannelsAtom = loadable(channelsRowsAtom);
-
-// Action: refresh channel list
-const refetchChannelsAtom = atom(null, (_get, set) => {
-  set(channelsRefreshAtom, (c) => c + 1);
+const upsertChannelAtom = atom(null, async (_get, set, payload: ChannelUpsertPayload) => {
+  const result = await upsertChannelApi(payload);
+  await set(fetchChannelsAtom);
+  return result;
 });
 
-// Action: create or update a channel, then refresh
-const upsertChannelAtom = atom(
-  null,
-  async (
-    _get,
-    set,
-    payload: { id?: number; name: string; type: string; meta_data: TwilioMetaData },
-  ) => {
-    await upsertChannel(payload);
-    set(channelsRefreshAtom, (c) => c + 1);
-  },
-);
-
-// Action: delete a channel, then refresh
-const deleteChannelAtom = atom(null, async (_get, set, channelId: number) => {
-  await deleteChannel(channelId);
-  set(channelsRefreshAtom, (c) => c + 1);
+const deleteChannelAtom = atom(null, async (_get, set, channelId: string) => {
+  await deleteChannelApi(channelId);
+  await set(fetchChannelsAtom);
 });
 
-export { deleteChannelAtom, loadableChannelsAtom, refetchChannelsAtom, upsertChannelAtom };
+const resetChannelsAtom = atom(null, (_get, set) => {
+  set(channelsStateAtom, initialState);
+});
+
+export {
+  channelsAtom,
+  channelsStateAtom,
+  deleteChannelAtom,
+  fetchChannelsAtom,
+  resetChannelsAtom,
+  upsertChannelAtom,
+};
+export type { ChannelsState };
