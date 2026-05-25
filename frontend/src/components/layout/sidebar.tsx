@@ -439,9 +439,9 @@ export function Sidebar() {
                 fullWidth
                 className="justify-start gap-3 px-3 h-9 font-normal"
               >
-                <Link href="/members">
+                <Link href="/user-settings">
                   <Settings className="h-4 w-4 text-muted-foreground" />
-                  Settings
+                  User settings
                 </Link>
               </Button>
               <Button

@@ -1,6 +1,6 @@
 'use client';
 
-import { CustomModal, SelectInput, TextInput } from '@/components/shared';
+import { AppLoader, CustomModal, SelectInput, TextInput } from '@/components/shared';
 import { getChannel } from '@/services/channelService';
 import type { Channel, ChannelUpsertPayload } from '@/types/integration';
 import { handleApiError } from '@/utils/helpers';
@@ -109,41 +109,45 @@ export default function ChannelFormModal({
       confirmLoading={saving}
       confirmDisabled={!formState.isValid || hydrating}
     >
-      <div className="space-y-4">
-        <TextInput
-          name="name"
-          control={control}
-          label="Name"
-          placeholder="e.g. Twilio Production"
-          isRequired
-          disabled={saving || hydrating}
-        />
-        <SelectInput
-          name="channel-type"
-          label="Type"
-          options={CHANNEL_TYPE_OPTIONS}
-          value={channelType}
-          onValueChange={setChannelType}
-          disabled={saving || hydrating || !!providerKey || isEdit}
-        />
-        <TextInput
-          name="auth_token"
-          control={control}
-          label="Auth Token"
-          type="password"
-          placeholder="Enter auth token"
-          isRequired
-          disabled={saving || hydrating}
-        />
-        <TextInput
-          name="account_sid"
-          control={control}
-          label="Account SID"
-          placeholder="Enter account SID"
-          isRequired
-          disabled={saving || hydrating}
-        />
-      </div>
+      {hydrating ? (
+        <AppLoader className="min-h-[260px]" />
+      ) : (
+        <div className="space-y-4">
+          <TextInput
+            name="name"
+            control={control}
+            label="Name"
+            placeholder="e.g. Twilio Production"
+            isRequired
+            disabled={saving}
+          />
+          <SelectInput
+            name="channel-type"
+            label="Type"
+            options={CHANNEL_TYPE_OPTIONS}
+            value={channelType}
+            onValueChange={setChannelType}
+            disabled={saving || !!providerKey || isEdit}
+          />
+          <TextInput
+            name="auth_token"
+            control={control}
+            label="Auth Token"
+            type="password"
+            placeholder="Enter auth token"
+            isRequired
+            disabled={saving}
+          />
+          <TextInput
+            name="account_sid"
+            control={control}
+            label="Account SID"
+            placeholder="Enter account SID"
+            isRequired
+            disabled={saving}
+          />
+        </div>
+      )}
     </CustomModal>
   );
 }

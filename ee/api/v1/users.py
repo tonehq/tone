@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from core.database.session import get_db
 from core.schemas.list_request import ListRequest, apply_list_request
+from core.schemas.user import UserUpdate
 from ee.services.auth_service import EEAuthService
 from ee.middleware.auth import get_ee_jwt_claims, require_ee_org_member, EEJWTClaims
 
@@ -20,6 +21,17 @@ def get_me(
     db: Session = Depends(get_db),
 ):
     return EEAuthService(db).get_user_me(claims.user_id)
+
+
+@router.patch("/me")
+def update_me(
+    payload: UserUpdate,
+    claims: EEJWTClaims = Depends(get_ee_jwt_claims),
+    db: Session = Depends(get_db),
+):
+    return EEAuthService(db).update_user_me(
+        claims.user_id, payload.model_dump(exclude_unset=True)
+    )
 
 
 @router.post("/get_all_users_for_organization")
