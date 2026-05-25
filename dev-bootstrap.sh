@@ -47,8 +47,17 @@ fi
 echo ""
 echo "==> Setting up virtual environment..."
 
+REQUIRED_PY="3.11"
 if [ -d "$VENV_DIR" ]; then
-    echo "    Virtual environment already exists at $VENV_DIR"
+    VENV_PY_VERSION="$("$VENV_DIR/bin/python" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo "unknown")"
+    if [ "$VENV_PY_VERSION" != "$REQUIRED_PY" ]; then
+        echo "    Existing venv uses Python $VENV_PY_VERSION; required $REQUIRED_PY. Recreating..."
+        rm -rf "$VENV_DIR"
+        python3.11 -m venv "$VENV_DIR"
+        echo "    Recreated virtual environment at $VENV_DIR"
+    else
+        echo "    Virtual environment already exists at $VENV_DIR (Python $VENV_PY_VERSION)"
+    fi
 else
     python3.11 -m venv "$VENV_DIR"
     echo "    Created virtual environment at $VENV_DIR"
@@ -62,6 +71,17 @@ source "$VENV_DIR/bin/activate"
 echo "    Using: $(python --version) from $(which python)"
 
 # ── Step 4: Install dependencies ───────────────────────────────────
+
+# Cloudsmith entitlement URL for the private tone-pipecat package.
+# Must be supplied by the developer — see CLAUDE.md for how to obtain the
+# entitlement token from Cloudsmith.
+if [ -z "${PIP_EXTRA_INDEX_URL:-}" ]; then
+    echo "ERROR: PIP_EXTRA_INDEX_URL is not set."
+    echo "       Export it before running this script, e.g.:"
+    echo "         export PIP_EXTRA_INDEX_URL=\"https://<user>:<token>@dl.cloudsmith.io/<entitlement>/tonehq/tone/python/simple/\""
+    echo "       Get the entitlement token from Cloudsmith (tonehq/tone repo)."
+    exit 1
+fi
 
 echo ""
 echo "==> Installing Python dependencies..."

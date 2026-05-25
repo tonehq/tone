@@ -1,219 +1,183 @@
 'use client';
 
-import {
-  deleteChannelAtom,
-  loadableChannelsAtom,
-  upsertChannelAtom,
-} from '@/atoms/IntegrationAtom';
-import ActiveConnectionsSection from '@/components/settings/ActiveConnectionsSection';
-import AvailableIntegrationsSection from '@/components/settings/AvailableIntegrationsSection';
-import ToneLoader from '@/components/shared/ToneLoader';
-import { API_KEY_PROVIDERS, OAUTH_PROVIDERS } from '@/constants/integrations';
-import {
-  disconnectOAuth,
-  getOAuthAuthorizeUrl,
-  getOAuthConnections,
-} from '@/services/oauthService';
-import type { IntegrationRow } from '@/types/integration';
-import type { OAuthConnection } from '@/types/oauth';
+import { channelsAtom, fetchChannelsAtom, resetChannelsAtom } from '@/atoms/IntegrationAtom';
+import { fetchOAuthAtom, oauthAtom, resetOAuthAtom } from '@/atoms/OAuthAtom';
+import AvailableIntegrationsCatalog from '@/components/integrations/available-integrations-catalog';
+import ChannelGrid, { type ChannelGridHandle } from '@/components/integrations/channel-grid';
+import OAuthConnectionGrid from '@/components/integrations/oauth-connection-grid';
+import { CustomButton } from '@/components/shared';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
-import { showToast } from '@/utils/toast';
-import { useAtom } from 'jotai';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { Phone, Plug, RefreshCw, Sparkles } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
-import AddChannelModal from './AddChannelModal';
+const CATALOG_ANCHOR_ID = 'integrations-available-providers';
+const OAUTH_AND_API_HINT = 'Pick any provider below to add it to your workspace';
+
+function CountChip({ value, dim = false }: { value: number | null; dim?: boolean }) {
+  if (value === null) return null;
+  return (
+    <span
+      className={cn(
+        'inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums',
+        dim ? 'bg-foreground/5 text-foreground/60' : 'bg-foreground/10 text-foreground/80',
+      )}
+    >
+      {value}
+    </span>
+  );
+}
 
 interface IntegrationsProps {
   refreshKey?: string | null;
 }
 
 export default function Integrations({ refreshKey }: IntegrationsProps) {
-  const [mounted, setMounted] = useState(false);
-  const [channelsLoadable] = useAtom(loadableChannelsAtom);
-  const [, upsertChannel] = useAtom(upsertChannelAtom);
-  const [, removeChannel] = useAtom(deleteChannelAtom);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editRow, setEditRow] = useState<IntegrationRow | null>(null);
-  const [selectedProviderKey, setSelectedProviderKey] = useState<string | null>(null);
+  const channelGridRef = useRef<ChannelGridHandle | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  const [allConnections, setAllConnections] = useState<OAuthConnection[]>([]);
-  const [oauthLoading, setOauthLoading] = useState(true);
-  const [oauthConnecting, setOauthConnecting] = useState<Record<string, boolean>>({});
-  const [disconnectingId, setDisconnectingId] = useState<number | null>(null);
+  const oauthState = useAtomValue(oauthAtom);
+  const channelsState = useAtomValue(channelsAtom);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const refetchOAuth = useSetAtom(fetchOAuthAtom);
+  const refetchChannels = useSetAtom(fetchChannelsAtom);
+  const resetOAuth = useSetAtom(resetOAuthAtom);
+  const resetChannels = useSetAtom(resetChannelsAtom);
 
-  const fetchConnections = useCallback(async () => {
-    setOauthLoading(true);
-    try {
-      const connections = await getOAuthConnections();
-      setAllConnections(connections);
-    } catch {
-      setAllConnections([]);
-    } finally {
-      setOauthLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (mounted) fetchConnections();
-  }, [mounted, fetchConnections]);
-
-  useEffect(() => {
-    if (refreshKey) fetchConnections();
-  }, [refreshKey, fetchConnections]);
-
-  const getConnectionsForProvider = useCallback(
-    (providerKey: string) =>
-      allConnections.filter((c) => c.provider === providerKey && c.is_active),
-    [allConnections],
+  useEffect(
+    () => () => {
+      resetOAuth();
+      resetChannels();
+    },
+    [resetOAuth, resetChannels],
   );
 
-  const handleOAuthConnect = useCallback(async (providerKey: string) => {
-    setOauthConnecting((prev) => ({ ...prev, [providerKey]: true }));
-    try {
-      const authUrl = await getOAuthAuthorizeUrl(providerKey);
-      window.location.href = authUrl;
-    } catch (error) {
-      handleApiError(error);
-      setOauthConnecting((prev) => ({ ...prev, [providerKey]: false }));
+  useEffect(() => {
+    if (refreshKey) {
+      refetchOAuth().catch((err) => handleApiError(err));
     }
-  }, []);
-
-  const handleOAuthDisconnect = useCallback(async (connectionId: number) => {
-    setDisconnectingId(connectionId);
-    try {
-      await disconnectOAuth(connectionId);
-      setAllConnections((prev) => prev.filter((c) => c.id !== connectionId));
-      showToast.success('Account disconnected');
-    } catch (error) {
-      handleApiError(error);
-    } finally {
-      setDisconnectingId(null);
-    }
-  }, []);
-
-  const rows: IntegrationRow[] = channelsLoadable.state === 'hasData' ? channelsLoadable.data : [];
-
-  const rowsByType = useMemo(() => {
-    const map: Record<string, IntegrationRow[]> = {};
-    for (const row of rows) {
-      const type = (row.type ?? 'twilio').toLowerCase();
-      if (!map[type]) map[type] = [];
-      map[type].push(row);
-    }
-    return map;
-  }, [rows]);
+  }, [refreshKey, refetchOAuth]);
 
   const handleAddApiKey = useCallback((providerKey: string) => {
-    setEditRow(null);
-    setSelectedProviderKey(providerKey);
-    setModalOpen(true);
+    channelGridRef.current?.openAdd(providerKey);
   }, []);
 
-  const handleEdit = useCallback((row: IntegrationRow) => {
-    setEditRow(row);
-    setSelectedProviderKey(row.type ?? null);
-    setModalOpen(true);
+  const handleRefreshAll = useCallback(() => {
+    refetchOAuth().catch((err) => handleApiError(err));
+    refetchChannels().catch((err) => handleApiError(err));
+  }, [refetchOAuth, refetchChannels]);
+
+  const handleScrollToCatalog = useCallback(() => {
+    const el = document.getElementById(CATALOG_ANCHOR_ID);
+    const root = scrollRef.current;
+    if (!el || !root) return;
+    root.scrollTo({ top: el.offsetTop - 16, behavior: 'smooth' });
   }, []);
 
-  const handleCloseModal = () => {
-    setModalOpen(false);
-    setEditRow(null);
-    setSelectedProviderKey(null);
-  };
-
-  const handleSubmit = async (data: {
-    id?: number;
-    name: string;
-    type: string;
-    auth_token: string;
-    account_sid: string;
-  }) => {
-    const payload = {
-      ...(data.id ? { id: data.id } : {}),
-      name: data.name,
-      type: data.type,
-      meta_data: {
-        account_sid: data.account_sid,
-        auth_token: data.auth_token,
-      },
-    };
-
-    try {
-      await upsertChannel(payload as any);
-      showToast.success(
-        data.id ? 'Integration updated successfully' : 'Integration created successfully',
-      );
-    } catch (err) {
-      handleApiError(err);
-      throw new Error('API call failed');
-    }
-  };
-
-  const handleDelete = useCallback(
-    async (id: number) => {
-      try {
-        await removeChannel(id);
-        showToast.success('Integration deleted successfully');
-      } catch (error) {
-        handleApiError(error);
-      }
-    },
-    [removeChannel],
+  const connectedOAuthSlugs = useMemo(
+    () => new Set(oauthState.items.map((i) => i.provider_slug)),
+    [oauthState.items],
+  );
+  const configuredChannelTypes = useMemo(
+    () => new Set(channelsState.items.map((i) => i.channel_type)),
+    [channelsState.items],
   );
 
-  if (!mounted) {
-    return (
-      <div className="flex h-full w-full items-center justify-center p-4">
-        <ToneLoader label="Loading integrations..." />
-      </div>
-    );
-  }
+  const oauthCount = oauthState.initialized ? oauthState.items.length : null;
+  const channelsCount = channelsState.initialized ? channelsState.items.length : null;
+  const totalCount =
+    oauthCount === null && channelsCount === null ? null : (oauthCount ?? 0) + (channelsCount ?? 0);
+
+  const isRefreshing = oauthState.status === 'loading' || channelsState.status === 'loading';
 
   return (
-    <div className="w-full">
-      <div className="mb-10">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Integrations</h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          Connect services and manage credentials to power your voice agents.
-        </p>
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* ── Fixed page header ─────────────────────────────────── */}
+      <header className="shrink-0 border-b border-border/60 bg-background">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-6 py-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-[22px] font-semibold leading-tight tracking-tight text-foreground">
+              Integrations
+            </h1>
+            <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
+              Connect services and manage credentials that power your voice agents.
+            </p>
+          </div>
+          <CustomButton
+            type="default"
+            size="sm"
+            onClick={handleRefreshAll}
+            loading={isRefreshing}
+            icon={<RefreshCw className="size-3.5" />}
+            className="self-start sm:self-auto"
+          >
+            Refresh
+          </CustomButton>
+        </div>
+      </header>
+
+      {/* ── Scrollable content (the only thing that scrolls) ──── */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-7xl space-y-8 px-6 pb-10 pt-6">
+          {/* Available providers (catalog) */}
+          <section id={CATALOG_ANCHOR_ID} className="space-y-4 scroll-mt-6">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="size-4 text-violet-500" strokeWidth={2.25} />
+                <h2 className="text-[15px] font-semibold tracking-tight text-foreground">
+                  Available providers
+                </h2>
+              </div>
+              <p className="hidden text-xs text-muted-foreground sm:block">{OAUTH_AND_API_HINT}</p>
+            </div>
+            <AvailableIntegrationsCatalog
+              onAddApiKey={handleAddApiKey}
+              connectedSlugs={connectedOAuthSlugs}
+              configuredChannelTypes={configuredChannelTypes}
+            />
+          </section>
+
+          {/* Your integrations (workspace) */}
+          <section className="relative overflow-hidden rounded-3xl border border-border/70 bg-gradient-to-b from-muted/40 to-muted/15 p-5 sm:p-6">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute -right-24 -top-24 size-64 rounded-full bg-violet-500/[0.06] blur-3xl"
+            />
+
+            <div className="relative mb-4 flex items-center gap-2">
+              <h2 className="text-[15px] font-semibold tracking-tight text-foreground">
+                Your integrations
+              </h2>
+              <CountChip value={totalCount} />
+            </div>
+
+            <Tabs defaultValue="services" className="relative w-full">
+              <TabsList className="mb-5 bg-background/80 shadow-sm">
+                <TabsTrigger value="services" className="gap-1.5 px-3">
+                  <Plug className="size-3.5" />
+                  <span>Services</span>
+                  <CountChip value={oauthCount} dim />
+                </TabsTrigger>
+                <TabsTrigger value="channels" className="gap-1.5 px-3">
+                  <Phone className="size-3.5" />
+                  <span>Channels</span>
+                  <CountChip value={channelsCount} dim />
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="services">
+                <OAuthConnectionGrid onConnectAnother={handleScrollToCatalog} />
+              </TabsContent>
+
+              <TabsContent value="channels">
+                <ChannelGrid controlRef={channelGridRef} />
+              </TabsContent>
+            </Tabs>
+          </section>
+        </div>
       </div>
-
-      <ActiveConnectionsSection
-        oauthProviders={OAUTH_PROVIDERS}
-        apiKeyProviders={API_KEY_PROVIDERS}
-        getConnectionsForProvider={getConnectionsForProvider}
-        rowsByType={rowsByType}
-        oauthConnecting={oauthConnecting}
-        disconnectingId={disconnectingId}
-        onOAuthConnect={handleOAuthConnect}
-        onOAuthDisconnect={handleOAuthDisconnect}
-        onAddApiKey={handleAddApiKey}
-        onEditRow={handleEdit}
-        onDeleteRow={handleDelete}
-      />
-
-      <AvailableIntegrationsSection
-        oauthProviders={OAUTH_PROVIDERS}
-        apiKeyProviders={API_KEY_PROVIDERS}
-        getConnectionsForProvider={getConnectionsForProvider}
-        rowsByType={rowsByType}
-        oauthConnecting={oauthConnecting}
-        oauthLoading={oauthLoading}
-        onOAuthConnect={handleOAuthConnect}
-        onAddApiKey={handleAddApiKey}
-      />
-
-      <AddChannelModal
-        open={modalOpen}
-        onClose={handleCloseModal}
-        onSubmit={handleSubmit}
-        editData={editRow}
-        providerKey={selectedProviderKey}
-      />
     </div>
   );
 }
