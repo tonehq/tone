@@ -79,7 +79,6 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Model Providers', href: '/model-providers', icon: Plug },
       { label: 'Integrations', href: '/integrations', icon: Cable },
-      { label: 'Phone Numbers', href: '/phone-numbers', icon: Phone },
       { label: 'Organizations', href: '/organizations', icon: Building2 },
       { label: 'Members', href: '/members', icon: Users },
     ],

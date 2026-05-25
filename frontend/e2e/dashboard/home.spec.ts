@@ -87,9 +87,8 @@ test.describe('Home Page', () => {
       await expect(page.getByRole('heading', { name: 'Quick Links' })).toBeVisible();
     });
 
-    test('shows all 6 quick link cards', async ({ page }) => {
+    test('shows all 5 quick link cards', async ({ page }) => {
       await expect(page.getByRole('link', { name: 'Agents' })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'Phone Numbers' })).toBeVisible();
       await expect(page.getByRole('link', { name: 'Analytics' })).toBeVisible();
       await expect(page.getByRole('link', { name: 'Actions' })).toBeVisible();
       await expect(page.getByRole('link', { name: 'Team Members' })).toBeVisible();
@@ -98,7 +97,6 @@ test.describe('Home Page', () => {
 
     test('shows each quick link card with its description', async ({ page }) => {
       await expect(page.getByText('Create and manage your AI voice agents')).toBeVisible();
-      await expect(page.getByText('Manage your phone numbers for calls')).toBeVisible();
       await expect(page.getByText('View performance metrics and insights')).toBeVisible();
       await expect(page.getByText('Configure automated actions and triggers')).toBeVisible();
       await expect(page.getByText('Manage your team and invite new members')).toBeVisible();
@@ -119,13 +117,6 @@ test.describe('Home Page', () => {
 
     test('renders "Agents" card with correct href', async ({ page }) => {
       await expect(page.getByRole('link', { name: 'Agents' })).toHaveAttribute('href', '/agents');
-    });
-
-    test('renders "Phone Numbers" card with correct href', async ({ page }) => {
-      await expect(page.getByRole('link', { name: 'Phone Numbers' })).toHaveAttribute(
-        'href',
-        '/phone-numbers',
-      );
     });
 
     test('renders "Analytics" card with correct href', async ({ page }) => {
@@ -163,11 +154,6 @@ test.describe('Home Page', () => {
     test('clicking "Agents" card navigates to /agents', async ({ page }) => {
       await page.getByRole('link', { name: 'Agents' }).click();
       await expect(page).toHaveURL(/\/agents/, { timeout: 10_000 });
-    });
-
-    test('clicking "Phone Numbers" card navigates to /phone-numbers', async ({ page }) => {
-      await page.getByRole('link', { name: 'Phone Numbers' }).click();
-      await expect(page).toHaveURL(/\/phone-numbers/, { timeout: 10_000 });
     });
 
     test('clicking "Team Members" card navigates to /settings', async ({ page }) => {
@@ -233,14 +219,7 @@ test.describe('Home Page', () => {
     });
 
     test('quick link cards are rendered as accessible links', async ({ page }) => {
-      for (const name of [
-        'Agents',
-        'Phone Numbers',
-        'Analytics',
-        'Actions',
-        'Team Members',
-        'Settings',
-      ]) {
+      for (const name of ['Agents', 'Analytics', 'Actions', 'Team Members', 'Settings']) {
         await expect(page.getByRole('link', { name })).toBeVisible();
       }
     });
@@ -251,7 +230,7 @@ test.describe('Home Page', () => {
       await expect(agentsLink).toBeFocused();
 
       await page.keyboard.press('Tab');
-      await expect(page.getByRole('link', { name: 'Phone Numbers' })).toBeFocused();
+      await expect(page.getByRole('link', { name: 'Analytics' })).toBeFocused();
     });
 
     test('allows Enter key to activate a focused quick link card', async ({ page }) => {

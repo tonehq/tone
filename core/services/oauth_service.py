@@ -192,7 +192,15 @@ class OAuthService(BaseService):
 
     def get_valid_access_token_for_connection(self, connection: OAuthConnection) -> str:
         provider = connection.provider_slug
-        tokens = self.get_decrypted_tokens(connection)
+        try:
+            tokens = self.get_decrypted_tokens(connection)
+        except Exception as exc:
+            # Decryption failed (rotated key, corrupted blob, etc.) — the user
+            # needs to reconnect rather than see a generic 500.
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Stored credentials for '{provider}' could not be decrypted. Please reconnect.",
+            ) from exc
         now = int(time.time())
         expiry = tokens.get("token_expiry")
 
