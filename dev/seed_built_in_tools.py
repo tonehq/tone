@@ -6,9 +6,9 @@ Skips if a tool with the same tool_type already exists for an org.
 """
 
 import uuid
-import time
 import sys
 import json
+from datetime import datetime, timezone
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -116,16 +116,16 @@ def main():
                     skipped += 1
                     continue
 
-                now = int(time.time())
+                now = datetime.now(timezone.utc)
                 session.execute(
                     text(
                         """
-                        INSERT INTO tools (uuid, name, description, tool_type, parameters, is_active, is_template, organization_id, created_at, updated_at)
-                        VALUES (:uuid, :name, :description, :tool_type, CAST(:parameters AS jsonb), :is_active, :is_template, :org_id, :created_at, :updated_at)
+                        INSERT INTO tools (id, name, description, tool_type, parameters, is_active, is_template, organization_id, created_at, updated_at)
+                        VALUES (:id, :name, :description, :tool_type, CAST(:parameters AS jsonb), :is_active, :is_template, :org_id, :created_at, :updated_at)
                         """
                     ),
                     {
-                        "uuid": str(uuid.uuid4()),
+                        "id": str(uuid.uuid4()),
                         "name": tool_def["name"],
                         "description": tool_def["description"],
                         "tool_type": tool_def["tool_type"],

@@ -116,9 +116,9 @@ def seed_user(db, email, password):
 
     user = User(
         email=email,
-        full_name=email.split("@")[0],
-        encrypted_password=hash_password(password),
-        is_email_verified=True,
+        first_name=email.split("@")[0],
+        password_hash=hash_password(password),
+        is_verified=True,
         is_active=True,
     )
     db.add(user)
@@ -135,7 +135,6 @@ def seed_organization(db, org_name):
     org = Organization(
         name=org_name,
         slug=slug,
-        is_active=True,
     )
     db.add(org)
     db.flush()
@@ -150,7 +149,6 @@ def seed_member(db, user, org):
         organization_id=org.id,
         user_id=user.id,
         role="owner",
-        is_active=True,
     )
     db.add(member)
     db.flush()
@@ -175,8 +173,8 @@ def seed_from_configs(db, org_name, email, password):
     org = seed_organization(db, org_name)
     seed_member(db, user, org)
 
-    # Set default_organization_id on user
-    user.default_organization_id = org.id
+    # Link user to organization
+    user.organization_id = org.id
 
     org_id = org.id
 
