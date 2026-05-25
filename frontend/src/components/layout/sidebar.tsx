@@ -300,8 +300,8 @@ export function Sidebar() {
                             className={cn(
                               'flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[13px] transition-colors',
                               isActive
-                                ? 'bg-sidebar-accent text-foreground'
-                                : 'text-foreground/85 hover:bg-sidebar-accent/60',
+                                ? 'bg-sidebar-accent text-foreground cursor-default'
+                                : 'text-foreground/85 hover:bg-sidebar-accent/60 cursor-pointer',
                             )}
                           >
                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-[11px] font-semibold text-primary">
@@ -329,7 +329,7 @@ export function Sidebar() {
                   <div className="p-1.5">
                     <Link
                       href="/organizations"
-                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-foreground/85 hover:bg-sidebar-accent/60"
+                      className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-foreground/85 hover:bg-sidebar-accent/60"
                     >
                       <Settings className="h-3.5 w-3.5 text-muted-foreground" />
                       Manage organizations
