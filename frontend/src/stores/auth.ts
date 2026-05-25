@@ -43,6 +43,23 @@ function readJSON<T>(key: string): T | null {
   }
 }
 
+// Build a clean Organization + User pair from the active membership. The
+// organization is rebuilt fresh (id + name only) so that fields like slug,
+// logo_url, or subscription_* from a previously-active workspace can't leak
+// through after a switch — those should be re-fetched from the API.
+function reconcileActiveOrg(
+  activeOrgId: string | null,
+  orgs: UserOrganization[],
+  user: User | null,
+): { organization: Organization; user: User | null } | null {
+  const membership = activeOrgId ? orgs.find((o) => String(o.id) === String(activeOrgId)) : null;
+  if (!membership) return null;
+  return {
+    organization: { id: membership.id, name: membership.name },
+    user: user ? { ...user, role: membership.role ?? user.role ?? null } : user,
+  };
+}
+
 function bootstrap() {
   if (typeof window === 'undefined') {
     return {
@@ -73,19 +90,26 @@ function bootstrap() {
     };
   }
 
-  // Role is contextual to the active membership — populate from the response
-  // or, failing that, from the access token claims.
+  // If the user has switched workspaces, the active org id in localStorage is
+  // the source of truth — reconcile organization name and per-org role with
+  // the matching membership so the sidebar reflects the current tenant
+  // after reload.
+  const reconciled = reconcileActiveOrg(activeOrgId, organizations, user);
+  if (reconciled) {
+    organization = reconciled.organization;
+    user = reconciled.user;
+  } else if (!organization && organizations.length) {
+    organization = {
+      id: organizations[0].id as string,
+      name: organizations[0].name ?? 'Workspace',
+    };
+    if (user && !user.role) user.role = organizations[0].role ?? null;
+  }
+
+  // Role is contextual to the active membership — fall back to the login
+  // payload / token claims when no membership row carried one.
   if (user && !user.role) {
     user.role = (loginData?.role as string) ?? readRoleFromToken(token) ?? null;
-  }
-  if (!organization && organizations.length) {
-    organization = {
-      id: activeOrgId || (organizations[0].id as string),
-      name:
-        organizations.find((o) => o.id === activeOrgId)?.name ??
-        organizations[0].name ??
-        'Workspace',
-    };
   }
 
   return {
@@ -149,7 +173,21 @@ export const useAuthStore = create<AuthState>((set) => ({
         : null,
     }));
   },
-  setOrganizations: (orgs) => set({ organizations: orgs }),
+  setOrganizations: (orgs) =>
+    set((s) => {
+      // The full membership list arrives async (DashboardLayout fetches it
+      // after bootstrap), so this is our first chance to reconcile the
+      // displayed organization and role with the active tenant in
+      // localStorage. Without this, switching workspaces + reload shows the
+      // original login org until something else updates the store.
+      const reconciled = reconcileActiveOrg(s.activeOrgId, orgs, s.user);
+      if (!reconciled) return { organizations: orgs };
+      return {
+        organizations: orgs,
+        organization: reconciled.organization,
+        user: reconciled.user,
+      };
+    }),
   clearAuth: () => {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(ACCESS_TOKEN);
