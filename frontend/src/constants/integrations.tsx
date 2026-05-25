@@ -42,22 +42,4 @@ export const API_KEY_PROVIDERS: ProviderCardConfig[] = [
     iconBorder: 'border-red-200/50 dark:border-red-500/20 shadow-sm dark:shadow-none',
     accentColor: 'bg-red-500',
   },
-  {
-    key: 'telnyx',
-    name: 'Telnyx',
-    description: 'Global carrier for programmable voice and messaging APIs.',
-    icon: <Phone size={18} className="text-teal-600 dark:text-teal-400" />,
-    iconBg: 'bg-teal-50 dark:bg-teal-500/10',
-    iconBorder: 'border-teal-200/50 dark:border-teal-500/20 shadow-sm dark:shadow-none',
-    accentColor: 'bg-teal-500',
-  },
-  {
-    key: 'exotel',
-    name: 'Exotel',
-    description: 'Cloud telephony for customer engagement across India and Southeast Asia.',
-    icon: <Phone size={18} className="text-blue-600 dark:text-blue-400" />,
-    iconBg: 'bg-blue-50 dark:bg-blue-500/10',
-    iconBorder: 'border-blue-200/50 dark:border-blue-500/20 shadow-sm dark:shadow-none',
-    accentColor: 'bg-blue-500',
-  },
 ];

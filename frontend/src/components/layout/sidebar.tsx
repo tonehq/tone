@@ -79,7 +79,6 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Model Providers', href: '/model-providers', icon: Plug },
       { label: 'Integrations', href: '/integrations', icon: Cable },
-      { label: 'Phone Numbers', href: '/phone-numbers', icon: Phone },
       { label: 'Organizations', href: '/organizations', icon: Building2 },
       { label: 'Members', href: '/members', icon: Users },
     ],
@@ -440,9 +439,9 @@ export function Sidebar() {
                 fullWidth
                 className="justify-start gap-3 px-3 h-9 font-normal"
               >
-                <Link href="/members">
+                <Link href="/user-settings">
                   <Settings className="h-4 w-4 text-muted-foreground" />
-                  Settings
+                  User settings
                 </Link>
               </Button>
               <Button

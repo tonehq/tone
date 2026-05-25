@@ -12,6 +12,7 @@ from core.models.phone_number import PhoneNumber
 # Uploads
 from core.models.upload import Upload
 from core.models.document import Document
+from core.models.document_chunk import DocumentChunk
 
 # Agent Core
 from core.models.agent import Agent

@@ -72,10 +72,13 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
         transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
       >
         <main className="flex-1 p-6 overflow-auto flex flex-col min-h-0 min-w-0">
+          {/* Page-entry animation uses opacity only — animating `y` would set
+              `transform` on this wrapper and break `position: sticky` for any
+              page that wants a sticky header. */}
           <motion.div
             className="flex-1 flex flex-col min-h-0 min-w-0 outline-none"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
           >
             {children}

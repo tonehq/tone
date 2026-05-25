@@ -103,7 +103,7 @@ export default function BuiltInToolForm({
     () =>
       connections.map((c) => ({
         value: String(c.id),
-        label: c.user_email ?? `Connection #${c.id}`,
+        label: c.public_metadata?.user_email ?? c.label ?? `Connection #${c.id}`,
       })),
     [connections],
   );

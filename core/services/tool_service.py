@@ -127,9 +127,9 @@ class ToolService(BaseService):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Template tools cannot be edited",
             )
-        # Built-in tools: only allow updating meta_data, auth_config, and is_active
+        # Built-in tools: only allow updating name, description, meta_data, auth_config, and is_active
         if tool.tool_type != "custom":
-            allowed = {"meta_data", "auth_config", "is_active", "oauth_connection_id"}
+            allowed = {"name", "description", "meta_data", "auth_config", "is_active", "oauth_connection_id"}
             data = {k: v for k, v in data.items() if k in allowed}
         if data.get("oauth_connection_id"):
             self._validate_oauth_connection(data["oauth_connection_id"])
@@ -162,9 +162,9 @@ class ToolService(BaseService):
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Template tools cannot be edited",
                 )
-            # Built-in tools: only allow updating meta_data, auth_config, and is_active
+            # Built-in tools: only allow updating name, description, meta_data, auth_config, and is_active
             if existing.tool_type != "custom":
-                allowed = {"meta_data", "auth_config", "is_active", "oauth_connection_id"}
+                allowed = {"name", "description", "meta_data", "auth_config", "is_active", "oauth_connection_id"}
                 update_data = {k: v for k, v in data.items() if k in allowed}
             else:
                 update_data = {k: v for k, v in data.items() if k != "id"}

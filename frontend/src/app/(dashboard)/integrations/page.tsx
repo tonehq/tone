@@ -24,7 +24,7 @@ function IntegrationsWithCallback() {
 
 export default function IntegrationsPage() {
   return (
-    <div className="animate-page h-full overflow-y-auto p-6">
+    <div className="animate-page flex h-full flex-col">
       <Suspense>
         <IntegrationsWithCallback />
       </Suspense>

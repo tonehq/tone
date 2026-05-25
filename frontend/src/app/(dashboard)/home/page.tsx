@@ -10,7 +10,6 @@ import {
   Bot,
   CheckCircle2,
   Clock,
-  Phone,
   Plus,
   Settings,
   Users,
@@ -93,15 +92,6 @@ const quickLinks: QuickLinkConfig[] = [
     iconBg: 'bg-violet-500/10',
     iconColor: 'text-violet-600 dark:text-violet-400',
     hoverRing: 'group-hover:ring-violet-500/20',
-  },
-  {
-    title: 'Phone Numbers',
-    description: 'Manage your phone numbers for calls',
-    icon: Phone,
-    href: '/phone-numbers',
-    iconBg: 'bg-emerald-500/10',
-    iconColor: 'text-emerald-600 dark:text-emerald-400',
-    hoverRing: 'group-hover:ring-emerald-500/20',
   },
   {
     title: 'Team Members',

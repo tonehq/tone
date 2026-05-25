@@ -11,6 +11,12 @@ export interface AcceptInvitationPayload {
   last_name?: string;
 }
 
+export interface UpdateProfilePayload {
+  first_name?: string;
+  last_name?: string;
+  avatar_url?: string | null;
+}
+
 export const authApi = {
   login: async (payload: LoginFormData): Promise<AuthLoginResponse> => {
     const { data } = await axios.post<AuthLoginResponse>('/auth/login', payload);
@@ -36,6 +42,10 @@ export const authApi = {
   },
   me: async (): Promise<User> => {
     const { data } = await axios.get<User>('/user/me');
+    return data;
+  },
+  updateMe: async (payload: UpdateProfilePayload): Promise<User> => {
+    const { data } = await axios.patch<User>('/user/me', payload);
     return data;
   },
   myOrg: async (): Promise<Organization | null> => {
