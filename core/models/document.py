@@ -29,6 +29,12 @@ class Document(OrgScopedModel):
 
     upload = relationship("Upload")
     agent = relationship("Agent")
+    chunks = relationship(
+        "DocumentChunk",
+        back_populates="document",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
     def to_dict(self) -> dict:
         return {

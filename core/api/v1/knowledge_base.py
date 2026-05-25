@@ -1,6 +1,6 @@
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session, joinedload
 
 from core.database.session import get_db
@@ -9,6 +9,7 @@ from core.models.agent import Agent
 from core.models.document import Document
 from core.models.upload import Upload
 from core.services.crud import list_records
+from core.services.document_processing_service import DocumentProcessingService
 from core.services.r2_storage_service import R2StorageService
 from shared.config import settings
 
@@ -90,6 +91,7 @@ def list_documents(
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def upload_document(
+    background_tasks: BackgroundTasks,
     agent_id: str = Form(...),
     file: UploadFile = File(...),
     claims: JWTClaims = Depends(require_org_member),
@@ -136,12 +138,17 @@ async def upload_document(
         file_name=file_name,
         content_type=content_type,
         file_size_bytes=len(file_bytes),
-        status="ready",
+        status="processing",
         meta_data={},
     )
     db.add(doc)
     db.commit()
     db.refresh(doc)
+
+    background_tasks.add_task(
+        DocumentProcessingService().process_document, doc.id, org_id
+    )
+
     return _doc_to_payload(doc)
 
 
@@ -183,6 +190,7 @@ def rename_document(
 @router.patch("/{document_id}/file")
 async def replace_document_file(
     document_id: str,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     file_name: str | None = Form(None),
     claims: JWTClaims = Depends(require_org_member),
@@ -243,7 +251,7 @@ async def replace_document_file(
     doc.file_name = new_name
     doc.content_type = content_type
     doc.file_size_bytes = len(file_bytes)
-    doc.status = "ready"
+    doc.status = "processing"
     db.commit()
     db.refresh(doc)
 
@@ -253,6 +261,10 @@ async def replace_document_file(
             R2StorageService().delete_file(old_path)
         except Exception:
             pass
+
+    background_tasks.add_task(
+        DocumentProcessingService().reprocess_document, doc.id, org_id
+    )
 
     return _doc_to_payload(doc)
 

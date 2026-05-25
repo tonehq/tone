@@ -16,7 +16,6 @@ import { TOOL_STATUS_OPTIONS, TOOL_TYPE_OPTIONS } from '@/lib/constants/filters'
 import type { CustomTableColumn, CustomTableSortState } from '@/types/components';
 import type { Tool } from '@/types/tool';
 import { cn } from '@/utils/cn';
-import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
 const METHOD_COLORS: Record<string, string> = {
@@ -41,7 +40,6 @@ export default function ToolsListPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const [deleteTarget, setDeleteTarget] = useState<Tool | null>(null);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
@@ -98,22 +96,6 @@ export default function ToolsListPage() {
     },
     [router],
   );
-
-  const handleSingleDelete = useCallback(async () => {
-    if (!deleteTarget) return;
-    try {
-      await deleteMutation.mutateAsync(deleteTarget.id);
-      showToast.success('Tool deleted successfully');
-      setSelectedIds((prev) => {
-        const next = new Set(prev);
-        next.delete(deleteTarget.id);
-        return next;
-      });
-      setDeleteTarget(null);
-    } catch (error) {
-      handleApiError(error);
-    }
-  }, [deleteTarget, deleteMutation]);
 
   const handleBulkDelete = useCallback(async () => {
     if (selectedIds.size === 0) return;
@@ -310,7 +292,15 @@ export default function ToolsListPage() {
         render: (_val: unknown, record: Tool) => (
           <ActionMenu
             onEdit={() => handleEdit(record)}
-            onDelete={async () => setDeleteTarget(record)}
+            onDelete={async () => {
+              await deleteMutation.mutateAsync(record.id);
+              showToast.success('Tool deleted successfully');
+              setSelectedIds((prev) => {
+                const next = new Set(prev);
+                next.delete(record.id);
+                return next;
+              });
+            }}
             itemName={record.name}
           />
         ),
@@ -404,18 +394,6 @@ export default function ToolsListPage() {
         count={selectedIds.size}
         onClear={() => setSelectedIds(new Set())}
         onDelete={() => setBulkDeleteOpen(true)}
-      />
-
-      {/* Delete confirmation modal */}
-      <CustomModal
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        title="Delete tool"
-        description={`Are you sure you want to delete "${deleteTarget?.name}"? This action cannot be undone.`}
-        confirmText="Delete"
-        confirmType="danger"
-        confirmLoading={deleteMutation.isPending}
-        onConfirm={handleSingleDelete}
       />
 
       {/* Bulk delete modal */}

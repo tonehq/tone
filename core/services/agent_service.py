@@ -637,7 +637,8 @@ class AgentService(BaseService):
             )
         from core.models.call_log import CallLog
         from core.models.upload import Upload
-        from core.models.document import Document, DocumentChunk
+        from core.models.document import Document
+        from core.models.document_chunk import DocumentChunk
         from core.models.tool import AgentTool
         from core.models.mcp_server import AgentMcpServer
 

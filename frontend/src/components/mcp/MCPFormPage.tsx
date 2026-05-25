@@ -158,11 +158,11 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const { control, handleSubmit, watch, reset } = useForm<MCPFormState>({
+  const { control, handleSubmit, watch, reset, setValue } = useForm<MCPFormState>({
     defaultValues: DEFAULT_VALUES,
   });
 
-  const { fields, append, remove, update } = useFieldArray<MCPFormState, 'http_headers', 'id'>({
+  const { fields, append, remove } = useFieldArray<MCPFormState, 'http_headers', 'id'>({
     control,
     name: 'http_headers',
   });
@@ -186,6 +186,7 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
     };
   }, [isEditMode, serverId, reset]);
 
+  const watchedHeaders = watch('http_headers');
   const watchedName = watch('name');
   const watchedDescription = watch('description') ?? '';
   const watchedIsActive = watch('is_active');
@@ -533,7 +534,11 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
                       )}
                     </div>
                     <HttpHeadersBuilder
-                      rows={fields.map((f) => ({ id: f.id, key: f.key, value: f.value }))}
+                      rows={fields.map((f, i) => ({
+                        id: f.id,
+                        key: watchedHeaders[i]?.key ?? '',
+                        value: watchedHeaders[i]?.value ?? '',
+                      }))}
                       onAdd={() => append({ key: '', value: '' })}
                       onRemove={(id) => {
                         const idx = fields.findIndex((f) => f.id === id);
@@ -542,11 +547,9 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
                       onChange={(id, patch) => {
                         const idx = fields.findIndex((f) => f.id === id);
                         if (idx < 0) return;
-                        const current = fields[idx];
-                        update(idx, {
-                          key: patch.key ?? current.key,
-                          value: patch.value ?? current.value,
-                        });
+                        if (patch.key !== undefined) setValue(`http_headers.${idx}.key`, patch.key);
+                        if (patch.value !== undefined)
+                          setValue(`http_headers.${idx}.value`, patch.value);
                       }}
                     />
                   </div>
