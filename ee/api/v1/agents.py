@@ -1,8 +1,9 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends
 from sqlalchemy.orm import Session
 
+from core.api.v1.agents import list_agents_for_org
 from core.database.session import get_db
 from core.models.agent import Agent
 from ee.middleware.auth import EEJWTClaims, require_ee_org_member
@@ -23,3 +24,13 @@ def get_all_agents(
         .all()
     )
     return [{"id": str(r.id), "uuid": str(r.id), "name": r.name} for r in rows]
+
+
+@router.post("/list")
+def list_agents(
+    body: dict = Body(default={}),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    org_id = UUID(claims.org_id)
+    return list_agents_for_org(db, org_id, body)

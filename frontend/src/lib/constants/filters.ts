@@ -20,3 +20,9 @@ export const TOOL_STATUS_OPTIONS: SelectOption[] = [
   { value: 'active', label: 'Active' },
   { value: 'inactive', label: 'Inactive' },
 ];
+
+export const AGENT_TYPE_OPTIONS: SelectOption[] = [
+  { value: 'all', label: 'All types' },
+  { value: 'inbound', label: 'Inbound' },
+  { value: 'outbound', label: 'Outbound' },
+];

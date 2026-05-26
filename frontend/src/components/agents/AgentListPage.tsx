@@ -1,30 +1,64 @@
 'use client';
 
-import agentsAtom, { deleteAgentAtom, fetchAgentList } from '@/atoms/AgentsAtom';
+import { deleteAgentAtom, fetchPaginatedAgentList, paginatedAgentsAtom } from '@/atoms/AgentsAtom';
 import { AgentActionMenu } from '@/components/agents/AgentActionMenu';
 import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 import CreateAgentModal from '@/components/agents/CreateAgentModal';
 import { CustomButton, CustomTable, PhoneNumberDisplay } from '@/components/shared';
+import SearchBar from '@/components/shared/SearchBar';
+import SelectInput from '@/components/shared/SelectInput';
 import { Badge } from '@/components/ui/badge';
-import type { ApiAgent } from '@/types/agent';
-import type { CustomTableColumn } from '@/types/components';
+import { AGENT_TYPE_OPTIONS } from '@/lib/constants/filters';
+import type { ApiAgent, ListAgentsParams } from '@/types/agent';
+import type { CustomTableColumn, CustomTableSortState } from '@/types/components';
 import { formatDate } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
 import { Bot, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 const AgentListPage: React.FC = () => {
   const router = useRouter();
-  const [data] = useAtom(agentsAtom);
-  const [, fetAgentsList] = useAtom(fetchAgentList);
+  const [data] = useAtom(paginatedAgentsAtom);
+  const [, fetchList] = useAtom(fetchPaginatedAgentList);
   const [, removeAgent] = useAtom(deleteAgentAtom);
-  const [loader, setLoader] = useState(false);
+
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState<string | undefined>(undefined);
+  const [agentTypeFilter, setAgentTypeFilter] = useState<string>('all');
   const [modalOpen, setModalOpen] = useState(false);
 
-  const hasFetchedRef = useRef(false);
+  const params = useMemo<ListAgentsParams>(
+    () => ({
+      page,
+      page_size: pageSize,
+      search: search.trim() || undefined,
+      sort_by: sortBy,
+      agent_type: agentTypeFilter === 'all' ? undefined : agentTypeFilter,
+    }),
+    [page, pageSize, search, sortBy, agentTypeFilter],
+  );
+
+  const refresh = useCallback(
+    async (overrides: ListAgentsParams = {}) => {
+      try {
+        await fetchList({ ...params, ...overrides });
+      } catch (error) {
+        handleApiError(error);
+      }
+    },
+    [fetchList, params],
+  );
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
 
   const handleEdit = useCallback(
     (row: ApiAgent) => {
@@ -40,29 +74,36 @@ const AgentListPage: React.FC = () => {
       try {
         await removeAgent(agentId);
         showToast.success('Agent deleted successfully');
+        const remaining = Math.max(0, data.total - 1);
+        const lastPage = Math.max(1, Math.ceil(remaining / pageSize));
+        const nextPage = Math.min(page, lastPage);
+        if (nextPage !== page) setPage(nextPage);
+        else await refresh();
       } catch (error) {
         handleApiError(error);
       }
     },
-    [removeAgent],
+    [removeAgent, data.total, pageSize, page, refresh],
   );
 
-  useEffect(() => {
-    if (hasFetchedRef.current) return;
-    hasFetchedRef.current = true;
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+    setPage(1);
+  }, []);
 
-    const init = async () => {
-      setLoader(true);
-      try {
-        await fetAgentsList();
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoader(false);
-      }
-    };
+  const handleAgentTypeFilter = useCallback((value: string) => {
+    setAgentTypeFilter(value);
+    setPage(1);
+  }, []);
 
-    init();
+  const handleSortChange = useCallback((sort: CustomTableSortState | null) => {
+    setSortBy(sort ? `${sort.order === 'desc' ? '-' : ''}${sort.field}` : undefined);
+    setPage(1);
+  }, []);
+
+  const handlePaginationChange = useCallback((nextPage: number, nextPageSize: number) => {
+    setPage(nextPage);
+    setPageSize(nextPageSize);
   }, []);
 
   const columns: CustomTableColumn<ApiAgent>[] = [
@@ -102,6 +143,7 @@ const AgentListPage: React.FC = () => {
       key: 'agent_type',
       title: 'Type',
       dataIndex: 'agent_type',
+      sorter: true,
       render: (_value, record) => <AgentTypeBadge agentType={record.agent_type} />,
     },
     {
@@ -147,14 +189,14 @@ const AgentListPage: React.FC = () => {
   ];
 
   return (
-    <div className="animate-page flex h-full flex-col p-6">
-      <div className="mb-6 flex items-center justify-between">
+    <div className="animate-page flex h-full flex-col gap-5">
+      <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">Agents</h1>
-            {data.agentList.length > 0 && (
+            {data.total > 0 && (
               <Badge variant="secondary" className="text-xs tabular-nums">
-                {data.agentList.length}
+                {data.total}
               </Badge>
             )}
           </div>
@@ -165,31 +207,58 @@ const AgentListPage: React.FC = () => {
         </CustomButton>
       </div>
 
-      <CustomTable
-        columns={columns}
-        dataSource={data.agentList}
-        rowKey="id"
-        loading={loader}
-        onRowClick={handleEdit}
-        searchable
-        searchPlaceholder="Search agents..."
-        emptyState={
-          <div className="flex flex-col items-center gap-4 py-8">
-            <div className="flex size-12 items-center justify-center rounded-xl bg-muted">
-              <Bot className="size-6 text-muted-foreground" />
+      <div className="flex flex-wrap items-center gap-3">
+        <SearchBar
+          placeholder="Search agents..."
+          value={search}
+          onSearch={handleSearchChange}
+          debounceMs={400}
+          containerClassName="max-w-xs flex-1"
+        />
+        <SelectInput
+          name="agent-type-filter"
+          options={AGENT_TYPE_OPTIONS}
+          value={agentTypeFilter}
+          onValueChange={handleAgentTypeFilter}
+          placeholder="All types"
+          size="sm"
+          triggerClassName="min-w-[160px]"
+        />
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col">
+        <CustomTable
+          columns={columns}
+          dataSource={data.items}
+          rowKey="id"
+          loading={data.loading}
+          onRowClick={handleEdit}
+          onSortChange={handleSortChange}
+          pagination={{
+            current: page,
+            pageSize,
+            total: data.total,
+            pageSizeOptions: PAGE_SIZE_OPTIONS,
+            onChange: handlePaginationChange,
+          }}
+          emptyState={
+            <div className="flex flex-col items-center gap-4 py-8">
+              <div className="flex size-12 items-center justify-center rounded-xl bg-muted">
+                <Bot className="size-6 text-muted-foreground" />
+              </div>
+              <div className="text-center">
+                <p className="font-semibold text-foreground">No agents yet</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Create your first voice agent to get started
+                </p>
+              </div>
+              <CustomButton type="primary" icon={<Plus />} onClick={() => setModalOpen(true)}>
+                Create Agent
+              </CustomButton>
             </div>
-            <div className="text-center">
-              <p className="font-semibold text-foreground">No agents yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Create your first voice agent to get started
-              </p>
-            </div>
-            <CustomButton type="primary" icon={<Plus />} onClick={() => setModalOpen(true)}>
-              Create Agent
-            </CustomButton>
-          </div>
-        }
-      />
+          }
+        />
+      </div>
 
       <CreateAgentModal open={modalOpen} onClose={() => setModalOpen(false)} />
     </div>
