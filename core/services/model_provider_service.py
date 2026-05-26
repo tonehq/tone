@@ -2,7 +2,7 @@
 Model management). Shared by ``core/api/v1/services.py`` and
 ``ee/api/v1/services.py`` so the two editions cannot drift."""
 
-from typing import Any, Iterable
+from typing import Any, Iterable, List
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -11,7 +11,9 @@ from sqlalchemy.orm import Session, joinedload
 
 from core.models.api_key import ApiKey
 from core.models.model import Model
+from core.models.model_language import ModelLanguage
 from core.models.model_provider import ModelProvider
+from core.models.model_voice import ModelVoice
 from core.services.base import BaseService
 from core.services.crud import list_records
 from core.utils.encryption import encrypt
@@ -734,3 +736,75 @@ class ModelProviderService(BaseService):
         self.db.delete(record)
         self.db.commit()
         return {"ok": True}
+
+    # ─── TTS cascade (language → provider → voice) ────────────────────────
+
+    def list_tts_languages(self) -> List[dict]:
+        """Return distinct languages available across all active TTS models."""
+        rows = (
+            self.db.query(ModelLanguage.name)
+            .join(Model, Model.id == ModelLanguage.model_id)
+            .filter(Model.kind == "tts", Model.is_active.is_(True), ModelLanguage.is_active.is_(True))
+            .distinct()
+            .order_by(ModelLanguage.name.asc())
+            .all()
+        )
+        return [{"name": row[0]} for row in rows]
+
+    def list_tts_providers(self, language: str) -> List[dict]:
+        """Return TTS providers that have models supporting the given language."""
+        rows = (
+            self.db.query(ModelProvider)
+            .join(Model, Model.provider_id == ModelProvider.id)
+            .join(ModelLanguage, ModelLanguage.model_id == Model.id)
+            .filter(
+                Model.kind == "tts",
+                Model.is_active.is_(True),
+                ModelProvider.is_active.is_(True),
+                ModelLanguage.is_active.is_(True),
+                ModelLanguage.name == language,
+            )
+            .distinct()
+            .order_by(ModelProvider.display_name.asc())
+            .all()
+        )
+        return [
+            {
+                "id": str(p.id),
+                "slug": p.slug,
+                "display_name": p.display_name,
+                "description": p.description,
+            }
+            for p in rows
+        ]
+
+    def list_tts_voices(self, provider_id: str, language: str) -> List[dict]:
+        """Return TTS voices for a provider that support the given language."""
+        prov_uuid = _parse_uuid(provider_id, field="provider id")
+        self._provider_or_404(prov_uuid)
+
+        rows = (
+            self.db.query(ModelVoice)
+            .join(Model, Model.id == ModelVoice.model_id)
+            .filter(
+                Model.provider_id == prov_uuid,
+                Model.kind == "tts",
+                Model.is_active.is_(True),
+                ModelVoice.is_active.is_(True),
+                ModelVoice.language_list.contains([language]),
+            )
+            .order_by(ModelVoice.name.asc())
+            .all()
+        )
+        return [
+            {
+                "id": str(v.id),
+                "name": v.name,
+                "gender": v.gender,
+                "accent": v.accent,
+                "description": v.description,
+                "language_list": v.language_list,
+                "sample_url": v.sample_url,
+            }
+            for v in rows
+        ]

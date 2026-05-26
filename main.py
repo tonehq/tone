@@ -16,14 +16,7 @@ from core.api.v1 import (
     auth, users, organizations, agent_configs, channels, oauth,
     knowledge_base, agents, mcp_servers, services, tools, dashboard,
 )
-# NOTE: the following routers reference dropped pre-v2 models (voice,
-# model_instance, hosting_provider, etc.) and currently fail to import.
-# They are temporarily disabled so the server can boot with the v2 auth
-# schema:
-#   agent_channel_phone_numbers, channel_phone_numbers,
-#   generated_api_keys, voices, call_logs, telephony,
-#   model_providers_menu, hosting_providers,
-#   model_menu, model_instances
+# NOTE: call_logs router is temporarily disabled (references dropped pre-v2 models).
 import core.models
 
 skip_license = settings.SKIP_LICENSE_CHECK

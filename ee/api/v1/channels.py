@@ -1,9 +1,12 @@
 from typing import Any, Dict
+from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from core.database.session import get_db
+from core.models.agent import Agent
+from core.models.phone_number import PhoneNumber
 from core.services.channel_service import ChannelService
 from core.utils.auth_helpers import require_org_id
 from ee.middleware.auth import (
@@ -88,3 +91,39 @@ def delete_channel(
     db: Session = Depends(get_db),
 ):
     return _svc(claims, db).delete_channel(channel_id)
+
+
+@router.get("/phone_numbers")
+def list_phone_numbers(
+    channel_id: str = Query(..., description="The channel ID to fetch phone numbers for"),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    """List phone numbers assigned to agents for a given channel."""
+    org_id = require_org_id(claims.org_id)
+    try:
+        ch_uuid = UUID(channel_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid channel_id")
+    rows = (
+        db.query(PhoneNumber, Agent.name.label("agent_name"))
+        .outerjoin(Agent, Agent.id == PhoneNumber.agent_id)
+        .filter(
+            PhoneNumber.channel_id == ch_uuid,
+            PhoneNumber.organization_id == org_id,
+        )
+        .all()
+    )
+    return [
+        {
+            "id": str(pn.id),
+            "number": pn.number,
+            "label": pn.label,
+            "channel_id": str(pn.channel_id),
+            "assigned_to": {
+                "agent_id": str(pn.agent_id),
+                "agent_name": agent_name,
+            } if pn.agent_id else None,
+        }
+        for pn, agent_name in rows
+    ]

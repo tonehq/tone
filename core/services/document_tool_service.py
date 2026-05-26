@@ -1,11 +1,11 @@
 """Document tool for voice agents — lets the LLM search uploaded documents during a call.
 
 How it works (step by step):
-1. When building the pipeline, we check if the agent has any documents uploaded.
-2. If yes, we create a tool called "read_document" with a description listing the doc names.
+1. When building the pipeline, we check if the agent has any KB uploads.
+2. If yes, we create a tool called "read_document" with a description listing the file names.
 3. We register a handler so when the LLM calls read_document(query="..."), we:
    a. Convert the query into an embedding (list of numbers representing meaning)
-   b. Search document_chunks using pgvector to find the closest matching chunks
+   b. Search knowledge_base_chunks using pgvector to find the closest matching chunks
    c. Return the chunk texts back to the LLM so it can answer the user
 4. The LLM then speaks the answer based on the retrieved content.
 """
@@ -50,14 +50,14 @@ def get_document_tool_schema(document_names: List[str]) -> ToolsSchema:
     return ToolsSchema(standard_tools=[function_schema])
 
 
-def create_document_handler(agent_id: int, org_id: Any, api_key: str, doc_ids: List[int], top_k: int = 3, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None):
+def create_document_handler(agent_id: int, org_id: Any, api_key: str, upload_ids: List, top_k: int = 3, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None):
     """Create the handler function for read_document tool calls.
 
     Args:
         agent_id: The agent's ID (to scope chunk search)
         org_id: The organization ID
         api_key: Decrypted OpenAI API key for embedding the query
-        doc_ids: Pre-fetched list of ready document IDs for this agent
+        upload_ids: Pre-fetched list of ready upload IDs for this agent
         top_k: Number of top matching chunks to return
         tool_call_entries: Shared list to append tool call logs to (optional)
 
@@ -71,7 +71,7 @@ def create_document_handler(agent_id: int, org_id: Any, api_key: str, doc_ids: L
         Steps:
         1. Get the query from params.arguments
         2. Embed the query using OpenAI (same model used at upload time)
-        3. Search document_chunks with pgvector similarity (<=> operator)
+        3. Search knowledge_base_chunks with pgvector similarity (<=> operator)
         4. Return the top matching chunk texts to the LLM via result_callback
         """
         import time as _time
@@ -95,20 +95,21 @@ def create_document_handler(agent_id: int, org_id: Any, api_key: str, doc_ids: L
             embedder = EmbeddingService(api_key)
             query_embedding = embedder.embed_query(query)
 
-            # Step 2: Single JOIN query — search document_chunks via pgvector similarity
+            # Step 2: Single query — search knowledge_base_chunks via pgvector similarity
             with get_db_context() as db:
                 embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
                 query_sql = text("""
-                    SELECT dc.chunk_text, dc.embedding <=> :embedding AS distance
-                    FROM document_chunks dc
-                    JOIN documents d ON dc.document_id = d.id
-                    WHERE d.agent_id = :agent_id AND d.status = 'ready'
-                    ORDER BY dc.embedding <=> :embedding
+                    SELECT kbc.chunk_text, kbc.embedding <=> :embedding AS distance
+                    FROM knowledge_base_chunks kbc
+                    JOIN uploads u ON kbc.upload_id = u.id
+                    JOIN agent_knowledge_bases akb ON akb.upload_id = u.id
+                    WHERE akb.agent_id = :agent_id AND u.status = 'ready'
+                    ORDER BY kbc.embedding <=> :embedding
                     LIMIT :top_k
                 """)
                 results = db.execute(
                     query_sql,
-                    {"embedding": embedding_str, "agent_id": agent_id, "top_k": top_k},
+                    {"embedding": embedding_str, "agent_id": str(agent_id), "top_k": top_k},
                 ).fetchall()
 
             if not results:
@@ -145,186 +146,87 @@ def create_document_handler(agent_id: int, org_id: Any, api_key: str, doc_ids: L
 
 
 def get_document_names_for_agent(agent_id: int, org_id: Any) -> List[str]:
-    """Fetch file names of all ready documents for an agent."""
+    """Fetch file names of all ready KB uploads for an agent."""
     from core.database.session import get_db_context
-    from core.models.document import Document
     from core.models.upload import Upload
+    from core.models.agent_knowledge_base import AgentKnowledgeBase
 
     with get_db_context() as db:
         rows = (
             db.query(Upload.file_name)
-            .join(Document, Document.upload_id == Upload.id)
-            .filter(Document.agent_id == agent_id, Document.status == "ready")
+            .join(AgentKnowledgeBase, AgentKnowledgeBase.upload_id == Upload.id)
+            .filter(AgentKnowledgeBase.agent_id == agent_id, Upload.status == "ready")
             .all()
         )
     return [row[0] for row in rows if row[0]]
 
 
 def get_openai_api_key_for_agent(org_id: Any) -> Optional[str]:
-    """Fetch and decrypt the OpenAI API key from DB for embedding.
-
-    Tries new path first (Account with model_provider_menu → ApiKey.account_id),
-    then falls back to old path (ServiceProvider → ApiKey.service_provider_id).
-    """
+    """Fetch and decrypt the OpenAI API key from DB for embedding."""
     from core.database.session import get_db_context
-    from core.models.service_provider import ServiceProvider
-    from core.models.account import Account
-    from core.models.model_provider_menu import ModelProviderMenu
     from core.models.api_key import ApiKey
+    from core.models.model_provider import ModelProvider
     from core.utils.encryption import decrypt
 
     with get_db_context() as db:
-        # New path: Account linked to ModelProviderMenu
-        mpm = (
-            db.query(ModelProviderMenu)
-            .filter(ModelProviderMenu.name == "openai", ModelProviderMenu.provider_type == "llm")
-            .first()
-        )
-        if mpm:
-            acct = (
-                db.query(Account)
-                .filter(
-                    Account.model_provider_menu_id == mpm.id,
-                    Account.status == "active",
-                    Account.organization_id == org_id,
-                )
-                .first()
-            )
-            if acct:
-                api_key_record = (
-                    db.query(ApiKey)
-                    .filter(
-                        ApiKey.account_id == acct.id,
-                        ApiKey.status == "active",
-                        ApiKey.organization_id == org_id,
-                    )
-                    .first()
-                )
-                if api_key_record and api_key_record.api_key_encrypted:
-                    return decrypt(api_key_record.api_key_encrypted)
-
-        # Old path: ServiceProvider
-        provider = (
-            db.query(ServiceProvider)
-            .filter(ServiceProvider.name == "openai", ServiceProvider.provider_type == "llm")
-            .first()
-        )
-        if not provider:
-            return None
-
-        api_key_record = (
+        row = (
             db.query(ApiKey)
+            .join(ModelProvider, ModelProvider.id == ApiKey.provider_id)
             .filter(
-                ApiKey.service_provider_id == provider.id,
-                ApiKey.status == "active",
+                ModelProvider.provider_id == "openai",
+                ApiKey.is_active.is_(True),
                 ApiKey.organization_id == org_id,
             )
             .first()
         )
-        if not api_key_record or not api_key_record.api_key_encrypted:
-            return None
+        if row and row.encrypted_key:
+            return decrypt(row.encrypted_key)
 
-        return decrypt(api_key_record.api_key_encrypted)
+    return None
 
 
 def register_document_tool(llm: Any, agent_id: int, org_id: Any, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None) -> Optional[ToolsSchema]:
     """Main entry point — call this from agent_factory_service after LLM is created.
 
-    Checks if the agent has documents, and if so:
+    Checks if the agent has KB uploads, and if so:
     1. Builds the tool schema with document names
     2. Registers the handler on the LLM
     3. Returns the ToolsSchema (to pass to LLMContext)
 
-    Uses a single DB session for all queries (doc names, doc IDs, API key).
     Returns None if the agent has no documents.
     """
     from core.database.session import get_db_context
-    from core.models.document import Document
     from core.models.upload import Upload
-    from core.models.service_provider import ServiceProvider
-    from core.models.account import Account
-    from core.models.model_provider_menu import ModelProviderMenu
-    from core.models.api_key import ApiKey
-    from core.utils.encryption import decrypt
+    from core.models.agent_knowledge_base import AgentKnowledgeBase
 
     with get_db_context() as db:
-        # Query 1: Fetch doc names and doc IDs in one query
-        doc_rows = (
-            db.query(Upload.file_name, Document.id)
-            .join(Document, Document.upload_id == Upload.id)
-            .filter(Document.agent_id == agent_id, Document.status == "ready")
+        # Fetch upload names and IDs in one query
+        upload_rows = (
+            db.query(Upload.file_name, Upload.id)
+            .join(AgentKnowledgeBase, AgentKnowledgeBase.upload_id == Upload.id)
+            .filter(AgentKnowledgeBase.agent_id == agent_id, Upload.status == "ready")
             .all()
         )
 
-        if not doc_rows:
-            logger.info("Agent {} has no documents, skipping tool registration", agent_id)
+        if not upload_rows:
+            logger.info("Agent {} has no KB uploads, skipping tool registration", agent_id)
             return None
 
-        doc_names = [row[0] for row in doc_rows if row[0]]
-        doc_ids = [row[1] for row in doc_rows]
+        doc_names = [row[0] for row in upload_rows if row[0]]
+        upload_ids = [row[1] for row in upload_rows]
 
         if not doc_names:
-            logger.info("Agent {} has no documents, skipping tool registration", agent_id)
+            logger.info("Agent {} has no KB uploads, skipping tool registration", agent_id)
             return None
 
-        # Query 2: Fetch OpenAI API key for embedding queries
-        # Try new path first (Account), then old path (ServiceProvider)
-        api_key = None
-
-        mpm = (
-            db.query(ModelProviderMenu)
-            .filter(ModelProviderMenu.name == "openai", ModelProviderMenu.provider_type == "llm")
-            .first()
-        )
-        if mpm:
-            acct = (
-                db.query(Account)
-                .filter(
-                    Account.model_provider_menu_id == mpm.id,
-                    Account.status == "active",
-                    Account.organization_id == org_id,
-                )
-                .first()
-            )
-            if acct:
-                api_key_record = (
-                    db.query(ApiKey)
-                    .filter(
-                        ApiKey.account_id == acct.id,
-                        ApiKey.status == "active",
-                        ApiKey.organization_id == org_id,
-                    )
-                    .first()
-                )
-                if api_key_record and api_key_record.api_key_encrypted:
-                    api_key = decrypt(api_key_record.api_key_encrypted)
-
-        if not api_key:
-            provider = (
-                db.query(ServiceProvider)
-                .filter(ServiceProvider.name == "openai", ServiceProvider.provider_type == "llm")
-                .first()
-            )
-            if provider:
-                api_key_record = (
-                    db.query(ApiKey)
-                    .filter(
-                        ApiKey.service_provider_id == provider.id,
-                        ApiKey.status == "active",
-                        ApiKey.organization_id == org_id,
-                    )
-                    .first()
-                )
-                if api_key_record and api_key_record.api_key_encrypted:
-                    api_key = decrypt(api_key_record.api_key_encrypted)
-
+        api_key = get_openai_api_key_for_agent(org_id)
         if not api_key:
             logger.warning("No OpenAI API key found for org {}, skipping document tool", org_id)
             return None
 
     # Build tool schema and handler
     tools_schema = get_document_tool_schema(doc_names)
-    handler = create_document_handler(agent_id, org_id, api_key, doc_ids, tool_call_entries=tool_call_entries, current_turn=current_turn)
+    handler = create_document_handler(agent_id, org_id, api_key, upload_ids, tool_call_entries=tool_call_entries, current_turn=current_turn)
 
     # Register handler on the LLM
     llm.register_function("read_document", handler)
