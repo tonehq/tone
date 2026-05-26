@@ -1,4 +1,4 @@
-"""Background pipeline: Extract text -> Chunk -> Embed -> Store in document_chunks."""
+"""Background pipeline: Extract text -> Chunk -> Embed -> Store in knowledge_base_chunks."""
 
 from uuid import UUID
 
@@ -7,11 +7,11 @@ from loguru import logger
 
 class DocumentProcessingService:
 
-    def process_document(self, document_id: UUID, org_id: UUID, delete_existing: bool = False):
+    def process_upload(self, upload_id: UUID, org_id: UUID, delete_existing: bool = False):
         """Full pipeline: download file, extract text, chunk, embed, store."""
         from core.database.session import get_db_context
-        from core.models.document import Document
-        from core.models.document_chunk import DocumentChunk
+        from core.models.upload import Upload
+        from core.models.knowledge_base_chunk import KnowledgeBaseChunk
         from core.services.r2_storage_service import R2StorageService
         from core.services.text_extraction_service import TextExtractionService
         from core.services.chunking_service import ChunkingService
@@ -20,26 +20,25 @@ class DocumentProcessingService:
 
         with get_db_context() as db:
             try:
-                doc = db.query(Document).filter(Document.id == document_id).first()
-                if not doc:
-                    logger.error("Document {} not found, skipping processing", document_id)
+                upload = db.query(Upload).filter(Upload.id == upload_id).first()
+                if not upload:
+                    logger.error("Upload {} not found, skipping processing", upload_id)
                     return
 
-                doc.status = "processing"
+                upload.status = "processing"
                 if delete_existing:
-                    db.query(DocumentChunk).filter(
-                        DocumentChunk.document_id == document_id
+                    db.query(KnowledgeBaseChunk).filter(
+                        KnowledgeBaseChunk.upload_id == upload_id
                     ).delete(synchronize_session=False)
                 db.commit()
 
                 # 1. Download file from R2
-                upload = doc.upload
-                if not upload or not upload.file_path:
-                    raise ValueError("Document has no associated upload/file_path")
+                if not upload.file_path:
+                    raise ValueError("Upload has no file_path")
                 file_bytes = R2StorageService().download_file(upload.file_path)
 
                 # 2. Extract text
-                text = TextExtractionService().extract(file_bytes, doc.content_type)
+                text = TextExtractionService().extract(file_bytes, upload.file_type)
                 if not text.strip():
                     raise ValueError("No text could be extracted from the file")
 
@@ -65,9 +64,9 @@ class DocumentProcessingService:
                 chunk_records = []
                 for chunk_data, embedding in zip(chunks, all_embeddings):
                     chunk_records.append(
-                        DocumentChunk(
+                        KnowledgeBaseChunk(
                             organization_id=org_id,
-                            document_id=document_id,
+                            upload_id=upload_id,
                             chunk_index=chunk_data["chunk_index"],
                             chunk_text=chunk_data["chunk_text"],
                             embedding=embedding,
@@ -76,26 +75,26 @@ class DocumentProcessingService:
                 db.bulk_save_objects(chunk_records)
 
                 # 7. Mark as ready
-                doc.status = "ready"
+                upload.status = "ready"
                 db.commit()
                 logger.info(
-                    "Document {} processed: {} chunks stored",
-                    document_id,
+                    "Upload {} processed: {} chunks stored",
+                    upload_id,
                     len(chunk_records),
                 )
 
             except Exception as e:
                 db.rollback()
-                logger.error("Document {} processing failed: {}", document_id, e)
+                logger.error("Upload {} processing failed: {}", upload_id, e)
                 try:
-                    doc = db.query(Document).filter(Document.id == document_id).first()
-                    if doc:
-                        doc.status = "failed"
-                        doc.meta_data = {**(doc.meta_data or {}), "error": str(e)}
+                    upload = db.query(Upload).filter(Upload.id == upload_id).first()
+                    if upload:
+                        upload.status = "failed"
+                        upload.meta_data = {**(upload.meta_data or {}), "error": str(e)}
                         db.commit()
                 except Exception as meta_err:
                     logger.error("Failed to update error metadata: {}", meta_err)
 
-    def reprocess_document(self, document_id: UUID, org_id: UUID):
+    def reprocess_upload(self, upload_id: UUID, org_id: UUID):
         """Delete existing chunks and re-run the full pipeline."""
-        self.process_document(document_id, org_id, delete_existing=True)
+        self.process_upload(upload_id, org_id, delete_existing=True)
