@@ -1,14 +1,54 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Body, Depends
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from core.database.session import get_db
 from core.middleware.auth import JWTClaims, require_org_member
 from core.models.agent import Agent
+from core.models.channel import Channel
+from core.models.phone_number import PhoneNumber
+from core.services.crud import list_records
 from shared.config import settings
 
 router = APIRouter()
+
+
+ALLOWED_SORT_FIELDS = {"name", "agent_type", "is_active", "created_at", "updated_at"}
+
+
+def _phone_numbers_for(db: Session, org_id: UUID, agent_ids: list[UUID]) -> dict[UUID, list[dict]]:
+    """Batch-fetch phone numbers for the given agents. Returns {agent_id: [{type, no}, ...]}."""
+    if not agent_ids:
+        return {}
+    rows = (
+        db.query(PhoneNumber.agent_id, PhoneNumber.number, Channel.channel_type)
+        .join(Channel, Channel.id == PhoneNumber.channel_id)
+        .filter(
+            PhoneNumber.organization_id == org_id,
+            PhoneNumber.agent_id.in_(agent_ids),
+        )
+        .all()
+    )
+    grouped: dict[UUID, list[dict]] = {}
+    for agent_id, number, channel_type in rows:
+        grouped.setdefault(agent_id, []).append({"type": channel_type, "no": number})
+    return grouped
+
+
+def _serialize_agent(agent: Agent, phone_map: dict[UUID, list[dict]]) -> dict:
+    return {
+        "id": str(agent.id),
+        "uuid": str(agent.id),
+        "name": agent.name,
+        "description": agent.description,
+        "agent_type": agent.agent_type,
+        "is_active": agent.is_active,
+        "phone_number": phone_map.get(agent.id, []),
+        "created_at": agent.created_at.timestamp() if agent.created_at else None,
+        "updated_at": agent.updated_at.timestamp() if agent.updated_at else None,
+    }
 
 
 @router.get("/get_all_agents")
@@ -24,3 +64,49 @@ def get_all_agents(
         .all()
     )
     return [{"id": str(r.id), "uuid": str(r.id), "name": r.name} for r in rows]
+
+
+def list_agents_for_org(db: Session, org_id: UUID, body: dict) -> dict:
+    """Shared list pipeline used by both core and EE agent list endpoints."""
+    page = max(int(body.get("page") or 1), 1)
+    page_size = min(max(int(body.get("page_size") or 20), 1), 100)
+    search = body.get("search")
+    sort_by = body.get("sort_by")
+    is_active = body.get("is_active")
+    agent_type = body.get("agent_type")
+
+    filters = []
+    if search:
+        like = f"%{search}%"
+        filters.append(or_(Agent.name.ilike(like), Agent.description.ilike(like)))
+    if is_active is not None:
+        filters.append(Agent.is_active == bool(is_active))
+    if agent_type:
+        filters.append(Agent.agent_type == agent_type)
+
+    order_by = Agent.updated_at.desc()
+    if sort_by:
+        desc = sort_by.startswith("-")
+        field_name = sort_by.lstrip("-")
+        if field_name in ALLOWED_SORT_FIELDS:
+            col = getattr(Agent, field_name)
+            order_by = col.desc() if desc else col.asc()
+
+    items, total = list_records(db, Agent, org_id, page, page_size, filters, order_by)
+    phone_map = _phone_numbers_for(db, org_id, [a.id for a in items])
+    return {
+        "items": [_serialize_agent(a, phone_map) for a in items],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+@router.post("/list")
+def list_agents(
+    body: dict = Body(default={}),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
+    return list_agents_for_org(db, org_id, body)

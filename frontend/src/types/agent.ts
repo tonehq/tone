@@ -98,6 +98,30 @@ export interface AgentsState {
   agentList: ApiAgent[];
 }
 
+export interface ListAgentsParams {
+  page?: number;
+  page_size?: number;
+  search?: string;
+  sort_by?: string;
+  is_active?: boolean;
+  agent_type?: string;
+}
+
+export interface PaginatedAgents {
+  items: ApiAgent[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface PaginatedAgentsState {
+  items: ApiAgent[];
+  total: number;
+  page: number;
+  pageSize: number;
+  loading: boolean;
+}
+
 export interface AgentFormState {
   name: string;
   description: string;
