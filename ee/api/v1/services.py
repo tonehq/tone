@@ -65,10 +65,13 @@ def update_service(
 @router.delete("/providers/{provider_id}", status_code=status.HTTP_200_OK)
 def delete_provider_services(
     provider_id: str,
+    service_type: str | None = None,
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    return _service(claims, db).delete_provider_services(provider_id)
+    return _service(claims, db).delete_provider_services(
+        provider_id, service_type=service_type
+    )
 
 
 @router.delete("/{service_id}", status_code=status.HTTP_200_OK)
