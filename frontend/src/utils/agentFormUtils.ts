@@ -1,133 +1,159 @@
-import type { AgentFormState, ApiAgent } from '@/types/agent';
+import type {
+  AgentDetail,
+  AgentDirection,
+  AgentFormState,
+  AgentPhoneNumberInput,
+  CreateAgentPayload,
+  UpdateAgentPayload,
+} from '@/types/agent';
 
-export const defaultFormState = (agentType: 'inbound' | 'outbound'): AgentFormState => ({
-  name: agentType === 'inbound' ? 'My Inbound Assistant' : 'My Outbound Assistant',
+const DEFAULT_TOKEN_LIMIT = 4096;
+const DEFAULT_VOICE_SPEED = 1.0;
+const DEFAULT_MAX_DURATION = 600;
+
+export const defaultFormState = (agentType: AgentDirection): AgentFormState => ({
+  name: agentType === 'outbound' ? 'My Outbound Assistant' : 'My Inbound Assistant',
   description: '',
-  end_call_message: '',
-  first_message: '',
-  customVocabulary: [],
-  filterWords: [],
-  language: 'en',
-  patienceLevel: 'low',
-  speechRecognition: 'fast',
-  voiceSpeed: 50,
-  voiceVolume: 100,
-  interruptionSensitivity: 2,
-  voicePrompting: '',
-  useRealisticFillerWords: false,
-  callRecording: false,
-  callTranscription: false,
-  phoneNumbers: [],
-  channels: [],
-  channelId: null,
-  llmMetaData: {},
-  ttsMetaData: {},
-  sttMetaData: {},
-  llmProviderMenuId: null,
-  llmModelMenuId: null,
-  ttsProviderMenuId: null,
-  ttsModelMenuId: null,
-  sttProviderMenuId: null,
-  sttModelMenuId: null,
+  agent_type: agentType,
+  is_active: true,
+  config: {
+    first_message: '',
+    end_call_message: '',
+    system_prompt_template: '',
+    conversation_history_token_limit: DEFAULT_TOKEN_LIMIT,
+    language_id: null,
+    knowledge_model_id: null,
+    llm_settings: {},
+    voice_settings: {
+      provider_id: null,
+      voice_id: null,
+      language: null,
+      speed: DEFAULT_VOICE_SPEED,
+    },
+    stt_settings: {},
+    conversation_settings: { max_duration_seconds: DEFAULT_MAX_DURATION },
+  },
+  tool_ids: [],
+  mcp_server_ids: [],
+  upload_ids: [],
+  phone_numbers: [],
 });
 
-function parseStringArray(val: string | string[] | null | undefined): string[] {
-  if (Array.isArray(val)) return val;
-  if (typeof val === 'string') {
-    try {
-      const parsed = JSON.parse(val);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return val ? [val] : [];
-    }
-  }
-  return [];
-}
-
-function parseBoolean(val: boolean | string | null | undefined): boolean {
-  if (typeof val === 'boolean') return val;
-  if (val === null || val === undefined) return false;
-  return String(val).toLowerCase() === 'true' || String(val) === '1';
-}
-
-export function apiAgentToFormState(
-  api: ApiAgent | null,
-  agentType: 'inbound' | 'outbound',
-): AgentFormState {
-  const defaults = defaultFormState(agentType);
-  if (!api) return defaults;
+/** Hydrate a form state from the backend's AgentDetail. */
+export function agentDetailToFormState(detail: AgentDetail): AgentFormState {
+  const base = defaultFormState(detail.agent_type);
+  const cfg = detail.config ?? base.config;
   return {
-    ...defaults,
-    name: api.name ?? defaults.name,
-    description: api.description ?? defaults.description,
-    first_message: api.first_message ?? defaults.first_message,
-    end_call_message: api.end_call_message ?? defaults.end_call_message,
-    voicePrompting: (api.system_prompt as string) ?? defaults.voicePrompting,
-    customVocabulary: parseStringArray(api.custom_vocabulary),
-    filterWords: parseStringArray(api.filter_words),
-    useRealisticFillerWords: parseBoolean(api.realistic_filler_words),
-    language: (api.language as string) ?? defaults.language,
-    voiceSpeed:
-      typeof api.voice_speed === 'number'
-        ? api.voice_speed
-        : Number(api.voice_speed) || defaults.voiceSpeed,
-    patienceLevel: (api.patience_level as string) ?? defaults.patienceLevel,
-    speechRecognition: (api.speech_recognition as string) ?? defaults.speechRecognition,
-    callRecording: parseBoolean(api.call_recording),
-    callTranscription: parseBoolean(api.call_transcription),
-    phoneNumbers: api.phone_number ?? [],
-    channels: api.channels ?? [],
-    channelId: api.channels?.[0]?.id ?? null,
-    llmMetaData: (api.llm_meta_data as Record<string, unknown>) ?? {},
-    ttsMetaData: (api.tts_meta_data as Record<string, unknown>) ?? {},
-    sttMetaData: (api.stt_meta_data as Record<string, unknown>) ?? {},
-    // New provider-based fields (fallback to null if not present)
-    llmProviderMenuId: api.llm_model_provider_menu_id ?? null,
-    llmModelMenuId: api.llm_model_menu_id ?? null,
-    ttsProviderMenuId: api.tts_model_provider_menu_id ?? null,
-    ttsModelMenuId: api.tts_model_menu_id ?? null,
-    sttProviderMenuId: api.stt_model_provider_menu_id ?? null,
-    sttModelMenuId: api.stt_model_menu_id ?? null,
+    name: detail.name,
+    description: detail.description ?? '',
+    agent_type: detail.agent_type,
+    is_active: detail.is_active,
+    config: {
+      first_message: cfg.first_message ?? base.config.first_message,
+      end_call_message: cfg.end_call_message ?? base.config.end_call_message,
+      system_prompt_template: cfg.system_prompt_template ?? base.config.system_prompt_template,
+      conversation_history_token_limit:
+        cfg.conversation_history_token_limit ?? base.config.conversation_history_token_limit,
+      language_id: cfg.language_id ?? null,
+      knowledge_model_id: cfg.knowledge_model_id ?? null,
+      llm_settings: cfg.llm_settings ?? {},
+      voice_settings: cfg.voice_settings ?? base.config.voice_settings,
+      stt_settings: cfg.stt_settings ?? {},
+      conversation_settings: cfg.conversation_settings ?? base.config.conversation_settings,
+    },
+    tool_ids: (detail.tools ?? []).map((t) => t.id),
+    mcp_server_ids: (detail.mcp_servers ?? []).map((m) => m.id),
+    upload_ids: (detail.documents ?? []).map((d) => d.id),
+    phone_numbers: (detail.phone_numbers ?? []).map((p) => ({
+      number: p.number,
+      channel_id: p.channel_id ?? '',
+      label: p.label ?? null,
+    })),
   };
 }
 
-export function formStateToUpsertPayload(
-  form: AgentFormState,
-  agentType: 'inbound' | 'outbound',
-  existingId?: number,
-): Record<string, unknown> {
-  const payload: Record<string, unknown> = {
-    name: form.name,
-    description: form.description || null,
-    agent_type: agentType,
-    first_message: form.first_message || null,
-    end_call_message: form.end_call_message || null,
-    system_prompt: form.voicePrompting || null,
-    custom_vocabulary: form.customVocabulary.length ? JSON.stringify(form.customVocabulary) : null,
-    filter_words: form.filterWords.length ? JSON.stringify(form.filterWords) : null,
-    realistic_filler_words: form.useRealisticFillerWords,
-    language: form.language || null,
-    voice_speed: form.voiceSpeed,
-    patience_level: form.patienceLevel || null,
-    speech_recognition: form.speechRecognition || null,
-    call_recording: form.callRecording,
-    call_transcription: form.callTranscription,
-    voice_id: form.ttsMetaData?.voice_id ?? null,
-    channel: {
-      ...(form.channelId ? { id: form.channelId } : {}),
-      type: form.channels?.find((c: any) => c.id === form.channelId)?.type || 'twilio',
-    },
-    llm_meta_data: Object.keys(form.llmMetaData).length ? form.llmMetaData : null,
-    tts_meta_data: Object.keys(form.ttsMetaData).length ? form.ttsMetaData : null,
-    stt_meta_data: Object.keys(form.sttMetaData).length ? form.sttMetaData : null,
-    // Provider-based resolution
-    llm_model_provider_menu_id: form.llmProviderMenuId,
-    llm_model_menu_id: form.llmModelMenuId,
-    tts_model_provider_menu_id: form.ttsProviderMenuId,
-    tts_model_menu_id: form.ttsModelMenuId,
-    stt_model_provider_menu_id: form.sttProviderMenuId,
-    stt_model_menu_id: form.sttModelMenuId,
+/** Pure value equality for the small JSON-ish shapes we ship in config. */
+function valuesEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a == null || b == null) return a == null && b == null;
+  if (typeof a !== typeof b) return false;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    return a.every((v, i) => valuesEqual(v, b[i]));
+  }
+  if (typeof a === 'object' && typeof b === 'object') {
+    const ak = Object.keys(a as Record<string, unknown>);
+    const bk = Object.keys(b as Record<string, unknown>);
+    if (ak.length !== bk.length) return false;
+    return ak.every((k) =>
+      valuesEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]),
+    );
+  }
+  return false;
+}
+
+function phoneListEqual(a: AgentPhoneNumberInput[], b: AgentPhoneNumberInput[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((row, i) => {
+    const other = b[i];
+    return (
+      row.number === other.number &&
+      row.channel_id === other.channel_id &&
+      (row.label ?? null) === (other.label ?? null)
+    );
+  });
+}
+
+export function formStateToCreatePayload(state: AgentFormState): CreateAgentPayload {
+  return {
+    name: state.name.trim(),
+    agent_type: state.agent_type,
+    description: state.description.trim() || undefined,
+    is_active: state.is_active,
+    config: state.config,
+    tool_ids: state.tool_ids,
+    mcp_server_ids: state.mcp_server_ids,
+    upload_ids: state.upload_ids,
+    phone_numbers: state.phone_numbers,
   };
-  if (existingId != null) payload.id = existingId;
+}
+
+/** Diff-aware: only sends fields that actually changed. Arrays are full
+ * replacements when included, so we only include them when the user touched
+ * them — otherwise the backend would treat an unchanged array as an explicit
+ * replacement. */
+export function formStateToUpdatePayload(
+  next: AgentFormState,
+  prev: AgentFormState,
+): UpdateAgentPayload {
+  const payload: UpdateAgentPayload = {};
+
+  if (next.name.trim() !== prev.name.trim()) payload.name = next.name.trim();
+  if ((next.description ?? '').trim() !== (prev.description ?? '').trim()) {
+    payload.description = next.description.trim() || null;
+  }
+  if (next.agent_type !== prev.agent_type) payload.agent_type = next.agent_type;
+  if (next.is_active !== prev.is_active) payload.is_active = next.is_active;
+
+  // Config: diff per-field; only include the fields that changed.
+  const cfgDiff: Record<string, unknown> = {};
+  (Object.keys(next.config) as (keyof AgentFormState['config'])[]).forEach((key) => {
+    if (!valuesEqual(next.config[key], prev.config[key])) {
+      cfgDiff[key] = next.config[key];
+    }
+  });
+  if (Object.keys(cfgDiff).length > 0) {
+    payload.config = cfgDiff as CreateAgentPayload['config'];
+  }
+
+  if (!valuesEqual(next.tool_ids, prev.tool_ids)) payload.tool_ids = next.tool_ids;
+  if (!valuesEqual(next.mcp_server_ids, prev.mcp_server_ids)) {
+    payload.mcp_server_ids = next.mcp_server_ids;
+  }
+  if (!valuesEqual(next.upload_ids, prev.upload_ids)) payload.upload_ids = next.upload_ids;
+  if (!phoneListEqual(next.phone_numbers, prev.phone_numbers)) {
+    payload.phone_numbers = next.phone_numbers;
+  }
+
   return payload;
 }

@@ -7,14 +7,14 @@ from pgvector.sqlalchemy import Vector
 from core.models.base import OrgScopedModel
 
 
-class DocumentChunk(OrgScopedModel):
-    """A chunk of text extracted from a Document, with its embedding vector."""
+class KnowledgeBaseChunk(OrgScopedModel):
+    """A chunk of text extracted from an Upload, with its embedding vector."""
 
-    __tablename__ = "document_chunks"
+    __tablename__ = "knowledge_base_chunks"
 
-    document_id = Column(
+    upload_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("documents.id", ondelete="CASCADE"),
+        ForeignKey("uploads.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
@@ -22,4 +22,4 @@ class DocumentChunk(OrgScopedModel):
     chunk_text = Column(Text, nullable=False)
     embedding = Column(Vector(1536), nullable=True)
 
-    document = relationship("Document", back_populates="chunks")
+    upload = relationship("Upload")

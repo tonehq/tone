@@ -1,101 +1,147 @@
-export type AgentType = 'inbound' | 'outbound' | 'widget' | 'chat';
+export type AgentType = 'inbound' | 'outbound' | 'both';
 
 export type AgentStatus = 'active' | 'inactive' | 'draft';
 
-export interface Agent {
-  id: string;
-  name: string;
-  type: AgentType;
-  status: AgentStatus;
-  phoneNumber?: string;
-  createdAt: string;
-  lastEdited: string;
-  avatar?: string;
-}
+/** Hardcoded variant used by /agents/create/[type] routes. The list response
+ * can also surface 'both' via the API; routes for editing handle it via the
+ * type segment in the URL. */
+export type AgentDirection = 'inbound' | 'outbound' | 'both';
 
-export interface AgentFormData {
-  name: string;
-  image?: string;
-  aiModel: string;
-  timezone: string;
-  knowledgeBase?: string;
-  customVocabulary?: string[];
-  language: string;
-  voice: string;
-  voiceProvider: string;
-  sttProvider: string;
-  patienceLevel: 'low' | 'medium' | 'high';
-  speechRecognition: 'faster' | 'high_accuracy';
-  voiceSpeed: number;
-  voiceVolume: number;
-  interruptionSensitivity: number;
-  voicePrompting: string;
-  filterWords?: string[];
-  useRealisticFillerWords: boolean;
-  maxCallDuration?: number;
-  greeting?: string;
-  endCallPhrase?: string;
-  callRecording: boolean;
-  callTranscription: boolean;
-}
+// ─── domain primitives (mirror the new backend payload) ────────────────────
 
-export interface CreateAgentModalOption {
-  type: AgentType;
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-}
-
-export interface ApiAgent {
-  id: number;
-  uuid: string;
-  name: string;
-  description: string;
-  agent_type?: string;
-  phone_number?: { type: string; no: string }[];
-  is_public: boolean;
-  tags: Record<string, unknown>;
-  total_calls: number;
-  total_minutes: number;
-  average_rating: number;
-  created_by: number;
-  created_at: number;
-  updated_at: number;
-  llm_account_id: number;
-  tts_account_id: number;
-  stt_account_id: number;
-  llm_model_id: number | null;
-  tts_model_id: number | null;
-  stt_model_id: number | null;
-  llm_model_instance_id?: number | null;
-  tts_model_instance_id?: number | null;
-  stt_model_instance_id?: number | null;
-  llm_model_provider_menu_id?: number | null;
-  tts_model_provider_menu_id?: number | null;
-  stt_model_provider_menu_id?: number | null;
-  llm_model_menu_id?: number | null;
-  tts_model_menu_id?: number | null;
-  stt_model_menu_id?: number | null;
-  first_message: string;
-  system_prompt: string;
-  end_call_message: string;
-  voicemail_message: string | null;
-  status: string;
-  custom_vocabulary: string | string[] | null;
-  filter_words: string | string[] | null;
-  realistic_filler_words: boolean | string | null;
-  language: string | null;
-  voice_speed: number | string | null;
-  patience_level: string | null;
-  speech_recognition: string | null;
-  call_recording: boolean | string | null;
-  call_transcription: boolean | string | null;
-  channels?: any[] | null;
+export interface AgentLlmSettings {
+  temperature?: number;
+  max_tokens?: number;
   [key: string]: unknown;
 }
 
-export interface AgentsState {
-  agentList: ApiAgent[];
+export interface AgentVoiceSettings {
+  provider_id?: string | null;
+  voice_id?: string | null;
+  language?: string | null;
+  speed?: number | null;
+  [key: string]: unknown;
+}
+
+export interface AgentSttSettings {
+  model?: string | null;
+  [key: string]: unknown;
+}
+
+export interface AgentConversationSettings {
+  max_duration_seconds?: number | null;
+  [key: string]: unknown;
+}
+
+export interface AgentConfig {
+  first_message?: string | null;
+  /** Optional closing line the agent reads before hanging up. Stored on
+   * config; backend's AgentConfig accepts extra keys. */
+  end_call_message?: string | null;
+  system_prompt_template?: string | null;
+  conversation_history_token_limit?: number | null;
+  language_id?: string | null;
+  knowledge_model_id?: string | null;
+  llm_settings?: AgentLlmSettings | null;
+  voice_settings?: AgentVoiceSettings | null;
+  stt_settings?: AgentSttSettings | null;
+  conversation_settings?: AgentConversationSettings | null;
+}
+
+export interface AgentConfigResponse extends AgentConfig {
+  id: string;
+  version: number;
+}
+
+export interface AgentPhoneNumberInput {
+  number: string;
+  channel_id: string;
+  label?: string | null;
+}
+
+// ─── API payloads ──────────────────────────────────────────────────────────
+
+export interface CreateAgentPayload {
+  name: string;
+  agent_type: AgentDirection;
+  description?: string | null;
+  is_active?: boolean;
+  config?: AgentConfig;
+  tool_ids?: string[];
+  mcp_server_ids?: string[];
+  upload_ids?: string[];
+  phone_numbers?: AgentPhoneNumberInput[];
+}
+
+/** Partial — only present fields are touched. Arrays present (even []) =
+ * full replacement. Arrays omitted = left untouched. */
+export type UpdateAgentPayload = Partial<CreateAgentPayload>;
+
+// ─── API responses ─────────────────────────────────────────────────────────
+
+export interface AgentToolRef {
+  id: string;
+  name: string;
+}
+
+export interface AgentMcpServerRef {
+  id: string;
+  name: string;
+}
+
+export interface AgentDocumentRef {
+  id: string;
+  file_path?: string | null;
+  file_name?: string | null;
+}
+
+export interface AgentPhoneNumberRef {
+  id: string;
+  number: string;
+  label?: string | null;
+  channel_id?: string | null;
+}
+
+/** Full detail (create/get/update response). */
+export interface AgentDetail {
+  id: string;
+  name: string;
+  description: string | null;
+  agent_type: AgentDirection;
+  llm_model?: string | null;
+  is_active: boolean;
+  created_by_user_id?: string | null;
+  created_at: string;
+  updated_at: string;
+  config: AgentConfigResponse;
+  tools: AgentToolRef[];
+  mcp_servers: AgentMcpServerRef[];
+  documents: AgentDocumentRef[];
+  phone_numbers: AgentPhoneNumberRef[];
+}
+
+/** Lightweight listing row (POST /agent/list). `phone_number` is the legacy
+ * shape returned by the list endpoint — kept as-is for now. */
+export interface AgentListItem {
+  id: string;
+  uuid: string;
+  name: string;
+  description: string | null;
+  agent_type: AgentDirection;
+  is_active: boolean;
+  phone_number: { type: string; no: string }[];
+  created_at: number;
+  updated_at: number;
+}
+
+/** Alias retained so the listing page does not need to be renamed everywhere. */
+export type ApiAgent = AgentListItem;
+
+/** GET /agent/get_all_agents (dropdown helper). */
+export interface AgentDropdownItem {
+  id: string;
+  uuid: string;
+  name: string;
 }
 
 export interface ListAgentsParams {
@@ -104,52 +150,59 @@ export interface ListAgentsParams {
   search?: string;
   sort_by?: string;
   is_active?: boolean;
-  agent_type?: string;
+  agent_type?: AgentDirection;
 }
 
 export interface PaginatedAgents {
-  items: ApiAgent[];
+  items: AgentListItem[];
   total: number;
   page: number;
   page_size: number;
 }
 
+// ─── UI state ──────────────────────────────────────────────────────────────
+
+export interface AgentsState {
+  agentList: AgentDropdownItem[];
+}
+
 export interface PaginatedAgentsState {
-  items: ApiAgent[];
+  items: AgentListItem[];
   total: number;
   page: number;
   pageSize: number;
   loading: boolean;
 }
 
+/** Single source of truth for the agent create/edit form. Mirrors the
+ * create/update payload — serialisers in agentFormUtils convert this into
+ * a {@link CreateAgentPayload} or a diff-aware {@link UpdateAgentPayload}. */
 export interface AgentFormState {
   name: string;
   description: string;
-  end_call_message: string;
-  first_message: string;
-  customVocabulary: string[];
-  filterWords: string[];
-  language: string;
-  patienceLevel: string;
-  speechRecognition: string;
-  voiceSpeed: number;
-  voiceVolume: number;
-  interruptionSensitivity: number;
-  voicePrompting: string;
-  useRealisticFillerWords: boolean;
-  callRecording: boolean;
-  callTranscription: boolean;
-  phoneNumbers: { type: string; no: string }[];
-  channels: any[];
-  channelId: number | null;
-  llmMetaData: Record<string, unknown>;
-  ttsMetaData: Record<string, unknown>;
-  sttMetaData: Record<string, unknown>;
-  // Provider-based fields (model_providers_menu.id + model_menu.id)
-  llmProviderMenuId: number | null;
-  llmModelMenuId: number | null;
-  ttsProviderMenuId: number | null;
-  ttsModelMenuId: number | null;
-  sttProviderMenuId: number | null;
-  sttModelMenuId: number | null;
+  agent_type: AgentDirection;
+  is_active: boolean;
+  config: {
+    first_message: string;
+    end_call_message: string;
+    system_prompt_template: string;
+    conversation_history_token_limit: number | null;
+    language_id: string | null;
+    knowledge_model_id: string | null;
+    llm_settings: AgentLlmSettings;
+    voice_settings: AgentVoiceSettings;
+    stt_settings: AgentSttSettings;
+    conversation_settings: AgentConversationSettings;
+  };
+  tool_ids: string[];
+  mcp_server_ids: string[];
+  upload_ids: string[];
+  phone_numbers: AgentPhoneNumberInput[];
+}
+
+export interface CreateAgentModalOption {
+  type: AgentType;
+  title: string;
+  description: string;
+  icon: React.ReactNode;
 }

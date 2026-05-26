@@ -1,6 +1,8 @@
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
@@ -9,6 +11,7 @@ from core.middleware.auth import JWTClaims, require_org_member
 from core.models.agent import Agent
 from core.models.channel import Channel
 from core.models.phone_number import PhoneNumber
+from core.services.agent_service import AgentService
 from core.services.crud import list_records
 from shared.config import settings
 
@@ -17,6 +20,66 @@ router = APIRouter()
 
 ALLOWED_SORT_FIELDS = {"name", "agent_type", "is_active", "created_at", "updated_at"}
 
+
+# ---------------------------------------------------------------------------
+# Pydantic request schemas
+# ---------------------------------------------------------------------------
+
+class AgentConfigRequest(BaseModel):
+    first_message: Optional[str] = None
+    system_prompt_template: Optional[str] = None
+    conversation_history_token_limit: Optional[int] = None
+    language_id: Optional[str] = None
+    knowledge_model_id: Optional[str] = None
+    llm_settings: Optional[Dict[str, Any]] = None
+    voice_settings: Optional[Dict[str, Any]] = None
+    stt_settings: Optional[Dict[str, Any]] = None
+    conversation_settings: Optional[Dict[str, Any]] = None
+
+
+class PhoneNumberAttachment(BaseModel):
+    number: str
+    channel_id: str
+    label: Optional[str] = None
+
+
+class CreateAgentRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    agent_type: str
+    is_active: bool = True
+    config: Optional[AgentConfigRequest] = None
+    tool_ids: Optional[List[str]] = None
+    mcp_server_ids: Optional[List[str]] = None
+    upload_ids: Optional[List[str]] = None
+    phone_numbers: Optional[List[PhoneNumberAttachment]] = None
+
+
+class UpdateAgentRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    agent_type: Optional[str] = None
+    is_active: Optional[bool] = None
+    config: Optional[AgentConfigRequest] = None
+    tool_ids: Optional[List[str]] = None
+    mcp_server_ids: Optional[List[str]] = None
+    upload_ids: Optional[List[str]] = None
+    phone_numbers: Optional[List[PhoneNumberAttachment]] = None
+
+
+# ---------------------------------------------------------------------------
+# Service helper
+# ---------------------------------------------------------------------------
+
+def _get_service(claims: JWTClaims, db: Session) -> AgentService:
+    org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
+    user_id = UUID(claims.user_id) if claims.user_id else None
+    return AgentService(db, user_id=user_id, org_id=org_id)
+
+
+# ---------------------------------------------------------------------------
+# Helpers (shared with EE)
+# ---------------------------------------------------------------------------
 
 def _phone_numbers_for(db: Session, org_id: UUID, agent_ids: list[UUID]) -> dict[UUID, list[dict]]:
     """Batch-fetch phone numbers for the given agents. Returns {agent_id: [{type, no}, ...]}."""
@@ -49,21 +112,6 @@ def _serialize_agent(agent: Agent, phone_map: dict[UUID, list[dict]]) -> dict:
         "created_at": agent.created_at.timestamp() if agent.created_at else None,
         "updated_at": agent.updated_at.timestamp() if agent.updated_at else None,
     }
-
-
-@router.get("/get_all_agents")
-def get_all_agents(
-    claims: JWTClaims = Depends(require_org_member),
-    db: Session = Depends(get_db),
-):
-    org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
-    rows = (
-        db.query(Agent.id, Agent.name)
-        .filter(Agent.organization_id == org_id, Agent.deleted_at.is_(None))
-        .order_by(Agent.name.asc())
-        .all()
-    )
-    return [{"id": str(r.id), "uuid": str(r.id), "name": r.name} for r in rows]
 
 
 def list_agents_for_org(db: Session, org_id: UUID, body: dict) -> dict:
@@ -100,6 +148,72 @@ def list_agents_for_org(db: Session, org_id: UUID, body: dict) -> dict:
         "page": page,
         "page_size": page_size,
     }
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/get_all_agents")
+def get_all_agents(
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
+    rows = (
+        db.query(Agent.id, Agent.name)
+        .filter(Agent.organization_id == org_id, Agent.deleted_at.is_(None))
+        .order_by(Agent.name.asc())
+        .all()
+    )
+    return [{"id": str(r.id), "uuid": str(r.id), "name": r.name} for r in rows]
+
+
+@router.post("/create_agent", status_code=status.HTTP_201_CREATED)
+def create_agent(
+    body: CreateAgentRequest,
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    svc = _get_service(claims, db)
+    user_id = UUID(claims.user_id) if claims.user_id else None
+    agent = svc.create_agent(body.model_dump(), user_id)
+    return svc.agent_response(agent)
+
+
+@router.get("/get_agent")
+def get_agent(
+    agent_id: str = Query(..., description="The agent ID to fetch"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    svc = _get_service(claims, db)
+    agent = svc.get_agent(agent_id)
+    return svc.agent_response(agent)
+
+
+@router.put("/update_agent")
+def update_agent(
+    body: UpdateAgentRequest,
+    agent_id: str = Query(..., description="The agent ID to update"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    svc = _get_service(claims, db)
+    user_id = UUID(claims.user_id) if claims.user_id else None
+    data = body.model_dump(exclude_unset=True)
+    agent = svc.update_agent(agent_id, data, user_id)
+    return svc.agent_response(agent)
+
+
+@router.delete("/delete_agent", status_code=status.HTTP_200_OK)
+def delete_agent(
+    agent_id: str = Query(..., description="The agent ID to delete"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    svc = _get_service(claims, db)
+    return svc.delete_agent(agent_id)
 
 
 @router.post("/list")

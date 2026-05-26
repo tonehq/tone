@@ -24,16 +24,20 @@ def get_mcp_servers_for_agent(agent_id: int):
     from core.models.mcp_server import McpServer, AgentMcpServer
 
     with get_db_context() as db:
-        results = (
-            db.query(McpServer, AgentMcpServer.selected_tools)
+        # ``AgentMcpServer.selected_tools`` was dropped in the v2 schema
+        # revamp, so we no longer filter the registered tools per-link.
+        # Every active MCP server attached to the agent contributes all
+        # of its tools.
+        rows = (
+            db.query(McpServer)
             .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)
             .filter(AgentMcpServer.agent_id == agent_id, McpServer.is_active == True)
             .all()
         )
         servers = []
-        for server, selected_tools in results:
+        for server in rows:
             db.expunge(server)
-            server._selected_tools = selected_tools
+            server._selected_tools = None
             servers.append(server)
         return servers
 

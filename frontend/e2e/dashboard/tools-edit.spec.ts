@@ -319,16 +319,14 @@ test.describe('Tools Edit — Built-In (Google Calendar)', () => {
     });
 
     test('shows helper text under Calendar ID and Timezone fields', async ({ page }) => {
-      await expect(
-        page.getByText(/Defaults to "primary" if not specified\./),
-      ).toBeVisible();
+      await expect(page.getByText(/Defaults to "primary" if not specified\./)).toBeVisible();
       await expect(page.getByText(/Defaults to UTC if not specified\./)).toBeVisible();
     });
 
     test('shows the truncated UUID in the header with copy button', async ({ page }) => {
       await expect(page.getByRole('button', { name: 'Copy UUID' })).toBeVisible({ timeout: 5_000 });
       await expect(
-        page.getByText(CALENDAR_TOOL.uuid.slice(0, 13) + '...', { exact: false }),
+        page.getByText(`${CALENDAR_TOOL.uuid.slice(0, 13)}...`, { exact: false }),
       ).toBeVisible();
     });
   });

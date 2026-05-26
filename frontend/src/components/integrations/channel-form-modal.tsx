@@ -128,6 +128,13 @@ export default function ChannelFormModal({
             value={channelType}
             onValueChange={setChannelType}
             disabled={saving || !!providerKey || isEdit}
+            helperText={
+              isEdit
+                ? 'Type cannot be changed after the channel is created.'
+                : providerKey
+                  ? 'Pre-selected from the provider tile.'
+                  : undefined
+            }
           />
           <TextInput
             name="auth_token"

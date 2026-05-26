@@ -1,8 +1,9 @@
 from typing import Any, Dict
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from core.api.v1.channels import list_phone_numbers_for_channel
 from core.database.session import get_db
 from core.services.channel_service import ChannelService
 from core.utils.auth_helpers import require_org_id
@@ -88,3 +89,14 @@ def delete_channel(
     db: Session = Depends(get_db),
 ):
     return _svc(claims, db).delete_channel(channel_id)
+
+
+@router.get("/phone_numbers")
+def list_phone_numbers(
+    channel_id: str = Query(..., description="The channel ID to fetch phone numbers for"),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    """List phone numbers stored in DB for a given channel, with agent assignment status."""
+    org_id = require_org_id(claims.org_id)
+    return list_phone_numbers_for_channel(db, org_id, channel_id)

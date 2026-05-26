@@ -151,7 +151,9 @@ test.describe('Tools Create — Type Selection Page', () => {
     await page.goto('/tools/create');
 
     // The Custom Tool card is still visible — failure just hides templates
-    await expect(page.getByRole('heading', { name: 'Custom Tool' })).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole('heading', { name: 'Custom Tool' })).toBeVisible({
+      timeout: 5_000,
+    });
   });
 
   test('navigates to /tools/create/custom when clicking the Custom Tool card', async ({ page }) => {
@@ -190,9 +192,7 @@ test.describe('Tools Create — Custom Tool Form', () => {
     });
 
     test('shows the Tool Definition section', async ({ page }) => {
-      await expect(
-        page.getByRole('heading', { name: 'Tool Definition', level: 3 }),
-      ).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Tool Definition', level: 3 })).toBeVisible();
     });
 
     test('shows the Active checkbox checked by default', async ({ page }) => {
@@ -331,7 +331,9 @@ test.describe('Tools Create — Custom Tool Form', () => {
       await expect(page.getByText('Name is required')).not.toBeVisible({ timeout: 2_000 });
     });
 
-    test('accepts very long name (no max length on custom tool client schema)', async ({ page }) => {
+    test('accepts very long name (no max length on custom tool client schema)', async ({
+      page,
+    }) => {
       await mockUpsertSuccess(page);
       const longName = 'a'.repeat(500);
       await page.getByPlaceholder('check_inventory').fill(longName);
@@ -387,9 +389,9 @@ test.describe('Tools Create — Custom Tool Form', () => {
       await page.locator('button[id="tool-method"]').click();
       await page.getByRole('option', { name: 'GET', exact: true }).click();
 
-      await expect(
-        page.getByText('Parameters will be sent as query string values.'),
-      ).toBeVisible({ timeout: 3_000 });
+      await expect(page.getByText('Parameters will be sent as query string values.')).toBeVisible({
+        timeout: 3_000,
+      });
     });
 
     test('shows JSON helper text under Parameters for POST', async ({ page }) => {
@@ -515,7 +517,10 @@ test.describe('Tools Create — Custom Tool Form', () => {
       await page.getByRole('option', { name: 'Bearer Token' }).click();
 
       await page.getByPlaceholder('Enter bearer token').fill('secret-token');
-      await page.getByRole('button', { name: /toggle password visibility/i }).first().click();
+      await page
+        .getByRole('button', { name: /toggle password visibility/i })
+        .first()
+        .click();
 
       await expect(page.locator('input[id="tool-auth-bearer"]')).toHaveAttribute('type', 'text');
     });
@@ -613,9 +618,9 @@ test.describe('Tools Create — Custom Tool Form', () => {
         .fill('https://example.com');
       await page.getByRole('button', { name: 'Create' }).click();
 
-      await expect(
-        page.locator('[data-sonner-toast]', { hasText: /already exists/i }),
-      ).toBeVisible({ timeout: 5_000 });
+      await expect(page.locator('[data-sonner-toast]', { hasText: /already exists/i })).toBeVisible(
+        { timeout: 5_000 },
+      );
       await expect(page).toHaveURL(/\/tools\/create\/custom/, { timeout: 3_000 });
     });
 

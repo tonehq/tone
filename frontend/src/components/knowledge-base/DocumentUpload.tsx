@@ -6,7 +6,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import CustomButton from '@/components/shared/CustomButton';
 import SelectInput from '@/components/shared/SelectInput';
 import { useUploadKnowledgeBase } from '@/lib/api/knowledge-base';
-import type { ApiAgent } from '@/types/agent';
+import type { AgentDropdownItem } from '@/types/agent';
 import type { SelectOption } from '@/types/components';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
@@ -23,7 +23,7 @@ const ACCEPTED_EXTENSIONS = ['pdf', 'txt', 'csv', 'json', 'docx'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
 interface DocumentUploadProps {
-  agents: ApiAgent[];
+  agents: AgentDropdownItem[];
   agentsLoading: boolean;
   onUploadSuccess: () => void;
 }

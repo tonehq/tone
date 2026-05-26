@@ -1,523 +1,390 @@
 'use client';
 
-import { loadableProvidersAtom } from '@/atoms/ProviderAtom';
-import { CallConfigurationTab, GeneralTab, VoiceTab } from '@/components/agents/agent-form';
-import ToolsTab from '@/components/agents/agent-form/ToolsTab';
-import type { DynamicProviderFieldsHandle } from '@/components/agents/agent-form/DynamicProviderFields';
-import type { GeneralTabHandle } from '@/components/agents/agent-form/GeneralTab';
-import PromptPage from '@/components/agents/agent-form/promptPage';
-import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
-import AssignPhoneNumberModal from '@/components/agents/AssignPhoneNumberModal';
-import type { TabItem } from '@/components/shared';
-import { CustomButton, CustomModal, CustomTab, PhoneNumberDisplay } from '@/components/shared';
-import ToneLoader from '@/components/shared/ToneLoader';
-import { Badge } from '@/components/ui/badge';
-import { deleteAgent, getAgent, upsertAgent } from '@/services/agentsService';
-import type { AgentFormState } from '@/types/agent';
-import type { ModelProviderWithAccounts } from '@/types/provider';
-import {
-  apiAgentToFormState,
-  defaultFormState,
-  formStateToUpsertPayload,
-} from '@/utils/agentFormUtils';
-import axiosInstance from '@/utils/axios';
-import { cn } from '@/utils/cn';
-import { handleApiError } from '@/utils/helpers';
-import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
 import {
-  AlertTriangle,
-  ChevronRight,
+  ArrowLeft,
+  Bot,
+  Cpu,
+  FileCheck2,
   Loader2,
   MessageSquare,
   Phone,
-  PhoneCall,
-  PhoneForwarded,
   Save,
-  Settings,
+  Sparkles,
+  Trash2,
   Volume2,
   Wrench,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { FormProvider, useForm } from 'react-hook-form';
+
+import {
+  createAgentAtom,
+  deleteAgentAtom,
+  fetchAgentAtom,
+  updateAgentAtom,
+} from '@/atoms/AgentsAtom';
+import AiStep from '@/components/agents/agent-form/steps/AiStep';
+import BasicsStep from '@/components/agents/agent-form/steps/BasicsStep';
+import KnowledgePhoneStep from '@/components/agents/agent-form/steps/KnowledgePhoneStep';
+import PromptStep from '@/components/agents/agent-form/steps/PromptStep';
+import ReviewStep from '@/components/agents/agent-form/steps/ReviewStep';
+import ToolsMcpStep from '@/components/agents/agent-form/steps/ToolsMcpStep';
+import VoiceStep from '@/components/agents/agent-form/steps/VoiceStep';
+import { AppLoader, CustomButton, CustomModal } from '@/components/shared';
+import { Badge } from '@/components/ui/badge';
+import type { AgentDirection, AgentFormState } from '@/types/agent';
+import {
+  agentDetailToFormState,
+  defaultFormState,
+  formStateToCreatePayload,
+  formStateToUpdatePayload,
+} from '@/utils/agentFormUtils';
+import { cn } from '@/utils/cn';
+import { handleApiError } from '@/utils/helpers';
+import { showToast } from '@/utils/toast';
 
 interface AgentFormPageProps {
-  agentType: 'inbound' | 'outbound';
+  agentType: AgentDirection;
   agentId?: string;
 }
+
+// The avatar chip and the direction badge both reuse this. In dark mode the
+// 15% backgrounds disappear against the dark canvas, so we bump opacity and
+// add a 1px inset ring for legibility on both themes.
+const DIRECTION_STYLES: Record<AgentDirection, string> = {
+  inbound:
+    'bg-emerald-500/15 text-emerald-700 ring-1 ring-inset ring-emerald-500/20 dark:bg-emerald-500/25 dark:text-emerald-200 dark:ring-emerald-400/40',
+  outbound:
+    'bg-violet-500/15 text-violet-700 ring-1 ring-inset ring-violet-500/20 dark:bg-violet-500/25 dark:text-violet-200 dark:ring-violet-400/40',
+  both: 'bg-sky-500/15 text-sky-700 ring-1 ring-inset ring-sky-500/20 dark:bg-sky-500/25 dark:text-sky-200 dark:ring-sky-400/40',
+};
+
+interface NavItem {
+  key: string;
+  label: string;
+  description: string;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { key: 'basics', label: 'Basics', description: 'Identity & messages', icon: Bot },
+  { key: 'prompt', label: 'Prompt', description: 'System prompt', icon: MessageSquare },
+  { key: 'ai', label: 'AI', description: 'LLM provider & tuning', icon: Cpu },
+  { key: 'voice', label: 'Voice', description: 'TTS & STT', icon: Volume2 },
+  { key: 'tools', label: 'Tools & MCP', description: 'Callable functions', icon: Wrench },
+  { key: 'knowledge', label: 'Knowledge & Phone', description: 'Docs & numbers', icon: Phone },
+  { key: 'review', label: 'Review', description: 'Sanity check', icon: FileCheck2 },
+];
 
 export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps) {
   const router = useRouter();
   const isEditMode = !!agentId;
 
-  const [providersLoadable] = useAtom(loadableProvidersAtom);
-  const [activeTab, setActiveTab] = useState('general');
-  const [formData, setFormData] = useState<AgentFormState>(() => defaultFormState(agentType));
+  const [, fetchAgent] = useAtom(fetchAgentAtom);
+  const [, createAgent] = useAtom(createAgentAtom);
+  const [, updateAgent] = useAtom(updateAgentAtom);
+  const [, deleteAgent] = useAtom(deleteAgentAtom);
+
+  const [activeTab, setActiveTab] = useState<string>('basics');
   const [loading, setLoading] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
-  const [assignModalOpen, setAssignModalOpen] = useState(false);
-  const [_assigning, setAssigning] = useState(false);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deletingAgent, setDeletingAgent] = useState(false);
-  const [unassignTarget, setUnassignTarget] = useState<{ no: string; type: string } | null>(null);
-  const [unassigning, setUnassigning] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [originalState, setOriginalState] = useState<AgentFormState | null>(null);
 
-  const generalHandle = useRef<GeneralTabHandle | null>(null);
-  const llmHandle = useRef<DynamicProviderFieldsHandle | null>(null);
-  const ttsHandle = useRef<DynamicProviderFieldsHandle | null>(null);
-  const sttHandle = useRef<DynamicProviderFieldsHandle | null>(null);
+  const methods = useForm<AgentFormState>({
+    defaultValues: defaultFormState(agentType),
+    mode: 'onChange',
+  });
 
-  const providers = (
-    providersLoadable.state === 'hasData' ? providersLoadable.data : []
-  ) as ModelProviderWithAccounts[];
-  const providersLoading = providersLoadable.state === 'loading';
-  const llmProviders = providers.filter((p) => p.provider_type === 'llm');
-  const ttsProviders = providers.filter((p) => p.provider_type === 'tts');
-  const sttProviders = providers.filter((p) => p.provider_type === 'stt');
-
-  const loadAgentData = useCallback(async () => {
-    if (!agentId) return;
-    setLoading(true);
-    try {
-      const agent = await getAgent(agentId);
-      if (agent) {
-        setFormData(apiAgentToFormState(agent, agentType));
-      } else {
-        showToast.error('Error', 'Agent not found');
-      }
-    } catch (error) {
-      handleApiError(error);
-    } finally {
-      setLoading(false);
-    }
-  }, [agentId, agentType]);
-
+  // ─── load on edit ─────────────────────────────────────────────────────────
   useEffect(() => {
-    if (isEditMode) {
-      loadAgentData();
-    }
-  }, [isEditMode, loadAgentData]);
-
-  const handleFormChange = (partial: any) => {
-    setFormData((prev) => ({ ...prev, ...partial }));
-  };
-
-  const handleAssignPhoneNumbers = async (phoneNumbers: { type: string; no: string }[]) => {
-    setAssigning(true);
-    try {
-      const channel = formData.channelId
-        ? formData?.channels?.find((c: any) => c.id === formData.channelId)
-        : formData?.channels?.find((c: any) => c.type === 'twilio');
-      const providerType = phoneNumbers[0]?.type || channel?.type || 'twilio';
-      const payload = {
-        phone_number: phoneNumbers,
-        phone_number_sid: channel?.meta_data?.account_sid,
-        phone_number_auth_token: channel?.meta_data?.auth_token,
-        provider: providerType,
-        channel_id: formData.channelId || channel?.id,
-        agent_id: agentId ? Number(agentId) : undefined,
-        country_code: '+1',
-        number_type: 'international',
-        capabilities: {
-          voice: true,
-          sms: false,
-          mms: true,
-        },
-        status: 'active',
-      };
-      await axiosInstance.post('/agent_channel_phone_number/upsert_channel_phone_number', payload);
-
-      setFormData((prev) => ({
-        ...prev,
-        phoneNumbers: [...prev.phoneNumbers, ...phoneNumbers],
-      }));
-      showToast.success('Phone number(s) assigned successfully');
-    } catch (error) {
-      handleApiError(error);
-      throw error;
-    } finally {
-      setAssigning(false);
-    }
-  };
-
-  const handleConfirmUnassign = async () => {
-    if (!unassignTarget) return;
-    const channel = formData?.channels?.find((c: any) => c.type === unassignTarget.type);
-    setUnassigning(true);
-    try {
-      await axiosInstance.post('/agent_channel_phone_number/detach_channel_phone_number', {
-        channel_id: channel?.id,
-        phone_number: unassignTarget.no,
-        agent_id: agentId ? Number(agentId) : undefined,
+    if (!isEditMode || !agentId) return;
+    let cancelled = false;
+    setLoading(true);
+    fetchAgent(agentId)
+      .then((detail) => {
+        if (cancelled) return;
+        const hydrated = agentDetailToFormState(detail);
+        methods.reset(hydrated);
+        setOriginalState(hydrated);
+      })
+      .catch((err) => {
+        if (!cancelled) handleApiError(err);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
-      setFormData((prev) => ({
-        ...prev,
-        phoneNumbers: prev.phoneNumbers.filter((pn) => pn.no !== unassignTarget.no),
-      }));
-      setUnassignTarget(null);
-      showToast.success('Phone number unassigned successfully');
-    } catch (error) {
-      handleApiError(error);
-    } finally {
-      setUnassigning(false);
-    }
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, [agentId, isEditMode]);
 
-  const handleSave = async () => {
-    const results = await Promise.all([
-      generalHandle.current?.trigger() ?? true,
-      llmHandle.current?.trigger() ?? true,
-      ttsHandle.current?.trigger() ?? true,
-      sttHandle.current?.trigger() ?? true,
-    ]);
-
-    if (results.some((valid) => !valid)) {
+  // ─── save / delete ────────────────────────────────────────────────────────
+  const handleSave = useCallback(async () => {
+    const valid = await methods.trigger();
+    if (!valid) {
+      setActiveTab('basics');
       return;
     }
-
+    const values = methods.getValues();
     setSaving(true);
     try {
-      const payload = formStateToUpsertPayload(
-        formData,
-        agentType,
-        isEditMode ? Number(agentId) : undefined,
-      );
-      await upsertAgent(payload);
-      showToast.success(isEditMode ? 'Agent saved successfully' : 'Agent created successfully');
-      if (!isEditMode) {
-        router.push('/agents');
+      if (isEditMode && agentId && originalState) {
+        const diff = formStateToUpdatePayload(values, originalState);
+        if (Object.keys(diff).length === 0) {
+          showToast.success('No changes', 'Nothing to update.');
+          setSaving(false);
+          return;
+        }
+        const updated = await updateAgent({ id: agentId, values: diff });
+        const fresh = agentDetailToFormState(updated);
+        methods.reset(fresh);
+        setOriginalState(fresh);
+        showToast.success('Agent updated');
+      } else {
+        const created = await createAgent(formStateToCreatePayload(values));
+        showToast.success('Agent created');
+        router.push(`/agents/edit/${created.agent_type}/${created.id}`);
       }
-    } catch (error) {
-      handleApiError(error);
+    } catch (err) {
+      handleApiError(err);
     } finally {
       setSaving(false);
     }
-  };
+  }, [agentId, createAgent, isEditMode, methods, originalState, router, updateAgent]);
 
-  const openDeleteConfirm = () => setDeleteConfirmOpen(true);
-
-  const handleConfirmDeleteAgent = async () => {
-    setDeletingAgent(true);
+  const handleConfirmDelete = useCallback(async () => {
+    if (!agentId) return;
+    setDeleting(true);
     try {
-      if (isEditMode) {
-        await deleteAgent(Number(agentId));
-        router.push('/agents');
-      } else {
-        router.push('/agents');
-      }
-    } catch (error) {
-      handleApiError(error);
+      await deleteAgent(agentId);
+      router.push('/agents');
+    } catch (err) {
+      handleApiError(err);
     } finally {
-      setDeletingAgent(false);
-      setDeleteConfirmOpen(false);
+      setDeleting(false);
+      setDeleteOpen(false);
     }
-  };
+  }, [agentId, deleteAgent, router]);
 
-  const configTabItems: TabItem[] = useMemo(
-    () => [
-      {
-        key: 'general',
-        label: 'General',
-        icon: <Settings size={16} />,
-        children: (
-          <GeneralTab
-            formData={{
-              name: formData.name,
-              description: formData.description,
-              end_call_message: formData.end_call_message,
-              first_message: formData.first_message,
-              customVocabulary: formData.customVocabulary,
-              filterWords: formData.filterWords,
-              useRealisticFillerWords: formData.useRealisticFillerWords,
-              llmMetaData: formData.llmMetaData,
-              llmProviderMenuId: formData.llmProviderMenuId,
-              llmModelMenuId: formData.llmModelMenuId,
-            }}
-            llmProviders={llmProviders}
-            providersLoading={providersLoading}
-            onFormChange={handleFormChange}
-            onDeleteAgent={openDeleteConfirm}
-            onGeneralValidityChange={(h) => {
-              generalHandle.current = h;
-            }}
-            onLlmValidityChange={(h) => {
-              llmHandle.current = h;
-            }}
-          />
-        ),
-      },
-      {
-        key: 'voice',
-        label: 'Voice',
-        icon: <Volume2 size={16} />,
-        children: (
-          <VoiceTab
-            formData={{
-              language: formData.language,
-              voiceSpeed: formData.voiceSpeed,
-              ttsProviderMenuId: formData.ttsProviderMenuId,
-              ttsModelMenuId: formData.ttsModelMenuId,
-              sttProviderMenuId: formData.sttProviderMenuId,
-              sttModelMenuId: formData.sttModelMenuId,
-              patienceLevel: formData.patienceLevel as 'low' | 'medium' | 'high',
-              speechRecognition: formData.speechRecognition as 'fast' | 'accurate',
-              ttsMetaData: formData.ttsMetaData,
-              sttMetaData: formData.sttMetaData,
-            }}
-            ttsProviders={ttsProviders}
-            sttProviders={sttProviders}
-            providersLoading={providersLoading}
-            onFormChange={handleFormChange}
-            onTtsValidityChange={(h) => {
-              ttsHandle.current = h;
-            }}
-            onSttValidityChange={(h) => {
-              sttHandle.current = h;
-            }}
-          />
-        ),
-      },
-      {
-        key: 'prompt',
-        label: 'Prompt',
-        icon: <MessageSquare size={16} />,
-        children: (
-          <PromptPage
-            formData={{ voicePrompting: formData.voicePrompting }}
-            onFormChange={handleFormChange}
-          />
-        ),
-      },
-      {
-        key: 'call-config',
-        label: 'Call Configuration',
-        icon: <PhoneCall size={16} />,
-        children: (
-          <CallConfigurationTab
-            formData={{
-              callRecording: formData.callRecording,
-              callTranscription: formData.callTranscription,
-            }}
-            onFormChange={handleFormChange}
-          />
-        ),
-      },
-      {
-        key: 'tools',
-        label: 'Tools',
-        icon: <Wrench size={16} />,
-        children: (
-          <ToolsTab agentId={agentId ? Number(agentId) : undefined} isEditMode={isEditMode} />
-        ),
-      },
-      {
-        key: 'assign-number',
-        label: 'Assign Number',
-        icon: <PhoneForwarded size={16} />,
-        children: (
-          <div className="space-y-5">
-            <div className="rounded-xl border border-border bg-background shadow-sm">
-              <div className="flex items-center justify-between border-b border-border/60 px-5 py-3.5">
-                <div className="flex items-center gap-3">
-                  <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                    <Phone size={16} className="text-primary" />
-                  </div>
-                  <div className="min-w-0">
-                    <h2 className="text-sm font-semibold text-foreground">Phone Numbers</h2>
-                    <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">
-                      Manage phone numbers assigned to this agent.
-                    </p>
-                  </div>
-                </div>
-                {isEditMode && (
-                  <CustomButton
-                    type="primary"
-                    icon={<Phone size={14} />}
-                    onClick={() => setAssignModalOpen(true)}
-                  >
-                    Assign Number
-                  </CustomButton>
-                )}
-              </div>
-              <div className="px-5 py-4">
-                {!formData.phoneNumbers?.length ? (
-                  <div className="flex flex-col items-center justify-center py-8 text-center">
-                    <div className="flex size-12 items-center justify-center rounded-xl bg-muted/50">
-                      <Phone size={20} className="text-muted-foreground" />
-                    </div>
-                    <p className="mt-3 text-[13px] font-medium text-foreground">
-                      No phone numbers assigned
-                    </p>
-                    <p className="mt-1 text-[12px] text-muted-foreground">
-                      {isEditMode
-                        ? 'Click "Assign Number" above to add one.'
-                        : 'Save the agent first to assign phone numbers.'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-border/40">
-                    {formData.phoneNumbers.map((pn) => (
-                      <div key={pn.no} className="flex items-center gap-3 py-3">
-                        <PhoneNumberDisplay
-                          phoneNumber={pn.no}
-                          flagSize="md"
-                          className="min-w-0 flex-1 text-[13px] font-medium"
-                        />
-                        <span className="text-[11px] capitalize text-muted-foreground">
-                          {pn.type}
-                        </span>
-                        <CustomButton
-                          type="default"
-                          className="text-[13px]"
-                          onClick={() => setUnassignTarget(pn)}
-                        >
-                          Unassign
-                        </CustomButton>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        ),
-      },
-    ],
+  // ─── derived ──────────────────────────────────────────────────────────────
+  const agentName = methods.watch('name') || (isEditMode ? 'Untitled agent' : 'New agent');
+  const agentInitial = (agentName.trim().charAt(0) || 'A').toUpperCase();
 
-    [formData, llmProviders, ttsProviders, sttProviders, providersLoading, isEditMode],
-  );
+  const activeBody = useMemo(() => {
+    switch (activeTab) {
+      case 'basics':
+        return <BasicsStep />;
+      case 'prompt':
+        return <PromptStep />;
+      case 'ai':
+        return <AiStep />;
+      case 'voice':
+        return <VoiceStep />;
+      case 'tools':
+        return <ToolsMcpStep />;
+      case 'knowledge':
+        return <KnowledgePhoneStep agentId={agentId ?? null} />;
+      case 'review':
+        return <ReviewStep onJump={(i) => setActiveTab(tabKeyForIndex(i))} />;
+      default:
+        return null;
+    }
+  }, [activeTab, agentId]);
 
   if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center p-6">
-        <ToneLoader label={isEditMode ? 'Loading agent...' : 'Loading...'} />
-      </div>
-    );
+    return <AppLoader className="h-full" />;
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      {/* Status banner */}
-      {!(formData.phoneNumbers?.length > 0) && (
-        <div
+    <FormProvider {...methods}>
+      <div className="flex h-full min-h-0 flex-col bg-background">
+        {/* ─── identity header (soft direction-tinted strip) ─────────────── */}
+        <header
           className={cn(
-            'flex shrink-0 items-center gap-2 px-6 py-3 text-[13px] leading-tight bg-amber-50/80 text-amber-800',
+            'relative flex shrink-0 items-center gap-3 overflow-hidden border-b border-border/60 px-5 py-3',
+            // Subtle gradient washes the header in the direction's accent
+            // colour without overwhelming the form below.
+            agentType === 'inbound' &&
+              'bg-gradient-to-r from-emerald-500/5 via-transparent to-transparent dark:from-emerald-500/10',
+            agentType === 'outbound' &&
+              'bg-gradient-to-r from-violet-500/5 via-transparent to-transparent dark:from-violet-500/10',
+            agentType === 'both' &&
+              'bg-gradient-to-r from-sky-500/5 via-transparent to-transparent dark:from-sky-500/10',
           )}
         >
-          <AlertTriangle size={18} className="shrink-0 text-amber-600" />
-          <span>
-            <span className="font-medium">No phone number</span>
-            <span className="mx-1 opacity-40">&mdash;</span>
-            Your agent can&apos;t {agentType === 'inbound' ? 'receive' : 'make'} calls yet.
-          </span>
-        </div>
-      )}
-
-      {/* Breadcrumb bar */}
-      <div className="flex shrink-0 items-center justify-between border-b border-border/60 bg-muted/30 px-6 py-3">
-        <nav className="flex items-center gap-1.5 text-[13px]">
           <CustomButton
-            type="link"
-            htmlType="button"
-            className="!p-0 text-[13px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+            type="text"
+            size="sm"
+            icon={<ArrowLeft className="size-4" />}
             onClick={() => router.push('/agents')}
+            className="-ml-2 h-8 text-muted-foreground hover:text-foreground"
+            aria-label="Back to agents"
+          />
+          <div
+            className={cn(
+              'flex size-10 shrink-0 items-center justify-center rounded-xl text-base font-semibold shadow-sm',
+              DIRECTION_STYLES[agentType],
+            )}
+            aria-hidden
           >
-            Agents
-          </CustomButton>
-          <ChevronRight size={12} className="text-muted-foreground/40" />
-          <span className="max-w-[240px] truncate font-medium text-foreground">
-            {formData.name || 'Untitled Agent'}
-          </span>
-        </nav>
-        <CustomButton type="default" icon={<Phone size={14} />}>
-          Test Agent
-        </CustomButton>
-      </div>
-
-      {/* Agent identity sub-header */}
-      <div className="flex shrink-0 items-center gap-4 bg-background px-6 py-3.5">
-        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-base font-bold text-primary">
-          {formData.name?.charAt(0)?.toUpperCase() || 'A'}
-        </div>
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-lg font-semibold tracking-tight text-foreground">
-            {formData.name || 'Untitled Agent'}
-          </h1>
-          <div className="mt-1 flex items-center gap-2">
-            <AgentTypeBadge agentType={agentType} />
-            {formData.phoneNumbers?.length > 0 &&
-              formData.phoneNumbers.map((pn) => (
-                <Badge
-                  key={pn.no}
-                  className="bg-primary/15 px-2.5 py-1 text-primary dark:text-primary"
-                >
-                  <Phone className="size-3.5" />
-                  <PhoneNumberDisplay phoneNumber={pn.no} flagSize="sm" className="text-xs" />
-                </Badge>
-              ))}
+            {agentInitial}
           </div>
-        </div>
-      </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h1 className="truncate font-display text-base font-semibold tracking-tight text-foreground">
+                {agentName}
+              </h1>
+              <Badge
+                className={cn(
+                  'inline-flex shrink-0 items-center gap-1 px-1.5 py-0 text-[10px] capitalize',
+                  DIRECTION_STYLES[agentType],
+                )}
+              >
+                <Phone className="size-2.5" />
+                {agentType}
+              </Badge>
+              {!isEditMode && (
+                <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+                  <Sparkles className="size-3" />
+                  New
+                </span>
+              )}
+            </div>
+            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+              {isEditMode ? 'Editing agent configuration' : 'Set up a new voice agent'}
+            </p>
+          </div>
+          {isEditMode && (
+            <CustomButton
+              type="text"
+              size="sm"
+              icon={<Trash2 className="size-4" />}
+              onClick={() => setDeleteOpen(true)}
+              className="h-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            >
+              Delete
+            </CustomButton>
+          )}
+        </header>
 
-      {/* Tabs + content */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <CustomTab
-          activeKey={activeTab}
-          onTabChange={setActiveTab}
-          className="flex min-h-0 flex-1 flex-col overflow-hidden"
-          tabBarClassName="shrink-0 border-b border-border bg-background px-6"
-          contentClassName="min-h-0 flex-1 overflow-auto bg-muted/20 px-8 py-6"
-          items={configTabItems}
+        {/* ─── sidebar + content split ───────────────────────────────────── */}
+        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[220px_1fr]">
+          {/* Sidebar nav */}
+          <nav
+            aria-label="Agent sections"
+            className="hidden flex-col gap-0.5 border-r border-border/60 bg-muted/20 p-3 lg:flex"
+          >
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const isActive = item.key === activeTab;
+              return (
+                <CustomButton
+                  key={item.key}
+                  type="text"
+                  onClick={() => setActiveTab(item.key)}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={cn(
+                    'group flex h-auto w-full items-center justify-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors',
+                    isActive
+                      ? 'bg-foreground text-background hover:bg-foreground/90'
+                      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                  )}
+                >
+                  <Icon
+                    className={cn(
+                      'size-4 shrink-0',
+                      isActive ? 'text-background' : 'text-muted-foreground',
+                    )}
+                    strokeWidth={2.25}
+                  />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="text-[13px] font-medium leading-tight">{item.label}</span>
+                    <span
+                      className={cn(
+                        'truncate text-[11px] leading-tight',
+                        isActive ? 'text-background/70' : 'text-muted-foreground/80',
+                      )}
+                    >
+                      {item.description}
+                    </span>
+                  </span>
+                </CustomButton>
+              );
+            })}
+          </nav>
+
+          {/* Mobile fallback — horizontal scroll tab strip */}
+          <nav
+            aria-label="Agent sections (mobile)"
+            className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border/60 bg-background px-3 py-1.5 lg:hidden"
+          >
+            {NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              const isActive = item.key === activeTab;
+              return (
+                <CustomButton
+                  key={item.key}
+                  type="text"
+                  size="sm"
+                  onClick={() => setActiveTab(item.key)}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={cn(
+                    'shrink-0 gap-1.5 rounded-full px-3 text-[12px]',
+                    isActive
+                      ? 'bg-foreground text-background'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  <Icon className="size-3.5" />
+                  {item.label}
+                </CustomButton>
+              );
+            })}
+          </nav>
+
+          {/* Body */}
+          <main className="min-h-0 overflow-auto px-5 py-5 lg:px-8 lg:py-6">
+            <div className="mx-auto max-w-3xl">{activeBody}</div>
+          </main>
+        </div>
+
+        {/* ─── sticky save bar ───────────────────────────────────────────── */}
+        <footer className="sticky bottom-0 flex shrink-0 items-center justify-end gap-2 border-t border-border/60 bg-background/85 px-5 py-1.5 backdrop-blur">
+          <CustomButton
+            type="primary"
+            size="sm"
+            icon={
+              saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />
+            }
+            onClick={handleSave}
+            loading={saving}
+          >
+            {isEditMode ? 'Save changes' : 'Create agent'}
+          </CustomButton>
+        </footer>
+
+        <CustomModal
+          open={deleteOpen}
+          onClose={() => setDeleteOpen(false)}
+          title="Delete agent"
+          description="This removes the agent and its configuration. Tools, MCP servers and uploads stay intact."
+          confirmText="Delete"
+          confirmType="danger"
+          confirmLoading={deleting}
+          onConfirm={handleConfirmDelete}
         />
       </div>
-
-      {/* Sticky save bar */}
-      <div className="sticky bottom-0 z-10 flex shrink-0 items-center justify-end gap-2 border-t border-border bg-background/80 px-6 py-3 backdrop-blur-sm">
-        <CustomButton
-          type="primary"
-          icon={saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save size={14} />}
-          onClick={handleSave}
-          loading={saving}
-        >
-          {saving ? 'Saving...' : 'Save Changes'}
-        </CustomButton>
-      </div>
-
-      {/* Modals */}
-      <AssignPhoneNumberModal
-        open={assignModalOpen}
-        onClose={() => setAssignModalOpen(false)}
-        currentPhoneNumbers={formData.phoneNumbers}
-        onAssign={handleAssignPhoneNumbers}
-        agentId={agentId ? Number(agentId) : undefined}
-        channelId={formData.channelId}
-      />
-
-      <CustomModal
-        open={deleteConfirmOpen}
-        onClose={() => setDeleteConfirmOpen(false)}
-        title="Delete Agent"
-        description="Deleting an agent will erase personalized data, voice profiles, and integrations. Are you sure?"
-        confirmText="Delete"
-        confirmType="danger"
-        confirmLoading={deletingAgent}
-        onConfirm={handleConfirmDeleteAgent}
-      />
-
-      <CustomModal
-        open={!!unassignTarget}
-        onClose={() => setUnassignTarget(null)}
-        title="Unassign Phone Number"
-        confirmText="Unassign"
-        confirmType="danger"
-        confirmLoading={unassigning}
-        onConfirm={handleConfirmUnassign}
-      >
-        <p className="text-sm text-foreground">
-          Are you sure you want to unassign <strong>{unassignTarget?.no}</strong>? This will remove
-          it from the agent.
-        </p>
-      </CustomModal>
-    </div>
+    </FormProvider>
   );
+}
+
+// Review step jumps still address sections by index (Basics=0, …) so this
+// translation table keeps the public ReviewStep API unchanged.
+const TAB_KEYS = ['basics', 'prompt', 'ai', 'voice', 'tools', 'knowledge', 'review'];
+function tabKeyForIndex(i: number) {
+  return TAB_KEYS[i] ?? TAB_KEYS[0];
 }

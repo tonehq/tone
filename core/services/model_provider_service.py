@@ -2,7 +2,7 @@
 Model management). Shared by ``core/api/v1/services.py`` and
 ``ee/api/v1/services.py`` so the two editions cannot drift."""
 
-from typing import Any, Iterable
+from typing import Any, Iterable, List
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -11,7 +11,9 @@ from sqlalchemy.orm import Session, joinedload
 
 from core.models.api_key import ApiKey
 from core.models.model import Model
+from core.models.model_language import ModelLanguage
 from core.models.model_provider import ModelProvider
+from core.models.model_voice import ModelVoice
 from core.services.base import BaseService
 from core.services.crud import list_records
 from core.utils.encryption import encrypt
@@ -115,21 +117,28 @@ class ModelProviderService(BaseService):
             out[k].sort()
         return out
 
-    def _provider_model_count_map(
+    def _model_count_by_provider_kind_map(
         self, provider_ids: Iterable[UUID]
-    ) -> dict[str, int]:
+    ) -> dict[tuple[str, str], int]:
+        """{(provider_id_str, kind): count} for active models. Lets the
+        listing show kind-scoped model counts when each card represents
+        one (provider, service_type) pair."""
         ids = list(provider_ids)
         if not ids:
             return {}
         rows = (
-            self.db.query(Model.provider_id, func.count(Model.id))
+            self.db.query(Model.provider_id, Model.kind, func.count(Model.id))
             .filter(Model.provider_id.in_(ids), Model.is_active.is_(True))
-            .group_by(Model.provider_id)
+            .group_by(Model.provider_id, Model.kind)
             .all()
         )
-        return {str(pid): int(count) for pid, count in rows}
+        return {(str(pid), kind): int(count) for pid, kind, count in rows}
 
-    def _default_keys_map(self, provider_ids: Iterable[UUID]) -> dict[str, dict]:
+    def _default_keys_by_provider_kind_map(
+        self, provider_ids: Iterable[UUID]
+    ) -> dict[tuple[str, str], dict]:
+        """{(provider_id_str, service_type): default_key_dict}. The partial
+        unique index guarantees at most one default per (org, service_type)."""
         ids = list(provider_ids)
         if not ids:
             return {}
@@ -144,9 +153,9 @@ class ModelProviderService(BaseService):
             )
             .all()
         )
-        out: dict[str, dict] = {}
+        out: dict[tuple[str, str], dict] = {}
         for row in rows:
-            out[str(row.provider_id)] = {
+            out[(str(row.provider_id), row.service_type)] = {
                 "id": str(row.id),
                 "label": row.label,
                 "service_type": row.service_type,
@@ -235,7 +244,9 @@ class ModelProviderService(BaseService):
     # ─── list / aggregate ──────────────────────────────────────────────────
 
     def list_services(self, body: dict) -> dict:
-        """Aggregated list — one row per distinct provider the org has ≥1 ApiKey for."""
+        """Aggregated list — one row per distinct (provider, service_type)
+        the org has ≥1 ApiKey for. A Deepgram STT key and a Deepgram TTS key
+        therefore surface as two separate cards on the listing page."""
         page = max(int(body.get("page") or 1), 1)
         page_size = min(max(int(body.get("page_size") or 12), 1), 100)
         search = body.get("search")
@@ -248,23 +259,27 @@ class ModelProviderService(BaseService):
             case((ApiKey.is_active.is_(True), ApiKey.id))
         ).label("active_api_key_count")
         last_used_at = func.max(ApiKey.updated_at).label("last_used_at")
-        service_types_agg = func.array_agg(distinct(ApiKey.service_type)).label(
-            "service_types"
-        )
 
         q = (
             self.db.query(
                 ApiKey.provider_id.label("provider_id"),
+                ApiKey.service_type.label("service_type"),
                 ModelProvider.slug,
                 ModelProvider.display_name,
                 ModelProvider.description,
                 api_key_count,
                 active_api_key_count,
                 last_used_at,
-                service_types_agg,
             )
             .join(ModelProvider, ModelProvider.id == ApiKey.provider_id)
-            .filter(ApiKey.organization_id == self.org_id)
+            .filter(
+                ApiKey.organization_id == self.org_id,
+                # Each card represents one (provider, service_type) pair, so
+                # legacy rows with NULL service_type can't be rendered or
+                # deleted from the listing — exclude them rather than surface
+                # broken cards with empty badges and 400-ing delete CTAs.
+                ApiKey.service_type.isnot(None),
+            )
         )
 
         if search:
@@ -283,6 +298,7 @@ class ModelProviderService(BaseService):
 
         q = q.group_by(
             ApiKey.provider_id,
+            ApiKey.service_type,
             ModelProvider.slug,
             ModelProvider.display_name,
             ModelProvider.description,
@@ -304,31 +320,36 @@ class ModelProviderService(BaseService):
             if f in ALLOWED_USAGE_SORT_FIELDS:
                 order_col = sort_map[f]
                 desc_dir = d
-        q = q.order_by(order_col.desc() if desc_dir else order_col.asc())
+        # Stable tiebreak so STT/TTS rows for the same provider stay
+        # adjacent and in a consistent order across requests.
+        q = q.order_by(
+            order_col.desc() if desc_dir else order_col.asc(),
+            ModelProvider.display_name.asc(),
+            ApiKey.service_type.asc(),
+        )
 
         rows = q.offset((page - 1) * page_size).limit(page_size).all()
 
         provider_ids = [r.provider_id for r in rows if r.provider_id]
-        kinds_map = self._provider_kinds_map(provider_ids)
-        model_count_map = self._provider_model_count_map(provider_ids)
-        default_map = self._default_keys_map(provider_ids)
+        model_count_map = self._model_count_by_provider_kind_map(provider_ids)
+        default_map = self._default_keys_by_provider_kind_map(provider_ids)
 
         def _row_to_dict(r) -> dict:
             pid = str(r.provider_id)
-            sts = sorted({s for s in (r.service_types or []) if s})
+            kind = r.service_type
             return {
+                "id": f"{pid}:{kind}",
                 "provider": {
                     "id": pid,
                     "slug": r.slug,
                     "display_name": r.display_name,
                     "description": r.description,
                 },
-                "kinds": kinds_map.get(pid, []),
+                "service_type": kind,
                 "api_key_count": int(r.api_key_count or 0),
                 "active_api_key_count": int(r.active_api_key_count or 0),
-                "default_api_key": default_map.get(pid),
-                "service_types": sts,
-                "model_count": model_count_map.get(pid, 0),
+                "default_api_key": default_map.get((pid, kind)),
+                "model_count": model_count_map.get((pid, kind), 0),
                 "last_used_at": (
                     int(r.last_used_at.timestamp()) if r.last_used_at else None
                 ),
@@ -352,10 +373,46 @@ class ModelProviderService(BaseService):
         )
 
         api_key_value = (body.get("api_key") or "").strip()
-        if not api_key_value:
+        source_key_id = body.get("source_key_id")
+
+        # Exactly one of api_key / source_key_id must be provided. When
+        # source_key_id is given, copy the encrypted_key from an existing key
+        # on the same provider so the user doesn't have to paste the secret
+        # again when adding a second service (e.g. Deepgram STT → TTS).
+        if api_key_value and source_key_id:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="api_key is required"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Provide either api_key or source_key_id, not both",
             )
+        if not api_key_value and not source_key_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="api_key or source_key_id is required",
+            )
+
+        if source_key_id:
+            src_uuid = _parse_uuid(source_key_id, field="source_key_id")
+            source = (
+                self.db.query(ApiKey)
+                .filter(
+                    ApiKey.id == src_uuid,
+                    ApiKey.organization_id == self.org_id,
+                )
+                .first()
+            )
+            if not source:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Source API key not found",
+                )
+            if source.provider_id != provider_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="source_key_id must belong to the same provider",
+                )
+            encrypted_key = source.encrypted_key
+        else:
+            encrypted_key = encrypt(api_key_value)
 
         label = (body.get("label") or "").strip() or None
         description = (body.get("description") or "").strip() or None
@@ -377,7 +434,7 @@ class ModelProviderService(BaseService):
             organization_id=self.org_id,
             provider_id=provider_id,
             label=label,
-            encrypted_key=encrypt(api_key_value),
+            encrypted_key=encrypted_key,
             is_active=is_active,
             service_type=service_type,
             description=description,
@@ -523,17 +580,24 @@ class ModelProviderService(BaseService):
         self.db.commit()
         return {"ok": True}
 
-    def delete_provider_services(self, provider_id: str) -> dict:
+    def delete_provider_services(
+        self, provider_id: str, service_type: str | None = None
+    ) -> dict:
+        """Delete all of the org's API keys for the provider, or just those of
+        a single ``service_type`` when the listing's card is per-(provider,
+        kind) and the user only wants to remove that card."""
         prov_uuid = _parse_uuid(provider_id, field="provider id")
         self._provider_or_404(prov_uuid)
-        deleted = (
-            self.db.query(ApiKey)
-            .filter(
-                ApiKey.organization_id == self.org_id,
-                ApiKey.provider_id == prov_uuid,
-            )
-            .delete(synchronize_session=False)
+
+        validated_kind = _validate_service_type(service_type, required=False)
+
+        q = self.db.query(ApiKey).filter(
+            ApiKey.organization_id == self.org_id,
+            ApiKey.provider_id == prov_uuid,
         )
+        if validated_kind:
+            q = q.filter(ApiKey.service_type == validated_kind)
+        deleted = q.delete(synchronize_session=False)
         self.db.commit()
         return {"deleted": int(deleted)}
 
@@ -617,8 +681,34 @@ class ModelProviderService(BaseService):
         page_size = min(max(int(body.get("page_size") or 50), 1), 200)
         search = body.get("search")
         sort_by = body.get("sort_by")
+        service_type = _validate_service_type(
+            body.get("service_type"), required=False
+        )
 
         q = self.db.query(Model).filter(Model.provider_id == prov_uuid)
+
+        if service_type:
+            # Detail page is scoped to one (provider, kind). Narrow to just
+            # that kind regardless of which other kinds the org has keys for.
+            q = q.filter(Model.kind == service_type)
+        else:
+            # Fallback: restrict to the kinds the org actually has active API
+            # keys for, so e.g. a Deepgram-STT-only org doesn't see Deepgram's
+            # TTS models.
+            org_kinds = {
+                row[0]
+                for row in self.db.query(distinct(ApiKey.service_type))
+                .filter(
+                    ApiKey.organization_id == self.org_id,
+                    ApiKey.provider_id == prov_uuid,
+                    ApiKey.is_active.is_(True),
+                )
+                .all()
+                if row[0]
+            }
+            if org_kinds:
+                q = q.filter(Model.kind.in_(org_kinds))
+
         if search:
             q = q.filter(Model.name.ilike(f"%{search}%"))
 
@@ -734,3 +824,75 @@ class ModelProviderService(BaseService):
         self.db.delete(record)
         self.db.commit()
         return {"ok": True}
+
+    # ─── TTS cascade (language → provider → voice) ────────────────────────
+
+    def list_tts_languages(self) -> List[dict]:
+        """Return distinct languages available across all active TTS models."""
+        rows = (
+            self.db.query(ModelLanguage.name)
+            .join(Model, Model.id == ModelLanguage.model_id)
+            .filter(Model.kind == "tts", Model.is_active.is_(True), ModelLanguage.is_active.is_(True))
+            .distinct()
+            .order_by(ModelLanguage.name.asc())
+            .all()
+        )
+        return [{"name": row[0]} for row in rows]
+
+    def list_tts_providers(self, language: str) -> List[dict]:
+        """Return TTS providers that have models supporting the given language."""
+        rows = (
+            self.db.query(ModelProvider)
+            .join(Model, Model.provider_id == ModelProvider.id)
+            .join(ModelLanguage, ModelLanguage.model_id == Model.id)
+            .filter(
+                Model.kind == "tts",
+                Model.is_active.is_(True),
+                ModelProvider.is_active.is_(True),
+                ModelLanguage.is_active.is_(True),
+                ModelLanguage.name == language,
+            )
+            .distinct()
+            .order_by(ModelProvider.display_name.asc())
+            .all()
+        )
+        return [
+            {
+                "id": str(p.id),
+                "slug": p.slug,
+                "display_name": p.display_name,
+                "description": p.description,
+            }
+            for p in rows
+        ]
+
+    def list_tts_voices(self, provider_id: str, language: str) -> List[dict]:
+        """Return TTS voices for a provider that support the given language."""
+        prov_uuid = _parse_uuid(provider_id, field="provider id")
+        self._provider_or_404(prov_uuid)
+
+        rows = (
+            self.db.query(ModelVoice)
+            .join(Model, Model.id == ModelVoice.model_id)
+            .filter(
+                Model.provider_id == prov_uuid,
+                Model.kind == "tts",
+                Model.is_active.is_(True),
+                ModelVoice.is_active.is_(True),
+                ModelVoice.language_list.contains([language]),
+            )
+            .order_by(ModelVoice.name.asc())
+            .all()
+        )
+        return [
+            {
+                "id": str(v.id),
+                "name": v.name,
+                "gender": v.gender,
+                "accent": v.accent,
+                "description": v.description,
+                "language_list": v.language_list,
+                "sample_url": v.sample_url,
+            }
+            for v in rows
+        ]

@@ -61,7 +61,7 @@ export default function ServiceGrid({
         <AnimatePresence mode="popLayout">
           {items.map((u) => (
             <ServiceCard
-              key={u.provider.id}
+              key={u.id}
               usage={u}
               onClick={onSelect}
               onEdit={onEdit}

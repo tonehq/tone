@@ -59,7 +59,7 @@ export default function ServiceCard({ usage, onClick, onEdit, onDelete }: Servic
         <div className="flex items-start gap-3">
           <ProviderLogo
             providerName={usage.provider.slug}
-            serviceType={usage.service_types[0] ?? ''}
+            serviceType={usage.service_type}
             className="size-11 shrink-0"
           />
           <div className="min-w-0 flex-1">
@@ -102,19 +102,16 @@ export default function ServiceCard({ usage, onClick, onEdit, onDelete }: Servic
           </div>
         </div>
 
-        {/* type pills + default indicator */}
+        {/* type pill + default indicator */}
         <div className="flex flex-wrap items-center gap-2">
-          {usage.service_types.map((t) => (
-            <Badge
-              key={t}
-              className={cn(
-                'px-2 py-0 text-[10px] font-semibold uppercase tracking-wider',
-                TYPE_BADGE_STYLES[t] ?? '',
-              )}
-            >
-              {t}
-            </Badge>
-          ))}
+          <Badge
+            className={cn(
+              'px-2 py-0 text-[10px] font-semibold uppercase tracking-wider',
+              TYPE_BADGE_STYLES[usage.service_type] ?? '',
+            )}
+          >
+            {usage.service_type}
+          </Badge>
           {usage.default_api_key && (
             <span
               className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground"

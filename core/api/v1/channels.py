@@ -1,10 +1,13 @@
-from typing import Any, Dict
+from typing import Any, Dict, List
+from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from core.database.session import get_db
 from core.middleware.auth import JWTClaims, require_admin_or_owner, require_org_member
+from core.models.agent import Agent
+from core.models.phone_number import PhoneNumber
 from core.services.channel_service import ChannelService
 from core.utils.auth_helpers import require_org_id
 
@@ -84,3 +87,44 @@ def delete_channel(
     db: Session = Depends(get_db),
 ):
     return _svc(claims, db).delete_channel(channel_id)
+
+
+def list_phone_numbers_for_channel(db: Session, org_id: UUID, channel_id: str) -> List[Dict[str, Any]]:
+    """Shared listing pipeline for /channel/phone_numbers (core + EE)."""
+    try:
+        ch_uuid = UUID(channel_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid channel_id")
+    rows = (
+        db.query(PhoneNumber, Agent.name.label("agent_name"))
+        .outerjoin(Agent, Agent.id == PhoneNumber.agent_id)
+        .filter(
+            PhoneNumber.channel_id == ch_uuid,
+            PhoneNumber.organization_id == org_id,
+        )
+        .all()
+    )
+    return [
+        {
+            "id": str(pn.id),
+            "number": pn.number,
+            "label": pn.label,
+            "channel_id": str(pn.channel_id),
+            "assigned_to": {
+                "agent_id": str(pn.agent_id),
+                "agent_name": agent_name,
+            } if pn.agent_id else None,
+        }
+        for pn, agent_name in rows
+    ]
+
+
+@router.get("/phone_numbers")
+def list_phone_numbers(
+    channel_id: str = Query(..., description="The channel ID to fetch phone numbers for"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """List phone numbers stored in DB for a given channel, with agent assignment status."""
+    org_id = require_org_id(claims.org_id)
+    return list_phone_numbers_for_channel(db, org_id, channel_id)

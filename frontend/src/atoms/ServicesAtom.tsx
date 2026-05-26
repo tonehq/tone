@@ -17,7 +17,13 @@ import {
   type ListServicesParams,
   type ModelUpsertPayload,
 } from '@/services/servicesService';
-import type { ProviderModel, ProviderUsage, Service, ServiceUpsertPayload } from '@/types/service';
+import type {
+  ProviderModel,
+  ProviderUsage,
+  Service,
+  ServiceKind,
+  ServiceUpsertPayload,
+} from '@/types/service';
 
 // Each fetch atom tags its call with an incrementing token, so when filters,
 // sort, or page change rapidly we can drop responses that aren't from the
@@ -107,11 +113,15 @@ export const fetchServiceAtom = atom(
   async (_get, _set, id: string): Promise<Service> => getService(id),
 );
 
-// ─── delete every ApiKey for (org, provider) ───────────────────────────────
+// ─── delete every ApiKey for (org, provider) — optionally scoped to one kind ─
 export const deleteProviderAtom = atom(
   null,
-  async (_get, _set, providerId: string): Promise<{ deleted: number }> =>
-    deleteProviderServices(providerId),
+  async (
+    _get,
+    _set,
+    payload: { providerId: string; serviceType?: ServiceKind },
+  ): Promise<{ deleted: number }> =>
+    deleteProviderServices(payload.providerId, payload.serviceType),
 );
 
 // ─── per-provider keys state (detail page) ─────────────────────────────────

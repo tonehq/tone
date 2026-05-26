@@ -56,8 +56,14 @@ export async function deleteService(id: string): Promise<void> {
   await axios.delete(`/services/${id}`);
 }
 
-export async function deleteProviderServices(providerId: string): Promise<{ deleted: number }> {
-  const { data } = await axios.delete<{ deleted: number }>(`/services/providers/${providerId}`);
+export async function deleteProviderServices(
+  providerId: string,
+  serviceType?: 'llm' | 'stt' | 'tts',
+): Promise<{ deleted: number }> {
+  const { data } = await axios.delete<{ deleted: number }>(
+    `/services/providers/${providerId}`,
+    serviceType ? { params: { service_type: serviceType } } : undefined,
+  );
   return data;
 }
 
@@ -93,6 +99,7 @@ export interface ListProviderModelsParams {
   page_size?: number;
   search?: string;
   sort_by?: string;
+  service_type?: 'llm' | 'stt' | 'tts';
 }
 
 export async function listProviderModels(

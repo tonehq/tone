@@ -22,6 +22,7 @@ class AgentConfig(OrgScopedModel):
     conversation_history_token_limit = Column(Integer, nullable=True)
     language_id = Column(UUID(as_uuid=True), ForeignKey("model_languages.id", ondelete="SET NULL"), nullable=True)
     knowledge_model_id = Column(UUID(as_uuid=True), ForeignKey("models.id", ondelete="SET NULL"), nullable=True)
+    llm_settings = Column(JSONB, nullable=True)
     voice_settings = Column(JSONB, nullable=True)
     stt_settings = Column(JSONB, nullable=True)
     conversation_settings = Column(JSONB, nullable=True)

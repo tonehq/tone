@@ -1,31 +1,45 @@
 import axiosInstance from '@/utils/axios';
-import type { ListAgentsParams, PaginatedAgents } from '@/types/agent';
-
-export const getAgents = async () => {
-  const res = await axiosInstance.get('/agent/get_all_agents');
-  return res.data;
-};
+import type {
+  AgentDetail,
+  AgentDropdownItem,
+  CreateAgentPayload,
+  ListAgentsParams,
+  PaginatedAgents,
+  UpdateAgentPayload,
+} from '@/types/agent';
 
 export const listAgents = async (params: ListAgentsParams = {}): Promise<PaginatedAgents> => {
-  const res = await axiosInstance.post('/agent/list', params);
-  return res.data as PaginatedAgents;
-};
-
-/** Fetch a single agent by id. Returns the first item from get_all_agents?agent_id=id. */
-export const getAgent = async (id: number | string) => {
-  const res = await axiosInstance.get('/agent/get_all_agents', {
-    params: { agent_id: Number(id) },
-  });
-  const data = Array.isArray(res.data) ? res.data : (res.data?.data ?? []);
-  return data[0] ?? null;
-};
-
-/** Create or update agent. Send id in payload to update. */
-export const upsertAgent = async (payload: Record<string, unknown>) => {
-  const res = await axiosInstance.post('/agent/upsert_agent', payload);
+  const res = await axiosInstance.post<PaginatedAgents>('/agent/list', params);
   return res.data;
 };
 
-export const deleteAgent = async (agentId: number): Promise<void> => {
+export const getAllAgents = async (): Promise<AgentDropdownItem[]> => {
+  const res = await axiosInstance.get<AgentDropdownItem[]>('/agent/get_all_agents');
+  return Array.isArray(res.data) ? res.data : [];
+};
+
+export const getAgent = async (agentId: string): Promise<AgentDetail> => {
+  const res = await axiosInstance.get<AgentDetail>('/agent/get_agent', {
+    params: { agent_id: agentId },
+  });
+  return res.data;
+};
+
+export const createAgent = async (payload: CreateAgentPayload): Promise<AgentDetail> => {
+  const res = await axiosInstance.post<AgentDetail>('/agent/create_agent', payload);
+  return res.data;
+};
+
+export const updateAgent = async (
+  agentId: string,
+  payload: UpdateAgentPayload,
+): Promise<AgentDetail> => {
+  const res = await axiosInstance.put<AgentDetail>('/agent/update_agent', payload, {
+    params: { agent_id: agentId },
+  });
+  return res.data;
+};
+
+export const deleteAgent = async (agentId: string): Promise<void> => {
   await axiosInstance.delete('/agent/delete_agent', { params: { agent_id: agentId } });
 };

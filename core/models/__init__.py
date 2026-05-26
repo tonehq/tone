@@ -9,10 +9,9 @@ from core.models.model_language import ModelLanguage
 from core.models.channel import Channel
 from core.models.phone_number import PhoneNumber
 
-# Uploads
+# Uploads & Knowledge Base
 from core.models.upload import Upload
-from core.models.document import Document
-from core.models.document_chunk import DocumentChunk
+from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 
 # Agent Core
 from core.models.agent import Agent

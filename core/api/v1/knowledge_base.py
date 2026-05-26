@@ -1,12 +1,12 @@
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Form, HTTPException, UploadFile, status
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from core.database.session import get_db
 from core.middleware.auth import JWTClaims, require_org_member
 from core.models.agent import Agent
-from core.models.document import Document
+from core.models.agent_knowledge_base import AgentKnowledgeBase
 from core.models.upload import Upload
 from core.services.crud import list_records
 from core.services.document_processing_service import DocumentProcessingService
@@ -29,9 +29,9 @@ def _signed_url(file_path: str | None, r2: R2StorageService | None = None) -> st
         return None
 
 
-def _doc_to_payload(doc: Document, r2: R2StorageService | None = None) -> dict:
-    payload = doc.to_dict()
-    payload["url"] = _signed_url(doc.upload.file_path if doc.upload else None, r2)
+def _upload_to_payload(upload: Upload, r2: R2StorageService | None = None) -> dict:
+    payload = upload.to_dict()
+    payload["url"] = _signed_url(upload.file_path, r2)
     return payload
 
 
@@ -50,39 +50,35 @@ def list_documents(
     agent_id = body.get("agent_id")
     status_filter = body.get("status")
 
-    filters = []
+    filters = [Upload.purpose == "kb_document"]
     if search:
-        filters.append(Document.file_name.ilike(f"%{search}%"))
+        filters.append(Upload.file_name.ilike(f"%{search}%"))
     if agent_id:
         try:
-            filters.append(Document.agent_id == UUID(str(agent_id)))
+            agent_uuid = UUID(str(agent_id))
         except ValueError:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid agent_id")
+        upload_ids_q = (
+            db.query(AgentKnowledgeBase.upload_id)
+            .filter(AgentKnowledgeBase.agent_id == agent_uuid, AgentKnowledgeBase.organization_id == org_id)
+        )
+        filters.append(Upload.id.in_(upload_ids_q))
     if status_filter:
-        filters.append(Document.status == status_filter)
+        filters.append(Upload.status == status_filter)
 
-    allowed_sort_fields = {"file_name", "file_size_bytes", "created_at", "updated_at", "status"}
-    order_by = Document.updated_at.desc()
+    allowed_sort_fields = {"file_name", "size_bytes", "created_at", "updated_at", "status"}
+    order_by = Upload.updated_at.desc()
     if sort_by:
         desc = sort_by.startswith("-")
         field_name = sort_by.lstrip("-")
         if field_name in allowed_sort_fields:
-            col = getattr(Document, field_name)
+            col = getattr(Upload, field_name)
             order_by = col.desc() if desc else col.asc()
 
-    items, total = list_records(
-        db,
-        Document,
-        org_id,
-        page,
-        page_size,
-        filters,
-        order_by,
-        options=[joinedload(Document.upload)],
-    )
+    items, total = list_records(db, Upload, org_id, page, page_size, filters, order_by)
     r2 = R2StorageService()
     return {
-        "items": [_doc_to_payload(i, r2) for i in items],
+        "items": [_upload_to_payload(i, r2) for i in items],
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -122,48 +118,63 @@ async def upload_document(
         organization_id=org_id,
         container_name=settings.R2_BUCKET_NAME,
         file_path=object_key,
+        file_name=file_name,
         file_type=content_type,
         size_bytes=len(file_bytes),
         purpose="kb_document",
+        status="processing",
+        meta_data={},
         created_by_user_id=user_id,
         is_active=True,
     )
     db.add(upload)
     db.flush()
 
-    doc = Document(
-        organization_id=org_id,
-        upload_id=upload.id,
-        agent_id=agent_uuid,
-        file_name=file_name,
-        content_type=content_type,
-        file_size_bytes=len(file_bytes),
-        status="processing",
-        meta_data={},
+    # Link upload to agent via AgentKnowledgeBase. AgentKnowledgeBase requires
+    # a config row, so refuse the upload rather than silently orphan it.
+    from core.models.agent_config import AgentConfig
+    config = (
+        db.query(AgentConfig)
+        .filter(AgentConfig.agent_id == agent_uuid, AgentConfig.deleted_at.is_(None))
+        .order_by(AgentConfig.version.desc())
+        .first()
     )
-    db.add(doc)
+    if not config:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Agent has no configuration yet. Save the agent before uploading knowledge base documents.",
+        )
+    db.add(
+        AgentKnowledgeBase(
+            organization_id=org_id,
+            agent_id=agent_uuid,
+            upload_id=upload.id,
+            agent_config_id=config.id,
+        )
+    )
+
     db.commit()
-    db.refresh(doc)
+    db.refresh(upload)
 
     background_tasks.add_task(
-        DocumentProcessingService().process_document, doc.id, org_id
+        DocumentProcessingService().process_upload, upload.id, org_id
     )
 
-    return _doc_to_payload(doc)
+    return _upload_to_payload(upload)
 
 
-@router.patch("/{document_id}")
+@router.patch("/{upload_id}")
 def rename_document(
-    document_id: str,
+    upload_id: str,
     body: dict = Body(...),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
     org_id = _resolve_org_id(claims)
     try:
-        doc_uuid = UUID(document_id)
+        uid = UUID(upload_id)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid document_id")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid upload_id")
 
     new_name = (body.get("file_name") or "").strip()
     if not new_name:
@@ -173,23 +184,23 @@ def rename_document(
             status_code=status.HTTP_400_BAD_REQUEST, detail="file_name too long (max 512)"
         )
 
-    doc = (
-        db.query(Document)
-        .filter(Document.id == doc_uuid, Document.organization_id == org_id)
+    upload = (
+        db.query(Upload)
+        .filter(Upload.id == uid, Upload.organization_id == org_id)
         .first()
     )
-    if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    if not upload:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found")
 
-    doc.file_name = new_name
+    upload.file_name = new_name
     db.commit()
-    db.refresh(doc)
-    return _doc_to_payload(doc)
+    db.refresh(upload)
+    return _upload_to_payload(upload)
 
 
-@router.patch("/{document_id}/file")
+@router.patch("/{upload_id}/file")
 async def replace_document_file(
-    document_id: str,
+    upload_id: str,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     file_name: str | None = Form(None),
@@ -198,64 +209,43 @@ async def replace_document_file(
 ):
     org_id = _resolve_org_id(claims)
     try:
-        doc_uuid = UUID(document_id)
+        uid = UUID(upload_id)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid document_id")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid upload_id")
 
-    doc = (
-        db.query(Document)
-        .filter(Document.id == doc_uuid, Document.organization_id == org_id)
+    upload = (
+        db.query(Upload)
+        .filter(Upload.id == uid, Upload.organization_id == org_id)
         .first()
     )
-    if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    if not upload:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found")
 
     file_bytes = await file.read()
     if not file_bytes:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
 
-    new_name = (file_name or "").strip() or file.filename or doc.file_name
+    new_name = (file_name or "").strip() or file.filename or upload.file_name
     if len(new_name) > 512:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="file_name too long (max 512)"
         )
     content_type = file.content_type or "application/octet-stream"
 
-    # Upload new blob first; only swap DB pointer once the new object is in R2.
     new_object_key = f"knowledge-base/{org_id}/{uuid4()}/{new_name}"
     R2StorageService().upload_file(file_bytes, new_object_key, content_type=content_type)
 
-    upload = doc.upload
-    old_path = upload.file_path if upload else None
+    old_path = upload.file_path
 
-    if upload is None:
-        # Defensive: re-create the Upload row if it's missing.
-        upload = Upload(
-            organization_id=org_id,
-            container_name=settings.R2_BUCKET_NAME,
-            file_path=new_object_key,
-            file_type=content_type,
-            size_bytes=len(file_bytes),
-            purpose="kb_document",
-            created_by_user_id=UUID(claims.user_id) if claims.user_id else None,
-            is_active=True,
-        )
-        db.add(upload)
-        db.flush()
-        doc.upload_id = upload.id
-    else:
-        upload.file_path = new_object_key
-        upload.file_type = content_type
-        upload.size_bytes = len(file_bytes)
-
-    doc.file_name = new_name
-    doc.content_type = content_type
-    doc.file_size_bytes = len(file_bytes)
-    doc.status = "processing"
+    upload.file_path = new_object_key
+    upload.file_name = new_name
+    upload.file_type = content_type
+    upload.size_bytes = len(file_bytes)
+    upload.status = "processing"
     db.commit()
-    db.refresh(doc)
+    db.refresh(upload)
 
-    # Best-effort delete of the old R2 blob (DB is the source of truth).
+    # Best-effort delete of the old R2 blob
     if old_path and old_path != new_object_key:
         try:
             R2StorageService().delete_file(old_path)
@@ -263,45 +253,42 @@ async def replace_document_file(
             pass
 
     background_tasks.add_task(
-        DocumentProcessingService().reprocess_document, doc.id, org_id
+        DocumentProcessingService().reprocess_upload, upload.id, org_id
     )
 
-    return _doc_to_payload(doc)
+    return _upload_to_payload(upload)
 
 
-@router.delete("/{document_id}", status_code=status.HTTP_200_OK)
+@router.delete("/{upload_id}", status_code=status.HTTP_200_OK)
 def delete_document(
-    document_id: str,
+    upload_id: str,
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
     org_id = _resolve_org_id(claims)
     try:
-        doc_uuid = UUID(document_id)
+        uid = UUID(upload_id)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid document_id")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid upload_id")
 
-    doc = (
-        db.query(Document)
-        .filter(Document.id == doc_uuid, Document.organization_id == org_id)
+    upload = (
+        db.query(Upload)
+        .filter(Upload.id == uid, Upload.organization_id == org_id)
         .first()
     )
-    if not doc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    if not upload:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found")
 
-    upload = doc.upload
-    file_path = upload.file_path if upload else None
+    file_path = upload.file_path
 
-    db.delete(doc)
-    if upload:
-        db.delete(upload)
+    # AgentKnowledgeBase rows cascade-delete via upload FK
+    db.delete(upload)
     db.commit()
 
     if file_path:
         try:
             R2StorageService().delete_file(file_path)
         except Exception:
-            # Storage delete is best-effort; DB state is the source of truth.
             pass
 
     return {"ok": True}
