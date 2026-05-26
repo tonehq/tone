@@ -1,6 +1,6 @@
-import { test as base, BrowserContext, expect, Page } from '@playwright/test';
+import { BrowserContext, expect, Page } from '@playwright/test';
 
-import { loginViaUI } from '../helpers/auth';
+import { test } from '../helpers/auth';
 
 // phone_number is now { type: string; no: string }[] in the API (not a plain string)
 const MOCK_AGENTS = [
@@ -77,28 +77,6 @@ const MOCK_AGENTS = [
     call_transcription: null,
   },
 ];
-
-// ── Browser lifecycle ─────────────────────────────────────────────────────────
-// Worker-scoped context = one browser window shared across all tests in this worker.
-// Login happens ONCE during worker setup against the real backend, not before every test.
-const test = base.extend<{ page: Page }, { workerContext: BrowserContext }>({
-  workerContext: [
-    async ({ browser }, provide) => {
-      const context = await browser.newContext();
-      const page = await context.newPage();
-      await loginViaUI(page);
-      await provide(context);
-      await context.close();
-    },
-    { scope: 'worker' },
-  ],
-
-  page: async ({ workerContext }, provide) => {
-    const pages = workerContext.pages();
-    const page = pages.length > 0 ? pages[0] : await workerContext.newPage();
-    await provide(page);
-  },
-});
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

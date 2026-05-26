@@ -1,8 +1,14 @@
 import axiosInstance from '@/utils/axios';
+import type { ListAgentsParams, PaginatedAgents } from '@/types/agent';
 
 export const getAgents = async () => {
   const res = await axiosInstance.get('/agent/get_all_agents');
   return res.data;
+};
+
+export const listAgents = async (params: ListAgentsParams = {}): Promise<PaginatedAgents> => {
+  const res = await axiosInstance.post('/agent/list', params);
+  return res.data as PaginatedAgents;
 };
 
 /** Fetch a single agent by id. Returns the first item from get_all_agents?agent_id=id. */
