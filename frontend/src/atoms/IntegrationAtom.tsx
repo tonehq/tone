@@ -1,7 +1,9 @@
 import {
   deleteChannel as deleteChannelApi,
+  listChannelPhoneNumbers,
   listChannels,
   upsertChannel as upsertChannelApi,
+  type ChannelPhoneNumber,
 } from '@/services/channelService';
 import type { Channel, ChannelUpsertPayload } from '@/types/integration';
 import { atom } from 'jotai';
@@ -58,10 +60,45 @@ const resetChannelsAtom = atom(null, (_get, set) => {
   set(channelsStateAtom, initialState);
 });
 
+// ─── per-channel phone numbers (used by the agent form) ────────────────────
+
+interface ChannelPhoneNumbersState {
+  byChannelId: Record<string, ChannelPhoneNumber[]>;
+  loadingChannelId: string | null;
+}
+
+const channelPhoneNumbersStateAtom = atom<ChannelPhoneNumbersState>({
+  byChannelId: {},
+  loadingChannelId: null,
+});
+
+const fetchChannelPhoneNumbersAtom = atom(
+  null,
+  async (_get, set, channelId: string): Promise<ChannelPhoneNumber[]> => {
+    set(channelPhoneNumbersStateAtom, (prev) => ({ ...prev, loadingChannelId: channelId }));
+    try {
+      const items = await listChannelPhoneNumbers(channelId);
+      set(channelPhoneNumbersStateAtom, (prev) => ({
+        byChannelId: { ...prev.byChannelId, [channelId]: items },
+        loadingChannelId: prev.loadingChannelId === channelId ? null : prev.loadingChannelId,
+      }));
+      return items;
+    } catch (err) {
+      set(channelPhoneNumbersStateAtom, (prev) => ({
+        ...prev,
+        loadingChannelId: prev.loadingChannelId === channelId ? null : prev.loadingChannelId,
+      }));
+      throw err;
+    }
+  },
+);
+
 export {
+  channelPhoneNumbersStateAtom,
   channelsAtom,
   channelsStateAtom,
   deleteChannelAtom,
+  fetchChannelPhoneNumbersAtom,
   fetchChannelsAtom,
   resetChannelsAtom,
   upsertChannelAtom,

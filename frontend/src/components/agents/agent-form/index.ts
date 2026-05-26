@@ -1,4 +1,7 @@
-export { default as GeneralTab } from './GeneralTab';
-export { default as VoiceTab } from './VoiceTab';
-export { default as CallConfigurationTab } from './CallConfigurationTab';
-export type { AgentGeneralFormData, AgentVoiceFormData, AgentCallConfigFormData } from './types';
+export { default as BasicsStep } from './steps/BasicsStep';
+export { default as PromptStep } from './steps/PromptStep';
+export { default as AiStep } from './steps/AiStep';
+export { default as VoiceStep } from './steps/VoiceStep';
+export { default as ToolsMcpStep } from './steps/ToolsMcpStep';
+export { default as KnowledgePhoneStep } from './steps/KnowledgePhoneStep';
+export { default as ReviewStep } from './steps/ReviewStep';

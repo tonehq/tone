@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/utils/cn';
+import { Loader2 } from 'lucide-react';
 import React, { memo } from 'react';
 import { Controller } from 'react-hook-form';
 
@@ -19,10 +20,6 @@ type RadioGroupFieldProps = RadioGroupFieldBaseProps | FormRadioGroupFieldProps;
 function isFormRadioGroup(props: RadioGroupFieldProps): props is FormRadioGroupFieldProps {
   return 'control' in props && props.control !== undefined;
 }
-
-const Skeleton = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('animate-pulse rounded-lg bg-muted', className)} {...props} />
-);
 
 const PlainRadioGroupField = React.forwardRef<
   React.ComponentRef<typeof RadioGroup>,
@@ -48,17 +45,25 @@ const PlainRadioGroupField = React.forwardRef<
     },
     ref,
   ) => {
+    // While options load, render the label with an inline spinner instead of
+    // a skeleton swap so the layout stays put (matches the SelectInput pattern
+    // used in the agent create/edit flow).
     if (loading) {
       return (
-        <div className="mb-2">
-          <Skeleton className="mb-2 h-4 w-24" />
-          <div className="flex flex-col gap-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center gap-2">
-                <Skeleton className="size-4 shrink-0 rounded-full" />
-                <Skeleton className="h-4 w-32" />
-              </div>
-            ))}
+        <div className="mb-2 flex flex-col gap-2">
+          {label && (
+            <Label className={cn('flex items-center gap-2', labelClassName)}>
+              {label}
+              {isRequired && <span className="ml-0.5 text-destructive">*</span>}
+              <Loader2
+                className="size-3 animate-spin text-muted-foreground"
+                aria-label="Loading options"
+              />
+            </Label>
+          )}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="size-3 animate-spin" />
+            Loading options...
           </div>
         </div>
       );

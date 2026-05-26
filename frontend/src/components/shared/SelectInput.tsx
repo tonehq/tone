@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/utils/cn';
+import { Loader2 } from 'lucide-react';
 import React, { forwardRef } from 'react';
 import { Controller } from 'react-hook-form';
 
@@ -21,10 +22,6 @@ type SelectInputProps = SelectInputBaseProps | FormSelectInputProps;
 function isFormSelect(props: SelectInputProps): props is FormSelectInputProps {
   return 'control' in props && props.control !== undefined;
 }
-
-const Skeleton = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('animate-pulse rounded-lg bg-muted', className)} {...props} />
-);
 
 const PlainSelectInput = forwardRef<HTMLButtonElement, SelectInputBaseProps>(
   (
@@ -49,14 +46,16 @@ const PlainSelectInput = forwardRef<HTMLButtonElement, SelectInputBaseProps>(
     },
     ref,
   ) => {
-    if (loading) {
-      return (
-        <div className="mb-2">
-          {label && <Skeleton className="mb-1 h-4 w-20" />}
-          <Skeleton className="h-9 w-full" />
-        </div>
-      );
-    }
+    // While the options are loading we keep the trigger mounted (no skeleton
+    // swap) so the field doesn't jump. The chevron is hidden via the
+    // aria-busy attribute selector and we overlay a spinner in its place.
+    const isLoading = loading;
+    const isEmpty = !isLoading && options.length === 0;
+    const isDisabled = disabled || isLoading;
+    // The "locked-because-the-value-is-already-decided" look (e.g. Type field
+    // pre-filled from the catalog tile). Distinct from loading: keep the
+    // chevron visible but mute the surface so the user reads it as read-only.
+    const isLockedRead = disabled && !isLoading;
 
     return (
       <div className={className}>
@@ -67,35 +66,59 @@ const PlainSelectInput = forwardRef<HTMLButtonElement, SelectInputBaseProps>(
           </Label>
         )}
 
-        <Select
-          value={value}
-          defaultValue={defaultValue}
-          onValueChange={onValueChange}
-          disabled={disabled}
-          name={name}
-        >
-          <SelectTrigger
-            ref={ref}
-            id={name}
-            size={size}
-            aria-invalid={error || undefined}
-            className={cn(
-              'w-full',
-              error &&
-                'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50',
-              triggerClassName,
-            )}
+        <div className="relative">
+          <Select
+            value={value}
+            defaultValue={defaultValue}
+            onValueChange={onValueChange}
+            disabled={isDisabled}
+            name={name}
           >
-            <SelectValue placeholder={placeholder} />
-          </SelectTrigger>
-          <SelectContent position={position}>
-            {options.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value} disabled={opt.disabled}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            <SelectTrigger
+              ref={ref}
+              id={name}
+              size={size}
+              aria-invalid={error || undefined}
+              aria-busy={isLoading || undefined}
+              className={cn(
+                'w-full',
+                !isDisabled && 'cursor-pointer',
+                isLoading &&
+                  'cursor-progress text-muted-foreground [&[aria-busy=true]_svg]:invisible',
+                isLockedRead &&
+                  'bg-muted/50 text-foreground/80 disabled:cursor-not-allowed disabled:opacity-100',
+                error &&
+                  'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50',
+                triggerClassName,
+              )}
+            >
+              {isLoading ? (
+                <span className="text-sm text-muted-foreground">Loading...</span>
+              ) : (
+                <SelectValue placeholder={placeholder} />
+              )}
+            </SelectTrigger>
+            <SelectContent position={position}>
+              {isEmpty ? (
+                <div className="px-3 py-2 text-center text-xs text-muted-foreground">
+                  No items to select
+                </div>
+              ) : (
+                options.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value} disabled={opt.disabled}>
+                    {opt.label}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+          {isLoading && (
+            <Loader2
+              aria-hidden
+              className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground"
+            />
+          )}
+        </div>
 
         {helperText && (
           <p className={cn('mt-1 text-xs', error ? 'text-destructive' : 'text-muted-foreground')}>

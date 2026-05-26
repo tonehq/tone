@@ -33,3 +33,21 @@ export const getChannelsByType = async (type: string): Promise<Channel[]> => {
   });
   return data ?? [];
 };
+
+export interface ChannelPhoneNumber {
+  id: string;
+  number: string;
+  label: string | null;
+  channel_id: string;
+  assigned_to: {
+    agent_id: string;
+    agent_name: string;
+  } | null;
+}
+
+export const listChannelPhoneNumbers = async (channelId: string): Promise<ChannelPhoneNumber[]> => {
+  const { data } = await axiosInstance.get<ChannelPhoneNumber[]>('/channel/phone_numbers', {
+    params: { channel_id: channelId },
+  });
+  return data ?? [];
+};

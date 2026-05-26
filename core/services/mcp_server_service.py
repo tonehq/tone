@@ -360,8 +360,11 @@ class McpServerService(BaseService):
         return {"message": f"MCP server detached from {len(links)} agent(s) successfully"}
 
     def get_mcp_servers_by_agent(self, agent_id) -> List[Dict[str, Any]]:
-        results = (
-            self.db.query(McpServer, AgentMcpServer.selected_tools)
+        # ``AgentMcpServer.selected_tools`` was dropped in the v2 schema
+        # revamp. We still return the field for API back-compat, but always
+        # as None until the column (or a replacement) is reintroduced.
+        rows = (
+            self.db.query(McpServer)
             .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)
             .filter(
                 AgentMcpServer.agent_id == agent_id,
@@ -371,9 +374,9 @@ class McpServerService(BaseService):
             .all()
         )
         output = []
-        for server, selected_tools in results:
+        for server in rows:
             resp = self.mcp_server_response(server)
-            resp["selected_tools"] = selected_tools
+            resp["selected_tools"] = None
             output.append(resp)
         return output
 

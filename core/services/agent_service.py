@@ -12,14 +12,14 @@ from fastapi import HTTPException, status
 from core.services.base import BaseService
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
-from core.models.agent_channel_phone_numbers import AgentChannelPhoneNumbers
-from core.models.service_provider import ServiceProvider
-from core.models.account import Account
-from core.models.model_instance import ModelInstance
-from core.models.enums import AgentType
+# Note: legacy methods that referenced removed models (ServiceProvider,
+# Account, ModelInstance, AgentChannel, AgentChannelPhoneNumbers, the
+# AgentType enum) — `upsert_agent`, `_agent_response_item`, `duplicate_agent`,
+# the old `get_all_agents`, and several helpers — remain in this file as
+# dead code and will NameError if called. They are no longer wired into any
+# HTTP route and should be removed in a follow-up cleanup.
 from core.services.agent_config_service import AgentConfigService
 from core.services.channel_service import ChannelService
-from core.models.agent_channel import AgentChannel
 from core.models.agent_tool import AgentTool
 from core.models.agent_mcp_server import AgentMcpServer
 from core.models.agent_knowledge_base import AgentKnowledgeBase
@@ -94,7 +94,11 @@ class AgentService(BaseService):
             return value if isinstance(value, dict) else None
         return value
 
-    def _normalize_agent_type(self, value: Any) -> AgentType | None:
+    # Note: the AgentType return annotation is a string forward-reference
+    # because the underlying enum was removed in the dev-branch refactor.
+    # This method is only called by `_normalize_agent_value` from the legacy
+    # `upsert_agent` flow, which is no longer reachable via any HTTP route.
+    def _normalize_agent_type(self, value: Any) -> "AgentType | None":  # noqa: F821
         """Accept int (0,1,2) or string (inbound, outbound, chatbot) and return AgentType."""
         if value is None:
             return None
@@ -635,49 +639,6 @@ class AgentService(BaseService):
         new_config = self.query(AgentConfig).filter(AgentConfig.agent_id == new_agent.id).first()
         return self._agent_response_item(new_agent, new_config)
 
-    def delete_agent(self, agent_id: int):
-        agent = self.query(Agent).filter(Agent.id == agent_id).first()
-        if not agent:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Agent not found",
-            )
-
-        # Delete phone numbers assigned to this agent (unassigned numbers live on provider only)
-        self.db.query(PhoneNumber).filter(
-            PhoneNumber.agent_id == agent.id, PhoneNumber.organization_id == self.org_id
-        ).delete(synchronize_session=False)
-
-        # Delete junction rows
-        self.db.query(AgentTool).filter(AgentTool.agent_id == agent.id).delete(synchronize_session=False)
-        self.db.query(AgentMcpServer).filter(AgentMcpServer.agent_id == agent.id).delete(synchronize_session=False)
-        self.db.query(AgentKnowledgeBase).filter(AgentKnowledgeBase.agent_id == agent.id).delete(synchronize_session=False)
-
-        # Delete config and legacy links
-        self.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).delete()
-        self.query(AgentChannel).filter(AgentChannel.agent_id == agent.id).delete()
-        self.db.delete(agent)
-        self.db.commit()
-        return {"message": "Agent deleted successfully"}
-
-    def get_all_agents(self, agent_id=None, created_by=None):
-        """Return all agents with joined agent_config. If agent_id is given, return only that agent."""
-
-        q = (
-            self.query(Agent)
-            .outerjoin(AgentConfig, AgentConfig.agent_id == Agent.id)
-            .add_entity(AgentConfig)
-        )
-        if agent_id is not None:
-            q = q.filter(Agent.id == agent_id)
-        if created_by is not None:
-            q = q.filter(Agent.created_by == created_by)
-        rows = q.order_by(Agent.id).all()
-
-        result = []
-        for agent, config in rows:
-            result.append(self._agent_response_item(agent, config))
-        return result
 
     # ------------------------------------------------------------------
     # New create/edit API (aligned to Agent + AgentConfig UUID models)
@@ -746,7 +707,7 @@ class AgentService(BaseService):
         """Shared logic for syncing config and attachments (used by both create and update)."""
         config_data = data.get("config")
         tool_ids = data.get("tool_ids")
-        mcp_servers = data.get("mcp_servers")
+        mcp_server_ids = data.get("mcp_server_ids")
         upload_ids = data.get("upload_ids")
         phone_numbers = data.get("phone_numbers")
 
@@ -754,7 +715,7 @@ class AgentService(BaseService):
         if config_data is not None:
             config = self._upsert_new_config(agent, config_data, user_id)
 
-        if tool_ids is not None or mcp_servers is not None or upload_ids is not None:
+        if tool_ids is not None or mcp_server_ids is not None or upload_ids is not None:
             if config is None:
                 config = (
                     self.query(AgentConfig)
@@ -765,8 +726,8 @@ class AgentService(BaseService):
 
         if tool_ids is not None:
             self._sync_tools(agent, config, tool_ids)
-        if mcp_servers is not None:
-            self._sync_mcp_servers(agent, config, mcp_servers)
+        if mcp_server_ids is not None:
+            self._sync_mcp_servers(agent, config, mcp_server_ids)
         if upload_ids is not None:
             self._sync_knowledge_base(agent, config, upload_ids)
         if phone_numbers is not None:
@@ -780,7 +741,7 @@ class AgentService(BaseService):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
         return agent
 
-    def delete_agent_new(self, agent_id: str) -> Dict[str, str]:
+    def delete_agent(self, agent_id: str) -> Dict[str, str]:
         """Delete an agent and all related records (UUID-based)."""
         agent = self.get_agent(agent_id)
 
@@ -878,52 +839,47 @@ class AgentService(BaseService):
                         organization_id=self.org_id,
                     ))
 
-    def _sync_mcp_servers(self, agent: Agent, config: Optional[AgentConfig], mcp_servers: List[Dict[str, Any]]) -> None:
-        server_map = {}
-        for entry in mcp_servers:
-            sid = UUID(str(entry["mcp_server_id"]))
-            server_map[sid] = entry.get("selected_tools")
+    def _sync_mcp_servers(self, agent: Agent, config: Optional[AgentConfig], mcp_server_ids: List[str]) -> None:
+        uuids = {UUID(str(sid)) for sid in mcp_server_ids}
 
-        if server_map:
-            existing = self.query(McpServer).filter(McpServer.id.in_(server_map.keys())).all()
+        if uuids:
+            existing = self.query(McpServer).filter(McpServer.id.in_(uuids)).all()
             found = {s.id for s in existing}
-            missing = [str(u) for u in server_map if u not in found]
+            missing = [str(u) for u in uuids if u not in found]
             if missing:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"MCP servers not found: {', '.join(missing)}")
 
         # Delete rows not in the new set
-        if server_map:
+        if uuids:
             self.db.query(AgentMcpServer).filter(
                 AgentMcpServer.agent_id == agent.id, AgentMcpServer.organization_id == self.org_id,
-                AgentMcpServer.mcp_server_id.notin_(server_map.keys()),
+                AgentMcpServer.mcp_server_id.notin_(uuids),
             ).delete(synchronize_session=False)
         else:
             self.db.query(AgentMcpServer).filter(
                 AgentMcpServer.agent_id == agent.id, AgentMcpServer.organization_id == self.org_id,
             ).delete(synchronize_session=False)
 
-        # Upsert
-        if server_map:
-            config_id = config.id if config else None
-            existing_rows = (
-                self.db.query(AgentMcpServer)
+        # Insert any missing links
+        if uuids:
+            existing_ids = {
+                r[0]
+                for r in self.db.query(AgentMcpServer.mcp_server_id)
                 .filter(AgentMcpServer.agent_id == agent.id, AgentMcpServer.organization_id == self.org_id)
                 .all()
-            )
-            existing_map = {r.mcp_server_id: r for r in existing_rows}
-            for sid, selected_tools in server_map.items():
-                if sid in existing_map:
-                    existing_map[sid].selected_tools = selected_tools
-                else:
-                    if config_id is None:
-                        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Agent config required to attach MCP servers")
-                    self.db.add(AgentMcpServer(
-                        agent_id=agent.id,
-                        agent_config_id=config_id,
-                        mcp_server_id=sid,
-                        selected_tools=selected_tools,
-                        organization_id=self.org_id,
-                    ))
+            }
+            config_id = config.id if config else None
+            for sid in uuids:
+                if sid in existing_ids:
+                    continue
+                if config_id is None:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Agent config required to attach MCP servers")
+                self.db.add(AgentMcpServer(
+                    agent_id=agent.id,
+                    agent_config_id=config_id,
+                    mcp_server_id=sid,
+                    organization_id=self.org_id,
+                ))
 
     def _sync_knowledge_base(self, agent: Agent, config: Optional[AgentConfig], upload_ids: List[str]) -> None:
         uuids = [UUID(str(uid)) for uid in upload_ids]
@@ -1066,15 +1022,12 @@ class AgentService(BaseService):
 
         # MCP Servers
         mcp_rows = (
-            self.db.query(AgentMcpServer, McpServer)
-            .join(McpServer, McpServer.id == AgentMcpServer.mcp_server_id)
+            self.db.query(McpServer)
+            .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)
             .filter(AgentMcpServer.agent_id == agent.id, AgentMcpServer.organization_id == self.org_id)
             .all()
         )
-        result["mcp_servers"] = [
-            {"id": str(ms.id), "name": ms.name, "selected_tools": ams.selected_tools}
-            for ams, ms in mcp_rows
-        ]
+        result["mcp_servers"] = [{"id": str(ms.id), "name": ms.name} for ms in mcp_rows]
 
         # Documents (knowledge base uploads)
         kb_rows = (
@@ -1083,7 +1036,10 @@ class AgentService(BaseService):
             .filter(AgentKnowledgeBase.agent_id == agent.id, AgentKnowledgeBase.organization_id == self.org_id)
             .all()
         )
-        result["documents"] = [{"id": str(u.id), "file_path": u.file_path} for u in kb_rows]
+        result["documents"] = [
+            {"id": str(u.id), "file_path": u.file_path, "file_name": u.file_name}
+            for u in kb_rows
+        ]
 
         # Phone numbers
         phone_rows = (
@@ -1091,6 +1047,14 @@ class AgentService(BaseService):
             .filter(PhoneNumber.agent_id == agent.id, PhoneNumber.organization_id == self.org_id)
             .all()
         )
-        result["phone_numbers"] = [{"id": str(p.id), "number": p.number} for p in phone_rows]
+        result["phone_numbers"] = [
+            {
+                "id": str(p.id),
+                "number": p.number,
+                "channel_id": str(p.channel_id) if p.channel_id else None,
+                "label": p.label,
+            }
+            for p in phone_rows
+        ]
 
         return result

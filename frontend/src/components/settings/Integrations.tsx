@@ -11,7 +11,7 @@ import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { Phone, Plug, RefreshCw, Sparkles } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const CATALOG_ANCHOR_ID = 'integrations-available-providers';
 const OAUTH_AND_API_HINT = 'Pick any provider below to add it to your workspace';
@@ -60,7 +60,16 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
     }
   }, [refreshKey, refetchOAuth]);
 
+  // Tab + "open add channel" wiring.
+  // The Channels TabsContent is force-mounted below, so ChannelGrid is alive
+  // from the initial render and its imperative ref is always populated —
+  // openAdd can fire synchronously from the catalog button regardless of
+  // which tab is showing. We still flip the active tab so the user sees the
+  // new card land in the list after they save.
+  const [activeTab, setActiveTab] = useState<'services' | 'channels'>('services');
+
   const handleAddApiKey = useCallback((providerKey: string) => {
+    setActiveTab('channels');
     channelGridRef.current?.openAdd(providerKey);
   }, []);
 
@@ -153,7 +162,11 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
               <CountChip value={totalCount} />
             </div>
 
-            <Tabs defaultValue="services" className="relative w-full">
+            <Tabs
+              value={activeTab}
+              onValueChange={(v) => setActiveTab(v as 'services' | 'channels')}
+              className="relative w-full"
+            >
               <TabsList className="mb-5 bg-background/80 shadow-sm">
                 <TabsTrigger value="services" className="gap-1.5 px-3">
                   <Plug className="size-3.5" />
@@ -171,7 +184,11 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
                 <OAuthConnectionGrid onConnectAnother={handleScrollToCatalog} />
               </TabsContent>
 
-              <TabsContent value="channels">
+              {/* forceMount keeps ChannelGrid alive on the Services tab too,
+                  so the imperative openAdd from the catalog tile always
+                  finds a live ref. Radix sets [hidden] when inactive so the
+                  user only sees it when this tab is selected. */}
+              <TabsContent value="channels" forceMount>
                 <ChannelGrid controlRef={channelGridRef} />
               </TabsContent>
             </Tabs>
