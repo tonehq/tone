@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import agentsAtom, { fetchAgentList } from '@/atoms/AgentsAtom';
+import agentsAtom, { fetchAllAgentsAtom } from '@/atoms/AgentsAtom';
 import DocumentUpload from '@/components/knowledge-base/DocumentUpload';
 import EditDocument from '@/components/knowledge-base/EditDocument';
 import { CustomButton, CustomModal, CustomTable } from '@/components/shared';
@@ -31,7 +31,7 @@ import {
   useKnowledgeBase,
 } from '@/lib/api/knowledge-base';
 import { KNOWLEDGE_BASE_STATUS_OPTIONS } from '@/lib/constants/filters';
-import type { ApiAgent } from '@/types/agent';
+import type { AgentDropdownItem } from '@/types/agent';
 import type { CustomTableColumn, CustomTableSortState } from '@/types/components';
 import type { KnowledgeBaseDocument } from '@/types/knowledgeBase';
 import { cn } from '@/utils/cn';
@@ -121,7 +121,7 @@ export default function KnowledgeBasePage() {
   const queryClient = useQueryClient();
 
   const [agentData] = useAtom(agentsAtom);
-  const [, fetchAgents] = useAtom(fetchAgentList);
+  const [, fetchAgents] = useAtom(fetchAllAgentsAtom);
   const hasFetchedAgentsRef = useRef(false);
 
   const [page, setPage] = useState(1);
@@ -165,7 +165,7 @@ export default function KnowledgeBasePage() {
 
   const agentNameMap = useMemo(() => {
     const map = new Map<string, string>();
-    agentData.agentList.forEach((a: ApiAgent) => {
+    agentData.agentList.forEach((a: AgentDropdownItem) => {
       if (a.uuid) map.set(a.uuid, a.name);
       if (a.id != null) map.set(String(a.id), a.name);
     });

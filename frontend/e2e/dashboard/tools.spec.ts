@@ -124,7 +124,9 @@ test.describe('Tools List Page', () => {
 
     test('shows the descriptive subtitle', async ({ page }) => {
       await expect(
-        page.getByText('Define external API tools your voice agents can call during conversations.'),
+        page.getByText(
+          'Define external API tools your voice agents can call during conversations.',
+        ),
       ).toBeVisible();
     });
 
@@ -164,7 +166,9 @@ test.describe('Tools List Page', () => {
   // ── 2. Table Columns ─────────────────────────────────────────────────────
   test.describe('Table Columns', () => {
     test('shows all column headers', async ({ page }) => {
-      await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible({ timeout: 5_000 });
+      await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible({
+        timeout: 5_000,
+      });
       await expect(page.getByRole('columnheader', { name: 'Type' })).toBeVisible();
       await expect(page.getByRole('columnheader', { name: 'Method' })).toBeVisible();
       await expect(page.getByRole('columnheader', { name: 'Endpoint URL' })).toBeVisible();
@@ -194,12 +198,12 @@ test.describe('Tools List Page', () => {
     });
 
     test('renders the endpoint URL for custom tools', async ({ page }) => {
-      await expect(
-        page.getByText('https://api.example.com/inventory/{product_id}'),
-      ).toBeVisible();
+      await expect(page.getByText('https://api.example.com/inventory/{product_id}')).toBeVisible();
     });
 
-    test('renders auth type with underscore replaced by space and capitalized', async ({ page }) => {
+    test('renders auth type with underscore replaced by space and capitalized', async ({
+      page,
+    }) => {
       const row = page.locator('tbody tr').filter({ hasText: 'check_inventory' });
       // 'api_key' → 'api key' (rendered with capitalize CSS class)
       await expect(row.getByText('api key')).toBeVisible({ timeout: 5_000 });
@@ -213,7 +217,9 @@ test.describe('Tools List Page', () => {
 
     test('renders parameter count with singular/plural label', async ({ page }) => {
       const customRow = page.locator('tbody tr').filter({ hasText: 'check_inventory' });
-      await expect(customRow.getByText('2 params', { exact: true })).toBeVisible({ timeout: 5_000 });
+      await expect(customRow.getByText('2 params', { exact: true })).toBeVisible({
+        timeout: 5_000,
+      });
 
       const calRow = page.locator('tbody tr').filter({ hasText: 'create_calendar_event' });
       await expect(calRow.getByText('1 param', { exact: true })).toBeVisible();
@@ -239,7 +245,10 @@ test.describe('Tools List Page', () => {
   // ── 3. Navigation ────────────────────────────────────────────────────────
   test.describe('Navigation', () => {
     test('navigates to /tools/create when clicking Create New Tool', async ({ page }) => {
-      await page.getByRole('button', { name: /create new tool/i }).first().click();
+      await page
+        .getByRole('button', { name: /create new tool/i })
+        .first()
+        .click();
       await expect(page).toHaveURL(/\/tools\/create$/, { timeout: 10_000 });
     });
 
@@ -447,7 +456,9 @@ test.describe('Tools List Page', () => {
 
     test('selects a single row and shows the selection bar with count', async ({ page }) => {
       await page.getByRole('checkbox', { name: /Select check_inventory/i }).click();
-      await expect(page.getByText('tool selected', { exact: true })).toBeVisible({ timeout: 3_000 });
+      await expect(page.getByText('tool selected', { exact: true })).toBeVisible({
+        timeout: 3_000,
+      });
     });
 
     test('selects all rows and shows plural label "tools selected"', async ({ page }) => {
@@ -534,9 +545,11 @@ test.describe('Tools List Page', () => {
         .click();
       await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
 
-      await expect(page.locator('[data-sonner-toast]', { hasText: '3 tools deleted' })).toBeVisible({
-        timeout: 5_000,
-      });
+      await expect(page.locator('[data-sonner-toast]', { hasText: '3 tools deleted' })).toBeVisible(
+        {
+          timeout: 5_000,
+        },
+      );
     });
 
     test('shows error toast when all bulk deletes fail', async ({ page }) => {
@@ -587,9 +600,9 @@ test.describe('Tools List Page', () => {
         .click();
       await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
 
-      await expect(
-        page.locator('[data-sonner-toast]', { hasText: 'Partial delete' }),
-      ).toBeVisible({ timeout: 5_000 });
+      await expect(page.locator('[data-sonner-toast]', { hasText: 'Partial delete' })).toBeVisible({
+        timeout: 5_000,
+      });
       await expect(
         page.locator('[data-sonner-toast]', {
           hasText: /\d+ of \d+ deleted\. \d+ failed — refresh and try again\./,

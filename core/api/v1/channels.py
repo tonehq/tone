@@ -89,18 +89,8 @@ def delete_channel(
     return _svc(claims, db).delete_channel(channel_id)
 
 
-@router.get("/phone_numbers")
-def list_phone_numbers(
-    channel_id: str = Query(..., description="The channel ID to fetch phone numbers for"),
-    claims: JWTClaims = Depends(require_org_member),
-    db: Session = Depends(get_db),
-):
-    """List phone numbers assigned to agents for a given channel.
-
-    Returns all phone numbers stored in DB for this channel,
-    with assignment status (which agent they belong to).
-    """
-    org_id = require_org_id(claims.org_id)
+def list_phone_numbers_for_channel(db: Session, org_id: UUID, channel_id: str) -> List[Dict[str, Any]]:
+    """Shared listing pipeline for /channel/phone_numbers (core + EE)."""
     try:
         ch_uuid = UUID(channel_id)
     except ValueError:
@@ -127,3 +117,14 @@ def list_phone_numbers(
         }
         for pn, agent_name in rows
     ]
+
+
+@router.get("/phone_numbers")
+def list_phone_numbers(
+    channel_id: str = Query(..., description="The channel ID to fetch phone numbers for"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """List phone numbers stored in DB for a given channel, with agent assignment status."""
+    org_id = require_org_id(claims.org_id)
+    return list_phone_numbers_for_channel(db, org_id, channel_id)

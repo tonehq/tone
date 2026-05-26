@@ -124,7 +124,8 @@ async def upload_document(
     db.add(upload)
     db.flush()
 
-    # Link upload to agent via AgentKnowledgeBase
+    # Link upload to agent via AgentKnowledgeBase. AgentKnowledgeBase requires
+    # a config row, so refuse the upload rather than silently orphan it.
     from core.models.agent_config import AgentConfig
     config = (
         db.query(AgentConfig)
@@ -132,14 +133,19 @@ async def upload_document(
         .order_by(AgentConfig.version.desc())
         .first()
     )
-    if config:
-        kb_link = AgentKnowledgeBase(
+    if not config:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Agent has no configuration yet. Save the agent before uploading knowledge base documents.",
+        )
+    db.add(
+        AgentKnowledgeBase(
             organization_id=org_id,
             agent_id=agent_uuid,
             upload_id=upload.id,
             agent_config_id=config.id,
         )
-        db.add(kb_link)
+    )
 
     db.commit()
     db.refresh(upload)

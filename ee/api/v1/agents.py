@@ -63,14 +63,14 @@ def get_agent(
 
 @router.put("/update_agent")
 def update_agent(
+    body: UpdateAgentRequest,
     agent_id: str = Query(..., description="The agent ID to update"),
-    body: UpdateAgentRequest = None,
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
     svc = _get_service(claims, db)
     user_id = UUID(claims.user_id) if claims.user_id else None
-    data = body.model_dump(exclude_none=True) if body else {}
+    data = body.model_dump(exclude_unset=True)
     agent = svc.update_agent(agent_id, data, user_id)
     return svc.agent_response(agent)
 
@@ -82,7 +82,7 @@ def delete_agent(
     db: Session = Depends(get_db),
 ):
     svc = _get_service(claims, db)
-    return svc.delete_agent_new(agent_id)
+    return svc.delete_agent(agent_id)
 
 
 @router.post("/list")

@@ -9,7 +9,7 @@ import SearchBar from '@/components/shared/SearchBar';
 import SelectInput from '@/components/shared/SelectInput';
 import { Badge } from '@/components/ui/badge';
 import { AGENT_TYPE_OPTIONS } from '@/lib/constants/filters';
-import type { ApiAgent, ListAgentsParams } from '@/types/agent';
+import type { AgentDirection, ApiAgent, ListAgentsParams } from '@/types/agent';
 import type { CustomTableColumn, CustomTableSortState } from '@/types/components';
 import { formatDate } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
@@ -40,7 +40,7 @@ const AgentListPage: React.FC = () => {
       page_size: pageSize,
       search: search.trim() || undefined,
       sort_by: sortBy,
-      agent_type: agentTypeFilter === 'all' ? undefined : agentTypeFilter,
+      agent_type: agentTypeFilter === 'all' ? undefined : (agentTypeFilter as AgentDirection),
     }),
     [page, pageSize, search, sortBy, agentTypeFilter],
   );
@@ -70,7 +70,7 @@ const AgentListPage: React.FC = () => {
   );
 
   const handleDelete = useCallback(
-    async (agentId: number) => {
+    async (agentId: string) => {
       try {
         await removeAgent(agentId);
         showToast.success('Agent deleted successfully');
