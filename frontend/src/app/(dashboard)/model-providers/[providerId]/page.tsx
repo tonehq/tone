@@ -1,5 +1,9 @@
-import ServiceProviderDetailPage from '@/components/service-providers/ServiceProviderDetailPage';
+import { redirect } from 'next/navigation';
 
-const Page = () => <ServiceProviderDetailPage />;
+// Detail pages are now scoped to (provider, service_type). Land on the
+// listing instead of trying to guess which kind the user meant.
+const Page = () => {
+  redirect('/model-providers');
+};
 
 export default Page;

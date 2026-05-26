@@ -29,7 +29,13 @@ export interface ServiceUpsertPayload {
   description?: string;
   is_default?: boolean;
   is_active?: boolean;
+  /** Plaintext API key. Mutually exclusive with `source_key_id` on create. */
   api_key?: string;
+  /**
+   * ID of an existing ApiKey for the same provider whose encrypted credential
+   * should be copied into the new row. Mutually exclusive with `api_key`.
+   */
+  source_key_id?: string;
   config?: Record<string, unknown>;
 }
 
@@ -41,10 +47,16 @@ export interface ProviderCatalogItem {
   kinds: ServiceKind[];
 }
 
-/** Aggregated "card" view — one row per provider the org has ≥1 ApiKey for. */
+/**
+ * Aggregated "card" view — one row per (provider, service_type) the org has
+ * ≥1 ApiKey for. A Deepgram STT key and a Deepgram TTS key therefore surface
+ * as two separate cards. `id` is the composite `${providerId}:${serviceType}`
+ * so React lists have a stable key.
+ */
 export interface ProviderUsage {
+  id: string;
   provider: ServiceProviderRef;
-  kinds: ServiceKind[];
+  service_type: ServiceKind;
   api_key_count: number;
   active_api_key_count: number;
   default_api_key: {
@@ -52,7 +64,6 @@ export interface ProviderUsage {
     label: string | null;
     service_type: ServiceKind;
   } | null;
-  service_types: ServiceKind[];
   model_count: number;
   last_used_at: number | null;
 }

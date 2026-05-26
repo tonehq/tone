@@ -44,8 +44,16 @@ const MODELS_PAGE_SIZE = 20;
 
 export default function ServiceProviderDetailPage() {
   const router = useRouter();
-  const params = useParams<{ providerId: string }>();
+  const params = useParams<{ providerId: string; serviceType?: string }>();
   const providerId = params?.providerId;
+  // The detail page is scoped to one (provider, service_type). The route is
+  // /model-providers/{providerId}/{serviceType}; the older /{providerId} URL
+  // now redirects to the listing.
+  const rawServiceType = params?.serviceType;
+  const serviceType: ServiceKind | null =
+    rawServiceType === 'llm' || rawServiceType === 'stt' || rawServiceType === 'tts'
+      ? rawServiceType
+      : null;
 
   const [keysState] = useAtom(providerKeysAtom);
   const [modelsState] = useAtom(providerModelsAtom);
@@ -117,9 +125,10 @@ export default function ServiceProviderDetailPage() {
         page_size: KEYS_PAGE_SIZE,
         search: keysSearch || undefined,
         sort_by: keysSort,
+        service_type: serviceType ?? undefined,
       },
     });
-  }, [providerId, keysPage, keysSearch, keysSort, fetchKeys]);
+  }, [providerId, keysPage, keysSearch, keysSort, serviceType, fetchKeys]);
 
   const reloadModels = useCallback(() => {
     if (!providerId) return Promise.resolve();
@@ -130,9 +139,10 @@ export default function ServiceProviderDetailPage() {
         page_size: MODELS_PAGE_SIZE,
         search: modelsSearch || undefined,
         sort_by: modelsSort,
+        service_type: serviceType ?? undefined,
       },
     });
-  }, [providerId, modelsPage, modelsSearch, modelsSort, fetchModels]);
+  }, [providerId, modelsPage, modelsSearch, modelsSort, serviceType, fetchModels]);
 
   useEffect(() => {
     reloadKeys().catch(handleApiError);
@@ -515,12 +525,24 @@ export default function ServiceProviderDetailPage() {
       <header className="flex shrink-0 items-center gap-3">
         <ProviderLogo
           providerName={provider?.slug}
-          serviceType={provider?.kinds[0] ?? ''}
+          serviceType={serviceType ?? provider?.kinds[0] ?? ''}
           className="size-10"
         />
         <div className="min-w-0 flex-1">
-          <h1 className="font-display text-2xl font-semibold leading-tight tracking-tight text-foreground">
-            {providerLoading ? 'Loading…' : (provider?.display_name ?? 'Unknown provider')}
+          <h1 className="flex items-center gap-2 font-display text-2xl font-semibold leading-tight tracking-tight text-foreground">
+            <span className="truncate">
+              {providerLoading ? 'Loading…' : (provider?.display_name ?? 'Unknown provider')}
+            </span>
+            {serviceType && (
+              <Badge
+                className={cn(
+                  'px-2 py-0 text-[10px] font-semibold uppercase tracking-wider',
+                  TYPE_BADGE_STYLES[serviceType] ?? '',
+                )}
+              >
+                {serviceType}
+              </Badge>
+            )}
           </h1>
           {provider?.description && (
             <p className="truncate text-xs text-muted-foreground">{provider.description}</p>
@@ -684,7 +706,7 @@ export default function ServiceProviderDetailPage() {
       <ApiKeyCreateDrawer
         open={createOpen}
         lockedProviderId={providerId}
-        defaultServiceType={(provider?.kinds[0] as ServiceKind) ?? null}
+        defaultServiceType={serviceType ?? (provider?.kinds[0] as ServiceKind) ?? null}
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreateKey}
         isPending={isSaving}
@@ -719,8 +741,10 @@ export default function ServiceProviderDetailPage() {
       <ModelFormDrawer
         open={modelDrawerOpen}
         editing={editingModel}
-        defaultKind={(provider?.kinds[0] as ServiceKind) ?? null}
-        allowedKinds={(provider?.kinds as ServiceKind[]) ?? undefined}
+        defaultKind={serviceType ?? (provider?.kinds[0] as ServiceKind) ?? null}
+        allowedKinds={
+          serviceType ? [serviceType] : ((provider?.kinds as ServiceKind[]) ?? undefined)
+        }
         onClose={() => {
           setModelDrawerOpen(false);
           setEditingModel(null);

@@ -13,6 +13,7 @@ import servicesAtom, {
 } from '@/atoms/ServicesAtom';
 import { CustomButton, CustomModal, SearchBar, SelectInput } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
+import { listProviderKeys } from '@/services/servicesService';
 import type { ProviderUsage, Service, ServiceKind, ServiceUpsertPayload } from '@/types/service';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
@@ -42,7 +43,9 @@ export default function ServiceProvidersPage() {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | ServiceKind>('all');
   const [createOpen, setCreateOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProviderUsage | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -104,7 +107,7 @@ export default function ServiceProvidersPage() {
 
   const handleSelect = useCallback(
     (u: ProviderUsage) => {
-      router.push(`/model-providers/${u.provider.id}`);
+      router.push(`/model-providers/${u.provider.id}/${u.service_type}`);
     },
     [router],
   );
@@ -115,20 +118,45 @@ export default function ServiceProvidersPage() {
 
   const handleEdit = useCallback(
     async (u: ProviderUsage) => {
-      const keyId = u.default_api_key?.id;
-      if (!keyId) {
-        router.push(`/model-providers/${u.provider.id}`);
-        return;
-      }
+      // Open the drawer immediately with a loader, then resolve the key.
+      // Prefer the default key for this (provider, kind); fall back to the
+      // most recently updated key of that kind so the pencil always opens an
+      // editor instead of bouncing the user to the detail page.
+      setEditingService(null);
+      setEditOpen(true);
+      setEditLoading(true);
       try {
+        let keyId = u.default_api_key?.id;
+        if (!keyId) {
+          const { rows } = await listProviderKeys(u.provider.id, {
+            page: 1,
+            page_size: 1,
+            service_type: u.service_type,
+            sort_by: '-updated_at',
+          });
+          keyId = rows[0]?.id;
+        }
+        if (!keyId) {
+          setEditOpen(false);
+          router.push(`/model-providers/${u.provider.id}/${u.service_type}`);
+          return;
+        }
         const svc = await fetchService(keyId);
         setEditingService(svc);
       } catch (err) {
+        setEditOpen(false);
         handleApiError(err);
+      } finally {
+        setEditLoading(false);
       }
     },
     [fetchService, router],
   );
+
+  const handleEditClose = useCallback(() => {
+    setEditOpen(false);
+    setEditingService(null);
+  }, []);
 
   const handleDeleteRequest = useCallback((u: ProviderUsage) => {
     setDeleteTarget(u);
@@ -138,13 +166,20 @@ export default function ServiceProvidersPage() {
     if (!deleteTarget) return;
     setIsDeleting(true);
     try {
-      const { deleted } = await deleteProvider(deleteTarget.provider.id);
+      const { deleted } = await deleteProvider({
+        providerId: deleteTarget.provider.id,
+        serviceType: deleteTarget.service_type,
+      });
+      // Keep the modal open with the Delete button still in its loading state
+      // until the listing refresh lands, so the user doesn't see a stale card
+      // briefly remain after dismissing the dialog.
+      await loadInitial();
+      const typeLabel = deleteTarget.service_type.toUpperCase();
       showToast.success(
         `Removed ${deleted} key${deleted === 1 ? '' : 's'}`,
-        `All keys for ${deleteTarget.provider.display_name} have been deleted.`,
+        `${deleteTarget.provider.display_name} · ${typeLabel} keys have been deleted.`,
       );
       setDeleteTarget(null);
-      await loadInitial();
     } catch (err) {
       handleApiError(err);
     } finally {
@@ -157,9 +192,11 @@ export default function ServiceProvidersPage() {
       setIsSaving(true);
       try {
         await upsertService({ values: payload });
+        // Wait for the listing refresh before dismissing the drawer so the
+        // Create button keeps its loading state until the new card is in view.
+        await loadInitial();
         showToast.success('Provider added');
         setCreateOpen(false);
-        await loadInitial();
       } catch (err) {
         handleApiError(err);
       } finally {
@@ -174,9 +211,12 @@ export default function ServiceProvidersPage() {
       setIsSaving(true);
       try {
         await upsertService({ id, values: payload as ServiceUpsertPayload });
-        showToast.success('Provider updated');
-        setEditingService(null);
+        // Mirror handleCreate / handleDeleteConfirm: keep the Save button in
+        // its loading state until the refreshed list lands.
         await loadInitial();
+        showToast.success('Provider updated');
+        setEditOpen(false);
+        setEditingService(null);
       } catch (err) {
         handleApiError(err);
       } finally {
@@ -262,11 +302,15 @@ export default function ServiceProvidersPage() {
         isPending={isSaving}
       />
 
-      {/* edit drawer */}
+      {/* edit drawer — opened from the listing where each card is a provider
+          connection, so the copy mirrors the "Add provider" button. */}
       <ApiKeyEditDrawer
-        open={!!editingService}
+        open={editOpen}
         editing={editingService}
-        onClose={() => setEditingService(null)}
+        loading={editLoading}
+        title="Edit provider"
+        description="Update this provider connection. To rotate the secret, delete this key and add a new one."
+        onClose={handleEditClose}
         onSubmit={handleUpdate}
         isPending={isSaving}
       />
@@ -278,7 +322,7 @@ export default function ServiceProvidersPage() {
         title="Delete provider keys?"
         description={
           deleteTarget
-            ? `This will permanently delete ${deleteTarget.api_key_count} key${
+            ? `This will permanently delete ${deleteTarget.api_key_count} ${deleteTarget.service_type.toUpperCase()} key${
                 deleteTarget.api_key_count === 1 ? '' : 's'
               } for ${deleteTarget.provider.display_name}. Agents using these credentials will stop working.`
             : ''

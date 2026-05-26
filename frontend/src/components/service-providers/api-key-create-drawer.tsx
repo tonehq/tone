@@ -6,12 +6,18 @@ import {
   CheckboxField,
   CustomButton,
   CustomDrawer,
+  RadioGroupField,
   SelectInput,
   TextAreaField,
   TextInput,
 } from '@/components/shared';
-import { listProviderCatalog } from '@/services/servicesService';
-import type { ProviderCatalogItem, ServiceKind, ServiceUpsertPayload } from '@/types/service';
+import { listProviderCatalog, listProviderKeys } from '@/services/servicesService';
+import type {
+  ProviderCatalogItem,
+  Service,
+  ServiceKind,
+  ServiceUpsertPayload,
+} from '@/types/service';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
@@ -31,6 +37,19 @@ const SERVICE_TYPE_OPTIONS = [
   { value: 'stt', label: 'Speech-to-Text' },
   { value: 'tts', label: 'Text-to-Speech' },
 ];
+
+const SERVICE_TYPE_LABEL: Record<ServiceKind, string> = {
+  llm: 'LLM',
+  stt: 'STT',
+  tts: 'TTS',
+};
+
+const KEY_SOURCE_OPTIONS = [
+  { value: 'new', label: 'Enter a new key' },
+  { value: 'reuse', label: 'Use an existing key' },
+];
+
+type KeySource = 'new' | 'reuse';
 
 interface FormState {
   service_type: ServiceKind | '';
@@ -71,9 +90,20 @@ export default function ApiKeyCreateDrawer({
   const [providers, setProviders] = useState<ProviderCatalogItem[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
 
+  // Existing keys for the currently selected provider — drives the
+  // "Use an existing key" option so the user doesn't have to retype a
+  // credential they've already stored (e.g. Deepgram STT → TTS).
+  const [existingKeys, setExistingKeys] = useState<Service[]>([]);
+  const [existingKeysLoading, setExistingKeysLoading] = useState(false);
+  const [keySource, setKeySource] = useState<KeySource>('new');
+  const [sourceKeyId, setSourceKeyId] = useState('');
+
   useEffect(() => {
     if (open) {
       setForm(initialFormState(lockedProviderId, defaultServiceType));
+      setKeySource('new');
+      setSourceKeyId('');
+      setExistingKeys([]);
     }
   }, [open, lockedProviderId, defaultServiceType]);
 
@@ -96,12 +126,61 @@ export default function ApiKeyCreateDrawer({
     };
   }, [open]);
 
+  // Fetch existing keys whenever the selected provider changes. Skip when the
+  // drawer is closed or no provider has been picked yet.
+  useEffect(() => {
+    // Reset selection when the provider changes so we don't carry a key id
+    // that belongs to the previous provider into the new options.
+    setSourceKeyId('');
+    if (!open || !form.provider_id) {
+      setExistingKeys([]);
+      return;
+    }
+    let cancelled = false;
+    setExistingKeysLoading(true);
+    listProviderKeys(form.provider_id, { page: 1, page_size: 100, status: 'active' })
+      .then((res) => {
+        if (cancelled) return;
+        setExistingKeys(res.rows);
+      })
+      .catch((err) => {
+        if (!cancelled) handleApiError(err);
+      })
+      .finally(() => {
+        if (!cancelled) setExistingKeysLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, form.provider_id]);
+
+  // When existing keys arrive, pre-select the default (or first) so the
+  // "reuse" option works on first click without an extra interaction.
+  useEffect(() => {
+    if (existingKeys.length === 0) {
+      setSourceKeyId('');
+      if (keySource === 'reuse') setKeySource('new');
+      return;
+    }
+    const preferred = existingKeys.find((k) => k.is_default) ?? existingKeys[0];
+    setSourceKeyId((prev) => prev || preferred.id);
+  }, [existingKeys, keySource]);
+
   const providerOptions = useMemo(() => {
     const filtered = form.service_type
       ? providers.filter((p) => p.kinds.includes(form.service_type as ServiceKind))
       : providers;
     return filtered.map((p) => ({ value: p.id, label: p.display_name }));
   }, [providers, form.service_type]);
+
+  const existingKeyOptions = useMemo(
+    () =>
+      existingKeys.map((k) => ({
+        value: k.id,
+        label: `${k.label || 'Unnamed key'} · ${SERVICE_TYPE_LABEL[k.service_type]}`,
+      })),
+    [existingKeys],
+  );
 
   const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -119,11 +198,19 @@ export default function ApiKeyCreateDrawer({
   };
 
   const trimmedKey = form.api_key.trim();
-  const canSubmit = form.service_type !== '' && form.provider_id !== '' && trimmedKey.length > 0;
+  const canSubmit =
+    form.service_type !== '' &&
+    form.provider_id !== '' &&
+    (keySource === 'new' ? trimmedKey.length > 0 : sourceKeyId !== '');
 
   const handleConfirm = async () => {
     if (!canSubmit) {
-      showToast.error('Required fields missing', 'Provider, service type, and key are required.');
+      showToast.error(
+        'Required fields missing',
+        keySource === 'reuse'
+          ? 'Provider, service type, and an existing key are required.'
+          : 'Provider, service type, and key are required.',
+      );
       return;
     }
 
@@ -134,7 +221,7 @@ export default function ApiKeyCreateDrawer({
       description: form.description.trim() || undefined,
       is_default: form.is_default,
       is_active: form.is_active,
-      api_key: trimmedKey,
+      ...(keySource === 'new' ? { api_key: trimmedKey } : { source_key_id: sourceKeyId }),
     };
 
     try {
@@ -153,12 +240,23 @@ export default function ApiKeyCreateDrawer({
         ? 'No providers support this type'
         : 'Select a provider';
 
+  const showKeySourceToggle = form.provider_id !== '' && existingKeys.length > 0;
+
+  // When the drawer is opened from the listing page the user is adding a new
+  // provider connection; from the detail page they're adding another key to
+  // an already-connected provider, so the copy differs.
+  const isAddingProvider = !lockedProviderId;
+  const drawerTitle = isAddingProvider ? 'Add provider' : 'Add API key';
+  const drawerDescription = isAddingProvider
+    ? 'Connect a model provider with an API key so your agents can use it.'
+    : 'Add another API key for this provider.';
+
   return (
     <CustomDrawer
       open={open}
       onClose={onClose}
-      title="Add API key"
-      description="Connect a provider with an API key so your agents can use it."
+      title={drawerTitle}
+      description={drawerDescription}
       width="sm:max-w-lg"
       footer={
         <div className="flex justify-end gap-2">
@@ -212,15 +310,38 @@ export default function ApiKeyCreateDrawer({
           rows={2}
           placeholder="Optional notes for your team."
         />
-        <TextInput
-          name="api_key"
-          label="API key"
-          type="password"
-          value={form.api_key}
-          onChange={(e) => update('api_key', e.target.value)}
-          placeholder="sk-..."
-          isRequired
-        />
+        {showKeySourceToggle && (
+          <RadioGroupField
+            name="key_source"
+            label="API key"
+            options={KEY_SOURCE_OPTIONS}
+            value={keySource}
+            onValueChange={(v) => setKeySource(v as KeySource)}
+            orientation="horizontal"
+          />
+        )}
+        {keySource === 'reuse' && showKeySourceToggle ? (
+          <SelectInput
+            name="source_key_id"
+            label="Existing key"
+            options={existingKeyOptions}
+            value={sourceKeyId}
+            onValueChange={setSourceKeyId}
+            placeholder="Select an existing key"
+            loading={existingKeysLoading}
+            isRequired
+          />
+        ) : (
+          <TextInput
+            name="api_key"
+            label={showKeySourceToggle ? 'New API key' : 'API key'}
+            type="password"
+            value={form.api_key}
+            onChange={(e) => update('api_key', e.target.value)}
+            placeholder="sk-..."
+            isRequired
+          />
+        )}
         <div className="flex flex-wrap items-center gap-6">
           <CheckboxField
             id="is_active"
