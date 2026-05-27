@@ -54,10 +54,7 @@ export async function deleteAgentViaUI(
     const deleteButton = page.getByRole('button', { name: /^delete$/i });
     if (!(await deleteButton.isVisible().catch(() => false))) return;
     await deleteButton.click();
-    await page
-      .getByRole('dialog')
-      .getByRole('button', { name: 'Delete', exact: true })
-      .click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
     await page.waitForURL(/\/agents(?:\?|$|\/)/, { timeout: 10_000 });
   } catch {
     expect.soft(true, `Failed to clean up agent ${options.id}`).toBe(true);
@@ -72,10 +69,7 @@ export async function openEditAgent(
   if (options.nameContains) {
     await expect(page.getByText(options.nameContains).first()).toBeVisible({ timeout: 15_000 });
   } else {
-    await page
-      .locator('input[name="name"]')
-      .first()
-      .waitFor({ state: 'visible', timeout: 15_000 });
+    await page.locator('input[name="name"]').first().waitFor({ state: 'visible', timeout: 15_000 });
   }
 }
 
@@ -133,6 +127,9 @@ export interface FillReport {
   isActiveToggled: boolean;
   systemPrompt: boolean;
   tokenLimit: boolean;
+  temperature: boolean;
+  maxTokens: boolean;
+  voiceSpeed: boolean;
   llmProvider: string | null;
   llmModel: string | null;
   voiceLanguage: string | null;
@@ -141,10 +138,30 @@ export interface FillReport {
   voiceVoice: string | null;
   sttProvider: string | null;
   sttModel: string | null;
+  toolsPickedCount: number;
   toolPicked: string | null;
   mcpAttached: string | null;
   kbAttached: string | null;
   phoneAssigned: string | null;
+}
+
+/**
+ * Move a Radix slider to a deterministic value by pressing Home (jump to min)
+ * then ArrowRight `steps` times. Use when the slider's current value is
+ * unknown (e.g. fresh form). Returns true if a slider thumb was found.
+ */
+export async function setSliderByKeyboard(
+  page: Page,
+  slider: ReturnType<Page['locator']>,
+  steps: number,
+): Promise<boolean> {
+  if (!(await slider.isVisible({ timeout: 2_000 }).catch(() => false))) return false;
+  await slider.focus().catch(() => undefined);
+  await page.keyboard.press('Home');
+  for (let i = 0; i < steps; i += 1) {
+    await page.keyboard.press('ArrowRight');
+  }
+  return true;
 }
 
 export async function fillBasicsStep(
@@ -155,7 +172,9 @@ export async function fillBasicsStep(
     endCallMessage?: string;
     toggleActive?: boolean;
   },
-): Promise<Pick<FillReport, 'description' | 'firstMessage' | 'endCallMessage' | 'isActiveToggled'>> {
+): Promise<
+  Pick<FillReport, 'description' | 'firstMessage' | 'endCallMessage' | 'isActiveToggled'>
+> {
   await goToStep(page, 'basics');
   const report = {
     description: false,
@@ -193,10 +212,10 @@ export async function fillBasicsStep(
 
 export async function fillPromptStep(
   page: Page,
-  values: { systemPrompt?: string; tokenLimit?: number },
-): Promise<Pick<FillReport, 'systemPrompt' | 'tokenLimit'>> {
+  values: { systemPrompt?: string },
+): Promise<Pick<FillReport, 'systemPrompt'>> {
   await goToStep(page, 'prompt');
-  const report = { systemPrompt: false, tokenLimit: false };
+  const report = { systemPrompt: false };
   if (values.systemPrompt !== undefined) {
     const promptArea = page.locator('textarea').first();
     if (await promptArea.isVisible().catch(() => false)) {
@@ -204,29 +223,25 @@ export async function fillPromptStep(
       report.systemPrompt = true;
     }
   }
-  if (values.tokenLimit !== undefined) {
-    const tokenInput = page
-      .locator('input[name*="conversation_history_token_limit"], input[type="number"]')
-      .first();
-    if (await tokenInput.isVisible().catch(() => false)) {
-      await tokenInput.fill(String(values.tokenLimit));
-      report.tokenLimit = true;
-    }
-  }
   return report;
 }
 
 export async function fillAiStep(
   page: Page,
-): Promise<Pick<FillReport, 'llmProvider' | 'llmModel'>> {
+  values?: { maxTokens?: number; tokenLimit?: number; temperatureSteps?: number },
+): Promise<
+  Pick<FillReport, 'llmProvider' | 'llmModel' | 'temperature' | 'maxTokens' | 'tokenLimit'>
+> {
   await goToStep(page, 'ai');
   const providerTrigger = page
-    .locator('button[id="config.llm_settings.provider_id"], button:has-text("Select an LLM provider")')
+    .locator(
+      'button[id="config.llm_settings.provider_id"], button:has-text("Select an LLM provider")',
+    )
     .first();
   let llmProvider: string | null = null;
   if (await providerTrigger.isVisible({ timeout: 3_000 }).catch(() => false)) {
     llmProvider = await pickFirstSelectOption(page, providerTrigger);
-    // Give the dependent Model dropdown a moment to load.
+    // Give the dependent Model dropdown + LLM-settings panel a moment to mount.
     await page.waitForTimeout(500);
   } else {
     console.log('[fillAiStep] LLM provider trigger not found');
@@ -238,7 +253,33 @@ export async function fillAiStep(
   if (await modelTrigger.isVisible({ timeout: 3_000 }).catch(() => false)) {
     llmModel = await pickFirstSelectOption(page, modelTrigger);
   }
-  return { llmProvider, llmModel };
+  // Temperature slider is only visible once a provider is picked.
+  let temperature = false;
+  if (llmProvider) {
+    const tempSlider = page.locator('[role="slider"]').first();
+    temperature = await setSliderByKeyboard(page, tempSlider, values?.temperatureSteps ?? 7);
+  }
+  // Max tokens — number input next to "Max tokens per response" label.
+  let maxTokens = false;
+  if (values?.maxTokens !== undefined) {
+    const maxTokensInput = page.locator('input[name="config.llm_settings.max_tokens"]').first();
+    if (await maxTokensInput.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await maxTokensInput.fill(String(values.maxTokens));
+      maxTokens = true;
+    }
+  }
+  // Conversation history token limit lives on this step (not Prompt).
+  let tokenLimit = false;
+  if (values?.tokenLimit !== undefined) {
+    const tokenInput = page
+      .locator('input[name="config.conversation_history_token_limit"]')
+      .first();
+    if (await tokenInput.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await tokenInput.fill(String(values.tokenLimit));
+      tokenLimit = true;
+    }
+  }
+  return { llmProvider, llmModel, temperature, maxTokens, tokenLimit };
 }
 
 export async function fillVoiceStep(
@@ -246,7 +287,13 @@ export async function fillVoiceStep(
 ): Promise<
   Pick<
     FillReport,
-    'voiceLanguage' | 'voiceProvider' | 'voiceModel' | 'voiceVoice' | 'sttProvider' | 'sttModel'
+    | 'voiceLanguage'
+    | 'voiceProvider'
+    | 'voiceModel'
+    | 'voiceVoice'
+    | 'sttProvider'
+    | 'sttModel'
+    | 'voiceSpeed'
   >
 > {
   await goToStep(page, 'voice');
@@ -289,12 +336,25 @@ export async function fillVoiceStep(
   if (await sttModelTrigger.isVisible({ timeout: 3_000 }).catch(() => false)) {
     sttModel = await pickFirstSelectOption(page, sttModelTrigger);
   }
-  return { voiceLanguage, voiceProvider, voiceModel, voiceVoice, sttProvider, sttModel };
+  // Voice speed slider only appears once a voice is picked. min=0.5 max=2 step=0.05,
+  // so 10 right-arrow presses from min lands on 1.0 (a natural-sounding default).
+  let voiceSpeed = false;
+  if (voiceVoice) {
+    const speedSlider = page.locator('[role="slider"]').first();
+    voiceSpeed = await setSliderByKeyboard(page, speedSlider, 10);
+  }
+  return {
+    voiceLanguage,
+    voiceProvider,
+    voiceModel,
+    voiceVoice,
+    sttProvider,
+    sttModel,
+    voiceSpeed,
+  };
 }
 
-export async function pickFirstTool(
-  page: Page,
-): Promise<Pick<FillReport, 'toolPicked'>> {
+export async function pickFirstTool(page: Page): Promise<Pick<FillReport, 'toolPicked'>> {
   await goToStep(page, 'tools');
   // Tool tiles are CustomButtons with title attribute = tool name.
   const tile = page.locator('button[title]:not([title=""]):has(svg)').first();
@@ -306,9 +366,28 @@ export async function pickFirstTool(
   return { toolPicked: toolName };
 }
 
-export async function attachFirstMcpServer(
+/**
+ * Toggle every visible tool tile so the agent ends up bound to as many tools
+ * as the catalog has available. Returns how many were clicked.
+ */
+export async function pickAllTools(
   page: Page,
-): Promise<Pick<FillReport, 'mcpAttached'>> {
+): Promise<Pick<FillReport, 'toolsPickedCount' | 'toolPicked'>> {
+  await goToStep(page, 'tools');
+  const tiles = page.locator('button[title]:not([title=""]):has(svg)');
+  const count = await tiles.count().catch(() => 0);
+  if (count === 0) return { toolsPickedCount: 0, toolPicked: null };
+  let firstName: string | null = null;
+  for (let i = 0; i < count; i += 1) {
+    const tile = tiles.nth(i);
+    if (!(await tile.isVisible().catch(() => false))) continue;
+    if (i === 0) firstName = await tile.getAttribute('title');
+    await tile.click().catch(() => undefined);
+  }
+  return { toolsPickedCount: count, toolPicked: firstName };
+}
+
+export async function attachFirstMcpServer(page: Page): Promise<Pick<FillReport, 'mcpAttached'>> {
   await goToStep(page, 'tools');
   const addTrigger = page.locator('button[id="add_mcp_server"]').first();
   if (!(await addTrigger.isVisible({ timeout: 3_000 }).catch(() => false))) {
@@ -318,14 +397,12 @@ export async function attachFirstMcpServer(
   return { mcpAttached: picked };
 }
 
-export async function pickFirstKbDoc(
-  page: Page,
-): Promise<Pick<FillReport, 'kbAttached'>> {
+export async function pickFirstKbDoc(page: Page): Promise<Pick<FillReport, 'kbAttached'>> {
   await goToStep(page, 'knowledge');
-  const tile = page
-    .locator('button[title]:not([title=""]):has(span:has-text("KB"))')
+  const tile = page.locator('button[title]:not([title=""]):has(span:has-text("KB"))').first();
+  const fallback = page
+    .locator('button:has(svg):has-text(".pdf"), button:has(svg):has-text(".txt")')
     .first();
-  const fallback = page.locator('button:has(svg):has-text(".pdf"), button:has(svg):has-text(".txt")').first();
   const target = (await tile.isVisible({ timeout: 2_000 }).catch(() => false)) ? tile : fallback;
   if (!(await target.isVisible({ timeout: 3_000 }).catch(() => false))) {
     return { kbAttached: null };
@@ -354,10 +431,7 @@ export async function assignFirstPhoneNumber(
   const chTrig = page.locator('button[id="assign_channel"]').first();
   await pickFirstSelectOption(page, chTrig).catch(() => null);
   // Number list rows are <li> with a "+digits" pattern.
-  const firstNumber = page
-    .getByRole('dialog')
-    .locator('li button:not([disabled])')
-    .first();
+  const firstNumber = page.getByRole('dialog').locator('li button:not([disabled])').first();
   if (!(await firstNumber.isVisible({ timeout: 3_000 }).catch(() => false))) {
     await page.keyboard.press('Escape').catch(() => undefined);
     return { phoneAssigned: null };

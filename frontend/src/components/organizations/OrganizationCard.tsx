@@ -36,9 +36,9 @@ const OrganizationCard: React.FC<OrganizationCardProps> = ({ org, index, onEdit,
       <div className={cn('h-1 w-full bg-gradient-to-r opacity-80', getAvatarGradient(org.name))} />
 
       <CardContent className="p-5">
-        <div className="flex items-start justify-between">
+        <div className="flex items-start justify-between gap-2">
           {/* Avatar + Info */}
-          <div className="flex items-start gap-3.5">
+          <div className="flex min-w-0 flex-1 items-start gap-3.5">
             <div
               className={cn(
                 'flex size-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-sm font-semibold text-white shadow-sm',
@@ -48,9 +48,13 @@ const OrganizationCard: React.FC<OrganizationCardProps> = ({ org, index, onEdit,
               {getInitials(org.name)}
             </div>
 
-            <div className="min-w-0">
-              <h3 className="truncate text-[15px] font-semibold text-foreground">{org.name}</h3>
-              <p className="mt-0.5 text-xs text-muted-foreground">{org.slug}</p>
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate text-[15px] font-semibold text-foreground" title={org.name}>
+                {org.name}
+              </h3>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground" title={org.slug}>
+                {org.slug}
+              </p>
             </div>
           </div>
 
