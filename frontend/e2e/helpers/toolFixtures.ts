@@ -60,7 +60,9 @@ export async function pickSelectOptionByLabel(
 }
 
 export async function setHttpMethod(page: Page, method: string): Promise<boolean> {
-  const trigger = page.locator('button[name="tool-method"]').first();
+  // SelectInput renders its trigger with `id={name}` (not `name`), so we
+  // target the trigger by id to match the actual DOM.
+  const trigger = page.locator('button[id="tool-method"]').first();
   return pickSelectOptionByLabel(page, trigger, method);
 }
 
@@ -74,7 +76,7 @@ export async function setAuthType(
     bearer: 'Bearer Token',
     basic: 'Basic Auth',
   };
-  const trigger = page.locator('button[name="tool-auth-type"]').first();
+  const trigger = page.locator('button[id="tool-auth-type"]').first();
   return pickSelectOptionByLabel(page, trigger, labelMap[type]);
 }
 
@@ -109,8 +111,15 @@ export async function addParameter(page: Page, p: ParameterInput): Promise<boole
   if (!rowId) return false;
 
   if (p.type) {
-    const typeTrigger = page.locator(`button[name="param-type-${rowId}"]`).first();
-    await pickSelectOptionByLabel(page, typeTrigger, p.type);
+    const typeLabelMap: Record<NonNullable<ParameterInput['type']>, string> = {
+      string: 'String',
+      number: 'Number',
+      integer: 'Integer',
+      boolean: 'Boolean',
+      array: 'Array',
+    };
+    const typeTrigger = page.locator(`button[id="param-type-${rowId}"]`).first();
+    await pickSelectOptionByLabel(page, typeTrigger, typeLabelMap[p.type]);
   }
   if (p.description !== undefined) {
     await page.locator(`input[name="param-desc-${rowId}"]`).fill(p.description);

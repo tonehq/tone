@@ -100,7 +100,7 @@ test.describe('Tools — create', () => {
     });
 
     test('TC-008 HTTP method dropdown exposes all five verbs', async ({ page }) => {
-      await page.locator('button[name="tool-method"]').first().click();
+      await page.locator('button[id="tool-method"]').first().click();
       const listbox = page.getByRole('listbox').first();
       for (const verb of ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']) {
         await expect(listbox.getByRole('option', { name: verb, exact: true })).toBeVisible();
@@ -123,7 +123,7 @@ test.describe('Tools — create', () => {
       await expect(page.locator('input[name^="param-name-"]').first()).toBeVisible({
         timeout: 5_000,
       });
-      await expect(page.locator('button[name^="param-type-"]').first()).toBeVisible();
+      await expect(page.locator('button[id^="param-type-"]').first()).toBeVisible();
       await expect(page.locator('input[name^="param-desc-"]').first()).toBeVisible();
     });
 
