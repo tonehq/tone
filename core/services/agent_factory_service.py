@@ -1,5 +1,7 @@
 """Factory to build LLM, STT, and TTS instances from an agent's config and run the bot pipeline."""
 
+from __future__ import annotations
+
 import json
 import os
 import sys
@@ -16,14 +18,11 @@ from sqlalchemy.orm import Session
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
 from core.models.api_key import ApiKey
-from core.models.models import Model
-from core.models.model_instance import ModelInstance
-from core.models.model_menu import ModelMenu
-from core.models.model_provider_menu import ModelProviderMenu
-from core.models.account import Account
-from core.models.service_provider import ServiceProvider
-from core.models.voice import Voice
+from core.models.model import Model
+from core.models.model_provider import ModelProvider
+from core.models.model_voice import ModelVoice
 from core.services.base import BaseService
+from core.services.service_warmup import get_smart_turn
 from core.utils.encryption import decrypt
 
 
@@ -1285,7 +1284,11 @@ class AgentFactoryService(BaseService):
         from core.database.session import get_db_context
         from core.processors.call_end_detector import CallEndDetectorProcessor
         from core.processors.metrics_collector import MetricsCollectorProcessor
-        from core.services.call_log_service import CallLogService
+        try:
+            from core.services.call_log_service import CallLogService
+        except ImportError as _e:
+            CallLogService = None
+            logger.warning(f"CallLogService unavailable, call logging disabled: {_e}")
         logger.info("[TIMING] run_bot_with_components imports (+%.3fs)", _time.monotonic() - _t)
 
         # Extract call metadata from runner_args
@@ -1460,29 +1463,35 @@ class AgentFactoryService(BaseService):
         # Fetch custom tools for this agent
         custom_tools_schema = None
         if agent:
-            from core.services.custom_tool_service import (
-                get_custom_tools_for_agent,
-                build_custom_tool_schemas,
-                create_custom_tool_handler,
-                create_built_in_tool_handler,
-            )
-            custom_tools = get_custom_tools_for_agent(agent.id)
-            if custom_tools:
-                logger.info("Fetched {} custom tools for agent {}", len(custom_tools), agent.id)
-                custom_tools_schema = build_custom_tool_schemas(custom_tools)
-                for tool in custom_tools:
-                    if tool.tool_type != "custom":
-                        handler = create_built_in_tool_handler(tool, from_number, org_id=agent.organization_id, tool_call_entries=tool_call_entries, current_turn=current_turn)
-                    else:
-                        handler = create_custom_tool_handler(tool, tool_call_entries=tool_call_entries, current_turn=current_turn)
-                    llm.register_function(tool.name, handler)
-                    logger.info("Registered {} tool handler: {}", tool.tool_type, tool.name)
+            try:
+                from core.services.custom_tool_service import (
+                    get_custom_tools_for_agent,
+                    build_custom_tool_schemas,
+                    create_custom_tool_handler,
+                    create_built_in_tool_handler,
+                )
+                custom_tools = get_custom_tools_for_agent(agent.id)
+                if custom_tools:
+                    logger.info("Fetched {} custom tools for agent {}", len(custom_tools), agent.id)
+                    custom_tools_schema = build_custom_tool_schemas(custom_tools)
+                    for tool in custom_tools:
+                        if tool.tool_type != "custom":
+                            handler = create_built_in_tool_handler(tool, from_number, org_id=agent.organization_id, tool_call_entries=tool_call_entries, current_turn=current_turn)
+                        else:
+                            handler = create_custom_tool_handler(tool, tool_call_entries=tool_call_entries, current_turn=current_turn)
+                        llm.register_function(tool.name, handler)
+                        logger.info("Registered {} tool handler: {}", tool.tool_type, tool.name)
+            except Exception as e:
+                logger.warning(f"custom_tool_service unavailable, custom tools disabled: {e}")
 
         # Register MCP server tools if agent has linked MCP servers
         mcp_tools_schema = None
         if agent:
-            from core.services.mcp_tool_service import register_mcp_tools
-            mcp_tools_schema = await register_mcp_tools(llm, agent.id)
+            try:
+                from core.services.mcp_tool_service import register_mcp_tools
+                mcp_tools_schema = await register_mcp_tools(llm, agent.id)
+            except Exception as e:
+                logger.warning(f"mcp_tool_service unavailable, MCP tools disabled: {e}")
 
         # Combine doc tools, custom tools, and MCP tools into one ToolsSchema
         all_tool_schemas = []
@@ -1547,17 +1556,16 @@ class AgentFactoryService(BaseService):
             # Standard pipeline: STT → LLM → TTS
             tools = combined_tools
             context = LLMContext(messages, tools)
-            smart_turn_analyzer = LocalSmartTurnAnalyzerV3(
-                confidence_threshold=0.9,
+            smart_turn_analyzer = get_smart_turn() or LocalSmartTurnAnalyzerV3(
+                confidence_threshold=0.5,
                 params=SmartTurnParams(stop_secs=0.4),
+            )
+            user_turn_strategies = UserTurnStrategies(
+                stop=[TurnAnalyzerUserTurnStopStrategy(turn_analyzer=smart_turn_analyzer)]
             )
             context_aggregator = LLMContextAggregatorPair(
                 context,
-                user_params=LLMUserAggregatorParams(
-                    user_turn_strategies=UserTurnStrategies(
-                        stop=[TurnAnalyzerUserTurnStopStrategy(turn_analyzer=smart_turn_analyzer)]
-                    ),
-                ),
+                user_params=LLMUserAggregatorParams(user_turn_strategies=user_turn_strategies),
             )
             user_aggregator = context_aggregator.user()
             assistant_aggregator = context_aggregator.assistant()
