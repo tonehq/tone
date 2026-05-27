@@ -38,6 +38,9 @@ from pipecat.runner.types import (
     WebSocketRunnerArguments,
 )
 
+from core.services.agent_runtime_resolver import resolve_agent_runtime
+from core.services.call_engines.factory import build_call_engine_for_call
+
 load_dotenv(override=True)
 
 
@@ -48,61 +51,14 @@ def _get_twilio_credentials(org_id=None, channel_id=None) -> dict:
     Then tries org-scoped channel lookup, then falls back to api_keys table.
     Returns {"account_sid": ..., "auth_token": ...}.
     """
-    from core.database.session import get_db_context
+    from core.services.call_engines.credentials import fetch_channel_credentials
 
-    with get_db_context() as db:
-        from core.models.channel import Channel
-        from core.models.enums import ChannelType
-
-        # Try specific channel first
-        if channel_id:
-            channel = db.query(Channel).filter(Channel.id == channel_id).first()
-            if channel and channel.meta_data:
-                meta = channel.meta_data
-                account_sid = meta.get("account_sid")
-                auth_token = meta.get("auth_token")
-                if account_sid and auth_token:
-                    return {"account_sid": account_sid, "auth_token": auth_token}
-
-        # Try channels table (per-org credentials)
-        if org_id:
-            channel = (
-                db.query(Channel)
-                .filter(Channel.type == ChannelType.TWILIO, Channel.organization_id == org_id)
-                .first()
-            )
-            if channel and channel.meta_data:
-                meta = channel.meta_data
-                account_sid = meta.get("account_sid")
-                auth_token = meta.get("auth_token")
-                if account_sid and auth_token:
-                    return {"account_sid": account_sid, "auth_token": auth_token}
-
-        # Fallback: api_keys table (legacy, global)
-        from core.models.service_provider import ServiceProvider
-        from core.models.api_key import ApiKey
-        from core.utils.encryption import decrypt
-
-        provider = db.query(ServiceProvider).filter(ServiceProvider.name == "twilio").first()
-        if not provider:
-            logger.warning("Twilio service provider not found in DB")
-            return {}
-
-        q = db.query(ApiKey).filter(ApiKey.service_provider_id == provider.id)
-        if org_id:
-            q = q.filter(ApiKey.organization_id == org_id)
-        api_keys = q.all()
-
-        creds = {}
-        for ak in api_keys:
-            additional = ak.additional_credentials or {}
-            key_type = additional.get("key_type")
-            if key_type == "account_sid":
-                creds["account_sid"] = decrypt(ak.api_key_encrypted)
-            elif key_type == "auth_token":
-                creds["auth_token"] = decrypt(ak.api_key_encrypted)
-
-        return creds
+    config = fetch_channel_credentials("twilio", org_id=org_id, channel_id=channel_id)
+    account_sid = config.get("account_sid")
+    auth_token = config.get("auth_token")
+    if account_sid and auth_token:
+        return {"account_sid": account_sid, "auth_token": auth_token}
+    return {}
 
 
 def _get_plivo_credentials(org_id=None) -> dict:
@@ -177,30 +133,41 @@ def _get_provider_api_key(name: str, provider_type: str) -> str:
     Returns the decrypted key or empty string if not found.
     """
     from core.database.session import get_db_context
-    from core.models.service_provider import ServiceProvider
     from core.models.api_key import ApiKey
+    from core.models.model_provider import ModelProvider
     from core.utils.encryption import decrypt
 
     with get_db_context() as db:
         provider = (
-            db.query(ServiceProvider)
-            .filter(ServiceProvider.name == name, ServiceProvider.provider_type == provider_type)
+            db.query(ModelProvider)
+            .filter(ModelProvider.slug == name, ModelProvider.is_active.is_(True))
             .first()
         )
         if not provider:
-            logger.warning(f"Service provider not found in DB: name={name}, provider_type={provider_type}")
+            logger.warning(f"Model provider not found in DB: slug={name}")
             return ""
 
         api_key = (
             db.query(ApiKey)
-            .filter(ApiKey.service_provider_id == provider.id, ApiKey.status == "active")
+            .filter(
+                ApiKey.provider_id == provider.id,
+                ApiKey.service_type == provider_type,
+                ApiKey.is_active.is_(True),
+            )
+            .order_by(ApiKey.is_default.desc())
             .first()
         )
         if not api_key:
-            logger.warning(f"No active API key found for provider: name={name}, provider_type={provider_type}")
+            logger.warning(
+                f"No active api_key for provider slug={name} service_type={provider_type}"
+            )
             return ""
 
-        return decrypt(api_key.api_key_encrypted)
+        try:
+            return decrypt(api_key.encrypted_key)
+        except Exception as e:
+            logger.error(f"Failed to decrypt api_key id={api_key.id}: {e}")
+            return ""
 
 
 async def _default_messages():
@@ -263,7 +230,42 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         logger.info("[TIMING] run_bot() run_bot_with_components finished (+%.3fs), total run_bot: %.3fs", _time.monotonic() - _t2, _time.monotonic() - _t_run_bot)
         return
 
-    # Fallback when no agent (e.g. WebRTC, Daily without agent in body)
+    call_data = body.get("call_data") or {}
+    to_number = call_data.get("to", "")
+    resolved = None
+    if to_number:
+        _t = _time.monotonic()
+        resolved = resolve_agent_runtime(to_number)
+        logger.info("[TIMING] run_bot() resolve_agent_runtime (+%.3fs)", _time.monotonic() - _t)
+
+    if resolved:
+        logger.info(
+            f"Running bot with resolved agent runtime: agent={resolved['agent'].id} "
+            f"name={resolved['agent'].name}"
+        )
+        llm = resolved["llm"]
+        stt = resolved["stt"]
+        tts = resolved["tts"]
+        messages = [
+            {"role": "system", "content": resolved["system_prompt"]},
+        ]
+        first_message = resolved.get("first_message")
+        if first_message:
+            messages.append({"role": "assistant", "content": first_message})
+        factory = AgentFactoryService(db=None)
+        await factory.run_bot_with_components(
+            transport=transport,
+            runner_args=runner_args,
+            llm=llm,
+            stt=stt,
+            tts=tts,
+            messages=messages,
+            agent=resolved["agent"],
+            end_call_message=resolved.get("end_call_message"),
+        )
+        logger.info("[TIMING] run_bot() (resolved path) total: %.3fs", _time.monotonic() - _t_run_bot)
+        return
+
     logger.info("Running bot with default env-based services (no agent in body)")
     from pipecat.services.cartesia.tts import CartesiaTTSService
     from pipecat.services.deepgram.stt import DeepgramSTTService
@@ -277,7 +279,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
             "No agent in session and default service API keys not found in DB for: "
             "openai (llm), deepgram (stt), cartesia (tts)"
         )
-    llm = OpenAILLMService(api_key=openai_key, model="gpt-4o")
+    llm = OpenAILLMService(api_key=openai_key, model="gpt-4o-mini")
     stt = DeepgramSTTService(api_key=deepgram_key)
     tts = CartesiaTTSService(
         api_key=cartesia_key,
@@ -410,14 +412,21 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
             transport_type, call_data = await parse_telephony_websocket(runner_args.websocket)
             logger.info("[TIMING] bot() parse_telephony_websocket (+%.3fs)", _time.monotonic() - _t)
 
-        # Fetch from/to only if not already present (BotRunnerService enriches call_data)
         if transport_type == "twilio" and not call_data.get("from"):
-            _t = _time.monotonic()
-            call_info = await get_call_info(transport_type, call_data.get("call_id", ""), org_id=call_data.get("_org_id"), call_data=call_data)
-            logger.info("[TIMING] bot() get_call_info Twilio API (+%.3fs)", _time.monotonic() - _t)
-            if call_info:
-                call_data["from"] = call_info.get("from_number", "")
-                call_data["to"] = call_info.get("to_number", "")
+            twilio_body = call_data.get("body") or {}
+            param_from = (twilio_body.get("from") or "").strip()
+            param_to = (twilio_body.get("to") or "").strip()
+            if param_from or param_to:
+                call_data["from"] = param_from
+                call_data["to"] = param_to
+                logger.info("[TIMING] bot() Twilio from/to from <Parameter> tags (skipped API call)")
+            else:
+                _t = _time.monotonic()
+                call_info = await get_call_info(transport_type, call_data.get("call_id", ""), org_id=call_data.get("_org_id"), call_data=call_data)
+                logger.info("[TIMING] bot() get_call_info Twilio API (+%.3fs)", _time.monotonic() - _t)
+                if call_info:
+                    call_data["from"] = call_info.get("from_number", "")
+                    call_data["to"] = call_info.get("to_number", "")
 
         from_number = call_data.get("from", "")
         to_number = call_data.get("to", "")
@@ -427,20 +436,19 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
         if agent:
             logger.info(f"Resolved agent for this call: id={agent.id} name={agent.name}")
 
-        _t = _time.monotonic()
-        serializer = _create_serializer(transport_type, call_data)
-        logger.info("[TIMING] bot() _create_serializer (+%.3fs)", _time.monotonic() - _t)
+        if getattr(runner_args, "body", None) is None:
+            runner_args.body = {}
+        runner_args.body["call_data"] = call_data
+        runner_args.body["transport_type"] = transport_type
 
-        transport = FastAPIWebsocketTransport(
+        _t = _time.monotonic()
+        engine = build_call_engine_for_call(transport_type, call_data)
+        call_transport = engine.create_transport(
             websocket=runner_args.websocket,
-            params=FastAPIWebsocketParams(
-                audio_in_enabled=True,
-                audio_out_enabled=True,
-                add_wav_header=False,
-                vad_analyzer=SileroVADAnalyzer(),
-                serializer=serializer,
-            ),
+            call_data=call_data,
         )
+        transport = call_transport.get_pipecat_transport()
+        logger.info("[TIMING] bot() build call engine + transport (+%.3fs)", _time.monotonic() - _t)
 
     elif isinstance(runner_args, SmallWebRTCRunnerArguments):
         webrtc_connection: SmallWebRTCConnection = runner_args.webrtc_connection
