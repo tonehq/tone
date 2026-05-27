@@ -27,6 +27,7 @@ ALLOWED_SORT_FIELDS = {"name", "agent_type", "is_active", "created_at", "updated
 
 class AgentConfigRequest(BaseModel):
     first_message: Optional[str] = None
+    end_call_message: Optional[str] = None
     system_prompt_template: Optional[str] = None
     conversation_history_token_limit: Optional[int] = None
     language_id: Optional[str] = None

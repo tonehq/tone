@@ -100,3 +100,15 @@ def list_phone_numbers(
     """List phone numbers stored in DB for a given channel, with agent assignment status."""
     org_id = require_org_id(claims.org_id)
     return list_phone_numbers_for_channel(db, org_id, channel_id)
+
+
+@router.get("/twilio_phone_numbers")
+def list_twilio_phone_numbers(
+    channel_id: str = Query(..., description="The Twilio channel ID to fetch numbers for"),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    """Fetch live IncomingPhoneNumbers from Twilio for the given channel,
+    merged with local assignment info so the UI can flag numbers already
+    bound to another agent in this org."""
+    return _svc(claims, db).list_twilio_phone_numbers(channel_id)
