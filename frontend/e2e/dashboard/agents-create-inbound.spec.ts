@@ -22,8 +22,8 @@ import {
   fillPromptStep,
   fillVoiceStep,
   goToStep,
+  pickAllTools,
   pickFirstKbDoc,
-  pickFirstTool,
   uniqueAgentName,
 } from '../helpers/agentFixtures';
 import { test } from '../helpers/auth';
@@ -93,7 +93,10 @@ test.describe('Agents — create inbound', () => {
   test.describe('Tools & MCP step', () => {
     test('AC-022 New tool navigates when clean', async ({ page }) => {
       await page.getByText('Tools & MCP', { exact: true }).first().click();
-      await page.getByRole('button', { name: /new tool/i }).first().click();
+      await page
+        .getByRole('button', { name: /new tool/i })
+        .first()
+        .click();
       await page.waitForURL(/\/tools\/create/, { timeout: 10_000 });
     });
   });
@@ -123,9 +126,7 @@ test.describe('Agents — create inbound', () => {
   // Real user journey — fills Basics, Prompt, AI, Voice, Tools, MCP, KB, and
   // Phone, saves, reloads the edit page, and verifies every value persisted.
   test.describe('Comprehensive flow', () => {
-    test('AC-FULL fills every step, saves, reloads and verifies persistence', async ({
-      page,
-    }) => {
+    test('AC-FULL fills every step, saves, reloads and verifies persistence', async ({ page }) => {
       test.setTimeout(180_000);
 
       const name = uniqueAgentName('inbound-full');
@@ -133,27 +134,33 @@ test.describe('Agents — create inbound', () => {
       const firstMessage = 'Hello! How can I help you today?';
       const endCallMessage = 'Thank you for calling. Have a great day!';
       const systemPrompt = 'You are a helpful voice assistant for the e2e suite.';
+      const maxTokens = 1024;
       const tokenLimit = 4000;
 
-      // 1. Basics
+      // 1. Basics — fill every textarea + flip the active switch.
       await page.locator('input[name="name"]').first().fill(name);
       const basicsReport = await fillBasicsStep(page, {
         description,
         firstMessage,
         endCallMessage,
+        toggleActive: true,
       });
 
       // 2. Prompt
-      const promptReport = await fillPromptStep(page, { systemPrompt, tokenLimit });
+      const promptReport = await fillPromptStep(page, { systemPrompt });
 
-      // 3. AI
-      const aiReport = await fillAiStep(page);
+      // 3. AI — provider, model, temperature slider, max tokens, history limit
+      const aiReport = await fillAiStep(page, {
+        maxTokens,
+        tokenLimit,
+        temperatureSteps: 7,
+      });
 
-      // 4. Voice + STT
+      // 4. Voice + STT — language, provider, model, voice, speed slider, STT
       const voiceReport = await fillVoiceStep(page);
 
-      // 5. Tools + MCP
-      const toolReport = await pickFirstTool(page);
+      // 5. Tools + MCP — toggle every tile and attach the first MCP server
+      const toolReport = await pickAllTools(page);
       const mcpReport = await attachFirstMcpServer(page);
 
       // 6. Knowledge + Phone
@@ -188,14 +195,12 @@ test.describe('Agents — create inbound', () => {
       });
 
       if (basicsReport.description) {
-        await expect(page.locator('textarea[name="description"]').first()).toHaveValue(
-          description,
-        );
+        await expect(page.locator('textarea[name="description"]').first()).toHaveValue(description);
       }
       if (basicsReport.firstMessage) {
-        await expect(
-          page.locator('textarea[placeholder*="Hi there"]').first(),
-        ).toHaveValue(firstMessage);
+        await expect(page.locator('textarea[placeholder*="Hi there"]').first()).toHaveValue(
+          firstMessage,
+        );
       }
       if (basicsReport.endCallMessage) {
         await expect(
@@ -206,6 +211,19 @@ test.describe('Agents — create inbound', () => {
       if (promptReport.systemPrompt) {
         await goToStep(page, 'prompt');
         await expect(page.locator('textarea').first()).toHaveValue(systemPrompt);
+      }
+
+      if (aiReport.maxTokens) {
+        await goToStep(page, 'ai');
+        await expect(
+          page.locator('input[name="config.llm_settings.max_tokens"]').first(),
+        ).toHaveValue(String(maxTokens));
+      }
+      if (aiReport.tokenLimit) {
+        await goToStep(page, 'ai');
+        await expect(
+          page.locator('input[name="config.conversation_history_token_limit"]').first(),
+        ).toHaveValue(String(tokenLimit));
       }
 
       // 9. Cleanup

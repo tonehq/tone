@@ -16,6 +16,7 @@ import { expect, type Page } from '@playwright/test';
 import {
   createAgentViaUI,
   deleteAgentViaUI,
+  fillAiStep,
   fillBasicsStep,
   fillPromptStep,
   fillVoiceStep,
@@ -144,9 +145,7 @@ test.describe('Agents — edit', () => {
       await page.keyboard.press('Escape');
     });
 
-    test('AE-015 Delete bypasses unsaved-changes guard and removes the agent', async ({
-      page,
-    }) => {
+    test('AE-015 Delete bypasses unsaved-changes guard and removes the agent', async ({ page }) => {
       // Use a throw-away agent so the shared fixture survives.
       const throwaway = await createAgentViaUI(page, {
         agentType: 'inbound',
@@ -155,10 +154,7 @@ test.describe('Agents — edit', () => {
       // Make form dirty before deleting.
       await page.locator('input[name="name"]').first().fill(`${throwaway.name}-dirty`);
       await page.getByRole('button', { name: /^delete$/i }).click();
-      await page
-        .getByRole('dialog')
-        .getByRole('button', { name: 'Delete', exact: true })
-        .click();
+      await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
       await page.waitForURL(/\/agents(?:\?|$|\/)/, { timeout: 10_000 });
     });
   });
@@ -187,7 +183,10 @@ test.describe('Agents — edit', () => {
       });
       await page.locator('input[name="name"]').first().fill(`${fixtureAgentName}-dirty`);
       await page.getByText('Tools & MCP', { exact: true }).first().click();
-      await page.getByRole('button', { name: /new tool/i }).first().click();
+      await page
+        .getByRole('button', { name: /new tool/i })
+        .first()
+        .click();
       await expect(page.getByText(/discard unsaved changes\?/i)).toBeVisible({ timeout: 5_000 });
       await page.getByRole('button', { name: /discard/i }).click();
       await page.waitForURL(/\/tools\/create/, { timeout: 10_000 });
@@ -235,19 +234,35 @@ test.describe('Agents — edit', () => {
 
       const newDescription = 'AE-FULL edited description';
       const newFirstMessage = 'Hi from AE-FULL edit test.';
+      const newEndCallMessage = 'AE-FULL edited end-call message.';
       const newSystemPrompt = 'You are a knowledgeable assistant — AE-FULL edit.';
+      const newMaxTokens = 2048;
+      const newTokenLimit = 6000;
 
-      // 1. Basics
+      // 1. Basics — also flip the active switch.
       const basicsReport = await fillBasicsStep(page, {
         description: newDescription,
         firstMessage: newFirstMessage,
+        endCallMessage: newEndCallMessage,
+        toggleActive: true,
       });
       // 2. Prompt
       const promptReport = await fillPromptStep(page, { systemPrompt: newSystemPrompt });
-      // 3. Voice + STT
+      // 3. AI — provider, model, temperature, max tokens, history limit
+      const aiReport = await fillAiStep(page, {
+        maxTokens: newMaxTokens,
+        tokenLimit: newTokenLimit,
+        temperatureSteps: 5,
+      });
+      // 4. Voice + STT (with speed slider)
       const voiceReport = await fillVoiceStep(page);
 
-      console.log('AE-FULL fill report', { ...basicsReport, ...promptReport, ...voiceReport });
+      console.log('AE-FULL fill report', {
+        ...basicsReport,
+        ...promptReport,
+        ...aiReport,
+        ...voiceReport,
+      });
 
       // 4. Save
       await page.getByRole('button', { name: /save changes/i }).click();
@@ -264,13 +279,30 @@ test.describe('Agents — edit', () => {
         );
       }
       if (basicsReport.firstMessage) {
+        await expect(page.locator('textarea[placeholder*="Hi there"]').first()).toHaveValue(
+          newFirstMessage,
+        );
+      }
+      if (basicsReport.endCallMessage) {
         await expect(
-          page.locator('textarea[placeholder*="Hi there"]').first(),
-        ).toHaveValue(newFirstMessage);
+          page.locator('textarea[placeholder*="Thanks for calling"]').first(),
+        ).toHaveValue(newEndCallMessage);
       }
       if (promptReport.systemPrompt) {
         await goToStep(page, 'prompt');
         await expect(page.locator('textarea').first()).toHaveValue(newSystemPrompt);
+      }
+      if (aiReport.maxTokens) {
+        await goToStep(page, 'ai');
+        await expect(
+          page.locator('input[name="config.llm_settings.max_tokens"]').first(),
+        ).toHaveValue(String(newMaxTokens));
+      }
+      if (aiReport.tokenLimit) {
+        await goToStep(page, 'ai');
+        await expect(
+          page.locator('input[name="config.conversation_history_token_limit"]').first(),
+        ).toHaveValue(String(newTokenLimit));
       }
 
       // 6. Cleanup
