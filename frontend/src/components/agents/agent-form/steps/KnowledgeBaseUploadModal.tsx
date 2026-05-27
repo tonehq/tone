@@ -27,7 +27,9 @@ function fmt(bytes: number): string {
 
 interface KnowledgeBaseUploadModalProps {
   open: boolean;
-  agentId: string;
+  /** Null while creating a new agent. The upload is created standalone and
+   * the agent form attaches it on save via the upload_ids payload. */
+  agentId: string | null;
   onClose: () => void;
   /** Called once after a successful upload with the newly created upload IDs.
    * The agent form auto-selects those IDs and re-fetches the doc list. */
@@ -78,21 +80,28 @@ export default function KnowledgeBaseUploadModal({
 
   const handleUpload = async () => {
     if (files.length === 0) return;
+    // Fire uploads in parallel so the round-trips overlap. Successes are
+    // reported once; failures stay in the list so the user can retry just
+    // those without re-picking the survivors.
+    const results = await Promise.allSettled(
+      files.map((f) => uploadMutation.mutateAsync({ agentId, file: f })),
+    );
     const uploadedIds: string[] = [];
     const failed: File[] = [];
-    for (const f of files) {
-      try {
-        const doc = await uploadMutation.mutateAsync({ agentId, file: f });
-        if (doc?.id) uploadedIds.push(String(doc.id));
-      } catch (err) {
-        failed.push(f);
-        handleApiError(err);
+    results.forEach((res, idx) => {
+      if (res.status === 'fulfilled' && res.value?.id) {
+        uploadedIds.push(String(res.value.id));
+      } else {
+        failed.push(files[idx]);
+        if (res.status === 'rejected') handleApiError(res.reason);
       }
-    }
+    });
     if (uploadedIds.length > 0) {
       showToast.success(
         uploadedIds.length === 1 ? 'Document uploaded' : `${uploadedIds.length} documents uploaded`,
-        'They are attached to this agent and ready to use.',
+        agentId
+          ? 'They are attached to this agent and ready to use.'
+          : 'Saved. They will be attached to the agent when you save.',
       );
       onUploaded(uploadedIds);
     }
@@ -109,7 +118,11 @@ export default function KnowledgeBaseUploadModal({
       open={open}
       onClose={handleClose}
       title="Upload to knowledge base"
-      description="Files are uploaded to this agent and auto-selected when they finish processing."
+      description={
+        agentId
+          ? 'Files are uploaded to this agent and auto-selected when they finish processing.'
+          : 'Files are uploaded now and will be attached to the agent when you save.'
+      }
       hideFooter
       width="sm:max-w-lg"
     >

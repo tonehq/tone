@@ -2,6 +2,7 @@
 
 import { CustomButton } from '@/components/shared';
 import { TOOL_TYPE_HEADER } from '@/constants/toolForm';
+import { useGoBack } from '@/hooks/useGoBack';
 import { getTemplateTools } from '@/services/toolService';
 import type { Tool } from '@/types/tool';
 import { cn } from '@/utils/cn';
@@ -11,6 +12,7 @@ import { useEffect, useState } from 'react';
 
 export default function ToolCreatePage() {
   const router = useRouter();
+  const goBack = useGoBack('/tools');
 
   const [templates, setTemplates] = useState<Tool[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
@@ -36,7 +38,7 @@ export default function ToolCreatePage() {
           <CustomButton
             type="text"
             size="icon-sm"
-            onClick={() => router.push('/tools')}
+            onClick={goBack}
             className="text-muted-foreground hover:text-foreground"
             aria-label="Back"
           >
