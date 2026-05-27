@@ -1,10 +1,10 @@
 'use client';
 
 import { Check, Plus, Server, Sparkles, Wrench, X } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
+import { useAgentFormNav } from '@/components/agents/agent-form/AgentFormNav';
 import SectionCard, { ACCENTS } from '@/components/agents/agent-form/SectionCard';
 import { CustomButton, SearchBar, SelectInput } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
@@ -30,7 +30,7 @@ const MCP_ACCENT = {
 };
 
 export default function ToolsMcpStep() {
-  const router = useRouter();
+  const { safeNavigate } = useAgentFormNav();
   const { control, setValue } = useFormContext<AgentFormState>();
   const selectedToolIds = useWatch({ control, name: 'tool_ids' }) ?? [];
   const selectedMcpIds = useWatch({ control, name: 'mcp_server_ids' }) ?? [];
@@ -132,7 +132,7 @@ export default function ToolsMcpStep() {
               type="default"
               size="sm"
               icon={<Plus className="size-3.5" />}
-              onClick={() => router.push('/tools/create')}
+              onClick={() => safeNavigate('/tools/create')}
             >
               New tool
             </CustomButton>
@@ -183,7 +183,7 @@ export default function ToolsMcpStep() {
                   type="primary"
                   size="sm"
                   icon={<Plus className="size-3.5" />}
-                  onClick={() => router.push('/tools/create')}
+                  onClick={() => safeNavigate('/tools/create')}
                   className="mt-1"
                 >
                   Create a tool
@@ -263,7 +263,7 @@ export default function ToolsMcpStep() {
               type="default"
               size="sm"
               icon={<Plus className="size-3.5" />}
-              onClick={() => router.push('/mcp/create')}
+              onClick={() => safeNavigate('/mcp/create')}
             >
               New MCP server
             </CustomButton>

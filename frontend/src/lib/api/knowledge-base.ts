@@ -30,9 +30,9 @@ export const knowledgeBaseApi = {
     const { data } = await axios.post<PaginatedDocuments>('/knowledge-base/list', body);
     return data;
   },
-  upload: async (agentId: string, file: File): Promise<KnowledgeBaseDocument> => {
+  upload: async (agentId: string | null, file: File): Promise<KnowledgeBaseDocument> => {
     const formData = new FormData();
-    formData.append('agent_id', agentId);
+    if (agentId) formData.append('agent_id', agentId);
     formData.append('file', file);
     const { data } = await axios.post<KnowledgeBaseDocument>('/knowledge-base', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -76,7 +76,7 @@ export function useKnowledgeBase(params: ListDocumentsParams = {}) {
 export function useUploadKnowledgeBase() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ agentId, file }: { agentId: string; file: File }) =>
+    mutationFn: ({ agentId, file }: { agentId: string | null; file: File }) =>
       knowledgeBaseApi.upload(agentId, file),
     onSuccess: () => qc.invalidateQueries({ queryKey: [KNOWLEDGE_BASE_QUERY_KEY] }),
   });

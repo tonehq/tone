@@ -4,6 +4,7 @@ import { deleteToolAtom, fetchToolsAtom, upsertToolAtom } from '@/atoms/ToolAtom
 import ToneLoader from '@/components/shared/ToneLoader';
 import BuiltInToolForm from '@/components/tools/BuiltInToolForm';
 import CustomToolForm from '@/components/tools/CustomToolForm';
+import { useGoBack } from '@/hooks/useGoBack';
 import type { BuiltInToolFormData, CustomToolFormData } from '@/schemas/tool';
 import { getTool } from '@/services/toolService';
 import type {
@@ -32,6 +33,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   const [, upsertToolAction] = useAtom(upsertToolAtom);
   const [, deleteToolAction] = useAtom(deleteToolAtom);
   const [, fetchTools] = useAtom(fetchToolsAtom);
+  const goBack = useGoBack('/tools');
 
   const templateId = searchParams.get('template_id');
 
@@ -171,7 +173,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
     setParameters(schema);
   }, []);
 
-  const handleBack = useCallback(() => router.push('/tools'), [router]);
+  const handleBack = goBack;
 
   const handleDelete = useCallback(async () => {
     if (!toolId) return;

@@ -5,7 +5,7 @@ import {
   ArrowLeft,
   Bot,
   Cpu,
-  FileCheck2,
+  Eye,
   Loader2,
   MessageSquare,
   Phone,
@@ -25,6 +25,7 @@ import {
   fetchAgentAtom,
   updateAgentAtom,
 } from '@/atoms/AgentsAtom';
+import { AgentFormNavProvider } from '@/components/agents/agent-form/AgentFormNav';
 import AiStep from '@/components/agents/agent-form/steps/AiStep';
 import BasicsStep from '@/components/agents/agent-form/steps/BasicsStep';
 import KnowledgePhoneStep from '@/components/agents/agent-form/steps/KnowledgePhoneStep';
@@ -34,6 +35,8 @@ import ToolsMcpStep from '@/components/agents/agent-form/steps/ToolsMcpStep';
 import VoiceStep from '@/components/agents/agent-form/steps/VoiceStep';
 import { AppLoader, CustomButton, CustomModal } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
+import { useGoBack } from '@/hooks/useGoBack';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import type { AgentDirection, AgentFormState } from '@/types/agent';
 import {
   agentDetailToFormState,
@@ -75,7 +78,6 @@ const NAV_ITEMS: NavItem[] = [
   { key: 'voice', label: 'Voice', description: 'TTS & STT', icon: Volume2 },
   { key: 'tools', label: 'Tools & MCP', description: 'Callable functions', icon: Wrench },
   { key: 'knowledge', label: 'Knowledge & Phone', description: 'Docs & numbers', icon: Phone },
-  { key: 'review', label: 'Review', description: 'Sanity check', icon: FileCheck2 },
 ];
 
 export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps) {
@@ -86,18 +88,33 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
   const [, createAgent] = useAtom(createAgentAtom);
   const [, updateAgent] = useAtom(updateAgentAtom);
   const [, deleteAgent] = useAtom(deleteAgentAtom);
+  const goBack = useGoBack('/agents');
 
   const [activeTab, setActiveTab] = useState<string>('basics');
   const [loading, setLoading] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [originalState, setOriginalState] = useState<AgentFormState | null>(null);
 
   const methods = useForm<AgentFormState>({
     defaultValues: defaultFormState(agentType),
     mode: 'onChange',
   });
+
+  // `formState.isDirty` flips as soon as any field diverges from the value
+  // captured by the latest `reset()` call, so it correctly resets after save.
+  const isDirty = methods.formState.isDirty;
+  const { promptOpen, guardedAction, confirmLeave, cancelLeave } = useUnsavedChangesGuard(isDirty);
+
+  // Exposed to child steps so their onClick → router.push calls (e.g. the
+  // "New tool" / "New MCP server" buttons) route through the guard.
+  const safeNavigate = useCallback(
+    (href: string) => guardedAction(() => router.push(href)),
+    [guardedAction, router],
+  );
+  const navContextValue = useMemo(() => ({ safeNavigate }), [safeNavigate]);
 
   // ─── load on edit ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -112,7 +129,15 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         setOriginalState(hydrated);
       })
       .catch((err) => {
-        if (!cancelled) handleApiError(err);
+        if (cancelled) return;
+        // Treat a missing agent (deleted, bad URL, wrong tenant) as a
+        // redirect, not a toast — there's nothing to edit on this page.
+        if ((err as { response?: { status?: number } })?.response?.status === 404) {
+          showToast.error('Agent not found', 'It may have been deleted.');
+          router.replace('/agents');
+          return;
+        }
+        handleApiError(err);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -120,7 +145,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
     return () => {
       cancelled = true;
     };
-  }, [agentId, isEditMode]);
+  }, [agentId, fetchAgent, isEditMode, methods, router]);
 
   // ─── save / delete ────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
@@ -147,6 +172,9 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       } else {
         const created = await createAgent(formStateToCreatePayload(values));
         showToast.success('Agent created');
+        // Mark the form clean against the values we just persisted. This
+        // clears isDirty so the upcoming redirect can't trip the guard.
+        methods.reset(values);
         router.push(`/agents/edit/${created.agent_type}/${created.id}`);
       }
     } catch (err) {
@@ -161,6 +189,9 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
     setDeleting(true);
     try {
       await deleteAgent(agentId);
+      // Agent no longer exists — clear the form so the redirect can't be
+      // intercepted by the unsaved-changes guard.
+      methods.reset(methods.getValues());
       router.push('/agents');
     } catch (err) {
       handleApiError(err);
@@ -168,7 +199,7 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
       setDeleting(false);
       setDeleteOpen(false);
     }
-  }, [agentId, deleteAgent, router]);
+  }, [agentId, deleteAgent, methods, router]);
 
   // ─── derived ──────────────────────────────────────────────────────────────
   const agentName = methods.watch('name') || (isEditMode ? 'Untitled agent' : 'New agent');
@@ -188,12 +219,19 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         return <ToolsMcpStep />;
       case 'knowledge':
         return <KnowledgePhoneStep agentId={agentId ?? null} />;
-      case 'review':
-        return <ReviewStep onJump={(i) => setActiveTab(tabKeyForIndex(i))} />;
       default:
         return null;
     }
   }, [activeTab, agentId]);
+
+  // ReviewStep still uses index-based jumps; the modal closes itself then
+  // switches to the matching tab.
+  const handleReviewJump = useCallback((stepIndex: number) => {
+    const key = NAV_ITEMS[stepIndex]?.key;
+    if (!key) return;
+    setPreviewOpen(false);
+    setActiveTab(key);
+  }, []);
 
   if (loading) {
     return <AppLoader className="h-full" />;
@@ -201,190 +239,223 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
 
   return (
     <FormProvider {...methods}>
-      <div className="flex h-full min-h-0 flex-col bg-background">
-        {/* ─── identity header (soft direction-tinted strip) ─────────────── */}
-        <header
-          className={cn(
-            'relative flex shrink-0 items-center gap-3 overflow-hidden border-b border-border/60 px-5 py-3',
-            // Subtle gradient washes the header in the direction's accent
-            // colour without overwhelming the form below.
-            agentType === 'inbound' &&
-              'bg-gradient-to-r from-emerald-500/5 via-transparent to-transparent dark:from-emerald-500/10',
-            agentType === 'outbound' &&
-              'bg-gradient-to-r from-violet-500/5 via-transparent to-transparent dark:from-violet-500/10',
-            agentType === 'both' &&
-              'bg-gradient-to-r from-sky-500/5 via-transparent to-transparent dark:from-sky-500/10',
-          )}
-        >
-          <CustomButton
-            type="text"
-            size="sm"
-            icon={<ArrowLeft className="size-4" />}
-            onClick={() => router.push('/agents')}
-            className="-ml-2 h-8 text-muted-foreground hover:text-foreground"
-            aria-label="Back to agents"
-          />
-          <div
+      <AgentFormNavProvider value={navContextValue}>
+        <div className="flex h-full min-h-0 flex-col bg-background">
+          {/* ─── identity header (soft direction-tinted strip) ─────────────── */}
+          <header
             className={cn(
-              'flex size-10 shrink-0 items-center justify-center rounded-xl text-base font-semibold shadow-sm',
-              DIRECTION_STYLES[agentType],
+              'relative flex shrink-0 items-center gap-3 overflow-hidden border-b border-border/60 px-5 py-3',
+              // Subtle gradient washes the header in the direction's accent
+              // colour without overwhelming the form below.
+              agentType === 'inbound' &&
+                'bg-gradient-to-r from-emerald-500/5 via-transparent to-transparent dark:from-emerald-500/10',
+              agentType === 'outbound' &&
+                'bg-gradient-to-r from-violet-500/5 via-transparent to-transparent dark:from-violet-500/10',
+              agentType === 'both' &&
+                'bg-gradient-to-r from-sky-500/5 via-transparent to-transparent dark:from-sky-500/10',
             )}
-            aria-hidden
           >
-            {agentInitial}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <h1 className="truncate font-display text-base font-semibold tracking-tight text-foreground">
-                {agentName}
-              </h1>
-              <Badge
-                className={cn(
-                  'inline-flex shrink-0 items-center gap-1 px-1.5 py-0 text-[10px] capitalize',
-                  DIRECTION_STYLES[agentType],
-                )}
-              >
-                <Phone className="size-2.5" />
-                {agentType}
-              </Badge>
-              {!isEditMode && (
-                <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
-                  <Sparkles className="size-3" />
-                  New
-                </span>
-              )}
-            </div>
-            <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-              {isEditMode ? 'Editing agent configuration' : 'Set up a new voice agent'}
-            </p>
-          </div>
-          {isEditMode && (
             <CustomButton
               type="text"
               size="sm"
-              icon={<Trash2 className="size-4" />}
-              onClick={() => setDeleteOpen(true)}
-              className="h-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              icon={<ArrowLeft className="size-4" />}
+              onClick={() => guardedAction(goBack)}
+              className="-ml-2 h-8 text-muted-foreground hover:text-foreground"
+              aria-label="Back to agents"
+            />
+            <div
+              className={cn(
+                'flex size-10 shrink-0 items-center justify-center rounded-xl text-base font-semibold shadow-sm',
+                DIRECTION_STYLES[agentType],
+              )}
+              aria-hidden
             >
-              Delete
-            </CustomButton>
-          )}
-        </header>
-
-        {/* ─── sidebar + content split ───────────────────────────────────── */}
-        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[220px_1fr]">
-          {/* Sidebar nav */}
-          <nav
-            aria-label="Agent sections"
-            className="hidden flex-col gap-0.5 border-r border-border/60 bg-muted/20 p-3 lg:flex"
-          >
-            {NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const isActive = item.key === activeTab;
-              return (
-                <CustomButton
-                  key={item.key}
-                  type="text"
-                  onClick={() => setActiveTab(item.key)}
-                  aria-current={isActive ? 'page' : undefined}
+              {agentInitial}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h1 className="truncate font-display text-base font-semibold tracking-tight text-foreground">
+                  {agentName}
+                </h1>
+                <Badge
                   className={cn(
-                    'group flex h-auto w-full items-center justify-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors',
-                    isActive
-                      ? 'bg-foreground text-background hover:bg-foreground/90'
-                      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+                    'inline-flex shrink-0 items-center gap-1 px-1.5 py-0 text-[10px] capitalize',
+                    DIRECTION_STYLES[agentType],
                   )}
                 >
-                  <Icon
-                    className={cn(
-                      'size-4 shrink-0',
-                      isActive ? 'text-background' : 'text-muted-foreground',
-                    )}
-                    strokeWidth={2.25}
-                  />
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="text-[13px] font-medium leading-tight">{item.label}</span>
-                    <span
-                      className={cn(
-                        'truncate text-[11px] leading-tight',
-                        isActive ? 'text-background/70' : 'text-muted-foreground/80',
-                      )}
-                    >
-                      {item.description}
-                    </span>
+                  <Phone className="size-2.5" />
+                  {agentType}
+                </Badge>
+                {!isEditMode && (
+                  <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
+                    <Sparkles className="size-3" />
+                    New
                   </span>
-                </CustomButton>
-              );
-            })}
-          </nav>
-
-          {/* Mobile fallback — horizontal scroll tab strip */}
-          <nav
-            aria-label="Agent sections (mobile)"
-            className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border/60 bg-background px-3 py-1.5 lg:hidden"
-          >
-            {NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              const isActive = item.key === activeTab;
-              return (
+                )}
+              </div>
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                {isEditMode ? 'Editing agent configuration' : 'Set up a new voice agent'}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {isEditMode && (
                 <CustomButton
-                  key={item.key}
                   type="text"
                   size="sm"
-                  onClick={() => setActiveTab(item.key)}
-                  aria-current={isActive ? 'page' : undefined}
-                  className={cn(
-                    'shrink-0 gap-1.5 rounded-full px-3 text-[12px]',
-                    isActive
-                      ? 'bg-foreground text-background'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
+                  icon={<Trash2 className="size-4" />}
+                  onClick={() => setDeleteOpen(true)}
+                  className="h-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                 >
-                  <Icon className="size-3.5" />
-                  {item.label}
+                  Delete
                 </CustomButton>
-              );
-            })}
-          </nav>
+              )}
+              <CustomButton
+                type="default"
+                size="sm"
+                icon={<Eye className="size-4" />}
+                onClick={() => setPreviewOpen(true)}
+                className="h-8"
+              >
+                Preview
+              </CustomButton>
+              <CustomButton
+                type="primary"
+                size="sm"
+                icon={
+                  saving ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Save className="size-3.5" />
+                  )
+                }
+                onClick={handleSave}
+                loading={saving}
+                className="h-8"
+              >
+                {isEditMode ? 'Save changes' : 'Create agent'}
+              </CustomButton>
+            </div>
+          </header>
 
-          {/* Body */}
-          <main className="min-h-0 overflow-auto px-5 py-5 lg:px-8 lg:py-6">
-            <div className="mx-auto max-w-3xl">{activeBody}</div>
-          </main>
-        </div>
+          {/* ─── sidebar + content split ───────────────────────────────────── */}
+          <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[220px_1fr]">
+            {/* Sidebar nav */}
+            <nav
+              aria-label="Agent sections"
+              className="hidden flex-col gap-0.5 border-r border-border/60 bg-muted/20 p-3 lg:flex"
+            >
+              {NAV_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const isActive = item.key === activeTab;
+                return (
+                  <CustomButton
+                    key={item.key}
+                    type="text"
+                    onClick={() => setActiveTab(item.key)}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={cn(
+                      'group flex h-auto w-full items-center justify-start gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors',
+                      // Use accent + ring instead of inverting to foreground/background — the
+                      // inverted palette reads as a glaring white block in dark mode.
+                      isActive
+                        ? 'bg-accent text-accent-foreground ring-1 ring-inset ring-border hover:bg-accent'
+                        : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        'size-4 shrink-0',
+                        isActive ? 'text-foreground' : 'text-muted-foreground',
+                      )}
+                      strokeWidth={2.25}
+                    />
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <span className="text-[13px] font-medium leading-tight">{item.label}</span>
+                      <span
+                        className={cn(
+                          'truncate text-[11px] leading-tight',
+                          isActive ? 'text-muted-foreground' : 'text-muted-foreground/80',
+                        )}
+                      >
+                        {item.description}
+                      </span>
+                    </span>
+                  </CustomButton>
+                );
+              })}
+            </nav>
 
-        {/* ─── sticky save bar ───────────────────────────────────────────── */}
-        <footer className="sticky bottom-0 flex shrink-0 items-center justify-end gap-2 border-t border-border/60 bg-background/85 px-5 py-1.5 backdrop-blur">
-          <CustomButton
-            type="primary"
-            size="sm"
-            icon={
-              saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />
-            }
-            onClick={handleSave}
-            loading={saving}
+            {/* Mobile fallback — horizontal scroll tab strip */}
+            <nav
+              aria-label="Agent sections (mobile)"
+              className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border/60 bg-background px-3 py-1.5 lg:hidden"
+            >
+              {NAV_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const isActive = item.key === activeTab;
+                return (
+                  <CustomButton
+                    key={item.key}
+                    type="text"
+                    size="sm"
+                    onClick={() => setActiveTab(item.key)}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={cn(
+                      'shrink-0 gap-1.5 rounded-full px-3 text-[12px]',
+                      isActive
+                        ? 'bg-accent text-foreground ring-1 ring-inset ring-border'
+                        : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                    )}
+                  >
+                    <Icon className="size-3.5" />
+                    {item.label}
+                  </CustomButton>
+                );
+              })}
+            </nav>
+
+            {/* Body */}
+            <main className="min-h-0 overflow-auto px-5 py-5 lg:px-8 lg:py-6">
+              <div className="mx-auto max-w-3xl">{activeBody}</div>
+            </main>
+          </div>
+
+          <CustomModal
+            open={previewOpen}
+            onClose={() => setPreviewOpen(false)}
+            title="Agent preview"
+            description="Read-only sanity check of the current configuration."
+            hideFooter
+            width="sm:max-w-3xl"
+            className="max-h-[85vh] overflow-hidden"
+            contentClassName="max-h-[calc(85vh-90px)] overflow-y-auto"
           >
-            {isEditMode ? 'Save changes' : 'Create agent'}
-          </CustomButton>
-        </footer>
+            <ReviewStep onJump={handleReviewJump} />
+          </CustomModal>
 
-        <CustomModal
-          open={deleteOpen}
-          onClose={() => setDeleteOpen(false)}
-          title="Delete agent"
-          description="This removes the agent and its configuration. Tools, MCP servers and uploads stay intact."
-          confirmText="Delete"
-          confirmType="danger"
-          confirmLoading={deleting}
-          onConfirm={handleConfirmDelete}
-        />
-      </div>
+          <CustomModal
+            open={deleteOpen}
+            onClose={() => setDeleteOpen(false)}
+            title="Delete agent"
+            description="This removes the agent and its configuration. Tools, MCP servers and uploads stay intact."
+            confirmText="Delete"
+            confirmType="danger"
+            confirmLoading={deleting}
+            onConfirm={handleConfirmDelete}
+          />
+
+          <CustomModal
+            open={promptOpen}
+            onClose={cancelLeave}
+            title="Discard unsaved changes?"
+            description="You have unsaved changes on this agent. If you leave now, those changes will be lost."
+            confirmText="Discard"
+            confirmType="danger"
+            cancelText="Keep editing"
+            onConfirm={confirmLeave}
+          />
+        </div>
+      </AgentFormNavProvider>
     </FormProvider>
   );
-}
-
-// Review step jumps still address sections by index (Basics=0, …) so this
-// translation table keeps the public ReviewStep API unchanged.
-const TAB_KEYS = ['basics', 'prompt', 'ai', 'voice', 'tools', 'knowledge', 'review'];
-function tabKeyForIndex(i: number) {
-  return TAB_KEYS[i] ?? TAB_KEYS[0];
 }
