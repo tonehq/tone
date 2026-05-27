@@ -4,9 +4,13 @@ import os
 from core.logging import setup_logging
 setup_logging()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
+from pipecat.runner.types import WebSocketRunnerArguments
+
+from core.bot import bot
 from shared.config import settings
 from core.internal.machine import generate_fingerprint
 from core.internal.license import init_license_validator, get_license_info
@@ -145,6 +149,12 @@ def init_redis_pool():
 
 
 @app.on_event("startup")
+def warm_up_pipeline_services():
+    from core.services.service_warmup import warm_up_services
+    warm_up_services()
+
+
+@app.on_event("startup")
 async def warm_worker_pool_startup():
     """Pre-spawn bot worker subprocesses so the first call starts instantly."""
     use_subprocess = os.environ.get("USE_SUBPROCESS_BOT", "false").lower() == "true"
@@ -191,6 +201,58 @@ def ready():
 @app.get("/environment")
 def environment():
     return {"environment": settings.ENVIRONMENT}
+
+
+@app.post("/twiml")
+@app.get("/twiml")
+async def twiml(request: Request) -> Response:
+    host = request.url.hostname or "localhost"
+    ws_url = f"wss://{host}/ws"
+    from_number = ""
+    to_number = ""
+    try:
+        if request.method == "POST":
+            form = await request.form()
+            from_number = (form.get("From") or "").strip()
+            to_number = (form.get("To") or "").strip()
+        else:
+            from_number = (request.query_params.get("From") or "").strip()
+            to_number = (request.query_params.get("To") or "").strip()
+    except Exception:
+        pass
+
+    from xml.sax.saxutils import escape as _xml_escape
+
+    params_xml = ""
+    if from_number:
+        params_xml += f'<Parameter name="from" value="{_xml_escape(from_number)}" />'
+    if to_number:
+        params_xml += f'<Parameter name="to" value="{_xml_escape(to_number)}" />'
+
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<Response>'
+        '<Connect>'
+        f'<Stream url="{ws_url}">{params_xml}</Stream>'
+        '</Connect>'
+        '</Response>'
+    )
+    return Response(content=xml, media_type="application/xml")
+
+
+@app.websocket("/ws")
+async def ws_endpoint(websocket: WebSocket) -> None:
+    await websocket.accept()
+    runner_args = WebSocketRunnerArguments(websocket=websocket, body={})
+    try:
+        await bot(runner_args)
+    except Exception as exc:
+        print(f"[/ws] bot crashed: {exc}")
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
