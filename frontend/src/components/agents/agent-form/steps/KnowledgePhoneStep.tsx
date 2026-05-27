@@ -25,6 +25,10 @@ import type { AgentFormState, AgentPhoneNumberInput } from '@/types/agent';
 import type { Channel } from '@/types/integration';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
+import { formatPhoneWithDash, getCountryIso2FromPhone } from '@/utils/phoneUtils';
+import * as FlagIcons from 'country-flag-icons/react/3x2';
+
+type FlagKey = keyof typeof FlagIcons;
 
 const PAGE_SIZE = 30;
 
@@ -255,39 +259,77 @@ export default function KnowledgePhoneStep({ agentId }: KnowledgePhoneStepProps)
         }
       >
         {phoneNumbers.length === 0 && (
-          <div className="rounded-xl border border-dashed border-border/70 py-5 text-center text-sm text-muted-foreground">
-            No phone numbers assigned yet.
+          <div className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-6 text-center">
+            <span className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <PhoneIncoming className="size-4" />
+            </span>
+            <p className="text-sm font-medium text-foreground">No phone numbers assigned</p>
+            <p className="text-[11px] text-muted-foreground">
+              Click below to pick from your connected providers.
+            </p>
           </div>
         )}
         {phoneNumbers.length > 0 && (
-          <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/70 bg-card">
+          <ul className="grid gap-2 sm:grid-cols-2">
             {phoneNumbers.map((row) => {
               const channel = channelById.get(row.channel_id);
+              const iso2 = getCountryIso2FromPhone(row.number);
+              const FlagComponent = iso2
+                ? (FlagIcons[iso2 as FlagKey] as
+                    | React.ComponentType<React.SVGProps<SVGSVGElement>>
+                    | undefined)
+                : undefined;
               return (
                 <li
                   key={`${row.channel_id}|${row.number}`}
-                  className="flex items-center justify-between gap-3 px-3 py-2.5"
+                  className={cn(
+                    'group relative flex items-center gap-3 overflow-hidden rounded-xl border border-border/70 bg-card px-3 py-2.5 transition-all',
+                    'hover:border-primary/40 hover:shadow-sm',
+                  )}
                 >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <Phone className="size-3.5" />
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/8 text-primary ring-1 ring-primary/10">
+                    <Phone className="size-4" strokeWidth={2.25} />
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="flex min-w-0 items-center gap-2">
+                      {FlagComponent ? (
+                        <FlagComponent
+                          className="h-3 w-[18px] shrink-0 rounded-[2px] object-cover shadow-[0_0_0_0.5px_rgba(0,0,0,0.08)]"
+                          aria-label={iso2 ?? undefined}
+                        />
+                      ) : null}
+                      <span className="truncate text-sm font-semibold tabular-nums text-foreground">
+                        {formatPhoneWithDash(row.number)}
+                      </span>
                     </span>
-                    <div className="flex min-w-0 flex-col">
-                      <span className="truncate text-sm font-medium text-foreground">
-                        {row.number}
-                      </span>
-                      <span className="truncate text-[11px] text-muted-foreground">
-                        {channel ? `${channel.name} · ${channel.channel_type}` : 'Unknown channel'}
-                        {row.label ? ` · ${row.label}` : ''}
-                      </span>
-                    </div>
+                    <span className="flex min-w-0 items-center gap-1.5 truncate text-[11px] text-muted-foreground">
+                      {channel ? (
+                        <>
+                          <span className="truncate font-medium text-foreground/80">
+                            {channel.name}
+                          </span>
+                          <Badge
+                            variant="secondary"
+                            className="h-4 shrink-0 px-1.5 text-[9px] font-medium uppercase tracking-wide"
+                          >
+                            {channel.channel_type}
+                          </Badge>
+                          {row.label && <span className="truncate">· {row.label}</span>}
+                        </>
+                      ) : (
+                        <span>Unknown channel</span>
+                      )}
+                    </span>
                   </div>
                   <CustomButton
                     type="text"
                     size="icon-xs"
                     onClick={() => removeAssignedNumber(row.number, row.channel_id)}
                     aria-label={`Remove ${row.number}`}
-                    className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    className={cn(
+                      'shrink-0 text-muted-foreground transition-all',
+                      'opacity-60 hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100',
+                    )}
                   >
                     <X className="size-4" />
                   </CustomButton>

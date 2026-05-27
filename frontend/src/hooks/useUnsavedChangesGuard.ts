@@ -17,14 +17,6 @@ interface UnsavedChangesGuard {
 
 const SENTINEL_STATE = { __unsavedGuard: true };
 
-function isSentinel(state: unknown): boolean {
-  return !!(
-    state &&
-    typeof state === 'object' &&
-    (state as { __unsavedGuard?: boolean }).__unsavedGuard
-  );
-}
-
 /**
  * Guards an in-flight form against losing unsaved changes.
  *
@@ -116,10 +108,11 @@ export function useUnsavedChangesGuard(isDirty: boolean): UnsavedChangesGuard {
     window.addEventListener('popstate', handler);
     return () => {
       window.removeEventListener('popstate', handler);
-      if (isSentinel(window.history.state)) {
-        skipNextPopRef.current = true;
-        window.history.back();
-      }
+      // We intentionally do NOT call history.back() here even if the sentinel
+      // is on top. Doing so races with `router.push` from inside save/delete
+      // (Next.js's pushState lands in a microtask), and we'd undo the redirect
+      // the user just performed. Leaving the sentinel costs one extra back
+      // press in history at worst — a fine trade for not breaking navigation.
     };
   }, [isDirty]);
 

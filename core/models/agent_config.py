@@ -18,6 +18,7 @@ class AgentConfig(OrgScopedModel):
     is_default = Column(Boolean, nullable=False, default=False)
     published_at = Column(DateTime(timezone=True), nullable=True)
     first_message = Column(String(1000), nullable=True)
+    end_call_message = Column(String(1000), nullable=True)
     system_prompt_template = Column(Text, nullable=True)
     conversation_history_token_limit = Column(Integer, nullable=True)
     language_id = Column(UUID(as_uuid=True), ForeignKey("model_languages.id", ondelete="SET NULL"), nullable=True)

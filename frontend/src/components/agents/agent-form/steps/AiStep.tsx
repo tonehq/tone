@@ -19,10 +19,15 @@ export default function AiStep() {
   const [loadingProviders, setLoadingProviders] = useState(false);
   const [loadingModels, setLoadingModels] = useState(false);
 
-  // The form stores the LLM provider id at `config.knowledge_model_id` (per
-  // the existing wire format) and the LLM model id at
-  // `config.llm_settings.model_id` (free key on llm_settings).
-  const llmProviderId = useWatch({ control, name: 'config.knowledge_model_id' });
+  // LLM provider id and model id both live under `config.llm_settings`
+  // (a JSONB column on the backend). We previously wrote provider id into
+  // `config.knowledge_model_id`, but that column is a FK to `models.id`
+  // (KB embedding model), not a provider — saving caused a FK violation
+  // surfaced misleadingly as "Unique constraint violated.".
+  const llmProviderId = useWatch({
+    control,
+    name: 'config.llm_settings.provider_id' as never,
+  }) as string | null | undefined;
   const llmModelId = useWatch({
     control,
     name: 'config.llm_settings.model_id' as never,
@@ -97,13 +102,15 @@ export default function AiStep() {
       >
         {/* Step 1 — Provider */}
         <SelectInput
-          name="config.knowledge_model_id"
+          name="config.llm_settings.provider_id"
           label="Provider"
           options={llmProviderOptions}
           loading={loadingProviders}
           value={llmProviderId ?? ''}
           onValueChange={(v) => {
-            setValue('config.knowledge_model_id', v || null, { shouldDirty: true });
+            setValue('config.llm_settings.provider_id' as never, (v || null) as never, {
+              shouldDirty: true,
+            });
             // New provider → forget the previously-chosen model.
             setValue('config.llm_settings.model_id' as never, null as never, {
               shouldDirty: true,

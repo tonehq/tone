@@ -9,9 +9,12 @@ from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from loguru import logger
 from sqlalchemy.exc import IntegrityError
 
+from core.models.agent import Agent
 from core.models.channel import Channel
+from core.models.phone_number import PhoneNumber
 from core.services.base import BaseService
 from core.utils.auth_helpers import coerce_uuid
 from core.utils.encryption import decrypt_json, encrypt_json
@@ -190,6 +193,88 @@ class ChannelService(BaseService):
 
     def get_decrypted_config(self, channel: Channel) -> Dict[str, Any]:
         return decrypt_json(channel.encrypted_config)
+
+    # ──────────────────────────────────────────────────────────────────────
+    # Twilio: live IncomingPhoneNumber listing
+    # ──────────────────────────────────────────────────────────────────────
+
+    def list_twilio_phone_numbers(self, channel_id: Union[str, UUID]) -> List[Dict[str, Any]]:
+        """Fetch IncomingPhoneNumbers from Twilio for a Twilio channel, merged
+        with local PhoneNumber rows so the UI can mark numbers already
+        assigned to an agent in this org."""
+        record = self._get_record(channel_id)
+        if (record.channel_type or "").lower() != "twilio":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Channel is not a Twilio channel",
+            )
+
+        config = decrypt_json(record.encrypted_config)
+        account_sid = config.get("account_sid")
+        auth_token = config.get("auth_token")
+        if not account_sid or not auth_token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Twilio credentials are not configured for this channel",
+            )
+
+        try:
+            from twilio.rest import Client
+            from twilio.base.exceptions import TwilioRestException
+        except ImportError as e:
+            logger.exception("twilio SDK not installed")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Twilio integration is unavailable on this server",
+            ) from e
+
+        try:
+            client = Client(account_sid, auth_token)
+            twilio_numbers = client.incoming_phone_numbers.list()
+        except TwilioRestException as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Twilio API error: {e.msg or str(e)}",
+            ) from e
+        except Exception as e:
+            logger.exception("Unexpected error fetching Twilio phone numbers")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to fetch phone numbers from Twilio",
+            ) from e
+
+        local_rows = (
+            self.db.query(PhoneNumber, Agent.name.label("agent_name"))
+            .outerjoin(Agent, Agent.id == PhoneNumber.agent_id)
+            .filter(
+                PhoneNumber.channel_id == record.id,
+                PhoneNumber.organization_id == self.org_id,
+            )
+            .all()
+        )
+        assignments_by_number: Dict[str, Dict[str, Any]] = {}
+        for pn, agent_name in local_rows:
+            if pn.agent_id:
+                assignments_by_number[pn.number] = {
+                    "agent_id": str(pn.agent_id),
+                    "agent_name": agent_name,
+                }
+
+        results: List[Dict[str, Any]] = []
+        for n in twilio_numbers:
+            number = getattr(n, "phone_number", None)
+            if not number:
+                continue
+            results.append(
+                {
+                    "id": getattr(n, "sid", number),
+                    "number": number,
+                    "label": getattr(n, "friendly_name", None),
+                    "channel_id": str(record.id),
+                    "assigned_to": assignments_by_number.get(number),
+                }
+            )
+        return results
 
     # ──────────────────────────────────────────────────────────────────────
     # Internal
