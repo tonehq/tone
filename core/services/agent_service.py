@@ -43,24 +43,43 @@ AGENT_METADATA_KEYS = (
 
 
 def _agent_unique_constraint_detail(exc: IntegrityError) -> str:
-    """Return a user-friendly message for Agent unique constraint violations."""
+    """Return a user-friendly message for Agent integrity-error violations.
+
+    Distinguishes unique-violation (23505) from foreign-key-violation (23503)
+    and not-null (23502). FK violations used to be reported as
+    "Unique constraint violated." which made e.g. an unknown model id look
+    like a duplicate-name issue.
+    """
     msg = str(exc).lower()
     orig = getattr(exc, "orig", None)
+    pgcode = getattr(orig, "pgcode", None) if orig is not None else None
     constraint_name = None
-    if orig is not None:
-        pgcode = getattr(orig, "pgcode", None)
-        if pgcode == "23505":  # unique_violation
-            if hasattr(orig, "diag") and orig.diag is not None:
-                constraint_name = getattr(orig.diag, "constraint_name", None)
+    if orig is not None and hasattr(orig, "diag") and orig.diag is not None:
+        constraint_name = getattr(orig.diag, "constraint_name", None)
+
+    # Foreign-key violation: a referenced row doesn't exist.
+    if pgcode == "23503" or "foreign key" in msg:
+        if constraint_name and "knowledge_model" in constraint_name:
+            return "Selected knowledge embedding model does not exist."
+        if constraint_name and "language" in constraint_name:
+            return "Selected language does not exist."
+        return "A referenced record could not be found. Check your selections and try again."
+
+    # Not-null violation.
+    if pgcode == "23502":
+        return "A required field is missing."
+
+    # Unique violation: the legacy path.
     if constraint_name is None and "agent_name_unique" in msg:
         constraint_name = "agent_name_unique"
     if constraint_name == "agent_name_unique":
         return "An agent with this name already exists."
-    if constraint_name and "uuid" in (constraint_name or "").lower():
+    if constraint_name and "uuid" in constraint_name.lower():
         return "Duplicate agent identifier (uuid)."
-    if "unique" in msg or (orig and getattr(orig, "pgcode", None) == "23505"):
+    if pgcode == "23505" or "unique" in msg:
         return "A record with this value already exists. Please use a unique name or identifier."
-    return "Unique constraint violated."
+
+    return "Database constraint violated."
 
 
 class AgentService(BaseService):
@@ -771,9 +790,9 @@ class AgentService(BaseService):
         )
 
         config_fields = (
-            "first_message", "system_prompt_template", "conversation_history_token_limit",
-            "language_id", "knowledge_model_id", "llm_settings", "voice_settings",
-            "stt_settings", "conversation_settings",
+            "first_message", "end_call_message", "system_prompt_template",
+            "conversation_history_token_limit", "language_id", "knowledge_model_id",
+            "llm_settings", "voice_settings", "stt_settings", "conversation_settings",
         )
 
         if existing:
@@ -999,6 +1018,7 @@ class AgentService(BaseService):
                 "id": str(config.id),
                 "version": config.version,
                 "first_message": config.first_message,
+                "end_call_message": config.end_call_message,
                 "system_prompt_template": config.system_prompt_template,
                 "conversation_history_token_limit": config.conversation_history_token_limit,
                 "language_id": str(config.language_id) if config.language_id else None,

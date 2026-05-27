@@ -51,3 +51,10 @@ export const listChannelPhoneNumbers = async (channelId: string): Promise<Channe
   });
   return data ?? [];
 };
+
+export const listTwilioPhoneNumbers = async (channelId: string): Promise<ChannelPhoneNumber[]> => {
+  const { data } = await axiosInstance.get<ChannelPhoneNumber[]>('/channel/twilio_phone_numbers', {
+    params: { channel_id: channelId },
+  });
+  return data ?? [];
+};
