@@ -181,7 +181,6 @@ pathspec==0.11.2
 pgvector==0.3.6
 phonenumbers==8.12.48
 pillow==11.3.0
--e git+https://github.com/tonehq/pipecat.git@179df0871f7d46fe6af3f6363b9f6420015302ac#egg=pipecat_ai
 pipecat-ai-small-webrtc-prebuilt==2.0.4
 pkce==1.0.3
 plaster==1.1.2
