@@ -14,7 +14,8 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:debug": "playwright test --debug",
-    "test:e2e:agents": "playwright test e2e/dashboard/agents.spec.ts e2e/dashboard/agents-create-inbound.spec.ts e2e/dashboard/agents-create-outbound.spec.ts e2e/dashboard/agents-edit.spec.ts --project=chromium --headed --workers=1 --reporter=list"
+    "test:e2e:agents": "playwright test e2e/dashboard/agents.spec.ts e2e/dashboard/agents-create-inbound.spec.ts e2e/dashboard/agents-create-outbound.spec.ts e2e/dashboard/agents-edit.spec.ts --project=chromium --headed --workers=1 --reporter=list",
+    "test:e2e:tools": "playwright test e2e/dashboard/tools.spec.ts e2e/dashboard/tools-create.spec.ts e2e/dashboard/tools-edit.spec.ts --project=chromium --headed --workers=1 --reporter=list"
   },
   "lint-staged": {
     "src/**/*.{ts,tsx,js,jsx}": [
