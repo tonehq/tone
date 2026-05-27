@@ -36,8 +36,21 @@ export async function gotoCreatePicker(page: Page): Promise<void> {
 }
 
 export async function openEditTool(page: Page, options: { id: string }): Promise<void> {
+  // Wait for the GET /tool/get_tool response that hydrates the form. Without
+  // this, a fast-typing test can race the load and have its first fills
+  // overwritten when loadToolData resolves and resets the parent's state.
+  const responsePromise = page
+    .waitForResponse(
+      (resp) =>
+        resp.url().includes('/tool/get_tool') &&
+        resp.url().includes(options.id) &&
+        resp.request().method() === 'GET',
+      { timeout: 15_000 },
+    )
+    .catch(() => null);
   await page.goto(`/tools/edit/${options.id}`);
   await page.locator('input[name="name"]').first().waitFor({ state: 'visible', timeout: 15_000 });
+  await responsePromise;
 }
 
 // ── SelectInput pickers (shadcn) ────────────────────────────────────────────
