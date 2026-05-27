@@ -1,11 +1,12 @@
 'use client';
 
 import { cn } from '@/utils/cn';
-import { Loader2 } from 'lucide-react';
+import { ChevronDown, Inbox, Loader2 } from 'lucide-react';
 import React, { forwardRef } from 'react';
 import { Controller } from 'react-hook-form';
 
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -67,51 +68,81 @@ const PlainSelectInput = forwardRef<HTMLButtonElement, SelectInputBaseProps>(
         )}
 
         <div className="relative">
-          <Select
-            value={value}
-            defaultValue={defaultValue}
-            onValueChange={onValueChange}
-            disabled={isDisabled}
-            name={name}
-          >
-            <SelectTrigger
-              ref={ref}
-              id={name}
-              size={size}
-              aria-invalid={error || undefined}
-              aria-busy={isLoading || undefined}
-              className={cn(
-                'w-full',
-                !isDisabled && 'cursor-pointer',
-                isLoading &&
-                  'cursor-progress text-muted-foreground [&[aria-busy=true]_svg]:invisible',
-                isLockedRead &&
-                  'bg-muted/50 text-foreground/80 disabled:cursor-not-allowed disabled:opacity-100',
-                error &&
-                  'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50',
-                triggerClassName,
-              )}
+          {isEmpty && !isLoading && !isLockedRead ? (
+            // Radix Select doesn't reliably open its popper when SelectContent
+            // has no SelectItem children — the panel can collapse immediately
+            // because there's nothing for roving focus to land on. Render a
+            // Popover that mimics the trigger so the user still gets visual
+            // feedback ("No data") on click.
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  id={name}
+                  name={name}
+                  aria-invalid={error || undefined}
+                  className={cn(
+                    'border-input data-[state=open]:border-ring data-[state=open]:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50 flex h-9 w-full cursor-pointer items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none data-[state=open]:ring-[3px] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                    size === 'sm' ? 'h-8' : 'h-9',
+                    error &&
+                      'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50',
+                    triggerClassName,
+                  )}
+                >
+                  <span className="truncate text-left text-muted-foreground">{placeholder}</span>
+                  <ChevronDown className="size-4 opacity-50" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                align="start"
+                sideOffset={4}
+                className="flex min-w-[220px] flex-col items-center justify-center gap-1.5 px-3 py-5 text-xs text-muted-foreground"
+              >
+                <Inbox className="size-7 opacity-60" strokeWidth={1.25} />
+                No data
+              </PopoverContent>
+            </Popover>
+          ) : (
+            <Select
+              value={value}
+              defaultValue={defaultValue}
+              onValueChange={onValueChange}
+              disabled={isDisabled}
+              name={name}
             >
-              {isLoading ? (
-                <span className="text-sm text-muted-foreground">Loading...</span>
-              ) : (
-                <SelectValue placeholder={placeholder} />
-              )}
-            </SelectTrigger>
-            <SelectContent position={position}>
-              {isEmpty ? (
-                <div className="px-3 py-2 text-center text-xs text-muted-foreground">
-                  No items to select
-                </div>
-              ) : (
-                options.map((opt) => (
+              <SelectTrigger
+                ref={ref}
+                id={name}
+                size={size}
+                aria-invalid={error || undefined}
+                aria-busy={isLoading || undefined}
+                className={cn(
+                  'w-full',
+                  !isDisabled && 'cursor-pointer',
+                  isLoading &&
+                    'cursor-progress text-muted-foreground [&[aria-busy=true]_svg]:invisible',
+                  isLockedRead &&
+                    'bg-muted/50 text-foreground/80 disabled:cursor-not-allowed disabled:opacity-100',
+                  error &&
+                    'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50',
+                  triggerClassName,
+                )}
+              >
+                {isLoading ? (
+                  <span className="text-sm text-muted-foreground">Loading...</span>
+                ) : (
+                  <SelectValue placeholder={placeholder} />
+                )}
+              </SelectTrigger>
+              <SelectContent position={position}>
+                {options.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value} disabled={opt.disabled}>
                     {opt.label}
                   </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           {isLoading && (
             <Loader2
               aria-hidden

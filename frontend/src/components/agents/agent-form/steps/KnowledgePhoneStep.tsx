@@ -1,6 +1,15 @@
 'use client';
 
-import { Check, FileText, Phone, PhoneIncoming, Upload, X } from 'lucide-react';
+import {
+  AlertCircle,
+  Check,
+  FileText,
+  Loader2,
+  Phone,
+  PhoneIncoming,
+  Upload,
+  X,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
@@ -41,9 +50,11 @@ export default function KnowledgePhoneStep({ agentId }: KnowledgePhoneStepProps)
   const refreshKb = useCallback(async () => {
     setKbLoading(true);
     try {
+      // Show both ready and still-processing docs so freshly uploaded files
+      // appear in the grid immediately. The row UI surfaces the status so
+      // the user can tell which ones aren't usable yet.
       const res = await listKnowledgeBase({
         search: kbSearch.trim() || undefined,
-        status: 'ready',
         page: 1,
         page_size: PAGE_SIZE,
         sort_by: '-updated_at',
@@ -143,8 +154,6 @@ export default function KnowledgePhoneStep({ agentId }: KnowledgePhoneStepProps)
               size="sm"
               icon={<Upload className="size-3.5" />}
               onClick={() => setUploadOpen(true)}
-              disabled={!agentId}
-              title={agentId ? undefined : 'Save the agent first to upload documents.'}
             >
               Upload
             </CustomButton>
@@ -153,8 +162,7 @@ export default function KnowledgePhoneStep({ agentId }: KnowledgePhoneStepProps)
       >
         {!agentId && (
           <p className="text-[11px] text-muted-foreground">
-            Save the agent first to upload new documents here. You can still attach previously
-            uploaded files once they're indexed.
+            Uploads here are queued and attached to the agent automatically when you save.
           </p>
         )}
         <SearchBar
@@ -174,12 +182,14 @@ export default function KnowledgePhoneStep({ agentId }: KnowledgePhoneStepProps)
             ))}
           {!kbLoading && kbItems.length === 0 && (
             <div className="col-span-full rounded-lg border border-dashed border-border/70 py-6 text-center text-sm text-muted-foreground">
-              No ready-to-use documents found. Upload some from the Knowledge Base page.
+              No documents found. Upload some from the Knowledge Base page.
             </div>
           )}
           {!kbLoading &&
             kbItems.map((doc) => {
               const selected = uploadIds.includes(doc.id);
+              const isProcessing = doc.status === 'processing' || doc.status === 'pending';
+              const isFailed = doc.status === 'failed';
               return (
                 <CustomButton
                   key={doc.id}
@@ -198,8 +208,20 @@ export default function KnowledgePhoneStep({ agentId }: KnowledgePhoneStepProps)
                       <FileText className="size-3.5 shrink-0 text-muted-foreground" />
                       <span className="min-w-0 flex-1 truncate">{doc.file_name}</span>
                     </span>
-                    <span className="truncate text-xs text-muted-foreground">
+                    <span className="flex min-w-0 items-center gap-1.5 truncate text-xs text-muted-foreground">
                       {(doc.size_bytes / 1024).toFixed(0)} KB · {doc.file_type}
+                      {isProcessing && (
+                        <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                          <Loader2 className="size-3 animate-spin" />
+                          Processing
+                        </span>
+                      )}
+                      {isFailed && (
+                        <span className="inline-flex items-center gap-1 text-destructive">
+                          <AlertCircle className="size-3" />
+                          Failed
+                        </span>
+                      )}
                     </span>
                   </div>
                   <span
@@ -292,14 +314,12 @@ export default function KnowledgePhoneStep({ agentId }: KnowledgePhoneStepProps)
         )}
       </SectionCard>
 
-      {agentId && (
-        <KnowledgeBaseUploadModal
-          open={uploadOpen}
-          agentId={agentId}
-          onClose={() => setUploadOpen(false)}
-          onUploaded={handleUploaded}
-        />
-      )}
+      <KnowledgeBaseUploadModal
+        open={uploadOpen}
+        agentId={agentId}
+        onClose={() => setUploadOpen(false)}
+        onUploaded={handleUploaded}
+      />
 
       <AssignPhoneNumberModal
         open={assignOpen}

@@ -82,20 +82,45 @@ def list_documents(
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def upload_document(
-    agent_id: str = Form(...),
     file: UploadFile = File(...),
+    agent_id: str | None = Form(None),
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    org_id = UUID(claims.org_id)
-    try:
-        agent_uuid = UUID(agent_id)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid agent_id")
+    """Upload a knowledge-base document.
 
-    agent = db.query(Agent).filter(Agent.id == agent_uuid, Agent.organization_id == org_id).first()
-    if not agent:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+    ``agent_id`` is optional: when omitted, the upload is created standalone
+    and the caller is expected to attach it on agent save via ``upload_ids``
+    on the create_agent payload.
+    """
+    org_id = UUID(claims.org_id)
+    agent_uuid: UUID | None = None
+    agent_config = None
+    if agent_id:
+        try:
+            agent_uuid = UUID(agent_id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid agent_id")
+
+        agent = db.query(Agent).filter(Agent.id == agent_uuid, Agent.organization_id == org_id).first()
+        if not agent:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+
+        # Resolve the latest agent_config before touching R2 so we fail fast
+        # when no config exists — otherwise raising 409 after the blob is
+        # written would orphan the R2 object.
+        from core.models.agent_config import AgentConfig
+        agent_config = (
+            db.query(AgentConfig)
+            .filter(AgentConfig.agent_id == agent_uuid, AgentConfig.deleted_at.is_(None))
+            .order_by(AgentConfig.version.desc())
+            .first()
+        )
+        if not agent_config:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Agent has no configuration yet. Save the agent before uploading knowledge base documents.",
+            )
 
     file_bytes = await file.read()
     if not file_bytes:
@@ -106,49 +131,46 @@ async def upload_document(
     user_id = UUID(claims.user_id) if claims.user_id else None
 
     object_key = f"knowledge-base/{org_id}/{uuid4()}/{file_name}"
-    R2StorageService().upload_file(file_bytes, object_key, content_type=content_type)
+    r2 = R2StorageService()
+    r2.upload_file(file_bytes, object_key, content_type=content_type)
 
-    upload = Upload(
-        organization_id=org_id,
-        container_name=settings.R2_BUCKET_NAME,
-        file_path=object_key,
-        file_name=file_name,
-        file_type=content_type,
-        size_bytes=len(file_bytes),
-        purpose="kb_document",
-        status="ready",
-        meta_data={},
-        created_by_user_id=user_id,
-        is_active=True,
-    )
-    db.add(upload)
-    db.flush()
-
-    # Link upload to agent via AgentKnowledgeBase. AgentKnowledgeBase requires
-    # a config row, so refuse the upload rather than silently orphan it.
-    from core.models.agent_config import AgentConfig
-    config = (
-        db.query(AgentConfig)
-        .filter(AgentConfig.agent_id == agent_uuid, AgentConfig.deleted_at.is_(None))
-        .order_by(AgentConfig.version.desc())
-        .first()
-    )
-    if not config:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Agent has no configuration yet. Save the agent before uploading knowledge base documents.",
-        )
-    db.add(
-        AgentKnowledgeBase(
+    try:
+        upload = Upload(
             organization_id=org_id,
-            agent_id=agent_uuid,
-            upload_id=upload.id,
-            agent_config_id=config.id,
+            container_name=settings.R2_BUCKET_NAME,
+            file_path=object_key,
+            file_name=file_name,
+            file_type=content_type,
+            size_bytes=len(file_bytes),
+            purpose="kb_document",
+            status="ready",
+            meta_data={},
+            created_by_user_id=user_id,
+            is_active=True,
         )
-    )
+        db.add(upload)
+        db.flush()
 
-    db.commit()
-    db.refresh(upload)
+        if agent_uuid is not None and agent_config is not None:
+            db.add(
+                AgentKnowledgeBase(
+                    organization_id=org_id,
+                    agent_id=agent_uuid,
+                    upload_id=upload.id,
+                    agent_config_id=agent_config.id,
+                )
+            )
+
+        db.commit()
+        db.refresh(upload)
+    except Exception:
+        db.rollback()
+        try:
+            r2.delete_file(object_key)
+        except Exception:
+            pass
+        raise
+
     return _upload_to_payload(upload)
 
 

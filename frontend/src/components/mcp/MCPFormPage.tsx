@@ -8,6 +8,7 @@ import CheckboxField from '@/components/shared/CheckboxField';
 import ToneLoader from '@/components/shared/ToneLoader';
 import SettingsSection from '@/components/tools/SettingsSection';
 import { Switch } from '@/components/ui/switch';
+import { useGoBack } from '@/hooks/useGoBack';
 import { getMcpServer } from '@/services/mcpServerService';
 import type { MCPServer, MCPServerUpsertPayload } from '@/types/mcp';
 import { cn } from '@/utils/cn';
@@ -215,7 +216,7 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
     }
   };
 
-  const onBack = () => router.push('/mcp');
+  const onBack = useGoBack('/mcp');
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
