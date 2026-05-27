@@ -120,7 +120,6 @@ hupper==1.11
 identify==2.5.12
 idna==3.4
 ifaddr==0.2.0
-infisical-python==2.3.6
 infisicalsdk==1.0.16
 iniconfig==2.3.0
 isodate==0.6.1
