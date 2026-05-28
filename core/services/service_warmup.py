@@ -72,7 +72,7 @@ def _preload_silero_vad() -> Optional[Any]:
                 confidence=0.7,
                 start_secs=0.2,
                 stop_secs=0.4,
-                min_volume=0.6,
+                min_volume=0.4,
             )
         )
         return _silero_vad_analyzer
