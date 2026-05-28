@@ -1269,7 +1269,10 @@ class AgentFactoryService(BaseService):
             AssistantTurnStoppedMessage, LLMContextAggregatorPair,
             LLMUserAggregatorParams, UserTurnStoppedMessage)
         from pipecat.turns.user_turn_strategies import UserTurnStrategies
-        from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
+        from pipecat.turns.user_stop import (
+            TurnAnalyzerUserTurnStopStrategy,
+            TranscriptionUserTurnStopStrategy,
+        )
         from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
         from pipecat.audio.turn.smart_turn.base_smart_turn import SmartTurnParams
         from pipecat.processors.aggregators.llm_text_processor import \
@@ -1561,7 +1564,10 @@ class AgentFactoryService(BaseService):
                 params=SmartTurnParams(stop_secs=0.4),
             )
             user_turn_strategies = UserTurnStrategies(
-                stop=[TurnAnalyzerUserTurnStopStrategy(turn_analyzer=smart_turn_analyzer)]
+                stop=[
+                    TurnAnalyzerUserTurnStopStrategy(turn_analyzer=smart_turn_analyzer),
+                    TranscriptionUserTurnStopStrategy(),
+                ]
             )
             context_aggregator = LLMContextAggregatorPair(
                 context,
