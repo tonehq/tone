@@ -11,7 +11,7 @@ from pipecat.transports.websocket.fastapi import (
 )
 
 from core.services.call_engines.base import CallDirection, CallTransport
-from core.services.service_warmup import build_rnnoise_filter, get_silero_vad
+from core.services.service_warmup import build_rnnoise_filter, get_silero_vad_phone
 
 
 class WebsocketCallTransport(CallTransport):
@@ -31,7 +31,7 @@ class WebsocketCallTransport(CallTransport):
 
     def _build(self) -> FastAPIWebsocketTransport:
         if self._inner is None:
-            vad_analyzer = get_silero_vad() or SileroVADAnalyzer()
+            vad_analyzer = get_silero_vad_phone() or SileroVADAnalyzer()
             audio_in_filter = build_rnnoise_filter()
             self._inner = FastAPIWebsocketTransport(
                 websocket=self._websocket,
