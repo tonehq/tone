@@ -1324,7 +1324,7 @@ class AgentFactoryService(BaseService):
             await call_log_ready.wait()
             return call_log_state["id"]
 
-        if agent:
+        if agent and CallLogService is not None:
             def _create_call_log_in_thread():
                 """Run in a thread so synchronous DB work doesn't block the event loop."""
                 try:
