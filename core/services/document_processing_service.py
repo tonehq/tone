@@ -72,7 +72,8 @@ class DocumentProcessingService:
                             embedding=embedding,
                         )
                     )
-                db.bulk_save_objects(chunk_records)
+                db.add_all(chunk_records)
+                db.flush()
 
                 # 7. Mark as ready
                 upload.status = "ready"
