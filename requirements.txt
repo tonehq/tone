@@ -216,6 +216,7 @@ pyotp==2.9.0
 pyparsing==3.3.2
 PyPDF2==3.0.1
 pyphen==0.14.0
+pyrnnoise==0.4.3
 PySocks==1.7.1
 pytest==9.0.2
 pytest-cov==7.0.0
