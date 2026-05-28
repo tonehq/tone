@@ -19,15 +19,12 @@ from pipecat.adapters.schemas.tools_schema import ToolsSchema
 
 
 def get_mcp_servers_for_agent(agent_id: int):
-    """Fetch all active MCP servers linked to an agent with their selected tools."""
+    """Fetch all active MCP servers linked to an agent."""
     from core.database.session import get_db_context
-    from core.models.mcp_server import McpServer, AgentMcpServer
+    from core.models.mcp_server import McpServer
+    from core.models.agent_mcp_server import AgentMcpServer
 
     with get_db_context() as db:
-        # ``AgentMcpServer.selected_tools`` was dropped in the v2 schema
-        # revamp, so we no longer filter the registered tools per-link.
-        # Every active MCP server attached to the agent contributes all
-        # of its tools.
         rows = (
             db.query(McpServer)
             .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)
@@ -37,7 +34,6 @@ def get_mcp_servers_for_agent(agent_id: int):
         servers = []
         for server in rows:
             db.expunge(server)
-            server._selected_tools = None
             servers.append(server)
         return servers
 
@@ -64,11 +60,6 @@ async def register_mcp_tools(llm, agent_id: int) -> Optional[ToolsSchema]:
 
     for server in servers:
         try:
-            selected_tools = getattr(server, '_selected_tools', None)
-            if not selected_tools:
-                logger.info("No tools selected for MCP server '{}', skipping", server.name)
-                continue
-
             headers = build_auth_headers(server.auth_config)
             if server.transport_type == "sse":
                 server_params = SseServerParameters(url=server.server_url, headers=headers)
@@ -82,13 +73,8 @@ async def register_mcp_tools(llm, agent_id: int) -> Optional[ToolsSchema]:
             tools_schema = await mcp_client.register_tools(llm)
 
             if tools_schema and tools_schema.standard_tools:
-                selected_set = set(selected_tools)
-                filtered = [t for t in tools_schema.standard_tools if t.name in selected_set]
-                if filtered:
-                    all_tool_schemas.extend(filtered)
-                    logger.info("Registered {}/{} MCP tools from server '{}' (filtered by selected_tools)", len(filtered), len(tools_schema.standard_tools), server.name)
-                else:
-                    logger.info("No matching tools after filtering for MCP server '{}'", server.name)
+                all_tool_schemas.extend(tools_schema.standard_tools)
+                logger.info("Registered {} MCP tools from server '{}'", len(tools_schema.standard_tools), server.name)
             else:
                 logger.info("No tools found on MCP server '{}'", server.name)
 
