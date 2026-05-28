@@ -2,6 +2,7 @@ import axiosInstance from '@/utils/axios';
 
 export interface TtsLanguage {
   name: string;
+  codes: string[];
 }
 
 export interface TtsProvider {
@@ -9,6 +10,7 @@ export interface TtsProvider {
   slug: string;
   display_name: string;
   description?: string | null;
+  language_code: string;
 }
 
 export interface TtsVoice {

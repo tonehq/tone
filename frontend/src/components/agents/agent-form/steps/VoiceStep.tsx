@@ -87,7 +87,18 @@ export default function VoiceStep() {
     setLoadingLangs(true);
     listTtsLanguages()
       .then((rows) => {
-        if (!cancelled) setLanguages(rows);
+        if (cancelled) return;
+        setLanguages(rows);
+
+        // Backward compat: if saved language is a raw code (e.g. "en")
+        // from an older agent, resolve it to the display name (e.g. "English").
+        const saved = voiceSettings?.language;
+        if (saved && !rows.some((l) => l.name === saved)) {
+          const match = rows.find((l) => l.codes?.includes(saved));
+          if (match) {
+            setValue('config.voice_settings.language', match.name, { shouldDirty: false });
+          }
+        }
       })
       .catch((err) => {
         if (!cancelled) handleApiError(err);
@@ -226,6 +237,7 @@ export default function VoiceStep() {
   // ─── selection ────────────────────────────────────────────────────────────
   const setLanguage = (v: string) => {
     setValue('config.voice_settings.language', v || null, { shouldDirty: true });
+    setValue('config.voice_settings.language_code' as never, null as never, { shouldDirty: true });
     setValue('config.voice_settings.provider_id', null, { shouldDirty: true });
     setValue('config.voice_settings.model_id' as never, null as never, { shouldDirty: true });
     setValue('config.voice_settings.voice_id', null, { shouldDirty: true });
@@ -234,6 +246,13 @@ export default function VoiceStep() {
     setValue('config.voice_settings.provider_id', v || null, { shouldDirty: true });
     setValue('config.voice_settings.model_id' as never, null as never, { shouldDirty: true });
     setValue('config.voice_settings.voice_id', null, { shouldDirty: true });
+    // Persist the provider-specific language code for runtime use
+    const matched = providers.find((p) => p.id === v);
+    if (matched?.language_code) {
+      setValue('config.voice_settings.language_code' as never, matched.language_code as never, {
+        shouldDirty: true,
+      });
+    }
   };
 
   const languageOptions = useMemo(

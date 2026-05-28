@@ -12,6 +12,7 @@ class ModelLanguage(TimestampModel):
 
     model_id = Column(UUID(as_uuid=True), ForeignKey("models.id", ondelete="CASCADE"), nullable=False)
     name = Column(String(50), nullable=False)
+    display_name = Column(String(100), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
 
     # relationships

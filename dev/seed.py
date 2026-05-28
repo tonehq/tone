@@ -46,6 +46,105 @@ def _get_api_key_from_env(env_var_name):
     return value.strip() or None
 
 
+# Maps provider-specific language codes/names to canonical display names.
+# Used during seeding to populate ModelLanguage.display_name so the UI
+# can show a single deduplicated dropdown while keeping the provider code
+# in ModelLanguage.name for runtime API calls.
+LANGUAGE_DISPLAY_MAP = {
+    # ── Full names ────────────────────────────────────────────────────
+    "Afrikaans": "Afrikaans", "Albanian": "Albanian", "Amharic": "Amharic",
+    "Arabic": "Arabic", "Armenian": "Armenian", "Assamese": "Assamese",
+    "Azerbaijani": "Azerbaijani", "Basque": "Basque", "Belarusian": "Belarusian",
+    "Bengali": "Bengali", "Bosnian": "Bosnian", "Bulgarian": "Bulgarian",
+    "Burmese": "Burmese", "Catalan": "Catalan", "Cebuano": "Cebuano",
+    "Chichewa": "Chichewa", "Chinese": "Chinese", "Chinese (Cantonese)": "Chinese (Cantonese)",
+    "Chinese (Mandarin)": "Chinese", "Croatian": "Croatian", "Czech": "Czech",
+    "Danish": "Danish", "Dutch": "Dutch", "English": "English",
+    "English (GB)": "English", "English (US)": "English", "Estonian": "Estonian",
+    "Filipino": "Filipino", "Finnish": "Finnish", "French": "French",
+    "Galician": "Galician", "Georgian": "Georgian", "German": "German",
+    "Greek": "Greek", "Gujarati": "Gujarati", "Haitian Creole": "Haitian Creole",
+    "Hausa": "Hausa", "Hebrew": "Hebrew", "Hindi": "Hindi",
+    "Hungarian": "Hungarian", "Icelandic": "Icelandic", "Indonesian": "Indonesian",
+    "Irish": "Irish", "Italian": "Italian", "Japanese": "Japanese",
+    "Javanese": "Javanese", "Kannada": "Kannada", "Kazakh": "Kazakh",
+    "Kirghiz": "Kirghiz", "Konkani": "Konkani", "Korean": "Korean",
+    "Lao": "Lao", "Latin": "Latin", "Latvian": "Latvian",
+    "Lingala": "Lingala", "Lithuanian": "Lithuanian", "Luxembourgish": "Luxembourgish",
+    "Macedonian": "Macedonian", "Malagasy": "Malagasy", "Malay": "Malay",
+    "Malayalam": "Malayalam", "Mandarin Chinese": "Chinese", "Maori": "Maori",
+    "Marathi": "Marathi", "Mongolian": "Mongolian", "Nepali": "Nepali",
+    "Norwegian": "Norwegian", "Norwegian (Bokmal)": "Norwegian", "Nynorsk": "Norwegian",
+    "Odia": "Odia", "Pashto": "Pashto", "Persian": "Persian",
+    "Polish": "Polish", "Portugese": "Portuguese", "Portuguese": "Portuguese",
+    "Punjabi": "Punjabi", "Romanian": "Romanian", "Russian": "Russian",
+    "Serbian": "Serbian", "Sindhi": "Sindhi", "Sinhala": "Sinhala",
+    "Slovak": "Slovak", "Slovenian": "Slovenian", "Somali": "Somali",
+    "Spanish": "Spanish", "Swahili": "Swahili", "Swedish": "Swedish",
+    "Tagalog": "Tagalog", "Tamil": "Tamil", "Telugu": "Telugu",
+    "Thai": "Thai", "Turkish": "Turkish", "Ukrainian": "Ukrainian",
+    "Urdu": "Urdu", "Vietnamese": "Vietnamese", "Welsh": "Welsh",
+    # ── ISO / BCP-47 codes ────────────────────────────────────────────
+    "af-ZA": "Afrikaans", "am-ET": "Amharic",
+    "ar": "Arabic", "ar-001": "Arabic", "ar-EG": "Arabic",
+    "az-AZ": "Azerbaijani", "be-BY": "Belarusian", "bg-BG": "Bulgarian",
+    "bn": "Bengali", "bn-BD": "Bengali", "bn-IN": "Bengali",
+    "ca": "Catalan", "ca-ES": "Catalan", "ceb-PH": "Cebuano",
+    "cmn-CN": "Chinese", "cmn-TW": "Chinese",
+    "cs-CZ": "Czech", "da-DK": "Danish",
+    "de": "German", "de-DE": "German",
+    "el-GR": "Greek",
+    "en": "English", "en-AU": "English", "en-GB": "English",
+    "en-IN": "English", "en-US": "English",
+    "es": "Spanish", "es-ES": "Spanish", "es-MX": "Spanish", "es-US": "Spanish",
+    "et-EE": "Estonian", "eu-ES": "Basque",
+    "fa-IR": "Persian", "fi-FI": "Finnish", "fil-PH": "Filipino",
+    "fr": "French", "fr-CA": "French", "fr-FR": "French",
+    "gl-ES": "Galician", "gu-IN": "Gujarati",
+    "he": "Hebrew", "he-IL": "Hebrew",
+    "hi": "Hindi", "hi-IN": "Hindi",
+    "hr-HR": "Croatian", "ht-HT": "Haitian Creole",
+    "hu-HU": "Hungarian", "hy": "Armenian", "hy-AM": "Armenian",
+    "id-ID": "Indonesian", "is-IS": "Icelandic",
+    "it": "Italian", "it-IT": "Italian",
+    "ja": "Japanese", "ja-JP": "Japanese",
+    "jv-JV": "Javanese", "ka-GE": "Georgian",
+    "kn-IN": "Kannada", "ko": "Korean", "ko-KR": "Korean",
+    "kok-IN": "Konkani", "la-VA": "Latin",
+    "lb-LU": "Luxembourgish", "lo-LA": "Lao",
+    "lt-LT": "Lithuanian", "lv-LV": "Latvian",
+    "mai-IN": "Maithili", "mg-MG": "Malagasy",
+    "mk-MK": "Macedonian", "ml-IN": "Malayalam",
+    "mn-MN": "Mongolian", "mr-IN": "Marathi",
+    "ms-MY": "Malay", "my-MM": "Burmese",
+    "nb-NO": "Norwegian", "ne-NP": "Nepali",
+    "nl": "Dutch", "nl-NL": "Dutch",
+    "nn-NO": "Norwegian",
+    "od-IN": "Odia", "or-IN": "Odia",
+    "pa-IN": "Punjabi",
+    "pl": "Polish", "pl-PL": "Polish",
+    "ps-AF": "Pashto",
+    "pt": "Portuguese", "pt-BR": "Portuguese", "pt-PT": "Portuguese",
+    "ro": "Romanian", "ro-RO": "Romanian",
+    "ru": "Russian", "ru-RU": "Russian",
+    "sd-PK": "Sindhi", "si-LK": "Sinhala",
+    "sk-SK": "Slovak", "sl-SI": "Slovenian",
+    "sq-AL": "Albanian", "sr-RS": "Serbian",
+    "sv-SE": "Swedish", "sw-KE": "Swahili",
+    "ta": "Tamil", "ta-IN": "Tamil",
+    "te": "Telugu", "te-IN": "Telugu",
+    "th-TH": "Thai", "tr-TR": "Turkish",
+    "uk-UA": "Ukrainian", "ur-PK": "Urdu",
+    "vi-VN": "Vietnamese",
+    "zh": "Chinese", "zh-CN": "Chinese",
+}
+
+
+def _resolve_display_name(code: str) -> str:
+    """Return the canonical display name for a language code/name."""
+    return LANGUAGE_DISPLAY_MAP.get(code, code)
+
+
 def _slugify(text):
     """Convert text to a URL-friendly slug."""
     text = text.lower().strip()
@@ -255,6 +354,7 @@ def seed_from_configs(db, org_name, email, password):
         if i not in provider_map:
             continue
         mp = provider_map[i]
+        kind = config["provider_type"]
         voices_spec = config.get("voices") or []
         seen_voice_ids = set()
 
@@ -270,10 +370,10 @@ def seed_from_configs(db, org_name, email, password):
             if voice_model_name:
                 model_obj = model_name_to_obj.get((mp.id, voice_model_name))
 
-            # If no specific model, try first model of this provider
+            # If no specific model, try first model of this provider with matching kind
             if not model_obj:
                 for key, obj in model_name_to_obj.items():
-                    if key[0] == mp.id:
+                    if key[0] == mp.id and obj.kind == kind:
                         model_obj = obj
                         break
 
@@ -295,14 +395,15 @@ def seed_from_configs(db, org_name, email, password):
 
     db.flush()
 
-    # --- Phase 4: Insert ModelLanguage records (STT providers with language_list) ---
+    # --- Phase 4: Insert ModelLanguage records (from voice language_list) ---
     seen_model_languages = set()
     for i, config in enumerate(all_providers):
         if i not in provider_map:
             continue
         mp = provider_map[i]
+        kind = config["provider_type"]
 
-        # Extract languages from voices or from model meta_data
+        # Extract languages from voices
         for voice_spec in config.get("voices") or []:
             lang_list = voice_spec.get("language_list") or []
             voice_model_name = voice_spec.get("model_name")
@@ -311,7 +412,7 @@ def seed_from_configs(db, org_name, email, password):
                 model_obj = model_name_to_obj.get((mp.id, voice_model_name))
             if not model_obj:
                 for key, obj in model_name_to_obj.items():
-                    if key[0] == mp.id:
+                    if key[0] == mp.id and obj.kind == kind:
                         model_obj = obj
                         break
             if not model_obj:
@@ -326,6 +427,7 @@ def seed_from_configs(db, org_name, email, password):
                 ml = ModelLanguage(
                     model_id=model_obj.id,
                     name=lang,
+                    display_name=_resolve_display_name(lang),
                     is_active=True,
                 )
                 db.add(ml)
