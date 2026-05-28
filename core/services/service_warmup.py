@@ -70,7 +70,7 @@ def _preload_silero_vad() -> Optional[Any]:
         _silero_vad_analyzer = SileroVADAnalyzer(
             params=VADParams(
                 confidence=0.7,
-                start_secs=0.2,
+                start_secs=0.4,
                 stop_secs=0.4,
                 min_volume=0.4,
             )
