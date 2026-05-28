@@ -72,7 +72,7 @@ def _preload_silero_vad() -> Optional[Any]:
                 confidence=0.7,
                 start_secs=0.4,
                 stop_secs=0.4,
-                min_volume=0.4,
+                min_volume=0.5,
             )
         )
         return _silero_vad_analyzer
@@ -88,7 +88,7 @@ def _preload_smart_turn() -> Optional[Any]:
     try:
         _smart_turn_analyzer = LocalSmartTurnAnalyzerV3(
             confidence_threshold=0.5,
-            params=SmartTurnParams(stop_secs=0.4),
+            params=SmartTurnParams(stop_secs=0.2),
         )
         return _smart_turn_analyzer
     except Exception as e:
