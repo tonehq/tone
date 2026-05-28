@@ -11,8 +11,8 @@ from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
 from pipecat.services.llm_service import FunctionCallParams
 
-from core.models.tool import Tool, AgentTool
-
+from core.models.tool import Tool
+from core.models.agent_tool import AgentTool
 
 def get_custom_tools_for_agent(agent_id: int) -> List[Tool]:
     """Fetch all active custom tools linked to an agent."""
