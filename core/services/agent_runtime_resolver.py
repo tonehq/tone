@@ -127,19 +127,9 @@ def _build_llm(slug: str, api_key: str, model: Optional[str], settings: Dict[str
 
 def _build_stt(slug: str, api_key: str, model: Optional[str], settings: Dict[str, Any]):
     if slug == "deepgram":
-        live_options = LiveOptions(
-            model=model,
-            endpointing=300,
-            utterance_end_ms="1000",
-            interim_results=True,
-            vad_events=True,
-        ) if model else LiveOptions(
-            endpointing=300,
-            utterance_end_ms="1000",
-            interim_results=True,
-            vad_events=True,
-        )
-        return DeepgramSTTService(api_key=api_key, live_options=live_options)
+        if model:
+            return DeepgramSTTService(api_key=api_key, live_options=LiveOptions(model=model))
+        return DeepgramSTTService(api_key=api_key)
     if slug == "openai":
         return OpenAISTTService(api_key=api_key, model=model or "whisper-1")
     if slug == "groq":
