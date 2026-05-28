@@ -1,6 +1,6 @@
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from core.database.session import get_db
@@ -8,6 +8,7 @@ from core.models.agent import Agent
 from core.models.agent_knowledge_base import AgentKnowledgeBase
 from core.models.upload import Upload
 from core.services.crud import list_records
+from core.services.document_processing_service import DocumentProcessingService
 from core.services.r2_storage_service import R2StorageService
 from ee.middleware.auth import EEJWTClaims, require_ee_org_member
 from shared.config import settings
@@ -82,6 +83,7 @@ def list_documents(
 
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     agent_id: str | None = Form(None),
     claims: EEJWTClaims = Depends(require_ee_org_member),
@@ -143,7 +145,7 @@ async def upload_document(
             file_type=content_type,
             size_bytes=len(file_bytes),
             purpose="kb_document",
-            status="ready",
+            status="processing",
             meta_data={},
             created_by_user_id=user_id,
             is_active=True,
@@ -170,6 +172,10 @@ async def upload_document(
         except Exception:
             pass
         raise
+
+    background_tasks.add_task(
+        DocumentProcessingService().process_upload, upload.id, org_id
+    )
 
     return _upload_to_payload(upload)
 
