@@ -26,3 +26,10 @@ export const AGENT_TYPE_OPTIONS: SelectOption[] = [
   { value: 'inbound', label: 'Inbound' },
   { value: 'outbound', label: 'Outbound' },
 ];
+
+export const CALL_STATUS_OPTIONS: SelectOption[] = [
+  { value: 'all', label: 'All statuses' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'failed', label: 'Failed' },
+];

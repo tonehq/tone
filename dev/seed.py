@@ -382,6 +382,7 @@ def seed_from_configs(db, org_name, email, password):
 
             mv = ModelVoice(
                 model_id=model_obj.id,
+                voice_id=voice_spec.get("voice_id"),
                 accent=voice_spec.get("accent"),
                 name=voice_spec.get("name"),
                 gender=voice_spec.get("gender"),

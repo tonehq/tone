@@ -236,31 +236,10 @@ class CallLogService(BaseService):
             .all()
         )
 
-        data = []
-        for row in results:
-            call_log = row[0]
-            agent_name = row[1]
-            agent_type = row[2]
-
-            data.append({
-                "id": call_log.id,
-                "uuid": str(call_log.uuid),
-                "agent_id": call_log.agent_id,
-                "agent_name": agent_name,
-                "agent_type": agent_type.name if agent_type else None,
-                "started_at": call_log.started_at,
-                "ended_at": call_log.ended_at,
-                "duration_seconds": call_log.duration_seconds,
-                "transcript": call_log.transcript,
-                "from_number": call_log.from_number,
-                "to_number": call_log.to_number,
-                "transport_type": call_log.transport_type,
-                "status": call_log.status,
-                "audio_file_path": call_log.audio_file_path,
-                "provider_call_id": call_log.provider_call_id,
-                "metrics": call_log.metrics,
-                "tool_calls": call_log.tool_calls,
-            })
+        data = [
+            self.call_log_response(row[0], agent_name=row[1], agent_type=row[2])
+            for row in results
+        ]
 
         return {
             "data": data,
@@ -281,10 +260,9 @@ class CallLogService(BaseService):
         if not result:
             return None
 
-        call_log = result[0]
-        agent_name = result[1]
-        agent_type = result[2]
+        return self.call_log_response(result[0], agent_name=result[1], agent_type=result[2])
 
+    def call_log_response(self, call_log: CallLog, agent_name: Optional[str] = None, agent_type=None) -> Dict[str, Any]:
         return {
             "id": call_log.id,
             "uuid": str(call_log.uuid),

@@ -1,16 +1,27 @@
-from typing import Any, Dict
-
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
 from uuid import UUID
 
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+
+from core.api.v1.call_logs import ListCallsRequest
 from core.database.session import get_db
-from core.services.call_log_service import CallLogService
-from core.utils.storage import generate_presigned_url
-from ee.middleware.auth import require_ee_org_member, EEJWTClaims
+from core.services.call_service import CallService
+from ee.middleware.auth import EEJWTClaims, require_ee_org_member
 
 router = APIRouter()
 
+
+# ---------------------------------------------------------------------------
+# Service helper
+# ---------------------------------------------------------------------------
+
+def _get_service(claims: EEJWTClaims, db: Session) -> CallService:
+    return CallService(db, org_id=UUID(claims.org_id))
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
 
 @router.get("/filter-values")
 def get_filter_values(
@@ -18,51 +29,34 @@ def get_filter_values(
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    return CallLogService(db, org_id=UUID(claims.org_id)).get_filter_values(column_name=column_name)
+    return _get_service(claims, db).get_filter_values(column_name=column_name)
 
 
 @router.post("/list")
-def get_call_logs(
-    data: Dict[str, Any] = Body(...),
+def get_calls(
+    body: ListCallsRequest,
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    return CallLogService(db, org_id=UUID(claims.org_id)).get_call_logs(
-        page_no=data.get("page_no", 1),
-        page_size=data.get("page_size", 10),
-        start_date_time=data.get("start_date_time"),
-        end_date_time=data.get("end_date_time"),
-        filters=data.get("filters"),
-        sort_by=data.get("sort_by"),
-        sort_order=data.get("sort_order", "desc"),
+    filters = [f.model_dump() for f in body.filters] if body.filters else None
+    return _get_service(claims, db).get_calls(
+        page_no=body.page_no,
+        page_size=body.page_size,
+        start_date_time=body.start_date_time,
+        end_date_time=body.end_date_time,
+        filters=filters,
+        sort_by=body.sort_by,
+        sort_order=body.sort_order,
     )
 
 
 @router.get("/{call_id}")
-def get_call_log_by_id(
-    call_id: int,
+def get_call_by_id(
+    call_id: str,
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    result = CallLogService(db, org_id=UUID(claims.org_id)).get_call_log_by_id(call_log_id=call_id)
+    result = _get_service(claims, db).get_call_by_id(call_id=call_id)
     if not result:
-        raise HTTPException(status_code=404, detail="Call log not found")
+        raise HTTPException(status_code=404, detail="Call not found")
     return result
-
-
-@router.get("/{call_id}/audio-url")
-def get_audio_url(
-    call_id: int,
-    claims: EEJWTClaims = Depends(require_ee_org_member),
-    db: Session = Depends(get_db),
-):
-    result = CallLogService(db, org_id=UUID(claims.org_id)).get_call_log_by_id(call_log_id=call_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Call log not found")
-
-    audio_path = result.get("audio_file_path")
-    if not audio_path:
-        raise HTTPException(status_code=404, detail="No audio recording for this call")
-
-    url = generate_presigned_url(audio_path)
-    return {"url": url}

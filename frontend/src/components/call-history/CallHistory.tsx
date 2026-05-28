@@ -1,33 +1,28 @@
 'use client';
 
 import callLogsAtom, { fetchCallLogs } from '@/atoms/CallLogAtom';
+import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 import { CustomButton, CustomTable, CustomTooltip, PhoneNumberDisplay } from '@/components/shared';
+import SearchBar from '@/components/shared/SearchBar';
+import SelectInput from '@/components/shared/SelectInput';
+import { Badge } from '@/components/ui/badge';
+import { AGENT_TYPE_OPTIONS, CALL_STATUS_OPTIONS } from '@/lib/constants/filters';
 import type { CallLogFilterParam, CallLogQueryParams, CallLogRow } from '@/types/callLog';
-import type { CustomTableColumn } from '@/types/components';
+import type { CustomTableColumn, CustomTableSortState } from '@/types/components';
 import { handleApiError } from '@/utils/helpers';
 import { useAtom } from 'jotai';
-import {
-  ArrowUpDown,
-  CalendarDays,
-  ChartNoAxesCombined,
-  Filter,
-  MessageSquareText,
-  Phone,
-  X,
-} from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
-
-import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
+import { CalendarDays, ChartNoAxesCombined, MessageSquareText, Phone, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import CallDetailDrawer from './CallDetailDrawer';
-import FilterModal from './FilterSortModal';
 import MetricsModal from './MetricsModal';
-import SortModal from './SortModal';
 import TranscriptionModal from './TranscriptionModal';
 
-const formatTimestamp = (ts: number | null): string => {
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+
+const formatTimestamp = (ts: string | null): string => {
   if (!ts) return '-';
-  return new Date(ts * 1000).toLocaleString();
+  return new Date(ts).toLocaleString();
 };
 
 const formatDuration = (seconds: number | null): string => {
@@ -37,99 +32,127 @@ const formatDuration = (seconds: number | null): string => {
   return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
 };
 
+const STATUS_BADGE_CLASSES: Record<string, string> = {
+  completed: 'bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15 dark:text-emerald-400',
+  in_progress: 'bg-amber-500/15 text-amber-600 hover:bg-amber-500/15 dark:text-amber-400',
+  failed: 'bg-red-500/15 text-red-600 hover:bg-red-500/15 dark:text-red-400',
+};
+
 const CallHistory: React.FC = () => {
   const [data] = useAtom(callLogsAtom);
   const [, doFetchCallLogs] = useAtom(fetchCallLogs);
 
-  const [pageNo, setPageNo] = useState(1);
+  const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [startDateTime, setStartDateTime] = useState('');
-  const [endDateTime, setEndDateTime] = useState('');
-  const [filters, setFilters] = useState<CallLogFilterParam[]>([]);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [agentTypeFilter, setAgentTypeFilter] = useState('all');
   const [sortBy, setSortBy] = useState<string | undefined>(undefined);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [dateApplied, setDateApplied] = useState(false);
+  const [startDateTime, setStartDateTime] = useState('');
+  const [endDateTime, setEndDateTime] = useState('');
 
-  const [filterModalOpen, setFilterModalOpen] = useState(false);
-  const [sortModalOpen, setSortModalOpen] = useState(false);
   const [selectedCallLog, setSelectedCallLog] = useState<CallLogRow | null>(null);
   const [transcriptionCallLog, setTranscriptionCallLog] = useState<CallLogRow | null>(null);
   const [metricsCallLog, setMetricsCallLog] = useState<CallLogRow | null>(null);
 
-  // Snapshot date values on each fetch trigger so they stay stable in the dep array
-  const startRef = useRef(startDateTime);
-  const endRef = useRef(endDateTime);
-
-  useEffect(() => {
-    startRef.current = startDateTime;
-    endRef.current = endDateTime;
-  }, [startDateTime, endDateTime]);
-
-  // Single effect for all fetches
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const params: CallLogQueryParams = {
-          page_no: pageNo,
-          page_size: pageSize,
-        };
-
-        if (startRef.current) {
-          params.start_date_time = Math.floor(new Date(startRef.current).getTime() / 1000);
-        }
-        if (endRef.current) {
-          params.end_date_time = Math.floor(new Date(endRef.current).getTime() / 1000);
-        }
-        if (filters.length > 0) {
-          params.filters = filters;
-        }
-        if (sortBy) {
-          params.sort_by = sortBy;
-          params.sort_order = sortOrder;
-        }
-
-        await doFetchCallLogs(params);
-      } catch (err) {
-        handleApiError(err);
-      }
+  const params = useMemo<CallLogQueryParams>(() => {
+    const q: CallLogQueryParams = {
+      page_no: page,
+      page_size: pageSize,
     };
 
-    fetchData();
-  }, [pageNo, pageSize, filters, sortBy, sortOrder, refreshKey, doFetchCallLogs]);
-
-  const handleDateFilter = useCallback(() => {
-    if (dateApplied) {
-      setStartDateTime('');
-      setEndDateTime('');
-      setDateApplied(false);
-    } else {
-      setDateApplied(true);
+    const filters: CallLogFilterParam[] = [];
+    if (search.trim()) {
+      filters.push({ field: 'agent_name', operator: 'contains', value: search.trim() });
     }
-    setPageNo(1);
-    setRefreshKey((k) => k + 1);
-  }, [dateApplied]);
+    if (statusFilter !== 'all') {
+      filters.push({ field: 'status', operator: 'in', value: [statusFilter] });
+    }
+    if (agentTypeFilter !== 'all') {
+      filters.push({ field: 'agent_type', operator: 'in', value: [agentTypeFilter] });
+    }
+    if (filters.length > 0) {
+      q.filters = filters;
+    }
 
-  const handleApplyFilters = useCallback((newFilters: CallLogFilterParam[]) => {
-    setFilters(newFilters);
-    setPageNo(1);
-    setFilterModalOpen(false);
+    if (startDateTime) {
+      q.start_date_time = new Date(startDateTime).toISOString();
+    }
+    if (endDateTime) {
+      q.end_date_time = new Date(endDateTime).toISOString();
+    }
+
+    if (sortBy) {
+      q.sort_by = sortBy;
+      q.sort_order = sortOrder;
+    }
+
+    return q;
+  }, [
+    page,
+    pageSize,
+    search,
+    statusFilter,
+    agentTypeFilter,
+    startDateTime,
+    endDateTime,
+    sortBy,
+    sortOrder,
+  ]);
+
+  const refresh = useCallback(async () => {
+    try {
+      await doFetchCallLogs(params);
+    } catch (error) {
+      handleApiError(error);
+    }
+  }, [doFetchCallLogs, params]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearch(value);
+    setPage(1);
   }, []);
 
-  const handleApplySort = useCallback((newSortBy?: string, newSortOrder?: 'asc' | 'desc') => {
-    setSortBy(newSortBy);
-    setSortOrder(newSortOrder ?? 'desc');
-    setPageNo(1);
-    setSortModalOpen(false);
+  const handleStatusFilter = useCallback((value: string) => {
+    setStatusFilter(value);
+    setPage(1);
   }, []);
+
+  const handleAgentTypeFilter = useCallback((value: string) => {
+    setAgentTypeFilter(value);
+    setPage(1);
+  }, []);
+
+  const handleSortChange = useCallback((sort: CustomTableSortState | null) => {
+    if (sort) {
+      setSortBy(sort.field);
+      setSortOrder(sort.order);
+    } else {
+      setSortBy(undefined);
+      setSortOrder('desc');
+    }
+    setPage(1);
+  }, []);
+
+  const handlePaginationChange = useCallback((nextPage: number, nextPageSize: number) => {
+    setPage(nextPage);
+    setPageSize(nextPageSize);
+  }, []);
+
+  const handleClearDates = useCallback(() => {
+    setStartDateTime('');
+    setEndDateTime('');
+    setPage(1);
+  }, []);
+
+  const hasDates = startDateTime || endDateTime;
 
   const columns: CustomTableColumn<CallLogRow>[] = [
-    {
-      key: 'sno',
-      title: 'S.No',
-      width: '40px',
-      render: (_value, _record, index) => (pageNo - 1) * pageSize + index + 1,
-    },
     {
       key: 'agent_name',
       title: 'Agent',
@@ -142,26 +165,27 @@ const CallHistory: React.FC = () => {
       ),
     },
     {
-      key: 'started_at',
-      title: 'Call Start At',
-      dataIndex: 'started_at',
-      render: (value) => formatTimestamp(value as number | null),
-    },
-    {
-      key: 'ended_at',
-      title: 'Call End At',
-      dataIndex: 'ended_at',
-      render: (value) => formatTimestamp(value as number | null),
+      key: 'status',
+      title: 'Status',
+      dataIndex: 'status',
+      sorter: true,
+      render: (value) => {
+        const status = (value as string) || 'unknown';
+        const classes = STATUS_BADGE_CLASSES[status] ?? 'bg-muted text-muted-foreground';
+        const label = status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        return <Badge className={classes}>{label}</Badge>;
+      },
     },
     {
       key: 'duration_seconds',
-      title: 'Call Duration',
+      title: 'Duration',
       dataIndex: 'duration_seconds',
+      sorter: true,
       render: (value) => formatDuration(value as number | null),
     },
     {
       key: 'from_number',
-      title: 'Call From Number',
+      title: 'From',
       dataIndex: 'from_number',
       render: (value) => {
         const num = value as string | null;
@@ -170,12 +194,19 @@ const CallHistory: React.FC = () => {
     },
     {
       key: 'to_number',
-      title: 'Call To Number',
+      title: 'To',
       dataIndex: 'to_number',
       render: (value) => {
         const num = value as string | null;
         return num ? <PhoneNumberDisplay phoneNumber={num} flagSize="sm" /> : '-';
       },
+    },
+    {
+      key: 'started_at',
+      title: 'Started At',
+      dataIndex: 'started_at',
+      sorter: true,
+      render: (value) => formatTimestamp(value as string | null),
     },
     {
       key: 'actions',
@@ -187,7 +218,10 @@ const CallHistory: React.FC = () => {
               type="default"
               size="icon-xs"
               disabled={!(record.transcript && record.transcript.length > 0)}
-              onClick={() => setTranscriptionCallLog(record)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setTranscriptionCallLog(record);
+              }}
             >
               <MessageSquareText className="size-3.5" />
             </CustomButton>
@@ -197,7 +231,10 @@ const CallHistory: React.FC = () => {
               type="default"
               size="icon-xs"
               disabled={!record.metrics}
-              onClick={() => setMetricsCallLog(record)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setMetricsCallLog(record);
+              }}
             >
               <ChartNoAxesCombined className="size-3.5" />
             </CustomButton>
@@ -208,24 +245,50 @@ const CallHistory: React.FC = () => {
   ];
 
   return (
-    <div className="animate-page flex h-full flex-col p-6">
-      <div className="mb-6">
+    <div className="animate-page flex h-full flex-col gap-5 p-6">
+      <div>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Call History</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           View and filter your voice agent call logs
         </p>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <SearchBar
+          placeholder="Search by agent name..."
+          value={search}
+          onSearch={handleSearchChange}
+          debounceMs={400}
+          containerClassName="max-w-xs flex-1"
+        />
+        <SelectInput
+          name="status-filter"
+          options={CALL_STATUS_OPTIONS}
+          value={statusFilter}
+          onValueChange={handleStatusFilter}
+          placeholder="All statuses"
+          size="sm"
+          triggerClassName="min-w-[160px]"
+        />
+        <SelectInput
+          name="agent-type-filter"
+          options={AGENT_TYPE_OPTIONS}
+          value={agentTypeFilter}
+          onValueChange={handleAgentTypeFilter}
+          placeholder="All types"
+          size="sm"
+          triggerClassName="min-w-[140px]"
+        />
+        <div className="flex items-center gap-2">
           <div className="relative">
             <CalendarDays className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
-              id="start-datetime"
               type="datetime-local"
               value={startDateTime}
-              onChange={(e) => setStartDateTime(e.target.value)}
-              placeholder="Start date"
+              onChange={(e) => {
+                setStartDateTime(e.target.value);
+                setPage(1);
+              }}
               className={`h-9 rounded-md border border-input bg-background pl-9 pr-3 text-sm shadow-sm transition-colors placeholder:text-muted-foreground hover:border-ring focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30 ${startDateTime ? 'text-foreground' : 'text-muted-foreground'}`}
             />
           </div>
@@ -233,80 +296,53 @@ const CallHistory: React.FC = () => {
           <div className="relative">
             <CalendarDays className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <input
-              id="end-datetime"
               type="datetime-local"
               value={endDateTime}
-              onChange={(e) => setEndDateTime(e.target.value)}
-              placeholder="End date"
+              onChange={(e) => {
+                setEndDateTime(e.target.value);
+                setPage(1);
+              }}
               className={`h-9 rounded-md border border-input bg-background pl-9 pr-3 text-sm shadow-sm transition-colors placeholder:text-muted-foreground hover:border-ring focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30 ${endDateTime ? 'text-foreground' : 'text-muted-foreground'}`}
             />
           </div>
-          <CustomButton
-            type={dateApplied ? 'danger' : 'primary'}
-            size="sm"
-            icon={dateApplied ? <X className="size-4" /> : undefined}
-            onClick={handleDateFilter}
-          >
-            {dateApplied ? 'Clear Date Filter' : 'Apply Date Filter'}
-          </CustomButton>
-        </div>
-        <div className="flex items-end gap-2">
-          <CustomButton
-            type={filters.length > 0 ? 'primary' : 'default'}
-            size="sm"
-            icon={<Filter className="size-4" />}
-            onClick={() => setFilterModalOpen(true)}
-          >
-            Filter
-          </CustomButton>
-          <CustomButton
-            type={sortBy ? 'primary' : 'default'}
-            size="sm"
-            icon={<ArrowUpDown className="size-4" />}
-            onClick={() => setSortModalOpen(true)}
-          >
-            Sort
-          </CustomButton>
+          {hasDates && (
+            <CustomButton type="text" size="icon-sm" onClick={handleClearDates}>
+              <X className="size-4 text-muted-foreground" />
+            </CustomButton>
+          )}
         </div>
       </div>
 
-      <CustomTable
-        columns={columns}
-        dataSource={data.callLogs}
-        rowKey="id"
-        loading={data.loading}
-        onRowClick={(record) => setSelectedCallLog(record)}
-        pagination={{
-          current: pageNo,
-          pageSize: pageSize,
-          total: data.total,
-          onChange: (page, size) => {
-            setPageNo(page);
-            setPageSize(size);
-          },
-        }}
-        emptyState={
-          <div className="flex flex-col items-center gap-3 py-12">
-            <Phone className="size-12 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground">No call logs found</p>
-          </div>
-        }
-      />
-
-      <FilterModal
-        open={filterModalOpen}
-        onClose={() => setFilterModalOpen(false)}
-        onApply={handleApplyFilters}
-        currentFilters={filters}
-      />
-
-      <SortModal
-        open={sortModalOpen}
-        onClose={() => setSortModalOpen(false)}
-        onApply={handleApplySort}
-        currentSortBy={sortBy}
-        currentSortOrder={sortOrder}
-      />
+      <div className="flex min-h-0 flex-1 flex-col">
+        <CustomTable
+          columns={columns}
+          dataSource={data.callLogs}
+          rowKey="id"
+          loading={data.loading}
+          onRowClick={(record) => setSelectedCallLog(record)}
+          onSortChange={handleSortChange}
+          pagination={{
+            current: page,
+            pageSize,
+            total: data.total,
+            pageSizeOptions: PAGE_SIZE_OPTIONS,
+            onChange: handlePaginationChange,
+          }}
+          emptyState={
+            <div className="flex flex-col items-center gap-4 py-8">
+              <div className="flex size-12 items-center justify-center rounded-xl bg-muted">
+                <Phone className="size-6 text-muted-foreground" />
+              </div>
+              <div className="text-center">
+                <p className="font-semibold text-foreground">No call logs found</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Call logs will appear here once your agents start handling calls
+                </p>
+              </div>
+            </div>
+          }
+        />
+      </div>
 
       <CallDetailDrawer
         open={!!selectedCallLog}

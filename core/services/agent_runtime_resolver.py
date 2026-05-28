@@ -289,6 +289,9 @@ def resolve_agent_runtime(to_number: str) -> Optional[Dict[str, Any]]:
         def _key(pid, service_type):
             ak = key_by_provider_service.get((pid, service_type))
             if not ak:
+                # Fallback: use key with NULL service_type for this provider
+                ak = key_by_provider_service.get((pid, None))
+            if not ak:
                 return None
             try:
                 return decrypt(ak.encrypted_key)
@@ -311,7 +314,7 @@ def resolve_agent_runtime(to_number: str) -> Optional[Dict[str, Any]]:
         llm = _build_llm(llm_slug, llm_key, llm_model, llm_settings) if llm_slug and llm_key else None
         stt = _build_stt(stt_slug, stt_key, stt_model, stt_settings) if stt_slug and stt_key else None
 
-        voice_id = (voice_row.name if voice_row else None) or (
+        voice_id = (voice_row.voice_id if voice_row else None) or (
             voice_id_raw if voice_id_raw and not _looks_like_uuid(voice_id_raw) else None
         )
         tts = _build_tts(tts_slug, tts_key, tts_model, voice_id, voice_settings) if tts_slug and tts_key else None

@@ -15,12 +15,12 @@ export const getFilterValues = async (
   return res.data;
 };
 
-export const getCallLogById = async (callId: number): Promise<CallLogRow> => {
+export const getCallLogById = async (callId: string): Promise<CallLogRow> => {
   const res = await axiosInstance.get(`/call-log/${callId}`);
   return res.data;
 };
 
-export const getCallLogAudioUrl = async (callId: number): Promise<string> => {
+export const getCallLogAudioUrl = async (callId: string): Promise<string> => {
   const res = await axiosInstance.get(`/call-log/${callId}/audio-url`);
   return res.data.url;
 };
