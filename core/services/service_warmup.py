@@ -3,6 +3,7 @@ import time
 from typing import Any, Optional
 
 from loguru import logger
+from pipecat.audio.filters.rnnoise_filter import RNNoiseFilter
 from pipecat.audio.turn.smart_turn.base_smart_turn import SmartTurnParams
 from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
 from pipecat.audio.vad.silero import SileroVADAnalyzer
@@ -10,6 +11,7 @@ from pipecat.audio.vad.vad_analyzer import VADParams
 
 _silero_vad_analyzer: Optional[Any] = None
 _smart_turn_analyzer: Optional[Any] = None
+_rnnoise_available: bool = False
 _warmed_up: bool = False
 
 
@@ -96,6 +98,20 @@ def _preload_smart_turn() -> Optional[Any]:
         return None
 
 
+def _probe_rnnoise() -> bool:
+    global _rnnoise_available
+    try:
+        from pyrnnoise import RNNoise
+        probe = RNNoise(sample_rate=48000)
+        del probe
+        _rnnoise_available = True
+        return True
+    except Exception as e:
+        logger.warning(f"[warmup] RNNoise unavailable, calls will run without noise suppression: {e}")
+        _rnnoise_available = False
+        return False
+
+
 def warm_up_services() -> None:
     global _warmed_up
     if _warmed_up:
@@ -115,6 +131,10 @@ def warm_up_services() -> None:
     _preload_smart_turn()
     logger.info(f"[warmup] Smart Turn ONNX preloaded (+{time.monotonic() - t:.3f}s)")
 
+    t = time.monotonic()
+    if _probe_rnnoise():
+        logger.info(f"[warmup] RNNoise probe ok (+{time.monotonic() - t:.3f}s)")
+
     _warmed_up = True
     logger.info(f"[warmup] all services warmed up in {time.monotonic() - t0:.3f}s")
 
@@ -125,6 +145,16 @@ def get_silero_vad():
 
 def get_smart_turn():
     return _smart_turn_analyzer
+
+
+def build_rnnoise_filter() -> Optional[RNNoiseFilter]:
+    if not _rnnoise_available:
+        return None
+    try:
+        return RNNoiseFilter(resampler_quality="QQ")
+    except Exception as e:
+        logger.warning(f"[transport] failed to build RNNoise filter: {e}")
+        return None
 
 
 def is_warmed_up() -> bool:
