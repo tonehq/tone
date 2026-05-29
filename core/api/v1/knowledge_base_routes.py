@@ -318,6 +318,9 @@ def build_knowledge_base_router(
         upload.file_name = new_name
         upload.file_type = content_type
         upload.size_bytes = len(file_bytes)
+        # Both editions intentionally re-run the pipeline on replace: the new
+        # blob must be re-embedded, so flip back to "processing" and re-queue
+        # rather than marking "ready" (which would leave stale embeddings).
         upload.status = "processing"
         db.commit()
         db.refresh(upload)
