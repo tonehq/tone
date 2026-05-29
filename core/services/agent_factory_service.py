@@ -1597,12 +1597,42 @@ class AgentFactoryService(BaseService):
                         "timestamp": message.timestamp,
                     })
 
-            # Build pipeline
+            from pipecat.frames.frames import (
+                Frame,
+                InterimTranscriptionFrame,
+                TranscriptionFrame,
+                UserStartedSpeakingFrame,
+                UserStoppedSpeakingFrame,
+                VADUserStartedSpeakingFrame,
+                VADUserStoppedSpeakingFrame,
+            )
+            from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
+
+            class STTFrameLogger(FrameProcessor):
+                async def process_frame(self, frame: Frame, direction: FrameDirection):
+                    await super().process_frame(frame, direction)
+                    if isinstance(frame, VADUserStartedSpeakingFrame):
+                        logger.info(f"[STT-DEBUG] VAD-START dir={direction.name}")
+                    elif isinstance(frame, VADUserStoppedSpeakingFrame):
+                        logger.info(f"[STT-DEBUG] VAD-STOP dir={direction.name}")
+                    elif isinstance(frame, UserStartedSpeakingFrame):
+                        logger.info(f"[STT-DEBUG] USER-START dir={direction.name}")
+                    elif isinstance(frame, UserStoppedSpeakingFrame):
+                        logger.info(f"[STT-DEBUG] USER-STOP dir={direction.name}")
+                    elif isinstance(frame, InterimTranscriptionFrame):
+                        logger.info(f"[STT-DEBUG] INTERIM text={getattr(frame, 'text', '')!r}")
+                    elif isinstance(frame, TranscriptionFrame):
+                        logger.info(f"[STT-DEBUG] FINAL text={getattr(frame, 'text', '')!r}")
+                    await self.push_frame(frame, direction)
+
+            stt_frame_logger = STTFrameLogger()
+
             pipeline_processors = [transport.input()]
 
             pipeline_processors.extend([
                 rtvi,
                 stt,
+                stt_frame_logger,
                 call_end_detector,
                 user_aggregator,
                 llm,
