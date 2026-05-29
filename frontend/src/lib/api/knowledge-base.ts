@@ -16,7 +16,9 @@ export interface ListDocumentsParams {
   search?: string;
   sort_by?: string;
   agent_id?: string;
-  status?: KnowledgeBaseDocument['status'] | '';
+  // Loose string: the value comes from KNOWLEDGE_BASE_STATUS_OPTIONS and is
+  // filtered server-side. '' / 'all' / undefined mean "no status filter".
+  status?: string;
 }
 
 export const KNOWLEDGE_BASE_QUERY_KEY = 'knowledge-base';
@@ -60,6 +62,10 @@ export const knowledgeBaseApi = {
     );
     return data;
   },
+  reprocess: async (id: string): Promise<KnowledgeBaseDocument> => {
+    const { data } = await axios.post<KnowledgeBaseDocument>(`/knowledge-base/${id}/reprocess`);
+    return data;
+  },
   delete: async (id: string): Promise<void> => {
     await axios.delete(`/knowledge-base/${id}`);
   },
@@ -96,6 +102,14 @@ export function useReplaceKnowledgeBaseFile() {
   return useMutation({
     mutationFn: ({ id, file, fileName }: { id: string; file: File; fileName?: string }) =>
       knowledgeBaseApi.replaceFile(id, file, fileName),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [KNOWLEDGE_BASE_QUERY_KEY] }),
+  });
+}
+
+export function useReprocessKnowledgeBase() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => knowledgeBaseApi.reprocess(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: [KNOWLEDGE_BASE_QUERY_KEY] }),
   });
 }
