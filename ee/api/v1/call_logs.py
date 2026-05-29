@@ -50,6 +50,15 @@ def get_calls(
     )
 
 
+@router.get("/{call_id}/audio-url")
+def get_audio_url(
+    call_id: str,
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    return _get_service(claims, db).get_audio_url(call_id=call_id)
+
+
 @router.get("/{call_id}")
 def get_call_by_id(
     call_id: str,
