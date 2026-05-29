@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional
 
+from fastapi import HTTPException
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session, aliased
 
@@ -9,6 +10,7 @@ from core.models.channel import Channel
 from core.models.phone_number import PhoneNumber
 from core.models.upload import Upload
 from core.services.base import BaseService
+from core.services.r2_storage_service import R2StorageService
 
 
 class CallService(BaseService):
@@ -208,6 +210,21 @@ class CallService(BaseService):
             from_number=result[4],
             to_number=result[5],
         )
+
+    def get_audio_url(self, call_id: str) -> Dict[str, Any]:
+        call = self.query(Call).filter(Call.id == call_id).first()
+        if not call:
+            raise HTTPException(status_code=404, detail="Call not found")
+
+        if not call.recording_upload_id:
+            raise HTTPException(status_code=404, detail="No recording available for this call")
+
+        upload = self.db.query(Upload).filter(Upload.id == call.recording_upload_id).first()
+        if not upload or not upload.file_path:
+            raise HTTPException(status_code=404, detail="Recording file not found")
+
+        url = R2StorageService().generate_presigned_url(upload.file_path)
+        return {"url": url}
 
     def call_response(
         self,

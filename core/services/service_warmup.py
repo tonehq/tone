@@ -6,7 +6,11 @@ from loguru import logger
 from pipecat.audio.filters.rnnoise_filter import RNNoiseFilter
 from pipecat.audio.turn.smart_turn.base_smart_turn import SmartTurnParams
 from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
+from pipecat.audio.vad.silero import SileroVADAnalyzer
+from pipecat.audio.vad.vad_analyzer import VADParams
 
+_silero_vad_analyzer: Optional[Any] = None
+_silero_vad_analyzer_phone: Optional[Any] = None
 _smart_turn_analyzer: Optional[Any] = None
 _rnnoise_available: bool = False
 _warmed_up: bool = False
@@ -61,6 +65,44 @@ def _import_pipecat_services() -> None:
     logger.info(f"[warmup] preloaded {succeeded}/{len(_MODULES_TO_WARM)} pipecat modules")
 
 
+def _preload_silero_vad() -> Optional[Any]:
+    global _silero_vad_analyzer
+    if _silero_vad_analyzer is not None:
+        return _silero_vad_analyzer
+    try:
+        _silero_vad_analyzer = SileroVADAnalyzer(
+            params=VADParams(
+                confidence=0.7,
+                start_secs=0.4,
+                stop_secs=0.4,
+                min_volume=0.4,
+            )
+        )
+        return _silero_vad_analyzer
+    except Exception as e:
+        logger.warning(f"[warmup] Silero VAD preload failed: {e}")
+        return None
+
+
+def _preload_silero_vad_phone() -> Optional[Any]:
+    global _silero_vad_analyzer_phone
+    if _silero_vad_analyzer_phone is not None:
+        return _silero_vad_analyzer_phone
+    try:
+        _silero_vad_analyzer_phone = SileroVADAnalyzer(
+            params=VADParams(
+                confidence=0.7,
+                start_secs=0.2,
+                stop_secs=0.4,
+                min_volume=0.4,
+            )
+        )
+        return _silero_vad_analyzer_phone
+    except Exception as e:
+        logger.warning(f"[warmup] Silero VAD (phone) preload failed: {e}")
+        return None
+
+
 def _preload_smart_turn() -> Optional[Any]:
     global _smart_turn_analyzer
     if _smart_turn_analyzer is not None:
@@ -102,6 +144,11 @@ def warm_up_services() -> None:
     logger.info(f"[warmup] pipecat module imports finished (+{time.monotonic() - t:.3f}s)")
 
     t = time.monotonic()
+    _preload_silero_vad()
+    _preload_silero_vad_phone()
+    logger.info(f"[warmup] Silero VAD preloaded (+{time.monotonic() - t:.3f}s)")
+
+    t = time.monotonic()
     _preload_smart_turn()
     logger.info(f"[warmup] Smart Turn ONNX preloaded (+{time.monotonic() - t:.3f}s)")
 
@@ -111,6 +158,14 @@ def warm_up_services() -> None:
 
     _warmed_up = True
     logger.info(f"[warmup] all services warmed up in {time.monotonic() - t0:.3f}s")
+
+
+def get_silero_vad():
+    return _silero_vad_analyzer
+
+
+def get_silero_vad_phone():
+    return _silero_vad_analyzer_phone or _silero_vad_analyzer
 
 
 def get_smart_turn():
