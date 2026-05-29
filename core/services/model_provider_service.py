@@ -888,12 +888,14 @@ class ModelProviderService(BaseService):
             for p, code in rows
         ]
 
-    def list_tts_voices(self, provider_id: str, language: str) -> List[dict]:
+    def list_tts_voices(self, provider_id: str, language: str, model_id: str = None) -> List[dict]:
         """Return TTS voices for a provider that support the given language.
 
         ``language`` is a display name (e.g. "English").  The method resolves
         it to all matching provider-specific codes and filters voices whose
         ``language_list`` JSONB array contains any of those codes.
+
+        If ``model_id`` is provided, only voices belonging to that model are returned.
         """
         prov_uuid = _parse_uuid(provider_id, field="provider id")
         self._provider_or_404(prov_uuid)
@@ -917,7 +919,7 @@ class ModelProviderService(BaseService):
             # Fallback: treat language as a raw code (backward compat)
             codes = [language]
 
-        rows = (
+        query = (
             self.db.query(ModelVoice)
             .join(Model, Model.id == ModelVoice.model_id)
             .filter(
@@ -927,9 +929,13 @@ class ModelProviderService(BaseService):
                 ModelVoice.is_active.is_(True),
                 or_(*(ModelVoice.language_list.contains([c]) for c in codes)),
             )
-            .order_by(ModelVoice.name.asc())
-            .all()
         )
+
+        if model_id:
+            model_uuid = _parse_uuid(model_id, field="model id")
+            query = query.filter(Model.id == model_uuid)
+
+        rows = query.order_by(ModelVoice.name.asc()).all()
         return [
             {
                 "id": str(v.id),

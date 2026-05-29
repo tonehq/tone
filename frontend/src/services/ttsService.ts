@@ -35,9 +35,13 @@ export const listTtsProviders = async (language: string): Promise<TtsProvider[]>
   return Array.isArray(res.data) ? res.data : [];
 };
 
-export const listTtsVoices = async (providerId: string, language: string): Promise<TtsVoice[]> => {
-  const res = await axiosInstance.get<TtsVoice[]>('/services/tts/voices', {
-    params: { provider_id: providerId, language },
-  });
+export const listTtsVoices = async (
+  providerId: string,
+  language: string,
+  modelId?: string | null,
+): Promise<TtsVoice[]> => {
+  const params: Record<string, string> = { provider_id: providerId, language };
+  if (modelId) params.model_id = modelId;
+  const res = await axiosInstance.get<TtsVoice[]>('/services/tts/voices', { params });
   return Array.isArray(res.data) ? res.data : [];
 };

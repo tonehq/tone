@@ -135,7 +135,7 @@ export default function VoiceStep() {
     };
   }, [language]);
 
-  // ─── voices load (depends on provider + language) ─────────────────────────
+  // ─── voices load (depends on provider + language + model) ──────────────────
   const providerId = voiceSettings?.provider_id ?? '';
   useEffect(() => {
     if (!providerId || !language) {
@@ -144,7 +144,7 @@ export default function VoiceStep() {
     }
     let cancelled = false;
     setLoadingVoices(true);
-    listTtsVoices(providerId, language)
+    listTtsVoices(providerId, language, ttsModelId)
       .then((rows) => {
         if (!cancelled) setVoices(rows);
       })
@@ -157,7 +157,7 @@ export default function VoiceStep() {
     return () => {
       cancelled = true;
     };
-  }, [providerId, language]);
+  }, [providerId, language, ttsModelId]);
 
   // ─── TTS models (depends on provider) ─────────────────────────────────────
   useEffect(() => {
@@ -346,11 +346,12 @@ export default function VoiceStep() {
               label: m.display_name || m.name,
             }))}
             value={ttsModelId ?? ''}
-            onValueChange={(v) =>
+            onValueChange={(v) => {
               setValue('config.voice_settings.model_id' as never, (v || null) as never, {
                 shouldDirty: true,
-              })
-            }
+              });
+              setValue('config.voice_settings.voice_id', null, { shouldDirty: true });
+            }}
             loading={loadingTtsModels}
             placeholder="Select a model"
             helperText="Optional — the provider's default model is used when blank."
