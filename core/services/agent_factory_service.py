@@ -1273,6 +1273,10 @@ class AgentFactoryService(BaseService):
             TurnAnalyzerUserTurnStopStrategy,
             TranscriptionUserTurnStopStrategy,
         )
+        from core.processors.transcription_timeout_turn_stop import (
+            TranscriptionTimeoutUserTurnStopStrategy,
+        )
+        from core.processors.vad_speaking_timeout import VADSpeakingTimeoutProcessor
         from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
         from pipecat.audio.turn.smart_turn.base_smart_turn import SmartTurnParams
         from pipecat.processors.aggregators.llm_text_processor import \
@@ -1562,6 +1566,7 @@ class AgentFactoryService(BaseService):
             user_turn_strategies = UserTurnStrategies(
                 stop=[
                     TranscriptionUserTurnStopStrategy(),
+                    TranscriptionTimeoutUserTurnStopStrategy(timeout=1.5),
                 ]
             )
             context_aggregator = LLMContextAggregatorPair(
@@ -1629,8 +1634,10 @@ class AgentFactoryService(BaseService):
 
             pipeline_processors = [transport.input()]
 
+            vad_timeout = VADSpeakingTimeoutProcessor(max_duration_secs=8.0)
             pipeline_processors.extend([
                 rtvi,
+                vad_timeout,
                 stt,
                 stt_frame_logger,
                 call_end_detector,
