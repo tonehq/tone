@@ -40,6 +40,10 @@ export function useTools(params: ListToolsParams = {}) {
     queryKey: [TOOLS_QUERY_KEY, params],
     queryFn: () => toolsApi.list(params),
     placeholderData: (prev) => prev,
+    // The create/edit flow upserts via Jotai atoms and does not invalidate this
+    // cache, so always refetch on mount to pick up changes when returning to the
+    // list page (otherwise the 30s global staleTime serves stale data).
+    refetchOnMount: 'always',
   });
 }
 
