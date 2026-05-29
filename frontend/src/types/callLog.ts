@@ -44,22 +44,23 @@ export interface CallMetrics {
 }
 
 export interface CallLogRow {
-  id: number;
-  uuid: string;
-  agent_id: number;
+  id: string;
+  agent_id: string;
   agent_name: string;
   agent_type: string;
-  started_at: number;
-  ended_at: number | null;
+  direction: string;
+  channel_type: string;
+  status: string;
+  started_at: string | null;
+  ended_at: string | null;
   duration_seconds: number | null;
-  transcript: Array<{ role: string; text: string; timestamp?: string }> | null;
   from_number: string | null;
   to_number: string | null;
-  transport_type: string | null;
-  status: string;
-  audio_file_path: string | null;
   provider_call_id: string | null;
+  recording_upload_id: string | null;
+  transcript: Array<{ role: string; text: string; timestamp?: string }> | null;
   metrics: CallMetrics | null;
+  tool_calls: Array<Record<string, unknown>> | null;
 }
 
 export interface CallLogsState {
@@ -77,8 +78,8 @@ export interface CallLogFilterParam {
 export interface CallLogQueryParams {
   page_no: number;
   page_size: number;
-  start_date_time?: number;
-  end_date_time?: number;
+  start_date_time?: string;
+  end_date_time?: string;
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
   filters?: CallLogFilterParam[];

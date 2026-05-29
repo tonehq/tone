@@ -11,6 +11,7 @@ class ModelVoice(TimestampModel):
     __tablename__ = "model_voices"
 
     model_id = Column(UUID(as_uuid=True), ForeignKey("models.id", ondelete="CASCADE"), nullable=False)
+    voice_id = Column(String(200), nullable=True)
     accent = Column(String(120), nullable=True)
     name = Column(String(200), nullable=True)
     gender = Column(String(200), nullable=True)

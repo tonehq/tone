@@ -1,16 +1,50 @@
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, status
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from uuid import UUID
 
 from core.database.session import get_db
 from core.middleware.auth import JWTClaims, require_org_member
-from core.services.call_log_service import CallLogService
-from core.utils.storage import generate_presigned_url, get_r2_object
+from core.services.call_service import CallService
+from shared.config import settings
 
 router = APIRouter()
 
+
+# ---------------------------------------------------------------------------
+# Pydantic request schemas
+# ---------------------------------------------------------------------------
+
+class CallFilterParam(BaseModel):
+    field: str
+    operator: str
+    value: object
+
+
+class ListCallsRequest(BaseModel):
+    page_no: int = Field(default=1, ge=1)
+    page_size: int = Field(default=10, ge=1, le=100)
+    start_date_time: Optional[str] = None
+    end_date_time: Optional[str] = None
+    filters: Optional[List[CallFilterParam]] = None
+    sort_by: Optional[str] = None
+    sort_order: str = Field(default="desc", pattern="^(asc|desc)$")
+
+
+# ---------------------------------------------------------------------------
+# Service helper
+# ---------------------------------------------------------------------------
+
+def _get_service(claims: JWTClaims, db: Session) -> CallService:
+    org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
+    return CallService(db, org_id=org_id)
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
 
 @router.get("/filter-values")
 def get_filter_values(
@@ -18,92 +52,34 @@ def get_filter_values(
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    return CallLogService(db).get_filter_values(column_name=column_name)
+    return _get_service(claims, db).get_filter_values(column_name=column_name)
 
 
 @router.post("/list")
-def get_call_logs(
-    data: Dict[str, Any] = Body(...),
+def get_calls(
+    body: ListCallsRequest,
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    return CallLogService(db).get_call_logs(
-        page_no=data.get("page_no", 1),
-        page_size=data.get("page_size", 10),
-        start_date_time=data.get("start_date_time"),
-        end_date_time=data.get("end_date_time"),
-        filters=data.get("filters"),
-        sort_by=data.get("sort_by"),
-        sort_order=data.get("sort_order", "desc"),
+    filters = [f.model_dump() for f in body.filters] if body.filters else None
+    return _get_service(claims, db).get_calls(
+        page_no=body.page_no,
+        page_size=body.page_size,
+        start_date_time=body.start_date_time,
+        end_date_time=body.end_date_time,
+        filters=filters,
+        sort_by=body.sort_by,
+        sort_order=body.sort_order,
     )
 
 
 @router.get("/{call_id}")
-def get_call_log_by_id(
-    call_id: int,
+def get_call_by_id(
+    call_id: str,
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    result = CallLogService(db).get_call_log_by_id(call_log_id=call_id)
+    result = _get_service(claims, db).get_call_by_id(call_id=call_id)
     if not result:
-        raise HTTPException(status_code=404, detail="Call log not found")
+        raise HTTPException(status_code=404, detail="Call not found")
     return result
-
-
-@router.get("/{call_id}/audio-url")
-def get_audio_url(
-    call_id: int,
-    claims: JWTClaims = Depends(require_org_member),
-    db: Session = Depends(get_db),
-):
-    result = CallLogService(db).get_call_log_by_id(call_log_id=call_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Call log not found")
-
-    audio_path = result.get("audio_file_path")
-    if not audio_path:
-        raise HTTPException(status_code=404, detail="No audio recording for this call")
-
-    url = generate_presigned_url(audio_path)
-    return {"url": url}
-
-
-@router.get("/{call_id}/audio")
-def download_audio(
-    call_id: int,
-    claims: JWTClaims = Depends(require_org_member),
-    db: Session = Depends(get_db),
-    range: Optional[str] = Header(None),
-):
-    """Stream the audio file from R2 for playback or download.
-
-    Supports HTTP Range requests so browsers can seek within the audio.
-    """
-    result = CallLogService(db).get_call_log_by_id(call_log_id=call_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Call log not found")
-
-    audio_path = result.get("audio_file_path")
-    if not audio_path:
-        raise HTTPException(status_code=404, detail="No audio recording for this call")
-
-    try:
-        r2_response = get_r2_object(audio_path, range_header=range)
-    except Exception:
-        raise HTTPException(status_code=404, detail="Audio file not found in storage")
-
-    headers = {
-        "Accept-Ranges": "bytes",
-        "Content-Length": str(r2_response["ContentLength"]),
-    }
-    if "ContentRange" in r2_response:
-        headers["Content-Range"] = r2_response["ContentRange"]
-
-    status_code = r2_response["StatusCode"]
-
-    return StreamingResponse(
-        r2_response["Body"].iter_chunks(chunk_size=1024 * 64),
-        status_code=status_code,
-        media_type=r2_response["ContentType"],
-        headers=headers,
-    )
