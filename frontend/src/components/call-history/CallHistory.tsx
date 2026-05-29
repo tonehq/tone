@@ -245,7 +245,7 @@ const CallHistory: React.FC = () => {
   ];
 
   return (
-    <div className="animate-page flex h-full flex-col gap-5 p-6">
+    <div className="animate-page flex h-full flex-col gap-5">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Call History</h1>
         <p className="mt-1 text-sm text-muted-foreground">
