@@ -1559,13 +1559,8 @@ class AgentFactoryService(BaseService):
             # Standard pipeline: STT → LLM → TTS
             tools = combined_tools
             context = LLMContext(messages, tools)
-            smart_turn_analyzer = get_smart_turn() or LocalSmartTurnAnalyzerV3(
-                confidence_threshold=0.5,
-                params=SmartTurnParams(stop_secs=0.4),
-            )
             user_turn_strategies = UserTurnStrategies(
                 stop=[
-                    TurnAnalyzerUserTurnStopStrategy(turn_analyzer=smart_turn_analyzer),
                     TranscriptionUserTurnStopStrategy(),
                 ]
             )
