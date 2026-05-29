@@ -93,8 +93,8 @@ def _preload_silero_vad_phone() -> Optional[Any]:
             params=VADParams(
                 confidence=0.7,
                 start_secs=0.2,
-                stop_secs=0.4,
-                min_volume=0.25,
+                stop_secs=0.6,
+                min_volume=0.4,
             )
         )
         return _silero_vad_analyzer_phone
