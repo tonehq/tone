@@ -3,6 +3,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useAtom } from 'jotai';
 import {
+  AlertTriangle,
   BookOpen,
   Calendar,
   ExternalLink,
@@ -10,6 +11,7 @@ import {
   HardDrive,
   Pencil,
   Plus,
+  RotateCcw,
   Trash2,
   User,
   X,
@@ -29,6 +31,7 @@ import {
   knowledgeBaseApi,
   useDeleteKnowledgeBase,
   useKnowledgeBase,
+  useReprocessKnowledgeBase,
 } from '@/lib/api/knowledge-base';
 import { KNOWLEDGE_BASE_STATUS_OPTIONS } from '@/lib/constants/filters';
 import type { AgentDropdownItem } from '@/types/agent';
@@ -62,11 +65,18 @@ const contentTypeBadgeColors: Record<string, { label: string; color: string }> =
   },
 };
 
-function getTypeBadge(contentType: string) {
+function getTypeBadge(contentType?: string | null) {
+  if (!contentType) return { label: 'FILE', color: 'bg-muted text-muted-foreground' };
   const config = contentTypeBadgeColors[contentType];
   if (config) return config;
   const ext = contentType.split('/').pop()?.toUpperCase() ?? 'FILE';
   return { label: ext, color: 'bg-muted text-muted-foreground' };
+}
+
+/** Extract the human-readable failure reason stored on a failed upload. */
+function getErrorMessage(doc: Pick<KnowledgeBaseDocument, 'meta_data'>): string | null {
+  const error = doc.meta_data?.error;
+  return typeof error === 'string' && error.trim() ? error : null;
 }
 
 function formatFileSize(bytes: number): string {
@@ -154,6 +164,8 @@ export default function KnowledgeBasePage() {
   const total = data?.total ?? 0;
 
   const deleteMutation = useDeleteKnowledgeBase();
+  const reprocessMutation = useReprocessKnowledgeBase();
+  const [reprocessingId, setReprocessingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (hasFetchedAgentsRef.current) return;
@@ -279,6 +291,25 @@ export default function KnowledgeBasePage() {
     queryClient.invalidateQueries({ queryKey: [KNOWLEDGE_BASE_QUERY_KEY] });
   }, [queryClient]);
 
+  const handleReprocess = useCallback(
+    async (doc: KnowledgeBaseDocument) => {
+      if (reprocessingId) return;
+      setReprocessingId(doc.id);
+      try {
+        const updated = await reprocessMutation.mutateAsync(doc.id);
+        showToast.success('Retrying', 'Document processing has been restarted.');
+        // Keep the detail modal in sync if it's open on this document. Merge so
+        // fields not returned by the reprocess endpoint (e.g. agent_id) survive.
+        setSelectedDoc((prev) => (prev && prev.id === doc.id ? { ...prev, ...updated } : prev));
+      } catch (error) {
+        handleApiError(error);
+      } finally {
+        setReprocessingId(null);
+      }
+    },
+    [reprocessMutation, reprocessingId],
+  );
+
   const columns = useMemo<CustomTableColumn<KnowledgeBaseDocument>[]>(
     () => [
       {
@@ -306,7 +337,7 @@ export default function KnowledgeBasePage() {
         dataIndex: 'file_name',
         sorter: true,
         render: (_value, record) => {
-          const badge = getTypeBadge(record.content_type);
+          const badge = getTypeBadge(record.file_type);
           return (
             <div className="flex min-w-0 items-center gap-3">
               <div className="relative flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted/60 ring-1 ring-border">
@@ -337,7 +368,7 @@ export default function KnowledgeBasePage() {
                   </span>
                 </div>
                 <span className="truncate text-xs text-muted-foreground">
-                  {agentNameMap.get(record.agent_id) ?? 'Unknown agent'}
+                  {agentNameMap.get(record.agent_id ?? '') ?? 'Unknown agent'}
                 </span>
               </div>
             </div>
@@ -345,9 +376,9 @@ export default function KnowledgeBasePage() {
         },
       },
       {
-        key: 'file_size_bytes',
+        key: 'size_bytes',
         title: 'Size',
-        dataIndex: 'file_size_bytes',
+        dataIndex: 'size_bytes',
         sorter: true,
         width: 'w-[110px]',
         render: (value) => (
@@ -364,12 +395,14 @@ export default function KnowledgeBasePage() {
         width: 'w-[130px]',
         render: (_value, record) => {
           const cfg = statusConfig[record.status] ?? statusConfig.processing;
+          const errorMsg = record.status === 'failed' ? getErrorMessage(record) : null;
           return (
             <span
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
                 cfg.className,
               )}
+              title={errorMsg ?? undefined}
             >
               <span className={cn('h-1.5 w-1.5 rounded-full', statusDot[record.status])} />
               {cfg.label}
@@ -386,7 +419,7 @@ export default function KnowledgeBasePage() {
         render: (value) =>
           value ? (
             <span className="text-sm tabular-nums text-muted-foreground">
-              {formatDate(value as number)}
+              {formatDate(value as string)}
             </span>
           ) : (
             <span className="text-muted-foreground">—</span>
@@ -399,6 +432,23 @@ export default function KnowledgeBasePage() {
         width: 'w-[96px]',
         render: (_value, record) => (
           <div className="flex items-center justify-end gap-0.5">
+            {record.status === 'failed' && (
+              <CustomButton
+                type="text"
+                size="icon-xs"
+                disabled={!!reprocessingId}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleReprocess(record);
+                }}
+                aria-label="Retry processing"
+                className="text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <RotateCcw
+                  className={cn('size-4', reprocessingId === record.id && 'animate-spin')}
+                />
+              </CustomButton>
+            )}
             <CustomButton
               type="text"
               size="icon-xs"
@@ -427,13 +477,24 @@ export default function KnowledgeBasePage() {
         ),
       },
     ],
-    [allRowsSelected, someRowsSelected, toggleAllRows, selectedIds, toggleRow, agentNameMap],
+    [
+      allRowsSelected,
+      someRowsSelected,
+      toggleAllRows,
+      selectedIds,
+      toggleRow,
+      agentNameMap,
+      handleReprocess,
+      reprocessingId,
+    ],
   );
 
-  const detailBadge = selectedDoc ? getTypeBadge(selectedDoc.content_type) : null;
+  const detailBadge = selectedDoc ? getTypeBadge(selectedDoc.file_type) : null;
   const detailStatus = selectedDoc
     ? (statusConfig[selectedDoc.status] ?? statusConfig.processing)
     : null;
+  const detailError =
+    selectedDoc && selectedDoc.status === 'failed' ? getErrorMessage(selectedDoc) : null;
 
   return (
     <div className="animate-page flex h-full min-h-0 flex-col gap-5">
@@ -602,16 +663,48 @@ export default function KnowledgeBasePage() {
               </div>
             </div>
 
+            {detailError && (
+              <div
+                role="alert"
+                className="flex items-start gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 px-3.5 py-3"
+              >
+                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-medium text-destructive">Processing failed</p>
+                  <p className="mt-0.5 break-words text-[13px] text-destructive/90">
+                    {detailError}
+                  </p>
+                  <CustomButton
+                    type="default"
+                    size="sm"
+                    icon={
+                      <RotateCcw
+                        className={cn(
+                          'size-4',
+                          reprocessingId === selectedDoc.id && 'animate-spin',
+                        )}
+                      />
+                    }
+                    disabled={!!reprocessingId}
+                    onClick={() => handleReprocess(selectedDoc)}
+                    className="mt-2.5"
+                  >
+                    Retry processing
+                  </CustomButton>
+                </div>
+              </div>
+            )}
+
             <div className="rounded-xl border border-border bg-muted/20">
               <DetailRow
                 icon={<User className="size-4" />}
                 label="Agent"
-                value={agentNameMap.get(selectedDoc.agent_id) ?? 'Unknown agent'}
+                value={agentNameMap.get(selectedDoc.agent_id ?? '') ?? 'Unknown agent'}
               />
               <DetailRow
                 icon={<HardDrive className="size-4" />}
                 label="File size"
-                value={formatFileSize(selectedDoc.file_size_bytes)}
+                value={formatFileSize(selectedDoc.size_bytes)}
               />
               <DetailRow
                 icon={<Calendar className="size-4" />}
