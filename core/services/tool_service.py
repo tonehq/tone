@@ -45,8 +45,8 @@ def decrypt_auth_config(auth_config: Optional[Dict[str, Any]]) -> Optional[Dict[
 
 class ToolService(BaseService):
 
-    def _validate_oauth_connection(self, oauth_connection_id: int) -> None:
-        """Raise 400 if the OAuth connection doesn't exist, is inactive, or belongs to a different org."""
+    def _validate_oauth_connection(self, oauth_connection_id) -> None:
+        """Raise 400 if the OAuth connection doesn't exist or belongs to a different org."""
         from core.models.oauth_connection import OAuthConnection
 
         connection = self.db.query(OAuthConnection).filter(
@@ -61,11 +61,6 @@ class ToolService(BaseService):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="OAuth connection does not belong to this organization",
-            )
-        if not connection.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="OAuth connection is no longer active. Please reconnect.",
             )
 
     def _check_duplicate_name(self, name: str, exclude_id=None) -> None:
