@@ -2,6 +2,7 @@
 ``core/services/model_provider_service.py`` so the EE edition can share it
 without copy-paste drift."""
 
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, Query, status
@@ -185,7 +186,8 @@ def list_tts_providers(
 def list_tts_voices(
     provider_id: str = Query(..., description="Provider ID to fetch voices for"),
     language: str = Query(..., description="Language name to filter voices"),
+    model_id: Optional[str] = Query(None, description="Model ID to filter voices by"),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    return _service(claims, db).list_tts_voices(provider_id, language)
+    return _service(claims, db).list_tts_voices(provider_id, language, model_id=model_id)

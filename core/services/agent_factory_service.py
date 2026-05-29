@@ -855,7 +855,7 @@ class AgentFactoryService(BaseService):
                     model = voice_model
 
         tts_voice_id = metadata.get("voice_id")
-        tts_language = metadata.get("language")
+        tts_language = metadata.get("language_code") or metadata.get("language")
 
         # Providers that need an aiohttp session
         _http_providers = {"asyncai_http", "deepgram", "minimax", "neuphonic", "rime", "sarvam", "speechmatics"}

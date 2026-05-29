@@ -24,9 +24,9 @@ interface CallDetailDrawerProps {
   callLog: CallLogRow | null;
 }
 
-const formatTimestamp = (ts: number | null): string => {
+const formatTimestamp = (ts: string | null): string => {
   if (!ts) return '-';
-  return new Date(ts * 1000).toLocaleString();
+  return new Date(ts).toLocaleString();
 };
 
 const formatDuration = (seconds: number | null): string => {
@@ -80,7 +80,7 @@ const CallDetailDrawer: React.FC<CallDetailDrawerProps> = ({ open, onClose, call
   const [audioLoading, setAudioLoading] = useState(false);
 
   useEffect(() => {
-    if (!open || !callLog?.audio_file_path) {
+    if (!open || !callLog?.recording_upload_id) {
       setAudioUrl(null);
       return;
     }
@@ -102,7 +102,7 @@ const CallDetailDrawer: React.FC<CallDetailDrawerProps> = ({ open, onClose, call
     return () => {
       cancelled = true;
     };
-  }, [open, callLog?.id, callLog?.audio_file_path]);
+  }, [open, callLog?.id, callLog?.recording_upload_id]);
 
   const filteredTranscript = useMemo(() => {
     if (!callLog?.transcript) return [];
@@ -144,7 +144,7 @@ const CallDetailDrawer: React.FC<CallDetailDrawerProps> = ({ open, onClose, call
             {/* Audio Player */}
             <div>
               <h3 className="mb-2 text-sm font-medium text-foreground">Audio Recording</h3>
-              {callLog.audio_file_path ? (
+              {callLog.recording_upload_id ? (
                 audioLoading ? (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Loader2 className="size-4 animate-spin" />
@@ -191,8 +191,8 @@ const CallDetailDrawer: React.FC<CallDetailDrawerProps> = ({ open, onClose, call
                 <div className="flex items-start gap-2">
                   <Radio className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                   <div>
-                    <p className="text-xs text-muted-foreground">Transport Type</p>
-                    <p className="text-sm">{callLog.transport_type || '-'}</p>
+                    <p className="text-xs text-muted-foreground">Channel Type</p>
+                    <p className="text-sm">{callLog.channel_type || '-'}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">

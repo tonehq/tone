@@ -6,7 +6,7 @@ from typing import Any, Iterable, List
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import case, distinct, func
+from sqlalchemy import case, distinct, func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from core.models.api_key import ApiKey
@@ -828,21 +828,42 @@ class ModelProviderService(BaseService):
     # ─── TTS cascade (language → provider → voice) ────────────────────────
 
     def list_tts_languages(self) -> List[dict]:
-        """Return distinct languages available across all active TTS models."""
+        """Return distinct languages available across all active TTS models.
+
+        Groups by ``display_name`` so the UI dropdown is deduplicated.
+        Returns the canonical display name and all provider-specific codes
+        that map to it, so the frontend can resolve saved codes on edit.
+        """
         rows = (
-            self.db.query(ModelLanguage.name)
+            self.db.query(
+                ModelLanguage.display_name,
+                func.array_agg(distinct(ModelLanguage.name)),
+            )
             .join(Model, Model.id == ModelLanguage.model_id)
-            .filter(Model.kind == "tts", Model.is_active.is_(True), ModelLanguage.is_active.is_(True))
-            .distinct()
-            .order_by(ModelLanguage.name.asc())
+            .filter(
+                Model.kind == "tts",
+                Model.is_active.is_(True),
+                ModelLanguage.is_active.is_(True),
+                ModelLanguage.display_name.isnot(None),
+            )
+            .group_by(ModelLanguage.display_name)
+            .order_by(ModelLanguage.display_name.asc())
             .all()
         )
-        return [{"name": row[0]} for row in rows]
+        return [{"name": row[0], "codes": sorted(row[1])} for row in rows]
 
     def list_tts_providers(self, language: str) -> List[dict]:
-        """Return TTS providers that have models supporting the given language."""
+        """Return TTS providers that have models supporting the given language.
+
+        ``language`` is a display name (e.g. "English").  For each provider the
+        response includes the first matching provider-specific code so the
+        frontend can persist it in ``voice_settings.language_code``.
+        """
         rows = (
-            self.db.query(ModelProvider)
+            self.db.query(
+                ModelProvider,
+                func.min(ModelLanguage.name),  # first provider-specific code
+            )
             .join(Model, Model.provider_id == ModelProvider.id)
             .join(ModelLanguage, ModelLanguage.model_id == Model.id)
             .filter(
@@ -850,9 +871,9 @@ class ModelProviderService(BaseService):
                 Model.is_active.is_(True),
                 ModelProvider.is_active.is_(True),
                 ModelLanguage.is_active.is_(True),
-                ModelLanguage.name == language,
+                ModelLanguage.display_name == language,
             )
-            .distinct()
+            .group_by(ModelProvider.id)
             .order_by(ModelProvider.display_name.asc())
             .all()
         )
@@ -862,16 +883,43 @@ class ModelProviderService(BaseService):
                 "slug": p.slug,
                 "display_name": p.display_name,
                 "description": p.description,
+                "language_code": code,
             }
-            for p in rows
+            for p, code in rows
         ]
 
-    def list_tts_voices(self, provider_id: str, language: str) -> List[dict]:
-        """Return TTS voices for a provider that support the given language."""
+    def list_tts_voices(self, provider_id: str, language: str, model_id: str = None) -> List[dict]:
+        """Return TTS voices for a provider that support the given language.
+
+        ``language`` is a display name (e.g. "English").  The method resolves
+        it to all matching provider-specific codes and filters voices whose
+        ``language_list`` JSONB array contains any of those codes.
+
+        If ``model_id`` is provided, only voices belonging to that model are returned.
+        """
         prov_uuid = _parse_uuid(provider_id, field="provider id")
         self._provider_or_404(prov_uuid)
 
-        rows = (
+        # Resolve display name → provider-specific codes for this provider
+        code_rows = (
+            self.db.query(ModelLanguage.name)
+            .join(Model, Model.id == ModelLanguage.model_id)
+            .filter(
+                Model.provider_id == prov_uuid,
+                Model.kind == "tts",
+                ModelLanguage.is_active.is_(True),
+                ModelLanguage.display_name == language,
+            )
+            .distinct()
+            .all()
+        )
+        codes = [r[0] for r in code_rows]
+
+        if not codes:
+            # Fallback: treat language as a raw code (backward compat)
+            codes = [language]
+
+        query = (
             self.db.query(ModelVoice)
             .join(Model, Model.id == ModelVoice.model_id)
             .filter(
@@ -879,11 +927,15 @@ class ModelProviderService(BaseService):
                 Model.kind == "tts",
                 Model.is_active.is_(True),
                 ModelVoice.is_active.is_(True),
-                ModelVoice.language_list.contains([language]),
+                or_(*(ModelVoice.language_list.contains([c]) for c in codes)),
             )
-            .order_by(ModelVoice.name.asc())
-            .all()
         )
+
+        if model_id:
+            model_uuid = _parse_uuid(model_id, field="model id")
+            query = query.filter(Model.id == model_uuid)
+
+        rows = query.order_by(ModelVoice.name.asc()).all()
         return [
             {
                 "id": str(v.id),
