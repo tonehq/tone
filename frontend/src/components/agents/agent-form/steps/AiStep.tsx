@@ -4,10 +4,12 @@ import { Brain, Settings2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
+import DynamicProviderFields from '@/components/agents/agent-form/DynamicProviderFields';
 import SectionCard, { ACCENTS } from '@/components/agents/agent-form/SectionCard';
 import { SelectInput, SliderField, TextInput } from '@/components/shared';
 import { listProviderCatalog, listProviderModels } from '@/services/servicesService';
 import type { ProviderCatalogItem, ProviderModel } from '@/types/service';
+import type { MetaDataSchemaField } from '@/types/provider';
 import type { AgentFormState } from '@/types/agent';
 import { handleApiError } from '@/utils/helpers';
 
@@ -92,6 +94,13 @@ export default function AiStep() {
   const showModelField = !!llmProviderId;
   const showSettings = !!llmProviderId;
 
+  // Get meta_data_schema for the selected LLM provider
+  const llmSchema = useMemo<MetaDataSchemaField[]>(() => {
+    if (!llmProviderId) return [];
+    const provider = providers.find((p) => p.id === llmProviderId);
+    return provider?.meta_data_schema?.llm ?? [];
+  }, [llmProviderId, providers]);
+
   return (
     <div className="flex flex-col gap-4">
       <SectionCard
@@ -145,23 +154,29 @@ export default function AiStep() {
           title="LLM settings"
           description="Fine-tune how the model answers."
         >
-          <SliderField
-            name="config.llm_settings.temperature"
-            label="Temperature"
-            control={control}
-            min={0}
-            max={2}
-            step={0.1}
-            showLabels
-            helperText="Lower = more deterministic. Higher = more creative."
-          />
-          <TextInput
-            name="config.llm_settings.max_tokens"
-            label="Max tokens per response"
-            control={control}
-            type="number"
-            placeholder="1024"
-          />
+          {llmSchema.length > 0 ? (
+            <DynamicProviderFields fields={llmSchema} basePath="config.llm_settings" />
+          ) : (
+            <>
+              <SliderField
+                name="config.llm_settings.temperature"
+                label="Temperature"
+                control={control}
+                min={0}
+                max={2}
+                step={0.1}
+                showLabels
+                helperText="Lower = more deterministic. Higher = more creative."
+              />
+              <TextInput
+                name="config.llm_settings.max_tokens"
+                label="Max tokens per response"
+                control={control}
+                type="number"
+                placeholder="1024"
+              />
+            </>
+          )}
           <TextInput
             name="config.conversation_history_token_limit"
             label="Conversation history token limit"

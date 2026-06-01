@@ -45,6 +45,8 @@ export interface ProviderCatalogItem {
   display_name: string;
   description: string | null;
   kinds: ServiceKind[];
+  /** Provider-specific configurable fields, keyed by kind (llm/stt/tts). */
+  meta_data_schema?: Record<string, import('@/types/provider').MetaDataSchemaField[]> | null;
 }
 
 /**
