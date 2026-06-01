@@ -58,21 +58,46 @@ def _try_decrypt(value):
 
 
 def build_auth_headers(auth_config, already_decrypted=False) -> dict:
-    """Build HTTP headers from auth_config."""
+    """Build HTTP headers from auth_config.
+
+    All auth sources are MERGED (not mutually exclusive), because the UI lets a
+    server use an API key / bearer token AND custom HTTP headers at the same time
+    (e.g. ClickUp: ``Authorization: Bearer <key>`` plus ``x-workspace-id``).
+    Explicit custom headers win on name conflicts; the api_key/token only fills
+    ``Authorization`` if a custom header hasn't already set it.
+    """
     if not auth_config:
         return {}
     decrypted = auth_config if already_decrypted else decrypt_auth_config(auth_config)
     headers = {}
-    if decrypted.get("headers") and isinstance(decrypted["headers"], list):
+
+    # 1) Explicit custom headers (list form), e.g. x-workspace-id
+    if isinstance(decrypted.get("headers"), list):
         for h in decrypted["headers"]:
             if h.get("header_name") and h.get("header_value"):
                 headers[h["header_name"]] = h["header_value"]
-    elif decrypted.get("header_name") and decrypted.get("header_value"):
-        headers[decrypted["header_name"]] = decrypted["header_value"]
-    elif decrypted.get("api_key"):
-        headers["Authorization"] = f"Bearer {decrypted['api_key']}"
-    elif decrypted.get("token") or decrypted.get("bearer_token"):
-        headers["Authorization"] = f"Bearer {decrypted.get('token') or decrypted.get('bearer_token')}"
+
+    # 2) Single header_name/header_value pair (legacy single-header form)
+    if decrypted.get("header_name") and decrypted.get("header_value"):
+        headers.setdefault(decrypted["header_name"], decrypted["header_value"])
+
+    # 3) API key / bearer token → a CONFIGURABLE header + scheme, so this works for
+    #    any provider instead of being hardcoded to "Authorization: Bearer".
+    #      default                         -> Authorization: Bearer <secret>
+    #      auth_header="X-Api-Key", scheme="" -> X-Api-Key: <secret>      (e.g. Postman)
+    #      auth_scheme=""                  -> Authorization: <secret>     (e.g. ClickUp raw token)
+    #      auth_scheme="Basic"             -> Authorization: Basic <secret>
+    #    Only applied if that header wasn't already set by a custom header above.
+    secret = decrypted.get("api_key") or decrypted.get("token") or decrypted.get("bearer_token")
+    if secret:
+        target = decrypted.get("auth_header") or decrypted.get("api_key_header") or "Authorization"
+        scheme = decrypted.get("auth_scheme")
+        if scheme is None:
+            scheme = "Bearer"
+        value = f"{scheme} {secret}".strip() if scheme else str(secret)
+        if not any(k.lower() == target.lower() for k in headers):
+            headers[target] = value
+
     return headers
 
 
