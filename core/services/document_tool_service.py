@@ -18,6 +18,8 @@ from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
 from pipecat.services.llm_service import FunctionCallParams
 
+DEFAULT_TOP_K = 8
+
 
 def get_document_tool_schema(document_names: List[str]) -> ToolsSchema:
     """Build the read_document tool schema with document names in the description.
@@ -50,7 +52,7 @@ def get_document_tool_schema(document_names: List[str]) -> ToolsSchema:
     return ToolsSchema(standard_tools=[function_schema])
 
 
-def create_document_handler(agent_id: int, org_id: Any, api_key: str, upload_ids: List, top_k: int = 3, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None):
+def create_document_handler(agent_id: int, org_id: Any, api_key: str, upload_ids: List, top_k: int = DEFAULT_TOP_K, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None):
     """Create the handler function for read_document tool calls.
 
     Args:
@@ -87,30 +89,13 @@ def create_document_handler(agent_id: int, org_id: Any, api_key: str, upload_ids
         }
 
         try:
-            from core.services.embedding_service import EmbeddingService
-            from core.database.session import get_db_context
-            from sqlalchemy import text
+            from core.services.rag.embedders import OpenAIEmbedder
+            from core.services.rag.vector_stores.pgvector_store import PgVectorStore
 
-            # Step 1: Embed the query
-            embedder = EmbeddingService(api_key)
-            query_embedding = embedder.embed_query(query)
-
-            # Step 2: Single query — search knowledge_base_chunks via pgvector similarity
-            with get_db_context() as db:
-                embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
-                query_sql = text("""
-                    SELECT kbc.chunk_text, kbc.embedding <=> :embedding AS distance
-                    FROM knowledge_base_chunks kbc
-                    JOIN uploads u ON kbc.upload_id = u.id
-                    JOIN agent_knowledge_bases akb ON akb.upload_id = u.id
-                    WHERE akb.agent_id = :agent_id AND u.status = 'ready'
-                    ORDER BY kbc.embedding <=> :embedding
-                    LIMIT :top_k
-                """)
-                results = db.execute(
-                    query_sql,
-                    {"embedding": embedding_str, "agent_id": str(agent_id), "top_k": top_k},
-                ).fetchall()
+            query_embedding = OpenAIEmbedder(api_key).embed_query(query)
+            results = PgVectorStore().query(
+                query_embedding, top_k=top_k, filters={"agent_id": str(agent_id)}
+            )
 
             if not results:
                 tool_call_entry["result"] = "No relevant content found"
@@ -121,8 +106,7 @@ def create_document_handler(agent_id: int, org_id: Any, api_key: str, upload_ids
                 await params.result_callback("No relevant content found in the documents.")
                 return
 
-            # Step 3: Combine chunk texts and return to LLM
-            chunks_text = "\n\n---\n\n".join(row[0] for row in results)
+            chunks_text = "\n\n---\n\n".join(r.text for r in results)
             result = f"Here is the relevant content from the documents:\n\n{chunks_text}"
             logger.info("read_document returning {} chunks for query='{}'", len(results), query)
 
