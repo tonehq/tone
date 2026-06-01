@@ -358,30 +358,46 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
 async def _calendar_create_event(base_url: str, headers: dict, arguments: dict, timezone: str) -> str:
     """Create a calendar event."""
     title = arguments.get("title", "Appointment")
-    date = arguments.get("date")  # e.g. "2026-05-10"
+    date = arguments.get("date")  # check-in / event date, e.g. "2026-11-01"
+    end_date = arguments.get("end_date")  # check-out date for multi-day stays
     start_time = arguments.get("start_time")  # e.g. "14:00"
+    end_time = arguments.get("end_time")  # e.g. "21:00"
     duration_minutes = int(arguments.get("duration_minutes", 30))
     description = arguments.get("description", "")
     attendee_email = arguments.get("attendee_email")
 
-    if not date or not start_time:
-        return "Error: 'date' and 'start_time' are required to create an event."
+    if not date:
+        return "Error: 'date' is required to create an event."
 
-    # Build start/end datetime strings
-    start_dt = f"{date}T{start_time}:00"
-    # Calculate end time
-    start_hour, start_min = map(int, start_time.split(":"))
-    total_minutes = start_hour * 60 + start_min + duration_minutes
-    end_hour = total_minutes // 60
-    end_min = total_minutes % 60
-    end_dt = f"{date}T{end_hour:02d}:{end_min:02d}:00"
-
-    event_body = {
-        "summary": title,
-        "description": description,
-        "start": {"dateTime": start_dt, "timeZone": timezone},
-        "end": {"dateTime": end_dt, "timeZone": timezone},
-    }
+    if end_date and not start_time:
+        # All-day, multi-day event — e.g. a hotel stay from check-in to check-out.
+        # Google all-day events use date-only start/end, and end.date is EXCLUSIVE,
+        # so passing the check-out date spans the nights of the stay.
+        event_body = {
+            "summary": title,
+            "description": description,
+            "start": {"date": date},
+            "end": {"date": end_date},
+        }
+        when_desc = f"{date} to {end_date} (all-day)"
+    else:
+        if not start_time:
+            return "Error: provide 'start_time' for a timed event, or 'end_date' for an all-day stay."
+        start_dt = f"{date}T{start_time}:00"
+        if end_time:
+            # Honor an explicit end time (and an optional end_date for overnight slots).
+            end_dt = f"{end_date or date}T{end_time}:00"
+        else:
+            start_hour, start_min = map(int, start_time.split(":"))
+            total_minutes = start_hour * 60 + start_min + duration_minutes
+            end_dt = f"{date}T{total_minutes // 60:02d}:{total_minutes % 60:02d}:00"
+        event_body = {
+            "summary": title,
+            "description": description,
+            "start": {"dateTime": start_dt, "timeZone": timezone},
+            "end": {"dateTime": end_dt, "timeZone": timezone},
+        }
+        when_desc = f"{date} {start_time}" + (f"-{end_time}" if end_time else "")
 
     if attendee_email:
         event_body["attendees"] = [{"email": attendee_email}]
@@ -394,7 +410,7 @@ async def _calendar_create_event(base_url: str, headers: dict, arguments: dict, 
     if response.status_code in (200, 201):
         event = response.json()
         logger.info("google_calendar create_event SUCCESS: event_id={} status={} htmlLink={}", event.get("id"), event.get("status"), event.get("htmlLink"))
-        return f"Event '{title}' created successfully on {date} at {start_time} for {duration_minutes} minutes. Event link: {event.get('htmlLink', 'N/A')}"
+        return f"Event '{title}' created successfully ({when_desc}). Event link: {event.get('htmlLink', 'N/A')}"
     else:
         logger.error("google_calendar create_event FAILED: status={} body={}", response.status_code, response.text)
         return f"Failed to create event: {response.text}"
