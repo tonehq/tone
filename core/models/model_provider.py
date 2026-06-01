@@ -1,7 +1,7 @@
 import uuid
 
 from sqlalchemy import Column, String, Boolean, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from core.models.base import TimestampModel
 
@@ -18,3 +18,4 @@ class ModelProvider(TimestampModel):
     description = Column(String(500), nullable=True)
     website_url = Column(String(255), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
+    meta_data_schema = Column(JSONB, nullable=True)

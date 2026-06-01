@@ -4,6 +4,7 @@ import { Mic, Pause, Play, Volume2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
+import DynamicProviderFields from '@/components/agents/agent-form/DynamicProviderFields';
 import SectionCard, { ACCENTS } from '@/components/agents/agent-form/SectionCard';
 import {
   CustomButton,
@@ -24,6 +25,7 @@ import {
   type TtsVoice,
 } from '@/services/ttsService';
 import type { AgentFormState } from '@/types/agent';
+import type { MetaDataSchemaField } from '@/types/provider';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 
@@ -290,6 +292,19 @@ export default function VoiceStep() {
     [voices],
   );
 
+  // ─── meta_data_schema for TTS and STT ─────────────────────────────────────
+  const ttsSchema = useMemo<MetaDataSchemaField[]>(() => {
+    if (!providerId) return [];
+    const matched = providers.find((p) => p.id === providerId);
+    return matched?.meta_data_schema ?? [];
+  }, [providerId, providers]);
+
+  const sttSchema = useMemo<MetaDataSchemaField[]>(() => {
+    if (!sttProviderId) return [];
+    const matched = sttProviders.find((p) => p.id === sttProviderId);
+    return matched?.meta_data_schema?.stt ?? [];
+  }, [sttProviderId, sttProviders]);
+
   // ─── render helpers ───────────────────────────────────────────────────────
   const showProviderField = !!language;
   const showModelField = !!providerId;
@@ -415,17 +430,12 @@ export default function VoiceStep() {
           </div>
         )}
 
-        {/* Step 5 — Speed (only once a voice is picked) */}
-        {showSpeedSlider && (
-          <SliderField
-            name="config.voice_settings.speed"
-            label="Speech speed"
-            control={control}
-            min={0.5}
-            max={2}
-            step={0.05}
-            showLabels
-            helperText="1.0 is normal. 0.85–1.2 sounds the most natural."
+        {/* Step 5 — Provider-specific TTS settings */}
+        {showVoiceField && ttsSchema.length > 0 && (
+          <DynamicProviderFields
+            fields={ttsSchema}
+            basePath="config.voice_settings"
+            exclude={['voice_id']}
           />
         )}
       </SectionCard>
@@ -474,6 +484,9 @@ export default function VoiceStep() {
             placeholder={sttProviderId ? 'Select a model' : 'Pick a provider first'}
           />
         </div>
+        {sttSchema.length > 0 && (
+          <DynamicProviderFields fields={sttSchema} basePath="config.stt_settings" />
+        )}
         <p className="text-[11px] text-muted-foreground">
           Caller speech is transcribed by this provider/model before reaching the LLM.
         </p>
