@@ -9,7 +9,7 @@ import { ArrowLeft, CheckCircle } from 'lucide-react';
 
 import { resetPasswordSchema, type ResetPasswordFormData } from '@/schemas/auth';
 import { showToast, handleApiError } from '@/lib/toast';
-import { Form, PageLoader, TextInput } from '@/components/shared';
+import { AppLoader, Form, TextInput } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { useResetPassword } from '@/lib/api/auth';
 
@@ -97,7 +97,7 @@ function ResetPasswordContent() {
 
 export default function ResetPasswordPage() {
   return (
-    <Suspense fallback={<PageLoader size="md" className="animate-page" />}>
+    <Suspense fallback={<AppLoader className="animate-page" />}>
       <ResetPasswordContent />
     </Suspense>
   );

@@ -271,7 +271,16 @@ export default function ToolsMcpStep() {
         }
       >
         {/* Attached servers */}
-        {selectedMcpIds.length === 0 ? (
+        {loading ? (
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: Math.max(selectedMcpIds.length, 1) }).map((_, i) => (
+              <div
+                key={i}
+                className="h-[56px] animate-pulse rounded-xl border border-border/40 bg-muted/40"
+              />
+            ))}
+          </div>
+        ) : selectedMcpIds.length === 0 ? (
           <div className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-border/70 px-6 py-5 text-center">
             <span
               className={cn(
