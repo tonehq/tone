@@ -11,6 +11,7 @@ export interface TtsProvider {
   display_name: string;
   description?: string | null;
   language_code: string;
+  meta_data_schema?: import('@/types/provider').MetaDataSchemaField[] | null;
 }
 
 export interface TtsVoice {

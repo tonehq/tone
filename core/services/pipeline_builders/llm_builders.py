@@ -16,6 +16,15 @@ class AnthropicLLMBuilder(LLMBuilder):
         from pipecat.services.anthropic.llm import AnthropicLLMService
         if "enable_prompt_caching" not in ctx.metadata:
             ctx.metadata["enable_prompt_caching"] = True
+        # Convert thinking_budget_tokens into a ThinkingConfig object
+        budget = ctx.metadata.pop("thinking_budget_tokens", None)
+        if budget is not None:
+            try:
+                ctx.metadata["thinking"] = AnthropicLLMService.ThinkingConfig(
+                    type="enabled", budget_tokens=int(budget)
+                )
+            except (TypeError, ValueError):
+                pass
         params = build_input_params(AnthropicLLMService, ctx.metadata)
         return AnthropicLLMService(api_key=ctx.api_key, model=ctx.model or "claude-haiku-4-5-20251001", params=params)
 
@@ -116,14 +125,25 @@ class OpenAIRealtimeLLMBuilder(LLMBuilder):
 
 class GeminiLiveLLMBuilder(LLMBuilder):
     def build(self, ctx: BuildContext) -> Any:
-        from pipecat.services.google.gemini_live.llm import GeminiLiveLLMService
+        from pipecat.services.google.gemini_live.llm import GeminiLiveLLMService, InputParams as GeminiLiveInputParams
         voice_id = ctx.metadata.get("voice_id") or "Puck"
-        return GeminiLiveLLMService(
-            api_key=ctx.api_key,
-            model=ctx.model or "models/gemini-2.5-flash-native-audio-preview-12-2025",
-            voice_id=voice_id,
-            system_instruction=ctx.metadata.get("system_instruction"),
-        )
+        # GeminiLive defines InputParams at module level, not as a class attr,
+        # so we build it manually instead of using build_input_params().
+        valid_keys = set(GeminiLiveInputParams.model_fields.keys())
+        filtered = {k: v for k, v in ctx.metadata.items() if k in valid_keys and v is not None and v != "None"}
+        params = GeminiLiveInputParams(**filtered) if filtered else None
+        kwargs = {
+            "api_key": ctx.api_key,
+            "model": ctx.model or "models/gemini-2.5-flash-native-audio-preview-12-2025",
+            "voice_id": voice_id,
+        }
+        if ctx.metadata.get("system_instruction"):
+            kwargs["system_instruction"] = ctx.metadata["system_instruction"]
+        if ctx.metadata.get("system_prompt"):
+            kwargs["system_instruction"] = ctx.metadata["system_prompt"]
+        if params:
+            kwargs["params"] = params
+        return GeminiLiveLLMService(**kwargs)
 
 
 LLM_BUILDERS = {

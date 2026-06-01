@@ -42,10 +42,12 @@ export interface MetaDataSchemaField {
     | 'date range'
     | 'datetime'
     | 'list'
+    | 'array'
     | 'rangepicker';
-  validator: Record<string, unknown> | string;
+  validator: Record<string, unknown> | null;
   description: string;
   values?: { value: string; label: string }[];
+  options?: string[];
 }
 
 export type ValidatorFn = (value: unknown, field: MetaDataSchemaField) => string | true;

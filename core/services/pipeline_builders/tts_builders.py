@@ -15,7 +15,6 @@ class CartesiaTTSBuilder(TTSBuilder):
         voice_kwargs["voice_id"] = ctx.voice_id or "e07c00bc-4134-4eae-9ea4-1a55fb45746b"
         if ctx.language is not None:
             voice_kwargs["language"] = ctx.language or "en"
-        print(f"[TTS {ctx.provider_name}] voice_kwargs: {voice_kwargs}")
         return CartesiaTTSService(api_key=ctx.api_key, model=ctx.model or "sonic-3", params=build_input_params(CartesiaTTSService, ctx.metadata), **voice_kwargs)
 
 

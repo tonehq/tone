@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.services.pipeline_builders.base import BuildContext, STTBuilder, build_input_params
+from core.services.pipeline_builders.base import (
+    BuildContext, STTBuilder, build_input_params,
+    clean_meta, resolve_language_code,
+)
 
 
 class DeepgramSTTBuilder(STTBuilder):
@@ -10,11 +13,16 @@ class DeepgramSTTBuilder(STTBuilder):
         from deepgram import LiveOptions
         from pipecat.services.deepgram.stt import DeepgramSTTService
         dg_kwargs = {}
-        if ctx.metadata.get("sample_rate") is not None:
-            dg_kwargs["sample_rate"] = ctx.metadata["sample_rate"]
-        live_options = None
-        if ctx.metadata.get("language"):
-            live_options = LiveOptions(language=ctx.metadata["language"])
+        sample_rate = clean_meta(ctx.metadata, "sample_rate")
+        if sample_rate is not None:
+            dg_kwargs["sample_rate"] = int(sample_rate)
+        live_opts = {}
+        if ctx.model:
+            live_opts["model"] = ctx.model
+        lang = resolve_language_code(ctx.metadata.get("language"))
+        if lang:
+            live_opts["language"] = lang
+        live_options = LiveOptions(**live_opts) if live_opts else None
         return DeepgramSTTService(api_key=ctx.api_key, live_options=live_options, **dg_kwargs)
 
 
@@ -24,9 +32,9 @@ class OpenAISTTBuilder(STTBuilder):
         return OpenAISTTService(
             api_key=ctx.api_key,
             model=ctx.model or "gpt-4o-transcribe",
-            language=ctx.metadata.get("language"),
-            prompt=ctx.metadata.get("prompt"),
-            temperature=ctx.metadata.get("temperature"),
+            language=resolve_language_code(ctx.metadata.get("language")),
+            prompt=clean_meta(ctx.metadata, "prompt"),
+            temperature=clean_meta(ctx.metadata, "temperature"),
         )
 
 
@@ -36,8 +44,8 @@ class GroqSTTBuilder(STTBuilder):
         return GroqSTTService(
             api_key=ctx.api_key,
             model=ctx.model or "whisper-large-v3-turbo",
-            language=ctx.metadata.get("language"),
-            prompt=ctx.metadata.get("prompt"),
+            language=resolve_language_code(ctx.metadata.get("language")),
+            prompt=clean_meta(ctx.metadata, "prompt"),
             temperature=ctx.metadata.get("temperature"),
         )
 
@@ -45,14 +53,17 @@ class GroqSTTBuilder(STTBuilder):
 class AzureSTTBuilder(STTBuilder):
     def build(self, ctx: BuildContext) -> Any:
         from pipecat.services.azure.stt import AzureSTTService
-        region = ctx.model_meta.get("region") or ctx.metadata.get("region") or "eastus"
+        region = clean_meta(ctx.metadata, "region") or ctx.model_meta.get("region") or "eastus"
         azure_kwargs = {}
-        if ctx.metadata.get("language") is not None:
-            azure_kwargs["language"] = ctx.metadata["language"]
-        if ctx.metadata.get("sample_rate") is not None:
-            azure_kwargs["sample_rate"] = ctx.metadata["sample_rate"]
-        if ctx.metadata.get("endpoint_id") is not None:
-            azure_kwargs["endpoint_id"] = ctx.metadata["endpoint_id"]
+        lang = resolve_language_code(ctx.metadata.get("language"))
+        if lang:
+            azure_kwargs["language"] = lang
+        sample_rate = clean_meta(ctx.metadata, "sample_rate")
+        if sample_rate is not None:
+            azure_kwargs["sample_rate"] = int(sample_rate)
+        endpoint_id = clean_meta(ctx.metadata, "endpoint_id")
+        if endpoint_id:
+            azure_kwargs["endpoint_id"] = endpoint_id
         return AzureSTTService(api_key=ctx.api_key, region=region, **azure_kwargs)
 
 
@@ -73,7 +84,7 @@ class SarvamSTTBuilder(STTBuilder):
         from pipecat.services.sarvam.stt import SarvamSTTService
         return SarvamSTTService(
             api_key=ctx.api_key,
-            model=ctx.model or "saarika:v2.5",
+            model=ctx.model or "saaras:v3",
             sample_rate=ctx.metadata.get("sample_rate"),
             params=build_input_params(SarvamSTTService, ctx.metadata),
         )
@@ -101,17 +112,22 @@ class AssemblyAISTTBuilder(STTBuilder):
         from pipecat.services.assemblyai.models import AssemblyAIConnectionParams
         from pipecat.services.assemblyai.stt import AssemblyAISTTService
         conn_kwargs = {}
-        if ctx.metadata.get("sample_rate") is not None:
-            conn_kwargs["sample_rate"] = ctx.metadata["sample_rate"]
-        if ctx.metadata.get("word_finalization_max_wait_time") is not None:
-            conn_kwargs["word_finalization_max_wait_time"] = ctx.metadata["word_finalization_max_wait_time"]
-        if ctx.metadata.get("end_of_turn_confidence_threshold") is not None:
-            conn_kwargs["end_of_turn_confidence_threshold"] = ctx.metadata["end_of_turn_confidence_threshold"]
-        if ctx.metadata.get("speech_model") is not None:
-            conn_kwargs["speech_model"] = ctx.metadata["speech_model"]
+        sample_rate = clean_meta(ctx.metadata, "sample_rate")
+        if sample_rate is not None:
+            conn_kwargs["sample_rate"] = int(sample_rate)
+        wfmwt = clean_meta(ctx.metadata, "word_finalization_max_wait_time")
+        if wfmwt is not None:
+            conn_kwargs["word_finalization_max_wait_time"] = int(wfmwt)
+        eotct = clean_meta(ctx.metadata, "end_of_turn_confidence_threshold")
+        if eotct is not None:
+            conn_kwargs["end_of_turn_confidence_threshold"] = float(eotct)
+        speech_model = clean_meta(ctx.metadata, "speech_model")
+        if speech_model:
+            conn_kwargs["speech_model"] = speech_model
         asm_kwargs = {}
-        if ctx.metadata.get("language") is not None:
-            asm_kwargs["language"] = ctx.metadata["language"]
+        lang = resolve_language_code(ctx.metadata.get("language"))
+        if lang:
+            asm_kwargs["language"] = lang
         if conn_kwargs:
             asm_kwargs["connection_params"] = AssemblyAIConnectionParams(**conn_kwargs)
         return AssemblyAISTTService(api_key=ctx.api_key, **asm_kwargs)
@@ -120,13 +136,18 @@ class AssemblyAISTTBuilder(STTBuilder):
 class CartesiaSTTBuilder(STTBuilder):
     def build(self, ctx: BuildContext) -> Any:
         from pipecat.services.cartesia.stt import CartesiaLiveOptions, CartesiaSTTService
-        live_options = CartesiaLiveOptions(
-            language=ctx.metadata.get("language") or "en",
-            sample_rate=ctx.metadata.get("sample_rate") or 16000,
-        )
+        sr = clean_meta(ctx.metadata, "sample_rate")
+        sample_rate = int(sr) if sr else 16000
+        live_opts = {
+            "language": resolve_language_code(ctx.metadata.get("language")) or "en",
+            "sample_rate": sample_rate,
+        }
+        if ctx.model:
+            live_opts["model"] = ctx.model
+        live_options = CartesiaLiveOptions(**live_opts)
         return CartesiaSTTService(
             api_key=ctx.api_key,
-            sample_rate=ctx.metadata.get("sample_rate") or 16000,
+            sample_rate=sample_rate,
             live_options=live_options,
         )
 
@@ -165,10 +186,12 @@ class SambaNovaSTTBuilder(STTBuilder):
     def build(self, ctx: BuildContext) -> Any:
         from pipecat.services.sambanova.stt import SambaNovaSTTService
         sn_kwargs = {}
-        if ctx.metadata.get("language") is not None:
-            sn_kwargs["language"] = ctx.metadata["language"]
-        if ctx.metadata.get("prompt") is not None:
-            sn_kwargs["prompt"] = ctx.metadata["prompt"]
+        lang = resolve_language_code(ctx.metadata.get("language"))
+        if lang:
+            sn_kwargs["language"] = lang
+        prompt = clean_meta(ctx.metadata, "prompt")
+        if prompt:
+            sn_kwargs["prompt"] = prompt
         if ctx.metadata.get("temperature") is not None:
             sn_kwargs["temperature"] = ctx.metadata["temperature"]
         return SambaNovaSTTService(api_key=ctx.api_key, model=ctx.model or "Whisper-Large-v3", **sn_kwargs)
