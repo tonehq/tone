@@ -6,6 +6,8 @@
 
 import os
 import time as _time
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from loguru import logger
@@ -246,8 +248,27 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         llm = resolved["llm"]
         stt = resolved["stt"]
         tts = resolved["tts"]
+        # Anchor the model to the real current date. gpt-4o-mini has no clock, so
+        # without this it invents years (e.g. 2023) and can't enforce "no past dates".
+        # Resolve "today" in a configurable timezone (AGENT_TIMEZONE, default UTC) so
+        # the anchor matches the caller's locale instead of naive server-local time,
+        # which otherwise drifts a day at the midnight boundary. Falls back to UTC on
+        # an unknown zone.
+        from core.config import settings
+        _tz_name = getattr(settings, "AGENT_TIMEZONE", None) or "UTC"
+        try:
+            _now = datetime.now(ZoneInfo(_tz_name))
+        except Exception:
+            _tz_name = "UTC"
+            _now = datetime.now(timezone.utc)
+        _today = _now.strftime("%Y-%m-%d")
+        _date_preamble = (
+            f"Today's date is {_today} ({_tz_name}, YYYY-MM-DD). Treat this as the current date "
+            f"for all date reasoning. Never use a year earlier than the current year, and "
+            f"never schedule or book a date earlier than today.\n\n"
+        )
         messages = [
-            {"role": "system", "content": resolved["system_prompt"]},
+            {"role": "system", "content": _date_preamble + resolved["system_prompt"]},
         ]
         first_message = resolved.get("first_message")
         if first_message:
@@ -474,10 +495,14 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
         )
     
     elif isinstance(runner_args, DailyRunnerArguments):
+        # Daily participant display name for the bot. Not hardcoded to any one
+        # agent — configurable per deployment (BOT_DISPLAY_NAME), generic default.
+        from core.config import settings
+        bot_display_name = getattr(settings, "BOT_DISPLAY_NAME", None) or "AI Voice Agent"
         transport = DailyTransport(
             runner_args.room_url,
             runner_args.token,
-            "Hotel Booking Bot",
+            bot_display_name,
             DailyParams(
                 audio_in_enabled=True,
                 audio_out_enabled=True,

@@ -49,7 +49,11 @@ BUILT_IN_TOOLS = [
                 },
                 "date": {
                     "type": "string",
-                    "description": "Date in YYYY-MM-DD format",
+                    "description": "Date in YYYY-MM-DD format. For create_event this is the start/check-in date.",
+                },
+                "end_date": {
+                    "type": "string",
+                    "description": "End date in YYYY-MM-DD format (create_event). For a multi-day all-day event such as a hotel stay, set this to the check-out date and omit start_time; Google treats the end date as exclusive, so it spans the nights between 'date' and 'end_date'.",
                 },
                 "start_time": {
                     "type": "string",
@@ -69,7 +73,7 @@ BUILT_IN_TOOLS = [
                 },
                 "end_time": {
                     "type": "string",
-                    "description": "End time in HH:MM format for check_availability (default 17:00)",
+                    "description": "End time in HH:MM format (24-hour). For create_event it sets the event's end time (overrides duration_minutes); for check_availability it is the window end (default 17:00).",
                 },
                 "max_results": {
                     "type": "number",
