@@ -31,6 +31,7 @@ class TranscriptionTimeoutUserTurnStopStrategy(BaseUserTurnStopStrategy):
         super().__init__(**kwargs)
         self._timeout = timeout
         self._has_speech = False
+        self._got_final = False
         self._last_activity_time: float = 0
         self._text = ""
         self._event = asyncio.Event()
@@ -39,6 +40,7 @@ class TranscriptionTimeoutUserTurnStopStrategy(BaseUserTurnStopStrategy):
     async def reset(self):
         await super().reset()
         self._has_speech = False
+        self._got_final = False
         self._last_activity_time = 0
         self._text = ""
         self._event.clear()
@@ -61,6 +63,7 @@ class TranscriptionTimeoutUserTurnStopStrategy(BaseUserTurnStopStrategy):
         if isinstance(frame, TranscriptionFrame):
             if frame.text:
                 self._has_speech = True
+                self._got_final = True
                 self._text = frame.text
                 self._last_activity_time = time.time()
                 self._event.set()
@@ -83,7 +86,7 @@ class TranscriptionTimeoutUserTurnStopStrategy(BaseUserTurnStopStrategy):
                 await self._maybe_trigger()
 
     async def _maybe_trigger(self):
-        if not self._has_speech:
+        if self._got_final or not self._has_speech:
             return
         elapsed = time.time() - self._last_activity_time
         if elapsed >= self._timeout:
