@@ -1509,6 +1509,27 @@ class AgentFactoryService(BaseService):
         if mcp_tools_schema:
             all_tool_schemas.extend(mcp_tools_schema.standard_tools)
 
+        # Visibility: log exactly which tools (and how many from each source) were
+        # attached to this agent's LLM. Without this, a silent MCP-registration
+        # failure is indistinguishable from a healthy call — the agent simply never
+        # books anything and the failure goes unnoticed.
+        doc_count = len(doc_tools.standard_tools) if doc_tools else 0
+        custom_count = len(custom_tools_schema.standard_tools) if custom_tools_schema else 0
+        mcp_count = len(mcp_tools_schema.standard_tools) if mcp_tools_schema else 0
+        if all_tool_schemas:
+            logger.info(
+                "Agent {} tool inventory: {} total (doc={}, custom={}, mcp={}) -> {}",
+                getattr(agent, "id", None),
+                len(all_tool_schemas), doc_count, custom_count, mcp_count,
+                [getattr(t, "name", "?") for t in all_tool_schemas],
+            )
+        else:
+            logger.warning(
+                "Agent {} has NO tools attached (doc={}, custom={}, mcp={}). The LLM "
+                "cannot perform tool actions such as ClickUp task / calendar booking.",
+                getattr(agent, "id", None), doc_count, custom_count, mcp_count,
+            )
+
         if all_tool_schemas:
             from pipecat.adapters.schemas.tools_schema import ToolsSchema
             combined_tools = ToolsSchema(standard_tools=all_tool_schemas)

@@ -19,8 +19,7 @@ import {
   setMembersParamsAtom,
   updateMemberRoleAtom,
 } from '@/atoms/SettingsAtom';
-import { CustomButton, CustomTab } from '@/components/shared';
-import ToneLoader from '@/components/shared/ToneLoader';
+import { AppLoader, CustomButton, CustomTab } from '@/components/shared';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
@@ -120,7 +119,7 @@ export default function Members() {
   if (!mounted) {
     return (
       <div className="flex h-full w-full items-center justify-center p-4">
-        <ToneLoader label="Loading members..." />
+        <AppLoader label="Loading members..." className="min-h-0" />
       </div>
     );
   }

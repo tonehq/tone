@@ -225,6 +225,11 @@ class ToolService(BaseService):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="MCP tools cannot be deleted directly. Delete the MCP server instead.",
             )
+        # Remove the agent<->tool association rows so deleting a tool also
+        # detaches it from every agent (no orphaned agent_tools records).
+        self.db.query(AgentTool).filter(AgentTool.tool_id == tool.id).delete(
+            synchronize_session=False
+        )
         self.db.delete(tool)
         self.db.commit()
         return {"message": "Tool deleted successfully"}

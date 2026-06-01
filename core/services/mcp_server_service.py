@@ -297,7 +297,7 @@ class McpServerService(BaseService):
         self.db.commit()
         return {"message": "MCP server deleted successfully"}
 
-    def attach_to_agents(self, mcp_server_id, agent_ids: List, selected_tools: List[str] = None) -> None:
+    def attach_to_agents(self, mcp_server_id, agent_ids: List) -> None:
         self.get_mcp_server(mcp_server_id)
         existing = (
             self.db.query(AgentMcpServer.agent_id)
@@ -316,32 +316,10 @@ class McpServerService(BaseService):
             self.db.add(AgentMcpServer(
                 agent_id=agent_id,
                 mcp_server_id=mcp_server_id,
-                selected_tools=selected_tools,
                 created_at=now,
                 updated_at=now,
             ))
         self.db.commit()
-
-    def update_agent_mcp_server(self, mcp_server_id, agent_id, selected_tools: List[str]) -> Dict[str, Any]:
-        link = (
-            self.db.query(AgentMcpServer)
-            .filter(AgentMcpServer.mcp_server_id == mcp_server_id, AgentMcpServer.agent_id == agent_id)
-            .first()
-        )
-        if not link:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="MCP server is not attached to this agent",
-            )
-        link.selected_tools = selected_tools
-        link.updated_at = datetime.now(timezone.utc)
-        self.db.commit()
-        self.db.refresh(link)
-        return {
-            "agent_id": link.agent_id,
-            "mcp_server_id": link.mcp_server_id,
-            "selected_tools": link.selected_tools,
-        }
 
     def detach_from_agents(self, mcp_server_id, agent_ids: List) -> Dict[str, str]:
         links = (
@@ -360,9 +338,6 @@ class McpServerService(BaseService):
         return {"message": f"MCP server detached from {len(links)} agent(s) successfully"}
 
     def get_mcp_servers_by_agent(self, agent_id) -> List[Dict[str, Any]]:
-        # ``AgentMcpServer.selected_tools`` was dropped in the v2 schema
-        # revamp. We still return the field for API back-compat, but always
-        # as None until the column (or a replacement) is reintroduced.
         rows = (
             self.db.query(McpServer)
             .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)
@@ -373,12 +348,7 @@ class McpServerService(BaseService):
             )
             .all()
         )
-        output = []
-        for server in rows:
-            resp = self.mcp_server_response(server)
-            resp["selected_tools"] = None
-            output.append(resp)
-        return output
+        return [self.mcp_server_response(server) for server in rows]
 
     async def validate_mcp_connection(
         self, server_url: str, transport_type: str, auth_config: dict = None

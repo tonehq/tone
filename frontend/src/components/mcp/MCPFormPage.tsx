@@ -3,9 +3,14 @@
 
 import { fetchMcpServersAtom, upsertMcpServerAtom } from '@/atoms/MCPAtom';
 import HttpHeadersBuilder from '@/components/mcp/HttpHeadersBuilder';
-import { CustomButton, SliderField, TextAreaField, TextInput } from '@/components/shared';
+import {
+  AppLoader,
+  CustomButton,
+  SliderField,
+  TextAreaField,
+  TextInput,
+} from '@/components/shared';
 import CheckboxField from '@/components/shared/CheckboxField';
-import ToneLoader from '@/components/shared/ToneLoader';
 import SettingsSection from '@/components/tools/SettingsSection';
 import { Switch } from '@/components/ui/switch';
 import { useGoBack } from '@/hooks/useGoBack';
@@ -311,7 +316,7 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
           <div className="relative min-h-0 overflow-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {loadingServer && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70 backdrop-blur-sm">
-                <ToneLoader label="Loading server..." />
+                <AppLoader label="Loading server..." className="min-h-0" />
               </div>
             )}
             <div className="mx-auto max-w-[760px] space-y-4 px-6 py-6">

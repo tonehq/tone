@@ -1,7 +1,7 @@
 'use client';
 
 import { deleteToolAtom, fetchToolsAtom, upsertToolAtom } from '@/atoms/ToolAtom';
-import ToneLoader from '@/components/shared/ToneLoader';
+import { AppLoader } from '@/components/shared';
 import BuiltInToolForm from '@/components/tools/BuiltInToolForm';
 import CustomToolForm from '@/components/tools/CustomToolForm';
 import { useGoBack } from '@/hooks/useGoBack';
@@ -190,7 +190,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center p-6">
-        <ToneLoader label={isEditMode ? 'Loading tool...' : 'Loading...'} />
+        <AppLoader label={isEditMode ? 'Loading tool...' : 'Loading...'} className="min-h-0" />
       </div>
     );
   }

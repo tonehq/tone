@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { CheckCircle, XCircle } from 'lucide-react';
 
 import { showToast } from '@/lib/toast';
-import { PageLoader } from '@/components/shared';
+import { AppLoader } from '@/components/shared';
 import { Button } from '@/components/ui/button';
 import { useVerifyEmail } from '@/lib/api/auth';
 
@@ -42,7 +42,7 @@ function VerifyEmailContent() {
   }, [token]);
 
   if (status === 'loading') {
-    return <PageLoader message="Verifying your email..." className="animate-page" />;
+    return <AppLoader label="Verifying your email..." className="animate-page" />;
   }
 
   if (status === 'success') {
@@ -80,7 +80,7 @@ function VerifyEmailContent() {
 
 export default function VerifyEmailPage() {
   return (
-    <Suspense fallback={<PageLoader className="animate-page" />}>
+    <Suspense fallback={<AppLoader className="animate-page" />}>
       <VerifyEmailContent />
     </Suspense>
   );
