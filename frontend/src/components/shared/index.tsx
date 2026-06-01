@@ -14,7 +14,6 @@ import ErrorBoundary from './ErrorBoundary';
 import Form from './Form';
 import Logo from './Logo';
 import MultiSelectField from './MultiSelectField';
-import PageLoader from './PageLoader';
 import { PhoneNumberDisplay } from './PhoneNumberDisplay';
 import RadioGroupField from './RadioGroupField';
 import SearchBar from './SearchBar';
@@ -49,7 +48,6 @@ export type {
   TextInputBaseProps,
 } from '@/types/components';
 export type { CustomCardProps } from './CustomCard';
-export type { PageLoaderProps } from './PageLoader';
 export type { SearchableSelectOption } from './SearchableSelect';
 export type { TabItem } from './CustomTab';
 export type { ActionMenuProps } from './ActionMenu';
@@ -71,7 +69,6 @@ export {
   Form,
   Logo,
   MultiSelectField,
-  PageLoader,
   PhoneNumberDisplay,
   RadioGroupField,
   SearchBar,

@@ -11,7 +11,7 @@ import { Building2, CheckCircle, LogIn, XCircle } from 'lucide-react';
 import { acceptInviteSchema, type AcceptInviteFormData } from '@/schemas/auth';
 import { showToast, handleApiError } from '@/lib/toast';
 import { Button } from '@/components/ui/button';
-import { CustomCard, Form, PageLoader, TextInput } from '@/components/shared';
+import { AppLoader, CustomCard, Form, TextInput } from '@/components/shared';
 import { useAcceptInvitation, useValidateInvitation } from '@/lib/api/auth';
 import { useAuthStore } from '@/stores/auth';
 
@@ -113,7 +113,7 @@ function AcceptInviteContent() {
   }
 
   if (isLoading) {
-    return <PageLoader message="Validating invitation..." />;
+    return <AppLoader label="Validating invitation..." />;
   }
 
   if (error || !invitation?.valid) {
@@ -231,7 +231,7 @@ function AcceptInviteContent() {
 
 export default function AcceptInvitePage() {
   return (
-    <Suspense fallback={<PageLoader />}>
+    <Suspense fallback={<AppLoader />}>
       <AcceptInviteContent />
     </Suspense>
   );

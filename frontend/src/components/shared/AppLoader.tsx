@@ -12,9 +12,13 @@ const BARS = [
   { x: 26, h: 6, y: 13, opacity: 0.6 },
 ];
 
-export default function AppLoader({ className }: { className?: string }) {
+export default function AppLoader({ label, className }: { label?: string; className?: string }) {
   return (
-    <div className={cn('flex min-h-screen items-center justify-center', className)}>
+    <div
+      role="status"
+      aria-label={label ?? 'Loading'}
+      className={cn('flex min-h-screen flex-col items-center justify-center gap-3', className)}
+    >
       <motion.div
         className="relative"
         initial={{ opacity: 0 }}
@@ -54,6 +58,12 @@ export default function AppLoader({ className }: { className?: string }) {
           ))}
         </svg>
       </motion.div>
+
+      {label && (
+        <span className="text-[11px] font-medium tracking-tight text-muted-foreground">
+          {label}
+        </span>
+      )}
     </div>
   );
 }

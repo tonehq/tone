@@ -143,6 +143,22 @@ class OAuthService(BaseService):
 
     def delete_connection(self, connection_id: Union[str, UUID]) -> Dict[str, str]:
         connection = self.get_connection(connection_id)
+        # Disconnecting a connection leaves anything that relied on it unable to
+        # authenticate. Deactivate those tools and MCP servers (and clear the
+        # dangling link) so they aren't silently called and failing during a
+        # conversation. The FK's SET NULL would otherwise leave them active but
+        # unauthenticated, silently exposing zero tools at call time.
+        from core.models.tool import Tool
+        from core.models.mcp_server import McpServer
+
+        self.db.query(Tool).filter(Tool.oauth_connection_id == connection.id).update(
+            {Tool.is_active: False, Tool.oauth_connection_id: None},
+            synchronize_session=False,
+        )
+        self.db.query(McpServer).filter(McpServer.oauth_connection_id == connection.id).update(
+            {McpServer.is_active: False, McpServer.oauth_connection_id: None},
+            synchronize_session=False,
+        )
         self.db.delete(connection)
         self.db.commit()
         return {"message": "OAuth connection deleted successfully"}

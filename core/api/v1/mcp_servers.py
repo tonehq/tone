@@ -19,18 +19,11 @@ _ALLOWED_SORT_FIELDS = {"created_at", "updated_at", "name"}
 class AttachMcpServerRequest(BaseModel):
     mcp_server_id: str
     agent_ids: List[str]
-    selected_tools: List[str] = None
 
 
 class DetachMcpServerRequest(BaseModel):
     mcp_server_id: str
     agent_ids: List[str]
-
-
-class UpdateAgentMcpServerRequest(BaseModel):
-    mcp_server_id: str
-    agent_id: str
-    selected_tools: List[str]
 
 
 def _get_service(claims: JWTClaims, db: Session) -> McpServerService:
@@ -151,7 +144,7 @@ def attach_mcp_server_to_agents(
     db: Session = Depends(get_db),
 ):
     svc = _get_service(claims, db)
-    svc.attach_to_agents(body.mcp_server_id, body.agent_ids, body.selected_tools)
+    svc.attach_to_agents(body.mcp_server_id, body.agent_ids)
     return {"message": f"MCP server attached to {len(body.agent_ids)} agent(s) successfully"}
 
 
@@ -165,15 +158,6 @@ def detach_mcp_server_from_agents(
     return svc.detach_from_agents(body.mcp_server_id, body.agent_ids)
 
 
-@router.put("/update_agent_mcp_server")
-def update_agent_mcp_server(
-    body: UpdateAgentMcpServerRequest,
-    claims: JWTClaims = Depends(require_org_member),
-    db: Session = Depends(get_db),
-):
-    """Update selected tools for an MCP server attached to an agent."""
-    svc = _get_service(claims, db)
-    return svc.update_agent_mcp_server(body.mcp_server_id, body.agent_id, body.selected_tools)
 
 
 @router.get("/get_mcp_servers_by_agent")

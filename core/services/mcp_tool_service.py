@@ -11,11 +11,17 @@ How it works (step by step):
    gets the result, and feeds it back to the LLM.
 """
 
+import asyncio
 from typing import Optional
 
 from loguru import logger
 
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
+
+# Hard ceiling on how long discovering tools from a single MCP server may take at
+# pipeline-build time. A dead or mis-authenticated server must fail fast and
+# visibly rather than silently yielding zero tools (or blocking call setup).
+MCP_REGISTER_TIMEOUT_S = 25.0
 
 
 def get_mcp_servers_for_agent(agent_id: int):
@@ -50,7 +56,10 @@ async def register_mcp_tools(llm, agent_id: int) -> Optional[ToolsSchema]:
     """
     servers = get_mcp_servers_for_agent(agent_id)
     if not servers:
+        logger.info("Agent {} has no active linked MCP servers; no MCP tools registered", agent_id)
         return None
+
+    logger.info("Agent {} has {} active MCP server(s); registering tools", agent_id, len(servers))
 
     from pipecat.services.mcp_service import MCPClient
     from mcp.client.session_group import SseServerParameters, StreamableHttpParameters
@@ -61,6 +70,48 @@ async def register_mcp_tools(llm, agent_id: int) -> Optional[ToolsSchema]:
     for server in servers:
         try:
             headers = build_auth_headers(server.auth_config)
+
+            # OAuth-backed connectors (e.g. ClickUp, Google Calendar) authenticate via a
+            # linked OAuth connection, NOT a static header. Resolve a fresh (auto-refreshed)
+            # bearer token so their tools actually load — without this the remote returns
+            # 0 tools (or 401) and the agent silently can't book anything.
+            oauth_connection_id = getattr(server, "oauth_connection_id", None)
+            if oauth_connection_id and "Authorization" not in headers:
+                try:
+                    from core.database.session import get_db_context
+                    from core.services.oauth_service import OAuthService
+
+                    with get_db_context() as db:
+                        svc = OAuthService(db, org_id=server.organization_id)
+                        connection = svc.get_connection(oauth_connection_id)
+                        if connection:
+                            token = svc.get_valid_access_token_for_connection(connection)
+                            headers["Authorization"] = f"Bearer {token}"
+                            logger.info(
+                                "MCP server '{}' authenticated via OAuth connection {}",
+                                server.name, oauth_connection_id,
+                            )
+                        else:
+                            logger.warning(
+                                "MCP server '{}' references missing OAuth connection {} — "
+                                "reconnect it in Integrations settings",
+                                server.name, oauth_connection_id,
+                            )
+                except Exception as e:
+                    logger.error(
+                        "MCP server '{}': failed to resolve OAuth access token: {}",
+                        server.name, str(e),
+                    )
+
+            if not headers:
+                # Surfaces the most common silent failure: a server that requires auth
+                # but whose credential isn't materialised into a request header, so the
+                # remote returns 0 tools (or 401) and booking silently no-ops.
+                logger.warning(
+                    "MCP server '{}' resolved NO auth headers — if it requires auth, "
+                    "tool discovery will return nothing. Check its auth_config / OAuth connection.",
+                    server.name,
+                )
             if server.transport_type == "sse":
                 server_params = SseServerParameters(url=server.server_url, headers=headers)
             elif server.transport_type == "streamable_http":
@@ -69,15 +120,35 @@ async def register_mcp_tools(llm, agent_id: int) -> Optional[ToolsSchema]:
                 logger.warning("Unsupported transport type '{}' for MCP server '{}', skipping", server.transport_type, server.name)
                 continue
 
+            logger.info(
+                "Connecting to MCP server '{}' ({}, {} auth header(s))",
+                server.name, server.transport_type, len(headers),
+            )
             mcp_client = MCPClient(server_params=server_params)
-            tools_schema = await mcp_client.register_tools(llm)
+            tools_schema = await asyncio.wait_for(
+                mcp_client.register_tools(llm), timeout=MCP_REGISTER_TIMEOUT_S
+            )
 
             if tools_schema and tools_schema.standard_tools:
+                tool_names = [getattr(t, "name", "?") for t in tools_schema.standard_tools]
                 all_tool_schemas.extend(tools_schema.standard_tools)
-                logger.info("Registered {} MCP tools from server '{}'", len(tools_schema.standard_tools), server.name)
+                logger.info(
+                    "Registered {} MCP tools from server '{}': {}",
+                    len(tools_schema.standard_tools), server.name, tool_names,
+                )
             else:
-                logger.info("No tools found on MCP server '{}'", server.name)
+                logger.warning(
+                    "MCP server '{}' connected but exposed NO tools — the agent will not "
+                    "be able to act on it (e.g. create ClickUp task / calendar event)",
+                    server.name,
+                )
 
+        except asyncio.TimeoutError:
+            logger.error(
+                "Timed out after {}s discovering tools from MCP server '{}' ({})",
+                MCP_REGISTER_TIMEOUT_S, server.name, server.server_url,
+            )
+            continue
         except Exception as e:
             logger.error("Failed to connect to MCP server '{}': {}", server.name, str(e))
             continue
