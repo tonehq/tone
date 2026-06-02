@@ -27,7 +27,7 @@ const ACCEPTED_TYPES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
 const ACCEPTED_EXTENSIONS = ['pdf', 'txt', 'csv', 'json', 'docx'];
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
 interface EditDocumentProps {
   document: KnowledgeBaseDocument;
@@ -76,7 +76,7 @@ const EditDocument: React.FC<EditDocumentProps> = ({ document, onSaved }) => {
       return false;
     }
     if (f.size > MAX_FILE_SIZE) {
-      showToast.error(`Too large: ${f.name}`, 'Maximum file size is 10 MB');
+      showToast.error(`Too large: ${f.name}`, 'Maximum file size is 100 MB');
       return false;
     }
     return true;
@@ -235,7 +235,7 @@ const EditDocument: React.FC<EditDocumentProps> = ({ document, onSaved }) => {
                   to replace
                 </p>
                 <p className="mt-1 text-[11px] uppercase tracking-wider text-muted-foreground">
-                  PDF · DOCX · TXT · CSV · JSON · max 10 MB
+                  PDF · DOCX · TXT · CSV · JSON · max 100 MB
                 </p>
               </div>
             </div>
