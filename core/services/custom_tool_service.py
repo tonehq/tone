@@ -13,6 +13,8 @@ from pipecat.services.llm_service import FunctionCallParams
 
 from core.models.tool import Tool
 from core.models.agent_tool import AgentTool
+from core.utils.logging import truncate_for_log
+
 
 def get_custom_tools_for_agent(agent_id: int) -> List[Tool]:
     """Fetch all active custom tools linked to an agent."""
@@ -125,7 +127,13 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
             except Exception:
                 result_text = response.text
 
-            logger.info("Custom tool '{}' returned status {}", tool.name, response.status_code)
+            logger.info(
+                "🔧 Custom tool result ← tool='{}' status={} args={} output={}",
+                tool.name,
+                response.status_code,
+                truncate_for_log(arguments),
+                truncate_for_log(result_text),
+            )
 
             tool_call_entry["result"] = "success"
             tool_call_entry["status_code"] = response.status_code
@@ -356,48 +364,82 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
 
 
 async def _calendar_create_event(base_url: str, headers: dict, arguments: dict, timezone: str) -> str:
-    """Create a calendar event."""
+    """Create a calendar event.
+
+    Accepts either a timed event (``start_time`` provided, with optional ``end_time`` or
+    ``duration_minutes``; an optional ``end_date`` lets a timed slot run overnight) or an
+    **all-day event** when no time is given — so a date-only booking no longer fails. Google
+    Calendar models all-day events with date-only ``start.date``/``end.date`` where the end date is
+    exclusive: a single-day event ends the next day, and a multi-day stay (``end_date`` given, e.g.
+    a hotel check-out) ends on that date.
+    """
+    from datetime import datetime, timedelta
+
     title = arguments.get("title", "Appointment")
     date = arguments.get("date")  # check-in / event date, e.g. "2026-11-01"
     end_date = arguments.get("end_date")  # check-out date for multi-day stays
     start_time = arguments.get("start_time")  # e.g. "14:00"
-    end_time = arguments.get("end_time")  # e.g. "21:00"
-    duration_minutes = int(arguments.get("duration_minutes", 30))
+    end_time = arguments.get("end_time")  # e.g. "16:00" (optional)
+    duration_minutes = int(arguments.get("duration_minutes", 30) or 30)
     description = arguments.get("description", "")
     attendee_email = arguments.get("attendee_email")
 
     if not date:
         return "Error: 'date' is required to create an event."
 
-    if end_date and not start_time:
-        # All-day, multi-day event — e.g. a hotel stay from check-in to check-out.
-        # Google all-day events use date-only start/end, and end.date is EXCLUSIVE,
-        # so passing the check-out date spans the nights of the stay.
+    if start_time:
+        # Timed event — compute end via end_time when given, else duration. datetime math keeps
+        # this correct across midnight and rejects malformed input instead of producing bad strings.
+        # An explicit end_date lets a timed slot run to the next day (overnight bookings).
+        try:
+            start_obj = datetime.strptime(f"{date} {start_time}", "%Y-%m-%d %H:%M")
+        except ValueError:
+            return (
+                f"Error: invalid date/time ('{date}' '{start_time}'). "
+                "Use date as YYYY-MM-DD and time as HH:MM (24-hour)."
+            )
+        end_obj = None
+        if end_time:
+            try:
+                end_obj = datetime.strptime(f"{end_date or date} {end_time}", "%Y-%m-%d %H:%M")
+            except ValueError:
+                return (
+                    "Error: invalid 'end_time'/'end_date'. "
+                    "Use date as YYYY-MM-DD and time as HH:MM (24-hour)."
+                )
+        if end_obj is None or end_obj <= start_obj:
+            end_obj = start_obj + timedelta(minutes=duration_minutes)
+        event_body = {
+            "summary": title,
+            "description": description,
+            "start": {"dateTime": start_obj.strftime("%Y-%m-%dT%H:%M:%S"), "timeZone": timezone},
+            "end": {"dateTime": end_obj.strftime("%Y-%m-%dT%H:%M:%S"), "timeZone": timezone},
+        }
+        when_desc = f"{date} at {start_time}"
+    else:
+        # No time supplied → all-day event. A provided end_date spans a multi-day stay (e.g. a
+        # hotel booking); Google all-day events use date-only start/end where end.date is EXCLUSIVE,
+        # so a single-day event ends on the next day and a stay ends on the check-out date.
+        try:
+            start_date_obj = datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            return f"Error: invalid date '{date}'. Use YYYY-MM-DD."
+        if end_date:
+            try:
+                datetime.strptime(end_date, "%Y-%m-%d")
+            except ValueError:
+                return f"Error: invalid 'end_date' '{end_date}'. Use YYYY-MM-DD."
+            all_day_end = end_date
+            when_desc = f"{date} to {end_date} (all-day)"
+        else:
+            all_day_end = (start_date_obj + timedelta(days=1)).strftime("%Y-%m-%d")
+            when_desc = f"{date} (all-day)"
         event_body = {
             "summary": title,
             "description": description,
             "start": {"date": date},
-            "end": {"date": end_date},
+            "end": {"date": all_day_end},
         }
-        when_desc = f"{date} to {end_date} (all-day)"
-    else:
-        if not start_time:
-            return "Error: provide 'start_time' for a timed event, or 'end_date' for an all-day stay."
-        start_dt = f"{date}T{start_time}:00"
-        if end_time:
-            # Honor an explicit end time (and an optional end_date for overnight slots).
-            end_dt = f"{end_date or date}T{end_time}:00"
-        else:
-            start_hour, start_min = map(int, start_time.split(":"))
-            total_minutes = start_hour * 60 + start_min + duration_minutes
-            end_dt = f"{date}T{total_minutes // 60:02d}:{total_minutes % 60:02d}:00"
-        event_body = {
-            "summary": title,
-            "description": description,
-            "start": {"dateTime": start_dt, "timeZone": timezone},
-            "end": {"dateTime": end_dt, "timeZone": timezone},
-        }
-        when_desc = f"{date} {start_time}" + (f"-{end_time}" if end_time else "")
 
     if attendee_email:
         event_body["attendees"] = [{"email": attendee_email}]

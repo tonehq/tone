@@ -63,6 +63,24 @@ class ToolService(BaseService):
                 detail="OAuth connection does not belong to this organization",
             )
 
+    def _validate_oauth_scopes(self, tool_type: Optional[str], oauth_connection_id) -> None:
+        """Block config when a built-in tool's linked connection lacks the provider's scopes.
+
+        No-op for tool types not governed by an OAuth provider (e.g. custom/webhook tools) or when
+        no connection is linked.
+        """
+        if not oauth_connection_id:
+            return
+        from core.services.oauth_providers import get_provider_scopes, provider_for_tool_type
+        from core.services.oauth_service import OAuthService
+
+        provider = provider_for_tool_type(tool_type)
+        if not provider:
+            return
+        svc = OAuthService(self.db, org_id=self.org_id)
+        connection = svc.get_connection(oauth_connection_id)
+        svc.raise_if_missing_scopes(svc.validate_scopes(connection, get_provider_scopes(provider)))
+
     def _check_duplicate_name(self, name: str, exclude_id=None) -> None:
         """Raise 409 if a tool with the same name already exists in this org."""
         query = self.query(Tool).filter(Tool.name == name, Tool.tool_type != 'mcp')
@@ -165,6 +183,9 @@ class ToolService(BaseService):
                 update_data = {k: v for k, v in data.items() if k != "id"}
             if update_data.get("oauth_connection_id"):
                 self._validate_oauth_connection(update_data["oauth_connection_id"])
+                self._validate_oauth_scopes(
+                    existing.tool_type, update_data["oauth_connection_id"]
+                )
             if "name" in update_data:
                 self._check_duplicate_name(update_data["name"], exclude_id=tool_id)
             if "auth_config" in update_data:
@@ -191,6 +212,9 @@ class ToolService(BaseService):
         self._check_duplicate_name(data["name"])
         if data.get("oauth_connection_id"):
             self._validate_oauth_connection(data["oauth_connection_id"])
+            self._validate_oauth_scopes(
+                data.get("tool_type", "custom"), data["oauth_connection_id"]
+            )
         tool = Tool(
             id=uuid_lib.uuid4(),
             name=data["name"],
@@ -236,7 +260,10 @@ class ToolService(BaseService):
 
     def attach_tool_to_agents(self, agent_ids: List, tool_id) -> List[AgentTool]:
         # Verify tool exists
-        self.get_tool(tool_id)
+        tool = self.get_tool(tool_id)
+        # A built-in OAuth tool must have all required scopes before it's wired onto an agent,
+        # so the agent never silently fails to act on it mid-call.
+        self._validate_oauth_scopes(tool.tool_type, tool.oauth_connection_id)
 
         # Check which are already attached
         existing = (

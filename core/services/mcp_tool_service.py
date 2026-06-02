@@ -12,16 +12,73 @@ How it works (step by step):
 """
 
 import asyncio
+import time
 from typing import Optional
 
 from loguru import logger
 
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
 
+from core.utils.logging import truncate_for_log
+
 # Hard ceiling on how long discovering tools from a single MCP server may take at
 # pipeline-build time. A dead or mis-authenticated server must fail fast and
 # visibly rather than silently yielding zero tools (or blocking call setup).
 MCP_REGISTER_TIMEOUT_S = 25.0
+
+
+def _install_mcp_call_logging(llm, server_name: str):
+    """Wrap ``llm.register_function`` so each MCP tool registered through it logs, at call time,
+    its server + tool name, the arguments passed in, and the output returned (plus duration).
+
+    Pipecat's ``MCPClient.register_tools`` registers its handlers via ``llm.register_function``;
+    by shadowing that method on the instance for the duration of registration we transparently
+    decorate every MCP handler with logging without touching Pipecat internals.
+
+    Returns a zero-arg callable that restores the original ``register_function``.
+    """
+    original_register = llm.register_function
+
+    def logging_register(name, handler, *args, **kwargs):
+        async def logged_handler(params):
+            fn = getattr(params, "function_name", name)
+            arguments = getattr(params, "arguments", {})
+            started = time.monotonic()
+            logger.info(
+                "🔧 MCP tool call → server='{}' tool='{}' args={}",
+                server_name, fn, truncate_for_log(arguments),
+            )
+
+            original_cb = getattr(params, "result_callback", None)
+            if original_cb is not None:
+                async def logging_cb(result, *cb_args, **cb_kwargs):
+                    dur = round((time.monotonic() - started) * 1000)
+                    logger.info(
+                        "✅ MCP tool result ← server='{}' tool='{}' ({}ms) output={}",
+                        server_name, fn, dur, truncate_for_log(result),
+                    )
+                    return await original_cb(result, *cb_args, **cb_kwargs)
+
+                try:
+                    params.result_callback = logging_cb
+                except Exception:
+                    # FunctionCallParams not mutable on this version — still log the call above.
+                    pass
+
+            try:
+                return await handler(params)
+            except Exception as exc:
+                dur = round((time.monotonic() - started) * 1000)
+                logger.error(
+                    "❌ MCP tool error ✕ server='{}' tool='{}' ({}ms): {}",
+                    server_name, fn, dur, exc,
+                )
+                raise
+
+        return original_register(name, logged_handler, *args, **kwargs)
+
+    llm.register_function = logging_register
+    return lambda: setattr(llm, "register_function", original_register)
 
 
 def get_mcp_servers_for_agent(agent_id: int):
@@ -63,20 +120,26 @@ async def register_mcp_tools(llm, agent_id: int) -> Optional[ToolsSchema]:
 
     from pipecat.services.mcp_service import MCPClient
     from mcp.client.session_group import SseServerParameters, StreamableHttpParameters
-    from core.services.mcp_server_service import build_auth_headers
+    from core.services.mcp_server_service import build_auth_headers, headers_from_meta
 
     all_tool_schemas = []
 
     for server in servers:
         try:
+            # Header precedence mirrors validate_mcp_connection exactly: static auth_config first,
+            # then custom meta_data headers (e.g. ClickUp's x-workspace-id) override those, then the
+            # OAuth bearer (resolved below) overrides everything. Keeping the order identical here
+            # ensures a server that validates with one set of headers authenticates with the same
+            # set during a live call.
             headers = build_auth_headers(server.auth_config)
+            headers.update(headers_from_meta(getattr(server, "meta_data", None)))
 
             # OAuth-backed connectors (e.g. ClickUp, Google Calendar) authenticate via a
             # linked OAuth connection, NOT a static header. Resolve a fresh (auto-refreshed)
             # bearer token so their tools actually load — without this the remote returns
             # 0 tools (or 401) and the agent silently can't book anything.
             oauth_connection_id = getattr(server, "oauth_connection_id", None)
-            if oauth_connection_id and "Authorization" not in headers:
+            if oauth_connection_id:
                 try:
                     from core.database.session import get_db_context
                     from core.services.oauth_service import OAuthService
@@ -85,6 +148,16 @@ async def register_mcp_tools(llm, agent_id: int) -> Optional[ToolsSchema]:
                         svc = OAuthService(db, org_id=server.organization_id)
                         connection = svc.get_connection(oauth_connection_id)
                         if connection:
+                            # Non-blocking scope check: surface a clear warning if the granted
+                            # scopes don't cover what the provider needs, so a partially-authorized
+                            # connection doesn't quietly expose a subset of tools.
+                            scope_check = svc.validate_connection_for_provider(connection)
+                            if not scope_check["ok"]:
+                                logger.warning(
+                                    "MCP server '{}' OAuth connection {} is missing scopes {} — "
+                                    "some tools may be unavailable; reconnect to grant them",
+                                    server.name, oauth_connection_id, scope_check["missing"],
+                                )
                             token = svc.get_valid_access_token_for_connection(connection)
                             headers["Authorization"] = f"Bearer {token}"
                             logger.info(
@@ -125,9 +198,16 @@ async def register_mcp_tools(llm, agent_id: int) -> Optional[ToolsSchema]:
                 server.name, server.transport_type, len(headers),
             )
             mcp_client = MCPClient(server_params=server_params)
-            tools_schema = await asyncio.wait_for(
-                mcp_client.register_tools(llm), timeout=MCP_REGISTER_TIMEOUT_S
-            )
+            # Decorate every handler MCPClient registers so MCP tool calls log their
+            # name/arguments/output during the conversation; restore afterwards so only this
+            # server's tools are wrapped.
+            restore_logging = _install_mcp_call_logging(llm, server.name)
+            try:
+                tools_schema = await asyncio.wait_for(
+                    mcp_client.register_tools(llm), timeout=MCP_REGISTER_TIMEOUT_S
+                )
+            finally:
+                restore_logging()
 
             if tools_schema and tools_schema.standard_tools:
                 tool_names = [getattr(t, "name", "?") for t in tools_schema.standard_tools]

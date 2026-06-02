@@ -101,6 +101,21 @@ def build_auth_headers(auth_config, already_decrypted=False) -> dict:
     return headers
 
 
+def headers_from_meta(meta_data) -> dict:
+    """Extract the custom request headers the MCP form stores under
+    ``meta_data.http_headers`` (e.g. ClickUp's ``x-workspace-id``).
+
+    These live in meta_data (not auth_config), so ``build_auth_headers`` never sees them — they
+    must be merged into the request headers explicitly at validation and call time.
+    """
+    if not meta_data:
+        return {}
+    http_headers = meta_data.get("http_headers")
+    if isinstance(http_headers, dict):
+        return {k: v for k, v in http_headers.items() if k and v}
+    return {}
+
+
 class McpServerService(BaseService):
 
     VALID_TRANSPORT_TYPES = {"sse", "streamable_http"}
@@ -183,8 +198,14 @@ class McpServerService(BaseService):
             if "transport_type" in update_data:
                 self._validate_transport_type(update_data["transport_type"])
 
+            # Resolve the effective OAuth connection (incoming value wins, else the stored one)
+            # and block the update early if it lacks the provider's required scopes.
+            effective_oauth_id = update_data.get("oauth_connection_id", existing.oauth_connection_id)
+            if "oauth_connection_id" in update_data:
+                self._validate_oauth_scopes(effective_oauth_id)
+
             # Validate connection if connection-related fields changed
-            connection_fields = {"server_url", "transport_type", "auth_config"}
+            connection_fields = {"server_url", "transport_type", "auth_config", "oauth_connection_id"}
             validation_result = None
             if connection_fields & update_data.keys():
                 validate_url = update_data.get("server_url", existing.server_url)
@@ -193,13 +214,28 @@ class McpServerService(BaseService):
                     validate_auth = update_data["auth_config"]
                 else:
                     validate_auth = decrypt_auth_config(existing.auth_config)
-                validation_result = await self.validate_mcp_connection(validate_url, validate_transport, validate_auth)
+                effective_meta = update_data.get("meta_data", existing.meta_data)
+                # OAuth bearer takes precedence over any custom header of the same name.
+                extra_headers = {
+                    **headers_from_meta(effective_meta),
+                    **self._resolve_oauth_headers(effective_oauth_id),
+                }
+                validation_result = await self.validate_mcp_connection(
+                    validate_url, validate_transport, validate_auth, extra_headers=extra_headers
+                )
 
             if "auth_config" in update_data:
                 update_data["auth_config"] = encrypt_auth_config(update_data["auth_config"])
             for key, value in update_data.items():
                 if hasattr(existing, key):
                     setattr(existing, key, value)
+            # A successful (re)validation proves the server is reachable and authenticated. If a
+            # prior OAuth disconnect had auto-deactivated it (delete_connection sets is_active=False
+            # + nulls oauth_connection_id), bring it back online here — unless the caller explicitly
+            # set is_active in this request. Without this, re-linking a working connection silently
+            # leaves the server inactive, so it never loads for the agent at call time.
+            if validation_result is not None and "is_active" not in update_data:
+                existing.is_active = True
             existing.updated_at = now
             self.db.commit()
             self.db.refresh(existing)
@@ -222,9 +258,18 @@ class McpServerService(BaseService):
         transport_type = data.get("transport_type", "streamable_http")
         self._validate_transport_type(transport_type)
 
-        # Validate connection before persisting
+        # Block creation early if a linked OAuth connection lacks required scopes.
+        oauth_connection_id = data.get("oauth_connection_id")
+        self._validate_oauth_scopes(oauth_connection_id)
+
+        # Validate connection before persisting (inject custom headers + OAuth bearer when linked).
+        extra_headers = {
+            **headers_from_meta(data.get("meta_data")),
+            **self._resolve_oauth_headers(oauth_connection_id),
+        }
         validation_result = await self.validate_mcp_connection(
-            data["server_url"], transport_type, data.get("auth_config")
+            data["server_url"], transport_type, data.get("auth_config"),
+            extra_headers=extra_headers,
         )
 
         mcp_server = McpServer(
@@ -232,9 +277,12 @@ class McpServerService(BaseService):
             name=data["name"],
             description=data.get("description"),
             server_url=data["server_url"],
+            endpoint=data.get("endpoint"),
+            icon=data.get("icon"),
             transport_type=transport_type,
             auth_config=encrypt_auth_config(data.get("auth_config")),
             meta_data=data.get("meta_data"),
+            oauth_connection_id=oauth_connection_id,
             is_active=data.get("is_active", True),
             organization_id=self.org_id,
             created_at=now,
@@ -323,7 +371,10 @@ class McpServerService(BaseService):
         return {"message": "MCP server deleted successfully"}
 
     def attach_to_agents(self, mcp_server_id, agent_ids: List) -> None:
-        self.get_mcp_server(mcp_server_id)
+        mcp_server = self.get_mcp_server(mcp_server_id)
+        # An MCP server backed by an OAuth connection must have all required scopes before it can
+        # be wired onto an agent — otherwise tool discovery silently no-ops during a live call.
+        self._validate_oauth_scopes(mcp_server.oauth_connection_id)
         existing = (
             self.db.query(AgentMcpServer.agent_id)
             .filter(AgentMcpServer.mcp_server_id == mcp_server_id, AgentMcpServer.agent_id.in_(agent_ids))
@@ -375,8 +426,38 @@ class McpServerService(BaseService):
         )
         return [self.mcp_server_response(server) for server in rows]
 
+    def _resolve_oauth_headers(self, oauth_connection_id) -> Dict[str, str]:
+        """Resolve a fresh ``Authorization: Bearer`` header from a linked OAuth connection.
+
+        Returns ``{}`` when no connection is linked. Raises HTTPException(400) when the connection
+        is missing or its token can't be obtained, so the failure is visible at config time rather
+        than silently producing an unauthenticated server that discovers zero tools at call time.
+        """
+        if not oauth_connection_id:
+            return {}
+        from core.services.oauth_service import OAuthService
+
+        svc = OAuthService(self.db, org_id=self.org_id)
+        connection = svc.get_connection(oauth_connection_id)  # 404 if missing
+        token = svc.get_valid_access_token_for_connection(connection)
+        return {"Authorization": f"Bearer {token}"}
+
+    def _validate_oauth_scopes(self, oauth_connection_id) -> None:
+        """Block config when a linked connection lacks the provider's required scopes."""
+        if not oauth_connection_id:
+            return
+        from core.services.oauth_service import OAuthService
+
+        svc = OAuthService(self.db, org_id=self.org_id)
+        connection = svc.get_connection(oauth_connection_id)
+        svc.raise_if_missing_scopes(svc.validate_connection_for_provider(connection))
+
     async def validate_mcp_connection(
-        self, server_url: str, transport_type: str, auth_config: dict = None
+        self,
+        server_url: str,
+        transport_type: str,
+        auth_config: dict = None,
+        extra_headers: dict = None,
     ) -> Dict[str, Any]:
         """Connect to an MCP server with raw (unencrypted) config and return its tools.
         Raises HTTPException(400) on failure."""
@@ -386,6 +467,9 @@ class McpServerService(BaseService):
 
         self._validate_transport_type(transport_type)
         headers = build_auth_headers(auth_config, already_decrypted=True) if auth_config else {}
+        if extra_headers:
+            # OAuth-resolved bearer (or other dynamic auth) takes precedence over static headers.
+            headers = {**headers, **extra_headers}
 
         try:
             if transport_type == "sse":
@@ -457,9 +541,14 @@ class McpServerService(BaseService):
             "name": mcp_server.name,
             "description": mcp_server.description,
             "server_url": mcp_server.server_url,
+            "endpoint": mcp_server.endpoint,
+            "icon": mcp_server.icon,
             "transport_type": mcp_server.transport_type,
             "auth_config": decrypt_auth_config(mcp_server.auth_config),
             "meta_data": mcp_server.meta_data,
+            "oauth_connection_id": (
+                str(mcp_server.oauth_connection_id) if mcp_server.oauth_connection_id else None
+            ),
             "is_active": mcp_server.is_active,
             "created_at": mcp_server.created_at,
             "updated_at": mcp_server.updated_at,

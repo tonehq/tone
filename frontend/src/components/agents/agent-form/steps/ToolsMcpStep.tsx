@@ -1,12 +1,12 @@
 'use client';
 
-import { Check, Plus, Server, Sparkles, Wrench, X } from 'lucide-react';
+import { Check, Plus, Server, Sparkles, Wrench } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import { useAgentFormNav } from '@/components/agents/agent-form/AgentFormNav';
 import SectionCard, { ACCENTS } from '@/components/agents/agent-form/SectionCard';
-import { CustomButton, SearchBar, SelectInput } from '@/components/shared';
+import { CustomButton, SearchBar } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { listMcpServers } from '@/services/mcpServerService';
 import { getAllTools } from '@/services/toolService';
@@ -27,6 +27,7 @@ const MCP_ACCENT = {
   ring: 'ring-sky-500/30',
   bg: 'bg-sky-500/10',
   text: 'text-sky-700 dark:text-sky-300',
+  selected: 'border-sky-500/60 bg-sky-500/5 ring-1 ring-sky-500/20',
 };
 
 export default function ToolsMcpStep() {
@@ -39,6 +40,7 @@ export default function ToolsMcpStep() {
   const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
   const [loading, setLoading] = useState(false);
   const [toolSearch, setToolSearch] = useState('');
+  const [mcpSearch, setMcpSearch] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -80,27 +82,24 @@ export default function ToolsMcpStep() {
     setValue('tool_ids', [], { shouldDirty: true });
   };
 
-  const mcpServerOptions = useMemo(
-    () => mcpServers.map((m) => ({ value: m.id, label: m.name })),
-    [mcpServers],
-  );
+  const filteredMcpServers = useMemo(() => {
+    const q = mcpSearch.trim().toLowerCase();
+    if (!q) return mcpServers;
+    return mcpServers.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) || (m.description?.toLowerCase().includes(q) ?? false),
+    );
+  }, [mcpServers, mcpSearch]);
 
-  const availableMcpToAdd = useMemo(() => {
-    const used = new Set(selectedMcpIds);
-    return mcpServerOptions.filter((opt) => !used.has(opt.value));
-  }, [mcpServerOptions, selectedMcpIds]);
-
-  const addMcpServer = (mcpServerId: string) => {
-    if (!mcpServerId || selectedMcpIds.includes(mcpServerId)) return;
-    setValue('mcp_server_ids', [...selectedMcpIds, mcpServerId], { shouldDirty: true });
+  const toggleMcp = (mcpServerId: string) => {
+    const set = new Set(selectedMcpIds);
+    if (set.has(mcpServerId)) set.delete(mcpServerId);
+    else set.add(mcpServerId);
+    setValue('mcp_server_ids', Array.from(set), { shouldDirty: true });
   };
 
-  const removeMcpServer = (mcpServerId: string) => {
-    setValue(
-      'mcp_server_ids',
-      selectedMcpIds.filter((id) => id !== mcpServerId),
-      { shouldDirty: true },
-    );
+  const clearSelectedMcp = () => {
+    setValue('mcp_server_ids', [], { shouldDirty: true });
   };
 
   return (
@@ -259,6 +258,16 @@ export default function ToolsMcpStep() {
                 {selectedMcpIds.length} attached
               </Badge>
             )}
+            {selectedMcpIds.length > 0 && (
+              <CustomButton
+                type="text"
+                size="sm"
+                onClick={clearSelectedMcp}
+                className="text-xs text-muted-foreground hover:text-destructive"
+              >
+                Clear
+              </CustomButton>
+            )}
             <CustomButton
               type="default"
               size="sm"
@@ -270,17 +279,25 @@ export default function ToolsMcpStep() {
           </div>
         }
       >
-        {/* Attached servers */}
+        {/* Search */}
+        <SearchBar
+          placeholder="Search MCP servers by name or description..."
+          value={mcpSearch}
+          onSearch={setMcpSearch}
+          debounceMs={200}
+        />
+
+        {/* Body */}
         {loading ? (
-          <div className="flex flex-col gap-3">
-            {Array.from({ length: Math.max(selectedMcpIds.length, 1) }).map((_, i) => (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {Array.from({ length: 4 }).map((_, i) => (
               <div
                 key={i}
                 className="h-[56px] animate-pulse rounded-xl border border-border/40 bg-muted/40"
               />
             ))}
           </div>
-        ) : selectedMcpIds.length === 0 ? (
+        ) : filteredMcpServers.length === 0 ? (
           <div className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-border/70 px-6 py-5 text-center">
             <span
               className={cn(
@@ -292,75 +309,79 @@ export default function ToolsMcpStep() {
             >
               <Server className="size-3.5" />
             </span>
-            <p className="text-sm font-medium text-foreground">
-              {availableMcpToAdd.length === 0 ? 'No MCP servers available' : 'No servers attached'}
-            </p>
-            <p className="max-w-sm text-xs text-muted-foreground">
-              {availableMcpToAdd.length === 0
-                ? 'Create one to start attaching hosted toolsets to your agents.'
-                : 'Pick one from the dropdown below to give this agent extra capabilities.'}
-            </p>
+            {mcpSearch ? (
+              <p className="text-sm text-muted-foreground">
+                Nothing matches &ldquo;{mcpSearch}&rdquo;.
+              </p>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-foreground">No MCP servers yet</p>
+                <p className="max-w-sm text-xs text-muted-foreground">
+                  Create one to start attaching hosted toolsets to your agents.
+                </p>
+                <CustomButton
+                  type="primary"
+                  size="sm"
+                  icon={<Plus className="size-3.5" />}
+                  onClick={() => safeNavigate('/mcp/create')}
+                  className="mt-1"
+                >
+                  Create an MCP server
+                </CustomButton>
+              </>
+            )}
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
-            {selectedMcpIds.map((mcpServerId) => {
-              const server = mcpServers.find((m) => m.id === mcpServerId);
+          <div className="grid gap-2 sm:grid-cols-2">
+            {filteredMcpServers.map((server) => {
+              const selected = selectedMcpIds.includes(server.id);
               return (
-                <div
-                  key={mcpServerId}
-                  className="flex items-start justify-between gap-3 rounded-xl border border-border/70 bg-background p-3 transition-shadow hover:shadow-sm"
+                <CustomButton
+                  key={server.id}
+                  type="text"
+                  onClick={() => toggleMcp(server.id)}
+                  className={cn(
+                    'group flex h-auto items-start justify-between gap-3 rounded-xl border p-3 text-left transition-all',
+                    selected
+                      ? MCP_ACCENT.selected
+                      : 'border-border/70 hover:-translate-y-px hover:border-border hover:bg-muted/30',
+                  )}
                 >
-                  <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex min-w-0 flex-1 items-start gap-2.5">
                     <span
                       className={cn(
-                        'flex size-8 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset',
-                        MCP_ACCENT.bg,
-                        MCP_ACCENT.ring,
-                        MCP_ACCENT.text,
+                        'mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset transition-colors',
+                        selected
+                          ? cn(MCP_ACCENT.bg, MCP_ACCENT.ring, MCP_ACCENT.text)
+                          : 'bg-muted ring-border text-muted-foreground',
                       )}
                     >
                       <Server className="size-3.5" />
                     </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {server?.name ?? 'Unknown MCP server'}
-                      </p>
-                      {server?.description && (
-                        <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <span className="truncate text-sm font-medium text-foreground">
+                        {server.name}
+                      </span>
+                      {server.description && (
+                        <span className="line-clamp-2 text-xs text-muted-foreground">
                           {server.description}
-                        </p>
+                        </span>
                       )}
                     </div>
                   </div>
-                  <CustomButton
-                    type="text"
-                    size="icon-xs"
-                    onClick={() => removeMcpServer(mcpServerId)}
-                    aria-label={`Remove ${server?.name ?? 'server'}`}
-                    className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  <span
+                    className={cn(
+                      'mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border transition-colors',
+                      selected
+                        ? 'border-sky-500 bg-sky-500 text-white'
+                        : 'border-border bg-background text-transparent',
+                    )}
                   >
-                    <X className="size-4" />
-                  </CustomButton>
-                </div>
+                    <Check className="size-3" />
+                  </span>
+                </CustomButton>
               );
             })}
-          </div>
-        )}
-
-        {/* Attach control */}
-        {availableMcpToAdd.length > 0 && (
-          <div className="flex flex-col gap-1.5 rounded-xl border border-dashed border-border/70 bg-muted/20 p-3">
-            <p className="text-[11px] font-medium text-muted-foreground">
-              Attach an existing server
-            </p>
-            <SelectInput
-              name="add_mcp_server"
-              options={availableMcpToAdd}
-              value=""
-              onValueChange={addMcpServer}
-              placeholder="Pick a server to add…"
-              loading={loading}
-            />
           </div>
         )}
       </SectionCard>

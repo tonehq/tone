@@ -86,9 +86,20 @@ async def validate_mcp_server(
     server_url = data.get("server_url")
     transport_type = data.get("transport_type", "streamable_http")
     auth_config = data.get("auth_config")
+    oauth_connection_id = data.get("oauth_connection_id")
     if not server_url:
         raise HTTPException(status_code=400, detail="server_url is required")
-    return await svc.validate_mcp_connection(server_url, transport_type, auth_config)
+    # Reflect how the server will actually authenticate at call time: custom headers from
+    # meta_data plus a fresh OAuth bearer (which wins on conflict) when a connection is linked.
+    from core.services.mcp_server_service import headers_from_meta
+
+    extra_headers = {
+        **headers_from_meta(data.get("meta_data")),
+        **svc._resolve_oauth_headers(oauth_connection_id),
+    }
+    return await svc.validate_mcp_connection(
+        server_url, transport_type, auth_config, extra_headers=extra_headers
+    )
 
 
 @router.get("/get_mcp_server")
