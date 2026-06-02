@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import io
 import os
+import tempfile
 from abc import ABC, abstractmethod
 from typing import List
 
+from docling.document_converter import DocumentConverter
 from docx import Document as _Docx
-from llama_cloud_services import LlamaParse
 from loguru import logger
 from PyPDF2 import PdfReader as _PdfReader
 
@@ -23,7 +24,7 @@ class DocumentReader(ABC):
         ...
 
 
-class LlamaParseReader(DocumentReader):
+class DoclingReader(DocumentReader):
     _EXT = {
         "application/pdf": ".pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
@@ -33,30 +34,38 @@ class LlamaParseReader(DocumentReader):
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
         "application/vnd.ms-excel": ".xls",
         "text/html": ".html",
+        "text/markdown": ".md",
         "image/png": ".png",
         "image/jpeg": ".jpg",
         "image/tiff": ".tiff",
     }
 
-    def __init__(self, api_key: str = None, result_type: str = "markdown"):
-        self._api_key = api_key or os.getenv("LLAMA_CLOUD_API_KEY")
-        self._result_type = result_type
-        self._parser = None
+    def __init__(self):
+        self._converter = None
 
-    def _get_parser(self):
-        if self._parser is None:
-            self._parser = LlamaParse(api_key=self._api_key, result_type=self._result_type)
-        return self._parser
+    def _get_converter(self):
+        if self._converter is None:
+            self._converter = DocumentConverter()
+        return self._converter
 
     def supports(self, content_type: str) -> bool:
-        return content_type in self._EXT and bool(self._api_key)
+        return content_type in self._EXT
 
     def read(self, file_bytes: bytes, content_type: str) -> Document:
         ext = self._EXT.get(content_type, "")
-        docs = self._get_parser().load_data(file_bytes, extra_info={"file_name": f"upload{ext}"})
-        text = "\n\n".join(d.text for d in docs if getattr(d, "text", None))
-        logger.info("LlamaParse parsed {} -> {} chars", content_type, len(text))
-        return Document(text=text, metadata={"parser": "llamaparse"})
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+            tmp.write(file_bytes)
+            tmp_path = tmp.name
+        try:
+            result = self._get_converter().convert(tmp_path)
+            text = result.document.export_to_markdown()
+        finally:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+        logger.info("Docling parsed {} -> {} chars", content_type, len(text))
+        return Document(text=text, metadata={"parser": "docling"})
 
 
 class PdfReader(DocumentReader):
@@ -98,7 +107,7 @@ class TextReader(DocumentReader):
 
 class CompositeReader(DocumentReader):
     def __init__(self, readers: List[DocumentReader] = None):
-        self._readers = readers or [LlamaParseReader(), PdfReader(), DocxReader(), TextReader()]
+        self._readers = readers or [DoclingReader(), PdfReader(), DocxReader(), TextReader()]
 
     def supports(self, content_type: str) -> bool:
         return any(r.supports(content_type) for r in self._readers)

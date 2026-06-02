@@ -1,23 +1,20 @@
-"""Background pipeline: Extract text -> Chunk -> Embed -> Store in knowledge_base_chunks."""
-
 from uuid import UUID
 
 from loguru import logger
 
+from core.database.session import get_db_context
+from core.models.knowledge_base_chunk import KnowledgeBaseChunk
+from core.models.upload import Upload
+from core.services.document_tool_service import get_openai_api_key_for_agent
+from core.services.r2_storage_service import R2StorageService
+from core.services.rag.embedders import OpenAIEmbedder
+from core.services.rag.pipeline import RAGPipeline
+from core.services.rag.vector_stores.pgvector_store import PgVectorStore
+
 
 class DocumentProcessingService:
 
-    def process_upload(self, upload_id: UUID, org_id: UUID, delete_existing: bool = False):
-        """Full pipeline: download file, extract text, chunk, embed, store."""
-        from core.database.session import get_db_context
-        from core.models.upload import Upload
-        from core.models.knowledge_base_chunk import KnowledgeBaseChunk
-        from core.services.r2_storage_service import R2StorageService
-        from core.services.document_tool_service import get_openai_api_key_for_agent
-        from core.services.rag.pipeline import RAGPipeline
-        from core.services.rag.embedders import OpenAIEmbedder
-        from core.services.rag.vector_stores.pgvector_store import PgVectorStore
-
+    def process_document(self, upload_id: UUID, org_id: UUID, file_bytes: bytes, delete_existing: bool = False):
         with get_db_context() as db:
             try:
                 upload = db.query(Upload).filter(Upload.id == upload_id).first()
@@ -31,10 +28,6 @@ class DocumentProcessingService:
                         KnowledgeBaseChunk.upload_id == upload_id
                     ).delete(synchronize_session=False)
                 db.commit()
-
-                if not upload.file_path:
-                    raise ValueError("Upload has no file_path")
-                file_bytes = R2StorageService().download_file(upload.file_path)
 
                 api_key = get_openai_api_key_for_agent(org_id)
                 if not api_key:
@@ -68,6 +61,16 @@ class DocumentProcessingService:
                 except Exception as meta_err:
                     logger.error("Failed to update error metadata: {}", meta_err)
 
+    def process_upload(self, upload_id: UUID, org_id: UUID, delete_existing: bool = False):
+        with get_db_context() as db:
+            upload = db.query(Upload).filter(Upload.id == upload_id).first()
+            if not upload or not upload.file_path:
+                logger.error("Upload {} not found or has no file_path", upload_id)
+                return
+            file_path = upload.file_path
+
+        file_bytes = R2StorageService().download_file(file_path)
+        self.process_document(upload_id, org_id, file_bytes, delete_existing=delete_existing)
+
     def reprocess_upload(self, upload_id: UUID, org_id: UUID):
-        """Delete existing chunks and re-run the full pipeline."""
         self.process_upload(upload_id, org_id, delete_existing=True)

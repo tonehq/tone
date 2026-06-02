@@ -30,6 +30,7 @@ from core.models.agent_knowledge_base import AgentKnowledgeBase
 from core.models.upload import Upload
 from core.services.crud import list_records
 from core.services.document_processing_service import DocumentProcessingService
+from core.services.ingestion_queue import enqueue_reprocess, enqueue_upload
 from core.services.r2_storage_service import R2StorageService
 from shared.config import settings
 
@@ -239,7 +240,7 @@ def build_knowledge_base_router(
                 pass
             raise
 
-        background_tasks.add_task(DocumentProcessingService().process_upload, upload.id, org_id)
+        await enqueue_upload(upload.id, org_id)
 
         return _upload_to_payload(upload)
 
@@ -332,14 +333,12 @@ def build_knowledge_base_router(
             except Exception:
                 pass
 
-        background_tasks.add_task(
-            DocumentProcessingService().reprocess_upload, upload.id, org_id
-        )
+        await enqueue_reprocess(upload.id, org_id)
 
         return _upload_to_payload(upload)
 
     @router.post("/{upload_id}/reprocess", status_code=status.HTTP_202_ACCEPTED)
-    def reprocess_document(
+    async def reprocess_document(
         upload_id: str,
         background_tasks: BackgroundTasks,
         claims=Depends(auth_dependency),
@@ -379,9 +378,7 @@ def build_knowledge_base_router(
         db.commit()
         db.refresh(upload)
 
-        background_tasks.add_task(
-            DocumentProcessingService().reprocess_upload, upload.id, org_id
-        )
+        await enqueue_reprocess(upload.id, org_id)
 
         return _upload_to_payload(upload)
 
