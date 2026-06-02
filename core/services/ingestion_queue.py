@@ -24,6 +24,12 @@ def ingest_upload(upload_id: str, org_id: str, delete_existing: bool = False) ->
     DocumentProcessingService().process_upload(UUID(upload_id), UUID(org_id), delete_existing=delete_existing)
 
 
+@app.periodic(cron="*/5 * * * *")
+@app.task(name="heartbeat", queue="ingestion")
+def heartbeat(timestamp: int) -> None:
+    logger.info("[ingestion] heartbeat tick (scheduled_ts={})", timestamp)
+
+
 async def _defer_ingestion(upload_id, org_id, delete_existing: bool) -> None:
     async with app.open_async():
         await ingest_upload.defer_async(
