@@ -7,7 +7,9 @@ import time
 from abc import ABC, abstractmethod
 from typing import List, Optional, Tuple
 
-from docling.document_converter import DocumentConverter
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
 from docx import Document as _Docx
 from loguru import logger
 from PyPDF2 import PdfReader as _PdfReader
@@ -41,13 +43,18 @@ class DoclingReader(DocumentReader):
         "image/tiff": ".tiff",
     }
 
-    def __init__(self, page_range: Optional[Tuple[int, int]] = None):
+    def __init__(self, page_range: Optional[Tuple[int, int]] = None, ocr: bool = False, tables: bool = False):
         self._converter = None
         self._page_range = page_range
+        self._ocr = ocr
+        self._tables = tables
 
     def _get_converter(self):
         if self._converter is None:
-            self._converter = DocumentConverter()
+            options = PdfPipelineOptions(do_ocr=self._ocr, do_table_structure=self._tables)
+            self._converter = DocumentConverter(
+                format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=options)}
+            )
         return self._converter
 
     def supports(self, content_type: str) -> bool:
@@ -60,8 +67,8 @@ class DoclingReader(DocumentReader):
             tmp_path = tmp.name
         kwargs = {"page_range": self._page_range} if self._page_range else {}
         logger.info(
-            "Docling parsing {} ({:.2f} MB), page_range={} — this may take a while...",
-            content_type, len(file_bytes) / 1024 / 1024, self._page_range or "all",
+            "Docling parsing {} ({:.2f} MB), page_range={}, ocr={}, tables={} ...",
+            content_type, len(file_bytes) / 1024 / 1024, self._page_range or "all", self._ocr, self._tables,
         )
         start = time.monotonic()
         try:
