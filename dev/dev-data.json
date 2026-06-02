@@ -3064,15 +3064,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        },
-        {
           "name": "speed",
           "data_type": "string",
           "type": "select",
@@ -5587,15 +5578,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        },
-        {
           "name": "speed",
           "data_type": "float",
           "type": "input number",
@@ -5774,15 +5756,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        },
         {
           "name": "speed",
           "data_type": "float",
@@ -22784,15 +22757,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        },
-        {
           "name": "speed_alpha",
           "data_type": "float",
           "type": "input number",
@@ -29706,15 +29670,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        },
-        {
           "name": "pitch",
           "data_type": "float",
           "type": "input number",
@@ -36379,15 +36334,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        },
-        {
           "name": "latency",
           "data_type": "string",
           "type": "input",
@@ -38346,15 +38292,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en-US"
-        },
-        {
           "name": "quality",
           "data_type": "integer",
           "type": "input number",
@@ -39500,15 +39437,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        },
-        {
           "name": "speed",
           "data_type": "float",
           "type": "input number",
@@ -40280,50 +40208,124 @@
           }
         }
       ],
-      "meta_data_schema": [
-        {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        }
-      ],
+      "meta_data_schema": [],
       "voices": [
+        {
+          "name": "Amy",
+          "voice_id": "amy",
+          "description": "Narrative. Excited. US",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/amy/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Ansel",
+          "voice_id": "ansel",
+          "description": "Young, engaging voice with subtle enthusiasm and natural emphasis. Perfect for persuasive content and polished advertising.",
+          "gender": null,
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/ansel/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Autumn",
+          "voice_id": "autumn",
+          "description": "Warm, friendly female voice with a professional yet approachable tone. Ideal for customer support and guidance.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/autumn/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
         {
           "name": "Ava",
           "voice_id": "ava",
-          "description": "Warm, friendly American female voice",
+          "description": "Conversational. Sultry. US",
           "gender": "female",
           "language": "en",
-          "sample_url": null,
-          "accent": "American",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/ava/preview",
+          "accent": null,
           "language_list": [
             "en"
           ]
         },
         {
-          "name": "Curtis",
-          "voice_id": "curtis",
-          "description": "Confident American male voice",
+          "name": "Bella",
+          "voice_id": "bella",
+          "description": null,
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/bella/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Brandon",
+          "voice_id": "brandon",
+          "description": "Clear, stable American broadcaster voice with engaging delivery. Great for news, announcements, and professional narration.",
           "gender": "male",
           "language": "en",
-          "sample_url": null,
-          "accent": "American",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/brandon/preview",
+          "accent": null,
           "language_list": [
             "en"
           ]
         },
         {
-          "name": "Lily",
-          "voice_id": "lily",
-          "description": "Soft, clear American female voice",
+          "name": "Caleb",
+          "voice_id": "caleb",
+          "description": "Narrative. Confident. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/caleb/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Cassian",
+          "voice_id": "cassian",
+          "description": "Friendly, animated voice that's nurturing and engaging. Welcoming and enthusiastic, perfect for educational content and guiding students.",
+          "gender": null,
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/cassian/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Chloe",
+          "voice_id": "chloe",
+          "description": "Conversational. Authentic. US",
           "gender": "female",
           "language": "en",
-          "sample_url": null,
-          "accent": "American",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/chloe/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Dalton",
+          "voice_id": "dalton",
+          "description": "Narrative. US Southern accent. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/dalton/preview",
+          "accent": null,
           "language_list": [
             "en"
           ]
@@ -40331,11 +40333,395 @@
         {
           "name": "Daniel",
           "voice_id": "daniel",
-          "description": "Natural American male voice",
+          "description": "Narrative. Confident. US",
           "gender": "male",
           "language": "en",
-          "sample_url": null,
-          "accent": "American",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/daniel/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Dustin",
+          "voice_id": "dustin",
+          "description": "Narrative. Confident. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/dustin/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Elowen",
+          "voice_id": "elowen",
+          "description": "Warm, velvety female voice with youthful charm. Captivating for storytelling and narrative content.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/elowen/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Evander",
+          "voice_id": "evander",
+          "description": "Weathered, husky voice with a calm, comforting presence. Perfect for customer support and reassuring conversations.",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/evander/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Huxley",
+          "voice_id": "huxley",
+          "description": "Theatrical male voice with animated, expressive range. An intriguing and fun personality that's perfect for dynamic conversations and entertaining content.",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/huxley/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Jacob",
+          "voice_id": "jacob",
+          "description": null,
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/jacob/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "James",
+          "voice_id": "james",
+          "description": "Narrative. Deep and calm. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/james/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Juniper",
+          "voice_id": "juniper",
+          "description": "Commanding female voice with sophisticated, educated tones. Ideal for instruction and authoritative content.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/juniper/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Kennedy",
+          "voice_id": "kennedy",
+          "description": "Young, emotive female voice that's conversational, inviting, and healing. Great for advertisements and friendly communication.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/kennedy/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Lauren",
+          "voice_id": "lauren",
+          "description": "Conversational. California accent. US",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/lauren/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Leah",
+          "voice_id": "leah",
+          "description": "Confident, expressive female voice with dynamic intonation patterns. Professional and engaging, perfect for customer support and content creation.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/leah/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Lily",
+          "voice_id": "lily",
+          "description": "Narrative. Exuberant. US",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/lily/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Lucas",
+          "voice_id": "lucas",
+          "description": "Clear male voice with brisk, projected delivery. Speaks with the pace and clarity of professional broadcasting, prioritizing content over personality.",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/lucas/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Magnus",
+          "voice_id": "magnus",
+          "description": "Conversational. Deep and charming. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/magnus/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Miles",
+          "voice_id": "miles",
+          "description": "Conversational. Gossipy. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/miles/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Morgan",
+          "voice_id": "morgan",
+          "description": "Mature British female voice with depth and experience. Rich tones perfect for sophisticated content.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/morgan/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Natalie",
+          "voice_id": "natalie",
+          "description": "Bright, youthful female voice with animated, friendly energy. Sounds like talking with a close friend.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/natalie/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Nathan",
+          "voice_id": "nathan",
+          "description": "Narrative. Chill. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/nathan/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Noah",
+          "voice_id": "noah",
+          "description": "Conversational. Deep and chill. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/noah/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Nyssa",
+          "voice_id": "nyssa",
+          "description": "Warm female voice with animated Southern charm and spirited sass. Confident and motherly with distinctive personality, perfect for engaging conversations and personable support.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/nyssa/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Oliver",
+          "voice_id": "oliver",
+          "description": "Narrative. Silly. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/oliver/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Paige",
+          "voice_id": "paige",
+          "description": "Conversational. Determined. US",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/paige/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Ryan",
+          "voice_id": "ryan",
+          "description": "Rhythmic male voice with theatrical flair and higher pitch. Excellent for customer service and content creation.",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/ryan/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Sadie",
+          "voice_id": "sadie",
+          "description": "Calm, relaxed female voice with muted tones. Perfect for peaceful content creation and gentle narration.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/sadie/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Sophie",
+          "voice_id": "sophie",
+          "description": "Narrative. Strong British accent. UK",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/sophie/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Stella",
+          "voice_id": "stella",
+          "description": "Soft, gentle female voice ideal for reading content. Measured and professional without being overly animated.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/stella/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Terrence",
+          "voice_id": "terrence",
+          "description": "Narrative. Enthusiastic. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/terrence/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Tyler",
+          "voice_id": "tyler",
+          "description": "Smooth, buttery male voice with crisp articulation. Excellent for captivating storytelling and narration.",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/tyler/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Vesper",
+          "voice_id": "vesper",
+          "description": "Distinctive voice with nerdy charm and comforting qualities. Inviting and approachable for explanatory content.",
+          "gender": null,
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/vesper/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Violet",
+          "voice_id": "violet",
+          "description": "Uplifting female voice with slight vocal fry. Warm and understanding for customer concerns and support.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/violet/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Warrick",
+          "voice_id": "warrick",
+          "description": "Playful, animated voice with friendly, upbeat character. Engaging and enthusiastic, making it great for teaching children and interactive content.",
+          "gender": null,
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/warrick/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Zain",
+          "voice_id": "zain",
+          "description": "Smoky male voice that's both kind and curious. Perfect for thoughtful conversations and inquiry.",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/zain/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Zeke",
+          "voice_id": "zeke",
+          "description": "Conversational. Calm. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/zeke/preview",
+          "accent": null,
           "language_list": [
             "en"
           ]
@@ -40343,47 +40729,11 @@
         {
           "name": "Zoe",
           "voice_id": "zoe",
-          "description": "Bright, energetic American female voice",
+          "description": "Conversational. Energetic. US",
           "gender": "female",
           "language": "en",
-          "sample_url": null,
-          "accent": "American",
-          "language_list": [
-            "en"
-          ]
-        },
-        {
-          "name": "Ethan",
-          "voice_id": "ethan",
-          "description": "Calm, deep American male voice",
-          "gender": "male",
-          "language": "en",
-          "sample_url": null,
-          "accent": "American",
-          "language_list": [
-            "en"
-          ]
-        },
-        {
-          "name": "Mia",
-          "voice_id": "mia",
-          "description": "Expressive American female voice",
-          "gender": "female",
-          "language": "en",
-          "sample_url": null,
-          "accent": "American",
-          "language_list": [
-            "en"
-          ]
-        },
-        {
-          "name": "Leo",
-          "voice_id": "leo",
-          "description": "Smooth, professional American male voice",
-          "gender": "male",
-          "language": "en",
-          "sample_url": null,
-          "accent": "American",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/zoe/preview",
+          "accent": null,
           "language_list": [
             "en"
           ]
@@ -42388,15 +42738,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis"
-        },
-        {
           "name": "stability",
           "data_type": "float",
           "type": "input number",
@@ -44283,15 +44624,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        },
-        {
           "name": "user_instructions",
           "data_type": "string",
           "type": "input",
@@ -44523,17 +44855,7 @@
           }
         }
       ],
-      "meta_data_schema": [
-        {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis"
-        }
-      ],
+      "meta_data_schema": [],
       "voices": [
         {
           "name": "Nyomi",
@@ -44794,15 +45116,6 @@
           "validator": null,
           "required": 0,
           "description": "Polly voice engine type"
-        },
-        {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
         },
         {
           "name": "pitch",
@@ -45663,15 +45976,6 @@
           "validator": null,
           "required": 0,
           "description": "Google Cloud location"
-        },
-        {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
         },
         {
           "name": "speaking_rate",
@@ -48617,15 +48921,6 @@
           "validator": null,
           "required": 0,
           "description": "Speech emphasis level"
-        },
-        {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en-US"
         },
         {
           "name": "pitch",
