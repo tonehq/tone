@@ -153,7 +153,7 @@ export default function ModelFormDrawer({
           isRequired
         />
         <TextAreaField
-          id="description"
+          name="description"
           label="Description"
           value={form.description}
           onChange={(e) => update('description', e.target.value)}

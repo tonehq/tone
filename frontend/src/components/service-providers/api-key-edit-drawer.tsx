@@ -148,7 +148,7 @@ export default function ApiKeyEditDrawer({
             placeholder="e.g. OpenAI production"
           />
           <TextAreaField
-            id="description"
+            name="description"
             label="Description"
             value={form.description}
             onChange={(e) => update('description', e.target.value)}

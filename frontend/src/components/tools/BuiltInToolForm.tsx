@@ -1,6 +1,12 @@
 'use client';
 
-import { CustomButton, SelectInput, TextAreaField, TextInput } from '@/components/shared';
+import {
+  CustomButton,
+  ScopeStatus,
+  SelectInput,
+  TextAreaField,
+  TextInput,
+} from '@/components/shared';
 import SettingsSection from '@/components/tools/SettingsSection';
 import {
   DropdownMenu,
@@ -16,8 +22,8 @@ import {
   TOOL_TYPE_OAUTH_PROVIDER,
 } from '@/constants/toolForm';
 import { type BuiltInToolFormData, builtInToolSchema } from '@/schemas/tool';
-import { getOAuthConnections } from '@/services/oauthService';
-import type { OAuthConnection } from '@/types/oauth';
+import { getOAuthCatalog, getOAuthConnections } from '@/services/oauthService';
+import type { OAuthCatalogProvider, OAuthConnection } from '@/types/oauth';
 import type { Tool, ToolParametersSchema, ToolType } from '@/types/tool';
 import { cn } from '@/utils/cn';
 import { showToast } from '@/utils/toast';
@@ -87,6 +93,7 @@ export default function BuiltInToolForm({
   // OAuth connections for this tool type
   const [connections, setConnections] = useState<OAuthConnection[]>([]);
   const [connectionsLoading, setConnectionsLoading] = useState(false);
+  const [catalog, setCatalog] = useState<OAuthCatalogProvider[]>([]);
 
   const oauthProvider = TOOL_TYPE_OAUTH_PROVIDER[toolType];
 
@@ -97,7 +104,19 @@ export default function BuiltInToolForm({
       .then(setConnections)
       .catch(() => setConnections([]))
       .finally(() => setConnectionsLoading(false));
+    getOAuthCatalog()
+      .then(setCatalog)
+      .catch(() => setCatalog([]));
   }, [oauthProvider, toolType]);
+
+  const requiredScopes = useMemo(
+    () => catalog.find((p) => p.slug === oauthProvider)?.scopes ?? [],
+    [catalog, oauthProvider],
+  );
+  const selectedConnection = useMemo(
+    () => connections.find((c) => String(c.id) === String(oauthConnectionId)) ?? null,
+    [connections, oauthConnectionId],
+  );
 
   const connectionOptions = useMemo(
     () =>
@@ -310,6 +329,14 @@ export default function BuiltInToolForm({
                 loading={connectionsLoading}
                 placeholder="Select a Google account..."
               />
+              {selectedConnection && (
+                <div className="mt-2.5">
+                  <ScopeStatus
+                    granted={selectedConnection.public_metadata?.scopes}
+                    required={requiredScopes}
+                  />
+                </div>
+              )}
               {connections.length === 0 && !connectionsLoading && (
                 <p className="mt-2 text-[12px] text-muted-foreground">
                   No Google accounts connected.{' '}

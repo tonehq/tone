@@ -745,7 +745,7 @@ test.describe('Tools List Page', () => {
     test('shows skeleton rows while the list request is in flight', async ({ page }) => {
       await page.unrouteAll({ behavior: 'wait' });
 
-      let resolveRoute: (() => void) | null = null;
+      let resolveRoute: () => void = () => {};
       await page.route('**/tool/list', async (route) => {
         await new Promise<void>((resolve) => {
           resolveRoute = resolve;
@@ -762,7 +762,7 @@ test.describe('Tools List Page', () => {
         timeout: 2_000,
       });
 
-      resolveRoute?.();
+      resolveRoute();
     });
   });
 

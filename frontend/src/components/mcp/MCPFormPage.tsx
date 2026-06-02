@@ -6,6 +6,8 @@ import HttpHeadersBuilder from '@/components/mcp/HttpHeadersBuilder';
 import {
   AppLoader,
   CustomButton,
+  ScopeStatus,
+  SelectInput,
   SliderField,
   TextAreaField,
   TextInput,
@@ -15,7 +17,9 @@ import SettingsSection from '@/components/tools/SettingsSection';
 import { Switch } from '@/components/ui/switch';
 import { useGoBack } from '@/hooks/useGoBack';
 import { getMcpServer } from '@/services/mcpServerService';
+import { discoverMcpOAuth, getOAuthCatalog, getOAuthConnections } from '@/services/oauthService';
 import type { MCPServer, MCPServerUpsertPayload } from '@/types/mcp';
+import type { OAuthCatalogProvider, OAuthConnection } from '@/types/oauth';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
@@ -41,6 +45,10 @@ import { Controller, useFieldArray, useForm } from 'react-hook-form';
 
 type TransportType = 'shttp' | 'sse';
 
+// Radix <Select.Item> forbids an empty-string value (it's reserved for clearing the selection),
+// so the "no connection" choice uses a sentinel that we translate back to null on save.
+const NO_OAUTH_CONNECTION = '__none__';
+
 interface HttpHeaderField {
   key: string;
   value: string;
@@ -56,6 +64,7 @@ interface MCPFormState {
   bearer_token: string;
   use_api_key: boolean;
   api_key: string;
+  oauth_connection_id: string;
   http_headers: HttpHeaderField[];
   is_active: boolean;
 }
@@ -70,6 +79,7 @@ const DEFAULT_VALUES: MCPFormState = {
   bearer_token: '',
   use_api_key: false,
   api_key: '',
+  oauth_connection_id: NO_OAUTH_CONNECTION,
   http_headers: [],
   is_active: true,
 };
@@ -111,6 +121,7 @@ function serverToFormState(s: MCPServer): MCPFormState {
     bearer_token: auth.bearer_token ?? '',
     use_api_key: !!auth.api_key,
     api_key: auth.api_key ?? '',
+    oauth_connection_id: s.oauth_connection_id ?? NO_OAUTH_CONNECTION,
     http_headers: Object.entries(headersMap).map(([key, value]) => ({
       key,
       value: String(value),
@@ -135,6 +146,10 @@ function formStateToUpsertPayload(s: MCPFormState, id?: string): MCPServerUpsert
     server_url: s.server_url,
     transport_type: s.transport_type === 'shttp' ? 'streamable_http' : 'sse',
     auth_config: Object.keys(authConfig).length > 0 ? authConfig : null,
+    oauth_connection_id:
+      s.oauth_connection_id && s.oauth_connection_id !== NO_OAUTH_CONNECTION
+        ? s.oauth_connection_id
+        : null,
     meta_data: { timeout: s.timeout, http_headers: headersMap },
     is_active: s.is_active,
   };
@@ -152,6 +167,7 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
   const [, fetchServers] = useAtom(fetchMcpServersAtom);
   const [loadingServer, setLoadingServer] = useState<boolean>(isEditMode);
   const [saving, setSaving] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
 
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     settings: true,
@@ -172,6 +188,19 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
     control,
     name: 'http_headers',
   });
+
+  // OAuth connections available to back this server, plus the catalog (for required scopes).
+  const [oauthConnections, setOauthConnections] = useState<OAuthConnection[]>([]);
+  const [catalog, setCatalog] = useState<OAuthCatalogProvider[]>([]);
+
+  useEffect(() => {
+    Promise.all([getOAuthConnections(), getOAuthCatalog()])
+      .then(([connections, providers]) => {
+        setOauthConnections(connections);
+        setCatalog(providers);
+      })
+      .catch((error) => handleApiError(error));
+  }, []);
 
   useEffect(() => {
     if (!isEditMode || !serverId) return;
@@ -199,9 +228,22 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
   const watchedProtocol = watch('transport_type');
   const watchedTimeout = watch('timeout');
   const watchedServerUrl = watch('server_url') ?? '';
+  const watchedOAuthId = watch('oauth_connection_id') ?? '';
 
   const hostname = getHostname(watchedServerUrl);
   const protocolLabel = watchedProtocol === 'shttp' ? 'SHTTP' : 'SSE';
+
+  const selectedConnection = oauthConnections.find((c) => c.id === watchedOAuthId) ?? null;
+  const connectionOptions = [
+    { value: NO_OAUTH_CONNECTION, label: 'None — use static headers' },
+    ...oauthConnections.map((c) => ({
+      value: c.id,
+      label: `${c.public_metadata?.user_email || c.label || c.provider_slug} (${c.provider_slug})`,
+    })),
+  ];
+  const requiredScopesForConnection = selectedConnection
+    ? (catalog.find((p) => p.slug === selectedConnection.provider_slug)?.scopes ?? [])
+    : [];
 
   const onSave = async (data: MCPFormState) => {
     const payload = formStateToUpsertPayload(data, isEditMode ? serverId : undefined);
@@ -218,6 +260,21 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
       handleApiError(error);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const onDiscoverOAuth = async () => {
+    if (!watchedServerUrl.trim()) {
+      showToast.error('Enter the server URL first');
+      return;
+    }
+    setDiscovering(true);
+    try {
+      const url = await discoverMcpOAuth(watchedServerUrl.trim(), watchedName || undefined);
+      window.location.href = url;
+    } catch (error) {
+      handleApiError(error);
+      setDiscovering(false);
     }
   };
 
@@ -466,6 +523,56 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
                       <p className="mt-0.5 text-[12px] text-muted-foreground">
                         Optional — enable each method only if your MCP server requires it.
                       </p>
+                    </div>
+
+                    {/* OAuth connection — preferred for providers like ClickUp, Google, Slack.
+                        Resolves a fresh bearer token at call time and validates scopes. */}
+                    <div className="rounded-md border border-border/60 bg-muted/20 p-3">
+                      <div className="flex items-center gap-2">
+                        <Sparkles size={13} className="text-violet-500" />
+                        <p className="text-[12.5px] font-semibold text-foreground">
+                          Use an OAuth connection
+                        </p>
+                      </div>
+                      <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+                        Authenticate with a connected account instead of a static token. Manage
+                        connections in Integrations.
+                      </p>
+                      <div className="mt-3 border-t border-border/60 pt-3">
+                        <SelectInput
+                          name="oauth_connection_id"
+                          control={control}
+                          label="OAuth connection"
+                          placeholder="Select a connection"
+                          options={connectionOptions}
+                        />
+                        {selectedConnection && (
+                          <div className="mt-2.5">
+                            <ScopeStatus
+                              granted={selectedConnection.public_metadata?.scopes}
+                              required={requiredScopesForConnection}
+                            />
+                          </div>
+                        )}
+
+                        {/* Auto-discover OAuth for any spec-compliant MCP server (DCR + PKCE). */}
+                        <div className="mt-3 flex items-center justify-between gap-3 border-t border-border/60 pt-3">
+                          <p className="text-[11.5px] text-muted-foreground">
+                            No connection yet? Auto-discover this server&apos;s OAuth and authorize.
+                          </p>
+                          <CustomButton
+                            type="default"
+                            size="sm"
+                            onClick={onDiscoverOAuth}
+                            loading={discovering}
+                            disabled={!watchedServerUrl.trim()}
+                            className="shrink-0 gap-1.5"
+                          >
+                            <Sparkles size={13} />
+                            Auto-discover
+                          </CustomButton>
+                        </div>
+                      </div>
                     </div>
 
                     <Controller

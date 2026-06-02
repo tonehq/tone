@@ -13,6 +13,8 @@ from pipecat.services.llm_service import FunctionCallParams
 
 from core.models.tool import Tool
 from core.models.agent_tool import AgentTool
+from core.utils.logging import truncate_for_log
+
 
 def get_custom_tools_for_agent(agent_id: int) -> List[Tool]:
     """Fetch all active custom tools linked to an agent."""
@@ -125,7 +127,13 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
             except Exception:
                 result_text = response.text
 
-            logger.info("Custom tool '{}' returned status {}", tool.name, response.status_code)
+            logger.info(
+                "🔧 Custom tool result ← tool='{}' status={} args={} output={}",
+                tool.name,
+                response.status_code,
+                truncate_for_log(arguments),
+                truncate_for_log(result_text),
+            )
 
             tool_call_entry["result"] = "success"
             tool_call_entry["status_code"] = response.status_code
@@ -356,32 +364,65 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
 
 
 async def _calendar_create_event(base_url: str, headers: dict, arguments: dict, timezone: str) -> str:
-    """Create a calendar event."""
+    """Create a calendar event.
+
+    Accepts either a timed event (``start_time`` provided, with optional ``end_time`` or
+    ``duration_minutes``) or an **all-day event** when no time is given — so a date-only booking
+    no longer fails. Google Calendar models all-day events with date-only ``start.date``/``end.date``
+    where the end date is exclusive (i.e. the day after for a single-day event).
+    """
+    from datetime import datetime, timedelta
+
     title = arguments.get("title", "Appointment")
     date = arguments.get("date")  # e.g. "2026-05-10"
     start_time = arguments.get("start_time")  # e.g. "14:00"
-    duration_minutes = int(arguments.get("duration_minutes", 30))
+    end_time = arguments.get("end_time")  # e.g. "16:00" (optional)
+    duration_minutes = int(arguments.get("duration_minutes", 30) or 30)
     description = arguments.get("description", "")
     attendee_email = arguments.get("attendee_email")
 
-    if not date or not start_time:
-        return "Error: 'date' and 'start_time' are required to create an event."
+    if not date:
+        return "Error: 'date' is required to create an event."
 
-    # Build start/end datetime strings
-    start_dt = f"{date}T{start_time}:00"
-    # Calculate end time
-    start_hour, start_min = map(int, start_time.split(":"))
-    total_minutes = start_hour * 60 + start_min + duration_minutes
-    end_hour = total_minutes // 60
-    end_min = total_minutes % 60
-    end_dt = f"{date}T{end_hour:02d}:{end_min:02d}:00"
-
-    event_body = {
-        "summary": title,
-        "description": description,
-        "start": {"dateTime": start_dt, "timeZone": timezone},
-        "end": {"dateTime": end_dt, "timeZone": timezone},
-    }
+    if start_time:
+        # Timed event — compute end via end_time when given, else duration. datetime math keeps
+        # this correct across midnight and rejects malformed input instead of producing bad strings.
+        try:
+            start_obj = datetime.strptime(f"{date} {start_time}", "%Y-%m-%d %H:%M")
+        except ValueError:
+            return (
+                f"Error: invalid date/time ('{date}' '{start_time}'). "
+                "Use date as YYYY-MM-DD and time as HH:MM (24-hour)."
+            )
+        end_obj = None
+        if end_time:
+            try:
+                end_obj = datetime.strptime(f"{date} {end_time}", "%Y-%m-%d %H:%M")
+            except ValueError:
+                return "Error: invalid 'end_time'. Use HH:MM (24-hour)."
+        if end_obj is None or end_obj <= start_obj:
+            end_obj = start_obj + timedelta(minutes=duration_minutes)
+        event_body = {
+            "summary": title,
+            "description": description,
+            "start": {"dateTime": start_obj.strftime("%Y-%m-%dT%H:%M:%S"), "timeZone": timezone},
+            "end": {"dateTime": end_obj.strftime("%Y-%m-%dT%H:%M:%S"), "timeZone": timezone},
+        }
+        when_str = f"on {date} at {start_time}"
+    else:
+        # No time supplied → all-day event (end date is exclusive, so use the next day).
+        try:
+            start_date = datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            return f"Error: invalid date '{date}'. Use YYYY-MM-DD."
+        end_date = (start_date + timedelta(days=1)).strftime("%Y-%m-%d")
+        event_body = {
+            "summary": title,
+            "description": description,
+            "start": {"date": date},
+            "end": {"date": end_date},
+        }
+        when_str = f"on {date} (all-day)"
 
     if attendee_email:
         event_body["attendees"] = [{"email": attendee_email}]
@@ -394,7 +435,7 @@ async def _calendar_create_event(base_url: str, headers: dict, arguments: dict, 
     if response.status_code in (200, 201):
         event = response.json()
         logger.info("google_calendar create_event SUCCESS: event_id={} status={} htmlLink={}", event.get("id"), event.get("status"), event.get("htmlLink"))
-        return f"Event '{title}' created successfully on {date} at {start_time} for {duration_minutes} minutes. Event link: {event.get('htmlLink', 'N/A')}"
+        return f"Event '{title}' created successfully {when_str}. Event link: {event.get('htmlLink', 'N/A')}"
     else:
         logger.error("google_calendar create_event FAILED: status={} body={}", response.status_code, response.text)
         return f"Failed to create event: {response.text}"

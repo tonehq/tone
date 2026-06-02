@@ -4,13 +4,16 @@ import { channelsAtom, fetchChannelsAtom, resetChannelsAtom } from '@/atoms/Inte
 import { fetchOAuthAtom, oauthAtom, resetOAuthAtom } from '@/atoms/OAuthAtom';
 import AvailableIntegrationsCatalog from '@/components/integrations/available-integrations-catalog';
 import ChannelGrid, { type ChannelGridHandle } from '@/components/integrations/channel-grid';
+import CustomCredentialModal from '@/components/integrations/custom-credential-modal';
 import OAuthConnectionGrid from '@/components/integrations/oauth-connection-grid';
 import { CustomButton } from '@/components/shared';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { getOAuthCatalog } from '@/services/oauthService';
+import type { OAuthCatalogProvider } from '@/types/oauth';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { Phone, Plug, RefreshCw, Sparkles } from 'lucide-react';
+import { KeyRound, Phone, Plug, RefreshCw, Sparkles } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const CATALOG_ANCHOR_ID = 'integrations-available-providers';
@@ -45,6 +48,25 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
   const refetchChannels = useSetAtom(fetchChannelsAtom);
   const resetOAuth = useSetAtom(resetOAuthAtom);
   const resetChannels = useSetAtom(resetChannelsAtom);
+
+  const [catalog, setCatalog] = useState<OAuthCatalogProvider[]>([]);
+  const [customCredentialOpen, setCustomCredentialOpen] = useState(false);
+
+  useEffect(() => {
+    getOAuthCatalog()
+      .then(setCatalog)
+      .catch((err) => handleApiError(err));
+  }, []);
+
+  // Provider slug → required scopes, used to drive the scope-status badges on connection cards.
+  const requiredScopesByProvider = useMemo(
+    () =>
+      catalog.reduce<Record<string, string[]>>((acc, p) => {
+        acc[p.slug] = p.scopes ?? [];
+        return acc;
+      }, {}),
+    [catalog],
+  );
 
   useEffect(
     () => () => {
@@ -114,18 +136,35 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
               Connect services and manage credentials that power your voice agents.
             </p>
           </div>
-          <CustomButton
-            type="default"
-            size="sm"
-            onClick={handleRefreshAll}
-            loading={isRefreshing}
-            icon={<RefreshCw className="size-3.5" />}
-            className="self-start sm:self-auto"
-          >
-            Refresh
-          </CustomButton>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            <CustomButton
+              type="default"
+              size="sm"
+              onClick={() => setCustomCredentialOpen(true)}
+              icon={<KeyRound className="size-3.5" />}
+            >
+              Custom credential
+            </CustomButton>
+            <CustomButton
+              type="default"
+              size="sm"
+              onClick={handleRefreshAll}
+              loading={isRefreshing}
+              icon={<RefreshCw className="size-3.5" />}
+            >
+              Refresh
+            </CustomButton>
+          </div>
         </div>
       </header>
+
+      <CustomCredentialModal
+        open={customCredentialOpen}
+        onClose={() => setCustomCredentialOpen(false)}
+        onCreated={() => {
+          refetchOAuth().catch((err) => handleApiError(err));
+        }}
+      />
 
       {/* ── Scrollable content (the only thing that scrolls) ──── */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto">
@@ -145,6 +184,7 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
               onAddApiKey={handleAddApiKey}
               connectedSlugs={connectedOAuthSlugs}
               configuredChannelTypes={configuredChannelTypes}
+              catalog={catalog}
             />
           </section>
 
@@ -181,7 +221,10 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
               </TabsList>
 
               <TabsContent value="services">
-                <OAuthConnectionGrid onConnectAnother={handleScrollToCatalog} />
+                <OAuthConnectionGrid
+                  onConnectAnother={handleScrollToCatalog}
+                  requiredScopesByProvider={requiredScopesByProvider}
+                />
               </TabsContent>
 
               {/* forceMount keeps ChannelGrid alive on the Services tab too,

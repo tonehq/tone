@@ -16,6 +16,7 @@ import Logo from './Logo';
 import MultiSelectField from './MultiSelectField';
 import { PhoneNumberDisplay } from './PhoneNumberDisplay';
 import RadioGroupField from './RadioGroupField';
+import ScopeStatus from './ScopeStatus';
 import SearchBar from './SearchBar';
 import SearchableSelect from './SearchableSelect';
 import SelectInput from './SelectInput';
@@ -71,6 +72,7 @@ export {
   MultiSelectField,
   PhoneNumberDisplay,
   RadioGroupField,
+  ScopeStatus,
   SearchBar,
   SearchableSelect,
   SelectInput,
