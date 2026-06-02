@@ -49,6 +49,10 @@ type TransportType = 'shttp' | 'sse';
 // so the "no connection" choice uses a sentinel that we translate back to null on save.
 const NO_OAUTH_CONNECTION = '__none__';
 
+// Auto-discover OAuth navigates away to the provider and back, which would otherwise discard the
+// in-progress form. We stash the form in sessionStorage under this key and restore it on return.
+const MCP_FORM_DRAFT_KEY = 'mcp-form-oauth-draft';
+
 interface HttpHeaderField {
   key: string;
   value: string;
@@ -180,7 +184,7 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const { control, handleSubmit, watch, reset, setValue } = useForm<MCPFormState>({
+  const { control, handleSubmit, watch, reset, setValue, getValues } = useForm<MCPFormState>({
     defaultValues: DEFAULT_VALUES,
   });
 
@@ -203,6 +207,31 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
   }, []);
 
   useEffect(() => {
+    // Returning from an Auto-discover OAuth round-trip: restore the stashed form and pre-select the
+    // freshly created connection instead of reloading the saved server (which would lose the edits
+    // the user had in flight). See onDiscoverOAuth.
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('mcp_oauth') === 'success') {
+      const newConnectionId = params.get('connection_id');
+      const draft = sessionStorage.getItem(MCP_FORM_DRAFT_KEY);
+      sessionStorage.removeItem(MCP_FORM_DRAFT_KEY);
+      if (draft) {
+        try {
+          const parsed = JSON.parse(draft) as MCPFormState;
+          if (newConnectionId) parsed.oauth_connection_id = newConnectionId;
+          reset(parsed);
+        } catch {
+          if (newConnectionId) setValue('oauth_connection_id', newConnectionId);
+        }
+      } else if (newConnectionId) {
+        setValue('oauth_connection_id', newConnectionId);
+      }
+      setLoadingServer(false);
+      // Strip the one-shot query params so a refresh doesn't re-trigger the restore.
+      window.history.replaceState(null, '', window.location.pathname);
+      return;
+    }
+
     if (!isEditMode || !serverId) return;
     let cancelled = false;
     setLoadingServer(true);
@@ -219,7 +248,7 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
     return () => {
       cancelled = true;
     };
-  }, [isEditMode, serverId, reset]);
+  }, [isEditMode, serverId, reset, setValue]);
 
   const watchedHeaders = watch('http_headers');
   const watchedName = watch('name');
@@ -229,17 +258,33 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
   const watchedTimeout = watch('timeout');
   const watchedServerUrl = watch('server_url') ?? '';
   const watchedOAuthId = watch('oauth_connection_id') ?? '';
+  const watchedUseBearer = watch('use_bearer_token');
+  const watchedUseApiKey = watch('use_api_key');
 
   const hostname = getHostname(watchedServerUrl);
   const protocolLabel = watchedProtocol === 'shttp' ? 'SHTTP' : 'SSE';
 
+  // Single source of truth for "which auth is active", shown both in the rail and chips.
+  const authLabel =
+    watchedOAuthId && watchedOAuthId !== NO_OAUTH_CONNECTION
+      ? 'OAuth'
+      : watchedUseBearer
+        ? 'Bearer'
+        : watchedUseApiKey
+          ? 'API key'
+          : 'None';
+
   const selectedConnection = oauthConnections.find((c) => c.id === watchedOAuthId) ?? null;
   const connectionOptions = [
     { value: NO_OAUTH_CONNECTION, label: 'None — use static headers' },
-    ...oauthConnections.map((c) => ({
-      value: c.id,
-      label: `${c.public_metadata?.user_email || c.label || c.provider_slug} (${c.provider_slug})`,
-    })),
+    // Skip in-flight MCP discovery handshakes (status 'pending') — they hold no usable token yet,
+    // so picking one would fail validation at save. Mirrors the filter in oauth-connection-grid.
+    ...oauthConnections
+      .filter((c) => c.public_metadata?.status !== 'pending')
+      .map((c) => ({
+        value: c.id,
+        label: `${c.public_metadata?.user_email || c.label || c.provider_slug} (${c.provider_slug})`,
+      })),
   ];
   const requiredScopesForConnection = selectedConnection
     ? (catalog.find((p) => p.slug === selectedConnection.provider_slug)?.scopes ?? [])
@@ -247,7 +292,6 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
 
   const onSave = async (data: MCPFormState) => {
     const payload = formStateToUpsertPayload(data, isEditMode ? serverId : undefined);
-    console.log('[MCP] save payload', payload);
     setSaving(true);
     try {
       await upsertServer(payload);
@@ -270,9 +314,17 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
     }
     setDiscovering(true);
     try {
-      const url = await discoverMcpOAuth(watchedServerUrl.trim(), watchedName || undefined);
+      // Stash the in-progress form and tell the backend where to send the user back to, so the
+      // OAuth round-trip returns to this form with edits intact and the new connection selected.
+      sessionStorage.setItem(MCP_FORM_DRAFT_KEY, JSON.stringify(getValues()));
+      const url = await discoverMcpOAuth(
+        watchedServerUrl.trim(),
+        watchedName || undefined,
+        window.location.pathname,
+      );
       window.location.href = url;
     } catch (error) {
+      sessionStorage.removeItem(MCP_FORM_DRAFT_KEY);
       handleApiError(error);
       setDiscovering(false);
     }
@@ -283,23 +335,31 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* Top bar */}
-      <div className="relative flex shrink-0 items-center justify-between border-b border-border bg-background px-4 py-2">
-        <div className="flex items-center gap-2">
+      <div className="relative flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background py-3">
+        <div className="flex min-w-0 items-center gap-3">
           <CustomButton
             type="text"
             size="icon-sm"
             onClick={onBack}
-            aria-label="Back"
-            className="text-muted-foreground hover:text-foreground"
+            aria-label="Back to MCP servers"
+            className="shrink-0 text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft size={16} />
           </CustomButton>
-          <span className="text-[13px] font-medium text-foreground">
-            {watchedName || (isEditMode ? 'Edit MCP Server' : 'New MCP Server')}
-          </span>
-          <StatusPill active={!!watchedIsActive} />
+          <PreviewFavicon key={hostname ?? 'top'} hostname={hostname} size="sm" />
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="truncate text-[15px] font-semibold tracking-tight text-foreground">
+                {watchedName || (isEditMode ? 'Edit MCP Server' : 'New MCP Server')}
+              </h1>
+              <StatusPill active={!!watchedIsActive} />
+            </div>
+            <p className="truncate text-[11.5px] text-muted-foreground">
+              {hostname ?? 'Configure endpoint, auth, and protocol'}
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5">
           <CustomButton type="default" size="sm" onClick={onBack} disabled={saving}>
             Cancel
           </CustomButton>
@@ -322,11 +382,11 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
       </div>
 
       {/* Two-column layout: left rail + form */}
-      <div className="min-h-0 flex-1 overflow-hidden bg-muted/20">
+      <div className="min-h-0 flex-1 overflow-hidden bg-muted/30">
         <div className="grid h-full grid-cols-1 lg:grid-cols-[260px_1fr]">
           {/* LEFT RAIL — preview + section nav */}
           <aside className="hidden border-r border-border bg-background lg:flex lg:flex-col">
-            <div className="sticky top-0 flex flex-col gap-5 px-5 py-6">
+            <div className="sticky top-0 flex flex-col gap-5 px-6 py-7">
               {/* Preview */}
               <div>
                 <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -361,6 +421,16 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
                   <RailRow label="Timeout">
                     <span className="font-mono tabular-nums">{watchedTimeout}s</span>
                   </RailRow>
+                  <RailRow label="Auth">
+                    <span
+                      className={cn(
+                        'font-mono',
+                        authLabel === 'None' ? 'text-muted-foreground/70' : 'text-foreground',
+                      )}
+                    >
+                      {authLabel}
+                    </span>
+                  </RailRow>
                   <RailRow label="Headers">
                     <span className="font-mono tabular-nums">{fields.length}</span>
                   </RailRow>
@@ -369,14 +439,14 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
             </div>
           </aside>
 
-          {/* RIGHT COLUMN — scrollable form (scrollbar hidden) */}
-          <div className="relative min-h-0 overflow-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {/* RIGHT COLUMN — scrollable form */}
+          <div className="relative min-h-0 overflow-auto">
             {loadingServer && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70 backdrop-blur-sm">
                 <AppLoader label="Loading server..." className="min-h-0" />
               </div>
             )}
-            <div className="mx-auto max-w-[760px] space-y-4 px-6 py-6">
+            <div className="mx-auto max-w-[780px] space-y-4 px-6 py-8 lg:px-8">
               {/* Header band */}
               <div
                 className={cn(
@@ -407,6 +477,7 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
                   <div className="mt-4 flex flex-wrap items-center gap-1.5">
                     <Chip icon={<Signal size={11} />} label={protocolLabel} />
                     <Chip icon={<Clock size={11} />} label={`${watchedTimeout}s timeout`} />
+                    <Chip icon={<Sparkles size={11} />} label={`${authLabel} auth`} />
                     <Chip
                       icon={<KeyRound size={11} />}
                       label={`${fields.length} ${fields.length === 1 ? 'header' : 'headers'}`}
@@ -789,14 +860,22 @@ function RailRow({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function PreviewFavicon({ hostname }: { hostname: string | null }) {
+function PreviewFavicon({
+  hostname,
+  size = 'md',
+}: {
+  hostname: string | null;
+  size?: 'sm' | 'md';
+}) {
   const [failed, setFailed] = useState(false);
   const url = getFaviconUrl(hostname);
   const show = !!url && !failed;
+  const isSm = size === 'sm';
   return (
     <div
       className={cn(
-        'flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border',
+        'flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border',
+        isSm ? 'size-8' : 'size-9',
         show ? 'bg-white p-1 dark:border-border/60' : 'bg-primary/5 dark:bg-primary/10',
       )}
     >
@@ -804,13 +883,13 @@ function PreviewFavicon({ hostname }: { hostname: string | null }) {
         <img
           src={url ?? ''}
           alt={hostname ?? 'MCP server icon'}
-          width={20}
-          height={20}
-          className="size-5 object-contain"
+          width={isSm ? 18 : 20}
+          height={isSm ? 18 : 20}
+          className={cn('object-contain', isSm ? 'size-[18px]' : 'size-5')}
           onError={() => setFailed(true)}
         />
       ) : (
-        <Boxes size={16} className="text-primary" />
+        <Boxes size={isSm ? 15 : 16} className="text-primary" />
       )}
     </div>
   );

@@ -52,10 +52,14 @@ export const getOAuthCatalog = async (): Promise<OAuthCatalogProvider[]> => {
  * Generic MCP OAuth 2.1 discovery: probes a server, dynamically registers a client, and returns
  * the authorize URL to redirect the user to. Works with any spec-compliant remote MCP server.
  */
-export const discoverMcpOAuth = async (serverUrl: string, label?: string): Promise<string> => {
+export const discoverMcpOAuth = async (
+  serverUrl: string,
+  label?: string,
+  returnTo?: string,
+): Promise<string> => {
   const { data } = await axiosInstance.post<{ auth_url: string; connection_id: string }>(
     '/oauth/mcp/discover',
-    { server_url: serverUrl, label },
+    { server_url: serverUrl, label, return_to: returnTo },
   );
   return data.auth_url;
 };

@@ -110,7 +110,7 @@ def mcp_discover(
     db: Session = Depends(get_db),
 ):
     """Discover an MCP server's OAuth metadata, dynamically register a client, and return the
-    authorization URL. Body: { server_url, label? }."""
+    authorization URL. Body: { server_url, label?, return_to? }."""
     from core.services.mcp_oauth_service import McpOAuthService
 
     server_url = body.get("server_url")
@@ -123,7 +123,21 @@ def mcp_discover(
         server_url=server_url,
         created_by_user_id=claims.user_id,
         label=body.get("label"),
+        return_to=body.get("return_to"),
     )
+
+
+def _mcp_callback_redirect(connection) -> RedirectResponse:
+    """Send the user back to the in-app path that launched discovery (with the new connection id so
+    the form can auto-select it), falling back to the integrations page."""
+    frontend_url = settings.APPLICATION_URL.rstrip("/")
+    return_to = (connection.public_metadata or {}).get("return_to")
+    if return_to:
+        sep = "&" if "?" in return_to else "?"
+        target = f"{frontend_url}{return_to}{sep}mcp_oauth=success&connection_id={connection.id}"
+    else:
+        target = f"{frontend_url}/integrations?provider=mcp&status=success"
+    return RedirectResponse(url=target)
 
 
 @router.get("/mcp/callback")
@@ -142,10 +156,9 @@ def mcp_callback(
     svc = McpOAuthService(
         db, org_id=connection.organization_id, redirect_uri=_MCP_CALLBACK_URL
     )
-    svc.complete(connection_id=state, code=code)
+    connection = svc.complete(connection_id=state, code=code)
 
-    frontend_url = settings.APPLICATION_URL.rstrip("/")
-    return RedirectResponse(url=f"{frontend_url}/integrations?provider=mcp&status=success")
+    return _mcp_callback_redirect(connection)
 
 
 # ─── OAuth flow endpoints ───

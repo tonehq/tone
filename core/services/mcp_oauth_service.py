@@ -56,6 +56,18 @@ def _well_known(base: str, suffix: str) -> str:
     return urljoin(origin + "/", suffix)
 
 
+def _safe_return_path(return_to: Optional[str]) -> Optional[str]:
+    """Accept only a same-app relative path (``/...``), rejecting absolute/protocol-relative URLs to
+    avoid an open redirect on the post-auth callback. Returns ``None`` when not safe."""
+    if not return_to or not isinstance(return_to, str):
+        return None
+    candidate = return_to.strip()
+    # Must be a root-relative path and not protocol-relative ("//host") or a scheme ("http:").
+    if candidate.startswith("/") and not candidate.startswith("//") and "://" not in candidate:
+        return candidate
+    return None
+
+
 def _pkce_pair() -> Tuple[str, str]:
     verifier = base64.urlsafe_b64encode(secrets.token_bytes(48)).decode().rstrip("=")
     challenge = (
@@ -179,9 +191,17 @@ class McpOAuthService(BaseService):
         return client_id, data.get("client_secret")
 
     def start_discovery(
-        self, server_url: str, created_by_user_id, label: Optional[str] = None
+        self,
+        server_url: str,
+        created_by_user_id,
+        label: Optional[str] = None,
+        return_to: Optional[str] = None,
     ) -> Dict[str, str]:
-        """Run discovery + DCR, persist a pending connection, return the authorize URL."""
+        """Run discovery + DCR, persist a pending connection, return the authorize URL.
+
+        ``return_to`` is an optional in-app path the callback should send the user back to (e.g. the
+        MCP form they launched discovery from). Only a safe relative path is honoured.
+        """
         created_by = coerce_uuid(created_by_user_id)
         if not created_by:
             raise HTTPException(
@@ -208,6 +228,9 @@ class McpOAuthService(BaseService):
             "client_id": client_id,
             "scopes": meta["scopes_supported"],
         }
+        safe_return_to = _safe_return_path(return_to)
+        if safe_return_to:
+            public_metadata["return_to"] = safe_return_to
 
         # Reuse an existing connection for the same server (mirrors OAuthService.create_connection's
         # upsert): a reconnect re-runs discovery and must refresh the SAME row, so MCP servers linked
