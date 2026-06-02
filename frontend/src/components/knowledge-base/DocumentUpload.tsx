@@ -20,7 +20,7 @@ const ACCEPTED_TYPES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
 const ACCEPTED_EXTENSIONS = ['pdf', 'txt', 'csv', 'json', 'docx'];
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
 interface DocumentUploadProps {
   agents: AgentDropdownItem[];
@@ -77,7 +77,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
       return false;
     }
     if (f.size > MAX_FILE_SIZE) {
-      showToast.error(`Too large: ${f.name}`, 'Maximum file size is 10 MB');
+      showToast.error(`Too large: ${f.name}`, 'Maximum file size is 100 MB');
       return false;
     }
     return true;
@@ -220,7 +220,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
                 </span>
               </p>
               <p className="mt-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
-                PDF · DOCX · TXT · CSV · JSON · max 10 MB each
+                PDF · DOCX · TXT · CSV · JSON · max 100 MB each
               </p>
             </div>
           </div>
