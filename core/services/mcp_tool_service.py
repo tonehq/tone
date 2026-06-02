@@ -53,11 +53,7 @@ def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, cur
             )
 
             # One entry per invocation, mirroring the custom/built-in tool shape so
-            # ToolExecutionService can map it uniformly. Recorded UP FRONT (status
-            # "started") and appended now so the call is persisted even if its
-            # result is never delivered — e.g. a barge-in interruption discards it
-            # ("tool_call_id is not running") or it completes after call shutdown.
-            # The same dict is updated in place on result/error.
+            # ToolExecutionService can map it uniformly.
             entry = {
                 "tool": fn,
                 "tool_type": "mcp",
@@ -65,10 +61,7 @@ def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, cur
                 "arguments": arguments,
                 "timestamp": int(time.time()),
                 "turn": current_turn["number"] if current_turn else None,
-                "status": "started",
             }
-            if tool_call_entries is not None:
-                tool_call_entries.append(entry)
 
             original_cb = getattr(params, "result_callback", None)
 
@@ -99,6 +92,11 @@ def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, cur
                         "✅ MCP tool result ← server='{}' tool='{}' ({}ms) output={}",
                         server_name, fn, dur, truncate_for_log(result),
                     )
+                    if tool_call_entries is not None:
+                        entry["result"] = result
+                        entry["status"] = "success"
+                        entry["duration_ms"] = dur
+                        tool_call_entries.append(entry)
                     entry["result"] = result
                     entry["status"] = "success"
                     entry["duration_ms"] = dur
@@ -120,6 +118,11 @@ def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, cur
                     "❌ MCP tool error ✕ server='{}' tool='{}' ({}ms): {}",
                     server_name, fn, dur, exc,
                 )
+                if tool_call_entries is not None:
+                    entry["status"] = "error"
+                    entry["error"] = str(exc)
+                    entry["duration_ms"] = dur
+                    tool_call_entries.append(entry)
                 entry["status"] = "error"
                 entry["error"] = str(exc)
                 entry["duration_ms"] = dur
