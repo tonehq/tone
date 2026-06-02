@@ -27,9 +27,11 @@ from core.utils.logging import truncate_for_log
 MCP_REGISTER_TIMEOUT_S = 25.0
 
 
-def _install_mcp_call_logging(llm, server_name: str):
+def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, current_turn=None):
     """Wrap ``llm.register_function`` so each MCP tool registered through it logs, at call time,
-    its server + tool name, the arguments passed in, and the output returned (plus duration).
+    its server + tool name, the arguments passed in, and the output returned (plus duration) —
+    and, when ``tool_call_entries`` is provided, appends a structured entry so the invocation is
+    persisted to the ``tool_executions`` table alongside custom/built-in tool calls.
 
     Pipecat's ``MCPClient.register_tools`` registers its handlers via ``llm.register_function``;
     by shadowing that method on the instance for the duration of registration we transparently
@@ -49,6 +51,17 @@ def _install_mcp_call_logging(llm, server_name: str):
                 server_name, fn, truncate_for_log(arguments),
             )
 
+            # One entry per invocation, mirroring the custom/built-in tool shape so
+            # ToolExecutionService can map it uniformly.
+            entry = {
+                "tool": fn,
+                "tool_type": "mcp",
+                "server": server_name,
+                "arguments": arguments,
+                "timestamp": int(time.time()),
+                "turn": current_turn["number"] if current_turn else None,
+            }
+
             original_cb = getattr(params, "result_callback", None)
             if original_cb is not None:
                 async def logging_cb(result, *cb_args, **cb_kwargs):
@@ -57,6 +70,11 @@ def _install_mcp_call_logging(llm, server_name: str):
                         "✅ MCP tool result ← server='{}' tool='{}' ({}ms) output={}",
                         server_name, fn, dur, truncate_for_log(result),
                     )
+                    if tool_call_entries is not None:
+                        entry["result"] = result
+                        entry["status"] = "success"
+                        entry["duration_ms"] = dur
+                        tool_call_entries.append(entry)
                     return await original_cb(result, *cb_args, **cb_kwargs)
 
                 try:
@@ -73,6 +91,11 @@ def _install_mcp_call_logging(llm, server_name: str):
                     "❌ MCP tool error ✕ server='{}' tool='{}' ({}ms): {}",
                     server_name, fn, dur, exc,
                 )
+                if tool_call_entries is not None:
+                    entry["status"] = "error"
+                    entry["error"] = str(exc)
+                    entry["duration_ms"] = dur
+                    tool_call_entries.append(entry)
                 raise
 
         return original_register(name, logged_handler, *args, **kwargs)
@@ -101,12 +124,15 @@ def get_mcp_servers_for_agent(agent_id: int):
         return servers
 
 
-async def register_mcp_tools(llm, agent_id: int) -> Optional[ToolsSchema]:
+async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, current_turn=None) -> Optional[ToolsSchema]:
     """Connect to all MCP servers linked to an agent and register their tools with the LLM.
 
     Args:
         llm: The Pipecat LLM service to register tools with.
         agent_id: The agent ID to fetch MCP servers for.
+        tool_call_entries: Optional shared list each MCP invocation is appended to,
+            so it's persisted to the tool_executions table at call completion.
+        current_turn: Optional dict carrying the live conversation turn number.
 
     Returns:
         A ToolsSchema containing all MCP tools, or None if no MCP servers are linked.
@@ -201,7 +227,9 @@ async def register_mcp_tools(llm, agent_id: int) -> Optional[ToolsSchema]:
             # Decorate every handler MCPClient registers so MCP tool calls log their
             # name/arguments/output during the conversation; restore afterwards so only this
             # server's tools are wrapped.
-            restore_logging = _install_mcp_call_logging(llm, server.name)
+            restore_logging = _install_mcp_call_logging(
+                llm, server.name, tool_call_entries=tool_call_entries, current_turn=current_turn
+            )
             try:
                 tools_schema = await asyncio.wait_for(
                     mcp_client.register_tools(llm), timeout=MCP_REGISTER_TIMEOUT_S

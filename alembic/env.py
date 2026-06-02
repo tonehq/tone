@@ -35,6 +35,7 @@ from core.models.api_key import ApiKey
 from core.models.mcp_server import McpServer
 from core.models.tool import Tool
 from core.models.call import Call
+from core.models.tool_execution import ToolExecution
 from core.models.webhook import Webhook
 
 # this is the Alembic Config object, which provides

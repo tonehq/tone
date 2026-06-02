@@ -36,4 +36,5 @@ from core.models.tool import Tool
 
 # Calls & Metrics
 from core.models.call import Call
+from core.models.tool_execution import ToolExecution
 from core.models.webhook import Webhook
