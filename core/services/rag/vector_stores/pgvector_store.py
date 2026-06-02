@@ -5,6 +5,8 @@ from typing import List, Optional
 
 from sqlalchemy import text
 
+from core.database.session import get_db_context
+from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 from core.services.rag.types import SearchResult, VectorRecord
 from core.services.rag.vector_stores.base import VectorStore
 
@@ -18,14 +20,10 @@ class PgVectorStore(VectorStore):
         if self._session is not None:
             yield self._session
         else:
-            from core.database.session import get_db_context
-
             with get_db_context() as db:
                 yield db
 
     def add(self, records: List[VectorRecord]) -> int:
-        from core.models.knowledge_base_chunk import KnowledgeBaseChunk
-
         rows = [
             KnowledgeBaseChunk(
                 organization_id=r.metadata.get("organization_id"),
@@ -95,8 +93,6 @@ class PgVectorStore(VectorStore):
         ]
 
     def delete(self, *, filters: dict) -> int:
-        from core.models.knowledge_base_chunk import KnowledgeBaseChunk
-
         upload_id = (filters or {}).get("upload_id")
         if upload_id is None:
             raise ValueError("PgVectorStore.delete requires filters['upload_id']")
@@ -111,8 +107,6 @@ class PgVectorStore(VectorStore):
         return n
 
     def count(self, *, filters: Optional[dict] = None) -> int:
-        from core.models.knowledge_base_chunk import KnowledgeBaseChunk
-
         filters = filters or {}
         with self._db() as db:
             q = db.query(KnowledgeBaseChunk)
