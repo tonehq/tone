@@ -12,6 +12,7 @@ from fastapi import HTTPException, status
 from core.services.base import BaseService
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
+from core.models.model import Model
 # Note: legacy methods that referenced removed models (ServiceProvider,
 # Account, ModelInstance, AgentChannel, AgentChannelPhoneNumbers, the
 # AgentType enum) — `upsert_agent`, `_agent_response_item`, `duplicate_agent`,
@@ -20,6 +21,7 @@ from core.models.agent_config import AgentConfig
 # HTTP route and should be removed in a follow-up cleanup.
 from core.services.agent_config_service import AgentConfigService
 from core.services.channel_service import ChannelService
+from core.services.meta_data_schema_validator import MetaDataSchemaValidator
 from core.models.agent_tool import AgentTool
 from core.models.agent_mcp_server import AgentMcpServer
 from core.models.agent_knowledge_base import AgentKnowledgeBase
@@ -781,7 +783,70 @@ class AgentService(BaseService):
         self.db.commit()
         return {"message": "Agent deleted successfully"}
 
+    def _validate_meta_data_schema(self, config_data: Dict[str, Any]) -> None:
+        """Validate meta_data_schema fields in llm_settings, stt_settings, voice_settings.
+
+        Fetches the provider's meta_data_schema from DB and validates user values.
+        Model-level meta_data overrides provider-level validator max when present.
+        Raises HTTPException(400) with structured errors if validation fails.
+        """
+        from core.models.model_provider import ModelProvider
+
+        SETTINGS_KIND_MAP = {
+            "llm_settings": "llm",
+            "stt_settings": "stt",
+            "voice_settings": "tts",
+        }
+
+        validator = MetaDataSchemaValidator()
+        all_errors: Dict[str, Dict[str, list]] = {}
+
+        for settings_key, kind in SETTINGS_KIND_MAP.items():
+            settings = config_data.get(settings_key)
+            if not settings or not isinstance(settings, dict):
+                continue
+
+            provider_id = settings.get("provider_id")
+            if not provider_id:
+                continue
+
+            provider = (
+                self.db.query(ModelProvider)
+                .filter(ModelProvider.id == UUID(str(provider_id)))
+                .first()
+            )
+            if not provider or not provider.meta_data_schema:
+                continue
+
+            schema = provider.meta_data_schema.get(kind)
+            if not schema:
+                continue
+
+            # Fetch model-level meta_data for max overrides
+            model_meta_data = None
+            model_id = settings.get("model_id")
+            if model_id:
+                model_record = (
+                    self.db.query(Model)
+                    .filter(Model.id == UUID(str(model_id)))
+                    .first()
+                )
+                if model_record and model_record.meta_data:
+                    model_meta_data = model_record.meta_data
+
+            field_errors = validator.validate_settings(schema, settings, model_meta_data)
+            if field_errors:
+                all_errors[settings_key] = field_errors
+
+        if all_errors:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"message": "Validation failed", "errors": all_errors},
+            )
+
     def _upsert_new_config(self, agent: Agent, config_data: Dict[str, Any], user_id: Optional[UUID]) -> AgentConfig:
+        self._validate_meta_data_schema(config_data)
+
         existing = (
             self.query(AgentConfig)
             .filter(AgentConfig.agent_id == agent.id, AgentConfig.deleted_at.is_(None))

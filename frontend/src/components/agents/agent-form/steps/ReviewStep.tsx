@@ -187,11 +187,6 @@ export default function ReviewStep({ onJump }: ReviewStepProps) {
           value: state.config?.llm_settings?.max_completion_tokens,
           hideWhenEmpty: true,
         },
-        {
-          label: 'History tokens',
-          value: state.config?.conversation_history_token_limit,
-          hideWhenEmpty: true,
-        },
       ],
     },
     {

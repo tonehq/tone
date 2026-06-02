@@ -78,6 +78,7 @@ export interface ProviderModel {
   kind: ServiceKind;
   description: string | null;
   is_active: boolean;
+  meta_data: Record<string, unknown> | null;
   created_at: number;
   updated_at: number;
 }
