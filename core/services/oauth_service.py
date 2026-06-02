@@ -14,6 +14,7 @@ from uuid import UUID
 
 import httpx
 from fastapi import HTTPException, status
+from loguru import logger
 
 from core.models.oauth_connection import OAuthConnection
 from core.services.base import BaseService
@@ -532,9 +533,31 @@ class OAuthService(BaseService):
             response = client.post(token_url, data=refresh_data)
 
         if response.status_code != 200:
+            # Surface the provider's real reason (e.g. invalid_grant = token
+            # expired/revoked → must reconnect; invalid_client = config issue).
+            # Without this the failure is opaque and looks like a code bug.
+            provider_error = ""
+            try:
+                body = response.json()
+                provider_error = body.get("error") or ""
+                if body.get("error_description"):
+                    provider_error = f"{provider_error}: {body['error_description']}"
+            except Exception:
+                provider_error = (response.text or "")[:200]
+            logger.warning(
+                "OAuth refresh failed for '{}' (status={}): {}",
+                provider, response.status_code, provider_error,
+            )
+            hint = "Please reconnect."
+            if "invalid_grant" in provider_error:
+                hint = (
+                    "Refresh token expired or revoked — reconnect, and publish the "
+                    "OAuth app (Google Cloud Console → OAuth consent screen) so tokens "
+                    "stop expiring in 7 days."
+                )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Token refresh failed for '{provider}'. Please reconnect.",
+                detail=f"Token refresh failed for '{provider}' ({provider_error or response.status_code}). {hint}",
             )
 
         new_tokens = response.json()

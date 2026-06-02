@@ -367,14 +367,17 @@ async def _calendar_create_event(base_url: str, headers: dict, arguments: dict, 
     """Create a calendar event.
 
     Accepts either a timed event (``start_time`` provided, with optional ``end_time`` or
-    ``duration_minutes``) or an **all-day event** when no time is given — so a date-only booking
-    no longer fails. Google Calendar models all-day events with date-only ``start.date``/``end.date``
-    where the end date is exclusive (i.e. the day after for a single-day event).
+    ``duration_minutes``; an optional ``end_date`` lets a timed slot run overnight) or an
+    **all-day event** when no time is given — so a date-only booking no longer fails. Google
+    Calendar models all-day events with date-only ``start.date``/``end.date`` where the end date is
+    exclusive: a single-day event ends the next day, and a multi-day stay (``end_date`` given, e.g.
+    a hotel check-out) ends on that date.
     """
     from datetime import datetime, timedelta
 
     title = arguments.get("title", "Appointment")
-    date = arguments.get("date")  # e.g. "2026-05-10"
+    date = arguments.get("date")  # check-in / event date, e.g. "2026-11-01"
+    end_date = arguments.get("end_date")  # check-out date for multi-day stays
     start_time = arguments.get("start_time")  # e.g. "14:00"
     end_time = arguments.get("end_time")  # e.g. "16:00" (optional)
     duration_minutes = int(arguments.get("duration_minutes", 30) or 30)
@@ -387,6 +390,7 @@ async def _calendar_create_event(base_url: str, headers: dict, arguments: dict, 
     if start_time:
         # Timed event — compute end via end_time when given, else duration. datetime math keeps
         # this correct across midnight and rejects malformed input instead of producing bad strings.
+        # An explicit end_date lets a timed slot run to the next day (overnight bookings).
         try:
             start_obj = datetime.strptime(f"{date} {start_time}", "%Y-%m-%d %H:%M")
         except ValueError:
@@ -397,9 +401,12 @@ async def _calendar_create_event(base_url: str, headers: dict, arguments: dict, 
         end_obj = None
         if end_time:
             try:
-                end_obj = datetime.strptime(f"{date} {end_time}", "%Y-%m-%d %H:%M")
+                end_obj = datetime.strptime(f"{end_date or date} {end_time}", "%Y-%m-%d %H:%M")
             except ValueError:
-                return "Error: invalid 'end_time'. Use HH:MM (24-hour)."
+                return (
+                    "Error: invalid 'end_time'/'end_date'. "
+                    "Use date as YYYY-MM-DD and time as HH:MM (24-hour)."
+                )
         if end_obj is None or end_obj <= start_obj:
             end_obj = start_obj + timedelta(minutes=duration_minutes)
         event_body = {
@@ -408,21 +415,31 @@ async def _calendar_create_event(base_url: str, headers: dict, arguments: dict, 
             "start": {"dateTime": start_obj.strftime("%Y-%m-%dT%H:%M:%S"), "timeZone": timezone},
             "end": {"dateTime": end_obj.strftime("%Y-%m-%dT%H:%M:%S"), "timeZone": timezone},
         }
-        when_str = f"on {date} at {start_time}"
+        when_desc = f"{date} at {start_time}"
     else:
-        # No time supplied → all-day event (end date is exclusive, so use the next day).
+        # No time supplied → all-day event. A provided end_date spans a multi-day stay (e.g. a
+        # hotel booking); Google all-day events use date-only start/end where end.date is EXCLUSIVE,
+        # so a single-day event ends on the next day and a stay ends on the check-out date.
         try:
-            start_date = datetime.strptime(date, "%Y-%m-%d")
+            start_date_obj = datetime.strptime(date, "%Y-%m-%d")
         except ValueError:
             return f"Error: invalid date '{date}'. Use YYYY-MM-DD."
-        end_date = (start_date + timedelta(days=1)).strftime("%Y-%m-%d")
+        if end_date:
+            try:
+                datetime.strptime(end_date, "%Y-%m-%d")
+            except ValueError:
+                return f"Error: invalid 'end_date' '{end_date}'. Use YYYY-MM-DD."
+            all_day_end = end_date
+            when_desc = f"{date} to {end_date} (all-day)"
+        else:
+            all_day_end = (start_date_obj + timedelta(days=1)).strftime("%Y-%m-%d")
+            when_desc = f"{date} (all-day)"
         event_body = {
             "summary": title,
             "description": description,
             "start": {"date": date},
-            "end": {"date": end_date},
+            "end": {"date": all_day_end},
         }
-        when_str = f"on {date} (all-day)"
 
     if attendee_email:
         event_body["attendees"] = [{"email": attendee_email}]
@@ -435,7 +452,7 @@ async def _calendar_create_event(base_url: str, headers: dict, arguments: dict, 
     if response.status_code in (200, 201):
         event = response.json()
         logger.info("google_calendar create_event SUCCESS: event_id={} status={} htmlLink={}", event.get("id"), event.get("status"), event.get("htmlLink"))
-        return f"Event '{title}' created successfully {when_str}. Event link: {event.get('htmlLink', 'N/A')}"
+        return f"Event '{title}' created successfully ({when_desc}). Event link: {event.get('htmlLink', 'N/A')}"
     else:
         logger.error("google_calendar create_event FAILED: status={} body={}", response.status_code, response.text)
         return f"Failed to create event: {response.text}"

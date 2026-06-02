@@ -299,8 +299,15 @@ def seed_from_configs(db, org_name, email, password):
     # --- Phase 1: Insert ModelProvider records ---
     provider_map = {}  # config index -> ModelProvider object
     seen_providers = {}  # provider_id_str -> ModelProvider object
+    provider_schemas = {}  # provider_id_str -> {kind: [...schema...]}
     for i, config in enumerate(all_providers):
         provider_id_str = config["name"]  # e.g. "openai", "deepgram"
+        kind = config["provider_type"]  # llm | stt | tts
+
+        # Accumulate meta_data_schema per kind for each provider
+        schema = config.get("meta_data_schema")
+        if schema is not None:
+            provider_schemas.setdefault(provider_id_str, {})[kind] = schema
 
         if provider_id_str in seen_providers:
             provider_map[i] = seen_providers[provider_id_str]
@@ -319,6 +326,11 @@ def seed_from_configs(db, org_name, email, password):
         provider_map[i] = mp
         seen_providers[provider_id_str] = mp
         stats["model_providers_created"] += 1
+
+    # Assign merged meta_data_schema (keyed by kind) to each provider
+    for provider_id_str, mp in seen_providers.items():
+        if provider_id_str in provider_schemas:
+            mp.meta_data_schema = provider_schemas[provider_id_str]
 
     db.flush()
 

@@ -156,7 +156,7 @@ function SearchableSelectInner<T extends SearchableSelectOption>(
                 'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50',
             )}
           >
-            <span className="flex items-center gap-2 truncate">
+            <span className="min-w-0 flex-1 truncate [&>*]:truncate">
               {selectedOption ? (
                 renderSelectedValue ? (
                   renderSelectedValue(selectedOption)

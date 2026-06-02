@@ -8,36 +8,6 @@
       "api_key_env": "OPENAI_API_KEY",
       "models": [
         {
-          "name": "gpt-3.5-turbo",
-          "meta_data": {
-            "model": "gpt-3.5-turbo"
-          }
-        },
-        {
-          "name": "gpt-4-turbo",
-          "meta_data": {
-            "model": "gpt-4-turbo"
-          }
-        },
-        {
-          "name": "gpt-4.1",
-          "meta_data": {
-            "model": "gpt-4.1"
-          }
-        },
-        {
-          "name": "gpt-4o",
-          "meta_data": {
-            "model": "gpt-4o"
-          }
-        },
-        {
-          "name": "gpt-4o-mini",
-          "meta_data": {
-            "model": "gpt-4o-mini"
-          }
-        },
-        {
           "name": "gpt-5",
           "meta_data": {
             "model": "gpt-5"
@@ -56,39 +26,33 @@
           }
         },
         {
-          "name": "gpt-5.1",
-          "meta_data": {
-            "model": "gpt-5.1"
-          }
-        },
-        {
-          "name": "gpt-5.2",
-          "meta_data": {
-            "model": "gpt-5.2"
-          }
-        },
-        {
-          "name": "o1",
-          "meta_data": {
-            "model": "o1"
-          }
-        },
-        {
           "name": "o3",
           "meta_data": {
             "model": "o3"
           }
         },
         {
-          "name": "o3-mini",
+          "name": "gpt-5.5",
           "meta_data": {
-            "model": "o3-mini"
+            "model": "gpt-5.5"
           }
         },
         {
-          "name": "o4-mini",
+          "name": "gpt-5.4",
           "meta_data": {
-            "model": "o4-mini"
+            "model": "gpt-5.4"
+          }
+        },
+        {
+          "name": "gpt-5.4-mini",
+          "meta_data": {
+            "model": "gpt-5.4-mini"
+          }
+        },
+        {
+          "name": "o3-pro",
+          "meta_data": {
+            "model": "o3-pro"
           }
         }
       ],
@@ -298,21 +262,15 @@
           }
         },
         {
-          "name": "claude-opus-4-20250514",
-          "meta_data": {
-            "model": "claude-opus-4-20250514"
-          }
-        },
-        {
-          "name": "claude-sonnet-4-20250514",
-          "meta_data": {
-            "model": "claude-sonnet-4-20250514"
-          }
-        },
-        {
           "name": "claude-sonnet-4-6",
           "meta_data": {
             "model": "claude-sonnet-4-6"
+          }
+        },
+        {
+          "name": "claude-opus-4-7",
+          "meta_data": {
+            "model": "claude-opus-4-7"
           }
         }
       ],
@@ -371,6 +329,17 @@
           },
           "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+        },
+        {
+          "name": "thinking_budget_tokens",
+          "data_type": "integer",
+          "type": "input number",
+          "format": "integer",
+          "validator": {
+            "min": 1024
+          },
+          "required": 0,
+          "description": "Enable extended thinking with a token budget. The model will think before responding. Min: 1024"
         }
       ],
       "status": "active"
@@ -389,21 +358,9 @@
           }
         },
         {
-          "name": "gemini-3-pro-preview",
-          "meta_data": {
-            "model": "gemini-3-pro-preview"
-          }
-        },
-        {
           "name": "gemini-3-flash-preview",
           "meta_data": {
             "model": "gemini-3-flash-preview"
-          }
-        },
-        {
-          "name": "gemini-3.1-flash-lite-preview",
-          "meta_data": {
-            "model": "gemini-3.1-flash-lite-preview"
           }
         },
         {
@@ -434,42 +391,6 @@
           "name": "gemma-4-26b-a4b-it",
           "meta_data": {
             "model": "gemma-4-26b-a4b-it"
-          }
-        },
-        {
-          "name": "gemma-3-27b-it",
-          "meta_data": {
-            "model": "gemma-3-27b-it"
-          }
-        },
-        {
-          "name": "gemma-3-12b-it",
-          "meta_data": {
-            "model": "gemma-3-12b-it"
-          }
-        },
-        {
-          "name": "gemma-3-4b-it",
-          "meta_data": {
-            "model": "gemma-3-4b-it"
-          }
-        },
-        {
-          "name": "gemma-3-1b-it",
-          "meta_data": {
-            "model": "gemma-3-1b-it"
-          }
-        },
-        {
-          "name": "gemma-3n-e4b-it",
-          "meta_data": {
-            "model": "gemma-3n-e4b-it"
-          }
-        },
-        {
-          "name": "gemma-3n-e2b-it",
-          "meta_data": {
-            "model": "gemma-3n-e2b-it"
           }
         }
       ],
@@ -564,24 +485,6 @@
           "name": "anthropic/claude-sonnet-4",
           "meta_data": {
             "model": "anthropic/claude-sonnet-4"
-          }
-        },
-        {
-          "name": "anthropic/claude-3.7-sonnet",
-          "meta_data": {
-            "model": "anthropic/claude-3.7-sonnet"
-          }
-        },
-        {
-          "name": "anthropic/claude-3.7-sonnet:thinking",
-          "meta_data": {
-            "model": "anthropic/claude-3.7-sonnet:thinking"
-          }
-        },
-        {
-          "name": "anthropic/claude-3.5-sonnet",
-          "meta_data": {
-            "model": "anthropic/claude-3.5-sonnet"
           }
         },
         {
@@ -693,33 +596,15 @@
           }
         },
         {
-          "name": "openai/gpt-4-turbo-preview",
-          "meta_data": {
-            "model": "openai/gpt-4-turbo-preview"
-          }
-        },
-        {
           "name": "openai/gpt-4-1106-preview",
           "meta_data": {
             "model": "openai/gpt-4-1106-preview"
           }
         },
         {
-          "name": "openai/gpt-4-0314",
-          "meta_data": {
-            "model": "openai/gpt-4-0314"
-          }
-        },
-        {
           "name": "openai/gpt-4o",
           "meta_data": {
             "model": "openai/gpt-4o"
-          }
-        },
-        {
-          "name": "openai/gpt-4o:extended",
-          "meta_data": {
-            "model": "openai/gpt-4o:extended"
           }
         },
         {
@@ -957,18 +842,6 @@
           }
         },
         {
-          "name": "qwen/qwen-max",
-          "meta_data": {
-            "model": "qwen/qwen-max"
-          }
-        },
-        {
-          "name": "qwen/qwen-turbo",
-          "meta_data": {
-            "model": "qwen/qwen-turbo"
-          }
-        },
-        {
           "name": "qwen/qwen3-coder",
           "meta_data": {
             "model": "qwen/qwen3-coder"
@@ -999,12 +872,6 @@
           }
         },
         {
-          "name": "qwen/qwen2.5-coder-7b-instruct",
-          "meta_data": {
-            "model": "qwen/qwen2.5-coder-7b-instruct"
-          }
-        },
-        {
           "name": "qwen/qwen-2.5-coder-32b-instruct",
           "meta_data": {
             "model": "qwen/qwen-2.5-coder-32b-instruct"
@@ -1023,12 +890,6 @@
           }
         },
         {
-          "name": "mistralai/mistral-large-2411",
-          "meta_data": {
-            "model": "mistralai/mistral-large-2411"
-          }
-        },
-        {
           "name": "mistralai/mistral-medium-3",
           "meta_data": {
             "model": "mistralai/mistral-medium-3"
@@ -1038,12 +899,6 @@
           "name": "mistralai/mistral-medium-3.1",
           "meta_data": {
             "model": "mistralai/mistral-medium-3.1"
-          }
-        },
-        {
-          "name": "mistralai/mistral-small-creative",
-          "meta_data": {
-            "model": "mistralai/mistral-small-creative"
           }
         },
         {
@@ -1059,12 +914,6 @@
           }
         },
         {
-          "name": "mistralai/mixtral-8x7b-instruct",
-          "meta_data": {
-            "model": "mistralai/mixtral-8x7b-instruct"
-          }
-        },
-        {
           "name": "mistralai/mixtral-8x22b-instruct",
           "meta_data": {
             "model": "mistralai/mixtral-8x22b-instruct"
@@ -1074,18 +923,6 @@
           "name": "mistralai/ministral-14b-2512",
           "meta_data": {
             "model": "mistralai/ministral-14b-2512"
-          }
-        },
-        {
-          "name": "mistralai/devstral-small",
-          "meta_data": {
-            "model": "mistralai/devstral-small"
-          }
-        },
-        {
-          "name": "mistralai/devstral-medium",
-          "meta_data": {
-            "model": "mistralai/devstral-medium"
           }
         },
         {
@@ -1131,12 +968,6 @@
           }
         },
         {
-          "name": "deepseek/deepseek-v3.2-speciale",
-          "meta_data": {
-            "model": "deepseek/deepseek-v3.2-speciale"
-          }
-        },
-        {
           "name": "deepseek/deepseek-r1",
           "meta_data": {
             "model": "deepseek/deepseek-r1"
@@ -1164,12 +995,6 @@
           "name": "google/gemini-3.1-pro-preview",
           "meta_data": {
             "model": "google/gemini-3.1-pro-preview"
-          }
-        },
-        {
-          "name": "google/gemini-3-pro-preview",
-          "meta_data": {
-            "model": "google/gemini-3-pro-preview"
           }
         },
         {
@@ -1281,30 +1106,6 @@
           }
         },
         {
-          "name": "allenai/olmo-3.1-32b-instruct",
-          "meta_data": {
-            "model": "allenai/olmo-3.1-32b-instruct"
-          }
-        },
-        {
-          "name": "allenai/olmo-3.1-32b-think",
-          "meta_data": {
-            "model": "allenai/olmo-3.1-32b-think"
-          }
-        },
-        {
-          "name": "allenai/olmo-2-0325-32b-instruct",
-          "meta_data": {
-            "model": "allenai/olmo-2-0325-32b-instruct"
-          }
-        },
-        {
-          "name": "baidu/ernie-4.5-21b-a3b",
-          "meta_data": {
-            "model": "baidu/ernie-4.5-21b-a3b"
-          }
-        },
-        {
           "name": "baidu/ernie-4.5-300b-a47b",
           "meta_data": {
             "model": "baidu/ernie-4.5-300b-a47b"
@@ -1326,30 +1127,6 @@
           "name": "z-ai/glm-4.7",
           "meta_data": {
             "model": "z-ai/glm-4.7"
-          }
-        },
-        {
-          "name": "x-ai/grok-3",
-          "meta_data": {
-            "model": "x-ai/grok-3"
-          }
-        },
-        {
-          "name": "x-ai/grok-3-mini",
-          "meta_data": {
-            "model": "x-ai/grok-3-mini"
-          }
-        },
-        {
-          "name": "x-ai/grok-4",
-          "meta_data": {
-            "model": "x-ai/grok-4"
-          }
-        },
-        {
-          "name": "x-ai/grok-4-fast",
-          "meta_data": {
-            "model": "x-ai/grok-4-fast"
           }
         }
       ],
@@ -1551,15 +1328,15 @@
       "api_key_env": "DEEPSEEK_API_KEY",
       "models": [
         {
-          "name": "deepseek-chat",
+          "name": "deepseek-v4-pro",
           "meta_data": {
-            "model": "deepseek-chat"
+            "model": "deepseek-v4-pro"
           }
         },
         {
-          "name": "deepseek-reasoner",
+          "name": "deepseek-v4-flash",
           "meta_data": {
-            "model": "deepseek-reasoner"
+            "model": "deepseek-v4-flash"
           }
         }
       ],
@@ -1587,17 +1364,6 @@
           },
           "required": 0,
           "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
-        },
-        {
-          "name": "seed",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": {
-            "min": 0
-          },
-          "required": 0,
-          "description": "Seed for deterministic generation. Min: 0"
         },
         {
           "name": "temperature",
@@ -1633,17 +1399,6 @@
           },
           "required": 0,
           "description": "Maximum number of tokens to generate. Min: 1"
-        },
-        {
-          "name": "max_completion_tokens",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": {
-            "min": 1
-          },
-          "required": 0,
-          "description": "Maximum number of completion tokens to generate. Min: 1"
         }
       ],
       "status": "active"
@@ -1656,39 +1411,15 @@
       "api_key_env": "GROK_API_KEY",
       "models": [
         {
-          "name": "grok-4-1-fast-reasoning",
+          "name": "grok-4.3",
           "meta_data": {
-            "model": "grok-4-1-fast-reasoning"
+            "model": "grok-4.3"
           }
         },
         {
-          "name": "grok-4-1-fast-non-reasoning",
+          "name": "grok-build-0.1",
           "meta_data": {
-            "model": "grok-4-1-fast-non-reasoning"
-          }
-        },
-        {
-          "name": "grok-4-fast-reasoning",
-          "meta_data": {
-            "model": "grok-4-fast-reasoning"
-          }
-        },
-        {
-          "name": "grok-4-fast-non-reasoning",
-          "meta_data": {
-            "model": "grok-4-fast-non-reasoning"
-          }
-        },
-        {
-          "name": "grok-4",
-          "meta_data": {
-            "model": "grok-4"
-          }
-        },
-        {
-          "name": "grok-code-fast-1",
-          "meta_data": {
-            "model": "grok-code-fast-1"
+            "model": "grok-build-0.1"
           }
         }
       ],
@@ -1841,17 +1572,6 @@
           "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
         },
         {
-          "name": "seed",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": {
-            "min": 0
-          },
-          "required": 0,
-          "description": "Seed for deterministic generation. Min: 0"
-        },
-        {
           "name": "temperature",
           "data_type": "float",
           "type": "input number",
@@ -1885,17 +1605,6 @@
           },
           "required": 0,
           "description": "Maximum number of tokens to generate. Min: 1"
-        },
-        {
-          "name": "max_completion_tokens",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": {
-            "min": 1
-          },
-          "required": 0,
-          "description": "Maximum number of completion tokens to generate. Min: 1"
         }
       ],
       "status": "inactive"
@@ -2194,51 +1903,9 @@
           "meta_data": {
             "model": "amazon.nova-pro-v1:0"
           }
-        },
-        {
-          "name": "amazon.titan-tg1-large",
-          "meta_data": {
-            "model": "amazon.titan-tg1-large"
-          }
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "aws_access_key",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "AWS access key for authentication"
-        },
-        {
-          "name": "aws_secret_key",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "AWS secret key for authentication"
-        },
-        {
-          "name": "aws_session_token",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "AWS session token for temporary credentials"
-        },
-        {
-          "name": "aws_region",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "AWS region for the Bedrock service"
-        },
         {
           "name": "max_tokens",
           "data_type": "integer",
@@ -2354,17 +2021,16 @@
       },
       "models": [
         {
-          "name": "gemini-2.0-flash-live",
+          "name": "gemini-live-2.5-flash-native-audio",
           "meta_data": {
-            "model": "models/gemini-2.0-flash-live-001",
+            "model": "gemini-live-2.5-flash-native-audio",
             "is_s2s": true
           }
         },
         {
-          "name": "gemini-2.5-flash-native-audio",
+          "name": "gemini-3.1-flash-live-preview",
           "meta_data": {
-            "model": "models/gemini-2.5-flash-native-audio-preview-12-2025",
-            "is_s2s": true
+            "model": "gemini-3.1-flash-live-preview"
           }
         }
       ],
@@ -2385,6 +2051,41 @@
           "description": "Voice for the Gemini Live model response"
         },
         {
+          "name": "frequency_penalty",
+          "data_type": "float",
+          "type": "input number",
+          "format": "float",
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
+          "description": "Penalizes new tokens based on their frequency in the text so far. Range: 0.0 to 2.0"
+        },
+        {
+          "name": "max_tokens",
+          "data_type": "integer",
+          "type": "input number",
+          "format": "integer",
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
+          "description": "Maximum number of tokens to generate. Default: 4096. Min: 1"
+        },
+        {
+          "name": "presence_penalty",
+          "data_type": "float",
+          "type": "input number",
+          "format": "float",
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
+          "description": "Penalizes new tokens based on whether they appear in the text so far. Range: 0.0 to 2.0"
+        },
+        {
           "name": "temperature",
           "data_type": "float",
           "type": "input number",
@@ -2395,6 +2096,38 @@
           },
           "required": 0,
           "description": "Sampling temperature. Range: 0.0 to 2.0"
+        },
+        {
+          "name": "top_k",
+          "data_type": "integer",
+          "type": "input number",
+          "format": "integer",
+          "validator": {
+            "min": 0
+          },
+          "required": 0,
+          "description": "Top-K sampling parameter. Min: 0"
+        },
+        {
+          "name": "top_p",
+          "data_type": "float",
+          "type": "input number",
+          "format": "float",
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
+          "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+        },
+        {
+          "name": "enable_affective_dialog",
+          "data_type": "boolean",
+          "type": "radio",
+          "format": "boolean",
+          "validator": null,
+          "required": 0,
+          "description": "Enable affective dialog, allowing Gemini to adapt to expression and tone"
         }
       ],
       "status": "active"
@@ -2637,9 +2370,9 @@
       "api_key_env": "SARVAM_API_KEY",
       "models": [
         {
-          "name": "saarika:v2.5",
+          "name": "saaras:v3",
           "meta_data": {
-            "model": "saarika:v2.5"
+            "model": "saaras:v3"
           }
         }
       ],
@@ -2691,12 +2424,6 @@
           "name": "Universal-2",
           "meta_data": {
             "model": "Universal-2"
-          }
-        },
-        {
-          "name": "Universal-Streaming",
-          "meta_data": {
-            "model": "Universal-Streaming"
           }
         }
       ],
@@ -2894,22 +2621,13 @@
           "description": "Audio sample rate in Hz"
         },
         {
-          "name": "language",
+          "name": "language_code",
           "data_type": "string",
           "type": "input",
           "format": "string",
           "validator": null,
           "required": 0,
-          "description": "Language for transcription"
-        },
-        {
-          "name": "tag_audio_events",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "description": "Tag audio events in transcription. Default: true"
+          "description": "Language code for transcription (e.g. en, es, fr)"
         }
       ],
       "status": "active"
@@ -3237,21 +2955,9 @@
           }
         },
         {
-          "name": "gemini-3-pro-preview",
-          "meta_data": {
-            "model": "gemini-3-pro-preview"
-          }
-        },
-        {
           "name": "gemini-3-flash-preview",
           "meta_data": {
             "model": "gemini-3-flash-preview"
-          }
-        },
-        {
-          "name": "gemini-3.1-flash-lite-preview",
-          "meta_data": {
-            "model": "gemini-3.1-flash-lite-preview"
           }
         },
         {
@@ -3504,9 +3210,13 @@
         {
           "name": "speed",
           "data_type": "string",
-          "type": "input",
+          "type": "select",
           "format": "string",
-          "validator": null,
+          "options": [
+            "slow",
+            "normal",
+            "fast"
+          ],
           "required": 0,
           "description": "Speech speed: slow, normal, or fast"
         },
@@ -4723,64 +4433,6 @@
         }
       ],
       "status": "active"
-    },
-    {
-      "name": "playht",
-      "provider_type": "tts",
-      "display_name": "PlayHT",
-      "description": "PlayHT TTS",
-      "api_key_env": "PLAYHT_API_KEY",
-      "models": [
-        {
-          "name": "PlayDialog",
-          "meta_data": {
-            "model": "PlayDialog"
-          }
-        },
-        {
-          "name": "Play3.0-mini",
-          "meta_data": {
-            "model": "Play3.0-mini"
-          }
-        },
-        {
-          "name": "PlayHT2.0-turbo",
-          "meta_data": {
-            "model": "PlayHT2.0-turbo"
-          }
-        }
-      ],
-      "meta_data_schema": [
-        {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        },
-        {
-          "name": "speed",
-          "data_type": "float",
-          "type": "input number",
-          "format": "float",
-          "validator": null,
-          "required": 0,
-          "description": "Speech speed multiplier. Default: 1.0"
-        },
-        {
-          "name": "seed",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": null,
-          "required": 0,
-          "description": "Seed for deterministic generation"
-        }
-      ],
-      "voices": [],
-      "status": "inactive"
     },
     {
       "name": "deepgram",
@@ -11119,7 +10771,7 @@
         },
         {
           "name": "Professional Female Host",
-          "voice_id": "Cantonese_ProfessionalHost\uff08F)",
+          "voice_id": "Cantonese_ProfessionalHost（F)",
           "description": "A neutral and professional adult female host in Cantonese.",
           "gender": null,
           "language": null,
@@ -11221,7 +10873,7 @@
         },
         {
           "name": "Professional Male Host",
-          "voice_id": "Cantonese_ProfessionalHost\uff08M)",
+          "voice_id": "Cantonese_ProfessionalHost（M)",
           "description": "A neutral and professional adult male host in Cantonese.",
           "gender": null,
           "language": null,
@@ -37766,7 +37418,7 @@
         {
           "name": "Voice 1",
           "voice_id": "hi_1",
-          "description": "Hindi female \u2014 tts-1.5 only",
+          "description": "Hindi female — tts-1.5 only",
           "gender": "female",
           "language": "hi",
           "sample_url": null,
@@ -37778,7 +37430,7 @@
         {
           "name": "Voice 2",
           "voice_id": "hi_2",
-          "description": "Hindi male \u2014 tts-1.5 only",
+          "description": "Hindi male — tts-1.5 only",
           "gender": "male",
           "language": "hi",
           "sample_url": null,
@@ -37790,7 +37442,7 @@
         {
           "name": "Voice 1",
           "voice_id": "ar_1",
-          "description": "Arabic female \u2014 tts-1.5 only",
+          "description": "Arabic female — tts-1.5 only",
           "gender": "female",
           "language": "ar",
           "sample_url": null,
@@ -37802,7 +37454,7 @@
         {
           "name": "Voice 2",
           "voice_id": "ar_2",
-          "description": "Arabic male \u2014 tts-1.5 only",
+          "description": "Arabic male — tts-1.5 only",
           "gender": "male",
           "language": "ar",
           "sample_url": null,
@@ -37814,7 +37466,7 @@
         {
           "name": "Voice 1",
           "voice_id": "he_1",
-          "description": "Hebrew female \u2014 tts-1.5 only",
+          "description": "Hebrew female — tts-1.5 only",
           "gender": "female",
           "language": "he",
           "sample_url": null,
@@ -37826,7 +37478,7 @@
         {
           "name": "Voice 2",
           "voice_id": "he_2",
-          "description": "Hebrew male \u2014 tts-1.5 only",
+          "description": "Hebrew male — tts-1.5 only",
           "gender": "male",
           "language": "he",
           "sample_url": null,
@@ -40101,7 +39753,7 @@
           ]
         },
         {
-          "name": "Alexei (\u0410\u043b\u0435\u043a\u0441\u0435\u0439) ",
+          "name": "Alexei (Алексей) ",
           "voice_id": "d4a01414-c3e2-4eb5-8a15-4833ba691e60",
           "description": null,
           "gender": "Male",
@@ -40197,7 +39849,7 @@
           ]
         },
         {
-          "name": "Chae-won (\ucc44\uc6d0)",
+          "name": "Chae-won (채원)",
           "voice_id": "bb044b55-eefb-422c-b79a-606bcc9e94bc",
           "description": null,
           "gender": null,
@@ -40245,7 +39897,7 @@
           ]
         },
         {
-          "name": "Do-yun (\ub3c4\uc724)",
+          "name": "Do-yun (도윤)",
           "voice_id": "1b3e6ef8-0dda-4570-92c9-34cf80b139e2",
           "description": null,
           "gender": null,
@@ -40305,7 +39957,7 @@
           ]
         },
         {
-          "name": "Fahad (\u0641\u0647\u062f)",
+          "name": "Fahad (فهد)",
           "voice_id": "01333576-651c-4f7e-add6-03c72512e1be",
           "description": null,
           "gender": "MSA",
@@ -40377,7 +40029,7 @@
           ]
         },
         {
-          "name": "Ha-yoon (\ud558\uc724)",
+          "name": "Ha-yoon (하윤)",
           "voice_id": "05198625-352c-419d-ae9c-ef554bf0d8b8",
           "description": null,
           "gender": null,
@@ -40401,7 +40053,7 @@
           ]
         },
         {
-          "name": "Hikaru (\u3072\u304b\u308b)",
+          "name": "Hikaru (ひかる)",
           "voice_id": "17d48fcc-e563-4119-ba91-2cc97c212135",
           "description": null,
           "gender": null,
@@ -40413,7 +40065,7 @@
           ]
         },
         {
-          "name": "Hiroto (\u5927\u7fd4)",
+          "name": "Hiroto (大翔)",
           "voice_id": "469fc9fc-a445-471a-a67a-e37f5390a89a",
           "description": null,
           "gender": "Japanese",
@@ -40485,7 +40137,7 @@
           ]
         },
         {
-          "name": "Jo\u00e3o",
+          "name": "João",
           "voice_id": "32cac707-e77b-48b1-bb3d-0933efdfefa1",
           "description": null,
           "gender": "Male",
@@ -40557,7 +40209,7 @@
           ]
         },
         {
-          "name": "Mei (\u3081\u3044)",
+          "name": "Mei (めい)",
           "voice_id": "8488b90d-7b36-4da4-9ae1-4213263a539e",
           "description": null,
           "gender": "Calm",
@@ -40581,7 +40233,7 @@
           ]
         },
         {
-          "name": "Min-seo (\ubbfc\uc11c)",
+          "name": "Min-seo (민서)",
           "voice_id": "953a2ca8-4ea7-4dcb-8729-a4c4e4cff905",
           "description": null,
           "gender": null,
@@ -40653,7 +40305,7 @@
           ]
         },
         {
-          "name": "Sakura (\u3055\u304f\u3089)",
+          "name": "Sakura (さくら)",
           "voice_id": "019a2af5-6d97-4be8-a459-f4f46fda1949",
           "description": null,
           "gender": "Bright",
@@ -40677,7 +40329,7 @@
           ]
         },
         {
-          "name": "Seo-jun\t(\uc11c\uc900)",
+          "name": "Seo-jun\t(서준)",
           "voice_id": "96071f6b-798f-4475-9fe0-2d3382e57756",
           "description": null,
           "gender": null,
@@ -40689,7 +40341,7 @@
           ]
         },
         {
-          "name": "Seo-yeon (\uc11c\uc5f0)",
+          "name": "Seo-yeon (서연)",
           "voice_id": "ea418300-6e49-4770-b92a-6fd6473f49bd",
           "description": null,
           "gender": "Korean",
@@ -40737,7 +40389,7 @@
           ]
         },
         {
-          "name": "Vihaan (\u0935\u093f\u0939\u093e\u0928)",
+          "name": "Vihaan (विहान)",
           "voice_id": "2948b198-a403-4a9b-bd57-0e96396e179e",
           "description": null,
           "gender": "Hindi",
@@ -40761,7 +40413,7 @@
           ]
         },
         {
-          "name": "Yueyue (\u6708\u6708) ",
+          "name": "Yueyue (月月) ",
           "voice_id": "196867bb-cf33-4764-b2f1-0035bb470147",
           "description": null,
           "gender": "Female",
@@ -40773,7 +40425,7 @@
           ]
         },
         {
-          "name": "\u82e5\u66e6 (Ru\u00f2x\u012b)",
+          "name": "若曦 (Ruòxī)",
           "voice_id": "74034e7c-1e48-4306-83c0-fdd1005808a5",
           "description": null,
           "gender": "Chinese",
@@ -42451,7 +42103,7 @@
           ]
         },
         {
-          "name": "A Voz do Sil\u00eancio",
+          "name": "A Voz do Silêncio",
           "voice_id": "022b3a94-5b3b-4f31-bc1b-049474d0df06",
           "description": null,
           "gender": "female",
@@ -44910,7 +44562,7 @@
         {
           "name": "Noir Detective",
           "voice_id": "147331",
-          "description": "A weary detective with a gravelly voice and slow drawl. Cynical but sharp, like a man who\u2019s seen too much and trusts too little.",
+          "description": "A weary detective with a gravelly voice and slow drawl. Cynical but sharp, like a man who’s seen too much and trusts too little.",
           "gender": null,
           "language": "English (US)",
           "sample_url": null,
@@ -45769,7 +45421,7 @@
           ]
         },
         {
-          "name": "C\u00e9line",
+          "name": "Céline",
           "voice_id": "Celine",
           "description": null,
           "gender": "Female",
@@ -45781,7 +45433,7 @@
           ]
         },
         {
-          "name": "L\u00e9a",
+          "name": "Léa",
           "voice_id": "Lea",
           "description": null,
           "gender": "Female",
@@ -45793,7 +45445,7 @@
           ]
         },
         {
-          "name": "R\u00e9mi",
+          "name": "Rémi",
           "voice_id": "Remi",
           "description": null,
           "gender": "Male",
@@ -46033,7 +45685,7 @@
           ]
         },
         {
-          "name": "Vit\u00f3ria",
+          "name": "Vitória",
           "voice_id": "Vitoria",
           "description": null,
           "gender": "Female",
@@ -46057,7 +45709,7 @@
           ]
         },
         {
-          "name": "In\u00eas",
+          "name": "Inês",
           "voice_id": "Ines",
           "description": null,
           "gender": "Female",
@@ -46105,7 +45757,7 @@
           ]
         },
         {
-          "name": "Andr\u00e9s",
+          "name": "Andrés",
           "voice_id": "Andres",
           "description": null,
           "gender": "Male",
@@ -46175,15 +45827,15 @@
       "api_key_env": "GOOGLE_SERVICE_ACCOUNT_JSON",
       "models": [
         {
-          "name": "gemini-2.5-pro-tts",
+          "name": "gemini-2.5-pro-preview-tts",
           "meta_data": {
-            "model": "gemini-2.5-pro-tts"
+            "model": "gemini-2.5-pro-preview-tts"
           }
         },
         {
-          "name": "gemini-2.5-flash-tts",
+          "name": "gemini-2.5-flash-preview-tts",
           "meta_data": {
-            "model": "gemini-2.5-flash-tts"
+            "model": "gemini-2.5-flash-preview-tts"
           }
         },
         {
@@ -49897,7 +49549,11 @@
           },
           "date": {
             "type": "string",
-            "description": "Date in YYYY-MM-DD format"
+            "description": "Date in YYYY-MM-DD format. For create_event this is the start/check-in date."
+          },
+          "end_date": {
+            "type": "string",
+            "description": "End date in YYYY-MM-DD format (create_event). For a multi-day all-day event such as a hotel stay, set this to the check-out date and omit start_time; Google treats the end date as exclusive, so it spans the nights between 'date' and 'end_date'."
           },
           "start_time": {
             "type": "string",
@@ -49917,7 +49573,7 @@
           },
           "end_time": {
             "type": "string",
-            "description": "End time in HH:MM format for check_availability (default 17:00)"
+            "description": "End time in HH:MM format (24-hour). For create_event it sets the event's end time (overrides duration_minutes); for check_availability it is the window end (default 17:00)."
           },
           "max_results": {
             "type": "number",

@@ -334,9 +334,20 @@ class ModelProviderService(BaseService):
         model_count_map = self._model_count_by_provider_kind_map(provider_ids)
         default_map = self._default_keys_by_provider_kind_map(provider_ids)
 
+        # Batch-fetch meta_data_schema for all providers in this page
+        provider_schema_map = {}
+        if provider_ids:
+            schema_rows = (
+                self.db.query(ModelProvider.id, ModelProvider.meta_data_schema)
+                .filter(ModelProvider.id.in_(provider_ids))
+                .all()
+            )
+            provider_schema_map = {str(r.id): r.meta_data_schema for r in schema_rows}
+
         def _row_to_dict(r) -> dict:
             pid = str(r.provider_id)
             kind = r.service_type
+            schema = provider_schema_map.get(pid)
             return {
                 "id": f"{pid}:{kind}",
                 "provider": {
@@ -353,6 +364,7 @@ class ModelProviderService(BaseService):
                 "last_used_at": (
                     int(r.last_used_at.timestamp()) if r.last_used_at else None
                 ),
+                "meta_data_schema": (schema or {}).get(kind) if schema else None,
             }
 
         return {
@@ -618,6 +630,7 @@ class ModelProviderService(BaseService):
                 "display_name": p.display_name,
                 "description": p.description,
                 "kinds": kinds_map.get(str(p.id), []),
+                "meta_data_schema": p.meta_data_schema,
             }
             for p in providers
         ]
@@ -884,6 +897,7 @@ class ModelProviderService(BaseService):
                 "display_name": p.display_name,
                 "description": p.description,
                 "language_code": code,
+                "meta_data_schema": (p.meta_data_schema or {}).get("tts"),
             }
             for p, code in rows
         ]
