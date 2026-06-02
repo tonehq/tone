@@ -64,26 +64,32 @@ async def _async_main(bot_fn, WSRunnerArgs, agent, agent_id, transport_type, cal
         transport_type,
     )
 
-    trace_id = call_data.get("_trace_id", "none")
-    with logger.contextualize(trace_id=trace_id):
+    # One trace_id for the whole subprocess call so every log line carries it.
+    # Honors an externally-supplied _trace_id, else generates one. Logging-only.
+    from core.logging import start_call_trace
+    start_call_trace(
+        agent_id=agent_id,
+        call_id=call_data.get("call_id") or call_data.get("call_control_id") or call_data.get("stream_id"),
+        external=call_data.get("_trace_id"),
+    )
+    try:
+        body = {
+            "call_data": call_data,
+            "transport_type": transport_type,
+            "agent_id": agent_id,
+            "agent": agent,
+            "_prefetched_services": prefetched_services,
+        }
+        runner_args = WSRunnerArgs(websocket=pipe_ws, body=body)
+        await bot_fn(runner_args)
+    except Exception:
+        logger.exception("Bot worker pipe error")
+    finally:
         try:
-            body = {
-                "call_data": call_data,
-                "transport_type": transport_type,
-                "agent_id": agent_id,
-                "agent": agent,
-                "_prefetched_services": prefetched_services,
-            }
-            runner_args = WSRunnerArgs(websocket=pipe_ws, body=body)
-            await bot_fn(runner_args)
-        except Exception:
-            logger.exception("Bot worker pipe error")
-        finally:
-            try:
-                os.close(ipc_write_fd)
-            except OSError:
-                pass
-            logger.info("Bot worker subprocess finished: agent_id=%s", agent_id)
+            os.close(ipc_write_fd)
+        except OSError:
+            pass
+        logger.info("Bot worker subprocess finished: agent_id=%s", agent_id)
 
 
 def main():
