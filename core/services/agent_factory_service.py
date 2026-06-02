@@ -866,6 +866,7 @@ class AgentFactoryService(BaseService):
                             transport_type=transport_type,
                             from_number=from_number,
                             to_number=to_number,
+                            trace_id=trace_id,
                         )
                         call_log_state["id"] = call_log.id
                         logger.info("[TIMING] create_call_log thread (+%.3fs)", _time.monotonic() - _t)

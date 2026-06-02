@@ -45,16 +45,26 @@ def setup_logging():
 
 
 def _render_trace() -> str:
-    """Render and store the trace_id from its component contextvars."""
+    """Render and store the trace_id from its component contextvars.
+
+    Empty segments are dropped, so the value is always clean: "{call_uuid}" until
+    the agent is known, then "{call_uuid}-{agent_id}", then the full
+    "{call_uuid}-{agent_id}-{call_id}" — never a trailing dash or a "-0" filler.
+    The call_uuid prefix is present in every line, so the whole call is always
+    filterable by it.
+    """
     cu = _call_uuid_var.get()
     if cu == "none":
         _trace_id_var.set("none")
         return "none"
+    parts = [cu]
     agent_id = _agent_id_var.get()
-    if not agent_id:
-        tid = cu  # agent not resolved yet — still filterable by the call uuid
-    else:
-        tid = f"{cu}-{agent_id}-{_call_id_var.get() or '0'}"
+    if agent_id:
+        parts.append(str(agent_id))
+        call_id = _call_id_var.get()
+        if call_id and call_id != "0":
+            parts.append(str(call_id))
+    tid = "-".join(parts)
     _trace_id_var.set(tid)
     return tid
 
