@@ -1003,7 +1003,9 @@ class AgentFactoryService(BaseService):
         if agent:
             try:
                 from core.services.mcp_tool_service import register_mcp_tools
-                mcp_tools_schema = await register_mcp_tools(llm, agent.id)
+                mcp_tools_schema = await register_mcp_tools(
+                    llm, agent.id, tool_call_entries=tool_call_entries, current_turn=current_turn
+                )
             except Exception as e:
                 logger.warning(f"mcp_tool_service unavailable, MCP tools disabled: {e}")
 

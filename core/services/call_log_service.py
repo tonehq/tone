@@ -173,6 +173,19 @@ class CallLogService(BaseService):
 
         self.db.commit()
         self.db.refresh(call)
+
+        # Additionally persist each tool/MCP invocation as a queryable row.
+        # Wrapped so a persistence failure never breaks call completion.
+        if tool_calls:
+            try:
+                from core.services.tool_execution_service import ToolExecutionService
+                count = ToolExecutionService(
+                    self.db, org_id=call.organization_id
+                ).record_executions(call.id, call.agent_id, tool_calls)
+                logger.info("Persisted {} tool_executions for call {}", count, call.id)
+            except Exception as e:
+                logger.error("Failed to persist tool_executions for call {}: {}", call.id, e)
+
         return call
 
     def fail_call(self, call_log_id) -> Optional[Call]:
