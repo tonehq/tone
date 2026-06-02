@@ -101,6 +101,13 @@ export default function AiStep() {
     return provider?.meta_data_schema?.llm ?? [];
   }, [llmProviderId, providers]);
 
+  // Get model-level meta_data for the selected model (e.g. max_completion_tokens)
+  const selectedModelMetaData = useMemo(() => {
+    if (!llmModelId) return null;
+    const model = llmModels.find((m) => m.id === llmModelId);
+    return model?.meta_data ?? null;
+  }, [llmModelId, llmModels]);
+
   return (
     <div className="flex flex-col gap-4">
       <SectionCard
@@ -133,6 +140,8 @@ export default function AiStep() {
           <SelectInput
             name="config.llm_settings.model_id"
             label="Model"
+            control={control}
+            rules={{ required: 'Please select a model' }}
             options={llmModelOptions}
             loading={loadingModels}
             value={llmModelId ?? ''}
@@ -142,7 +151,6 @@ export default function AiStep() {
               })
             }
             placeholder="Select a model"
-            helperText="Optional — the provider's default model is used when blank."
           />
         )}
       </SectionCard>
@@ -155,7 +163,11 @@ export default function AiStep() {
           description="Fine-tune how the model answers."
         >
           {llmSchema.length > 0 ? (
-            <DynamicProviderFields fields={llmSchema} basePath="config.llm_settings" />
+            <DynamicProviderFields
+              fields={llmSchema}
+              basePath="config.llm_settings"
+              modelMetaData={selectedModelMetaData}
+            />
           ) : (
             <>
               <SliderField
@@ -177,14 +189,6 @@ export default function AiStep() {
               />
             </>
           )}
-          <TextInput
-            name="config.conversation_history_token_limit"
-            label="Conversation history token limit"
-            control={control}
-            type="number"
-            placeholder="4096"
-            helperText="How much of the running conversation to keep in the prompt window."
-          />
         </SectionCard>
       )}
     </div>
