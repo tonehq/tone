@@ -2222,22 +2222,13 @@
       ],
       "meta_data_schema": [
         {
-          "name": "sample_rate",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": null,
-          "required": 0,
-          "description": "Audio sample rate in Hz"
-        },
-        {
           "name": "language",
           "data_type": "string",
           "type": "input",
           "format": "string",
           "validator": null,
           "required": 0,
-          "description": "Language for transcription"
+          "description": "Language for transcription. Default: en"
         }
       ],
       "status": "active"
@@ -2378,15 +2369,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "sample_rate",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": null,
-          "required": 0,
-          "description": "Audio sample rate in Hz"
-        },
-        {
           "name": "language",
           "data_type": "string",
           "type": "input",
@@ -2436,15 +2418,6 @@
           "validator": null,
           "required": 0,
           "description": "Language for transcription. Default: en"
-        },
-        {
-          "name": "sample_rate",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": null,
-          "required": 0,
-          "description": "Audio sample rate in Hz. Default: 16000"
         },
         {
           "name": "word_finalization_max_wait_time",
@@ -2498,15 +2471,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "sample_rate",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": null,
-          "required": 0,
-          "description": "Audio sample rate in Hz. Default: 16000"
-        },
-        {
           "name": "language",
           "data_type": "string",
           "type": "input",
@@ -2551,15 +2515,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "sample_rate",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": null,
-          "required": 0,
-          "description": "Audio sample rate in Hz"
-        },
         {
           "name": "language_hints",
           "data_type": "array",
@@ -2612,15 +2567,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "sample_rate",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": null,
-          "required": 0,
-          "description": "Audio sample rate in Hz"
-        },
-        {
           "name": "language_code",
           "data_type": "string",
           "type": "input",
@@ -2655,15 +2601,6 @@
           "validator": null,
           "required": 0,
           "description": "API region: us-west or eu-west"
-        },
-        {
-          "name": "sample_rate",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": null,
-          "required": 0,
-          "description": "Audio sample rate in Hz"
         },
         {
           "name": "language",
@@ -2771,24 +2708,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "server",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "gRPC server address. Default: grpc.nvcf.nvidia.com:443"
-        },
-        {
-          "name": "sample_rate",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": null,
-          "required": 0,
-          "description": "Audio sample rate in Hz"
-        },
-        {
           "name": "language",
           "data_type": "string",
           "type": "input",
@@ -2875,15 +2794,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "sample_rate",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": null,
-          "required": 0,
-          "description": "Audio sample rate in Hz"
-        },
         {
           "name": "domain",
           "data_type": "string",
@@ -3011,24 +2921,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "credentials",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Google Cloud credentials JSON string"
-        },
-        {
-          "name": "credentials_path",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Path to Google Cloud credentials file"
-        },
-        {
           "name": "location",
           "data_type": "string",
           "type": "input",
@@ -3036,15 +2928,6 @@
           "validator": null,
           "required": 0,
           "description": "Google Cloud location. Default: global"
-        },
-        {
-          "name": "sample_rate",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": null,
-          "required": 0,
-          "description": "Audio sample rate in Hz"
         },
         {
           "name": "languages",
@@ -3147,24 +3030,6 @@
           "validator": null,
           "required": 0,
           "description": "Language for transcription. Default: en-US"
-        },
-        {
-          "name": "sample_rate",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": null,
-          "required": 0,
-          "description": "Audio sample rate in Hz"
-        },
-        {
-          "name": "endpoint_id",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Custom endpoint ID for Azure custom speech models"
         }
       ],
       "status": "inactive"
@@ -4454,17 +4319,7 @@
           }
         }
       ],
-      "meta_data_schema": [
-        {
-          "name": "sample_rate",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": null,
-          "required": 0,
-          "description": "Audio sample rate in Hz"
-        }
-      ],
+      "meta_data_schema": [],
       "voices": [
         {
           "name": "Amalthea",
@@ -5919,15 +5774,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "group_id",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "MiniMax group ID for authentication"
-        },
         {
           "name": "language",
           "data_type": "string",
@@ -38444,17 +38290,7 @@
           }
         }
       ],
-      "meta_data_schema": [
-        {
-          "name": "sample_rate",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": null,
-          "required": 0,
-          "description": "Audio sample rate in Hz. Default: 22050"
-        }
-      ],
+      "meta_data_schema": [],
       "voices": [],
       "status": "active"
     },
@@ -38509,15 +38345,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "server",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "gRPC server address. Default: grpc.nvcf.nvidia.com:443"
-        },
         {
           "name": "language",
           "data_type": "string",
@@ -44951,24 +44778,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "aws_access_key_id",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "AWS access key ID for authentication"
-        },
-        {
-          "name": "aws_session_token",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "AWS session token for temporary credentials"
-        },
-        {
           "name": "region",
           "data_type": "string",
           "type": "input",
@@ -45846,24 +45655,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "credentials",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Google Cloud credentials JSON string"
-        },
-        {
-          "name": "credentials_path",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Path to Google Cloud credentials file"
-        },
         {
           "name": "location",
           "data_type": "string",
@@ -49450,17 +49241,7 @@
           }
         }
       ],
-      "meta_data_schema": [
-        {
-          "name": "sample_rate",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": null,
-          "required": 0,
-          "description": "Audio sample rate in Hz. Default: 16000"
-        }
-      ],
+      "meta_data_schema": [],
       "voices": [
         {
           "name": "Sarah",

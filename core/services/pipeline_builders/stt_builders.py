@@ -12,10 +12,9 @@ class DeepgramSTTBuilder(STTBuilder):
     def build(self, ctx: BuildContext) -> Any:
         from deepgram import LiveOptions
         from pipecat.services.deepgram.stt import DeepgramSTTService
-        dg_kwargs = {}
-        sample_rate = clean_meta(ctx.metadata, "sample_rate")
-        if sample_rate is not None:
-            dg_kwargs["sample_rate"] = int(sample_rate)
+        # Note: sample_rate is NOT user-configurable for Deepgram — it's
+        # auto-detected by the transport (Twilio=8kHz, WebRTC=16kHz).
+        # Setting it incorrectly breaks transcription.
         live_opts = {}
         if ctx.model:
             live_opts["model"] = ctx.model
@@ -23,7 +22,7 @@ class DeepgramSTTBuilder(STTBuilder):
         if lang:
             live_opts["language"] = lang
         live_options = LiveOptions(**live_opts) if live_opts else None
-        return DeepgramSTTService(api_key=ctx.api_key, live_options=live_options, **dg_kwargs)
+        return DeepgramSTTService(api_key=ctx.api_key, live_options=live_options)
 
 
 class OpenAISTTBuilder(STTBuilder):
