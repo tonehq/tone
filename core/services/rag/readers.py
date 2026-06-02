@@ -3,8 +3,9 @@ from __future__ import annotations
 import io
 import os
 import tempfile
+import time
 from abc import ABC, abstractmethod
-from typing import List
+from typing import List, Optional, Tuple
 
 from docling.document_converter import DocumentConverter
 from docx import Document as _Docx
@@ -40,8 +41,9 @@ class DoclingReader(DocumentReader):
         "image/tiff": ".tiff",
     }
 
-    def __init__(self):
+    def __init__(self, page_range: Optional[Tuple[int, int]] = None):
         self._converter = None
+        self._page_range = page_range
 
     def _get_converter(self):
         if self._converter is None:
@@ -56,16 +58,25 @@ class DoclingReader(DocumentReader):
         with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
             tmp.write(file_bytes)
             tmp_path = tmp.name
+        kwargs = {"page_range": self._page_range} if self._page_range else {}
+        logger.info(
+            "Docling parsing {} ({:.2f} MB), page_range={} — this may take a while...",
+            content_type, len(file_bytes) / 1024 / 1024, self._page_range or "all",
+        )
+        start = time.monotonic()
         try:
-            result = self._get_converter().convert(tmp_path)
+            result = self._get_converter().convert(tmp_path, **kwargs)
             text = result.document.export_to_markdown()
         finally:
             try:
                 os.remove(tmp_path)
             except OSError:
                 pass
-        logger.info("Docling parsed {} -> {} chars", content_type, len(text))
-        return Document(text=text, metadata={"parser": "docling"})
+        logger.info(
+            "Docling parsed {} -> {} chars in {:.1f}s (page_range={})",
+            content_type, len(text), time.monotonic() - start, self._page_range or "all",
+        )
+        return Document(text=text, metadata={"parser": "docling", "page_range": self._page_range})
 
 
 class PdfReader(DocumentReader):
