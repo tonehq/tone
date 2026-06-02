@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List
 
+import openai
 from loguru import logger
 
 
@@ -27,8 +28,6 @@ class OpenAIEmbedder(Embedder):
         self.batch_size = batch_size
 
     def embed_texts(self, texts: List[str]) -> List[List[float]]:
-        import openai
-
         client = openai.OpenAI(api_key=self.api_key)
         out: List[List[float]] = []
         for i in range(0, len(texts), self.batch_size):

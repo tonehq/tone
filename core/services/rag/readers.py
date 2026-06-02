@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-import importlib.util
 import io
+import os
 from abc import ABC, abstractmethod
 from typing import List
 
+from docx import Document as _Docx
+from llama_cloud_services import LlamaParse
 from loguru import logger
+from PyPDF2 import PdfReader as _PdfReader
 
 from core.services.rag.types import Document
 
@@ -20,47 +23,40 @@ class DocumentReader(ABC):
         ...
 
 
-class DoclingReader(DocumentReader):
+class LlamaParseReader(DocumentReader):
     _EXT = {
         "application/pdf": ".pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
-        "application/msword": ".docx",
+        "application/msword": ".doc",
         "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+        "application/vnd.ms-powerpoint": ".ppt",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+        "application/vnd.ms-excel": ".xls",
         "text/html": ".html",
-        "text/markdown": ".md",
         "image/png": ".png",
         "image/jpeg": ".jpg",
         "image/tiff": ".tiff",
     }
 
-    def __init__(self):
-        self._converter = None
+    def __init__(self, api_key: str = None, result_type: str = "markdown"):
+        self._api_key = api_key or os.getenv("LLAMA_CLOUD_API_KEY")
+        self._result_type = result_type
+        self._parser = None
 
-    @staticmethod
-    def _installed() -> bool:
-        return importlib.util.find_spec("docling") is not None
-
-    def _get_converter(self):
-        if self._converter is None:
-            from docling.document_converter import DocumentConverter
-
-            self._converter = DocumentConverter()
-        return self._converter
+    def _get_parser(self):
+        if self._parser is None:
+            self._parser = LlamaParse(api_key=self._api_key, result_type=self._result_type)
+        return self._parser
 
     def supports(self, content_type: str) -> bool:
-        return content_type in self._EXT and self._installed()
+        return content_type in self._EXT and bool(self._api_key)
 
     def read(self, file_bytes: bytes, content_type: str) -> Document:
-        from docling.datamodel.base_models import DocumentStream
-
         ext = self._EXT.get(content_type, "")
-        source = DocumentStream(name=f"upload{ext}", stream=io.BytesIO(file_bytes))
-        result = self._get_converter().convert(source)
-        dl_doc = result.document
-        markdown = dl_doc.export_to_markdown()
-        logger.info("Docling parsed {} -> {} chars of markdown", content_type, len(markdown))
-        return Document(text=markdown, native=dl_doc, metadata={"parser": "docling"})
+        docs = self._get_parser().load_data(file_bytes, extra_info={"file_name": f"upload{ext}"})
+        text = "\n\n".join(d.text for d in docs if getattr(d, "text", None))
+        logger.info("LlamaParse parsed {} -> {} chars", content_type, len(text))
+        return Document(text=text, metadata={"parser": "llamaparse"})
 
 
 class PdfReader(DocumentReader):
@@ -68,8 +64,6 @@ class PdfReader(DocumentReader):
         return content_type == "application/pdf"
 
     def read(self, file_bytes: bytes, content_type: str) -> Document:
-        from PyPDF2 import PdfReader as _PdfReader
-
         reader = _PdfReader(io.BytesIO(file_bytes))
         pages = [p.extract_text() for p in reader.pages]
         result = "\n\n".join(t for t in pages if t)
@@ -87,8 +81,6 @@ class DocxReader(DocumentReader):
         return content_type in self._TYPES
 
     def read(self, file_bytes: bytes, content_type: str) -> Document:
-        from docx import Document as _Docx
-
         doc = _Docx(io.BytesIO(file_bytes))
         paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
         result = "\n\n".join(paragraphs)
@@ -106,7 +98,7 @@ class TextReader(DocumentReader):
 
 class CompositeReader(DocumentReader):
     def __init__(self, readers: List[DocumentReader] = None):
-        self._readers = readers or [DoclingReader(), PdfReader(), DocxReader(), TextReader()]
+        self._readers = readers or [LlamaParseReader(), PdfReader(), DocxReader(), TextReader()]
 
     def supports(self, content_type: str) -> bool:
         return any(r.supports(content_type) for r in self._readers)

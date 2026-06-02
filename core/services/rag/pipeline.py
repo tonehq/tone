@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from typing import Callable, List, Optional
 
-from core.services.rag.chunkers import Chunker, DoclingChunker
+from core.services.rag.chunkers import Chunker, RecursiveCharacterChunker
 from core.services.rag.embedders import Embedder
 from core.services.rag.readers import CompositeReader, DocumentReader
 from core.services.rag.types import Document, SearchResult, VectorRecord
@@ -22,7 +22,7 @@ class RAGPipeline:
         self.embedder = embedder
         self.store = store
         self.reader = reader or CompositeReader()
-        self.chunker = chunker or DoclingChunker(embedding_model=getattr(embedder, "model", None) or "text-embedding-3-small")
+        self.chunker = chunker or RecursiveCharacterChunker()
 
     def _ingest_document(self, document: Document, metadata: Optional[dict]) -> int:
         metadata = metadata or {}
