@@ -183,8 +183,8 @@ export default function ReviewStep({ onJump }: ReviewStepProps) {
           hideWhenEmpty: true,
         },
         {
-          label: 'Max tokens',
-          value: state.config?.llm_settings?.max_tokens,
+          label: 'Max completion tokens',
+          value: state.config?.llm_settings?.max_completion_tokens,
           hideWhenEmpty: true,
         },
         {
