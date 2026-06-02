@@ -185,7 +185,7 @@ pipecat-ai-small-webrtc-prebuilt==2.0.4
 pkce==1.0.3
 plaster==1.1.2
 plaster-pastedeploy==1.0.1
-platformdirs==2.6.2
+platformdirs==4.10.0
 pluggy==1.6.0
 prometheus-client==0.17.1
 prompt-toolkit==3.0.39
@@ -293,7 +293,6 @@ uvicorn==0.40.0
 uvloop==0.22.1
 venusian==3.0.0
 vine==5.0.0
-virtualenv==20.17.1
 wait_for2==0.4.1
 watchfiles==1.1.1
 wcwidth==0.2.6
