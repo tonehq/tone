@@ -20,6 +20,7 @@ from loguru import logger
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
 
 from core.utils.logging import truncate_for_log
+from core.utils.tool_idempotency import booking_signature, is_cacheable_result
 
 # Hard ceiling on how long discovering tools from a single MCP server may take at
 # pipeline-build time. A dead or mis-authenticated server must fail fast and
@@ -27,7 +28,7 @@ from core.utils.logging import truncate_for_log
 MCP_REGISTER_TIMEOUT_S = 25.0
 
 
-def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, current_turn=None):
+def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, current_turn=None, tool_dedup=None):
     """Wrap ``llm.register_function`` so each MCP tool registered through it logs, at call time,
     its server + tool name, the arguments passed in, and the output returned (plus duration) —
     and, when ``tool_call_entries`` is provided, appends a structured entry so the invocation is
@@ -52,7 +53,11 @@ def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, cur
             )
 
             # One entry per invocation, mirroring the custom/built-in tool shape so
-            # ToolExecutionService can map it uniformly.
+            # ToolExecutionService can map it uniformly. Recorded UP FRONT (status
+            # "started") and appended now so the call is persisted even if its
+            # result is never delivered — e.g. a barge-in interruption discards it
+            # ("tool_call_id is not running") or it completes after call shutdown.
+            # The same dict is updated in place on result/error.
             entry = {
                 "tool": fn,
                 "tool_type": "mcp",
@@ -60,9 +65,33 @@ def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, cur
                 "arguments": arguments,
                 "timestamp": int(time.time()),
                 "turn": current_turn["number"] if current_turn else None,
+                "status": "started",
             }
+            if tool_call_entries is not None:
+                tool_call_entries.append(entry)
 
             original_cb = getattr(params, "result_callback", None)
+
+            # In-call idempotency: if this exact create-type call already succeeded
+            # this call (e.g. a barge-in discarded the first result and the LLM
+            # re-issued the booking), return the cached result instead of creating
+            # a duplicate ClickUp task.
+            sig = booking_signature(fn, arguments) if tool_dedup is not None else None
+            if sig is not None and sig in tool_dedup:
+                cached = tool_dedup[sig]
+                dur = round((time.monotonic() - started) * 1000)
+                logger.warning(
+                    "⏭️ Duplicate MCP tool call suppressed → server='{}' tool='{}' "
+                    "(already created this call); returning cached result",
+                    server_name, fn,
+                )
+                entry["result"] = cached
+                entry["status"] = "duplicate_suppressed"
+                entry["duration_ms"] = dur
+                if original_cb is not None:
+                    await original_cb(cached)
+                return
+
             if original_cb is not None:
                 async def logging_cb(result, *cb_args, **cb_kwargs):
                     dur = round((time.monotonic() - started) * 1000)
@@ -70,11 +99,11 @@ def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, cur
                         "✅ MCP tool result ← server='{}' tool='{}' ({}ms) output={}",
                         server_name, fn, dur, truncate_for_log(result),
                     )
-                    if tool_call_entries is not None:
-                        entry["result"] = result
-                        entry["status"] = "success"
-                        entry["duration_ms"] = dur
-                        tool_call_entries.append(entry)
+                    entry["result"] = result
+                    entry["status"] = "success"
+                    entry["duration_ms"] = dur
+                    if sig is not None and tool_dedup is not None and is_cacheable_result(result):
+                        tool_dedup[sig] = result
                     return await original_cb(result, *cb_args, **cb_kwargs)
 
                 try:
@@ -91,11 +120,9 @@ def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, cur
                     "❌ MCP tool error ✕ server='{}' tool='{}' ({}ms): {}",
                     server_name, fn, dur, exc,
                 )
-                if tool_call_entries is not None:
-                    entry["status"] = "error"
-                    entry["error"] = str(exc)
-                    entry["duration_ms"] = dur
-                    tool_call_entries.append(entry)
+                entry["status"] = "error"
+                entry["error"] = str(exc)
+                entry["duration_ms"] = dur
                 raise
 
         return original_register(name, logged_handler, *args, **kwargs)
@@ -124,7 +151,7 @@ def get_mcp_servers_for_agent(agent_id: int):
         return servers
 
 
-async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, current_turn=None) -> Optional[ToolsSchema]:
+async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, current_turn=None, tool_dedup=None) -> Optional[ToolsSchema]:
     """Connect to all MCP servers linked to an agent and register their tools with the LLM.
 
     Args:
@@ -133,6 +160,8 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, current
         tool_call_entries: Optional shared list each MCP invocation is appended to,
             so it's persisted to the tool_executions table at call completion.
         current_turn: Optional dict carrying the live conversation turn number.
+        tool_dedup: Optional shared dict (per-call) used to suppress duplicate
+            create-type tool calls (e.g. clickup_create_task fired twice).
 
     Returns:
         A ToolsSchema containing all MCP tools, or None if no MCP servers are linked.
@@ -228,7 +257,8 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, current
             # name/arguments/output during the conversation; restore afterwards so only this
             # server's tools are wrapped.
             restore_logging = _install_mcp_call_logging(
-                llm, server.name, tool_call_entries=tool_call_entries, current_turn=current_turn
+                llm, server.name, tool_call_entries=tool_call_entries,
+                current_turn=current_turn, tool_dedup=tool_dedup,
             )
             try:
                 tools_schema = await asyncio.wait_for(
