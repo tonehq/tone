@@ -11,8 +11,12 @@ from sqlalchemy.orm import Session
 from core.config import settings
 from core.database.session import get_db
 from core.middleware.auth import JWTClaims, require_org_member
-from core.services.oauth_providers import get_provider_config, get_supported_providers
-from core.services.oauth_service import OAuthService
+from core.services.oauth_providers import (
+    get_catalog,
+    get_provider_config,
+    get_supported_providers,
+)
+from core.services.oauth_service import OAuthService, normalize_scopes
 from core.utils.auth_helpers import require_org_id
 
 router = APIRouter()
@@ -76,6 +80,93 @@ def list_providers():
     return {"providers": get_supported_providers()}
 
 
+@router.get("/catalog")
+def catalog():
+    """Public, secret-free provider catalog for the integrations grid."""
+    return {"providers": get_catalog()}
+
+
+@router.post("/custom_credential", status_code=status.HTTP_201_CREATED)
+def create_custom_credential(
+    body: Dict[str, Any] = Body(...),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Create a user-defined credential (OAuth 2.0 client-credentials or Bearer token).
+
+    Body: { name, auth_kind: "oauth2_client_credentials" | "bearer",
+            token_url?, client_id?, client_secret?, scope?, token? }
+    """
+    svc = _get_service(claims, db)
+    connection = svc.create_custom_credential({**body, "created_by_user_id": claims.user_id})
+    return svc.connection_response(connection)
+
+
+# ─── Generic MCP OAuth 2.1 discovery (works with any compliant MCP server) ───
+
+_MCP_CALLBACK_URL = f"{BACKEND_URL}/oauth/mcp/callback"
+
+
+@router.post("/mcp/discover")
+def mcp_discover(
+    body: Dict[str, Any] = Body(...),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Discover an MCP server's OAuth metadata, dynamically register a client, and return the
+    authorization URL to redirect the user to. Body: { server_url, label?, return_to? }."""
+    from core.services.mcp_oauth_service import McpOAuthService
+
+    server_url = body.get("server_url")
+    if not server_url:
+        raise HTTPException(status_code=400, detail="server_url is required")
+    svc = McpOAuthService(
+        db, org_id=require_org_id(claims.org_id), redirect_uri=_MCP_CALLBACK_URL
+    )
+    return svc.start_discovery(
+        server_url=server_url,
+        created_by_user_id=claims.user_id,
+        label=body.get("label"),
+        return_to=body.get("return_to"),
+    )
+
+
+def _mcp_callback_redirect(connection) -> RedirectResponse:
+    """Send the user back to the in-app path that launched discovery (with the new connection id so
+    the form can auto-select it), falling back to the integrations page."""
+    frontend_url = settings.APPLICATION_URL.rstrip("/")
+    return_to = (connection.public_metadata or {}).get("return_to")
+    if return_to:
+        sep = "&" if "?" in return_to else "?"
+        target = f"{frontend_url}{return_to}{sep}mcp_oauth=success&connection_id={connection.id}"
+    else:
+        target = f"{frontend_url}/integrations?provider=mcp&status=success"
+    return RedirectResponse(url=target)
+
+
+@router.get("/mcp/callback")
+def mcp_callback(
+    code: str = Query(..., description="Authorization code from the MCP authorization server"),
+    state: str = Query(..., description="The pending OAuth connection id"),
+    db: Session = Depends(get_db),
+):
+    from core.services.mcp_oauth_service import McpOAuthService
+
+    # The pending connection row carries org scope; load it to resolve the org for the service.
+    from core.models.oauth_connection import OAuthConnection
+
+    connection = db.query(OAuthConnection).filter(OAuthConnection.id == state).first()
+    if not connection:
+        raise HTTPException(status_code=400, detail="Unknown or expired MCP OAuth state")
+
+    svc = McpOAuthService(
+        db, org_id=connection.organization_id, redirect_uri=_MCP_CALLBACK_URL
+    )
+    connection = svc.complete(connection_id=state, code=code)
+
+    return _mcp_callback_redirect(connection)
+
+
 # ─── OAuth flow endpoints ───
 
 
@@ -101,11 +192,14 @@ def authorize(
         "client_id": config["client_id"],
         "redirect_uri": callback_url,
         "response_type": "code",
-        "scope": config["scopes"],
         "state": state,
-        "access_type": "offline",
-        "prompt": "consent",
     }
+    # Some providers (Notion, ClickUp) have no OAuth scopes; omit the param entirely for them.
+    scopes = config.get("scopes") or []
+    if scopes:
+        params["scope"] = config["scope_delimiter"].join(scopes)
+    # Provider-specific extras (Google offline access, Notion owner=user, etc.).
+    params.update(config.get("extra_authorize_params") or {})
 
     auth_url = f"{config['auth_url']}?{urllib.parse.urlencode(params)}"
     return {"auth_url": auth_url}
@@ -135,15 +229,20 @@ def callback(
     callback_url = f"{BACKEND_URL}/oauth/{provider}/callback"
 
     token_data = {
-        "client_id": config["client_id"],
-        "client_secret": config["client_secret"],
         "code": code,
         "grant_type": "authorization_code",
         "redirect_uri": callback_url,
     }
+    # Providers either accept client creds in the body (default) or require HTTP Basic (Notion).
+    token_kwargs: Dict[str, Any] = {"data": token_data}
+    if config.get("token_auth") == "basic":
+        token_kwargs["auth"] = (config["client_id"], config["client_secret"])
+    else:
+        token_data["client_id"] = config["client_id"]
+        token_data["client_secret"] = config["client_secret"]
 
     with httpx.Client() as client:
-        response = client.post(config["token_url"], data=token_data)
+        response = client.post(config["token_url"], **token_kwargs)
 
     if response.status_code != 200:
         raise HTTPException(
@@ -162,12 +261,17 @@ def callback(
 
     token_expiry = int(time.time()) + expires_in if expires_in else None
 
+    # Prefer the scopes the provider actually granted (returned in the token response) over the
+    # ones we requested; fall back to the catalog's requested scopes when absent.
+    granted_scopes = normalize_scopes(tokens.get("scope")) or config["scopes"]
+
     user_email = None
-    if provider.startswith("google"):
+    userinfo_url = config.get("userinfo_url")
+    if userinfo_url:
         try:
             with httpx.Client() as client:
                 userinfo = client.get(
-                    "https://www.googleapis.com/oauth2/v2/userinfo",
+                    userinfo_url,
                     headers={"Authorization": f"Bearer {access_token}"},
                 )
                 if userinfo.status_code == 200:
@@ -181,7 +285,7 @@ def callback(
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_expiry": token_expiry,
-        "scopes": config["scopes"],
+        "scopes": granted_scopes,
         "user_email": user_email,
         "created_by_user_id": user_id,
     })

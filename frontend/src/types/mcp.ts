@@ -5,9 +5,12 @@ export interface MCPServer {
   name: string;
   description: string | null;
   server_url: string;
+  endpoint?: string | null;
+  icon?: string | null;
   transport_type: MCPTransportType;
   auth_config: Record<string, string> | null;
   meta_data: Record<string, unknown> | null;
+  oauth_connection_id?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -18,9 +21,12 @@ export interface MCPServerUpsertPayload {
   name?: string;
   description?: string;
   server_url?: string;
+  endpoint?: string | null;
+  icon?: string | null;
   transport_type?: MCPTransportType;
   auth_config?: Record<string, string> | null;
   meta_data?: Record<string, unknown> | null;
+  oauth_connection_id?: string | null;
   is_active?: boolean;
 }
 

@@ -1,6 +1,15 @@
 import { GoogleIcon } from '@/components/icons/google';
 import { Phone, Sheet } from 'lucide-react';
 
+export type ProviderCategory = 'google' | 'productivity' | 'dev_crm';
+
+/** Human label for a catalog category. */
+export const PROVIDER_CATEGORY_LABELS: Record<string, string> = {
+  google: 'Google',
+  productivity: 'Productivity',
+  dev_crm: 'Dev & CRM',
+};
+
 export interface ProviderCardConfig {
   key: string;
   name: string;
@@ -9,6 +18,7 @@ export interface ProviderCardConfig {
   iconBg: string;
   iconBorder: string;
   accentColor: string;
+  category?: ProviderCategory;
 }
 
 export const OAUTH_PROVIDERS: ProviderCardConfig[] = [
@@ -20,6 +30,7 @@ export const OAUTH_PROVIDERS: ProviderCardConfig[] = [
     iconBg: 'bg-white dark:bg-white/10',
     iconBorder: 'border-border/50 shadow-sm dark:shadow-none',
     accentColor: 'bg-blue-500',
+    category: 'google',
   },
   {
     key: 'google_sheets',
@@ -29,6 +40,7 @@ export const OAUTH_PROVIDERS: ProviderCardConfig[] = [
     iconBg: 'bg-emerald-50 dark:bg-emerald-500/10',
     iconBorder: 'border-emerald-200/50 dark:border-emerald-500/20 shadow-sm dark:shadow-none',
     accentColor: 'bg-emerald-500',
+    category: 'google',
   },
 ];
 

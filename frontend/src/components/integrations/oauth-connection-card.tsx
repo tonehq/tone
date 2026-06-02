@@ -1,13 +1,17 @@
 'use client';
 
-import { CustomButton } from '@/components/shared';
+import { CustomButton, ScopeStatus } from '@/components/shared';
+import { Badge } from '@/components/ui/badge';
 import { formatRelative } from '@/utils/date';
 import { cn } from '@/utils/cn';
+import { normalizeScopes, shortScopeLabel } from '@/utils/scopes';
 import { motion, type Variants } from 'framer-motion';
 import { Clock, Mail, Plug, Unplug } from 'lucide-react';
 
 import { getOAuthProviderVisual, humanizeSlug } from './providerVisuals';
 import type { OAuthConnection } from '@/types/oauth';
+
+const MAX_VISIBLE_SCOPES = 3;
 
 export const cardVariants: Variants = {
   hidden: { opacity: 0, y: 8 },
@@ -19,17 +23,31 @@ interface OAuthConnectionCardProps {
   connection: OAuthConnection;
   onDisconnect: (id: string) => void | Promise<void>;
   isDisconnecting?: boolean;
+  /** Scopes the provider requires (from the catalog) — drives the scope-status badge. */
+  requiredScopes?: string[];
+  /** Re-run the authorize/discovery flow to grant missing scopes or refresh an expired token. */
+  onReconnect?: (connection: OAuthConnection) => void | Promise<void>;
+  isReconnecting?: boolean;
 }
 
 export default function OAuthConnectionCard({
   connection,
   onDisconnect,
   isDisconnecting = false,
+  requiredScopes,
+  onReconnect,
+  isReconnecting = false,
 }: OAuthConnectionCardProps) {
   const visual = getOAuthProviderVisual(connection.provider_slug);
-  const displayName = visual?.name ?? humanizeSlug(connection.provider_slug);
+  // Catalog providers use their brand name; custom credentials show their user-given label.
+  const displayName = visual?.name ?? connection.label ?? humanizeSlug(connection.provider_slug);
   const email = connection.public_metadata?.user_email ?? null;
   const refreshed = formatRelative(connection.updated_at);
+  const grantedScopes = normalizeScopes(connection.public_metadata?.scopes);
+  const expiry = connection.public_metadata?.token_expiry ?? null;
+  const isExpired = typeof expiry === 'number' && expiry > 0 && expiry * 1000 < Date.now();
+  const visibleScopes = grantedScopes.slice(0, MAX_VISIBLE_SCOPES);
+  const overflowCount = grantedScopes.length - visibleScopes.length;
 
   return (
     <motion.div
@@ -85,6 +103,33 @@ export default function OAuthConnectionCard({
               <dd>Refreshed {refreshed}</dd>
             </div>
           </dl>
+
+          {/* Scope pills + scope/health status */}
+          {(grantedScopes.length > 0 || (requiredScopes?.length ?? 0) > 0 || isExpired) && (
+            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+              {visibleScopes.map((scope) => (
+                <Badge
+                  key={scope}
+                  variant="secondary"
+                  className="font-normal text-[10px] text-muted-foreground"
+                >
+                  {shortScopeLabel(scope)}
+                </Badge>
+              ))}
+              {overflowCount > 0 && (
+                <Badge variant="outline" className="font-normal text-[10px] text-muted-foreground">
+                  +{overflowCount} more
+                </Badge>
+              )}
+              <ScopeStatus
+                granted={grantedScopes}
+                required={requiredScopes}
+                expired={isExpired}
+                onReconnect={onReconnect ? () => onReconnect(connection) : undefined}
+                reconnecting={isReconnecting}
+              />
+            </div>
+          )}
         </div>
 
         <CustomButton
@@ -92,7 +137,7 @@ export default function OAuthConnectionCard({
           size="sm"
           onClick={() => onDisconnect(connection.id)}
           loading={isDisconnecting}
-          className="shrink-0 gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          className="shrink-0 gap-1.5 self-start text-destructive hover:bg-destructive/10 hover:text-destructive"
         >
           <Unplug className="size-3.5" />
           Disconnect
