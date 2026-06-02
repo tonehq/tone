@@ -169,8 +169,8 @@ export default function AiStep() {
                 helperText="Lower = more deterministic. Higher = more creative."
               />
               <TextInput
-                name="config.llm_settings.max_tokens"
-                label="Max tokens per response"
+                name="config.llm_settings.max_completion_tokens"
+                label="Max completion tokens"
                 control={control}
                 type="number"
                 placeholder="1024"
