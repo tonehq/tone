@@ -12,6 +12,8 @@ from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from loguru import logger
 
+from core.logging import start_call_trace
+
 # Use pipecat.runner.types so we get the same classes as run.py (avoids isinstance mismatch)
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import create_transport
@@ -183,6 +185,12 @@ async def _default_messages():
     ]
 
 
+def _provider_call_id(call_data) -> str:
+    """The telephony provider's call id from call_data (for the trace_id)."""
+    cd = call_data or {}
+    return cd.get("call_id") or cd.get("call_control_id") or cd.get("stream_id") or ""
+
+
 async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     """Run the bot with the provided transport.
 
@@ -199,6 +207,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     agent = body.get("agent")
 
     if agent:
+        start_call_trace(agent_id=agent.id, call_id=_provider_call_id(body.get("call_data")))
         logger.info("Running bot with agent config: id=%s name=%s", agent.id, agent.name)
         _t = _time.monotonic()
         # Get agent bot data (LLM, STT, TTS, prompt) from DB, then close the session
@@ -241,6 +250,7 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         logger.info("[TIMING] run_bot() resolve_agent_runtime (+%.3fs)", _time.monotonic() - _t)
 
     if resolved:
+        start_call_trace(agent_id=resolved["agent"].id, call_id=_provider_call_id(call_data))
         logger.info(
             f"Running bot with resolved agent runtime: agent={resolved['agent'].id} "
             f"name={resolved['agent'].name}"
@@ -418,6 +428,11 @@ def _create_serializer(transport_type: str, call_data: dict):
 
 async def bot(runner_args: RunnerArguments, call_type: str = None):
     """Main bot entry point compatible with Pipecat Cloud."""
+    # Establish one trace_id for the whole call as the very first thing, so every
+    # subsequent log line (including the [TIMING] line below) carries it. The
+    # agent_id segment is filled in once the agent is resolved (here or in
+    # run_bot). Logging-only — does not affect call flow.
+    start_call_trace()
     _t_bot_start = _time.monotonic()
     logger.info(f"[TIMING] bot() entered")
 
@@ -455,6 +470,7 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
             logger.info(f"Call from: {from_number} to: {to_number}")
 
         if agent:
+            start_call_trace(agent_id=agent.id, call_id=_provider_call_id(call_data))
             logger.info(f"Resolved agent for this call: id={agent.id} name={agent.name}")
 
         if getattr(runner_args, "body", None) is None:

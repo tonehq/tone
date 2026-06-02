@@ -82,5 +82,6 @@ class Settings:
         self.GOOGLE_CLIENT_ID: str = get_secret("GOOGLE_CLIENT_ID", "")
         self.GOOGLE_CLIENT_SECRET: str = get_secret("GOOGLE_CLIENT_SECRET", "")
 
+        self.LLAMA_CLOUD_API_KEY: str = get_secret("LLAMA_CLOUD_API_KEY", "")
 
 settings = Settings()

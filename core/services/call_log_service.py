@@ -64,6 +64,7 @@ class CallLogService(BaseService):
         transport_type: Optional[str] = None,
         from_number: Optional[str] = None,
         to_number: Optional[str] = None,
+        trace_id: Optional[str] = None,
     ) -> Call:
         # Deduplicate
         if provider_call_id:
@@ -93,6 +94,7 @@ class CallLogService(BaseService):
             channel_id=channel_id,
             direction=direction,
             provider_call_id=provider_call_id,
+            trace_id=trace_id,
             from_phone_number_id=from_pn_id,
             to_phone_number_id=to_pn_id,
             from_number_raw_by_provider=from_number,

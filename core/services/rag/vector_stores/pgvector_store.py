@@ -3,10 +3,10 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import List, Optional
 
-from sqlalchemy import text
-
 from core.database.session import get_db_context
+from core.models.agent_knowledge_base import AgentKnowledgeBase
 from core.models.knowledge_base_chunk import KnowledgeBaseChunk
+from core.models.upload import Upload
 from core.services.rag.types import SearchResult, VectorRecord
 from core.services.rag.vector_stores.base import VectorStore
 
@@ -45,49 +45,38 @@ class PgVectorStore(VectorStore):
         self, embedding: List[float], top_k: int = 3, *, filters: Optional[dict] = None
     ) -> List[SearchResult]:
         filters = filters or {}
-        emb_str = "[" + ",".join(str(x) for x in embedding) + "]"
-        params = {"e": emb_str, "k": top_k}
+        distance = KnowledgeBaseChunk.embedding.cosine_distance(embedding)
 
         agent_id = filters.get("agent_id")
         upload_id = filters.get("upload_id")
 
-        if agent_id is not None:
-            sql = """
-                SELECT kbc.chunk_text, kbc.embedding <=> :e AS distance,
-                       kbc.upload_id, kbc.chunk_index
-                FROM knowledge_base_chunks kbc
-                JOIN uploads u ON kbc.upload_id = u.id
-                JOIN agent_knowledge_bases akb ON akb.upload_id = u.id
-                WHERE akb.agent_id = :agent_id AND u.status = :status
-                ORDER BY kbc.embedding <=> :e
-                LIMIT :k
-            """
-            params["agent_id"] = str(agent_id)
-            params["status"] = filters.get("status", "ready")
-        elif upload_id is not None:
-            sql = """
-                SELECT chunk_text, embedding <=> :e AS distance, upload_id, chunk_index
-                FROM knowledge_base_chunks
-                WHERE upload_id = :upload_id
-                ORDER BY embedding <=> :e
-                LIMIT :k
-            """
-            params["upload_id"] = str(upload_id)
-        else:
-            sql = """
-                SELECT chunk_text, embedding <=> :e AS distance, upload_id, chunk_index
-                FROM knowledge_base_chunks
-                ORDER BY embedding <=> :e
-                LIMIT :k
-            """
-
         with self._db() as db:
-            rows = db.execute(text(sql), params).fetchall()
+            q = db.query(
+                KnowledgeBaseChunk.chunk_text,
+                distance.label("distance"),
+                KnowledgeBaseChunk.upload_id,
+                KnowledgeBaseChunk.chunk_index,
+            )
+
+            if agent_id is not None:
+                q = (
+                    q.join(Upload, KnowledgeBaseChunk.upload_id == Upload.id)
+                    .join(AgentKnowledgeBase, AgentKnowledgeBase.upload_id == Upload.id)
+                    .filter(
+                        AgentKnowledgeBase.agent_id == str(agent_id),
+                        Upload.status == filters.get("status", "ready"),
+                    )
+                )
+            elif upload_id is not None:
+                q = q.filter(KnowledgeBaseChunk.upload_id == str(upload_id))
+
+            rows = q.order_by(distance).limit(top_k).all()
+
         return [
             SearchResult(
-                text=r[0],
-                score=float(r[1]),
-                metadata={"upload_id": r[2], "chunk_index": r[3]},
+                text=r.chunk_text,
+                score=float(r.distance),
+                metadata={"upload_id": r.upload_id, "chunk_index": r.chunk_index},
             )
             for r in rows
         ]

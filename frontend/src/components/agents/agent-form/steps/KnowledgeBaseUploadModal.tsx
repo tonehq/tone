@@ -17,7 +17,7 @@ const ACCEPTED_TYPES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
 const ACCEPTED_EXTENSIONS = ['pdf', 'txt', 'csv', 'json', 'docx'];
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
 function fmt(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -54,7 +54,7 @@ export default function KnowledgeBaseUploadModal({
       return false;
     }
     if (f.size > MAX_FILE_SIZE) {
-      showToast.error(`Too large: ${f.name}`, 'Max size is 10 MB');
+      showToast.error(`Too large: ${f.name}`, 'Max size is 100 MB');
       return false;
     }
     return true;
@@ -159,7 +159,7 @@ export default function KnowledgeBaseUploadModal({
             </span>
           </p>
           <p className="text-[11px] text-muted-foreground">
-            PDF · DOCX · TXT · CSV · JSON · max 10 MB
+            PDF · DOCX · TXT · CSV · JSON · max 100 MB
           </p>
           <input
             ref={fileInputRef}

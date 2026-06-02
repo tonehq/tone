@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staging-tone-worker
+  namespace: staging
+  labels:
+    app: staging-tone-worker
+    environment: staging
+    component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: staging-tone-worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: staging-tone-worker
+        environment: staging
+        component: worker
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: staging-tone-worker
+          image: developer390/tone:${IMAGE_TAG}
+          imagePullPolicy: Always
+          command:
+            - python
+            - "-m"
+            - procrastinate
+            - "--app=core.services.ingestion_queue.app"
+            - worker
+            - "--queues=ingestion"
+            - "--concurrency=1"
+            - "--no-listen-notify"
+            - "--fetch-job-polling-interval=5"
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+            limits:
+              cpu: "4"
+              memory: "6Gi"
+          env:
+            - name: ENV
+              value: "staging"
+            - name: INFISICAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: infisical-credentials
+                  key: token
+            - name: INFISICAL_PROJECT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: infisical-credentials
+                  key: project_id
+            - name: INFISICAL_HOST
+              value: "https://secrets.trytone.ai"
+      imagePullSecrets:
+        - name: dockerhub-auth

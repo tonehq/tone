@@ -817,6 +817,17 @@ class AgentFactoryService(BaseService):
         from_number = call_data.get("from", "")
         to_number = call_data.get("to", "")
 
+        # One trace_id for the whole call so every log line (setup, pipeline,
+        # Pipecat internals, DB thread) can be filtered together. Idempotent —
+        # reuses the call_uuid already set upstream in bot()/run_bot(), only
+        # ensures the agent_id suffix here. Logging-only; does not touch call flow.
+        from core.logging import start_call_trace, set_trace_id
+        trace_id = start_call_trace(
+            agent_id=agent.id if agent else None,
+            call_id=provider_call_id,
+            external=call_data.get("_trace_id"),
+        )
+
         # Create call log entry in DB (non-blocking — runs in background)
         import asyncio
         call_log_state = {"id": None, "done": False}
@@ -829,6 +840,10 @@ class AgentFactoryService(BaseService):
         # When adding new tool types, pass both tool_call_entries and current_turn to the handler creator.
         tool_call_entries: list[dict] = []
         current_turn: dict = {"number": 0}
+        # Per-call idempotency cache for create-type tools (booking signature ->
+        # first successful result). Suppresses duplicate ClickUp tasks / calendar
+        # events when a barge-in interruption makes the LLM re-issue a booking.
+        tool_dedup: dict = {}
 
         async def _get_call_log_id() -> int | None:
             """Await until call_log_id is available, then return it."""
@@ -838,6 +853,9 @@ class AgentFactoryService(BaseService):
         if agent and CallLogService is not None:
             def _create_call_log_in_thread():
                 """Run in a thread so synchronous DB work doesn't block the event loop."""
+                # Executor threads don't inherit contextvars, so re-set the trace_id
+                # here for this thread's log lines.
+                set_trace_id(trace_id)
                 try:
                     _t = _time.monotonic()
                     with get_db_context() as db:
@@ -848,12 +866,9 @@ class AgentFactoryService(BaseService):
                             transport_type=transport_type,
                             from_number=from_number,
                             to_number=to_number,
+                            trace_id=trace_id,
                         )
                         call_log_state["id"] = call_log.id
-                        current_trace = call_data.get("_trace_id", "")
-                        if current_trace:
-                            from core.logging import update_trace_id_with_call_log
-                            call_log_state["trace_id"] = update_trace_id_with_call_log(current_trace, call_log.id)
                         logger.info("[TIMING] create_call_log thread (+%.3fs)", _time.monotonic() - _t)
                 except Exception as e:
                     logger.error("Failed to create call log: {}", e)
@@ -990,7 +1005,7 @@ class AgentFactoryService(BaseService):
                     custom_tools_schema = build_custom_tool_schemas(custom_tools)
                     for tool in custom_tools:
                         if tool.tool_type != "custom":
-                            handler = create_built_in_tool_handler(tool, from_number, org_id=agent.organization_id, tool_call_entries=tool_call_entries, current_turn=current_turn)
+                            handler = create_built_in_tool_handler(tool, from_number, org_id=agent.organization_id, tool_call_entries=tool_call_entries, current_turn=current_turn, tool_dedup=tool_dedup)
                         else:
                             handler = create_custom_tool_handler(tool, tool_call_entries=tool_call_entries, current_turn=current_turn)
                         llm.register_function(tool.name, handler)
@@ -1004,7 +1019,8 @@ class AgentFactoryService(BaseService):
             try:
                 from core.services.mcp_tool_service import register_mcp_tools
                 mcp_tools_schema = await register_mcp_tools(
-                    llm, agent.id, tool_call_entries=tool_call_entries, current_turn=current_turn
+                    llm, agent.id, tool_call_entries=tool_call_entries,
+                    current_turn=current_turn, tool_dedup=tool_dedup,
                 )
             except Exception as e:
                 logger.warning(f"mcp_tool_service unavailable, MCP tools disabled: {e}")
@@ -1291,13 +1307,14 @@ class AgentFactoryService(BaseService):
 
         logger.info("[TIMING] run_bot_with_components setup complete, total: %.3fs — starting runner.run()", _time.monotonic() - _t_comp_start)
 
-        # Wait for call_log_id and update trace_id before starting the pipeline
+        # Wait for call_log_id before starting the pipeline. The trace_id
+        # ({short_uuid}-{agent_id}-{call_id}) is already fully set on this context
+        # and propagates to the pipeline's child tasks, so no per-run contextualize
+        # is needed.
         await call_log_ready.wait()
-        final_trace_id = call_log_state.get("trace_id") or call_data.get("_trace_id", "none")
 
         runner = PipelineRunner(handle_sigint=getattr(runner_args, "handle_sigint", False))
-        with logger.contextualize(trace_id=final_trace_id):
-            await runner.run(task)
+        await runner.run(task)
 
         # Fallback: if on_audio_data didn't update DB (e.g. no audio captured),
         # update the call log here with whatever we have.
