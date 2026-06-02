@@ -27,6 +27,12 @@ python main_ee.py
 alembic upgrade head              # Apply migrations
 alembic revision --autogenerate -m "description"  # Create migration
 
+# Procrastinate ingestion-queue schema (ONE-TIME, PER ENVIRONMENT)
+# Required before the document-ingestion worker can run. Not managed by alembic —
+# run this once against each environment's DB (local/staging/prod) before deploy.
+# Until applied, the in-process worker error-loops on a missing table.
+PYTHONPATH=. python -m procrastinate --app=core.services.ingestion_queue.app schema --apply
+
 # Seed service providers and models
 python dev/seed.py
 ```
