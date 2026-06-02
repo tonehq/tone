@@ -829,6 +829,10 @@ class AgentFactoryService(BaseService):
         # When adding new tool types, pass both tool_call_entries and current_turn to the handler creator.
         tool_call_entries: list[dict] = []
         current_turn: dict = {"number": 0}
+        # Per-call idempotency cache for create-type tools (booking signature ->
+        # first successful result). Suppresses duplicate ClickUp tasks / calendar
+        # events when a barge-in interruption makes the LLM re-issue a booking.
+        tool_dedup: dict = {}
 
         async def _get_call_log_id() -> int | None:
             """Await until call_log_id is available, then return it."""
@@ -990,7 +994,7 @@ class AgentFactoryService(BaseService):
                     custom_tools_schema = build_custom_tool_schemas(custom_tools)
                     for tool in custom_tools:
                         if tool.tool_type != "custom":
-                            handler = create_built_in_tool_handler(tool, from_number, org_id=agent.organization_id, tool_call_entries=tool_call_entries, current_turn=current_turn)
+                            handler = create_built_in_tool_handler(tool, from_number, org_id=agent.organization_id, tool_call_entries=tool_call_entries, current_turn=current_turn, tool_dedup=tool_dedup)
                         else:
                             handler = create_custom_tool_handler(tool, tool_call_entries=tool_call_entries, current_turn=current_turn)
                         llm.register_function(tool.name, handler)
@@ -1004,7 +1008,8 @@ class AgentFactoryService(BaseService):
             try:
                 from core.services.mcp_tool_service import register_mcp_tools
                 mcp_tools_schema = await register_mcp_tools(
-                    llm, agent.id, tool_call_entries=tool_call_entries, current_turn=current_turn
+                    llm, agent.id, tool_call_entries=tool_call_entries,
+                    current_turn=current_turn, tool_dedup=tool_dedup,
                 )
             except Exception as e:
                 logger.warning(f"mcp_tool_service unavailable, MCP tools disabled: {e}")

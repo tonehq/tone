@@ -154,13 +154,13 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
     return handle_tool_call
 
 
-def create_built_in_tool_handler(tool: Tool, caller_number: str, org_id=None, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None) -> Callable:
+def create_built_in_tool_handler(tool: Tool, caller_number: str, org_id=None, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None, tool_dedup: Optional[dict] = None) -> Callable:
     """Create a handler for a built-in tool based on tool_type."""
 
     if tool.tool_type == "send_sms":
         return _create_send_sms_handler(tool, caller_number, tool_call_entries=tool_call_entries, current_turn=current_turn)
     elif tool.tool_type == "google_calendar":
-        return _create_google_calendar_handler(tool, org_id=org_id, tool_call_entries=tool_call_entries, current_turn=current_turn)
+        return _create_google_calendar_handler(tool, org_id=org_id, tool_call_entries=tool_call_entries, current_turn=current_turn, tool_dedup=tool_dedup)
 
     # Fallback: unknown built-in tool type
     async def noop_handler(params: FunctionCallParams) -> None:
@@ -255,11 +255,12 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
     return handle_send_sms
 
 
-def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None) -> Callable:
+def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None, tool_dedup: Optional[dict] = None) -> Callable:
     """Create a handler that creates/checks events via Google Calendar API."""
 
     async def handle_google_calendar(params: FunctionCallParams) -> None:
         import time as _time
+        from core.utils.tool_idempotency import booking_signature, is_cacheable_result
 
         arguments = params.arguments
         action = arguments.get("action", "create_event")
@@ -273,17 +274,31 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
             "turn": current_turn["number"] if current_turn else None,
         }
 
-        meta = tool.meta_data or {}
-        calendar_id = meta.get("calendar_id", "primary")
-        timezone = meta.get("timezone", "UTC")
-        # Use org_id from call context; fall back to meta_data for backward compatibility
-        effective_org_id = org_id or meta.get("org_id")
-
         def _log_tool_call(result_str, duration_ms=None):
             tool_call_entry["result"] = result_str
             tool_call_entry["duration_ms"] = duration_ms or round((_time.monotonic() - _t_start) * 1000)
             if tool_call_entries is not None:
                 tool_call_entries.append(tool_call_entry)
+
+        # In-call idempotency: suppress a duplicate create_event (e.g. a barge-in
+        # discarded the first result and the LLM re-issued the booking) so we don't
+        # create a second calendar event for the same booking.
+        sig = booking_signature("google_calendar", arguments, is_create=(action == "create_event")) if tool_dedup is not None else None
+        if sig is not None and sig in tool_dedup:
+            cached = tool_dedup[sig]
+            logger.warning(
+                "⏭️ Duplicate google_calendar create_event suppressed (already created this call); returning cached result"
+            )
+            tool_call_entry["status"] = "duplicate_suppressed"
+            _log_tool_call(cached)
+            await params.result_callback(cached)
+            return
+
+        meta = tool.meta_data or {}
+        calendar_id = meta.get("calendar_id", "primary")
+        timezone = meta.get("timezone", "UTC")
+        # Use org_id from call context; fall back to meta_data for backward compatibility
+        effective_org_id = org_id or meta.get("org_id")
 
         if not effective_org_id:
             _log_tool_call("error: missing org_id")
@@ -349,6 +364,11 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
 
             logger.info("google_calendar action='{}' result: {}", action, result)
             _log_tool_call("success")
+            # Cache the successful create_event so an interruption-driven retry
+            # within this call returns this result instead of creating a duplicate.
+            # Skip caching failures so a retry can still complete the booking.
+            if sig is not None and tool_dedup is not None and is_cacheable_result(result):
+                tool_dedup[sig] = result
             await params.result_callback(result)
 
         except httpx.TimeoutException:
