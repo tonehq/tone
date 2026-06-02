@@ -10,49 +10,57 @@
         {
           "name": "gpt-5",
           "meta_data": {
-            "model": "gpt-5"
+            "model": "gpt-5",
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "gpt-5-mini",
           "meta_data": {
-            "model": "gpt-5-mini"
+            "model": "gpt-5-mini",
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "gpt-5-nano",
           "meta_data": {
-            "model": "gpt-5-nano"
+            "model": "gpt-5-nano",
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "o3",
           "meta_data": {
-            "model": "o3"
+            "model": "o3",
+            "max_completion_tokens": 100000
           }
         },
         {
           "name": "gpt-5.5",
           "meta_data": {
-            "model": "gpt-5.5"
+            "model": "gpt-5.5",
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "gpt-5.4",
           "meta_data": {
-            "model": "gpt-5.4"
+            "model": "gpt-5.4",
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "gpt-5.4-mini",
           "meta_data": {
-            "model": "gpt-5.4-mini"
+            "model": "gpt-5.4-mini",
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "o3-pro",
           "meta_data": {
-            "model": "o3-pro"
+            "model": "o3-pro",
+            "max_completion_tokens": 100000
           }
         }
       ],
@@ -140,13 +148,15 @@
         {
           "name": "groq/compound",
           "meta_data": {
-            "model": "groq/compound"
+            "model": "groq/compound",
+            "max_completion_tokens": 32768
           }
         },
         {
           "name": "groq/compound-mini",
           "meta_data": {
-            "model": "groq/compound-mini"
+            "model": "groq/compound-mini",
+            "max_completion_tokens": 32768
           }
         }
       ],
@@ -234,43 +244,57 @@
         {
           "name": "claude-opus-4-6",
           "meta_data": {
-            "model": "claude-opus-4-6"
+            "model": "claude-opus-4-6",
+            "max_tokens": 128000,
+            "thinking_budget_tokens": 128000
           }
         },
         {
           "name": "claude-opus-4-5",
           "meta_data": {
-            "model": "claude-opus-4-5"
+            "model": "claude-opus-4-5",
+            "max_tokens": 128000,
+            "thinking_budget_tokens": 128000
           }
         },
         {
           "name": "claude-haiku-4-5",
           "meta_data": {
-            "model": "claude-haiku-4-5"
+            "model": "claude-haiku-4-5",
+            "max_tokens": 64000,
+            "thinking_budget_tokens": 64000
           }
         },
         {
           "name": "claude-sonnet-4-5",
           "meta_data": {
-            "model": "claude-sonnet-4-5"
+            "model": "claude-sonnet-4-5",
+            "max_tokens": 64000,
+            "thinking_budget_tokens": 64000
           }
         },
         {
           "name": "claude-opus-4-1",
           "meta_data": {
-            "model": "claude-opus-4-1"
+            "model": "claude-opus-4-1",
+            "max_tokens": 32000,
+            "thinking_budget_tokens": 32000
           }
         },
         {
           "name": "claude-sonnet-4-6",
           "meta_data": {
-            "model": "claude-sonnet-4-6"
+            "model": "claude-sonnet-4-6",
+            "max_tokens": 64000,
+            "thinking_budget_tokens": 64000
           }
         },
         {
           "name": "claude-opus-4-7",
           "meta_data": {
-            "model": "claude-opus-4-7"
+            "model": "claude-opus-4-7",
+            "max_tokens": 128000,
+            "thinking_budget_tokens": 128000
           }
         }
       ],
@@ -354,43 +378,50 @@
         {
           "name": "gemini-3.1-pro-preview",
           "meta_data": {
-            "model": "gemini-3.1-pro-preview"
+            "model": "gemini-3.1-pro-preview",
+            "max_tokens": 65536
           }
         },
         {
           "name": "gemini-3-flash-preview",
           "meta_data": {
-            "model": "gemini-3-flash-preview"
+            "model": "gemini-3-flash-preview",
+            "max_tokens": 65536
           }
         },
         {
           "name": "gemini-2.5-pro",
           "meta_data": {
-            "model": "gemini-2.5-pro"
+            "model": "gemini-2.5-pro",
+            "max_tokens": 65536
           }
         },
         {
           "name": "gemini-2.5-flash",
           "meta_data": {
-            "model": "gemini-2.5-flash"
+            "model": "gemini-2.5-flash",
+            "max_tokens": 65536
           }
         },
         {
           "name": "gemini-2.5-flash-lite",
           "meta_data": {
-            "model": "gemini-2.5-flash-lite"
+            "model": "gemini-2.5-flash-lite",
+            "max_tokens": 65536
           }
         },
         {
           "name": "gemma-4-31b-it",
           "meta_data": {
-            "model": "gemma-4-31b-it"
+            "model": "gemma-4-31b-it",
+            "max_tokens": 8192
           }
         },
         {
           "name": "gemma-4-26b-a4b-it",
           "meta_data": {
-            "model": "gemma-4-26b-a4b-it"
+            "model": "gemma-4-26b-a4b-it",
+            "max_tokens": 8192
           }
         }
       ],
@@ -454,679 +485,905 @@
         {
           "name": "anthropic/claude-opus-4.6",
           "meta_data": {
-            "model": "anthropic/claude-opus-4.6"
+            "model": "anthropic/claude-opus-4.6",
+            "max_tokens": 128000,
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "anthropic/claude-opus-4.5",
           "meta_data": {
-            "model": "anthropic/claude-opus-4.5"
+            "model": "anthropic/claude-opus-4.5",
+            "max_tokens": 128000,
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "anthropic/claude-opus-4.1",
           "meta_data": {
-            "model": "anthropic/claude-opus-4.1"
+            "model": "anthropic/claude-opus-4.1",
+            "max_tokens": 32000,
+            "max_completion_tokens": 32000
           }
         },
         {
           "name": "anthropic/claude-opus-4",
           "meta_data": {
-            "model": "anthropic/claude-opus-4"
+            "model": "anthropic/claude-opus-4",
+            "max_tokens": 32000,
+            "max_completion_tokens": 32000
           }
         },
         {
           "name": "anthropic/claude-sonnet-4.5",
           "meta_data": {
-            "model": "anthropic/claude-sonnet-4.5"
+            "model": "anthropic/claude-sonnet-4.5",
+            "max_tokens": 64000,
+            "max_completion_tokens": 64000
           }
         },
         {
           "name": "anthropic/claude-sonnet-4",
           "meta_data": {
-            "model": "anthropic/claude-sonnet-4"
+            "model": "anthropic/claude-sonnet-4",
+            "max_tokens": 64000,
+            "max_completion_tokens": 64000
           }
         },
         {
           "name": "anthropic/claude-3.5-haiku",
           "meta_data": {
-            "model": "anthropic/claude-3.5-haiku"
+            "model": "anthropic/claude-3.5-haiku",
+            "max_tokens": 64000,
+            "max_completion_tokens": 64000
           }
         },
         {
           "name": "anthropic/claude-3-haiku",
           "meta_data": {
-            "model": "anthropic/claude-3-haiku"
+            "model": "anthropic/claude-3-haiku",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "openai/gpt-5",
           "meta_data": {
-            "model": "openai/gpt-5"
+            "model": "openai/gpt-5",
+            "max_tokens": 128000,
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "openai/gpt-5-chat",
           "meta_data": {
-            "model": "openai/gpt-5-chat"
+            "model": "openai/gpt-5-chat",
+            "max_tokens": 128000,
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "openai/gpt-5-mini",
           "meta_data": {
-            "model": "openai/gpt-5-mini"
+            "model": "openai/gpt-5-mini",
+            "max_tokens": 128000,
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "openai/gpt-5-nano",
           "meta_data": {
-            "model": "openai/gpt-5-nano"
+            "model": "openai/gpt-5-nano",
+            "max_tokens": 128000,
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "openai/gpt-5-pro",
           "meta_data": {
-            "model": "openai/gpt-5-pro"
+            "model": "openai/gpt-5-pro",
+            "max_tokens": 128000,
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "openai/gpt-5.2",
           "meta_data": {
-            "model": "openai/gpt-5.2"
+            "model": "openai/gpt-5.2",
+            "max_tokens": 128000,
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "openai/gpt-5.2-chat",
           "meta_data": {
-            "model": "openai/gpt-5.2-chat"
+            "model": "openai/gpt-5.2-chat",
+            "max_tokens": 128000,
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "openai/gpt-5.2-pro",
           "meta_data": {
-            "model": "openai/gpt-5.2-pro"
+            "model": "openai/gpt-5.2-pro",
+            "max_tokens": 128000,
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "openai/gpt-5.2-codex",
           "meta_data": {
-            "model": "openai/gpt-5.2-codex"
+            "model": "openai/gpt-5.2-codex",
+            "max_tokens": 128000,
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "openai/gpt-5.1",
           "meta_data": {
-            "model": "openai/gpt-5.1"
+            "model": "openai/gpt-5.1",
+            "max_tokens": 128000,
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "openai/gpt-5.1-chat",
           "meta_data": {
-            "model": "openai/gpt-5.1-chat"
+            "model": "openai/gpt-5.1-chat",
+            "max_tokens": 128000,
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "openai/gpt-5.1-codex",
           "meta_data": {
-            "model": "openai/gpt-5.1-codex"
+            "model": "openai/gpt-5.1-codex",
+            "max_tokens": 128000,
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "openai/gpt-5.1-codex-mini",
           "meta_data": {
-            "model": "openai/gpt-5.1-codex-mini"
+            "model": "openai/gpt-5.1-codex-mini",
+            "max_tokens": 128000,
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "openai/gpt-5.1-codex-max",
           "meta_data": {
-            "model": "openai/gpt-5.1-codex-max"
+            "model": "openai/gpt-5.1-codex-max",
+            "max_tokens": 128000,
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "openai/gpt-4",
           "meta_data": {
-            "model": "openai/gpt-4"
+            "model": "openai/gpt-4",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "openai/gpt-4-turbo",
           "meta_data": {
-            "model": "openai/gpt-4-turbo"
+            "model": "openai/gpt-4-turbo",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "openai/gpt-4-1106-preview",
           "meta_data": {
-            "model": "openai/gpt-4-1106-preview"
+            "model": "openai/gpt-4-1106-preview",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "openai/gpt-4o",
           "meta_data": {
-            "model": "openai/gpt-4o"
+            "model": "openai/gpt-4o",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "openai/gpt-4o-2024-05-13",
           "meta_data": {
-            "model": "openai/gpt-4o-2024-05-13"
+            "model": "openai/gpt-4o-2024-05-13",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "openai/gpt-4o-2024-11-20",
           "meta_data": {
-            "model": "openai/gpt-4o-2024-11-20"
+            "model": "openai/gpt-4o-2024-11-20",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "openai/gpt-4.1",
           "meta_data": {
-            "model": "openai/gpt-4.1"
+            "model": "openai/gpt-4.1",
+            "max_tokens": 32768,
+            "max_completion_tokens": 32768
           }
         },
         {
           "name": "openai/gpt-4.1-mini",
           "meta_data": {
-            "model": "openai/gpt-4.1-mini"
+            "model": "openai/gpt-4.1-mini",
+            "max_tokens": 32768,
+            "max_completion_tokens": 32768
           }
         },
         {
           "name": "openai/gpt-4.1-nano",
           "meta_data": {
-            "model": "openai/gpt-4.1-nano"
+            "model": "openai/gpt-4.1-nano",
+            "max_tokens": 32768,
+            "max_completion_tokens": 32768
           }
         },
         {
           "name": "openai/gpt-3.5-turbo",
           "meta_data": {
-            "model": "openai/gpt-3.5-turbo"
+            "model": "openai/gpt-3.5-turbo",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "openai/gpt-3.5-turbo-0613",
           "meta_data": {
-            "model": "openai/gpt-3.5-turbo-0613"
+            "model": "openai/gpt-3.5-turbo-0613",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "openai/gpt-3.5-turbo-16k",
           "meta_data": {
-            "model": "openai/gpt-3.5-turbo-16k"
+            "model": "openai/gpt-3.5-turbo-16k",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "openai/gpt-3.5-turbo-instruct",
           "meta_data": {
-            "model": "openai/gpt-3.5-turbo-instruct"
+            "model": "openai/gpt-3.5-turbo-instruct",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "openai/o1",
           "meta_data": {
-            "model": "openai/o1"
+            "model": "openai/o1",
+            "max_tokens": 100000,
+            "max_completion_tokens": 100000
           }
         },
         {
           "name": "openai/o1-pro",
           "meta_data": {
-            "model": "openai/o1-pro"
+            "model": "openai/o1-pro",
+            "max_tokens": 100000,
+            "max_completion_tokens": 100000
           }
         },
         {
           "name": "openai/o3",
           "meta_data": {
-            "model": "openai/o3"
+            "model": "openai/o3",
+            "max_tokens": 100000,
+            "max_completion_tokens": 100000
           }
         },
         {
           "name": "openai/o3-mini",
           "meta_data": {
-            "model": "openai/o3-mini"
+            "model": "openai/o3-mini",
+            "max_tokens": 100000,
+            "max_completion_tokens": 100000
           }
         },
         {
           "name": "openai/o3-mini-high",
           "meta_data": {
-            "model": "openai/o3-mini-high"
+            "model": "openai/o3-mini-high",
+            "max_tokens": 100000,
+            "max_completion_tokens": 100000
           }
         },
         {
           "name": "openai/o3-pro",
           "meta_data": {
-            "model": "openai/o3-pro"
+            "model": "openai/o3-pro",
+            "max_tokens": 100000,
+            "max_completion_tokens": 100000
           }
         },
         {
           "name": "openai/o4-mini",
           "meta_data": {
-            "model": "openai/o4-mini"
+            "model": "openai/o4-mini",
+            "max_tokens": 100000,
+            "max_completion_tokens": 100000
           }
         },
         {
           "name": "openai/o4-mini-high",
           "meta_data": {
-            "model": "openai/o4-mini-high"
+            "model": "openai/o4-mini-high",
+            "max_tokens": 100000,
+            "max_completion_tokens": 100000
           }
         },
         {
           "name": "meta-llama/llama-4-maverick",
           "meta_data": {
-            "model": "meta-llama/llama-4-maverick"
+            "model": "meta-llama/llama-4-maverick",
+            "max_tokens": 65536,
+            "max_completion_tokens": 65536
           }
         },
         {
           "name": "meta-llama/llama-4-scout",
           "meta_data": {
-            "model": "meta-llama/llama-4-scout"
+            "model": "meta-llama/llama-4-scout",
+            "max_tokens": 65536,
+            "max_completion_tokens": 65536
           }
         },
         {
           "name": "meta-llama/llama-3.3-70b-instruct",
           "meta_data": {
-            "model": "meta-llama/llama-3.3-70b-instruct"
+            "model": "meta-llama/llama-3.3-70b-instruct",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "meta-llama/llama-3.2-3b-instruct",
           "meta_data": {
-            "model": "meta-llama/llama-3.2-3b-instruct"
+            "model": "meta-llama/llama-3.2-3b-instruct",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "meta-llama/llama-3.2-1b-instruct",
           "meta_data": {
-            "model": "meta-llama/llama-3.2-1b-instruct"
+            "model": "meta-llama/llama-3.2-1b-instruct",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "meta-llama/llama-3.1-8b-instruct",
           "meta_data": {
-            "model": "meta-llama/llama-3.1-8b-instruct"
+            "model": "meta-llama/llama-3.1-8b-instruct",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "meta-llama/llama-3.1-70b-instruct",
           "meta_data": {
-            "model": "meta-llama/llama-3.1-70b-instruct"
+            "model": "meta-llama/llama-3.1-70b-instruct",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "meta-llama/llama-3-70b-instruct",
           "meta_data": {
-            "model": "meta-llama/llama-3-70b-instruct"
+            "model": "meta-llama/llama-3-70b-instruct",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "meta-llama/llama-3-8b-instruct",
           "meta_data": {
-            "model": "meta-llama/llama-3-8b-instruct"
+            "model": "meta-llama/llama-3-8b-instruct",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "qwen/qwen3-max",
           "meta_data": {
-            "model": "qwen/qwen3-max"
+            "model": "qwen/qwen3-max",
+            "max_tokens": 81920,
+            "max_completion_tokens": 81920
           }
         },
         {
           "name": "qwen/qwen3-max-thinking",
           "meta_data": {
-            "model": "qwen/qwen3-max-thinking"
+            "model": "qwen/qwen3-max-thinking",
+            "max_tokens": 81920,
+            "max_completion_tokens": 81920
           }
         },
         {
           "name": "qwen/qwen3-8b",
           "meta_data": {
-            "model": "qwen/qwen3-8b"
+            "model": "qwen/qwen3-8b",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "qwen/qwen3-14b",
           "meta_data": {
-            "model": "qwen/qwen3-14b"
+            "model": "qwen/qwen3-14b",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "qwen/qwen3-30b-a3b",
           "meta_data": {
-            "model": "qwen/qwen3-30b-a3b"
+            "model": "qwen/qwen3-30b-a3b",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "qwen/qwen3-32b",
           "meta_data": {
-            "model": "qwen/qwen3-32b"
+            "model": "qwen/qwen3-32b",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "qwen/qwen3-235b-a22b",
           "meta_data": {
-            "model": "qwen/qwen3-235b-a22b"
+            "model": "qwen/qwen3-235b-a22b",
+            "max_tokens": 81920,
+            "max_completion_tokens": 81920
           }
         },
         {
           "name": "qwen/qwen3-235b-a22b-thinking-2507",
           "meta_data": {
-            "model": "qwen/qwen3-235b-a22b-thinking-2507"
+            "model": "qwen/qwen3-235b-a22b-thinking-2507",
+            "max_tokens": 81920,
+            "max_completion_tokens": 81920
           }
         },
         {
           "name": "qwen/qwen3-next-80b-a3b-instruct",
           "meta_data": {
-            "model": "qwen/qwen3-next-80b-a3b-instruct"
+            "model": "qwen/qwen3-next-80b-a3b-instruct",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "qwen/qwen3-next-80b-a3b-thinking",
           "meta_data": {
-            "model": "qwen/qwen3-next-80b-a3b-thinking"
+            "model": "qwen/qwen3-next-80b-a3b-thinking",
+            "max_tokens": 81920,
+            "max_completion_tokens": 81920
           }
         },
         {
           "name": "qwen/qwen-plus",
           "meta_data": {
-            "model": "qwen/qwen-plus"
+            "model": "qwen/qwen-plus",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "qwen/qwen-plus-2025-07-28",
           "meta_data": {
-            "model": "qwen/qwen-plus-2025-07-28"
+            "model": "qwen/qwen-plus-2025-07-28",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "qwen/qwen-plus-2025-07-28:thinking",
           "meta_data": {
-            "model": "qwen/qwen-plus-2025-07-28:thinking"
+            "model": "qwen/qwen-plus-2025-07-28:thinking",
+            "max_tokens": 81920,
+            "max_completion_tokens": 81920
           }
         },
         {
           "name": "qwen/qwen3-coder",
           "meta_data": {
-            "model": "qwen/qwen3-coder"
+            "model": "qwen/qwen3-coder",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "qwen/qwen3-coder-plus",
           "meta_data": {
-            "model": "qwen/qwen3-coder-plus"
+            "model": "qwen/qwen3-coder-plus",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "qwen/qwen3-coder-flash",
           "meta_data": {
-            "model": "qwen/qwen3-coder-flash"
+            "model": "qwen/qwen3-coder-flash",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "qwen/qwen3-coder-next",
           "meta_data": {
-            "model": "qwen/qwen3-coder-next"
+            "model": "qwen/qwen3-coder-next",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "qwen/qwen3-coder-30b-a3b-instruct",
           "meta_data": {
-            "model": "qwen/qwen3-coder-30b-a3b-instruct"
+            "model": "qwen/qwen3-coder-30b-a3b-instruct",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "qwen/qwen-2.5-coder-32b-instruct",
           "meta_data": {
-            "model": "qwen/qwen-2.5-coder-32b-instruct"
+            "model": "qwen/qwen-2.5-coder-32b-instruct",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "mistralai/mistral-large",
           "meta_data": {
-            "model": "mistralai/mistral-large"
+            "model": "mistralai/mistral-large",
+            "max_tokens": 131072,
+            "max_completion_tokens": 131072
           }
         },
         {
           "name": "mistralai/mistral-large-2407",
           "meta_data": {
-            "model": "mistralai/mistral-large-2407"
+            "model": "mistralai/mistral-large-2407",
+            "max_tokens": 131072,
+            "max_completion_tokens": 131072
           }
         },
         {
           "name": "mistralai/mistral-medium-3",
           "meta_data": {
-            "model": "mistralai/mistral-medium-3"
+            "model": "mistralai/mistral-medium-3",
+            "max_tokens": 131072,
+            "max_completion_tokens": 131072
           }
         },
         {
           "name": "mistralai/mistral-medium-3.1",
           "meta_data": {
-            "model": "mistralai/mistral-medium-3.1"
+            "model": "mistralai/mistral-medium-3.1",
+            "max_tokens": 131072,
+            "max_completion_tokens": 131072
           }
         },
         {
           "name": "mistralai/mistral-small-3.1-24b-instruct",
           "meta_data": {
-            "model": "mistralai/mistral-small-3.1-24b-instruct"
+            "model": "mistralai/mistral-small-3.1-24b-instruct",
+            "max_tokens": 32768,
+            "max_completion_tokens": 32768
           }
         },
         {
           "name": "mistralai/mistral-small-3.2-24b-instruct",
           "meta_data": {
-            "model": "mistralai/mistral-small-3.2-24b-instruct"
+            "model": "mistralai/mistral-small-3.2-24b-instruct",
+            "max_tokens": 32768,
+            "max_completion_tokens": 32768
           }
         },
         {
           "name": "mistralai/mixtral-8x22b-instruct",
           "meta_data": {
-            "model": "mistralai/mixtral-8x22b-instruct"
+            "model": "mistralai/mixtral-8x22b-instruct",
+            "max_tokens": 65536,
+            "max_completion_tokens": 65536
           }
         },
         {
           "name": "mistralai/ministral-14b-2512",
           "meta_data": {
-            "model": "mistralai/ministral-14b-2512"
+            "model": "mistralai/ministral-14b-2512",
+            "max_tokens": 32768,
+            "max_completion_tokens": 32768
           }
         },
         {
           "name": "mistralai/devstral-2512",
           "meta_data": {
-            "model": "mistralai/devstral-2512"
+            "model": "mistralai/devstral-2512",
+            "max_tokens": 32768,
+            "max_completion_tokens": 32768
           }
         },
         {
           "name": "mistralai/codestral-2508",
           "meta_data": {
-            "model": "mistralai/codestral-2508"
+            "model": "mistralai/codestral-2508",
+            "max_tokens": 32768,
+            "max_completion_tokens": 32768
           }
         },
         {
           "name": "deepseek/deepseek-chat",
           "meta_data": {
-            "model": "deepseek/deepseek-chat"
+            "model": "deepseek/deepseek-chat",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "deepseek/deepseek-chat-v3-0324",
           "meta_data": {
-            "model": "deepseek/deepseek-chat-v3-0324"
+            "model": "deepseek/deepseek-chat-v3-0324",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "deepseek/deepseek-chat-v3.1",
           "meta_data": {
-            "model": "deepseek/deepseek-chat-v3.1"
+            "model": "deepseek/deepseek-chat-v3.1",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "deepseek/deepseek-v3.2",
           "meta_data": {
-            "model": "deepseek/deepseek-v3.2"
+            "model": "deepseek/deepseek-v3.2",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "deepseek/deepseek-v3.2-exp",
           "meta_data": {
-            "model": "deepseek/deepseek-v3.2-exp"
+            "model": "deepseek/deepseek-v3.2-exp",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "deepseek/deepseek-r1",
           "meta_data": {
-            "model": "deepseek/deepseek-r1"
+            "model": "deepseek/deepseek-r1",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "deepseek/deepseek-r1-0528",
           "meta_data": {
-            "model": "deepseek/deepseek-r1-0528"
+            "model": "deepseek/deepseek-r1-0528",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "deepseek/deepseek-r1-distill-qwen-32b",
           "meta_data": {
-            "model": "deepseek/deepseek-r1-distill-qwen-32b"
+            "model": "deepseek/deepseek-r1-distill-qwen-32b",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "deepseek/deepseek-r1-distill-llama-70b",
           "meta_data": {
-            "model": "deepseek/deepseek-r1-distill-llama-70b"
+            "model": "deepseek/deepseek-r1-distill-llama-70b",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "google/gemini-3.1-pro-preview",
           "meta_data": {
-            "model": "google/gemini-3.1-pro-preview"
+            "model": "google/gemini-3.1-pro-preview",
+            "max_tokens": 65536,
+            "max_completion_tokens": 65536
           }
         },
         {
           "name": "google/gemini-3-flash-preview",
           "meta_data": {
-            "model": "google/gemini-3-flash-preview"
+            "model": "google/gemini-3-flash-preview",
+            "max_tokens": 65536,
+            "max_completion_tokens": 65536
           }
         },
         {
           "name": "google/gemini-3.1-flash-lite-preview",
           "meta_data": {
-            "model": "google/gemini-3.1-flash-lite-preview"
+            "model": "google/gemini-3.1-flash-lite-preview",
+            "max_tokens": 65536,
+            "max_completion_tokens": 65536
           }
         },
         {
           "name": "google/gemini-2.5-pro",
           "meta_data": {
-            "model": "google/gemini-2.5-pro"
+            "model": "google/gemini-2.5-pro",
+            "max_tokens": 65536,
+            "max_completion_tokens": 65536
           }
         },
         {
           "name": "google/gemini-2.5-flash",
           "meta_data": {
-            "model": "google/gemini-2.5-flash"
+            "model": "google/gemini-2.5-flash",
+            "max_tokens": 65536,
+            "max_completion_tokens": 65536
           }
         },
         {
           "name": "google/gemini-2.5-flash-lite",
           "meta_data": {
-            "model": "google/gemini-2.5-flash-lite"
+            "model": "google/gemini-2.5-flash-lite",
+            "max_tokens": 65536,
+            "max_completion_tokens": 65536
           }
         },
         {
           "name": "ai21/jamba-large-1.7",
           "meta_data": {
-            "model": "ai21/jamba-large-1.7"
+            "model": "ai21/jamba-large-1.7",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "cohere/command-a",
           "meta_data": {
-            "model": "cohere/command-a"
+            "model": "cohere/command-a",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "cohere/command-r-08-2024",
           "meta_data": {
-            "model": "cohere/command-r-08-2024"
+            "model": "cohere/command-r-08-2024",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "cohere/command-r-plus-08-2024",
           "meta_data": {
-            "model": "cohere/command-r-plus-08-2024"
+            "model": "cohere/command-r-plus-08-2024",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "cohere/command-r7b-12-2024",
           "meta_data": {
-            "model": "cohere/command-r7b-12-2024"
+            "model": "cohere/command-r7b-12-2024",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "microsoft/phi-4",
           "meta_data": {
-            "model": "microsoft/phi-4"
+            "model": "microsoft/phi-4",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "inflection/inflection-3-pi",
           "meta_data": {
-            "model": "inflection/inflection-3-pi"
+            "model": "inflection/inflection-3-pi",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "inflection/inflection-3-productivity",
           "meta_data": {
-            "model": "inflection/inflection-3-productivity"
+            "model": "inflection/inflection-3-productivity",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "prime-intellect/intellect-3",
           "meta_data": {
-            "model": "prime-intellect/intellect-3"
+            "model": "prime-intellect/intellect-3",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "nousresearch/hermes-4-70b",
           "meta_data": {
-            "model": "nousresearch/hermes-4-70b"
+            "model": "nousresearch/hermes-4-70b",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "nousresearch/hermes-4-405b",
           "meta_data": {
-            "model": "nousresearch/hermes-4-405b"
+            "model": "nousresearch/hermes-4-405b",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "nousresearch/hermes-3-llama-3.1-70b",
           "meta_data": {
-            "model": "nousresearch/hermes-3-llama-3.1-70b"
+            "model": "nousresearch/hermes-3-llama-3.1-70b",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "nousresearch/hermes-3-llama-3.1-405b",
           "meta_data": {
-            "model": "nousresearch/hermes-3-llama-3.1-405b"
+            "model": "nousresearch/hermes-3-llama-3.1-405b",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "baidu/ernie-4.5-300b-a47b",
           "meta_data": {
-            "model": "baidu/ernie-4.5-300b-a47b"
+            "model": "baidu/ernie-4.5-300b-a47b",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "z-ai/glm-4.5",
           "meta_data": {
-            "model": "z-ai/glm-4.5"
+            "model": "z-ai/glm-4.5",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "z-ai/glm-4.6",
           "meta_data": {
-            "model": "z-ai/glm-4.6"
+            "model": "z-ai/glm-4.6",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "z-ai/glm-4.7",
           "meta_data": {
-            "model": "z-ai/glm-4.7"
+            "model": "z-ai/glm-4.7",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         }
       ],
@@ -1225,13 +1482,17 @@
         {
           "name": "qwen3-max",
           "meta_data": {
-            "model": "qwen3-max"
+            "model": "qwen3-max",
+            "max_tokens": 81920,
+            "max_completion_tokens": 81920
           }
         },
         {
           "name": "qwen3-coder-flash",
           "meta_data": {
-            "model": "qwen3-coder-flash"
+            "model": "qwen3-coder-flash",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         }
       ],
@@ -1330,13 +1591,15 @@
         {
           "name": "deepseek-v4-pro",
           "meta_data": {
-            "model": "deepseek-v4-pro"
+            "model": "deepseek-v4-pro",
+            "max_tokens": 384000
           }
         },
         {
           "name": "deepseek-v4-flash",
           "meta_data": {
-            "model": "deepseek-v4-flash"
+            "model": "deepseek-v4-flash",
+            "max_tokens": 384000
           }
         }
       ],
@@ -1413,13 +1676,17 @@
         {
           "name": "grok-4.3",
           "meta_data": {
-            "model": "grok-4.3"
+            "model": "grok-4.3",
+            "max_tokens": 131072,
+            "max_completion_tokens": 131072
           }
         },
         {
           "name": "grok-build-0.1",
           "meta_data": {
-            "model": "grok-build-0.1"
+            "model": "grok-build-0.1",
+            "max_tokens": 131072,
+            "max_completion_tokens": 131072
           }
         }
       ],
@@ -1518,31 +1785,36 @@
         {
           "name": "sonar",
           "meta_data": {
-            "model": "sonar"
+            "model": "sonar",
+            "max_tokens": 128000
           }
         },
         {
           "name": "sonar-pro",
           "meta_data": {
-            "model": "sonar-pro"
+            "model": "sonar-pro",
+            "max_tokens": 200000
           }
         },
         {
           "name": "sonar-reasoning-pro",
           "meta_data": {
-            "model": "sonar-reasoning-pro"
+            "model": "sonar-reasoning-pro",
+            "max_tokens": 128000
           }
         },
         {
           "name": "sonar-deep-research",
           "meta_data": {
-            "model": "sonar-deep-research"
+            "model": "sonar-deep-research",
+            "max_tokens": 128000
           }
         },
         {
           "name": "perplexity/sonar",
           "meta_data": {
-            "model": "perplexity/sonar"
+            "model": "perplexity/sonar",
+            "max_tokens": 128000
           }
         }
       ],
@@ -1619,55 +1891,73 @@
         {
           "name": "codex-mini",
           "meta_data": {
-            "model": "codex-mini"
+            "model": "codex-mini",
+            "max_tokens": 128000,
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "microsoft/MAI-DS-R1",
           "meta_data": {
-            "model": "microsoft/MAI-DS-R1"
+            "model": "microsoft/MAI-DS-R1",
+            "max_tokens": 128000,
+            "max_completion_tokens": 128000
           }
         },
         {
           "name": "microsoft/Phi-4",
           "meta_data": {
-            "model": "microsoft/Phi-4"
+            "model": "microsoft/Phi-4",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "microsoft/Phi-4-mini",
           "meta_data": {
-            "model": "microsoft/Phi-4-mini"
+            "model": "microsoft/Phi-4-mini",
+            "max_tokens": 16384,
+            "max_completion_tokens": 16384
           }
         },
         {
           "name": "microsoft/Phi-3.5-mini-instruct",
           "meta_data": {
-            "model": "microsoft/Phi-3.5-mini-instruct"
+            "model": "microsoft/Phi-3.5-mini-instruct",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "microsoft/Phi-3.5-MoE-instruct",
           "meta_data": {
-            "model": "microsoft/Phi-3.5-MoE-instruct"
+            "model": "microsoft/Phi-3.5-MoE-instruct",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "microsoft/Phi-3-mini-instruct",
           "meta_data": {
-            "model": "microsoft/Phi-3-mini-instruct"
+            "model": "microsoft/Phi-3-mini-instruct",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "microsoft/Phi-3-small-instruct",
           "meta_data": {
-            "model": "microsoft/Phi-3-small-instruct"
+            "model": "microsoft/Phi-3-small-instruct",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "microsoft/Phi-3-medium-instruct",
           "meta_data": {
-            "model": "microsoft/Phi-3-medium-instruct"
+            "model": "microsoft/Phi-3-medium-instruct",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         }
       ],
@@ -1766,19 +2056,25 @@
         {
           "name": "nvidia/nemotron-4-340b-instruct",
           "meta_data": {
-            "model": "nvidia/nemotron-4-340b-instruct"
+            "model": "nvidia/nemotron-4-340b-instruct",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "nvidia/nvidia-nemotron-nano-9b-v2",
           "meta_data": {
-            "model": "nvidia/nvidia-nemotron-nano-9b-v2"
+            "model": "nvidia/nvidia-nemotron-nano-9b-v2",
+            "max_tokens": 8192,
+            "max_completion_tokens": 8192
           }
         },
         {
           "name": "nvidia/llama-3.1-nemotron-70b-instruct",
           "meta_data": {
-            "model": "nvidia/llama-3.1-nemotron-70b-instruct"
+            "model": "nvidia/llama-3.1-nemotron-70b-instruct",
+            "max_tokens": 4096,
+            "max_completion_tokens": 4096
           }
         }
       ],
@@ -1877,31 +2173,36 @@
         {
           "name": "amazon.nova-2-lite-v1:0",
           "meta_data": {
-            "model": "amazon.nova-2-lite-v1:0"
+            "model": "amazon.nova-2-lite-v1:0",
+            "max_tokens": 65000
           }
         },
         {
           "name": "amazon.nova-lite-v1:0",
           "meta_data": {
-            "model": "amazon.nova-lite-v1:0"
+            "model": "amazon.nova-lite-v1:0",
+            "max_tokens": 65000
           }
         },
         {
           "name": "amazon.nova-micro-v1:0",
           "meta_data": {
-            "model": "amazon.nova-micro-v1:0"
+            "model": "amazon.nova-micro-v1:0",
+            "max_tokens": 65000
           }
         },
         {
           "name": "amazon.nova-premier-v1:0",
           "meta_data": {
-            "model": "amazon.nova-premier-v1:0"
+            "model": "amazon.nova-premier-v1:0",
+            "max_tokens": 65000
           }
         },
         {
           "name": "amazon.nova-pro-v1:0",
           "meta_data": {
-            "model": "amazon.nova-pro-v1:0"
+            "model": "amazon.nova-pro-v1:0",
+            "max_tokens": 65000
           }
         }
       ],
@@ -1958,21 +2259,24 @@
           "name": "gpt-4o-realtime-preview",
           "meta_data": {
             "model": "gpt-4o-realtime-preview",
-            "is_s2s": true
+            "is_s2s": true,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "gpt-4o-mini-realtime-preview",
           "meta_data": {
             "model": "gpt-4o-mini-realtime-preview",
-            "is_s2s": true
+            "is_s2s": true,
+            "max_completion_tokens": 4096
           }
         },
         {
           "name": "gpt-realtime",
           "meta_data": {
             "model": "gpt-realtime",
-            "is_s2s": true
+            "is_s2s": true,
+            "max_completion_tokens": 4096
           }
         }
       ],
@@ -2024,13 +2328,15 @@
           "name": "gemini-live-2.5-flash-native-audio",
           "meta_data": {
             "model": "gemini-live-2.5-flash-native-audio",
-            "is_s2s": true
+            "is_s2s": true,
+            "max_tokens": 65536
           }
         },
         {
           "name": "gemini-3.1-flash-live-preview",
           "meta_data": {
-            "model": "gemini-3.1-flash-live-preview"
+            "model": "gemini-3.1-flash-live-preview",
+            "max_tokens": 65536
           }
         }
       ],
@@ -2295,7 +2601,10 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
           "required": 0,
           "description": "Controls randomness in transcription"
         }
@@ -2346,7 +2655,10 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
           "required": 0,
           "description": "Controls randomness in transcription"
         }
@@ -2424,7 +2736,9 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": null,
+          "validator": {
+            "min": 0
+          },
           "required": 0,
           "description": "Max wait time in ms for word finalization"
         },
@@ -2433,7 +2747,10 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
           "required": 0,
           "description": "Confidence threshold for end of turn detection"
         },
@@ -2616,7 +2933,9 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.0
+          },
           "required": 0,
           "description": "Endpointing duration in seconds"
         },
@@ -2826,7 +3145,9 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": null,
+          "validator": {
+            "min": 1
+          },
           "required": 0,
           "description": "Maximum number of speakers for diarization"
         },
@@ -2835,7 +3156,9 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.0
+          },
           "required": 0,
           "description": "Maximum transcription delay in seconds"
         },
@@ -2844,7 +3167,9 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.0
+          },
           "required": 0,
           "description": "Silence duration to trigger end of utterance in seconds"
         }
@@ -3063,15 +3388,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        },
         {
           "name": "speed",
           "data_type": "string",
@@ -5587,20 +5903,14 @@
       ],
       "meta_data_schema": [
         {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        },
-        {
           "name": "speed",
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.5,
+            "max": 5.0
+          },
           "required": 0,
           "description": "Speech speed multiplier. Default: 1.0"
         }
@@ -5775,20 +6085,14 @@
       ],
       "meta_data_schema": [
         {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        },
-        {
           "name": "speed",
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.5,
+            "max": 2.0
+          },
           "required": 0,
           "description": "Speech speed multiplier. Default: 1.0"
         },
@@ -5797,7 +6101,10 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.0,
+            "max": 10.0
+          },
           "required": 0,
           "description": "Volume level. Default: 1.0"
         },
@@ -5806,7 +6113,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": null,
+          "validator": {
+            "min": -12,
+            "max": 12
+          },
           "required": 0,
           "description": "Pitch adjustment. Default: 0"
         },
@@ -22784,20 +23094,14 @@
       ],
       "meta_data_schema": [
         {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        },
-        {
           "name": "speed_alpha",
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.5,
+            "max": 3.0
+          },
           "required": 0,
           "description": "Speed control factor. Default: 1.0"
         },
@@ -29706,15 +30010,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        },
-        {
           "name": "pitch",
           "data_type": "float",
           "type": "input number",
@@ -29764,7 +30059,10 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": "range_validator",
+          "validator": {
+            "min": 0.01,
+            "max": 1.0
+          },
           "required": 0,
           "description": "Temperature for generation. Range: 0.01 to 1.0. Default: 0.6"
         }
@@ -36379,15 +36677,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        },
-        {
           "name": "latency",
           "data_type": "string",
           "type": "input",
@@ -36410,7 +36699,10 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.5,
+            "max": 2.0
+          },
           "required": 0,
           "description": "Prosody speed multiplier. Default: 1.0"
         },
@@ -36419,7 +36711,10 @@
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": null,
+          "validator": {
+            "min": -20,
+            "max": 20
+          },
           "required": 0,
           "description": "Prosody volume adjustment. Default: 0"
         }
@@ -36562,7 +36857,10 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
           "required": 0,
           "description": "Controls variation in speech generation"
         },
@@ -36571,7 +36869,10 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.5,
+            "max": 1.5
+          },
           "required": 0,
           "description": "Speaking rate multiplier"
         }
@@ -37377,7 +37678,10 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.25,
+            "max": 4.0
+          },
           "required": 0,
           "description": "Speech speed multiplier"
         }
@@ -38346,20 +38650,14 @@
       ],
       "meta_data_schema": [
         {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en-US"
-        },
-        {
           "name": "quality",
           "data_type": "integer",
           "type": "input number",
           "format": "integer",
-          "validator": null,
+          "validator": {
+            "min": 0,
+            "max": 40
+          },
           "required": 0,
           "description": "Audio quality setting. Default: 20"
         }
@@ -39500,20 +39798,14 @@
       ],
       "meta_data_schema": [
         {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        },
-        {
           "name": "speed",
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.7,
+            "max": 2.0
+          },
           "required": 0,
           "description": "Speech speed multiplier. Default: 1.0"
         }
@@ -40280,50 +40572,124 @@
           }
         }
       ],
-      "meta_data_schema": [
-        {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        }
-      ],
+      "meta_data_schema": [],
       "voices": [
+        {
+          "name": "Amy",
+          "voice_id": "amy",
+          "description": "Narrative. Excited. US",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/amy/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Ansel",
+          "voice_id": "ansel",
+          "description": "Young, engaging voice with subtle enthusiasm and natural emphasis. Perfect for persuasive content and polished advertising.",
+          "gender": null,
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/ansel/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Autumn",
+          "voice_id": "autumn",
+          "description": "Warm, friendly female voice with a professional yet approachable tone. Ideal for customer support and guidance.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/autumn/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
         {
           "name": "Ava",
           "voice_id": "ava",
-          "description": "Warm, friendly American female voice",
+          "description": "Conversational. Sultry. US",
           "gender": "female",
           "language": "en",
-          "sample_url": null,
-          "accent": "American",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/ava/preview",
+          "accent": null,
           "language_list": [
             "en"
           ]
         },
         {
-          "name": "Curtis",
-          "voice_id": "curtis",
-          "description": "Confident American male voice",
+          "name": "Bella",
+          "voice_id": "bella",
+          "description": null,
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/bella/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Brandon",
+          "voice_id": "brandon",
+          "description": "Clear, stable American broadcaster voice with engaging delivery. Great for news, announcements, and professional narration.",
           "gender": "male",
           "language": "en",
-          "sample_url": null,
-          "accent": "American",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/brandon/preview",
+          "accent": null,
           "language_list": [
             "en"
           ]
         },
         {
-          "name": "Lily",
-          "voice_id": "lily",
-          "description": "Soft, clear American female voice",
+          "name": "Caleb",
+          "voice_id": "caleb",
+          "description": "Narrative. Confident. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/caleb/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Cassian",
+          "voice_id": "cassian",
+          "description": "Friendly, animated voice that's nurturing and engaging. Welcoming and enthusiastic, perfect for educational content and guiding students.",
+          "gender": null,
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/cassian/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Chloe",
+          "voice_id": "chloe",
+          "description": "Conversational. Authentic. US",
           "gender": "female",
           "language": "en",
-          "sample_url": null,
-          "accent": "American",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/chloe/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Dalton",
+          "voice_id": "dalton",
+          "description": "Narrative. US Southern accent. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/dalton/preview",
+          "accent": null,
           "language_list": [
             "en"
           ]
@@ -40331,11 +40697,395 @@
         {
           "name": "Daniel",
           "voice_id": "daniel",
-          "description": "Natural American male voice",
+          "description": "Narrative. Confident. US",
           "gender": "male",
           "language": "en",
-          "sample_url": null,
-          "accent": "American",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/daniel/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Dustin",
+          "voice_id": "dustin",
+          "description": "Narrative. Confident. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/dustin/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Elowen",
+          "voice_id": "elowen",
+          "description": "Warm, velvety female voice with youthful charm. Captivating for storytelling and narrative content.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/elowen/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Evander",
+          "voice_id": "evander",
+          "description": "Weathered, husky voice with a calm, comforting presence. Perfect for customer support and reassuring conversations.",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/evander/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Huxley",
+          "voice_id": "huxley",
+          "description": "Theatrical male voice with animated, expressive range. An intriguing and fun personality that's perfect for dynamic conversations and entertaining content.",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/huxley/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Jacob",
+          "voice_id": "jacob",
+          "description": null,
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/jacob/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "James",
+          "voice_id": "james",
+          "description": "Narrative. Deep and calm. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/james/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Juniper",
+          "voice_id": "juniper",
+          "description": "Commanding female voice with sophisticated, educated tones. Ideal for instruction and authoritative content.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/juniper/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Kennedy",
+          "voice_id": "kennedy",
+          "description": "Young, emotive female voice that's conversational, inviting, and healing. Great for advertisements and friendly communication.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/kennedy/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Lauren",
+          "voice_id": "lauren",
+          "description": "Conversational. California accent. US",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/lauren/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Leah",
+          "voice_id": "leah",
+          "description": "Confident, expressive female voice with dynamic intonation patterns. Professional and engaging, perfect for customer support and content creation.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/leah/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Lily",
+          "voice_id": "lily",
+          "description": "Narrative. Exuberant. US",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/lily/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Lucas",
+          "voice_id": "lucas",
+          "description": "Clear male voice with brisk, projected delivery. Speaks with the pace and clarity of professional broadcasting, prioritizing content over personality.",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/lucas/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Magnus",
+          "voice_id": "magnus",
+          "description": "Conversational. Deep and charming. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/magnus/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Miles",
+          "voice_id": "miles",
+          "description": "Conversational. Gossipy. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/miles/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Morgan",
+          "voice_id": "morgan",
+          "description": "Mature British female voice with depth and experience. Rich tones perfect for sophisticated content.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/morgan/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Natalie",
+          "voice_id": "natalie",
+          "description": "Bright, youthful female voice with animated, friendly energy. Sounds like talking with a close friend.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/natalie/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Nathan",
+          "voice_id": "nathan",
+          "description": "Narrative. Chill. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/nathan/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Noah",
+          "voice_id": "noah",
+          "description": "Conversational. Deep and chill. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/noah/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Nyssa",
+          "voice_id": "nyssa",
+          "description": "Warm female voice with animated Southern charm and spirited sass. Confident and motherly with distinctive personality, perfect for engaging conversations and personable support.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/nyssa/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Oliver",
+          "voice_id": "oliver",
+          "description": "Narrative. Silly. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/oliver/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Paige",
+          "voice_id": "paige",
+          "description": "Conversational. Determined. US",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/paige/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Ryan",
+          "voice_id": "ryan",
+          "description": "Rhythmic male voice with theatrical flair and higher pitch. Excellent for customer service and content creation.",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/ryan/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Sadie",
+          "voice_id": "sadie",
+          "description": "Calm, relaxed female voice with muted tones. Perfect for peaceful content creation and gentle narration.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/sadie/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Sophie",
+          "voice_id": "sophie",
+          "description": "Narrative. Strong British accent. UK",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/sophie/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Stella",
+          "voice_id": "stella",
+          "description": "Soft, gentle female voice ideal for reading content. Measured and professional without being overly animated.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/stella/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Terrence",
+          "voice_id": "terrence",
+          "description": "Narrative. Enthusiastic. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/terrence/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Tyler",
+          "voice_id": "tyler",
+          "description": "Smooth, buttery male voice with crisp articulation. Excellent for captivating storytelling and narration.",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/tyler/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Vesper",
+          "voice_id": "vesper",
+          "description": "Distinctive voice with nerdy charm and comforting qualities. Inviting and approachable for explanatory content.",
+          "gender": null,
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/vesper/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Violet",
+          "voice_id": "violet",
+          "description": "Uplifting female voice with slight vocal fry. Warm and understanding for customer concerns and support.",
+          "gender": "female",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/violet/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Warrick",
+          "voice_id": "warrick",
+          "description": "Playful, animated voice with friendly, upbeat character. Engaging and enthusiastic, making it great for teaching children and interactive content.",
+          "gender": null,
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/warrick/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Zain",
+          "voice_id": "zain",
+          "description": "Smoky male voice that's both kind and curious. Perfect for thoughtful conversations and inquiry.",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/zain/preview",
+          "accent": null,
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Zeke",
+          "voice_id": "zeke",
+          "description": "Conversational. Calm. US",
+          "gender": "male",
+          "language": "en",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/zeke/preview",
+          "accent": null,
           "language_list": [
             "en"
           ]
@@ -40343,47 +41093,11 @@
         {
           "name": "Zoe",
           "voice_id": "zoe",
-          "description": "Bright, energetic American female voice",
+          "description": "Conversational. Energetic. US",
           "gender": "female",
           "language": "en",
-          "sample_url": null,
-          "accent": "American",
-          "language_list": [
-            "en"
-          ]
-        },
-        {
-          "name": "Ethan",
-          "voice_id": "ethan",
-          "description": "Calm, deep American male voice",
-          "gender": "male",
-          "language": "en",
-          "sample_url": null,
-          "accent": "American",
-          "language_list": [
-            "en"
-          ]
-        },
-        {
-          "name": "Mia",
-          "voice_id": "mia",
-          "description": "Expressive American female voice",
-          "gender": "female",
-          "language": "en",
-          "sample_url": null,
-          "accent": "American",
-          "language_list": [
-            "en"
-          ]
-        },
-        {
-          "name": "Leo",
-          "voice_id": "leo",
-          "description": "Smooth, professional American male voice",
-          "gender": "male",
-          "language": "en",
-          "sample_url": null,
-          "accent": "American",
+          "sample_url": "https://api.lmnt.com/v1/ai/voice/zoe/preview",
+          "accent": null,
           "language_list": [
             "en"
           ]
@@ -40426,7 +41140,10 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.25,
+            "max": 3.0
+          },
           "required": 0,
           "description": "Speech speed multiplier"
         },
@@ -40435,7 +41152,10 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.0,
+            "max": 5.0
+          },
           "required": 0,
           "description": "Trailing silence duration in seconds"
         }
@@ -42388,20 +43108,14 @@
       ],
       "meta_data_schema": [
         {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis"
-        },
-        {
           "name": "stability",
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
           "required": 0,
           "description": "Voice stability setting"
         },
@@ -42410,7 +43124,10 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
           "required": 0,
           "description": "Voice similarity boost setting"
         },
@@ -42419,7 +43136,10 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
           "required": 0,
           "description": "Style exaggeration setting"
         },
@@ -42437,7 +43157,10 @@
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.7,
+            "max": 1.2
+          },
           "required": 0,
           "description": "Speech speed multiplier"
         },
@@ -44283,15 +45006,6 @@
       ],
       "meta_data_schema": [
         {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        },
-        {
           "name": "user_instructions",
           "data_type": "string",
           "type": "input",
@@ -44523,17 +45237,7 @@
           }
         }
       ],
-      "meta_data_schema": [
-        {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis"
-        }
-      ],
+      "meta_data_schema": [],
       "voices": [
         {
           "name": "Nyomi",
@@ -44794,15 +45498,6 @@
           "validator": null,
           "required": 0,
           "description": "Polly voice engine type"
-        },
-        {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
         },
         {
           "name": "pitch",
@@ -45665,20 +46360,14 @@
           "description": "Google Cloud location"
         },
         {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en"
-        },
-        {
           "name": "speaking_rate",
           "data_type": "float",
           "type": "input number",
           "format": "float",
-          "validator": null,
+          "validator": {
+            "min": 0.25,
+            "max": 2.0
+          },
           "required": 0,
           "description": "Speaking rate multiplier"
         }
@@ -48617,15 +49306,6 @@
           "validator": null,
           "required": 0,
           "description": "Speech emphasis level"
-        },
-        {
-          "name": "language",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Language for speech synthesis. Default: en-US"
         },
         {
           "name": "pitch",

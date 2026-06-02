@@ -1,7 +1,7 @@
 import uuid
 
 from sqlalchemy import Column, String, Boolean, ForeignKey, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
 from core.models.base import TimestampModel
@@ -21,6 +21,7 @@ class Model(TimestampModel):
     sample_id = Column(String(500), nullable=True)
     sample_list = Column(Boolean, nullable=False, default=False)
     is_active = Column(Boolean, nullable=False, default=True)
+    meta_data = Column(JSONB, nullable=True)
 
     # relationships
     provider = relationship("ModelProvider", backref="models", lazy="select")

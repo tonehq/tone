@@ -104,7 +104,7 @@ const SliderField = (props: SliderFieldProps) => {
               onValueChange?.(v);
             }}
             error={error ?? !!fieldState.error}
-            helperText={helperText ?? (fieldState.error?.message as string)}
+            helperText={fieldState.error?.message ?? helperText}
           />
         )}
       />

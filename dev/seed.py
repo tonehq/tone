@@ -354,6 +354,7 @@ def seed_from_configs(db, org_name, email, password):
                 name=model_name,
                 display_name=model_name,
                 is_active=True,
+                meta_data=model_spec.get("meta_data"),
             )
             db.add(m)
             model_name_to_obj[(mp.id, model_name)] = m

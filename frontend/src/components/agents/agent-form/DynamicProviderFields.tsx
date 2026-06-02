@@ -1,5 +1,6 @@
 'use client';
 
+import type { RegisterOptions } from 'react-hook-form';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import { SelectInput, SliderField, TextInput } from '@/components/shared';
@@ -22,12 +23,15 @@ interface DynamicProviderFieldsProps {
   fields: MetaDataSchemaField[];
   basePath: string;
   exclude?: string[];
+  /** Model-level meta_data — overrides provider schema validator limits per field. */
+  modelMetaData?: Record<string, unknown> | null;
 }
 
 export default function DynamicProviderFields({
   fields,
   basePath,
   exclude = [],
+  modelMetaData,
 }: DynamicProviderFieldsProps) {
   const { control, setValue } = useFormContext();
 
@@ -44,10 +48,24 @@ export default function DynamicProviderFields({
           basePath={basePath}
           control={control}
           setValue={setValue}
+          modelMetaData={modelMetaData}
         />
       ))}
     </div>
   );
+}
+
+/** Safely extract min/max from a field's validator + optional model override. */
+function getFieldRange(field: MetaDataSchemaField, modelMetaData?: Record<string, unknown> | null) {
+  const validatorObj =
+    typeof field.validator === 'object' && field.validator !== null ? field.validator : {};
+  const min = validatorObj.min as number | undefined;
+  const modelMax =
+    modelMetaData && field.name in modelMetaData
+      ? (modelMetaData[field.name] as number)
+      : undefined;
+  const max = modelMax ?? (validatorObj.max as number | undefined);
+  return { min, max };
 }
 
 function FieldRenderer({
@@ -55,21 +73,21 @@ function FieldRenderer({
   basePath,
   control,
   setValue,
+  modelMetaData,
 }: {
   field: MetaDataSchemaField;
   basePath: string;
   control: ReturnType<typeof useFormContext>['control'];
   setValue: ReturnType<typeof useFormContext>['setValue'];
+  modelMetaData?: Record<string, unknown> | null;
 }) {
   const path = `${basePath}.${field.name}` as never;
   const currentValue = useWatch({ control, name: path });
   const isRequired = !!field.required;
 
-  const validator =
-    typeof field.validator === 'object' && field.validator !== null ? field.validator : {};
-  const min = validator.min as number | undefined;
-  const max = validator.max as number | undefined;
+  const { min, max } = getFieldRange(field, modelMetaData);
   const label = formatLabel(field.name) + (isRequired ? ' *' : '');
+  const rules = buildValidationRules(field, min, max);
 
   // Select with predefined options
   if (field.type === 'select' && field.options) {
@@ -77,6 +95,8 @@ function FieldRenderer({
       <SelectInput
         name={path}
         label={label}
+        control={control}
+        rules={rules}
         options={field.options.map((o) => ({ value: o, label: o }))}
         value={String(currentValue ?? '')}
         onValueChange={(v) => setValue(path, (v || null) as never, { shouldDirty: true })}
@@ -103,7 +123,7 @@ function FieldRenderer({
     );
   }
 
-  // Float with min/max — render as slider with static min/mid/max labels
+  // Float with min/max — render as slider (UI enforces range, no rules needed)
   if (field.data_type === 'float' && min !== undefined && max !== undefined) {
     const mid = Math.round(((min + max) / 2) * 10) / 10;
     return (
@@ -127,13 +147,14 @@ function FieldRenderer({
     );
   }
 
-  // Integer / float without range — render as number input
+  // Integer / float without full range — render as number input
   if (field.data_type === 'float' || field.data_type === 'integer' || field.data_type === 'int') {
     return (
       <TextInput
         name={path}
         label={label}
         control={control}
+        rules={rules}
         type="number"
         placeholder={min !== undefined ? `Min: ${min}` : undefined}
         helperText={field.description}
@@ -145,12 +166,59 @@ function FieldRenderer({
   return (
     <TextInput
       name={path}
-      label={formatLabel(field.name)}
+      label={label}
       control={control}
+      rules={rules}
       placeholder={field.description || undefined}
       helperText={field.description}
     />
   );
+}
+
+/** Build React Hook Form validation rules from a meta_data_schema field. */
+function buildValidationRules(
+  field: MetaDataSchemaField,
+  min?: number,
+  max?: number,
+): RegisterOptions {
+  const rules: RegisterOptions = {};
+  const label = formatLabel(field.name);
+
+  if (field.required) {
+    rules.required = `${label} is required`;
+  }
+
+  const isNumeric =
+    field.data_type === 'float' || field.data_type === 'integer' || field.data_type === 'int';
+  const hasOptions = field.options && field.options.length > 0;
+  const isArray = field.data_type === 'array' || field.data_type === 'list';
+
+  if (isNumeric || hasOptions || isArray) {
+    rules.validate = (value: unknown) => {
+      if (value === null || value === undefined || value === '') return true;
+
+      if (isNumeric) {
+        const num = Number(value);
+        if (isNaN(num)) return `${label} must be a valid number`;
+        if (field.data_type !== 'float' && !Number.isInteger(num))
+          return `${label} must be a whole number`;
+        if (min !== undefined && num < min) return `${label} must be at least ${min}`;
+        if (max !== undefined && num > max) return `${label} must be at most ${max}`;
+      }
+
+      if (hasOptions && !field.options!.includes(String(value))) {
+        return `${label} must be one of: ${field.options!.join(', ')}`;
+      }
+
+      if (isArray && !Array.isArray(value)) {
+        return `${label} must be a list`;
+      }
+
+      return true;
+    };
+  }
+
+  return rules;
 }
 
 /** Convert snake_case field name to a readable label. */

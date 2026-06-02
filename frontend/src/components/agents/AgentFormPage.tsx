@@ -178,7 +178,29 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
         router.push(`/agents/edit/${created.agent_type}/${created.id}`);
       }
     } catch (err) {
-      handleApiError(err);
+      const detail = (err as any)?.response?.data?.detail;
+      if (typeof detail === 'object' && detail?.errors) {
+        const validationErrors = detail.errors as Record<string, Record<string, string[]>>;
+        let navigated = false;
+        for (const [settingsKey, fields] of Object.entries(validationErrors)) {
+          for (const [fieldName, messages] of Object.entries(fields)) {
+            const path = `config.${settingsKey}.${fieldName}` as any;
+            methods.setError(path, { type: 'server', message: messages[0] });
+          }
+          if (!navigated) {
+            if (settingsKey === 'llm_settings') setActiveTab('ai');
+            else if (settingsKey === 'voice_settings' || settingsKey === 'stt_settings')
+              setActiveTab('voice');
+            navigated = true;
+          }
+        }
+        showToast.error(
+          'Validation failed',
+          detail.message || 'Please fix the highlighted fields.',
+        );
+      } else {
+        handleApiError(err);
+      }
     } finally {
       setSaving(false);
     }

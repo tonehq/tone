@@ -138,7 +138,7 @@ const TextInput = forwardRef<HTMLInputElement, TextInputProps>((props, ref) => {
             }}
             onBlur={field.onBlur}
             error={error ?? !!fieldState.error}
-            helperText={helperText ?? (fieldState.error?.message as string)}
+            helperText={fieldState.error?.message ?? helperText}
           />
         )}
       />
