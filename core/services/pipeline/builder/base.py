@@ -34,5 +34,5 @@ class PipelineBuilder:
     def __init__(self, params: PipelineParams):
         self.params = params
 
-    def build(self, transport: Any, agent: Any = None, audio_buffer: Any = None, from_number: str = "") -> BuildResult:
+    async def build(self, transport: Any, agent: Any = None, audio_buffer: Any = None, from_number: str = "") -> BuildResult:
         raise NotImplementedError

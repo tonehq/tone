@@ -17,11 +17,56 @@ from loguru import logger
 from core.services.pipeline.builder.base import BuildResult, PipelineBuilder
 from core.services.pipeline.service_factory import build_llm, build_stt, build_tts
 
+def _llm_safe_schema(node):
+    """Coerce a JSON-schema node so every current LLM provider accepts it.
+
+    Gemini (the strictest provider) rejects two patterns that MCP tools (e.g. ClickUp)
+    commonly emit and that OpenAI/Anthropic tolerate. We normalise to the strict form
+    once, so a single tool definition works across all LLMs:
+      * "type" as a list, e.g. ["string", "null"] -> first non-null type
+      * enum whose values aren't all strings       -> drop the enum (KEEP the declared
+        type, so the model still passes the real int/number value to the tool; Gemini
+        only permits string enums, so an int enum can't be kept either way)
+    """
+    if isinstance(node, list):
+        return [_llm_safe_schema(x) for x in node]
+    if not isinstance(node, dict):
+        return node
+    out = {}
+    for key, value in node.items():
+        if key == "type" and isinstance(value, list):
+            non_null = [t for t in value if t != "null"]
+            out[key] = non_null[0] if non_null else "string"
+        elif key == "enum" and isinstance(value, list):
+            if all(isinstance(v, str) for v in value):
+                out[key] = value  # string enums are valid everywhere
+            # else: drop the non-string enum, preserving the param's declared type
+        else:
+            out[key] = _llm_safe_schema(value)
+    return out
+
+
+def _sanitize_tool_schemas(tool_schemas):
+    """Return copies of the FunctionSchemas with provider-agnostic, LLM-safe properties."""
+    from pipecat.adapters.schemas.function_schema import FunctionSchema
+
+    cleaned = []
+    for fs in tool_schemas:
+        cleaned.append(
+            FunctionSchema(
+                name=fs.name,
+                description=fs.description,
+                properties={k: _llm_safe_schema(v) for k, v in (fs.properties or {}).items()},
+                required=fs.required,
+            )
+        )
+    return cleaned
+
 
 class PipecatPipelineBuilder(PipelineBuilder):
     """Assemble a Pipecat pipeline from `PipelineParams`."""
 
-    def build(self, transport: Any, agent: Any = None, audio_buffer: Any = None, from_number: str = "") -> BuildResult:
+    async def build(self, transport: Any, agent: Any = None, audio_buffer: Any = None, from_number: str = "") -> BuildResult:
         params = self.params
         is_s2s = params.is_s2s
 
@@ -65,33 +110,71 @@ class PipecatPipelineBuilder(PipelineBuilder):
         if agent:
             from core.services.custom_tool_service import (
                 build_custom_tool_schemas, create_built_in_tool_handler,
-                create_custom_tool_handler, get_custom_tools_for_agent)
+                create_custom_tool_handler, get_custom_tools_for_agent,
+                sanitize_tool_name)
             custom_tools = get_custom_tools_for_agent(agent.id)
             if custom_tools:
                 logger.info("Fetched {} custom tools for agent {}", len(custom_tools), agent.id)
                 custom_tools_schema = build_custom_tool_schemas(custom_tools)
                 for tool in custom_tools:
-                    if tool.tool_type == "built_in":
-                        handler = create_built_in_tool_handler(tool, from_number)
+                    # Only "custom" tools are customer webhooks; everything else
+                    # (google_calendar, send_sms, …) is a built-in whose tool_type IS
+                    # the specific type. google_calendar needs org_id for its OAuth
+                    # lookup. (The old code routed identically: tool_type != "custom".)
+                    if tool.tool_type != "custom":
+                        handler = create_built_in_tool_handler(
+                            tool, from_number, org_id=agent.organization_id
+                        )
                     else:
                         handler = create_custom_tool_handler(tool)
-                    llm.register_function(tool.name, handler)
-                    logger.info("Registered {} tool handler: {}", tool.tool_type, tool.name)
+                    # Register under the SAME sanitized name used in the schema so the
+                    # model's tool call (e.g. "calender_tool") maps back to this handler.
+                    fn_name = sanitize_tool_name(tool.name)
+                    llm.register_function(fn_name, handler)
+                    logger.info("Registered {} tool handler: {} (fn name: {})", tool.tool_type, tool.name, fn_name)
 
-        # Combine doc tools and custom tools into one ToolsSchema
+        # MCP tools: connect to the agent's linked MCP servers and register their tools.
+        # register_mcp_tools is async (network I/O), which is why build() is async.
+        mcp_tools_schema = None
+        if agent:
+            try:
+                from core.services.mcp_tool_service import register_mcp_tools
+                mcp_tools_schema = await register_mcp_tools(llm, agent.id)
+            except Exception as e:
+                logger.warning("MCP tools unavailable, disabled: {}", e)
+
+        # Combine doc tools, custom tools, and MCP tools into one ToolsSchema
         all_tool_schemas = []
         if doc_tools:
             all_tool_schemas.extend(doc_tools.standard_tools)
         if custom_tools_schema:
             all_tool_schemas.extend(custom_tools_schema.standard_tools)
+        if mcp_tools_schema:
+            all_tool_schemas.extend(mcp_tools_schema.standard_tools)
+
+        doc_count = len(doc_tools.standard_tools) if doc_tools else 0
+        custom_count = len(custom_tools_schema.standard_tools) if custom_tools_schema else 0
+        mcp_count = len(mcp_tools_schema.standard_tools) if mcp_tools_schema else 0
+        if agent:
+            logger.info(
+                "Agent {} tool inventory: {} total (doc={}, custom={}, mcp={})",
+                getattr(agent, "id", None), len(all_tool_schemas), doc_count, custom_count, mcp_count,
+            )
 
         if all_tool_schemas:
+            # Normalise every tool's parameter schema to the strict form that all
+            # current LLM providers accept (Gemini rejects int enums / union types
+            # that OpenAI tolerates). One definition, every provider.
+            all_tool_schemas = _sanitize_tool_schemas(all_tool_schemas)
             from pipecat.adapters.schemas.tools_schema import ToolsSchema
             combined_tools = ToolsSchema(standard_tools=all_tool_schemas)
         else:
             combined_tools = NOT_GIVEN
 
-        messages = params.messages
+        # Anchor the conversation to the real current date (fresh per call, not the
+        # resolver's cached messages) so clock-less models don't invent years or book
+        # past dates. No-op when there's no system message.
+        messages = params.messages_with_date_anchor()
 
         if is_s2s:
             # S2S pipeline: audio goes through the LLM directly (no separate STT/TTS).

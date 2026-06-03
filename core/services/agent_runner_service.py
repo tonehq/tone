@@ -8,8 +8,7 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from core.models.agent import Agent
-from core.models.agent_channel import AgentChannel
-from core.models.agent_channel_phone_numbers import AgentChannelPhoneNumbers
+from core.models.phone_number import PhoneNumber
 from core.services.base import BaseService
 
 
@@ -32,7 +31,7 @@ class AgentRunnerService(BaseService):
             return None
         return (
             self.db.query(Agent)
-            .filter(Agent.id == agent_id, Agent.status == "active")
+            .filter(Agent.id == agent_id, Agent.is_active.is_(True))
             .first()
         )
 
@@ -44,11 +43,11 @@ class AgentRunnerService(BaseService):
         if agent_id is None:
             return None
         rec = (
-            self.db.query(AgentChannelPhoneNumbers)
-            .filter(AgentChannelPhoneNumbers.agent_id == agent_id)
+            self.db.query(PhoneNumber)
+            .filter(PhoneNumber.agent_id == agent_id)
             .first()
         )
-        return rec.phone_number if rec else None
+        return rec.number if rec else None
 
     def get_agent_by_phone_number(self, phone_number: str) -> Optional[Agent]:
         """Find the agent associated with the given phone number (the number the call came to).
@@ -80,92 +79,56 @@ class AgentRunnerService(BaseService):
         # Single JOIN: phone_number → agent (avoids 2 separate queries)
         result = (
             self.db.query(Agent)
-            .join(AgentChannelPhoneNumbers, AgentChannelPhoneNumbers.agent_id == Agent.id)
-            .filter(AgentChannelPhoneNumbers.phone_number == normalized)
+            .join(PhoneNumber, PhoneNumber.agent_id == Agent.id)
+            .filter(PhoneNumber.number == normalized)
             .first()
         )
-        if not result:
-            # Fallback to channel-based lookup for legacy records without agent_id
-            result = (
-                self.db.query(Agent)
-                .join(AgentChannel, AgentChannel.agent_id == Agent.id)
-                .join(AgentChannelPhoneNumbers, AgentChannelPhoneNumbers.channel_id == AgentChannel.channel_id)
-                .filter(AgentChannelPhoneNumbers.phone_number == normalized)
-                .first()
-            )
 
         if result:
             cache_set(cache_key, result.id, ttl_seconds=1800)
 
         return result
 
-    def _get_twilio_credentials_from_channel(self, org_id=None, channel_id=None) -> dict:
-        """Fetch Twilio account_sid and auth_token from the channels table.
+    def _channel_config(self, provider_slug: str, channel_id=None) -> dict:
+        """Decrypt a telephony Channel's config (encrypted_config) for this org.
 
-        If channel_id is provided, looks up that specific channel.
-        Otherwise falls back to org-scoped type-based lookup.
-        Falls back to _get_twilio_credentials_from_api_keys() if no channel found.
+        Channels store credentials keyed by `channel_type`
+        ("twilio"/"telnyx"/"plivo"/"exotel"). Prefers a specific channel_id, then
+        falls back to the org-scoped channel of the given type. Returns {} if none.
         """
         from core.models.channel import Channel
-        from core.models.enums import ChannelType
+        from core.utils.encryption import decrypt_json
+
+        def _decrypt(channel) -> dict:
+            if not channel or not channel.encrypted_config:
+                return {}
+            try:
+                return decrypt_json(channel.encrypted_config) or {}
+            except Exception as e:
+                logger.warning("Failed to decrypt %s channel config: %s", provider_slug, e)
+                return {}
 
         if channel_id:
-            channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
-            if channel and channel.meta_data:
-                meta = channel.meta_data
-                account_sid = meta.get("account_sid")
-                auth_token = meta.get("auth_token")
-                if account_sid and auth_token:
-                    return {"account_sid": account_sid, "auth_token": auth_token}
+            cfg = _decrypt(self.db.query(Channel).filter(Channel.id == channel_id).first())
+            if cfg:
+                return cfg
 
-        if org_id:
-            channel = (
-                self.db.query(Channel)
-                .filter(Channel.type == ChannelType.TWILIO, Channel.organization_id == org_id)
-                .first()
-            )
-            if channel and channel.meta_data:
-                meta = channel.meta_data
-                account_sid = meta.get("account_sid")
-                auth_token = meta.get("auth_token")
-                if account_sid and auth_token:
-                    return {"account_sid": account_sid, "auth_token": auth_token}
-
-        # Fallback: try api_keys table
-        return self._get_twilio_credentials_from_api_keys()
-
-    def _get_twilio_credentials_from_api_keys(self) -> dict:
-        """Fetch Twilio account_sid and auth_token from the DB (api_keys table).
-
-        Legacy method — queries globally without org scoping.
-        """
-        from core.models.service_provider import ServiceProvider
-        from core.models.api_key import ApiKey
-        from core.utils.encryption import decrypt
-
-        provider = self.db.query(ServiceProvider).filter(ServiceProvider.name == "twilio").first()
-        if not provider:
-            logger.warning("Twilio service provider not found in DB")
-            return {}
-
-        q = self.db.query(ApiKey).filter(ApiKey.service_provider_id == provider.id)
+        q = self.db.query(Channel).filter(Channel.channel_type == provider_slug)
         if self.org_id:
-            q = q.filter(ApiKey.organization_id == self.org_id)
-        api_keys = q.all()
+            q = q.filter(Channel.organization_id == self.org_id)
+        return _decrypt(q.first())
 
-        creds = {}
-        for ak in api_keys:
-            additional = ak.additional_credentials or {}
-            key_type = additional.get("key_type")
-            if key_type == "account_sid":
-                creds["account_sid"] = decrypt(ak.api_key_encrypted)
-            if key_type == "auth_token":
-                creds["auth_token"] = decrypt(ak.api_key_encrypted)
-
-        return creds
+    def _get_twilio_credentials_from_channel(self, org_id=None, channel_id=None) -> dict:
+        """Fetch Twilio account_sid and auth_token from the org's Twilio channel."""
+        cfg = self._channel_config("twilio", channel_id=channel_id)
+        account_sid = cfg.get("account_sid")
+        auth_token = cfg.get("auth_token")
+        if account_sid and auth_token:
+            return {"account_sid": account_sid, "auth_token": auth_token}
+        return {}
 
     def _get_twilio_credentials(self, channel_id=None) -> dict:
-        """Fetch Twilio credentials — tries channel_id first, then org-scoped, then api_keys."""
+        """Fetch Twilio credentials from the org's Twilio channel (by channel_id or org)."""
         return self._get_twilio_credentials_from_channel(org_id=self.org_id, channel_id=channel_id)
 
     async def _fetch_twilio_call_info(self, call_sid: str, call_data: Dict[str, Any], channel_id=None) -> Optional[str]:
@@ -206,25 +169,8 @@ class AgentRunnerService(BaseService):
             return None
 
     def _get_telnyx_api_key(self) -> Optional[str]:
-        """Fetch Telnyx API key from the DB (service_providers + api_keys)."""
-        from core.models.service_provider import ServiceProvider
-        from core.models.api_key import ApiKey
-        from core.utils.encryption import decrypt
-
-        provider = self.db.query(ServiceProvider).filter(ServiceProvider.name == "telnyx").first()
-        if not provider:
-            logger.warning("Telnyx service provider not found in DB")
-            return None
-
-        q = self.db.query(ApiKey).filter(ApiKey.service_provider_id == provider.id, ApiKey.status == "active")
-        if self.org_id:
-            q = q.filter(ApiKey.organization_id == self.org_id)
-        api_key = q.first()
-        if not api_key:
-            logger.warning("No active API key found for Telnyx")
-            return None
-
-        return decrypt(api_key.api_key_encrypted)
+        """Fetch the Telnyx API key from the org's Telnyx channel."""
+        return self._channel_config("telnyx").get("api_key") or None
 
     async def _fetch_telnyx_to_number(self, call_control_id: str) -> Optional[str]:
         """Fetch the 'to' number for a Telnyx call from Telnyx REST API."""
@@ -251,17 +197,19 @@ class AgentRunnerService(BaseService):
             return None
 
     def _get_exotel_credentials(self, account_sid: str) -> dict:
-        """Fetch Exotel credentials from the Channel meta_data for the given account_sid."""
+        """Fetch Exotel credentials from the Exotel channels' encrypted_config by account_sid."""
         from core.models.channel import Channel
-        from core.models.enums import ChannelType
+        from core.utils.encryption import decrypt_json
 
-        channels = (
-            self.db.query(Channel)
-            .filter(Channel.type == ChannelType.EXOTEL)
-            .all()
-        )
+        channels = self.db.query(Channel).filter(Channel.channel_type == "exotel").all()
         for channel in channels:
-            meta = channel.meta_data or {}
+            if not channel.encrypted_config:
+                continue
+            try:
+                meta = decrypt_json(channel.encrypted_config) or {}
+            except Exception as e:
+                logger.warning("Failed to decrypt exotel channel config: %s", e)
+                continue
             if meta.get("account_sid") == account_sid:
                 return {
                     "account_sid": meta.get("account_sid"),
@@ -381,10 +329,10 @@ class AgentRunnerService(BaseService):
                 agent.id,
                 agent.name,
             )
-            # Resolve channel_id from AgentChannelPhoneNumbers for credential lookup
+            # Resolve channel_id from the PhoneNumber record for credential lookup
             phone_record = (
-                self.db.query(AgentChannelPhoneNumbers)
-                .filter(AgentChannelPhoneNumbers.phone_number == to_number, AgentChannelPhoneNumbers.agent_id == agent.id)
+                self.db.query(PhoneNumber)
+                .filter(PhoneNumber.number == to_number, PhoneNumber.agent_id == agent.id)
                 .first()
             )
             if phone_record and phone_record.channel_id:

@@ -10,6 +10,8 @@ import time as _time
 from dotenv import load_dotenv
 from loguru import logger
 
+from core.utils.telephony import provider_call_id
+
 # Use pipecat.runner.types so we get the same classes as run.py (avoids isinstance mismatch)
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import create_transport
@@ -41,156 +43,78 @@ from pipecat.runner.types import (
 load_dotenv(override=True)
 
 
-def _get_twilio_credentials(org_id=None) -> dict:
-    """Fetch Twilio account_sid and auth_token.
+def _channel_config(provider_slug: str, org_id=None) -> dict:
+    """Decrypt a telephony Channel's config for the given provider slug.
 
-    Tries the channels table first (org-scoped), then falls back to
-    the api_keys table (global).
-    Returns {"account_sid": ..., "auth_token": ...}.
+    Channels store credentials in `encrypted_config` keyed by `channel_type`
+    ("twilio"/"telnyx"/"plivo"/"exotel"). Returns the decrypted dict or {}.
     """
     from core.database.session import get_db_context
+    from core.models.channel import Channel
+    from core.utils.encryption import decrypt_json
 
     with get_db_context() as db:
-        # Try channels table first (per-org credentials)
+        q = db.query(Channel).filter(Channel.channel_type == provider_slug)
         if org_id:
-            from core.models.channel import Channel
-            from core.models.enums import ChannelType
-
-            channel = (
-                db.query(Channel)
-                .filter(Channel.type == ChannelType.TWILIO, Channel.organization_id == org_id)
-                .first()
-            )
-            if channel and channel.meta_data:
-                meta = channel.meta_data
-                account_sid = meta.get("account_sid")
-                auth_token = meta.get("auth_token")
-                if account_sid and auth_token:
-                    return {"account_sid": account_sid, "auth_token": auth_token}
-
-        # Fallback: api_keys table (legacy, global)
-        from core.models.service_provider import ServiceProvider
-        from core.models.api_key import ApiKey
-        from core.utils.encryption import decrypt
-
-        provider = db.query(ServiceProvider).filter(ServiceProvider.name == "twilio").first()
-        if not provider:
-            logger.warning("Twilio service provider not found in DB")
+            q = q.filter(Channel.organization_id == org_id)
+        channel = q.first()
+        if not channel or not channel.encrypted_config:
+            return {}
+        try:
+            return decrypt_json(channel.encrypted_config) or {}
+        except Exception as e:
+            logger.warning("Failed to decrypt %s channel config: %s", provider_slug, e)
             return {}
 
-        q = db.query(ApiKey).filter(ApiKey.service_provider_id == provider.id)
-        if org_id:
-            q = q.filter(ApiKey.organization_id == org_id)
-        api_keys = q.all()
 
-        creds = {}
-        for ak in api_keys:
-            additional = ak.additional_credentials or {}
-            key_type = additional.get("key_type")
-            if key_type == "account_sid":
-                creds["account_sid"] = decrypt(ak.api_key_encrypted)
-            elif key_type == "auth_token":
-                creds["auth_token"] = decrypt(ak.api_key_encrypted)
-
-        return creds
+def _get_twilio_credentials(org_id=None) -> dict:
+    """Fetch Twilio account_sid and auth_token from the org's Twilio channel."""
+    cfg = _channel_config("twilio", org_id)
+    account_sid = cfg.get("account_sid")
+    auth_token = cfg.get("auth_token")
+    if account_sid and auth_token:
+        return {"account_sid": account_sid, "auth_token": auth_token}
+    return {}
 
 
 def _get_plivo_credentials(org_id=None) -> dict:
-    """Fetch Plivo auth_id and auth_token from the DB (api_keys table).
-
-    Queries service_providers for name='plivo', then finds the two api_keys
-    rows whose additional_credentials->key_type is 'auth_id' or 'auth_token'.
-    Returns {"auth_id": ..., "auth_token": ...}.
-    """
-    from core.database.session import get_db_context
-    from core.models.service_provider import ServiceProvider
-    from core.models.api_key import ApiKey
-    from core.utils.encryption import decrypt
-
-    with get_db_context() as db:
-        provider = db.query(ServiceProvider).filter(ServiceProvider.name == "plivo").first()
-        if not provider:
-            logger.warning("Plivo service provider not found in DB")
-            return {}
-
-        q = db.query(ApiKey).filter(ApiKey.service_provider_id == provider.id)
-        if org_id:
-            q = q.filter(ApiKey.organization_id == org_id)
-        api_keys = q.all()
-
-        creds = {}
-        for ak in api_keys:
-            additional = ak.additional_credentials or {}
-            key_type = additional.get("key_type")
-            if key_type == "auth_id":
-                creds["auth_id"] = decrypt(ak.api_key_encrypted)
-            elif key_type == "auth_token":
-                creds["auth_token"] = decrypt(ak.api_key_encrypted)
-
-        return creds
+    """Fetch Plivo auth_id and auth_token from the org's Plivo channel."""
+    cfg = _channel_config("plivo", org_id)
+    auth_id = cfg.get("auth_id")
+    auth_token = cfg.get("auth_token")
+    if auth_id and auth_token:
+        return {"auth_id": auth_id, "auth_token": auth_token}
+    return {}
 
 
 def _get_telnyx_api_key(org_id=None) -> str:
-    """Fetch Telnyx API key from the DB.
-
-    Queries service_providers for name='telnyx', then retrieves the first
-    active api_key and decrypts it.
-    Returns the decrypted key or empty string if not found.
-    """
-    from core.database.session import get_db_context
-    from core.models.service_provider import ServiceProvider
-    from core.models.api_key import ApiKey
-    from core.utils.encryption import decrypt
-
-    with get_db_context() as db:
-        provider = db.query(ServiceProvider).filter(ServiceProvider.name == "telnyx").first()
-        if not provider:
-            logger.warning("Telnyx service provider not found in DB")
-            return ""
-
-        q = db.query(ApiKey).filter(ApiKey.service_provider_id == provider.id, ApiKey.status == "active")
-        if org_id:
-            q = q.filter(ApiKey.organization_id == org_id)
-        api_key = q.first()
-        if not api_key:
-            logger.warning("No active API key found for Telnyx")
-            return ""
-
-        return decrypt(api_key.api_key_encrypted)
+    """Fetch the Telnyx API key from the org's Telnyx channel."""
+    return _channel_config("telnyx", org_id).get("api_key") or ""
 
 
 def _get_provider_api_key(name: str, provider_type: str) -> str:
-    """Fetch the API key for a service provider from the DB.
+    """Fetch the first active API key for a model provider (by slug + service type).
 
-    Queries service_providers by name and provider_type, then retrieves
-    the first active api_key for that provider and decrypts it.
-    Returns the decrypted key or empty string if not found.
+    Used only by the no-agent demo/default path. Returns the decrypted key or "".
     """
     from core.database.session import get_db_context
-    from core.models.service_provider import ServiceProvider
     from core.models.api_key import ApiKey
+    from core.models.model_provider import ModelProvider
     from core.utils.encryption import decrypt
 
     with get_db_context() as db:
-        provider = (
-            db.query(ServiceProvider)
-            .filter(ServiceProvider.name == name, ServiceProvider.provider_type == provider_type)
-            .first()
-        )
+        provider = db.query(ModelProvider).filter(ModelProvider.slug == name).first()
         if not provider:
-            logger.warning(f"Service provider not found in DB: name={name}, provider_type={provider_type}")
+            logger.warning(f"Model provider not found in DB: slug={name}")
             return ""
 
-        api_key = (
-            db.query(ApiKey)
-            .filter(ApiKey.service_provider_id == provider.id, ApiKey.status == "active")
-            .first()
-        )
+        q = db.query(ApiKey).filter(ApiKey.provider_id == provider.id, ApiKey.is_active.is_(True))
+        api_key = q.filter(ApiKey.service_type == provider_type).first() or q.first()
         if not api_key:
-            logger.warning(f"No active API key found for provider: name={name}, provider_type={provider_type}")
+            logger.warning(f"No active API key found for provider: slug={name}, type={provider_type}")
             return ""
 
-        return decrypt(api_key.api_key_encrypted)
+        return decrypt(api_key.encrypted_key)
 
 
 async def _default_messages():
@@ -250,6 +174,50 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         await runner.run()
         logger.info("[TIMING] run_bot() pipeline finished (+%.3fs), total run_bot: %.3fs", _time.monotonic() - _t2, _time.monotonic() - _t_run_bot)
         return
+
+    # In-process telephony /ws path: no agent was pre-resolved in body. Resolve it by
+    # the called number (the new equivalent of the old resolve_agent_runtime), then run
+    # the agent's configured pipeline so the call uses its real LLM/STT/TTS and the
+    # runner creates a call-history record. Only if no agent matches do we fall through
+    # to env-based defaults.
+    body_call_data = body.get("call_data") or {}
+    to_number = body_call_data.get("to")
+    if to_number:
+        from core.logging import start_call_trace
+        from core.services.agent_runner_service import AgentRunnerService
+
+        _t = _time.monotonic()
+        resolved_agent = None
+        params = None
+        with get_db_context() as db:
+            resolved_agent = AgentRunnerService(db).get_agent_by_phone_number(to_number)
+            if resolved_agent:
+                start_call_trace(
+                    agent_id=resolved_agent.id, call_id=provider_call_id(body_call_data)
+                )
+                prefetched = body.get("_prefetched_services")
+                params = (
+                    engine.params_cls.from_cache_dict(prefetched)
+                    if prefetched
+                    else engine.params_cls.from_agent(
+                        resolved_agent, db, transport_type=body.get("transport_type")
+                    )
+                )
+        logger.info("[TIMING] run_bot() resolve agent by to_number (+%.3fs)", _time.monotonic() - _t)
+        if resolved_agent:
+            logger.info("Running bot with agent config: id=%s name=%s", resolved_agent.id, resolved_agent.name)
+            if not params:
+                raise ValueError(
+                    "Agent has no active config or missing LLM/STT/TTS services. "
+                    "Configure the agent and ensure services are set."
+                )
+            builder = engine.builder_cls(params)
+            runner = engine.runner_cls(
+                params, builder, transport, agent=resolved_agent, runner_args=runner_args
+            )
+            await runner.run()
+            return
+        logger.warning("run_bot() no agent found for to_number=%s; using default env services", to_number)
 
     # Fallback when no agent (e.g. WebRTC, Daily without agent in body)
     logger.info("Running bot with default env-based services (no agent in body)")
@@ -368,6 +336,11 @@ def _create_serializer(transport_type: str, call_data: dict):
 
 async def bot(runner_args: RunnerArguments, call_type: str = None):
     """Main bot entry point compatible with Pipecat Cloud."""
+    # Establish one trace_id for the whole call as the very first thing, so every
+    # subsequent log line carries it; the agent_id/call_id segments are filled in
+    # once known (here or in run_bot). Logging-only — does not affect call flow.
+    from core.logging import start_call_trace
+    start_call_trace()
     _t_bot_start = _time.monotonic()
     logger.info(f"[TIMING] bot() entered")
 
@@ -383,21 +356,40 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
             transport_type, call_data = await parse_telephony_websocket(runner_args.websocket)
             logger.info("[TIMING] bot() parse_telephony_websocket (+%.3fs)", _time.monotonic() - _t)
 
-        # Fetch from/to only if not already present (AgentRunnerService enriches call_data)
+        # Resolve from/to. Twilio passes them in the WS start message's <Parameter>
+        # tags (call_data["body"]); use those first and only fall back to the REST API
+        # when absent (the API 404s for test calls whose SID isn't a real Twilio call).
         if transport_type == "twilio" and not call_data.get("from"):
-            _t = _time.monotonic()
-            call_info = await get_call_info(transport_type, call_data.get("call_id", ""), org_id=call_data.get("_org_id"))
-            logger.info("[TIMING] bot() get_call_info Twilio API (+%.3fs)", _time.monotonic() - _t)
-            if call_info:
-                call_data["from"] = call_info.get("from_number", "")
-                call_data["to"] = call_info.get("to_number", "")
+            twilio_body = call_data.get("body") or {}
+            param_from = (twilio_body.get("from") or "").strip()
+            param_to = (twilio_body.get("to") or "").strip()
+            if param_from or param_to:
+                call_data["from"] = param_from
+                call_data["to"] = param_to
+                logger.info("[TIMING] bot() Twilio from/to from <Parameter> tags (skipped API call)")
+            else:
+                _t = _time.monotonic()
+                call_info = await get_call_info(transport_type, call_data.get("call_id", ""), org_id=call_data.get("_org_id"))
+                logger.info("[TIMING] bot() get_call_info Twilio API (+%.3fs)", _time.monotonic() - _t)
+                if call_info:
+                    call_data["from"] = call_info.get("from_number", "")
+                    call_data["to"] = call_info.get("to_number", "")
 
         from_number = call_data.get("from", "")
         to_number = call_data.get("to", "")
         if from_number or to_number:
             logger.info(f"Call from: {from_number} to: {to_number}")
 
+        # Make call metadata available to run_bot() and the runner (call-log creation
+        # reads call_data/transport_type from runner_args.body).
+        if getattr(runner_args, "body", None) is None:
+            runner_args.body = {}
+        runner_args.body["call_data"] = call_data
+        runner_args.body["transport_type"] = transport_type
+
         if agent:
+            start_call_trace(agent_id=agent.id, call_id=provider_call_id(call_data))
+            runner_args.body["agent"] = agent
             logger.info(f"Resolved agent for this call: id={agent.id} name={agent.name}")
 
         _t = _time.monotonic()
@@ -439,10 +431,14 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
         )
     
     elif isinstance(runner_args, DailyRunnerArguments):
+        # Daily participant display name for the bot. Not hardcoded to any one
+        # agent — configurable per deployment (BOT_DISPLAY_NAME), generic default.
+        from core.config import settings
+        bot_display_name = getattr(settings, "BOT_DISPLAY_NAME", None) or "AI Voice Agent"
         transport = DailyTransport(
             runner_args.room_url,
             runner_args.token,
-            "Hotel Booking Bot",
+            bot_display_name,
             DailyParams(
                 audio_in_enabled=True,
                 audio_out_enabled=True,

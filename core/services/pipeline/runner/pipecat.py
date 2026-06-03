@@ -27,6 +27,7 @@ class PipecatPipelineRunner(PipelineRunner):
 
         from core.database.session import get_db_context
         from core.services.call_log_service import CallLogService
+        from core.utils.telephony import provider_call_id as _provider_call_id
 
         _t_comp_start = _time.monotonic()
         agent = self.agent
@@ -37,11 +38,7 @@ class PipecatPipelineRunner(PipelineRunner):
         body = getattr(runner_args, "body", None) or {}
         call_data = body.get("call_data", {})
         transport_type = body.get("transport_type", "unknown")
-        provider_call_id = (
-            call_data.get("call_id")
-            or call_data.get("call_control_id")
-            or call_data.get("stream_id", "")
-        )
+        provider_call_id = _provider_call_id(call_data)
         from_number = call_data.get("from", "")
         to_number = call_data.get("to", "")
 
@@ -59,9 +56,16 @@ class PipecatPipelineRunner(PipelineRunner):
             return call_log_state["id"]
 
         if agent:
+            # Capture the call's trace_id from the async context; executor threads
+            # don't inherit contextvars, so we re-bind it inside the thread and also
+            # persist it on the call record (correlates the record to its logs).
+            from core.logging import get_trace_id, set_trace_id
+            _call_trace_id = get_trace_id()
+
             def _create_call_log_in_thread():
                 """Run in a thread so synchronous DB work doesn't block the event loop."""
                 try:
+                    set_trace_id(_call_trace_id)
                     _t = _time.monotonic()
                     with get_db_context() as db:
                         call_log = CallLogService(db).create_call_log(
@@ -71,9 +75,13 @@ class PipecatPipelineRunner(PipelineRunner):
                             transport_type=transport_type,
                             from_number=from_number,
                             to_number=to_number,
+                            trace_id=_call_trace_id if _call_trace_id != "none" else None,
                         )
-                        call_log_state["id"] = call_log.id
-                        logger.info("[TIMING] create_call_log thread (+%.3fs)", _time.monotonic() - _t)
+                        if call_log:
+                            call_log_state["id"] = call_log.id
+                            logger.info("[TIMING] create_call_log thread (+%.3fs)", _time.monotonic() - _t)
+                        else:
+                            logger.warning("create_call_log returned None (no channel resolved) — no call record created")
                 except Exception as e:
                     logger.error("Failed to create call log: {}", e)
                 finally:
@@ -88,7 +96,7 @@ class PipecatPipelineRunner(PipelineRunner):
             call_log_ready.set()
 
         # --- Build the pipeline (services + task + observers) ---
-        build = self.builder.build(transport, agent=agent, audio_buffer=audio_buffer, from_number=from_number)
+        build = await self.builder.build(transport, agent=agent, audio_buffer=audio_buffer, from_number=from_number)
         task = build.task
         rtvi = build.rtvi
         is_s2s = build.is_s2s

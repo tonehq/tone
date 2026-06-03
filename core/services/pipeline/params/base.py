@@ -10,7 +10,9 @@ NO Pipecat imports here — this layer stays framework-agnostic so future engine
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, List, Optional
+from zoneinfo import ZoneInfo
 
 from core.services.pipeline.service_resolver import (
     resolve_agent_services,
@@ -19,6 +21,30 @@ from core.services.pipeline.service_resolver import (
 
 # Default services for the no-agent fallback path (WebRTC / Daily without an agent).
 DEFAULT_VOICE_ID = "71a7ad14-091c-4e8e-a314-022ece01c121"
+
+
+def build_date_preamble() -> str:
+    """A system-prompt preamble anchoring the model to the real current date.
+
+    Clock-less models (e.g. gpt-4o-mini) otherwise invent years and can't enforce
+    "no past dates". "Today" is resolved in a configurable timezone (AGENT_TIMEZONE,
+    default UTC) so the anchor matches the caller's locale instead of naive
+    server-local time. Falls back to UTC on an unknown zone.
+    """
+    from core.config import settings
+
+    tz_name = getattr(settings, "AGENT_TIMEZONE", None) or "UTC"
+    try:
+        now = datetime.now(ZoneInfo(tz_name))
+    except Exception:
+        tz_name = "UTC"
+        now = datetime.now(timezone.utc)
+    today = now.strftime("%Y-%m-%d")
+    return (
+        f"Today's date is {today} ({tz_name}, YYYY-MM-DD). Treat this as the current date "
+        f"for all date reasoning. Never use a year earlier than the current year, and "
+        f"never schedule or book a date earlier than today.\n\n"
+    )
 
 
 @dataclass
@@ -82,6 +108,24 @@ class PipelineParams:
             return self.messages[-1].get("content", "").strip()
         return None
 
+    def messages_with_date_anchor(self) -> List[dict]:
+        """Messages with the current-date preamble prepended to the system prompt.
+
+        Computed fresh at build time (the builder calls this per call) rather than baked
+        into the resolver's Redis-cached messages, so the anchored date never goes stale.
+        Returns the messages unchanged if there is no system message.
+        """
+        preamble = build_date_preamble()
+        anchored = []
+        injected = False
+        for m in self.messages:
+            if not injected and m.get("role") == "system":
+                anchored.append({**m, "content": preamble + (m.get("content") or "")})
+                injected = True
+            else:
+                anchored.append(m)
+        return anchored
+
     # ------------------------------------------------------------------ #
     # Construction
     # ------------------------------------------------------------------ #
@@ -137,7 +181,7 @@ class PipelineParams:
     def default_env(cls, openai_key: str, deepgram_key: str, cartesia_key: str, messages: List[dict]) -> "PipelineParams":
         """Params for the no-agent fallback path (env-based OpenAI/Deepgram/Cartesia)."""
         return cls(
-            llm=ServiceSpec(provider_name="openai", api_key=openai_key, model_name="gpt-4o"),
+            llm=ServiceSpec(provider_name="openai", api_key=openai_key, model_name="gpt-4o-mini"),
             stt=ServiceSpec(provider_name="deepgram", api_key=deepgram_key),
             tts=ServiceSpec(provider_name="cartesia", api_key=cartesia_key, metadata={"voice_id": DEFAULT_VOICE_ID}),
             is_s2s=False,
