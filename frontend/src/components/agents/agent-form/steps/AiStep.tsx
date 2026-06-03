@@ -13,8 +13,11 @@ import type { MetaDataSchemaField } from '@/types/provider';
 import type { AgentFormState } from '@/types/agent';
 import { handleApiError } from '@/utils/helpers';
 
+/** Keys in llm_settings that are structural (not schema fields). */
+const LLM_STRUCTURAL_KEYS = new Set(['provider_id', 'model_id', 'model', 'is_s2s']);
+
 export default function AiStep() {
-  const { control, setValue } = useFormContext<AgentFormState>();
+  const { control, setValue, getValues } = useFormContext<AgentFormState>();
 
   const [providers, setProviders] = useState<ProviderCatalogItem[]>([]);
   const [llmModels, setLlmModels] = useState<ProviderModel[]>([]);
@@ -94,12 +97,19 @@ export default function AiStep() {
   const showModelField = !!llmProviderId;
   const showSettings = !!llmProviderId;
 
-  // Get meta_data_schema for the selected LLM provider
+  // Get meta_data_schema from the selected model (preferred) or fall back to provider
   const llmSchema = useMemo<MetaDataSchemaField[]>(() => {
+    if (llmModelId) {
+      const model = llmModels.find((m) => m.id === llmModelId);
+      if (model?.meta_data_schema && model.meta_data_schema.length > 0) {
+        return model.meta_data_schema;
+      }
+    }
+    // Fallback: provider-level schema
     if (!llmProviderId) return [];
     const provider = providers.find((p) => p.id === llmProviderId);
     return provider?.meta_data_schema?.llm ?? [];
-  }, [llmProviderId, providers]);
+  }, [llmModelId, llmModels, llmProviderId, providers]);
 
   // Get model-level meta_data for the selected model (e.g. max_completion_tokens)
   const selectedModelMetaData = useMemo(() => {
@@ -107,6 +117,24 @@ export default function AiStep() {
     const model = llmModels.find((m) => m.id === llmModelId);
     return model?.meta_data ?? null;
   }, [llmModelId, llmModels]);
+
+  // Clear stale schema field values when model changes (e.g. switching from
+  // GPT-4o to GPT-5 should remove temperature/top_p that GPT-5 doesn't support).
+  useEffect(() => {
+    if (!llmSchema.length) return;
+    const allowedKeys = new Set(llmSchema.map((f) => f.name));
+    const current = getValues('config.llm_settings' as never) as
+      | Record<string, unknown>
+      | undefined;
+    if (!current) return;
+    for (const key of Object.keys(current)) {
+      if (!LLM_STRUCTURAL_KEYS.has(key) && !allowedKeys.has(key)) {
+        setValue(`config.llm_settings.${key}` as never, undefined as never, {
+          shouldDirty: true,
+        });
+      }
+    }
+  }, [llmSchema]);
 
   return (
     <div className="flex flex-col gap-4">

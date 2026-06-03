@@ -293,17 +293,33 @@ export default function VoiceStep() {
   );
 
   // ─── meta_data_schema for TTS and STT ─────────────────────────────────────
+  // Prefer model-level schema, fall back to provider-level
   const ttsSchema = useMemo<MetaDataSchemaField[]>(() => {
+    if (ttsModelId) {
+      const model = ttsModels.find((m) => m.id === ttsModelId);
+      if (model?.meta_data_schema && model.meta_data_schema.length > 0) {
+        return model.meta_data_schema;
+      }
+    }
+    // Fallback: TTS provider returns meta_data_schema as a flat array
     if (!providerId) return [];
     const matched = providers.find((p) => p.id === providerId);
     return matched?.meta_data_schema ?? [];
-  }, [providerId, providers]);
+  }, [ttsModelId, ttsModels, providerId, providers]);
 
   const sttSchema = useMemo<MetaDataSchemaField[]>(() => {
+    if (sttModel) {
+      // STT uses model name, not model_id — find by name in sttModels
+      const model = sttModels.find((m) => m.name === sttModel || m.id === sttModel);
+      if (model?.meta_data_schema && model.meta_data_schema.length > 0) {
+        return model.meta_data_schema;
+      }
+    }
+    // Fallback: provider catalog has meta_data_schema keyed by kind
     if (!sttProviderId) return [];
     const matched = sttProviders.find((p) => p.id === sttProviderId);
     return matched?.meta_data_schema?.stt ?? [];
-  }, [sttProviderId, sttProviders]);
+  }, [sttModel, sttModels, sttProviderId, sttProviders]);
 
   // ─── render helpers ───────────────────────────────────────────────────────
   const showProviderField = !!language;

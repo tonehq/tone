@@ -79,6 +79,7 @@ export interface ProviderModel {
   description: string | null;
   is_active: boolean;
   meta_data: Record<string, unknown> | null;
+  meta_data_schema: import('@/types/provider').MetaDataSchemaField[] | null;
   created_at: number;
   updated_at: number;
 }

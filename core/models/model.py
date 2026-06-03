@@ -22,6 +22,7 @@ class Model(TimestampModel):
     sample_list = Column(Boolean, nullable=False, default=False)
     is_active = Column(Boolean, nullable=False, default=True)
     meta_data = Column(JSONB, nullable=True)
+    meta_data_schema = Column(JSONB, nullable=True)
 
     # relationships
     provider = relationship("ModelProvider", backref="models", lazy="select")
