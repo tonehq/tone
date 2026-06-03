@@ -23,7 +23,7 @@ class DocumentReader(ABC):
         ...
 
     @abstractmethod
-    def read(self, file_bytes: bytes, content_type: str) -> Document:
+    def read(self, file_bytes: bytes, content_type: str, page_range: Optional[Tuple[int, int]] = None) -> Document:
         ...
 
 
@@ -60,15 +60,16 @@ class DoclingReader(DocumentReader):
     def supports(self, content_type: str) -> bool:
         return content_type in self._EXT
 
-    def read(self, file_bytes: bytes, content_type: str) -> Document:
+    def read(self, file_bytes: bytes, content_type: str, page_range: Optional[Tuple[int, int]] = None) -> Document:
+        pr = page_range or self._page_range
         ext = self._EXT.get(content_type, "")
         with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
             tmp.write(file_bytes)
             tmp_path = tmp.name
-        kwargs = {"page_range": self._page_range} if self._page_range else {}
+        kwargs = {"page_range": pr} if pr else {}
         logger.info(
             "Docling parsing {} ({:.2f} MB), page_range={}, ocr={}, tables={} ...",
-            content_type, len(file_bytes) / 1024 / 1024, self._page_range or "all", self._ocr, self._tables,
+            content_type, len(file_bytes) / 1024 / 1024, pr or "all", self._ocr, self._tables,
         )
         start = time.monotonic()
         try:
@@ -81,16 +82,16 @@ class DoclingReader(DocumentReader):
                 pass
         logger.info(
             "Docling parsed {} -> {} chars in {:.1f}s (page_range={})",
-            content_type, len(text), time.monotonic() - start, self._page_range or "all",
+            content_type, len(text), time.monotonic() - start, pr or "all",
         )
-        return Document(text=text, metadata={"parser": "docling", "page_range": self._page_range})
+        return Document(text=text, metadata={"parser": "docling", "page_range": pr})
 
 
 class PdfReader(DocumentReader):
     def supports(self, content_type: str) -> bool:
         return content_type == "application/pdf"
 
-    def read(self, file_bytes: bytes, content_type: str) -> Document:
+    def read(self, file_bytes: bytes, content_type: str, page_range: Optional[Tuple[int, int]] = None) -> Document:
         reader = _PdfReader(io.BytesIO(file_bytes))
         pages = [p.extract_text() for p in reader.pages]
         result = "\n\n".join(t for t in pages if t)
@@ -107,7 +108,7 @@ class DocxReader(DocumentReader):
     def supports(self, content_type: str) -> bool:
         return content_type in self._TYPES
 
-    def read(self, file_bytes: bytes, content_type: str) -> Document:
+    def read(self, file_bytes: bytes, content_type: str, page_range: Optional[Tuple[int, int]] = None) -> Document:
         doc = _Docx(io.BytesIO(file_bytes))
         paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
         result = "\n\n".join(paragraphs)
@@ -119,7 +120,7 @@ class TextReader(DocumentReader):
     def supports(self, content_type: str) -> bool:
         return content_type.startswith("text/") or content_type in ("application/csv", "application/json")
 
-    def read(self, file_bytes: bytes, content_type: str) -> Document:
+    def read(self, file_bytes: bytes, content_type: str, page_range: Optional[Tuple[int, int]] = None) -> Document:
         return Document(text=file_bytes.decode("utf-8", errors="replace"), metadata={"parser": "text"})
 
 
@@ -130,8 +131,8 @@ class CompositeReader(DocumentReader):
     def supports(self, content_type: str) -> bool:
         return any(r.supports(content_type) for r in self._readers)
 
-    def read(self, file_bytes: bytes, content_type: str) -> Document:
+    def read(self, file_bytes: bytes, content_type: str, page_range: Optional[Tuple[int, int]] = None) -> Document:
         for reader in self._readers:
             if reader.supports(content_type):
-                return reader.read(file_bytes, content_type)
+                return reader.read(file_bytes, content_type, page_range)
         raise ValueError(f"Unsupported content type for text extraction: {content_type}")

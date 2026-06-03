@@ -15,13 +15,13 @@ from core.services.rag.vector_stores.pgvector_store import PgVectorStore
 class DocumentProcessingService:
 
     def process_document(self, upload_id: UUID, org_id: UUID, file_bytes: bytes, delete_existing: bool = False):
-        with get_db_context() as db:
-            try:
+        try:
+            with get_db_context() as db:
                 upload = db.query(Upload).filter(Upload.id == upload_id).first()
                 if not upload:
                     logger.error("Upload {} not found, skipping processing", upload_id)
                     return
-
+                file_type = upload.file_type
                 upload.status = "processing"
                 if delete_existing:
                     db.query(KnowledgeBaseChunk).filter(
@@ -29,37 +29,46 @@ class DocumentProcessingService:
                     ).delete(synchronize_session=False)
                 db.commit()
 
-                api_key = get_openai_api_key_for_agent(org_id)
-                if not api_key:
-                    raise ValueError("No OpenAI API key configured for embedding")
+            api_key = get_openai_api_key_for_agent(org_id)
+            if not api_key:
+                raise ValueError("No OpenAI API key configured for embedding")
 
-                pipeline = RAGPipeline(
-                    embedder=OpenAIEmbedder(api_key),
-                    store=PgVectorStore(session=db),
+            def _on_batch(batch_index: int, start_page: int, end_page: int, count: int, elapsed: float) -> None:
+                logger.info(
+                    "[ingestion] pages {}-{}: {} chunks stored in {:.1f}s",
+                    start_page, end_page, count, elapsed,
                 )
-                num_chunks = pipeline.ingest_file(
-                    file_bytes,
-                    upload.file_type,
-                    metadata={"organization_id": org_id, "upload_id": upload_id},
-                )
-                if not num_chunks:
-                    raise ValueError("Text extraction produced no chunks")
 
-                upload.status = "ready"
+            pipeline = RAGPipeline(
+                embedder=OpenAIEmbedder(api_key),
+                store=PgVectorStore(),
+            )
+            num_chunks = pipeline.ingest_file_paged(
+                file_bytes,
+                file_type,
+                page_batch=50,
+                metadata={"organization_id": org_id, "upload_id": upload_id},
+                on_batch=_on_batch,
+            )
+            if not num_chunks:
+                raise ValueError("Text extraction produced no chunks")
+
+            with get_db_context() as db:
+                db.query(Upload).filter(Upload.id == upload_id).update({"status": "ready"})
                 db.commit()
-                logger.info("Upload {} processed: {} chunks stored", upload_id, num_chunks)
+            logger.info("Upload {} processed: {} chunks stored", upload_id, num_chunks)
 
-            except Exception as e:
-                db.rollback()
-                logger.error("Upload {} processing failed: {}", upload_id, e)
-                try:
+        except Exception as e:
+            logger.error("Upload {} processing failed: {}", upload_id, e)
+            try:
+                with get_db_context() as db:
                     upload = db.query(Upload).filter(Upload.id == upload_id).first()
                     if upload:
                         upload.status = "failed"
                         upload.meta_data = {**(upload.meta_data or {}), "error": str(e)}
                         db.commit()
-                except Exception as meta_err:
-                    logger.error("Failed to update error metadata: {}", meta_err)
+            except Exception as meta_err:
+                logger.error("Failed to update error metadata: {}", meta_err)
 
     def process_upload(self, upload_id: UUID, org_id: UUID, delete_existing: bool = False):
         with get_db_context() as db:
