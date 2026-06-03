@@ -174,11 +174,31 @@ def _build_service_specs(
             logger.warning("[resolver] decrypt failed for api_key %s: %s", ak.id, e)
             return None
 
+    # Filter settings to only the params the chosen model actually supports, so stale
+    # params (e.g. a temperature saved for GPT-4o) aren't sent to a model that rejects
+    # them (e.g. GPT-5). Structural keys are always kept; provider params survive only
+    # when present in the model's meta_data_schema. Models without a schema are unfiltered.
+    _structural = {
+        "provider_id", "model_id", "model", "voice_id",
+        "language", "language_code", "is_s2s",
+        "system_prompt", "system_instruction", "base_url",
+    }
+
+    def _filter_by_model_schema(settings: dict, model_id) -> dict:
+        m = model_by_id.get(model_id) if model_id else None
+        if not m or not m.meta_data_schema:
+            return dict(settings)
+        allowed = {f["name"] for f in m.meta_data_schema if "name" in f} | _structural
+        return {k: v for k, v in settings.items() if k in allowed}
+
     # ── LLM ──
-    llm_metadata = dict(llm_settings)
-    is_s2s = bool(llm_metadata.get("is_s2s"))
+    is_s2s = bool(llm_settings.get("is_s2s"))
+    llm_metadata = _filter_by_model_schema(llm_settings, llm_mid)
     if is_s2s and config.system_prompt_template:
+        # OpenAI Realtime reads metadata["system_prompt"]; Gemini Live reads
+        # metadata["system_instruction"]. Set both so either S2S provider picks it up.
         llm_metadata["system_prompt"] = config.system_prompt_template
+        llm_metadata["system_instruction"] = config.system_prompt_template
     llm_spec = _make_service_spec(
         provider_by_id.get(llm_pid),
         _mname(llm_mid),
@@ -191,14 +211,14 @@ def _build_service_specs(
         provider_by_id.get(stt_pid),
         stt_model_literal or _mname(stt_mid),
         _key(stt_pid, "stt") if stt_pid else None,
-        dict(stt_settings),
+        _filter_by_model_schema(stt_settings, stt_mid),
     )
 
     # ── TTS ──
     resolved_voice = (voice_row.voice_id if voice_row else None) or (
         voice_id_raw if (voice_id_raw and not _looks_like_uuid(voice_id_raw)) else None
     )
-    tts_metadata = dict(voice_settings)
+    tts_metadata = _filter_by_model_schema(voice_settings, tts_mid)
     tts_metadata["voice_id"] = resolved_voice
     # The factory reads metadata["language"]; prefer the language *code* (e.g. "en")
     # over the display name (e.g. "English"), which Pipecat's Language enum rejects.

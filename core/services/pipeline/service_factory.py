@@ -295,6 +295,9 @@ def build_stt(spec: dict) -> Optional[Any]:
     except ImportError as e:
         logger.warning("STT provider %s not available: %s", provider_name, e)
         return None
+    except Exception as e:
+        logger.exception("STT provider %s failed to initialize: %s", provider_name, e)
+        return None
 
 
 def _close_unused_session(session) -> None:
