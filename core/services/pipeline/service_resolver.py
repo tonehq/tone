@@ -36,9 +36,13 @@ from core.models.model_provider import ModelProvider
 from core.models.model_voice import ModelVoice
 from core.utils.encryption import decrypt
 
-# Transport-specific cache key suffixes tried (in order) when no transport_type is given.
-CACHE_FALLBACK_SUFFIXES = ("twilio", "telnyx", "plivo", "exotel", "none")
-CACHE_TTL_SECONDS = 1800
+
+
+# Bump whenever the cached pipeline payload's shape changes (a key is added, renamed, or
+# removed in `load_agent_service_config`'s `result` dict). It is folded into every cache
+# version stamp, so a deploy that changes the shape invalidates all persisted entries
+# instead of serving them with a stale shape — there is no TTL to clear them otherwise.
+PAYLOAD_FORMAT_VERSION = "v1"
 
 
 def _resolve_org_id(org_id):
@@ -115,19 +119,14 @@ def _build_service_specs(
     stt_settings = config.stt_settings or {}
     voice_settings = config.voice_settings or {}
 
-    llm_pid = _to_uuid(llm_settings.get("provider_id"))
-    stt_pid = _to_uuid(stt_settings.get("provider_id"))
-    tts_pid = _to_uuid(voice_settings.get("provider_id"))
-    provider_ids = {p for p in (llm_pid, stt_pid, tts_pid) if p}
+    ids = _config_service_ids(config)
+    llm_pid, stt_pid, tts_pid = ids["llm_pid"], ids["stt_pid"], ids["tts_pid"]
+    llm_mid, stt_mid, tts_mid = ids["llm_mid"], ids["stt_mid"], ids["tts_mid"]
+    provider_ids, model_ids = ids["provider_ids"], ids["model_ids"]
 
-    llm_mid = _to_uuid(llm_settings.get("model_id"))
     stt_model_literal = stt_settings.get("model")
-    stt_mid = _to_uuid(stt_settings.get("model_id"))
-    tts_mid = _to_uuid(voice_settings.get("model_id"))
-    model_ids = {m for m in (llm_mid, stt_mid, tts_mid) if m}
-
     voice_id_raw = voice_settings.get("voice_id")
-    voice_uuid = _to_uuid(voice_id_raw)
+    voice_uuid = ids["voice_uuid"]
 
     providers = (
         db.query(ModelProvider).filter(ModelProvider.id.in_(provider_ids)).all() if provider_ids else []
@@ -171,7 +170,7 @@ def _build_service_specs(
         try:
             return decrypt(ak.encrypted_key)
         except Exception as e:
-            logger.warning("[resolver] decrypt failed for api_key %s: %s", ak.id, e)
+            logger.warning("[resolver] decrypt failed for api_key {}: {}", ak.id, e)
             return None
 
     # Filter settings to only the params the chosen model actually supports, so stale
@@ -235,51 +234,167 @@ def _build_service_specs(
     return llm_spec, stt_spec, tts_spec, is_s2s
 
 
-def _load_telephony_credentials(db: Session, org_id, transport_type: str, agent: Any) -> Optional[dict]:
-    """Fetch telephony provider credentials from the org's Channel (encrypted_config).
+def _config_service_ids(config) -> dict:
+    """Provider/model/voice ids referenced by a config's JSONB settings, extracted once.
 
-    Channels store credentials keyed by `channel_type` ("twilio"/"telnyx"/"plivo"/"exotel")
-    in an encrypted JSONB blob. Returns the decrypted config dict (e.g. account_sid/auth_token
-    for Twilio) or None.
-
-    Delegates to the shared `telephony_credentials.channel_config` (the single
-    decryption code path), reusing this resolver's DB session.
+    Returns the per-service ids (which `_build_service_specs` needs to resolve each service)
+    alongside the merged `provider_ids`/`model_ids` sets and the voice id (which the
+    cache-version stamp needs) — so the `_to_uuid(settings.get(...))` extraction lives in a
+    single place and the spec builder and the stamp can't drift apart.
     """
-    from core.services.transport.telephony_credentials import channel_config
+    llm = config.llm_settings or {}
+    stt = config.stt_settings or {}
+    voice = config.voice_settings or {}
+    llm_pid, stt_pid, tts_pid = (
+        _to_uuid(llm.get("provider_id")),
+        _to_uuid(stt.get("provider_id")),
+        _to_uuid(voice.get("provider_id")),
+    )
+    llm_mid, stt_mid, tts_mid = (
+        _to_uuid(llm.get("model_id")),
+        _to_uuid(stt.get("model_id")),
+        _to_uuid(voice.get("model_id")),
+    )
+    return {
+        "llm_pid": llm_pid, "stt_pid": stt_pid, "tts_pid": tts_pid,
+        "llm_mid": llm_mid, "stt_mid": stt_mid, "tts_mid": tts_mid,
+        "voice_uuid": _to_uuid(voice.get("voice_id")),
+        "provider_ids": {p for p in (llm_pid, stt_pid, tts_pid) if p},
+        "model_ids": {m for m in (llm_mid, stt_mid, tts_mid) if m},
+    }
 
-    org = org_id or getattr(agent, "organization_id", None)
-    return channel_config(transport_type, org_id=org, db=db) or None
+
+def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[Optional[str], Optional[Any]]:
+    """Return (version_stamp, active_config) for an agent.
+
+    The stamp is a composite of updated_at timestamps AND row counts across EVERY input the
+    cached pipeline payload depends on — the config, the referenced provider/model/voice/
+    api-key rows, the linked tools, and the KB uploads. Any change (incl. an in-place API-key
+    rotation, a model/voice edit, or a tool/KB add/remove) changes the stamp and invalidates
+    the cache; the counts catch removals that a bare max(updated_at) would miss. MCP is
+    intentionally excluded — it is never cached and is always resolved live in build().
+
+    Cost: one config lookup + ONE combined aggregate query (all the COUNT/MAX values are
+    scalar subqueries in a single round-trip) — far cheaper than a full resolve, and keeps
+    call-setup latency low even on a remote DB.
+    """
+    from sqlalchemy import func, select
+
+    from core.models.agent_knowledge_base import AgentKnowledgeBase
+    from core.models.agent_tool import AgentTool
+    from core.models.tool import Tool
+    from core.models.upload import Upload
+
+    config = get_active_agent_config(db, agent)
+    if not config:
+        return None, None
+
+    agent_id = agent.id if hasattr(agent, "id") else agent
+    org = org_id or getattr(config, "organization_id", None) or getattr(agent, "organization_id", None)
+    ids = _config_service_ids(config)
+    provider_ids, model_ids, voice_uuid = ids["provider_ids"], ids["model_ids"], ids["voice_uuid"]
+
+    # Each freshness value is a scalar subquery; selecting them together is ONE round-trip.
+    # Empty id-sets / a missing voice render as `IN ()` / `= NULL` → no rows → MAX = NULL,
+    # which is exactly the "nothing referenced" stamp we want.
+    prov_sq = select(func.max(ModelProvider.updated_at)).where(ModelProvider.id.in_(provider_ids)).scalar_subquery()
+    model_sq = select(func.max(Model.updated_at)).where(Model.id.in_(model_ids)).scalar_subquery()
+    voice_sq = select(func.max(ModelVoice.updated_at)).where(ModelVoice.id == voice_uuid).scalar_subquery()
+
+    _key_where = (
+        ApiKey.provider_id.in_(provider_ids),
+        ApiKey.organization_id == org,
+        ApiKey.is_active.is_(True),
+    )
+    key_cnt_sq = select(func.count(ApiKey.id)).where(*_key_where).scalar_subquery()
+    key_max_sq = select(func.max(ApiKey.updated_at)).where(*_key_where).scalar_subquery()
+
+    _tool_where = (AgentTool.agent_id == agent_id, Tool.is_active.is_(True))
+    tool_cnt_sq = (
+        select(func.count(Tool.id)).select_from(Tool)
+        .join(AgentTool, AgentTool.tool_id == Tool.id).where(*_tool_where).scalar_subquery()
+    )
+    tool_link_sq = (
+        select(func.max(AgentTool.updated_at)).select_from(AgentTool)
+        .join(Tool, Tool.id == AgentTool.tool_id).where(*_tool_where).scalar_subquery()
+    )
+    tool_max_sq = (
+        select(func.max(Tool.updated_at)).select_from(Tool)
+        .join(AgentTool, AgentTool.tool_id == Tool.id).where(*_tool_where).scalar_subquery()
+    )
+
+    _kb_where = (AgentKnowledgeBase.agent_id == agent_id, Upload.status == "ready")
+    kb_cnt_sq = (
+        select(func.count(Upload.id)).select_from(Upload)
+        .join(AgentKnowledgeBase, AgentKnowledgeBase.upload_id == Upload.id).where(*_kb_where).scalar_subquery()
+    )
+    kb_link_sq = (
+        select(func.max(AgentKnowledgeBase.updated_at)).select_from(AgentKnowledgeBase)
+        .join(Upload, Upload.id == AgentKnowledgeBase.upload_id).where(*_kb_where).scalar_subquery()
+    )
+    kb_max_sq = (
+        select(func.max(Upload.updated_at)).select_from(Upload)
+        .join(AgentKnowledgeBase, AgentKnowledgeBase.upload_id == Upload.id).where(*_kb_where).scalar_subquery()
+    )
+
+    (
+        prov_max, model_max, voice_ts, key_count, key_max,
+        tool_count, tool_link_max, tool_max, kb_count, kb_link_max, kb_max,
+    ) = db.execute(
+        select(
+            prov_sq, model_sq, voice_sq, key_cnt_sq, key_max_sq,
+            tool_cnt_sq, tool_link_sq, tool_max_sq, kb_cnt_sq, kb_link_sq, kb_max_sq,
+        )
+    ).one()
+
+    def _s(ts):
+        return ts.isoformat() if ts is not None else "none"
+
+    version = "|".join([
+        f"fmt:{PAYLOAD_FORMAT_VERSION}",
+        f"cfg:{config.id}:{_s(config.updated_at)}",
+        f"prov:{_s(prov_max)}",
+        f"model:{_s(model_max)}",
+        f"voice:{_s(voice_ts)}",
+        f"key:{key_count}:{_s(key_max)}",
+        f"tools:{tool_count}:{_s(tool_link_max)}:{_s(tool_max)}",
+        f"kb:{kb_count}:{_s(kb_link_max)}:{_s(kb_max)}",
+    ])
+    return version, config
 
 
 def load_agent_service_config(
     db: Session, agent: Any, transport_type: str = None, org_id=None
 ) -> Optional[dict]:
-    """Pre-fetch all data needed to build LLM/STT/TTS services into a JSON-serializable dict.
+    """Resolve the full pipeline payload (LLM/STT/TTS specs + prompt + tools + KB) for an
+    agent, served from a version-stamped Redis cache under one transport-independent key.
 
-    If transport_type is provided, also fetches telephony credentials in the same DB session.
-    Returns None if config or any required service is missing. Results are cached in Redis
-    keyed by agent_id + transport_type.
-
-    This is the single resolution path used by PipelineParams.from_agent.
+    On every call the live version stamp is recomputed and compared to the cached stamp: a
+    byte-identical match returns the cached payload with no further DB work; ANY change
+    (config, provider/model/voice/key, tools, or KB) forces a fresh resolve + re-stamp, so a
+    call never runs on stale data. `transport_type` is accepted for signature compatibility
+    but no longer affects the cache — telephony credentials are resolved per-transport at the
+    serializer, not cached here. Returns None if config/required services are missing.
     """
+    from core.services.custom_tool_service import serialize_agent_tools
+    from core.services.document_tool_service import get_kb_document_names
     from core.services.redis_service import cache_get, cache_set
 
-    org_id = _resolve_org_id(org_id)
-    _t_ser = _time.monotonic()
-
+    _t = _time.monotonic()
     agent_id = agent.id if hasattr(agent, "id") else agent
-    cache_key = f"agent_bot_data:{agent_id}:{transport_type or 'none'}"
-    cached = cache_get(cache_key)
-    if cached is not None:
-        logger.info("[TIMING] serialize: CACHE HIT for agent_id=%s (+%.3fs)", agent_id, _time.monotonic() - _t_ser)
-        return cached
+    org_id = _resolve_org_id(org_id)
 
-    config = get_active_agent_config(db, agent)
-    if not config or not config.system_prompt_template:
+    version, config = compute_agent_cache_version(db, agent, org_id=org_id)
+    if config is None or not config.system_prompt_template:
         return None
 
-    org_id = org_id or getattr(config, "organization_id", None) or getattr(agent, "organization_id", None)
+    cache_key = f"agent_pipeline_config:{agent_id}"
+    cached = cache_get(cache_key)
+    if cached is not None and cached.get("_cache_version") == version:
+        logger.info("[TIMING] pipeline config: CACHE HIT (fresh) agent_id={} (+{:.3f}s)", agent_id, _time.monotonic() - _t)
+        return cached
 
+    org_id = org_id or getattr(config, "organization_id", None) or getattr(agent, "organization_id", None)
     llm_spec, stt_spec, tts_spec, is_s2s = _build_service_specs(db, org_id, config)
     if not llm_spec:
         return None
@@ -291,41 +406,24 @@ def load_agent_service_config(
         messages.append({"role": "assistant", "content": config.first_message.strip()})
 
     result = {
+        "_cache_version": version,
         "llm": llm_spec,
         "stt": stt_spec,
         "tts": tts_spec,
         "is_s2s": is_s2s,
         "messages": messages,
         "end_call_message": getattr(config, "end_call_message", None),
+        "tools": serialize_agent_tools(agent_id),
+        "kb": get_kb_document_names(agent_id),
     }
-
-    if transport_type:
-        telephony_creds = _load_telephony_credentials(db, org_id, transport_type, agent)
-        if telephony_creds:
-            result["_telephony_creds"] = telephony_creds
-
-    cache_set(cache_key, result, ttl_seconds=CACHE_TTL_SECONDS)
-    logger.info(
-        "[TIMING] serialize: CACHE MISS — stored in Redis for agent_id=%s (+%.3fs)",
-        agent_id,
-        _time.monotonic() - _t_ser,
-    )
+    # Persistent (no TTL): the version stamp guarantees freshness on every read, and edits
+    # overwrite/invalidate the entry — so there is no need to expire it on a timer.
+    cache_set(cache_key, result, ttl_seconds=None)
+    logger.info("[TIMING] pipeline config: CACHE MISS — resolved + stored agent_id={} (+{:.3f}s)", agent_id, _time.monotonic() - _t)
     return result
 
 
 def load_agent_service_config_cached(db: Session, agent: Any, org_id=None) -> Optional[dict]:
-    """Resolve agent services trying transport-specific Redis cache keys first.
-
-    Used when no transport_type is known (e.g. the in-process /ws/test + WebRTC paths).
-    Falls back to a fresh resolution under the 'none' key.
-    """
-    from core.services.redis_service import cache_get
-
-    agent_id = agent.id if hasattr(agent, "id") else agent
-    for transport_suffix in CACHE_FALLBACK_SUFFIXES:
-        cache_key = f"agent_bot_data:{agent_id}:{transport_suffix}"
-        cached = cache_get(cache_key)
-        if cached is not None:
-            logger.info("[TIMING] using Redis-cached service data from key=%s (no DB queries)", cache_key)
-            return cached
+    """The cache is now one transport-independent key with a freshness stamp, so this just
+    delegates to load_agent_service_config (kept for the no-transport call sites)."""
     return load_agent_service_config(db, agent, transport_type=None, org_id=org_id)

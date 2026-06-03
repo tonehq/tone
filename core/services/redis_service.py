@@ -37,12 +37,18 @@ def cache_get(key: str) -> Optional[Any]:
     return None
 
 
-def cache_set(key: str, value: Any, ttl_seconds: int = 1800) -> bool:
-    """Set a JSON value in cache with TTL (default: 30 minutes). Returns True on success."""
+def cache_set(key: str, value: Any, ttl_seconds: Optional[int] = None) -> bool:
+    """Set a JSON value in cache. By default (ttl_seconds=None) the entry is stored
+    persistently with no expiry; pass an explicit ttl_seconds to expire it after that
+    many seconds. Returns True on success."""
     if not _client:
         return False
     try:
-        _client.setex(key, ttl_seconds, json.dumps(value))
+        data = json.dumps(value)
+        if ttl_seconds is None:
+            _client.set(key, data)
+        else:
+            _client.setex(key, ttl_seconds, data)
         return True
     except Exception as e:
         logger.debug("Redis cache_set error for key={}: {}", key, e)
