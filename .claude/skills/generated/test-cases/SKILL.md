@@ -26,7 +26,7 @@ description: "Skill for the Test-cases area of tone. 250 symbols across 60 files
 | `test-cases/test_agents.py` | test_get_all_agents_success, test_get_all_agents_empty, test_get_all_agents_with_agent_id_filter, test_get_all_agents_unauthenticated, test_get_all_agents_invalid_agent_id_type (+5) |
 | `test-cases/test_voices.py` | test_get_voices_success, test_get_voices_empty, test_get_voices_unauthenticated, test_get_voice_by_provider_success, test_get_voice_by_provider_empty (+4) |
 | `test-cases/test_service_providers.py` | test_get_all_providers_success, test_get_all_providers_filter_by_type, test_get_all_providers_empty, test_get_all_providers_unauthenticated, test_get_provider_success (+4) |
-| `core/services/bot_runner_service.py` | _get_twilio_credentials_from_channel, _get_twilio_credentials_from_api_keys, _get_twilio_credentials, _fetch_twilio_call_info, _get_telnyx_api_key (+4) |
+| `core/services/agent_runner_service.py` | _get_twilio_credentials_from_channel, _get_twilio_credentials_from_api_keys, _get_twilio_credentials, _fetch_twilio_call_info, _get_telnyx_api_key (+4) |
 
 ## Entry Points
 

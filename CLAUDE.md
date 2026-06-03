@@ -139,7 +139,7 @@ The `pipecat/` directory is a custom fork (`tonehq/pipecat`) of the Pipecat AI f
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **bamako** (6902 symbols, 18236 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **havana** (6848 symbols, 17855 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -155,7 +155,7 @@ This project is indexed by GitNexus as **bamako** (6902 symbols, 18236 relations
 
 1. `gitnexus_query({query: "<error or symptom>"})` — find execution flows related to the issue
 2. `gitnexus_context({name: "<suspect function>"})` — see all callers, callees, and process participation
-3. `READ gitnexus://repo/bamako/process/{processName}` — trace the full execution flow step by step
+3. `READ gitnexus://repo/havana/process/{processName}` — trace the full execution flow step by step
 4. For regressions: `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
 
 ## When Refactoring
@@ -194,10 +194,10 @@ This project is indexed by GitNexus as **bamako** (6902 symbols, 18236 relations
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/bamako/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/bamako/clusters` | All functional areas |
-| `gitnexus://repo/bamako/processes` | All execution flows |
-| `gitnexus://repo/bamako/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/havana/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/havana/clusters` | All functional areas |
+| `gitnexus://repo/havana/processes` | All execution flows |
+| `gitnexus://repo/havana/process/{name}` | Step-by-step execution trace |
 
 ## Self-Check Before Finishing
 

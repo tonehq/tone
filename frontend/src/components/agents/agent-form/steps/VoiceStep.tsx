@@ -439,7 +439,7 @@ export default function VoiceStep() {
         {showVoiceField && (
           <div className="flex flex-col gap-2">
             <div className="flex items-end gap-2">
-              <div className="flex-1">
+              <div className="min-w-0 flex-1">
                 <SearchableSelect<VoiceOption>
                   name="voice_id"
                   label="Voice"

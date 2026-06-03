@@ -1035,4 +1035,4 @@ class JWTClaims(BaseModel):
 
 16. **Assert org_id handling.** In EE tests, verify services are called with `org_id=UUID(claims.org_id)`. In Core tests, verify services are called WITHOUT explicit org_id. This is the primary behavioral difference between editions.
 
-17. **Telephony is WebSocket.** `telephony.py` provides a WebSocket endpoint at `/ws` mounted on `app` (not `api_v1`). It has no auth. EE re-exports the core router. Test with `TestClient.websocket_connect("/ws")` — do NOT use HTTP methods. Mock `BotRunnerService` and `bot()` since they require actual voice pipeline infrastructure.
+17. **Telephony is WebSocket.** `telephony.py` provides a WebSocket endpoint at `/ws` mounted on `app` (not `api_v1`). It has no auth. EE re-exports the core router. Test with `TestClient.websocket_connect("/ws")` — do NOT use HTTP methods. Mock `AgentRunnerService` and `bot()` since they require actual voice pipeline infrastructure.
