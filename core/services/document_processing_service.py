@@ -7,6 +7,7 @@ from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 from core.models.upload import Upload
 from core.services.document_tool_service import get_openai_api_key_for_agent
 from core.services.r2_storage_service import R2StorageService
+from core.services.rag.chunkers import DoclingHybridChunker
 from core.services.rag.embedders import OpenAIEmbedder
 from core.services.rag.pipeline import RAGPipeline
 from core.services.rag.vector_stores.pgvector_store import PgVectorStore
@@ -42,6 +43,7 @@ class DocumentProcessingService:
             pipeline = RAGPipeline(
                 embedder=OpenAIEmbedder(api_key),
                 store=PgVectorStore(),
+                chunker=DoclingHybridChunker(),
             )
             num_chunks = pipeline.ingest_file_paged(
                 file_bytes,
