@@ -8,7 +8,13 @@ from abc import ABC, abstractmethod
 from typing import List, Optional, Tuple
 
 from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.layout_model_specs import DOCLING_LAYOUT_EGRET_MEDIUM
+from docling.datamodel.pipeline_options import (
+    AcceleratorDevice,
+    AcceleratorOptions,
+    LayoutOptions,
+    PdfPipelineOptions,
+)
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docx import Document as _Docx
 from loguru import logger
@@ -43,7 +49,7 @@ class DoclingReader(DocumentReader):
         "image/tiff": ".tiff",
     }
 
-    def __init__(self, page_range: Optional[Tuple[int, int]] = None, ocr: bool = False, tables: bool = False):
+    def __init__(self, page_range: Optional[Tuple[int, int]] = None, ocr: bool = True, tables: bool = True):
         self._converter = None
         self._page_range = page_range
         self._ocr = ocr
@@ -51,7 +57,13 @@ class DoclingReader(DocumentReader):
 
     def _get_converter(self):
         if self._converter is None:
-            options = PdfPipelineOptions(do_ocr=self._ocr, do_table_structure=self._tables)
+            num_threads = int(os.getenv("DOCLING_NUM_THREADS", "4"))
+            options = PdfPipelineOptions(
+                do_ocr=self._ocr,
+                do_table_structure=self._tables,
+                accelerator_options=AcceleratorOptions(num_threads=num_threads, device=AcceleratorDevice.CPU),
+                layout_options=LayoutOptions(model_spec=DOCLING_LAYOUT_EGRET_MEDIUM),
+            )
             self._converter = DocumentConverter(
                 format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=options)}
             )
@@ -84,7 +96,7 @@ class DoclingReader(DocumentReader):
             "Docling parsed {} -> {} chars in {:.1f}s (page_range={})",
             content_type, len(text), time.monotonic() - start, pr or "all",
         )
-        return Document(text=text, metadata={"parser": "docling", "page_range": pr})
+        return Document(text=text, native=result.document, metadata={"parser": "docling", "page_range": pr})
 
 
 class PdfReader(DocumentReader):
