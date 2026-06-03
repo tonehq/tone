@@ -29,6 +29,9 @@ def load_seed_data():
         return json.load(f)
 
 
+BATCH_SIZE = 20  # commit every N updates to avoid remote DB timeouts
+
+
 def update_model_schemas(db):
     from core.models.model import Model
     from core.models.model_provider import ModelProvider
@@ -53,6 +56,7 @@ def update_model_schemas(db):
     updated = 0
     skipped = 0
     not_found = 0
+    pending = 0
 
     for config in all_providers:
         provider_name = config["name"]
@@ -81,10 +85,19 @@ def update_model_schemas(db):
 
             model_row.meta_data_schema = schema
             updated += 1
+            pending += 1
             field_names = [f["name"] for f in schema]
             print(f"  UPDATED: {provider_name}/{model_name} -> {field_names}")
 
-    db.commit()
+            if pending >= BATCH_SIZE:
+                db.commit()
+                print(f"  [committed batch of {pending}]")
+                pending = 0
+
+    if pending > 0:
+        db.commit()
+        print(f"  [committed final batch of {pending}]")
+
     return updated, skipped, not_found
 
 

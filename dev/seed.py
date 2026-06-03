@@ -374,7 +374,12 @@ def seed_from_configs(db, org_name, email, password):
 
             # Reuse existing model from DB if it exists
             if (mp.id, model_name) in existing_models:
-                model_name_to_obj[(mp.id, model_name)] = existing_models[(mp.id, model_name)]
+                existing_model = existing_models[(mp.id, model_name)]
+                # Update meta_data_schema if present in seed data
+                new_schema = model_spec.get("meta_data_schema")
+                if new_schema and existing_model.meta_data_schema != new_schema:
+                    existing_model.meta_data_schema = new_schema
+                model_name_to_obj[(mp.id, model_name)] = existing_model
                 stats["models_skipped"] += 1
                 continue
 
