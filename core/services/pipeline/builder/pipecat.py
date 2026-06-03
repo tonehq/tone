@@ -40,6 +40,11 @@ class PipecatPipelineBuilder(PipelineBuilder):
 
         from core.processors.call_end_detector import CallEndDetectorProcessor
         from core.processors.metrics_collector import MetricsCollectorProcessor
+        # Telephony resilience (ported from the call_engines work): keep barge-in
+        # robust when Silero VAD gets stuck "speaking" on phone-line noise.
+        from core.processors.vad_speaking_timeout import VADSpeakingTimeoutProcessor
+        from core.processors.duplicate_transcription_filter import DuplicateTranscriptionFilter
+        from core.processors.transcription_timeout_turn_stop import TranscriptionTimeoutUserTurnStopStrategy
 
         # --- Build services from the resolved specs (no DB) ---
         llm = build_llm(params.llm.to_dict()) if params.llm else None
@@ -118,7 +123,14 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 context,
                 user_params=LLMUserAggregatorParams(
                     user_turn_strategies=UserTurnStrategies(
-                        stop=[TurnAnalyzerUserTurnStopStrategy(turn_analyzer=smart_turn_analyzer)]
+                        stop=[
+                            # Primary: Smart Turn (the new design's turn detector).
+                            TurnAnalyzerUserTurnStopStrategy(turn_analyzer=smart_turn_analyzer),
+                            # Telephony fallback: fire end-of-turn when transcription
+                            # goes quiet even if Silero VAD never reports "stopped"
+                            # (phone-line noise can keep VAD stuck in speaking state).
+                            TranscriptionTimeoutUserTurnStopStrategy(timeout=1.5),
+                        ]
                     ),
                 ),
             )
@@ -128,10 +140,19 @@ class PipecatPipelineBuilder(PipelineBuilder):
             call_end_detector = CallEndDetectorProcessor(end_call_message=params.end_call_message)
             logger.info("[TIMING] context + aggregators + processors created (+%.3fs)", _time.monotonic() - _t)
 
+            # VADSpeakingTimeout caps a stuck VAD "speaking" segment (8s) so
+            # segmented STTs flush and turn-stop strategies can fire; the
+            # DuplicateTranscriptionFilter drops repeated final transcripts that
+            # would otherwise trigger a duplicate LLM response (the turn-stop race).
+            vad_timeout = VADSpeakingTimeoutProcessor(max_duration_secs=8.0)
+            duplicate_filter = DuplicateTranscriptionFilter()
+
             pipeline_processors = [
                 transport.input(),
                 rtvi,
+                vad_timeout,
                 stt,
+                duplicate_filter,
                 call_end_detector,
                 user_aggregator,
                 llm,
