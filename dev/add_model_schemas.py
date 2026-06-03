@@ -252,6 +252,22 @@ def classify_openrouter(model_name):
     return ["temperature_0_2", "top_p", "presence_penalty", "seed", "max_tokens"]
 
 
+def classify_aws_bedrock(model_name):
+    """Classify AWS Bedrock models — all support standard params."""
+    return ["temperature_0_2", "top_p", "max_tokens"]
+
+
+def classify_openai_realtime(model_name):
+    """Classify OpenAI Realtime S2S models."""
+    return ["temperature_0_2", "max_completion_tokens"]
+
+
+def classify_gemini_live(model_name):
+    """Classify Gemini Live S2S models."""
+    return ["temperature_0_2", "top_p", "top_k", "frequency_penalty",
+            "presence_penalty", "max_tokens"]
+
+
 # Provider -> classifier function
 PROVIDER_CLASSIFIERS = {
     "openai": classify_openai_direct,
@@ -263,6 +279,9 @@ PROVIDER_CLASSIFIERS = {
     "deepseek": classify_deepseek_direct,
     "grok": classify_grok,
     "perplexity": classify_perplexity,
+    "aws_bedrock": classify_aws_bedrock,
+    "openai_realtime": classify_openai_realtime,
+    "gemini_live": classify_gemini_live,
 }
 
 # OpenAI-compatible providers that share standard OpenAI param set

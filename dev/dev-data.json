@@ -11211,7 +11211,45 @@
             "model": "amazon.nova-2-lite-v1:0",
             "max_tokens": 64000
           },
-          "supports_tool_calling": true
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "top_p",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+            },
+            {
+              "name": "max_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 1,
+                "max": 64000
+              },
+              "required": 0,
+              "description": "Maximum number of tokens to generate. Min: 1"
+            }
+          ]
         },
         {
           "name": "amazon.nova-lite-v1:0",
@@ -11219,7 +11257,45 @@
             "model": "amazon.nova-lite-v1:0",
             "max_tokens": 5000
           },
-          "supports_tool_calling": true
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "top_p",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+            },
+            {
+              "name": "max_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Maximum number of tokens to generate. Min: 1"
+            }
+          ]
         },
         {
           "name": "amazon.nova-micro-v1:0",
@@ -11227,7 +11303,45 @@
             "model": "amazon.nova-micro-v1:0",
             "max_tokens": 5000
           },
-          "supports_tool_calling": true
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "top_p",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+            },
+            {
+              "name": "max_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Maximum number of tokens to generate. Min: 1"
+            }
+          ]
         },
         {
           "name": "amazon.nova-premier-v1:0",
@@ -11235,7 +11349,45 @@
             "model": "amazon.nova-premier-v1:0",
             "max_tokens": 25000
           },
-          "supports_tool_calling": true
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "top_p",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+            },
+            {
+              "name": "max_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 1,
+                "max": 25000
+              },
+              "required": 0,
+              "description": "Maximum number of tokens to generate. Min: 1"
+            }
+          ]
         },
         {
           "name": "amazon.nova-pro-v1:0",
@@ -11243,7 +11395,45 @@
             "model": "amazon.nova-pro-v1:0",
             "max_tokens": 5000
           },
-          "supports_tool_calling": true
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "top_p",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+            },
+            {
+              "name": "max_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Maximum number of tokens to generate. Min: 1"
+            }
+          ]
         }
       ],
       "meta_data_schema": [
@@ -11302,7 +11492,33 @@
             "is_s2s": true,
             "max_completion_tokens": 4096
           },
-          "supports_tool_calling": false
+          "supports_tool_calling": false,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "max_completion_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 1,
+                "max": 4096
+              },
+              "required": 0,
+              "description": "Maximum number of completion tokens to generate. Min: 1"
+            }
+          ]
         },
         {
           "name": "gpt-4o-mini-realtime-preview",
@@ -11311,7 +11527,33 @@
             "is_s2s": true,
             "max_completion_tokens": 4096
           },
-          "supports_tool_calling": false
+          "supports_tool_calling": false,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "max_completion_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 1,
+                "max": 4096
+              },
+              "required": 0,
+              "description": "Maximum number of completion tokens to generate. Min: 1"
+            }
+          ]
         },
         {
           "name": "gpt-realtime",
@@ -11320,7 +11562,33 @@
             "is_s2s": true,
             "max_completion_tokens": 4096
           },
-          "supports_tool_calling": false
+          "supports_tool_calling": false,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "max_completion_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 1,
+                "max": 4096
+              },
+              "required": 0,
+              "description": "Maximum number of completion tokens to generate. Min: 1"
+            }
+          ]
         }
       ],
       "meta_data_schema": [
@@ -11374,7 +11642,80 @@
             "is_s2s": true,
             "max_tokens": 8192
           },
-          "supports_tool_calling": false
+          "supports_tool_calling": false,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "top_p",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+            },
+            {
+              "name": "top_k",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 0
+              },
+              "required": 0,
+              "description": "Top-K sampling parameter. Min: 0"
+            },
+            {
+              "name": "frequency_penalty",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": -2.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
+            },
+            {
+              "name": "presence_penalty",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": -2.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
+            },
+            {
+              "name": "max_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 1,
+                "max": 8192
+              },
+              "required": 0,
+              "description": "Maximum number of tokens to generate. Min: 1"
+            }
+          ]
         },
         {
           "name": "gemini-3.1-flash-live-preview",
@@ -11382,7 +11723,80 @@
             "model": "gemini-3.1-flash-live-preview",
             "max_tokens": 65536
           },
-          "supports_tool_calling": false
+          "supports_tool_calling": false,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "top_p",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+            },
+            {
+              "name": "top_k",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 0
+              },
+              "required": 0,
+              "description": "Top-K sampling parameter. Min: 0"
+            },
+            {
+              "name": "frequency_penalty",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": -2.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
+            },
+            {
+              "name": "presence_penalty",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": -2.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
+            },
+            {
+              "name": "max_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 1,
+                "max": 65536
+              },
+              "required": 0,
+              "description": "Maximum number of tokens to generate. Min: 1"
+            }
+          ]
         }
       ],
       "meta_data_schema": [
