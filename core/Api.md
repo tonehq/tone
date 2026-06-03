@@ -1709,11 +1709,11 @@ FUNCTION run_bot_for_agent(agent_config):
   8. RUN async pipeline until call ends
 ```
 
-### `BotRunnerService`
+### `AgentRunnerService`
 Routes incoming Twilio phone calls to the correct agent.
 
 ```
-FUNCTION get_bot_for_incoming_call(websocket_message):
+FUNCTION resolve_agent_for_incoming_call(websocket_message):
   1. PARSE WebSocket message from Twilio transport
   2. EXTRACT incoming phone number ("to" field)
   3. IF "to" not in message: CALL Twilio API to fetch call metadata
@@ -1737,5 +1737,5 @@ FUNCTION get_bot_for_incoming_call(websocket_message):
 | `AgentPhoneNumbersService` | — | `core/api/v1/agent_phone_numbers.py` |
 | `ModelService` | — | `core/api/v1/models.py` |
 | `AgentFactoryService` | `ApiKeyService`, `ServiceConfigService` | `core/bot.py` (Pipecat pipeline) |
-| `BotRunnerService` | `AgentPhoneNumbersService`, `AgentFactoryService` | `core/bot.py` (Twilio webhook) |
+| `AgentRunnerService` | `AgentPhoneNumbersService`, `AgentFactoryService` | `core/bot.py` (Twilio webhook) |
 | `EmailService` | Resend API (external) | `AuthService`, `EEAuthService` |

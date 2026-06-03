@@ -20,9 +20,8 @@ from pipecat.transports.websocket.fastapi import (FastAPIWebsocketParams,
 
 from core.bot import bot, run_bot
 from core.database.session import get_db_context
-from core.models.agent import Agent
 from core.serializers.raw_pcm import RawPCMSerializer
-from core.services.bot_runner_service import BotRunnerService
+from core.services.agent_runner_service import AgentRunnerService
 
 router = APIRouter()
 
@@ -33,7 +32,7 @@ async def telephony_websocket(websocket: WebSocket):
 
     Accepts the WebSocket and:
     1. Parses the first telephony messages to identify the provider and call data
-    2. Resolves the agent by the 'to' phone number via BotRunnerService
+    2. Resolves the agent by the 'to' phone number via AgentRunnerService
     3. Optionally spawns a subprocess bot if USE_SUBPROCESS_BOT=true
     4. Creates WebSocketRunnerArguments and runs the voice pipeline via bot()
     """
@@ -42,17 +41,17 @@ async def telephony_websocket(websocket: WebSocket):
     logger.info("[TIMING] WS accepted (+%.3fs)", _time.monotonic() - _t_ws_start)
 
     _t_import = _time.monotonic()
-    from core.services.bot_runner_service import BotRunnerService
+    from core.services.agent_runner_service import AgentRunnerService
     logger.info("[TIMING] telephony.py imports done (+%.3fs)", _time.monotonic() - _t_import)
 
     body = {}
     try:
-        _t_bot_runner = _time.monotonic()
+        _t_agent_runner = _time.monotonic()
         prefetched_services = None
         with get_db_context() as db:
-            agent, transport_type, call_data = await BotRunnerService(
+            agent, transport_type, call_data = await AgentRunnerService(
                 db
-            ).get_bot_for_incoming_call(websocket)
+            ).resolve_agent_for_incoming_call(websocket)
 
             # Pre-fetch service config + credentials + telephony creds in one DB session
             # so the subprocess doesn't need to establish its own DB connection
@@ -60,11 +59,9 @@ async def telephony_websocket(websocket: WebSocket):
                 # Store org_id in call_data so downstream code can fetch org-scoped creds
                 call_data["_org_id"] = str(agent.organization_id) if agent.organization_id else None
                 _t_prefetch = _time.monotonic()
-                from core.services.agent_factory_service import \
-                    AgentFactoryService
-                factory = AgentFactoryService(db)
+                from core.services.pipeline import PipelineParams
                 # Pass transport_type so telephony creds are fetched in the same DB session
-                prefetched_services = factory.serialize_agent_bot_data(agent, transport_type=transport_type)
+                prefetched_services = PipelineParams.serialize_for_prefetch(agent, db, transport_type=transport_type)
                 # Extract telephony creds from prefetched data into call_data
                 if prefetched_services and "_telephony_creds" in prefetched_services:
                     telephony_creds = prefetched_services.pop("_telephony_creds")
@@ -76,7 +73,7 @@ async def telephony_websocket(websocket: WebSocket):
                         call_data["_plivo_creds"] = telephony_creds
                 logger.info("[TIMING] serialize_agent_bot_data + creds (+%.3fs)", _time.monotonic() - _t_prefetch)
 
-        logger.info("[TIMING] get_bot_for_incoming_call total (+%.3fs)", _time.monotonic() - _t_bot_runner)
+        logger.info("[TIMING] resolve_agent_for_incoming_call total (+%.3fs)", _time.monotonic() - _t_agent_runner)
 
         # Check if subprocess mode is enabled
         use_subprocess = os.environ.get("USE_SUBPROCESS_BOT", "false").lower() == "true"
@@ -164,11 +161,12 @@ async def test_websocket(websocket: WebSocket):
 
     await websocket.accept()
 
-    # Resolve agent and its phone number from DB
+    # Resolve agent and its phone number from DB (via the shared AgentRunnerService)
     agent = None
     agent_phone = None
     with get_db_context() as db:
-        from core.models.agent_channel_phone_numbers import AgentChannelPhoneNumbers
+        from core.services.agent_runner_service import AgentRunnerService
+        agent_runner = AgentRunnerService(db)
 
         if agent_id_str:
             try:
@@ -176,16 +174,12 @@ async def test_websocket(websocket: WebSocket):
             except ValueError:
                 await websocket.close(code=4000, reason="agent_id must be an integer")
                 return
-            agent = db.query(Agent).filter(Agent.id == agent_id, Agent.status == "active").first()
+            agent = agent_runner.get_active_agent_by_id(agent_id)
             if agent:
-                phone_rec = db.query(AgentChannelPhoneNumbers).filter(
-                    AgentChannelPhoneNumbers.agent_id == agent.id
-                ).first()
-                agent_phone = phone_rec.phone_number if phone_rec else None
+                agent_phone = agent_runner.get_phone_number_for_agent(agent.id)
             logger.info("[TEST WS] accepted, agent_id={}, phone={}", agent_id, agent_phone)
         elif phone_number:
-            from core.services.bot_runner_service import BotRunnerService
-            agent = BotRunnerService(db).get_bot_for_phone_number(phone_number)
+            agent = agent_runner.get_agent_by_phone_number(phone_number)
             agent_phone = phone_number
             logger.info("[TEST WS] accepted, phone_number={} → agent={}", phone_number, agent.id if agent else None)
 

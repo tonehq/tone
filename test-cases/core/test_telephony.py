@@ -26,7 +26,7 @@ class TestTelephonyWebSocket:
         ]
         assert len(ws_routes) > 0, "/ws route should be registered on the app"
 
-    @patch("ee.api.v1.telephony.BotRunnerService", create=True)
+    @patch("ee.api.v1.telephony.AgentRunnerService", create=True)
     @patch("ee.api.v1.telephony.get_db_context", create=True)
     def test_websocket_accepts_connection(self, mock_db_ctx, mock_bot_svc):
         """Verify that the WebSocket endpoint accepts connections."""
@@ -44,4 +44,4 @@ class TestTelephonyWebSocket:
             pass
 
     # Note: Full telephony testing requires an async test runner and
-    # mocking BotRunnerService, AgentFactoryService, and the voice pipeline.
+    # mocking AgentRunnerService, AgentFactoryService, and the voice pipeline.

@@ -13,11 +13,11 @@ This document describes the runtime architecture of the Tone voice agent pipelin
   └─ websocket.accept()
   └─ _run_telephony_bot(websocket)                  # run.py:233
        └─ _get_bot_module()                         # run.py:127 → resolves core/bot.py
-       └─ BotRunnerService(db)
-            .get_bot_for_incoming_call(websocket)    # bot_runner_service.py:126
+       └─ AgentRunnerService(db)
+            .resolve_agent_for_incoming_call(websocket)    # agent_runner_service.py:126
             ├─ parse_telephony_websocket(websocket)  # Reads first WS messages → (transport_type, call_data)
             ├─ get_to_number_from_call_data_async()  # Resolves "to" phone number (Twilio API)
-            └─ get_bot_for_phone_number(to_number)   # DB lookup: phone → ChannelPhoneNumbers → Agent
+            └─ get_agent_by_phone_number(to_number)   # DB lookup: phone → ChannelPhoneNumbers → Agent
        └─ WebSocketRunnerArguments(websocket, body={call_data, transport_type, agent})
        └─ bot_module.bot(runner_args)                # core/bot.py:228
             └─ isinstance check → WebSocketRunnerArguments
@@ -70,7 +70,7 @@ graph TB
 
     subgraph "Call Resolution"
         RTB["_run_telephony_bot()<br/>run.py:233"]
-        BRS["BotRunnerService<br/>bot_runner_service.py"]
+        BRS["AgentRunnerService<br/>agent_runner_service.py"]
         PTW["parse_telephony_websocket()<br/>runner/utils.py"]
     end
 
@@ -248,10 +248,10 @@ classDiagram
         -_build_input_params(service_class, metadata)
     }
 
-    class BotRunnerService {
+    class AgentRunnerService {
         -db: Session
-        +get_bot_for_incoming_call(websocket) tuple
-        +get_bot_for_phone_number(phone_number) Agent
+        +resolve_agent_for_incoming_call(websocket) tuple
+        +get_agent_by_phone_number(phone_number) Agent
         -_fetch_twilio_to_number(call_sid) str
         -_get_twilio_credentials() dict
     }
@@ -286,7 +286,7 @@ classDiagram
     AgentFactoryService ..> PipelineRunner : creates
     AgentFactoryService ..> LLMContext : creates
     AgentFactoryService ..> LLMContextAggregatorPair : creates
-    BotRunnerService ..> AgentFactoryService : precedes
+    AgentRunnerService ..> AgentFactoryService : precedes
 
     PipelineRunner --> PipelineTask : runs
     PipelineTask --> Pipeline : orchestrates
@@ -304,7 +304,7 @@ sequenceDiagram
     participant Client as Twilio/Client
     participant WS as WebSocket /ws
     participant RTB as _run_telephony_bot
-    participant BRS as BotRunnerService
+    participant BRS as AgentRunnerService
     participant Bot as bot()
     participant Transport as FastAPIWebsocketTransport
     participant AFS as AgentFactoryService
@@ -322,7 +322,7 @@ sequenceDiagram
 
     RTB->>RTB: _get_bot_module() → core/bot.py
 
-    RTB->>BRS: get_bot_for_incoming_call(websocket)
+    RTB->>BRS: resolve_agent_for_incoming_call(websocket)
     BRS->>BRS: parse_telephony_websocket(ws)
     Note over BRS: Reads first WS messages<br/>→ transport_type, call_data
     BRS->>BRS: get_to_number_from_call_data_async()
@@ -481,8 +481,8 @@ BaseObject
 
 | Class                  | File                                     | Responsibility                                                            |
 | ---------------------- | ---------------------------------------- | ------------------------------------------------------------------------- |
-| `_run_telephony_bot()` | `pipecat/src/pipecat/runner/run.py:233`  | Receives WebSocket, resolves agent via BotRunnerService, invokes `bot()`  |
-| `BotRunnerService`     | `core/services/bot_runner_service.py:15` | Parses telephony WebSocket messages, resolves phone number → Agent via DB |
+| `_run_telephony_bot()` | `pipecat/src/pipecat/runner/run.py:233`  | Receives WebSocket, resolves agent via AgentRunnerService, invokes `bot()`  |
+| `AgentRunnerService`     | `core/services/agent_runner_service.py:15` | Parses telephony WebSocket messages, resolves phone number → Agent via DB |
 | `bot()`                | `core/bot.py:228`                        | Creates transport based on runner argument type, calls `run_bot()`        |
 
 
@@ -657,7 +657,7 @@ skinparam sequenceParticipantPadding 20
 actor "Twilio\nClient" as Client
 participant "WebSocket\n/ws" as WS
 participant "_run_telephony_bot" as RTB
-participant "BotRunnerService" as BRS
+participant "AgentRunnerService" as BRS
 participant "bot()" as Bot
 participant "FastAPIWebsocket\nTransport" as Transport
 participant "AgentFactory\nService" as AFS
@@ -675,7 +675,7 @@ WS -> WS : accept()
 WS -> RTB : _run_telephony_bot(ws)
 activate RTB
 
-RTB -> BRS : get_bot_for_incoming_call(ws)
+RTB -> BRS : resolve_agent_for_incoming_call(ws)
 activate BRS
 BRS -> BRS : parse_telephony_websocket()
 BRS -> DB : Query ChannelPhoneNumbers
@@ -817,10 +817,10 @@ class AgentFactoryService {
     +run_bot_with_components(...)
 }
 
-class BotRunnerService {
+class AgentRunnerService {
     -db: Session
-    +get_bot_for_incoming_call(ws)
-    +get_bot_for_phone_number(phone)
+    +resolve_agent_for_incoming_call(ws)
+    +get_agent_by_phone_number(phone)
 }
 
 class LLMContext {
@@ -851,7 +851,7 @@ AgentFactoryService ..> PipelineRunner : creates
 AgentFactoryService ..> LLMContext : creates
 AgentFactoryService ..> LLMContextAggregatorPair : creates
 
-BotRunnerService ..> AgentFactoryService : resolves agent for
+AgentRunnerService ..> AgentFactoryService : resolves agent for
 
 PipelineRunner --> PipelineTask : runs
 PipelineTask --> Pipeline : orchestrates

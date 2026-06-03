@@ -53,7 +53,7 @@ The feature is toggled via `USE_SUBPROCESS_BOT=true` (defaults to `false` for ba
 
 ### Agent Resolution
 
-4. `BotRunnerService.get_bot_for_incoming_call()` looks up the destination phone number in the DB and resolves the matching Agent.
+4. `AgentRunnerService.resolve_agent_for_incoming_call()` looks up the destination phone number in the DB and resolves the matching Agent.
 
 ### Subprocess Launch
 
@@ -204,6 +204,6 @@ This keeps the subprocess code identical to the in-process code path — `bot()`
 - `_drain_stdout()` runs continuously in the background to prevent this.
 
 ### Agent not found for phone number
-- `get_bot_for_incoming_call()` returns `None` for the agent.
+- `resolve_agent_for_incoming_call()` returns `None` for the agent.
 - Subprocess mode is skipped (requires a resolved agent).
 - Falls back to in-process execution with default services.

@@ -1,4 +1,4 @@
-"""Service to resolve the bot (agent) for incoming telephony calls by phone number."""
+"""Service to resolve the agent for incoming telephony calls by phone number."""
 
 import time as _time
 from typing import Optional, Tuple, Any, Dict
@@ -13,8 +13,8 @@ from core.models.agent_channel_phone_numbers import AgentChannelPhoneNumbers
 from core.services.base import BaseService
 
 
-class BotRunnerService(BaseService):
-    """Resolve the bot (agent) for incoming telephony calls by phone number."""
+class AgentRunnerService(BaseService):
+    """Resolve the agent for incoming telephony calls by phone number."""
 
     def _normalize_phone_number(self, phone_number: str) -> str:
         """Normalize phone number for lookup (strip, optional E.164)."""
@@ -22,8 +22,36 @@ class BotRunnerService(BaseService):
             return ""
         return phone_number.strip()
 
-    def get_bot_for_phone_number(self, phone_number: str) -> Optional[Agent]:
-        """Find the agent (bot) associated with the given phone number (the number the call came to).
+    def get_active_agent_by_id(self, agent_id: Any) -> Optional[Agent]:
+        """Return the active Agent for the given id, or None.
+
+        Centralizes agent-by-id resolution so callers (e.g. the /ws/test endpoint)
+        don't query the Agent table inline.
+        """
+        if agent_id is None:
+            return None
+        return (
+            self.db.query(Agent)
+            .filter(Agent.id == agent_id, Agent.status == "active")
+            .first()
+        )
+
+    def get_phone_number_for_agent(self, agent_id: Any) -> Optional[str]:
+        """Return the first phone number mapped to the given agent, or None.
+
+        Reusable counterpart to get_agent_by_phone_number (the reverse direction).
+        """
+        if agent_id is None:
+            return None
+        rec = (
+            self.db.query(AgentChannelPhoneNumbers)
+            .filter(AgentChannelPhoneNumbers.agent_id == agent_id)
+            .first()
+        )
+        return rec.phone_number if rec else None
+
+    def get_agent_by_phone_number(self, phone_number: str) -> Optional[Agent]:
+        """Find the agent associated with the given phone number (the number the call came to).
 
         Uses a single JOIN query instead of separate lookups.
         Results are cached in Redis keyed by phone number.
@@ -37,7 +65,6 @@ class BotRunnerService(BaseService):
         from core.services.redis_service import cache_get, cache_set
 
         normalized = self._normalize_phone_number(phone_number)
-        print("normalized in bot_runner_service.py file ===========", normalized)
         if not normalized:
             return None
 
@@ -307,10 +334,10 @@ class BotRunnerService(BaseService):
 
         return call_data.get("to") or None
 
-    async def get_bot_for_incoming_call(
+    async def resolve_agent_for_incoming_call(
         self, websocket: Any
     ) -> Tuple[Optional[Agent], str, Dict[str, Any]]:
-        """Parse the WebSocket (first messages from /ws), determine the 'to' number, and return the bot (agent) for that number.
+        """Parse the WebSocket (first messages from /ws), determine the 'to' number, and return the agent for that number.
 
         Consumes the first telephony messages from the websocket (same as parse_telephony_websocket).
         Caller should pass the same websocket to the transport so subsequent messages are read by the transport.
@@ -337,8 +364,8 @@ class BotRunnerService(BaseService):
             return None, transport_type, call_data
 
         _t2 = _time.monotonic()
-        agent = self.get_bot_for_phone_number(to_number)
-        logger.info("[TIMING] get_bot_for_phone_number (+%.3fs)", _time.monotonic() - _t2)
+        agent = self.get_agent_by_phone_number(to_number)
+        logger.info("[TIMING] get_agent_by_phone_number (+%.3fs)", _time.monotonic() - _t2)
 
         if agent:
             logger.info(

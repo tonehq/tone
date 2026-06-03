@@ -63,12 +63,19 @@ docker build -f core/Dockerfile -t tone .
 - `core/config.py` — `Settings` class loading from Infisical or `.env`
 - `core/context.py` — `TenantContext` for request-scoped multi-tenancy
 
-**Voice pipeline (the core product):**
-1. `core/bot.py` — Entry point (`run_bot`), called by transports (Daily WebRTC, Twilio, WebSocket)
-2. `core/services/agent_factory_service.py` — Builds pipelines: reads agent config from DB, decrypts provider API keys, instantiates Pipecat LLM/STT/TTS services
-3. `core/services/voice_service.py` — Fetches available voices from TTS providers
+**Voice pipeline (the core product):** lives in `core/services/pipeline/` — a 3-layer
+architecture, each layer a base class + a Pipecat child:
+1. `core/bot.py` — Entry point (`run_bot`), called by transports (Daily WebRTC, Twilio, WebSocket). Selects the engine via `get_engine()`, resolves `PipelineParams`, then runs the builder + runner.
+2. `core/services/pipeline/service_resolver.py` — the ONLY DB access: reads agent config + decrypts provider API keys into JSON-serializable service specs (Redis-cached).
+3. `core/services/pipeline/service_factory.py` — pure: turns a service spec into a Pipecat LLM/STT/TTS instance (no DB).
+4. `core/services/pipeline/params/` — `PipelineParams`/`PipecatPipelineParams` (data + `from_agent`/`from_cache_dict`/`serialize_for_prefetch`).
+5. `core/services/pipeline/builder/` — `PipecatPipelineBuilder.build()` assembles the Pipeline/PipelineTask (standard + S2S).
+6. `core/services/pipeline/runner/` — `PipecatPipelineRunner.run()` runs the pipeline + call lifecycle (call_log, recording → R2).
+7. `core/services/pipeline/engine.py` — registry bundling the (params, builder, runner) trio; add a new engine = subclass the 3 + `register_engine(...)`.
+8. `core/services/agent_factory_service.py` — thin back-compat facade over the package (legacy callers/tests).
+9. `core/services/voice_service.py` — Fetches available voices from TTS providers.
 
-**Pipeline flow:** Transport Input → STT → LLM → TTS → Transport Output
+**Pipeline flow:** Transport Input → STT → LLM → TTS → Transport Output (S2S: Input → LLM → Output)
 
 ### Frontend (Next.js 15 / React 19 / TypeScript)
 
@@ -115,7 +122,7 @@ The `pipecat/` directory is a custom fork (`tonehq/pipecat`) of the Pipecat AI f
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **tone** (12696 symbols, 50186 relationships, 293 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **bamako** (4683 symbols, 11762 relationships, 192 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -131,7 +138,7 @@ This project is indexed by GitNexus as **tone** (12696 symbols, 50186 relationsh
 
 1. `gitnexus_query({query: "<error or symptom>"})` — find execution flows related to the issue
 2. `gitnexus_context({name: "<suspect function>"})` — see all callers, callees, and process participation
-3. `READ gitnexus://repo/tone/process/{processName}` — trace the full execution flow step by step
+3. `READ gitnexus://repo/bamako/process/{processName}` — trace the full execution flow step by step
 4. For regressions: `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
 
 ## When Refactoring
@@ -170,10 +177,10 @@ This project is indexed by GitNexus as **tone** (12696 symbols, 50186 relationsh
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/tone/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/tone/clusters` | All functional areas |
-| `gitnexus://repo/tone/processes` | All execution flows |
-| `gitnexus://repo/tone/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/bamako/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/bamako/clusters` | All functional areas |
+| `gitnexus://repo/bamako/processes` | All execution flows |
+| `gitnexus://repo/bamako/process/{name}` | Step-by-step execution trace |
 
 ## Self-Check Before Finishing
 
@@ -211,25 +218,5 @@ To check whether embeddings exist, inspect `.gitnexus/meta.json` — the `stats.
 | Rename / extract / split / refactor | `.claude/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
 | Tools, resources, schema reference | `.claude/skills/gitnexus/gitnexus-guide/SKILL.md` |
 | Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus/gitnexus-cli/SKILL.md` |
-| Work in the Foundational area (1237 symbols) | `.claude/skills/generated/foundational/SKILL.md` |
-| Work in the Tests area (654 symbols) | `.claude/skills/generated/tests/SKILL.md` |
-| Work in the Services area (447 symbols) | `.claude/skills/generated/services/SKILL.md` |
-| Work in the Cartesia area (347 symbols) | `.claude/skills/generated/cartesia/SKILL.md` |
-| Work in the Test-cases area (250 symbols) | `.claude/skills/generated/test-cases/SKILL.md` |
-| Work in the Realtime area (194 symbols) | `.claude/skills/generated/realtime/SKILL.md` |
-| Work in the Daily area (183 symbols) | `.claude/skills/generated/daily/SKILL.md` |
-| Work in the V1 area (168 symbols) | `.claude/skills/generated/v1/SKILL.md` |
-| Work in the Aggregators area (161 symbols) | `.claude/skills/generated/aggregators/SKILL.md` |
-| Work in the Processors area (145 symbols) | `.claude/skills/generated/processors/SKILL.md` |
-| Work in the Frameworks area (108 symbols) | `.claude/skills/generated/frameworks/SKILL.md` |
-| Work in the Smallwebrtc area (108 symbols) | `.claude/skills/generated/smallwebrtc/SKILL.md` |
-| Work in the Openai_realtime_beta area (102 symbols) | `.claude/skills/generated/openai-realtime-beta/SKILL.md` |
-| Work in the Ui area (94 symbols) | `.claude/skills/generated/ui/SKILL.md` |
-| Work in the Frames area (94 symbols) | `.claude/skills/generated/frames/SKILL.md` |
-| Work in the Websocket area (88 symbols) | `.claude/skills/generated/websocket/SKILL.md` |
-| Work in the Pipeline area (85 symbols) | `.claude/skills/generated/pipeline/SKILL.md` |
-| Work in the Scripts area (77 symbols) | `.claude/skills/generated/scripts/SKILL.md` |
-| Work in the Google area (76 symbols) | `.claude/skills/generated/google/SKILL.md` |
-| Work in the Heygen area (70 symbols) | `.claude/skills/generated/heygen/SKILL.md` |
 
 <!-- gitnexus:end -->

@@ -212,53 +212,47 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     Otherwise uses env-based default services and a default prompt.
     """
     _t_run_bot = _time.monotonic()
-    from core.services.agent_factory_service import AgentFactoryService
     from core.database.session import get_db_context
+    from core.services.pipeline import get_engine
     logger.info("[TIMING] run_bot() entered")
 
     body = getattr(runner_args, "body", None) or {}
     agent = body.get("agent")
 
+    # Select the pipeline engine once (params/builder/runner trio). Defaults to "pipecat";
+    # a future engine just registers its own trio and can be chosen here (e.g. from config).
+    engine = get_engine()
+
     if agent:
         logger.info("Running bot with agent config: id=%s name=%s", agent.id, agent.name)
         _t = _time.monotonic()
-        # Get agent bot data (LLM, STT, TTS, prompt) from DB, then close the session
-        # BEFORE starting the long-running pipeline. This prevents Neon DB SSL
-        # timeout errors after 300+ second calls.
-        with get_db_context() as db:
-            factory = AgentFactoryService(db)
-            bot_data = factory.get_agent_bot_data(agent, prefetched=body.get("_prefetched_services"))
-        if not bot_data:
+        # Resolve pipeline params (LLM/STT/TTS specs, prompt) from prefetch or DB, then
+        # close the session BEFORE starting the long-running pipeline. The builder/runner
+        # build services and run WITHOUT holding a DB session open (they open their own
+        # short-lived sessions for call_log/audio). This prevents Neon DB SSL timeout
+        # errors after 300+ second calls.
+        prefetched = body.get("_prefetched_services")
+        if prefetched:
+            params = engine.params_cls.from_cache_dict(prefetched)
+        else:
+            with get_db_context() as db:
+                params = engine.params_cls.from_agent(agent, db)
+        if not params:
             raise ValueError(
                 "Agent has no active config or missing LLM/STT/TTS services. "
                 "Configure the agent and ensure services are set."
             )
-        logger.info("[TIMING] run_bot() get_agent_bot_data (+%.3fs)", _time.monotonic() - _t)
-        # Run the pipeline WITHOUT holding a DB session open. run_bot_with_components
-        # creates its own short-lived DB sessions for call_log creation, audio upload,
-        # etc. This avoids Neon DB SSL timeout on 300+ second calls.
+        logger.info("[TIMING] run_bot() resolved pipeline params (+%.3fs)", _time.monotonic() - _t)
+
         _t2 = _time.monotonic()
-        factory = AgentFactoryService(db=None)
-        await factory.run_bot_with_components(
-            transport=transport,
-            runner_args=runner_args,
-            llm=bot_data["llm"],
-            stt=bot_data["stt"],
-            tts=bot_data["tts"],
-            messages=bot_data["messages"],
-            agent=agent,
-            end_call_message=bot_data.get("end_call_message"),
-            is_s2s=bot_data.get("is_s2s", False),
-        )
-        logger.info("[TIMING] run_bot() run_bot_with_components finished (+%.3fs), total run_bot: %.3fs", _time.monotonic() - _t2, _time.monotonic() - _t_run_bot)
+        builder = engine.builder_cls(params)
+        runner = engine.runner_cls(params, builder, transport, agent=agent, runner_args=runner_args)
+        await runner.run()
+        logger.info("[TIMING] run_bot() pipeline finished (+%.3fs), total run_bot: %.3fs", _time.monotonic() - _t2, _time.monotonic() - _t_run_bot)
         return
 
     # Fallback when no agent (e.g. WebRTC, Daily without agent in body)
     logger.info("Running bot with default env-based services (no agent in body)")
-    from pipecat.services.cartesia.tts import CartesiaTTSService
-    from pipecat.services.deepgram.stt import DeepgramSTTService
-    from pipecat.services.openai.llm import OpenAILLMService
-
     openai_key = _get_provider_api_key("openai", "llm")
     deepgram_key = _get_provider_api_key("deepgram", "stt")
     cartesia_key = _get_provider_api_key("cartesia", "tts")
@@ -267,22 +261,11 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
             "No agent in session and default service API keys not found in DB for: "
             "openai (llm), deepgram (stt), cartesia (tts)"
         )
-    llm = OpenAILLMService(api_key=openai_key, model="gpt-4o")
-    stt = DeepgramSTTService(api_key=deepgram_key)
-    tts = CartesiaTTSService(
-        api_key=cartesia_key,
-        voice_id="71a7ad14-091c-4e8e-a314-022ece01c121",
-    )
     messages = await _default_messages()
-    with get_db_context() as db:
-        await AgentFactoryService(db).run_bot_with_components(
-            transport=transport,
-            runner_args=runner_args,
-            llm=llm,
-            stt=stt,
-            tts=tts,
-            messages=messages,
-        )
+    params = engine.params_cls.default_env(openai_key, deepgram_key, cartesia_key, messages)
+    builder = engine.builder_cls(params)
+    runner = engine.runner_cls(params, builder, transport, agent=None, runner_args=runner_args)
+    await runner.run()
 
 
 
@@ -346,7 +329,7 @@ def _create_serializer(transport_type: str, call_data: dict):
         A FrameSerializer instance for the given provider.
     """
     if transport_type == "twilio":
-        # Reuse credentials cached by BotRunnerService if available
+        # Reuse credentials cached by AgentRunnerService if available
         twilio_creds = call_data.get("_twilio_creds") or _get_twilio_credentials(org_id=call_data.get("_org_id"))
         return TwilioFrameSerializer(
             stream_sid=call_data["stream_id"],
@@ -400,7 +383,7 @@ async def bot(runner_args: RunnerArguments, call_type: str = None):
             transport_type, call_data = await parse_telephony_websocket(runner_args.websocket)
             logger.info("[TIMING] bot() parse_telephony_websocket (+%.3fs)", _time.monotonic() - _t)
 
-        # Fetch from/to only if not already present (BotRunnerService enriches call_data)
+        # Fetch from/to only if not already present (AgentRunnerService enriches call_data)
         if transport_type == "twilio" and not call_data.get("from"):
             _t = _time.monotonic()
             call_info = await get_call_info(transport_type, call_data.get("call_id", ""), org_id=call_data.get("_org_id"))

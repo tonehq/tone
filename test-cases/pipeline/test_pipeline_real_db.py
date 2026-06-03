@@ -25,12 +25,34 @@ class TestPipelineFromDB(unittest.IsolatedAsyncioTestCase):
 
     async def test_agent_factory_builds_services_from_db(self):
         """Verify AgentFactoryService correctly builds LLM/STT/TTS from existing DB data."""
-        from sqlalchemy import create_engine
+        from sqlalchemy import create_engine, inspect
+        from sqlalchemy.exc import OperationalError, ProgrammingError
         from sqlalchemy.orm import sessionmaker
         from core.models.agent import Agent
         from core.services.agent_factory_service import AgentFactoryService
 
         engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
+
+        # Pre-flight: this integration test needs the configured DATABASE_URL to point at
+        # a DB carrying THIS codebase's schema. If the DB is unreachable, or it's a foreign/
+        # outdated schema (e.g. missing the columns the Agent model expects), skip rather
+        # than fail with a confusing SQL error — the test stays meaningful against a real,
+        # migrated bamako DB and is a clean skip everywhere else.
+        try:
+            insp = inspect(engine)
+            if "agents" not in insp.get_table_names():
+                self.skipTest("DB has no 'agents' table — run `alembic upgrade head` against a bamako DB")
+            agent_cols = {c["name"] for c in insp.get_columns("agents")}
+            required_cols = {"uuid", "status"}
+            missing = required_cols - agent_cols
+            if missing:
+                self.skipTest(
+                    f"DATABASE_URL points at an incompatible schema (agents missing {sorted(missing)}). "
+                    "Point it at a migrated bamako DB (`alembic upgrade head` + `python dev/seed.py`)."
+                )
+        except OperationalError as e:
+            self.skipTest(f"DB unreachable: {e}")
+
         Session = sessionmaker(bind=engine)
         db = Session()
         try:
