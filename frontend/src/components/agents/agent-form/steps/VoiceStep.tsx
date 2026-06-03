@@ -29,8 +29,20 @@ import type { MetaDataSchemaField } from '@/types/provider';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 
+/** Keys in voice_settings / stt_settings that are structural (not schema fields). */
+const TTS_STRUCTURAL_KEYS = new Set([
+  'provider_id',
+  'model_id',
+  'model',
+  'voice_id',
+  'language',
+  'language_code',
+  'speed',
+]);
+const STT_STRUCTURAL_KEYS = new Set(['provider_id', 'model_id', 'model']);
+
 export default function VoiceStep() {
-  const { control, setValue } = useFormContext<AgentFormState>();
+  const { control, setValue, getValues } = useFormContext<AgentFormState>();
   const voiceSettings = useWatch({ control, name: 'config.voice_settings' });
   // STT provider lives on config.stt_settings.provider_id. RHF accepts the
   // dotted path; we cast `name` to `never` to satisfy the strongly-typed
@@ -293,17 +305,67 @@ export default function VoiceStep() {
   );
 
   // ─── meta_data_schema for TTS and STT ─────────────────────────────────────
+  // Prefer model-level schema, fall back to provider-level
   const ttsSchema = useMemo<MetaDataSchemaField[]>(() => {
+    if (ttsModelId) {
+      const model = ttsModels.find((m) => m.id === ttsModelId);
+      if (model?.meta_data_schema && model.meta_data_schema.length > 0) {
+        return model.meta_data_schema;
+      }
+    }
+    // Fallback: TTS provider returns meta_data_schema as a flat array
     if (!providerId) return [];
     const matched = providers.find((p) => p.id === providerId);
     return matched?.meta_data_schema ?? [];
-  }, [providerId, providers]);
+  }, [ttsModelId, ttsModels, providerId, providers]);
 
   const sttSchema = useMemo<MetaDataSchemaField[]>(() => {
+    if (sttModel) {
+      // STT uses model name, not model_id — find by name in sttModels
+      const model = sttModels.find((m) => m.name === sttModel || m.id === sttModel);
+      if (model?.meta_data_schema && model.meta_data_schema.length > 0) {
+        return model.meta_data_schema;
+      }
+    }
+    // Fallback: provider catalog has meta_data_schema keyed by kind
     if (!sttProviderId) return [];
     const matched = sttProviders.find((p) => p.id === sttProviderId);
     return matched?.meta_data_schema?.stt ?? [];
-  }, [sttProviderId, sttProviders]);
+  }, [sttModel, sttModels, sttProviderId, sttProviders]);
+
+  // Clear stale TTS schema field values when TTS model changes
+  useEffect(() => {
+    if (!ttsSchema.length) return;
+    const allowedKeys = new Set(ttsSchema.map((f) => f.name));
+    const current = getValues('config.voice_settings' as never) as
+      | Record<string, unknown>
+      | undefined;
+    if (!current) return;
+    for (const key of Object.keys(current)) {
+      if (!TTS_STRUCTURAL_KEYS.has(key) && !allowedKeys.has(key)) {
+        setValue(`config.voice_settings.${key}` as never, undefined as never, {
+          shouldDirty: true,
+        });
+      }
+    }
+  }, [ttsSchema]);
+
+  // Clear stale STT schema field values when STT model changes
+  useEffect(() => {
+    if (!sttSchema.length) return;
+    const allowedKeys = new Set(sttSchema.map((f) => f.name));
+    const current = getValues('config.stt_settings' as never) as
+      | Record<string, unknown>
+      | undefined;
+    if (!current) return;
+    for (const key of Object.keys(current)) {
+      if (!STT_STRUCTURAL_KEYS.has(key) && !allowedKeys.has(key)) {
+        setValue(`config.stt_settings.${key}` as never, undefined as never, {
+          shouldDirty: true,
+        });
+      }
+    }
+  }, [sttSchema]);
 
   // ─── render helpers ───────────────────────────────────────────────────────
   const showProviderField = !!language;

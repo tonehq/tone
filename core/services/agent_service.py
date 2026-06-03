@@ -786,8 +786,9 @@ class AgentService(BaseService):
     def _validate_meta_data_schema(self, config_data: Dict[str, Any]) -> None:
         """Validate meta_data_schema fields in llm_settings, stt_settings, voice_settings.
 
-        Fetches the provider's meta_data_schema from DB and validates user values.
-        Model-level meta_data overrides provider-level validator max when present.
+        Prefers model-level meta_data_schema (per-model param support).
+        Falls back to provider-level meta_data_schema[kind] for models that
+        don't have their own schema yet.
         Raises HTTPException(400) with structured errors if validation fails.
         """
         from core.models.model_provider import ModelProvider
@@ -810,19 +811,8 @@ class AgentService(BaseService):
             if not provider_id:
                 continue
 
-            provider = (
-                self.db.query(ModelProvider)
-                .filter(ModelProvider.id == UUID(str(provider_id)))
-                .first()
-            )
-            if not provider or not provider.meta_data_schema:
-                continue
-
-            schema = provider.meta_data_schema.get(kind)
-            if not schema:
-                continue
-
-            # Fetch model-level meta_data for max overrides
+            # Try model-level schema first
+            schema = None
             model_meta_data = None
             model_id = settings.get("model_id")
             if model_id:
@@ -831,8 +821,24 @@ class AgentService(BaseService):
                     .filter(Model.id == UUID(str(model_id)))
                     .first()
                 )
-                if model_record and model_record.meta_data:
-                    model_meta_data = model_record.meta_data
+                if model_record:
+                    if model_record.meta_data_schema:
+                        schema = model_record.meta_data_schema
+                    if model_record.meta_data:
+                        model_meta_data = model_record.meta_data
+
+            # Fall back to provider-level schema
+            if not schema:
+                provider = (
+                    self.db.query(ModelProvider)
+                    .filter(ModelProvider.id == UUID(str(provider_id)))
+                    .first()
+                )
+                if provider and provider.meta_data_schema:
+                    schema = provider.meta_data_schema.get(kind)
+
+            if not schema:
+                continue
 
             field_errors = validator.validate_settings(schema, settings, model_meta_data)
             if field_errors:

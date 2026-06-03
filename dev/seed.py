@@ -279,9 +279,13 @@ def seed_from_configs(db, org_name, email, password):
 
     stats = {
         "model_providers_created": 0,
+        "model_providers_skipped": 0,
         "models_created": 0,
+        "models_skipped": 0,
         "model_voices_created": 0,
+        "model_voices_skipped": 0,
         "model_languages_created": 0,
+        "model_languages_skipped": 0,
         "api_keys_created": 0,
         "api_keys_none": 0,
         "tools_created": 0,
@@ -296,7 +300,13 @@ def seed_from_configs(db, org_name, email, password):
     all_providers.extend(data.get("stt_providers", []))
     all_providers.extend(data.get("tts_providers", []))
 
-    # --- Phase 1: Insert ModelProvider records ---
+    # --- Phase 1: Load or create ModelProvider records ---
+    # Check which providers already exist in DB
+    existing_providers = {
+        mp.provider_id: mp
+        for mp in db.query(ModelProvider).all()
+    }
+
     provider_map = {}  # config index -> ModelProvider object
     seen_providers = {}  # provider_id_str -> ModelProvider object
     provider_schemas = {}  # provider_id_str -> {kind: [...schema...]}
@@ -311,6 +321,14 @@ def seed_from_configs(db, org_name, email, password):
 
         if provider_id_str in seen_providers:
             provider_map[i] = seen_providers[provider_id_str]
+            continue
+
+        # Reuse existing provider from DB if it exists
+        if provider_id_str in existing_providers:
+            mp = existing_providers[provider_id_str]
+            provider_map[i] = mp
+            seen_providers[provider_id_str] = mp
+            stats["model_providers_skipped"] += 1
             continue
 
         slug = _slugify(config["display_name"])
@@ -334,7 +352,13 @@ def seed_from_configs(db, org_name, email, password):
 
     db.flush()
 
-    # --- Phase 2: Insert Model records ---
+    # --- Phase 2: Load or create Model records ---
+    # Check which models already exist in DB
+    existing_models = {
+        (m.provider_id, m.name): m
+        for m in db.query(Model).all()
+    }
+
     model_name_to_obj = {}  # (provider_uuid, model_name) -> Model object
     for i, config in enumerate(all_providers):
         if i not in provider_map:
@@ -348,6 +372,17 @@ def seed_from_configs(db, org_name, email, password):
             if (mp.id, model_name) in model_name_to_obj:
                 continue
 
+            # Reuse existing model from DB if it exists
+            if (mp.id, model_name) in existing_models:
+                existing_model = existing_models[(mp.id, model_name)]
+                # Update meta_data_schema if present in seed data
+                new_schema = model_spec.get("meta_data_schema")
+                if new_schema and existing_model.meta_data_schema != new_schema:
+                    existing_model.meta_data_schema = new_schema
+                model_name_to_obj[(mp.id, model_name)] = existing_model
+                stats["models_skipped"] += 1
+                continue
+
             m = Model(
                 provider_id=mp.id,
                 kind=kind,
@@ -355,6 +390,7 @@ def seed_from_configs(db, org_name, email, password):
                 display_name=model_name,
                 is_active=True,
                 meta_data=model_spec.get("meta_data"),
+                meta_data_schema=model_spec.get("meta_data_schema"),
             )
             db.add(m)
             model_name_to_obj[(mp.id, model_name)] = m
@@ -362,7 +398,13 @@ def seed_from_configs(db, org_name, email, password):
 
     db.flush()
 
-    # --- Phase 3: Insert ModelVoice records (TTS providers) ---
+    # --- Phase 3: Load or create ModelVoice records (TTS providers) ---
+    # Check which voices already exist in DB
+    existing_voices = {
+        (mv.model_id, mv.voice_id)
+        for mv in db.query(ModelVoice).all()
+    }
+
     for i, config in enumerate(all_providers):
         if i not in provider_map:
             continue
@@ -393,6 +435,11 @@ def seed_from_configs(db, org_name, email, password):
             if not model_obj:
                 continue  # skip voice if no model found
 
+            # Skip if voice already exists in DB
+            if (model_obj.id, voice_id) in existing_voices:
+                stats["model_voices_skipped"] += 1
+                continue
+
             mv = ModelVoice(
                 model_id=model_obj.id,
                 voice_id=voice_spec.get("voice_id"),
@@ -409,8 +456,14 @@ def seed_from_configs(db, org_name, email, password):
 
     db.flush()
 
-    # --- Phase 4: Insert ModelLanguage records (from voice language_list) ---
+    # --- Phase 4: Load or create ModelLanguage records (from voice language_list) ---
+    # Check which languages already exist in DB
+    existing_languages = {
+        (ml.model_id, ml.name)
+        for ml in db.query(ModelLanguage).all()
+    }
     seen_model_languages = set()
+
     for i, config in enumerate(all_providers):
         if i not in provider_map:
             continue
@@ -437,6 +490,11 @@ def seed_from_configs(db, org_name, email, password):
                 if key in seen_model_languages:
                     continue
                 seen_model_languages.add(key)
+
+                # Skip if language already exists in DB
+                if key in existing_languages:
+                    stats["model_languages_skipped"] += 1
+                    continue
 
                 ml = ModelLanguage(
                     model_id=model_obj.id,
@@ -517,10 +575,10 @@ def main():
         print(f"   User:             created ({email})")
         print(f"   Org:              created ({org_name})")
         print(f"   Member:           created")
-        print(f"   Model Providers:  {stats['model_providers_created']} created")
-        print(f"   Models:           {stats['models_created']} created")
-        print(f"   Model Voices:     {stats['model_voices_created']} created")
-        print(f"   Model Languages:  {stats['model_languages_created']} created")
+        print(f"   Model Providers:  {stats['model_providers_created']} created, {stats['model_providers_skipped']} already existed")
+        print(f"   Models:           {stats['models_created']} created, {stats['models_skipped']} already existed")
+        print(f"   Model Voices:     {stats['model_voices_created']} created, {stats['model_voices_skipped']} already existed")
+        print(f"   Model Languages:  {stats['model_languages_created']} created, {stats['model_languages_skipped']} already existed")
         print(f"   API keys:         {stats['api_keys_created']} created, {stats['api_keys_none']} no env key")
         print(f"   Tools:            {stats['tools_created']} created")
     finally:
