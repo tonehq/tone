@@ -85,6 +85,7 @@ def _model_to_dict(m: Model) -> dict:
         "description": m.description,
         "is_active": bool(m.is_active),
         "meta_data": m.meta_data,
+        "meta_data_schema": m.meta_data_schema,
         "created_at": int(m.created_at.timestamp()) if m.created_at else None,
         "updated_at": int(m.updated_at.timestamp()) if m.updated_at else None,
     }

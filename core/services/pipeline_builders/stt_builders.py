@@ -9,18 +9,38 @@ from core.services.pipeline_builders.base import (
 
 
 class DeepgramSTTBuilder(STTBuilder):
+    # LiveOptions boolean/string fields that can be set from metadata.
+    # sample_rate is NOT user-configurable — auto-detected by transport.
+    _LIVE_BOOL_KEYS = (
+        "punctuate", "smart_format", "profanity_filter", "diarize",
+        "filler_words", "no_delay", "dictation", "numerals", "interim_results",
+    )
+
     def build(self, ctx: BuildContext) -> Any:
         from deepgram import LiveOptions
         from pipecat.services.deepgram.stt import DeepgramSTTService
-        # Note: sample_rate is NOT user-configurable for Deepgram — it's
-        # auto-detected by the transport (Twilio=8kHz, WebRTC=16kHz).
-        # Setting it incorrectly breaks transcription.
         live_opts = {}
         if ctx.model:
             live_opts["model"] = ctx.model
         lang = resolve_language_code(ctx.metadata.get("language"))
         if lang:
             live_opts["language"] = lang
+        for key in self._LIVE_BOOL_KEYS:
+            val = clean_meta(ctx.metadata, key)
+            if val is not None:
+                live_opts[key] = val if isinstance(val, bool) else str(val).lower() == "true"
+        keywords_raw = clean_meta(ctx.metadata, "keywords")
+        if keywords_raw:
+            if isinstance(keywords_raw, list):
+                live_opts["keywords"] = keywords_raw
+            elif isinstance(keywords_raw, str):
+                live_opts["keywords"] = [k.strip() for k in keywords_raw.split(",") if k.strip()]
+        endpointing_val = clean_meta(ctx.metadata, "endpointing")
+        if endpointing_val is not None:
+            live_opts["endpointing"] = int(endpointing_val)
+        utterance_end = clean_meta(ctx.metadata, "utterance_end_ms")
+        if utterance_end is not None:
+            live_opts["utterance_end_ms"] = str(utterance_end)
         live_options = LiveOptions(**live_opts) if live_opts else None
         return DeepgramSTTService(api_key=ctx.api_key, live_options=live_options)
 
