@@ -4,9 +4,8 @@ Builds the LLM/STT/TTS services from the params' specs and assembles a Pipecat
 `Pipeline` + `PipelineTask` (standard STT->LLM->TTS or S2S). Performs NO database access:
 everything it needs is on `self.params` (resolved earlier by PipelineParams.from_agent).
 
-This is the front half of the old AgentFactoryService.run_bot_with_components
-(service construction + pipeline assembly). Event handlers that persist data are wired
-by the runner, which owns the transcript/turn entry lists.
+It handles service construction + pipeline assembly; event handlers that persist data are
+wired by the runner, which owns the transcript/turn entry lists.
 """
 
 import time as _time
@@ -91,10 +90,10 @@ class PipecatPipelineBuilder(PipelineBuilder):
         from core.processors.duplicate_transcription_filter import DuplicateTranscriptionFilter
         from core.processors.transcription_timeout_turn_stop import TranscriptionTimeoutUserTurnStopStrategy
 
-        # --- Build services from the resolved specs (no DB) ---
-        llm = build_llm(params.llm.to_dict()) if params.llm else None
-        stt = build_stt(params.stt.to_dict()) if (not is_s2s and params.stt) else None
-        tts = build_tts(params.tts.to_dict()) if (not is_s2s and params.tts) else None
+        # --- Build services from the resolved specs (plain dicts, no DB) ---
+        llm = build_llm(params.llm) if params.llm else None
+        stt = build_stt(params.stt) if (not is_s2s and params.stt) else None
+        tts = build_tts(params.tts) if (not is_s2s and params.tts) else None
 
         _t = _time.monotonic()
         rtvi = RTVIProcessor(config=RTVIConfig(config=[]))

@@ -19,8 +19,8 @@ from core.services.pipeline.builder import (BuildResult, PipecatPipelineBuilder,
                                              PipelineBuilder)
 from core.services.pipeline.engine import (DEFAULT_ENGINE, PipelineEngine,
                                            get_engine, register_engine)
-from core.services.pipeline.params import (PipecatPipelineParams, PipelineParams,
-                                           ServiceSpec)
+from core.services.pipeline.params import (PipecatPipelineParams,
+                                           PipelineParams)
 from core.services.pipeline.runner import PipecatPipelineRunner, PipelineRunner
 
 # Register the built-in Pipecat engine. New engines register their own trio the same way.
@@ -36,7 +36,6 @@ register_engine(
 __all__ = [
     "PipelineParams",
     "PipecatPipelineParams",
-    "ServiceSpec",
     "PipelineBuilder",
     "PipecatPipelineBuilder",
     "BuildResult",

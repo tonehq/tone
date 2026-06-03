@@ -1,7 +1,7 @@
 """Service to resolve the agent for incoming telephony calls by phone number."""
 
 import time as _time
-from typing import Optional, Tuple, Any, Dict
+from typing import Any, Dict, Optional, Tuple
 
 import aiohttp
 from loguru import logger
@@ -89,34 +89,27 @@ class AgentRunnerService(BaseService):
 
         return result
 
+    def get_agent_for_call(self, body: dict) -> Optional[Agent]:
+        """The agent for a call: a pre-resolved `body['agent']` (subprocess/warm-pool path),
+        else a lookup by the called ('to') number from the parsed telephony call_data.
+        Returns None if neither resolves."""
+        agent = body.get("agent")
+        if agent:
+            return agent
+        to_number = (body.get("call_data") or {}).get("to")
+        return self.get_agent_by_phone_number(to_number) if to_number else None
+
     def _channel_config(self, provider_slug: str, channel_id=None) -> dict:
         """Decrypt a telephony Channel's config (encrypted_config) for this org.
 
-        Channels store credentials keyed by `channel_type`
-        ("twilio"/"telnyx"/"plivo"/"exotel"). Prefers a specific channel_id, then
-        falls back to the org-scoped channel of the given type. Returns {} if none.
+        Delegates to the shared `telephony_credentials.channel_config`, reusing this
+        service's DB session and org scope so there is a single decryption code path.
         """
-        from core.models.channel import Channel
-        from core.utils.encryption import decrypt_json
+        from core.services.transport.telephony_credentials import channel_config
 
-        def _decrypt(channel) -> dict:
-            if not channel or not channel.encrypted_config:
-                return {}
-            try:
-                return decrypt_json(channel.encrypted_config) or {}
-            except Exception as e:
-                logger.warning("Failed to decrypt %s channel config: %s", provider_slug, e)
-                return {}
-
-        if channel_id:
-            cfg = _decrypt(self.db.query(Channel).filter(Channel.id == channel_id).first())
-            if cfg:
-                return cfg
-
-        q = self.db.query(Channel).filter(Channel.channel_type == provider_slug)
-        if self.org_id:
-            q = q.filter(Channel.organization_id == self.org_id)
-        return _decrypt(q.first())
+        return channel_config(
+            provider_slug, org_id=self.org_id, channel_id=channel_id, db=self.db
+        )
 
     def _get_twilio_credentials_from_channel(self, org_id=None, channel_id=None) -> dict:
         """Fetch Twilio account_sid and auth_token from the org's Twilio channel."""

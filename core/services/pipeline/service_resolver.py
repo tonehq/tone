@@ -9,9 +9,8 @@ a JSON-serializable "service spec" shape:
 This is the read/decrypt half of the pipeline; the construct half is `service_factory.py`
 (which turns these specs into Pipecat service instances, with no DB access).
 
-`resolve_agent_services` produces the full Redis-cached prefetch dict (the same shape
-the subprocess receives), and is the single source of truth shared by
-`PipelineParams.from_agent` and `PipelineParams.serialize_for_prefetch`.
+`load_agent_service_config` produces the full Redis-cached prefetch dict (the same shape
+the subprocess receives), and is the single resolution path used by `PipelineParams.from_agent`.
 
 Schema note: this matches the current Tone data model — `Agent.published_config_id`
 → `AgentConfig` (with JSONB `llm_settings`/`stt_settings`/`voice_settings`), providers
@@ -41,11 +40,6 @@ from core.utils.encryption import decrypt
 CACHE_FALLBACK_SUFFIXES = ("twilio", "telnyx", "plivo", "exotel", "none")
 CACHE_TTL_SECONDS = 1800
 
-# Settings keys that are routing/selection metadata, not provider params. They are
-# preserved in the spec metadata (the factory reads voice_id/language), but callers
-# that want only the free-form provider params can use this set.
-_SELECTION_KEYS = {"provider_id", "model_id", "model", "voice_id", "language", "language_code"}
-
 
 def _resolve_org_id(org_id):
     return org_id or get_current_org_id()
@@ -72,7 +66,7 @@ def _looks_like_uuid(value: Any) -> bool:
         return False
 
 
-def get_agent_config(db: Session, agent: Any) -> Optional[AgentConfig]:
+def get_active_agent_config(db: Session, agent: Any) -> Optional[AgentConfig]:
     """Get the published config for the given agent (Agent model or agent_id).
 
     Resolves via `Agent.published_config_id`; falls back to the agent's default/latest
@@ -95,7 +89,7 @@ def get_agent_config(db: Session, agent: Any) -> Optional[AgentConfig]:
     )
 
 
-def _build_spec(provider, model_name, api_key, metadata) -> Optional[dict]:
+def _make_service_spec(provider, model_name, api_key, metadata) -> Optional[dict]:
     """Assemble the {provider_name, api_key, model_name, metadata, model_meta_data} spec."""
     if not provider or not api_key:
         return None
@@ -108,7 +102,7 @@ def _build_spec(provider, model_name, api_key, metadata) -> Optional[dict]:
     }
 
 
-def _resolve_specs_from_config(
+def _build_service_specs(
     db: Session, org_id, config: AgentConfig
 ) -> Tuple[Optional[dict], Optional[dict], Optional[dict], bool]:
     """Resolve the llm/stt/tts service specs (+ is_s2s) from an AgentConfig.
@@ -185,7 +179,7 @@ def _resolve_specs_from_config(
     is_s2s = bool(llm_metadata.get("is_s2s"))
     if is_s2s and config.system_prompt_template:
         llm_metadata["system_prompt"] = config.system_prompt_template
-    llm_spec = _build_spec(
+    llm_spec = _make_service_spec(
         provider_by_id.get(llm_pid),
         _mname(llm_mid),
         _key(llm_pid, "llm") if llm_pid else None,
@@ -193,7 +187,7 @@ def _resolve_specs_from_config(
     )
 
     # ── STT ──
-    stt_spec = _build_spec(
+    stt_spec = _make_service_spec(
         provider_by_id.get(stt_pid),
         stt_model_literal or _mname(stt_mid),
         _key(stt_pid, "stt") if stt_pid else None,
@@ -211,7 +205,7 @@ def _resolve_specs_from_config(
     tts_language = voice_settings.get("language_code") or voice_settings.get("language")
     if tts_language:
         tts_metadata["language"] = tts_language
-    tts_spec = _build_spec(
+    tts_spec = _make_service_spec(
         provider_by_id.get(tts_pid),
         _mname(tts_mid),
         _key(tts_pid, "tts") if tts_pid else None,
@@ -221,45 +215,23 @@ def _resolve_specs_from_config(
     return llm_spec, stt_spec, tts_spec, is_s2s
 
 
-def resolve_service_spec(
-    db: Session, org_id, agent: Any, config: Optional[AgentConfig], service_type: str
-) -> Optional[dict]:
-    """Resolve one LLM/STT/TTS service spec for an agent (non-prefetched path)."""
-    org_id = _resolve_org_id(org_id)
-    if config is None:
-        config = get_agent_config(db, agent)
-    if not config:
-        return None
-    org_id = org_id or getattr(config, "organization_id", None) or getattr(agent, "organization_id", None)
-    llm_spec, stt_spec, tts_spec, _ = _resolve_specs_from_config(db, org_id, config)
-    return {"llm": llm_spec, "stt": stt_spec, "tts": tts_spec}.get(service_type)
-
-
-def _resolve_telephony_creds(db: Session, org_id, transport_type: str, agent: Any) -> Optional[dict]:
+def _load_telephony_credentials(db: Session, org_id, transport_type: str, agent: Any) -> Optional[dict]:
     """Fetch telephony provider credentials from the org's Channel (encrypted_config).
 
     Channels store credentials keyed by `channel_type` ("twilio"/"telnyx"/"plivo"/"exotel")
     in an encrypted JSONB blob. Returns the decrypted config dict (e.g. account_sid/auth_token
     for Twilio) or None.
+
+    Delegates to the shared `telephony_credentials.channel_config` (the single
+    decryption code path), reusing this resolver's DB session.
     """
-    from core.models.channel import Channel
-    from core.utils.encryption import decrypt_json
+    from core.services.transport.telephony_credentials import channel_config
 
-    q = db.query(Channel).filter(Channel.channel_type == transport_type)
     org = org_id or getattr(agent, "organization_id", None)
-    if org:
-        q = q.filter(Channel.organization_id == org)
-    channel = q.first()
-    if not channel or not channel.encrypted_config:
-        return None
-    try:
-        return decrypt_json(channel.encrypted_config) or None
-    except Exception as e:
-        logger.warning("[resolver] telephony cred decrypt failed for %s: %s", transport_type, e)
-        return None
+    return channel_config(transport_type, org_id=org, db=db) or None
 
 
-def resolve_agent_services(
+def load_agent_service_config(
     db: Session, agent: Any, transport_type: str = None, org_id=None
 ) -> Optional[dict]:
     """Pre-fetch all data needed to build LLM/STT/TTS services into a JSON-serializable dict.
@@ -268,8 +240,7 @@ def resolve_agent_services(
     Returns None if config or any required service is missing. Results are cached in Redis
     keyed by agent_id + transport_type.
 
-    This is the single resolution path shared by PipelineParams.from_agent and
-    PipelineParams.serialize_for_prefetch.
+    This is the single resolution path used by PipelineParams.from_agent.
     """
     from core.services.redis_service import cache_get, cache_set
 
@@ -283,13 +254,13 @@ def resolve_agent_services(
         logger.info("[TIMING] serialize: CACHE HIT for agent_id=%s (+%.3fs)", agent_id, _time.monotonic() - _t_ser)
         return cached
 
-    config = get_agent_config(db, agent)
+    config = get_active_agent_config(db, agent)
     if not config or not config.system_prompt_template:
         return None
 
     org_id = org_id or getattr(config, "organization_id", None) or getattr(agent, "organization_id", None)
 
-    llm_spec, stt_spec, tts_spec, is_s2s = _resolve_specs_from_config(db, org_id, config)
+    llm_spec, stt_spec, tts_spec, is_s2s = _build_service_specs(db, org_id, config)
     if not llm_spec:
         return None
     if not is_s2s and (not stt_spec or not tts_spec):
@@ -309,7 +280,7 @@ def resolve_agent_services(
     }
 
     if transport_type:
-        telephony_creds = _resolve_telephony_creds(db, org_id, transport_type, agent)
+        telephony_creds = _load_telephony_credentials(db, org_id, transport_type, agent)
         if telephony_creds:
             result["_telephony_creds"] = telephony_creds
 
@@ -322,7 +293,7 @@ def resolve_agent_services(
     return result
 
 
-def resolve_agent_services_with_fallback(db: Session, agent: Any, org_id=None) -> Optional[dict]:
+def load_agent_service_config_cached(db: Session, agent: Any, org_id=None) -> Optional[dict]:
     """Resolve agent services trying transport-specific Redis cache keys first.
 
     Used when no transport_type is known (e.g. the in-process /ws/test + WebRTC paths).
@@ -337,4 +308,4 @@ def resolve_agent_services_with_fallback(db: Session, agent: Any, org_id=None) -
         if cached is not None:
             logger.info("[TIMING] using Redis-cached service data from key=%s (no DB queries)", cache_key)
             return cached
-    return resolve_agent_services(db, agent, transport_type=None, org_id=org_id)
+    return load_agent_service_config(db, agent, transport_type=None, org_id=org_id)

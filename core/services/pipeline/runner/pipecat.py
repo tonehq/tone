@@ -105,6 +105,19 @@ class PipecatPipelineRunner(PipelineRunner):
         latency_observer = build.latency_observer
         turn_observer = build.turn_observer
 
+        def _assemble_metrics() -> dict:
+            """Collected pipeline metrics plus per-call latency samples and turn entries.
+
+            Used by both completion paths (on_audio_data and the post-run fallback) so
+            they persist the same metric shape.
+            """
+            metrics = metrics_collector.get_collected_metrics()
+            metrics["user_bot_latency"] = [
+                {"latency": round(l, 3)} for l in latency_observer._latencies
+            ]
+            metrics["turns"] = turn_entries
+            return metrics
+
         # Collect transcripts via Pipecat's built-in aggregator events
         if agent:
             from pipecat.processors.aggregators.llm_response_universal import (
@@ -209,11 +222,7 @@ class PipecatPipelineRunner(PipelineRunner):
                     try:
                         transcript_data = transcript_entries if transcript_entries else None
 
-                        collected_metrics = metrics_collector.get_collected_metrics()
-                        collected_metrics["user_bot_latency"] = [
-                            {"latency": round(l, 3)} for l in latency_observer._latencies
-                        ]
-                        collected_metrics["turns"] = turn_entries
+                        collected_metrics = _assemble_metrics()
                         with get_db_context() as db:
                             CallLogService(db).complete_call(
                                 call_log_id=call_log_id,
@@ -283,7 +292,7 @@ class PipecatPipelineRunner(PipelineRunner):
                 try:
                     transcript_data = transcript_entries if transcript_entries else None
 
-                    collected_metrics = metrics_collector.get_collected_metrics()
+                    collected_metrics = _assemble_metrics()
                     with get_db_context() as db:
                         CallLogService(db).complete_call(
                             call_log_id=call_log_id,
