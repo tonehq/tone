@@ -3,6 +3,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List
 
+from docling.chunking import HybridChunker
+from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
+from docling_core.transforms.chunker.tokenizer.openai import OpenAITokenizer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from loguru import logger
 
@@ -54,4 +57,46 @@ class RecursiveCharacterChunker(Chunker):
             "Split text into {} chunks (chunk_size={}, overlap={})",
             len(chunks), self.chunk_size, self.chunk_overlap,
         )
+        return chunks
+
+
+class DoclingHybridChunker(Chunker):
+    def __init__(self, max_tokens: int = 512, embedding_model: str = "text-embedding-3-small"):
+        self.max_tokens = max_tokens
+        self.embedding_model = embedding_model
+        self._chunker = None
+        self._fallback = None
+
+    def _resolve_tokenizer(self):
+        try:
+            import tiktoken
+
+            return OpenAITokenizer(
+                tokenizer=tiktoken.encoding_for_model(self.embedding_model),
+                max_tokens=self.max_tokens,
+            )
+        except Exception as e:
+            logger.info("OpenAI tokenizer unavailable ({}); using HuggingFace tokenizer", e)
+            return HuggingFaceTokenizer.from_pretrained(
+                model_name="sentence-transformers/all-MiniLM-L6-v2",
+                max_tokens=self.max_tokens,
+            )
+
+    def _get_chunker(self):
+        if self._chunker is None:
+            self._chunker = HybridChunker(tokenizer=self._resolve_tokenizer())
+        return self._chunker
+
+    def chunk(self, document: Document) -> List[Chunk]:
+        if document.native is None:
+            if self._fallback is None:
+                self._fallback = RecursiveCharacterChunker()
+            return self._fallback.chunk(document)
+        chunker = self._get_chunker()
+        chunks: List[Chunk] = []
+        for i, ch in enumerate(chunker.chunk(dl_doc=document.native)):
+            text = chunker.contextualize(ch)
+            if text and text.strip():
+                chunks.append(Chunk(index=i, text=text))
+        logger.info("Docling HybridChunker -> {} chunks (max_tokens={})", len(chunks), self.max_tokens)
         return chunks

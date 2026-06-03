@@ -189,17 +189,19 @@ def build_knowledge_base_router(
                     detail="Agent has no configuration yet. Save the agent before uploading knowledge base documents.",
                 )
 
-        file_bytes = await file.read()
-        if not file_bytes:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
-
         file_name = file.filename or "upload.bin"
         content_type = file.content_type or "application/octet-stream"
         user_id = UUID(claims.user_id) if claims.user_id else None
 
+        file.file.seek(0, 2)
+        size_bytes = file.file.tell()
+        file.file.seek(0)
+        if not size_bytes:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
+
         object_key = f"knowledge-base/{org_id}/{uuid4()}/{file_name}"
         r2 = R2StorageService()
-        r2.upload_file(file_bytes, object_key, content_type=content_type)
+        r2.upload_fileobj(file.file, object_key, content_type=content_type)
 
         try:
             upload = Upload(
@@ -208,7 +210,7 @@ def build_knowledge_base_router(
                 file_path=object_key,
                 file_name=file_name,
                 file_type=content_type,
-                size_bytes=len(file_bytes),
+                size_bytes=size_bytes,
                 purpose="kb_document",
                 status="processing",
                 meta_data={},
@@ -299,8 +301,10 @@ def build_knowledge_base_router(
         if not upload:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found")
 
-        file_bytes = await file.read()
-        if not file_bytes:
+        file.file.seek(0, 2)
+        size_bytes = file.file.tell()
+        file.file.seek(0)
+        if not size_bytes:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
 
         new_name = (file_name or "").strip() or file.filename or upload.file_name
@@ -311,14 +315,14 @@ def build_knowledge_base_router(
         content_type = file.content_type or "application/octet-stream"
 
         new_object_key = f"knowledge-base/{org_id}/{uuid4()}/{new_name}"
-        R2StorageService().upload_file(file_bytes, new_object_key, content_type=content_type)
+        R2StorageService().upload_fileobj(file.file, new_object_key, content_type=content_type)
 
         old_path = upload.file_path
 
         upload.file_path = new_object_key
         upload.file_name = new_name
         upload.file_type = content_type
-        upload.size_bytes = len(file_bytes)
+        upload.size_bytes = size_bytes
         # Both editions intentionally re-run the pipeline on replace: the new
         # blob must be re-embedded, so flip back to "processing" and re-queue
         # rather than marking "ready" (which would leave stale embeddings).

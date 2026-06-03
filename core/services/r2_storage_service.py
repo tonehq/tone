@@ -38,6 +38,22 @@ class R2StorageService:
         logger.info("Uploaded to R2: bucket={} key={}", self._bucket, object_key)
         return object_key
 
+    def upload_fileobj(
+        self,
+        fileobj,
+        object_key: str,
+        content_type: str = "application/octet-stream",
+    ) -> str:
+        """Stream a file-like object to R2 in chunks (no full in-memory copy). Returns the object key."""
+        self._client.upload_fileobj(
+            fileobj,
+            self._bucket,
+            object_key,
+            ExtraArgs={"ContentType": content_type},
+        )
+        logger.info("Streamed to R2: bucket={} key={}", self._bucket, object_key)
+        return object_key
+
     def download_file(self, object_key: str) -> bytes:
         """Download file from R2. Returns raw bytes."""
         response = self._client.get_object(
