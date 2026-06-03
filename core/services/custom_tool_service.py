@@ -1,6 +1,7 @@
 """Custom tool service for voice agents — lets the LLM call customer-defined webhook tools and built-in tools during a call."""
 
 import json
+import re
 from typing import Any, Callable, List, Optional
 
 import httpx
@@ -40,6 +41,19 @@ def get_custom_tools_for_agent(agent_id: int) -> List[Tool]:
     return tools
 
 
+def sanitize_tool_name(name: str) -> str:
+    """Make a tool name safe for LLM function-calling APIs.
+
+    OpenAI/Anthropic require function names to match ^[a-zA-Z0-9_-]+$ (no spaces,
+    max 64 chars). User-named tools like "calender tool" otherwise trigger a 400
+    ("string does not match pattern"). The schema name and the registered handler
+    name MUST be sanitized identically so the model's tool call still maps back to
+    its handler.
+    """
+    cleaned = re.sub(r"[^a-zA-Z0-9_-]", "_", (name or "").strip())
+    return (cleaned or "tool")[:64]
+
+
 def build_custom_tool_schemas(tools: List[Tool]) -> Optional[ToolsSchema]:
     """Convert Tool DB records into Pipecat ToolsSchema for LLMContext."""
     if not tools:
@@ -52,13 +66,13 @@ def build_custom_tool_schemas(tools: List[Tool]) -> Optional[ToolsSchema]:
         required = params.get("required", [])
 
         schema = FunctionSchema(
-            name=tool.name,
+            name=sanitize_tool_name(tool.name),
             description=tool.description,
             properties=properties,
             required=required,
         )
         function_schemas.append(schema)
-        logger.info("Built schema for custom tool: {}", tool.name)
+        logger.info("Built schema for custom tool: {} (fn name: {})", tool.name, schema.name)
 
     return ToolsSchema(standard_tools=function_schemas)
 

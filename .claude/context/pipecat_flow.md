@@ -113,9 +113,9 @@ This function figures out which AI agent should handle this call.
 async def _run_telephony_bot(websocket: WebSocket):
     bot_module = _get_bot_module()   # Finds core/bot.py which has a bot() function
 
-    # Uses BotRunnerService to figure out which agent to use
+    # Uses AgentRunnerService to figure out which agent to use
     with get_db_context() as db:
-        agent, transport_type, call_data = await BotRunnerService(db).get_bot_for_incoming_call(websocket)
+        agent, transport_type, call_data = await AgentRunnerService(db).resolve_agent_for_incoming_call(websocket)
 
     body = {
         "call_data": call_data,        # Stream/call IDs from Twilio
@@ -147,11 +147,11 @@ class WebSocketRunnerArguments(RunnerArguments):
 
 ---
 
-## Step 4: `BotRunnerService.get_bot_for_incoming_call()` — Parse Twilio Messages & Find Agent
+## Step 4: `AgentRunnerService.resolve_agent_for_incoming_call()` — Parse Twilio Messages & Find Agent
 
 This is the key function that reads the initial Twilio WebSocket messages and finds the right agent.
 
-**Code location:** `core/services/bot_runner_service.py`
+**Code location:** `core/services/agent_runner_service.py`
 
 ### Step 4a: Parse the first 2 WebSocket messages
 
@@ -316,90 +316,103 @@ FastAPIWebsocketParams(
 
 ---
 
-## Step 6: `run_bot()` — Get AI Services from Agent Config
+## Step 6: `run_bot()` — Select Engine + Resolve `PipelineParams`
 
-**Code location:** `core/bot.py` → `run_bot()` (line ~54)
+> **Architecture note (2026 revamp):** the old 1692-line `AgentFactoryService.run_bot_with_components`
+> monolith was split into the `core/services/pipeline/` package — three layers, each a base class
+> plus a Pipecat child:
+>
+> | Layer | Base / Child | Job |
+> |-------|--------------|-----|
+> | params | `PipelineParams` / `PipecatPipelineParams` | DATA: service specs + messages + flags |
+> | builder | `PipelineBuilder` / `PipecatPipelineBuilder` | builds services + assembles the pipeline |
+> | runner | `PipelineRunner` / `PipecatPipelineRunner` | runs the pipeline + call lifecycle |
+>
+> Two helpers sit under them: `service_resolver.py` (the ONLY DB access — reads config + decrypts
+> keys into specs) and `service_factory.py` (pure — turns specs into Pipecat service objects).
+> `engine.py` bundles the (params, builder, runner) trio so callers pick an engine once via
+> `get_engine()`. `AgentFactoryService` still exists as a thin back-compat facade over this package.
+
+**Code location:** `core/bot.py` → `run_bot()`
 
 ```python
 async def run_bot(transport, runner_args):
+    from core.services.pipeline import get_engine
     body = runner_args.body or {}
     agent = body.get("agent")
 
+    engine = get_engine()   # default "pipecat" → (PipecatPipelineParams, …Builder, …Runner)
+
     if agent:
-        # Agent found — use its config to build LLM/STT/TTS
-        with get_db_context() as db:
-            await AgentFactoryService(db).run_bot_for_agent(agent, transport, runner_args)
+        # Resolve params from the telephony prefetch dict (no DB) or from the DB.
+        prefetched = body.get("_prefetched_services")
+        if prefetched:
+            params = engine.params_cls.from_cache_dict(prefetched)      # no DB
+        else:
+            with get_db_context() as db:
+                params = engine.params_cls.from_agent(agent, db)        # short DB session, then closed
     else:
-        # No agent — use default env-based services (fallback)
-        llm = OpenAILLMService(api_key=os.getenv("OPENAI_API_KEY"), model="gpt-4o")
-        stt = DeepgramSTTService(api_key=os.getenv("DEEPGRAM_API_KEY"))
-        tts = CartesiaTTSService(api_key=os.getenv("CARTESIA_API_KEY"), voice_id="...")
-        messages = [{"role": "system", "content": "You are a polite assistant..."}]
-        await AgentFactoryService(db).run_bot_with_components(transport, runner_args, llm, stt, tts, messages)
+        # No agent (WebRTC/Daily) — env-based default services
+        params = engine.params_cls.default_env(openai_key, deepgram_key, cartesia_key, messages)
+
+    builder = engine.builder_cls(params)
+    runner  = engine.runner_cls(params, builder, transport, agent=agent, runner_args=runner_args)
+    await runner.run()
 ```
+
+> 🔑 The DB session is opened only to resolve params and **closed before the call runs**. The builder
+> and runner never hold a DB session open during the call (each opens its own short-lived session for
+> call_log/audio writes). This is the Neon-SSL-timeout fix.
 
 ---
 
-## Step 7: `AgentFactoryService.run_bot_for_agent()` — Build AI Services
+## Step 7: `PipelineParams` — Resolve Config + Decrypt Keys (the DATA)
 
-**Code location:** `core/services/agent_factory_service.py`
-
-### Step 7a: `get_agent_bot_data(agent)` — Assemble everything from DB
+`PipecatPipelineParams.from_agent(agent, db)` (and `serialize_for_prefetch`, called earlier by the
+telephony router) delegate to **`service_resolver.resolve_agent_services(db, agent, …)`**, which is the
+only DB code in the pipeline. It:
 
 ```python
-# 1. Fetch AgentConfig from DB
-config = self._get_agent_config(agent)
-# config looks like:
-# AgentConfig(
-#     system_prompt="You are a hotel booking assistant...",
-#     first_message="Hello! How can I help you today?",
-#     llm_service_id=5,      # FK to Model table
-#     stt_service_id=12,
-#     tts_service_id=8,
-#     voice_id="abc123",
-#     language="en",
-#     ...
-# )
-
-# 2. For each service (LLM, STT, TTS), look up Model + ServiceProvider + decrypt API key
-model, provider, api_key = self._get_service_and_credentials(config.llm_service_id, "llm")
-# model: Model(name="gpt-4o", model_id="gpt-4o", ...)
-# provider: ServiceProvider(provider_name="openai", ...)
-# api_key: "sk-proj-..." (decrypted from AES-encrypted DB value)
-
-# 3. Instantiate the right Pipecat service based on provider name
-llm = OpenAILLMService(api_key="sk-proj-...", model="gpt-4o")
-stt = DeepgramSTTService(api_key="dg-...", model="nova-2")
-tts = CartesiaTTSService(api_key="ct-...", voice_id="abc123")
-
-# 4. Build messages list
-messages = [
-    {"role": "system", "content": "You are a hotel booking assistant..."},
-    {"role": "assistant", "content": "Hello! How can I help you today?"},  # first_message
-]
+# 0. Redis check: key "agent_bot_data:{agent_id}:{transport or 'none'}" → return on hit
+# 1. Fetch the active AgentConfig (system_prompt, first_message, llm/stt/tts_service_id, *_metadata)
+# 2. Bulk-resolve service_id → ServiceProvider + Model, and DECRYPT each API key
+# 3. Detect S2S (llm_metadata["is_s2s"]); for S2S, inject system_prompt into the LLM metadata
+# 4. Build the JSON-serializable spec dict + cache it in Redis (TTL 1800s)
 ```
 
-**Return value of `get_agent_bot_data()`:**
+**Resulting `PipelineParams`** (each service is a `ServiceSpec`, NOT yet a live service object):
 ```python
-{
-    "llm": OpenAILLMService(...),
-    "stt": DeepgramSTTService(...),
-    "tts": CartesiaTTSService(...),
-    "messages": [
-        {"role": "system", "content": "You are a hotel booking assistant..."},
-        {"role": "assistant", "content": "Hello! How can I help you today?"},
-    ],
-    "config": AgentConfig(...),
-}
+PipelineParams(
+    llm=ServiceSpec(provider_name="openai", api_key="sk-…", model_name="gpt-4o", metadata={…}),
+    stt=ServiceSpec(provider_name="deepgram", …),   # None when is_s2s
+    tts=ServiceSpec(provider_name="cartesia", …),   # None when is_s2s
+    is_s2s=False,
+    messages=[{"role":"system", …}, {"role":"assistant", "content":"Hello!"}],
+    end_call_message="Goodbye!",
+)
 ```
+
+Because this is plain data, it round-trips through `to_cache_dict()`/`from_cache_dict()` for Redis and
+for the subprocess prefetch payload (zero DB in the subprocess).
 
 ---
 
-## Step 8: `run_bot_with_components()` — Build & Run the Pipeline
+## Step 8: `PipecatPipelineBuilder.build()` + `PipecatPipelineRunner.run()` — Build & Run
 
-This is where everything comes together. The voice pipeline is assembled and started.
+**Code location:** `core/services/pipeline/builder/pipecat.py` and `runner/pipecat.py`
 
-**Code location:** `core/services/agent_factory_service.py` → `run_bot_with_components()`
+`PipecatPipelineRunner.run()` owns the lifecycle: it starts call-log creation (background thread),
+creates the `AudioBufferProcessor`, calls `builder.build(...)`, wires event handlers (transcript, turns,
+`on_audio_data` → MP3 → R2 → complete call log), then runs the task and does fallback completion.
+
+`PipecatPipelineBuilder.build()` is **pure (no DB)** — it turns the params into a live pipeline:
+
+```python
+# 1. Build live services from the specs via service_factory (no DB):
+llm = build_llm(params.llm.to_dict())                       # → OpenAILLMService(...)
+stt = build_stt(params.stt.to_dict()) if not is_s2s else None
+tts = build_tts(params.tts.to_dict()) if not is_s2s else None
+```
 
 ### Step 8a: Create the context and aggregators
 
@@ -584,7 +597,7 @@ When the caller hangs up:
    POST https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Calls/{call_sid}.json
    Body: Status=completed
    ```
-5. **`PipelineRunner.run(task)`** returns — the `await` in `run_bot_with_components` unblocks
+5. **`PipelineRunner.run(task)`** returns — the `await` in `PipecatPipelineRunner.run()` unblocks
 6. **Control returns** up through `run_bot()` → `bot()` → `_run_telephony_bot()` → `websocket_endpoint()`
 7. **FastAPI** cleans up the WebSocket connection
 
@@ -599,20 +612,25 @@ Twilio HTTP POST /
 Twilio WebSocket /ws
   → websocket_endpoint(websocket)
     → _run_telephony_bot(websocket)
-      → BotRunnerService.get_bot_for_incoming_call(websocket)
+      → AgentRunnerService.resolve_agent_for_incoming_call(websocket)
         → parse_telephony_websocket(websocket)        # reads first 2 WS messages
         → _fetch_twilio_to_number(call_sid)            # Twilio REST API
-        → get_bot_for_phone_number(to_number)          # DB lookup
+        → get_agent_by_phone_number(to_number)         # DB lookup
       → bot_module.bot(runner_args)                    # core/bot.py
         → TwilioFrameSerializer(stream_sid, call_sid)
         → FastAPIWebsocketTransport(websocket, params)
         → run_bot(transport, runner_args)
-          → AgentFactoryService.run_bot_for_agent(agent, transport, runner_args)
-            → get_agent_bot_data(agent)                # DB: config + decrypt API keys
-            → run_bot_with_components(transport, ...)
-              → Pipeline([input → stt → llm → tts → output])
-              → PipelineTask(pipeline, allow_interruptions=True)
+          → engine = get_engine()                       # core/services/pipeline/engine.py
+          → params = PipecatPipelineParams.from_cache_dict(prefetched)  # or .from_agent(agent, db)
+          →            └→ service_resolver.resolve_agent_services()     # DB: config + decrypt (only here)
+          → builder = PipecatPipelineBuilder(params)
+          → runner  = PipecatPipelineRunner(params, builder, transport, agent, runner_args)
+          → await runner.run()
+              → builder.build(transport, agent, audio_buffer)          # service_factory.build_llm/stt/tts
+                → Pipeline([input → stt → llm → tts → output])         # (S2S: input → llm → output)
+                → PipelineTask(pipeline, allow_interruptions=True)
               → PipelineRunner().run(task)              # BLOCKS until call ends
+              → on_audio_data → R2 upload + complete call_log
 ```
 
 ---
@@ -624,9 +642,15 @@ Twilio WebSocket /ws
 | `pipecat/src/pipecat/runner/run.py` | FastAPI server, `/ws` endpoint, telephony routes |
 | `pipecat/src/pipecat/runner/types.py` | `WebSocketRunnerArguments`, `RunnerArguments` dataclasses |
 | `pipecat/src/pipecat/runner/utils.py` | `parse_telephony_websocket()` — reads first 2 Twilio messages |
-| `core/bot.py` | `bot()` entry point — creates transport, calls `run_bot()` |
-| `core/services/bot_runner_service.py` | Resolves phone number → Agent from DB |
-| `core/services/agent_factory_service.py` | Builds LLM/STT/TTS from agent config, assembles pipeline |
+| `core/bot.py` | `bot()` entry point — creates transport, calls `run_bot()` (selects engine, resolves params, runs) |
+| `core/services/agent_runner_service.py` | Resolves the agent for a call: phone → Agent (`get_agent_by_phone_number`), agent_id → Agent (`get_active_agent_by_id`), agent → phone (`get_phone_number_for_agent`), and the full incoming-call resolver (`resolve_agent_for_incoming_call`) |
+| `core/services/pipeline/engine.py` | Registry bundling the (params, builder, runner) trio; `get_engine()` picks one |
+| `core/services/pipeline/service_resolver.py` | Reads AgentConfig + decrypts API keys → service specs (the ONLY DB access; Redis-cached) |
+| `core/services/pipeline/service_factory.py` | Pure: turns a service spec into a Pipecat LLM/STT/TTS instance (no DB) |
+| `core/services/pipeline/params/{base,pipecat}.py` | `PipelineParams`/`PipecatPipelineParams` — data + `from_agent`/`from_cache_dict`/`serialize_for_prefetch` |
+| `core/services/pipeline/builder/{base,pipecat}.py` | `PipecatPipelineBuilder.build()` — builds services + assembles the Pipeline/PipelineTask |
+| `core/services/pipeline/runner/{base,pipecat}.py` | `PipecatPipelineRunner.run()` — runs the pipeline + call lifecycle (call_log, recording) |
+| `core/services/agent_factory_service.py` | Thin back-compat facade over `core/services/pipeline/` (legacy callers/tests) |
 | `pipecat/src/pipecat/serializers/twilio.py` | μ-law ↔ PCM codec bridge for Twilio audio |
 | `pipecat/src/pipecat/transports/websocket/fastapi.py` | WebSocket transport (input + output) |
 | `pipecat/src/pipecat/pipeline/pipeline.py` | Chains processors together |

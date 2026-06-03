@@ -156,15 +156,15 @@ function SearchableSelectInner<T extends SearchableSelectOption>(
                 'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50',
             )}
           >
-            <span className="min-w-0 flex-1 truncate [&>div]:truncate [&>div>div]:truncate [&_span]:truncate">
+            <span className="flex min-w-0 flex-1 items-center overflow-hidden">
               {selectedOption ? (
                 renderSelectedValue ? (
                   renderSelectedValue(selectedOption)
                 ) : (
-                  selectedOption.label
+                  <span className="truncate">{selectedOption.label}</span>
                 )
               ) : (
-                <span className="text-muted-foreground">{placeholder}</span>
+                <span className="truncate text-muted-foreground">{placeholder}</span>
               )}
             </span>
             <ChevronDownIcon className="size-4 shrink-0 opacity-50" />

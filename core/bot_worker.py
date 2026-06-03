@@ -67,9 +67,10 @@ async def _async_main(bot_fn, WSRunnerArgs, agent, agent_id, transport_type, cal
     # One trace_id for the whole subprocess call so every log line carries it.
     # Honors an externally-supplied _trace_id, else generates one. Logging-only.
     from core.logging import start_call_trace
+    from core.utils.telephony import provider_call_id
     start_call_trace(
         agent_id=agent_id,
-        call_id=call_data.get("call_id") or call_data.get("call_control_id") or call_data.get("stream_id"),
+        call_id=provider_call_id(call_data),
         external=call_data.get("_trace_id"),
     )
     try:
