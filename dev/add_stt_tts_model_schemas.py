@@ -641,7 +641,7 @@ def classify_stt(provider_name, model_name):
         return ["language", "prompt", "temperature"]
 
     if provider_name == "sarvam":
-        return ["language", "prompt", "vad_signals", "high_vad_sensitivity"]
+        return ["prompt", "vad_signals", "high_vad_sensitivity"]
 
     if provider_name == "assemblyai":
         if "3-Pro" in model_name or "3-pro" in model_name:

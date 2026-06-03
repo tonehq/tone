@@ -14063,15 +14063,6 @@
           },
           "meta_data_schema": [
             {
-              "name": "language",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Language for transcription"
-            },
-            {
               "name": "prompt",
               "data_type": "string",
               "type": "input text",
