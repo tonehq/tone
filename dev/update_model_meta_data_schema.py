@@ -106,8 +106,8 @@ def main():
         print("ERROR: Set DATABASE_URL at the top of this script before running.")
         sys.exit(1)
 
-    engine = create_engine(DATABASE_URL)
-    Session = sessionmaker(bind=engine)
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+    Session = sessionmaker(bind=engine, expire_on_commit=False)
     db = Session()
     try:
         host = DATABASE_URL.split("@")[1].split("/")[0] if "@" in DATABASE_URL else "local"

@@ -16,10 +16,11 @@ const ACCEPTED_TYPES = [
   'application/pdf',
   'text/plain',
   'text/csv',
+  'text/html',
   'application/json',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
-const ACCEPTED_EXTENSIONS = ['pdf', 'txt', 'csv', 'json', 'docx'];
+const ACCEPTED_EXTENSIONS = ['pdf', 'txt', 'csv', 'html', 'json', 'docx'];
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
 
 interface DocumentUploadProps {

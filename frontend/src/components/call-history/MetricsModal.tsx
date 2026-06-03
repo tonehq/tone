@@ -3,12 +3,13 @@
 import { CustomModal } from '@/components/shared';
 import type { CallMetrics } from '@/types/callLog';
 import { cn } from '@/utils/cn';
-import { Activity, BrainCircuit, Gauge, MessageSquare, Mic, Timer, Zap } from 'lucide-react';
+import { Activity, BrainCircuit, Gauge, MessageSquare, Mic, Zap } from 'lucide-react';
 import React, { useMemo } from 'react';
 
 import { Separator } from '@/components/ui/separator';
 
 import { BarChart } from './metrics/BarChart';
+import { LatencyAxisChart } from './metrics/LatencyAxisChart';
 import { LLMUsageSection } from './metrics/LLMUsageSection';
 import { ProcessingTimesSection } from './metrics/ProcessingTimesSection';
 import { SectionHeader } from './metrics/SectionHeader';
@@ -60,9 +61,10 @@ const MetricsModal: React.FC<MetricsModalProps> = ({ open, onClose, metrics, age
       open={open}
       onClose={onClose}
       title={`Metrics${agentName ? ` — ${agentName}` : ''}`}
-      width="md:max-w-2xl"
+      width="w-[65vw] max-w-[65vw] sm:max-w-[65vw]"
+      className="h-[90vh] max-h-[90vh]"
       hideFooter
-      contentClassName="max-h-[70vh] overflow-y-auto pr-0"
+      contentClassName="max-h-[calc(90vh-72px)] overflow-y-auto pr-0"
     >
       <div className="flex flex-col gap-8 pr-6">
         {/* Overview Cards */}
@@ -154,55 +156,6 @@ const MetricsModal: React.FC<MetricsModalProps> = ({ open, onClose, metrics, age
           </>
         )}
 
-        {/* Conversation Turns */}
-        {metrics.turns.length > 0 && (
-          <>
-            <Separator />
-            <div className="space-y-3">
-              <SectionHeader icon={Timer} title="Conversation Turns" />
-              <div className="overflow-hidden rounded-lg border border-border">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/50">
-                      <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
-                        Turn
-                      </th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
-                        Status
-                      </th>
-                      <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">
-                        Duration
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {metrics.turns.map((turn) => (
-                      <tr key={turn.turn} className="border-b border-border last:border-0">
-                        <td className="px-3 py-2 font-medium text-foreground">#{turn.turn}</td>
-                        <td className="px-3 py-2">
-                          <span
-                            className={cn(
-                              'inline-flex items-center capitalize rounded-full px-2 py-0.5 text-xs font-medium',
-                              turn.status === 'completed'
-                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                                : 'bg-amber-500/15 text-amber-600 dark:text-amber-400',
-                            )}
-                          >
-                            {turn.status}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-right text-muted-foreground">
-                          {turn.duration.toFixed(3)}s
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </>
-        )}
-
         {/* LLM Usage */}
         {metrics.llm_usage.length > 0 && (
           <>
@@ -225,6 +178,9 @@ const MetricsModal: React.FC<MetricsModalProps> = ({ open, onClose, metrics, age
             <Separator />
             <div className="space-y-3">
               <SectionHeader icon={Activity} title="End-to-End Latency" />
+              {metrics.user_bot_latency.length > 1 && (
+                <LatencyAxisChart latencies={metrics.user_bot_latency.map((l) => l.latency)} />
+              )}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {metrics.user_bot_latency.map((l, i) => (
                   <div key={i} className="rounded-lg border border-border p-3 text-center">

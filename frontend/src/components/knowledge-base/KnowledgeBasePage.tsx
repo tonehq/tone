@@ -59,6 +59,10 @@ const contentTypeBadgeColors: Record<string, { label: string; color: string }> =
     label: 'CSV',
     color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400',
   },
+  'text/html': {
+    label: 'HTML',
+    color: 'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400',
+  },
   'application/json': {
     label: 'JSON',
     color: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400',
