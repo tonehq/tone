@@ -191,12 +191,15 @@ def resolve_agent_runtime(to_number: str) -> Optional[Dict[str, Any]]:
         if llm_metadata.get("is_s2s") and ac.system_prompt_template:
             llm_metadata["system_prompt"] = ac.system_prompt_template
 
+        stt_metadata = _filter_by_model_schema(stt_settings, stt_model_id)
+        tts_filtered = _filter_by_model_schema(voice_settings, tts_model_id)
+
         # Debug: log the raw settings from AgentConfig so we can verify
         # meta_data_schema values are being passed to the pipeline builders.
         _exclude = {"provider_id", "model_id", "model", "voice_id", "language", "language_code"}
         llm_params = {k: v for k, v in llm_metadata.items() if k not in _exclude and v is not None}
-        stt_params = {k: v for k, v in stt_settings.items() if k not in _exclude and v is not None}
-        tts_params = {k: v for k, v in voice_settings.items() if k not in _exclude and v is not None}
+        stt_params = {k: v for k, v in stt_metadata.items() if k not in _exclude and v is not None}
+        tts_params = {k: v for k, v in tts_filtered.items() if k not in _exclude and v is not None}
         logger.info(
             f"[resolver] agent={agent.id} settings from AgentConfig:\n"
             f"  llm_settings  (slug={llm_slug}, model={llm_model}): {llm_params}\n"
@@ -205,15 +208,15 @@ def resolve_agent_runtime(to_number: str) -> Optional[Dict[str, Any]]:
         )
 
         llm = _build(LLM_BUILDERS, llm_slug, llm_key, llm_model, llm_metadata)
-        stt = _build(STT_BUILDERS, stt_slug, stt_key, stt_model, stt_settings)
+        stt = _build(STT_BUILDERS, stt_slug, stt_key, stt_model, stt_metadata)
 
         import aiohttp
         tts_session = aiohttp.ClientSession() if tts_slug in HTTP_TTS_PROVIDERS else None
-        tts_language = voice_settings.get("language_code") or voice_settings.get("language")
+        tts_language = tts_filtered.get("language_code") or tts_filtered.get("language")
         # Strip language/language_code from TTS metadata — they contain display
         # names ("English") that fail Pipecat's Language enum. The correct code
         # is passed via BuildContext.language → voice_kwargs in each builder.
-        tts_metadata = {k: v for k, v in voice_settings.items() if k not in ("language", "language_code")}
+        tts_metadata = {k: v for k, v in tts_filtered.items() if k not in ("language", "language_code")}
         tts = _build(
             TTS_BUILDERS, tts_slug, tts_key, tts_model, tts_metadata,
             voice_id=voice_id, language=tts_language, session=tts_session,
