@@ -43,7 +43,7 @@ spec:
             - "--fetch-job-polling-interval=5"
           resources:
             requests:
-              cpu: "1"
+              cpu: "2"
               memory: "2Gi"
             limits:
               cpu: "4"
@@ -51,6 +51,14 @@ spec:
           env:
             - name: ENV
               value: "staging"
+            - name: DOCLING_NUM_THREADS
+              value: "3"
+            - name: OMP_NUM_THREADS
+              value: "3"
+            - name: OPENBLAS_NUM_THREADS
+              value: "3"
+            - name: MKL_NUM_THREADS
+              value: "3"
             - name: INFISICAL_TOKEN
               valueFrom:
                 secretKeyRef:
