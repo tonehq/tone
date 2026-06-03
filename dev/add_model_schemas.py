@@ -82,9 +82,9 @@ FIELD = {
         "data_type": "integer",
         "type": "input number",
         "format": "integer",
-        "validator": {"min": 1},
+        "validator": {"min": 16},
         "required": 0,
-        "description": "Maximum number of completion tokens to generate. Min: 1",
+        "description": "Maximum number of completion tokens to generate. Min: 16",
     },
     "max_tokens": {
         "name": "max_tokens",
@@ -94,6 +94,15 @@ FIELD = {
         "validator": {"min": 1},
         "required": 0,
         "description": "Maximum number of tokens to generate. Min: 1",
+    },
+    "max_tokens_anthropic": {
+        "name": "max_tokens",
+        "data_type": "integer",
+        "type": "input number",
+        "format": "integer",
+        "validator": {"min": 1025},
+        "required": 0,
+        "description": "Maximum number of tokens to generate. Min: 1025 (must exceed thinking budget when thinking is enabled)",
     },
     "thinking_budget_tokens": {
         "name": "thinking_budget_tokens",
@@ -158,7 +167,7 @@ def classify_groq(model_name):
 def classify_anthropic(model_name):
     """Classify Anthropic Claude models."""
     # All Claude: temperature (0-1), top_p, top_k, max_tokens, thinking_budget_tokens
-    return ["temperature_0_1", "top_p", "top_k", "max_tokens",
+    return ["temperature_0_1", "top_p", "top_k", "max_tokens_anthropic",
             "thinking_budget_tokens", "enable_prompt_caching"]
 
 
