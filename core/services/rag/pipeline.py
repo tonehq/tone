@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import io
 import time
 from typing import Callable, List, Optional
+
+from PyPDF2 import PdfReader as _PdfReader
 
 from core.services.rag.chunkers import Chunker, RecursiveCharacterChunker
 from core.services.rag.embedders import Embedder
@@ -104,6 +107,36 @@ class RAGPipeline:
         if not document.text.strip() and document.native is None:
             raise ValueError("No text could be extracted from the file")
         return self._ingest_streaming(document, metadata, batch_size, on_batch)
+
+    def ingest_file_paged(
+        self, file_bytes: bytes, content_type: str, *, page_batch: int = 50,
+        metadata: Optional[dict] = None,
+        on_batch: Optional[Callable[[int, int, int, int, float], None]] = None,
+    ) -> int:
+        if content_type != "application/pdf":
+            return self.ingest_file_streaming(file_bytes, content_type, metadata=metadata)
+        total_pages = len(_PdfReader(io.BytesIO(file_bytes)).pages)
+        metadata = metadata or {}
+        total = 0
+        offset = 0
+        for batch_index, start in enumerate(range(1, total_pages + 1, page_batch)):
+            end = min(start + page_batch - 1, total_pages)
+            t0 = time.monotonic()
+            document = self.reader.read(file_bytes, content_type, (start, end))
+            chunks = self.chunker.chunk(document)
+            n = 0
+            if chunks:
+                embeddings = self.embedder.embed_texts([c.text for c in chunks])
+                records = [
+                    VectorRecord(text=c.text, embedding=emb, metadata={**metadata, "chunk_index": offset + i})
+                    for i, (c, emb) in enumerate(zip(chunks, embeddings))
+                ]
+                n = self.store.add(records)
+                offset += len(chunks)
+                total += n
+            if on_batch is not None:
+                on_batch(batch_index, start, end, n, time.monotonic() - t0)
+        return total
 
     def retrieve(self, query: str, top_k: int = 3, *, filters: Optional[dict] = None) -> List[SearchResult]:
         query_embedding = self.embedder.embed_query(query)
