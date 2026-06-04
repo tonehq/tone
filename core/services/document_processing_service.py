@@ -1,3 +1,5 @@
+import os
+import tempfile
 from uuid import UUID
 
 from loguru import logger
@@ -9,9 +11,19 @@ from core.services.document_tool_service import get_openai_api_key_for_agent
 from core.services.r2_storage_service import R2StorageService
 from core.services.rag.chunkers import DoclingHybridChunker
 from core.services.rag.embedders import OpenAIEmbedder
-from core.services.rag.pdf_router import PDF_CONTENT_TYPE, PdfRoutingService
+from core.services.rag.pdf_router import HTML_CONTENT_TYPE, PDF_CONTENT_TYPE, PdfRoutingService
 from core.services.rag.pipeline import RAGPipeline
 from core.services.rag.vector_stores.pgvector_store import PgVectorStore
+
+
+def _remove_files(*paths: str) -> None:
+    for path in paths:
+        if not path:
+            continue
+        try:
+            os.remove(path)
+        except OSError:
+            pass
 
 
 class DocumentProcessingService:
@@ -41,9 +53,18 @@ class DocumentProcessingService:
                     start_page, end_page, count, elapsed,
                 )
 
+            pdf_path = None
+            html_path = None
             build = None
             if file_type == PDF_CONTENT_TYPE:
-                build = PdfRoutingService().build(file_bytes, file_type)
+                pdf_fd, pdf_path = tempfile.mkstemp(suffix=".pdf")
+                with os.fdopen(pdf_fd, "wb") as f:
+                    f.write(file_bytes)
+                html_fd, html_path = tempfile.mkstemp(suffix=".html")
+                os.close(html_fd)
+                build = PdfRoutingService().build(pdf_path, html_path)
+                _remove_files(pdf_path)
+                pdf_path = None
 
             pipeline = RAGPipeline(
                 embedder=OpenAIEmbedder(api_key),
@@ -51,18 +72,21 @@ class DocumentProcessingService:
                 chunker=DoclingHybridChunker(),
             )
             metadata = {"organization_id": org_id, "upload_id": upload_id}
-            if build is not None:
-                num_chunks = pipeline.ingest_file_streaming(
-                    build.html_bytes, build.content_type, metadata=metadata
-                )
-            else:
-                num_chunks = pipeline.ingest_file_paged(
-                    file_bytes,
-                    file_type,
-                    page_batch=50,
-                    metadata=metadata,
-                    on_batch=_on_batch,
-                )
+            try:
+                if build is not None:
+                    num_chunks = pipeline.ingest_path(
+                        build.html_path, HTML_CONTENT_TYPE, metadata=metadata
+                    )
+                else:
+                    num_chunks = pipeline.ingest_file_paged(
+                        file_bytes,
+                        file_type,
+                        page_batch=50,
+                        metadata=metadata,
+                        on_batch=_on_batch,
+                    )
+            finally:
+                _remove_files(pdf_path, html_path)
             if not num_chunks:
                 raise ValueError("Text extraction produced no chunks")
 
