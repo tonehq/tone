@@ -7,10 +7,9 @@ from loguru import logger
 from core.database.session import get_db_context
 from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 from core.models.upload import Upload
-from core.services.document_tool_service import get_openai_api_key_for_agent
+from core.services.document_tool_service import build_embedder
 from core.services.r2_storage_service import R2StorageService
 from core.services.rag.chunkers import DoclingHybridChunker
-from core.services.rag.embedders import OpenAIEmbedder
 from core.services.rag.pdf_router import HTML_CONTENT_TYPE, PDF_CONTENT_TYPE, PdfRoutingService
 from core.services.rag.pipeline import RAGPipeline
 from core.services.rag.vector_stores.pgvector_store import PgVectorStore
@@ -43,9 +42,7 @@ class DocumentProcessingService:
                     ).delete(synchronize_session=False)
                 db.commit()
 
-            api_key = get_openai_api_key_for_agent(org_id)
-            if not api_key:
-                raise ValueError("No OpenAI API key configured for embedding")
+            embedder = build_embedder(org_id)
 
             def _on_batch(batch_index: int, start_page: int, end_page: int, count: int, elapsed: float) -> None:
                 logger.info(
@@ -67,7 +64,7 @@ class DocumentProcessingService:
                 pdf_path = None
 
             pipeline = RAGPipeline(
-                embedder=OpenAIEmbedder(api_key),
+                embedder=embedder,
                 store=PgVectorStore(),
                 chunker=DoclingHybridChunker(),
             )
