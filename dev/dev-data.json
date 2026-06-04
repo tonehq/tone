@@ -182,6 +182,116 @@
               "description": "Maximum number of completion tokens to generate. Min: 16"
             }
           ]
+        },
+        {
+          "name": "gpt-4o",
+          "meta_data": {
+            "model": "gpt-4o",
+            "max_completion_tokens": 16384
+          },
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "max_completion_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 16,
+                "max": 16384
+              },
+              "required": 0,
+              "description": "Maximum number of completion tokens to generate. Min: 16"
+            }
+          ]
+        },
+        {
+          "name": "gpt-4o-mini",
+          "meta_data": {
+            "model": "gpt-4o-mini",
+            "max_completion_tokens": 16384
+          },
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "max_completion_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 16,
+                "max": 16384
+              },
+              "required": 0,
+              "description": "Maximum number of completion tokens to generate. Min: 16"
+            }
+          ]
+        },
+        {
+          "name": "gpt-4.1-nano",
+          "meta_data": {
+            "model": "gpt-4.1-nano",
+            "max_completion_tokens": 32768
+          },
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "max_completion_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 16,
+                "max": 32768
+              },
+              "required": 0,
+              "description": "Maximum number of completion tokens to generate. Min: 16"
+            }
+          ]
+        },
+        {
+          "name": "gpt-5.4-nano",
+          "meta_data": {
+            "model": "gpt-5.4-nano",
+            "max_completion_tokens": 128000
+          },
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "max_completion_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 16,
+                "max": 128000
+              },
+              "required": 0,
+              "description": "Maximum number of completion tokens to generate. Min: 16"
+            }
+          ]
+        },
+        {
+          "name": "gpt-4.1-mini",
+          "meta_data": {
+            "model": "gpt-4.1-mini",
+            "max_completion_tokens": 32768
+          },
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "max_completion_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 16,
+                "max": 32768
+              },
+              "required": 0,
+              "description": "Maximum number of completion tokens to generate. Min: 16"
+            }
+          ]
         }
       ],
       "meta_data_schema": [
@@ -373,6 +483,234 @@
               "validator": {
                 "min": 16,
                 "max": 8192
+              },
+              "required": 0,
+              "description": "Maximum number of completion tokens to generate. Min: 16"
+            }
+          ]
+        },
+        {
+          "name": "llama-3.1-8b-instant",
+          "meta_data": {
+            "model": "llama-3.1-8b-instant",
+            "max_completion_tokens": 131072
+          },
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "top_p",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+            },
+            {
+              "name": "seed",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 0
+              },
+              "required": 0,
+              "description": "Seed for deterministic generation. Min: 0"
+            },
+            {
+              "name": "max_completion_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 16,
+                "max": 131072
+              },
+              "required": 0,
+              "description": "Maximum number of completion tokens to generate. Min: 16"
+            }
+          ]
+        },
+        {
+          "name": "llama-3.3-70b-versatile",
+          "meta_data": {
+            "model": "llama-3.3-70b-versatile",
+            "max_completion_tokens": 32768
+          },
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "top_p",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+            },
+            {
+              "name": "seed",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 0
+              },
+              "required": 0,
+              "description": "Seed for deterministic generation. Min: 0"
+            },
+            {
+              "name": "max_completion_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 16,
+                "max": 32768
+              },
+              "required": 0,
+              "description": "Maximum number of completion tokens to generate. Min: 16"
+            }
+          ]
+        },
+        {
+          "name": "openai/gpt-oss-20b",
+          "meta_data": {
+            "model": "openai/gpt-oss-20b",
+            "max_completion_tokens": 65536
+          },
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "top_p",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+            },
+            {
+              "name": "seed",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 0
+              },
+              "required": 0,
+              "description": "Seed for deterministic generation. Min: 0"
+            },
+            {
+              "name": "max_completion_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 16,
+                "max": 65536
+              },
+              "required": 0,
+              "description": "Maximum number of completion tokens to generate. Min: 16"
+            }
+          ]
+        },
+        {
+          "name": "openai/gpt-oss-120b",
+          "meta_data": {
+            "model": "openai/gpt-oss-120b",
+            "max_completion_tokens": 65536
+          },
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "top_p",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+            },
+            {
+              "name": "seed",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 0
+              },
+              "required": 0,
+              "description": "Seed for deterministic generation. Min: 0"
+            },
+            {
+              "name": "max_completion_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 16,
+                "max": 65536
               },
               "required": 0,
               "description": "Maximum number of completion tokens to generate. Min: 16"
@@ -1485,6 +1823,63 @@
               "validator": {
                 "min": 1,
                 "max": 32768
+              },
+              "required": 0,
+              "description": "Maximum number of tokens to generate. Min: 1"
+            }
+          ]
+        },
+        {
+          "name": "gemini-3.5-flash",
+          "meta_data": {
+            "model": "gemini-3.5-flash",
+            "max_tokens": 65536
+          },
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "top_p",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+            },
+            {
+              "name": "top_k",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 0
+              },
+              "required": 0,
+              "description": "Top-K sampling parameter. Min: 0"
+            },
+            {
+              "name": "max_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 1,
+                "max": 65536
               },
               "required": 0,
               "description": "Maximum number of tokens to generate. Min: 1"
@@ -9685,6 +10080,63 @@
               "description": "Maximum number of completion tokens to generate. Min: 16"
             }
           ]
+        },
+        {
+          "name": "grok-4-fast",
+          "meta_data": {
+            "model": "grok-4-fast",
+            "max_completion_tokens": 131072
+          },
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "top_p",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+            },
+            {
+              "name": "seed",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 0
+              },
+              "required": 0,
+              "description": "Seed for deterministic generation. Min: 0"
+            },
+            {
+              "name": "max_completion_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 16,
+                "max": 131072
+              },
+              "required": 0,
+              "description": "Maximum number of completion tokens to generate. Min: 16"
+            }
+          ]
         }
       ],
       "meta_data_schema": [
@@ -9746,6 +10198,121 @@
           },
           "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+        },
+        {
+          "name": "max_completion_tokens",
+          "data_type": "integer",
+          "type": "input number",
+          "format": "integer",
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
+          "description": "Maximum number of completion tokens to generate. Min: 1"
+        }
+      ],
+      "status": "active"
+    },
+    {
+      "name": "cohere",
+      "provider_type": "llm",
+      "display_name": "Cohere",
+      "description": "Cohere LLM (OpenAI-compatible Chat Completions endpoint)",
+      "api_key_env": "COHERE_API_KEY",
+      "models": [
+        {
+          "name": "command-a-03-2025",
+          "meta_data": {
+            "model": "command-a-03-2025",
+            "max_completion_tokens": 8192
+          },
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "top_p",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+            },
+            {
+              "name": "seed",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 0
+              },
+              "required": 0,
+              "description": "Seed for deterministic generation. Min: 0"
+            },
+            {
+              "name": "max_completion_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 16,
+                "max": 8192
+              },
+              "required": 0,
+              "description": "Maximum number of completion tokens to generate. Min: 16"
+            }
+          ]
+        }
+      ],
+      "meta_data_schema": [
+        {
+          "name": "temperature",
+          "data_type": "float",
+          "type": "input number",
+          "format": "float",
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
+          "description": "Controls randomness in output. Range: 0.0 to 2.0"
+        },
+        {
+          "name": "top_p",
+          "data_type": "float",
+          "type": "input number",
+          "format": "float",
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
+          "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+        },
+        {
+          "name": "seed",
+          "data_type": "integer",
+          "type": "input number",
+          "format": "integer",
+          "validator": {
+            "min": 0
+          },
+          "required": 0,
+          "description": "Seed for deterministic generation. Min: 0"
         },
         {
           "name": "max_completion_tokens",
@@ -13555,6 +14122,126 @@
               "description": "Comma-separated keywords to boost recognition"
             }
           ]
+        },
+        {
+          "name": "flux",
+          "meta_data": {
+            "model": "flux"
+          },
+          "meta_data_schema": [
+            {
+              "name": "language",
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "Language for transcription"
+            },
+            {
+              "name": "punctuate",
+              "data_type": "boolean",
+              "type": "radio",
+              "format": "boolean",
+              "validator": null,
+              "required": 0,
+              "description": "Add punctuation to transcripts"
+            },
+            {
+              "name": "smart_format",
+              "data_type": "boolean",
+              "type": "radio",
+              "format": "boolean",
+              "validator": null,
+              "required": 0,
+              "description": "Apply smart formatting (dates, numbers, etc.)"
+            },
+            {
+              "name": "profanity_filter",
+              "data_type": "boolean",
+              "type": "radio",
+              "format": "boolean",
+              "validator": null,
+              "required": 0,
+              "description": "Filter profanity from transcript"
+            },
+            {
+              "name": "diarize",
+              "data_type": "boolean",
+              "type": "radio",
+              "format": "boolean",
+              "validator": null,
+              "required": 0,
+              "description": "Enable speaker diarization"
+            },
+            {
+              "name": "filler_words",
+              "data_type": "boolean",
+              "type": "radio",
+              "format": "boolean",
+              "validator": null,
+              "required": 0,
+              "description": "Include filler words (um, uh) in transcript"
+            },
+            {
+              "name": "endpointing",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 10
+              },
+              "required": 0,
+              "description": "Endpointing duration in milliseconds"
+            },
+            {
+              "name": "utterance_end_ms",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 0
+              },
+              "required": 0,
+              "description": "Silence duration to trigger utterance end (ms)"
+            },
+            {
+              "name": "no_delay",
+              "data_type": "boolean",
+              "type": "radio",
+              "format": "boolean",
+              "validator": null,
+              "required": 0,
+              "description": "Minimize latency at cost of accuracy"
+            },
+            {
+              "name": "dictation",
+              "data_type": "boolean",
+              "type": "radio",
+              "format": "boolean",
+              "validator": null,
+              "required": 0,
+              "description": "Enable dictation mode"
+            },
+            {
+              "name": "numerals",
+              "data_type": "boolean",
+              "type": "radio",
+              "format": "boolean",
+              "validator": null,
+              "required": 0,
+              "description": "Convert numbers to digits"
+            },
+            {
+              "name": "interim_results",
+              "data_type": "boolean",
+              "type": "radio",
+              "format": "boolean",
+              "validator": null,
+              "required": 0,
+              "description": "Enable interim (partial) results"
+            }
+          ]
         }
       ],
       "meta_data_schema": [
@@ -14255,6 +14942,68 @@
               "description": "Confidence threshold for end-of-turn detection"
             }
           ]
+        },
+        {
+          "name": "u3-rt-pro",
+          "meta_data": {
+            "model": "u3-rt-pro"
+          },
+          "meta_data_schema": [
+            {
+              "name": "language",
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "Language for transcription"
+            },
+            {
+              "name": "speech_model",
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "Speech model to use",
+              "options": [
+                "universal-streaming-english",
+                "universal-streaming-multilingual"
+              ]
+            },
+            {
+              "name": "word_finalization_max_wait_time",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 0
+              },
+              "required": 0,
+              "description": "Max wait time for word finalization (ms)"
+            },
+            {
+              "name": "end_of_turn_confidence_threshold",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Confidence threshold for end-of-turn detection"
+            },
+            {
+              "name": "keyterms_prompt",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "Key terms to guide transcription (comma-separated)"
+            }
+          ]
         }
       ],
       "meta_data_schema": [
@@ -14348,6 +15097,34 @@
           "name": "ink-whisper-2025-06-04",
           "meta_data": {
             "model": "ink-whisper-2025-06-04"
+          },
+          "meta_data_schema": [
+            {
+              "name": "language",
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "Language for transcription"
+            },
+            {
+              "name": "sample_rate",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 8000
+              },
+              "required": 0,
+              "description": "Audio sample rate in Hz"
+            }
+          ]
+        },
+        {
+          "name": "ink-2",
+          "meta_data": {
+            "model": "ink-2"
           },
           "meta_data_schema": [
             {
@@ -18465,15 +19242,17 @@
           "meta_data_schema": [
             {
               "name": "speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.25,
-                "max": 4.0
-              },
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "validator": null,
               "required": 0,
-              "description": "Speech speed multiplier"
+              "description": "Speech speed: slow, normal, or fast",
+              "options": [
+                "slow",
+                "normal",
+                "fast"
+              ]
             },
             {
               "name": "emotion",
@@ -18494,15 +19273,17 @@
           "meta_data_schema": [
             {
               "name": "speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.25,
-                "max": 4.0
-              },
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "validator": null,
               "required": 0,
-              "description": "Speech speed multiplier"
+              "description": "Speech speed: slow, normal, or fast",
+              "options": [
+                "slow",
+                "normal",
+                "fast"
+              ]
             }
           ]
         },
@@ -18514,15 +19295,48 @@
           "meta_data_schema": [
             {
               "name": "speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.25,
-                "max": 4.0
-              },
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "validator": null,
               "required": 0,
-              "description": "Speech speed multiplier"
+              "description": "Speech speed: slow, normal, or fast",
+              "options": [
+                "slow",
+                "normal",
+                "fast"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "sonic-3.5",
+          "meta_data": {
+            "model": "sonic-3.5"
+          },
+          "meta_data_schema": [
+            {
+              "name": "speed",
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "Speech speed: slow, normal, or fast",
+              "options": [
+                "slow",
+                "normal",
+                "fast"
+              ]
+            },
+            {
+              "name": "emotion",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "Emotion control for voice"
             }
           ]
         }
@@ -18539,7 +19353,7 @@
             "fast"
           ],
           "required": 0,
-          "description": "Speech speed: slow, normal, or fast. Applies to non-Sonic-3 models.",
+          "description": "Speech speed: slow, normal, or fast",
           "default": null
         },
         {
@@ -52491,6 +53305,60 @@
           "name": "speech-1.5",
           "meta_data": {
             "model": "speech-1.5"
+          },
+          "meta_data_schema": [
+            {
+              "name": "latency",
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "Latency mode",
+              "options": [
+                "normal",
+                "balanced"
+              ]
+            },
+            {
+              "name": "normalize",
+              "data_type": "boolean",
+              "type": "radio",
+              "format": "boolean",
+              "validator": null,
+              "required": 0,
+              "description": "Normalize audio output"
+            },
+            {
+              "name": "prosody_speed",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.5,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Prosody speed. Range: 0.5 to 2.0"
+            },
+            {
+              "name": "prosody_volume",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Prosody volume. Range: 0.0 to 2.0"
+            }
+          ]
+        },
+        {
+          "name": "s2-pro",
+          "meta_data": {
+            "model": "s2-pro"
           },
           "meta_data_schema": [
             {
