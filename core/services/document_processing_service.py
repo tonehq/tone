@@ -13,7 +13,11 @@ from core.services.rag.chunkers import DoclingHybridChunker
 from core.services.rag.embedders import OpenAIEmbedder
 from core.services.rag.pdf_router import HTML_CONTENT_TYPE, PDF_CONTENT_TYPE, PdfRoutingService
 from core.services.rag.pipeline import RAGPipeline
+from core.services.rag.readers import DoclingReader
 from core.services.rag.vector_stores.pgvector_store import PgVectorStore
+
+DIRECT_PDF_DOCLING = True
+DIRECT_PDF_OCR = False
 
 
 def _remove_files(*paths: str) -> None:
@@ -56,7 +60,8 @@ class DocumentProcessingService:
             pdf_path = None
             html_path = None
             build = None
-            if file_type == PDF_CONTENT_TYPE:
+            direct = file_type == PDF_CONTENT_TYPE and DIRECT_PDF_DOCLING
+            if file_type == PDF_CONTENT_TYPE and not direct:
                 pdf_fd, pdf_path = tempfile.mkstemp(suffix=".pdf")
                 with os.fdopen(pdf_fd, "wb") as f:
                     f.write(file_bytes)
@@ -66,14 +71,24 @@ class DocumentProcessingService:
                 _remove_files(pdf_path)
                 pdf_path = None
 
+            reader = DoclingReader(ocr=DIRECT_PDF_OCR, tables=DIRECT_PDF_OCR) if direct else None
             pipeline = RAGPipeline(
                 embedder=OpenAIEmbedder(api_key),
                 store=PgVectorStore(),
                 chunker=DoclingHybridChunker(),
+                reader=reader,
             )
             metadata = {"organization_id": org_id, "upload_id": upload_id}
             try:
-                if build is not None:
+                if direct:
+                    logger.info(
+                        "[direct-pdf] docling parsing PDF directly (ocr={}, tables={})",
+                        DIRECT_PDF_OCR, DIRECT_PDF_OCR,
+                    )
+                    num_chunks = pipeline.ingest_file_streaming(
+                        file_bytes, file_type, metadata=metadata
+                    )
+                elif build is not None:
                     num_chunks = pipeline.ingest_path(
                         build.html_path, HTML_CONTENT_TYPE, metadata=metadata
                     )
