@@ -80,7 +80,7 @@ def build_llm(spec: dict) -> Optional[Any]:
             from pipecat.services.ollama.llm import OLLamaLLMService
             base_url = api_key if api_key else "http://localhost:11434/v1"
             return OLLamaLLMService(model=model or "llama2", base_url=base_url, params=build_input_params(OLLamaLLMService, metadata))
-        if provider_name in ["azure", "cerebras", "nvidia_nim", "fireworks", "together", "perplexity", "qwen", "deepseek", "mistral", "sambanova", "grok"]:
+        if provider_name in ["azure", "cerebras", "nvidia_nim", "fireworks", "together", "perplexity", "qwen", "deepseek", "mistral", "sambanova", "grok", "cohere"]:
             from pipecat.services.openai.llm import BaseOpenAILLMService
             base_url = model_meta.get("base_url") or metadata.get("base_url")
             default_models = {
@@ -95,6 +95,7 @@ def build_llm(spec: dict) -> Optional[Any]:
                 "mistral": "mistral-small-latest",
                 "sambanova": "Meta-Llama-3.1-8B-Instruct",
                 "grok": "grok-3",
+                "cohere": "command-a-03-2025",
             }
             default_base_urls = {
                 "cerebras": "https://api.cerebras.ai/v1",
@@ -107,6 +108,7 @@ def build_llm(spec: dict) -> Optional[Any]:
                 "mistral": "https://api.mistral.ai/v1",
                 "sambanova": "https://api.sambanova.ai/v1",
                 "grok": "https://api.x.ai/v1",
+                "cohere": "https://api.cohere.ai/compatibility/v1",
             }
             if not base_url:
                 base_url = default_base_urls.get(provider_name)
