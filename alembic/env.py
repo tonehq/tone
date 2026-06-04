@@ -20,7 +20,9 @@ from core.models.model_voice import ModelVoice
 from core.models.model_language import ModelLanguage
 from core.models.channel import Channel
 from core.models.phone_number import PhoneNumber
+from core.models.knowledge_base import KnowledgeBase
 from core.models.upload import Upload
+from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
 from core.models.agent_knowledge_base import AgentKnowledgeBase
@@ -35,6 +37,7 @@ from core.models.api_key import ApiKey
 from core.models.mcp_server import McpServer
 from core.models.tool import Tool
 from core.models.call import Call
+from core.models.call_metrics import CallMetrics
 from core.models.tool_execution import ToolExecution
 from core.models.webhook import Webhook
 
