@@ -13,7 +13,8 @@ import { buildGrafanaLogsUrl, isGrafanaConfigured } from '@/utils/grafana';
 import { formatDuration, formatTimestamp } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { useAtom } from 'jotai';
-import { CalendarDays, MessageSquareText, Phone, ScrollText, X } from 'lucide-react';
+import { BarChart3, CalendarDays, MessageSquareText, Phone, ScrollText, X } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import CallDetailDrawer from './CallDetailDrawer';
@@ -28,6 +29,7 @@ const STATUS_BADGE_CLASSES: Record<string, string> = {
 };
 
 const CallHistory: React.FC = () => {
+  const router = useRouter();
   const [data] = useAtom(callLogsAtom);
   const [, doFetchCallLogs] = useAtom(fetchCallLogs);
 
@@ -212,6 +214,18 @@ const CallHistory: React.FC = () => {
               }}
             >
               <MessageSquareText className="size-3.5" />
+            </CustomButton>
+          </CustomTooltip>
+          <CustomTooltip content="View metrics">
+            <CustomButton
+              type="default"
+              size="icon-xs"
+              onClick={(e) => {
+                e.stopPropagation();
+                router.push(`/call-metrics?call_id=${record.id}`);
+              }}
+            >
+              <BarChart3 className="size-3.5" />
             </CustomButton>
           </CustomTooltip>
           {isGrafanaConfigured() && (

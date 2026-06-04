@@ -16,6 +16,7 @@ import { formatDuration, formatTimestamp } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { useAtom } from 'jotai';
 import { BarChart3, CalendarDays, X } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
@@ -39,6 +40,12 @@ const formatNumber = (value: number | null): string => {
 };
 
 const CallMetrics: React.FC = () => {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  // Deep-link from Call History puts ?call_id=<id> on the URL. URL is the
+  // single source of truth — back/forward and Sidebar re-clicks all work.
+  const callIdFilter = searchParams.get('call_id') ?? '';
+
   const [data] = useAtom(callMetricsAtom);
   const [, doFetchCallMetrics] = useAtom(fetchCallMetrics);
 
@@ -89,6 +96,9 @@ const CallMetrics: React.FC = () => {
     };
 
     const filters: CallMetricsFilterParam[] = [];
+    if (callIdFilter) {
+      filters.push({ field: 'call_id', operator: 'equal_to', value: callIdFilter });
+    }
     if (search.trim()) {
       filters.push({ field: 'agent_name', operator: 'contains', value: search.trim() });
     }
@@ -109,7 +119,7 @@ const CallMetrics: React.FC = () => {
     }
 
     return q;
-  }, [page, pageSize, search, startDateTime, endDateTime, sortBy, sortOrder]);
+  }, [callIdFilter, page, pageSize, search, startDateTime, endDateTime, sortBy, sortOrder]);
 
   const refresh = useCallback(async () => {
     try {
@@ -149,6 +159,11 @@ const CallMetrics: React.FC = () => {
     setEndDateTime('');
     setPage(1);
   }, []);
+
+  const handleClearCallIdFilter = useCallback(() => {
+    router.replace('/call-metrics');
+    setPage(1);
+  }, [router]);
 
   const hasDates = startDateTime || endDateTime;
 
@@ -216,6 +231,18 @@ const CallMetrics: React.FC = () => {
           Per-call pipeline metrics — TTFB, latency, token usage, TTS characters and turns
         </p>
       </div>
+
+      {callIdFilter && (
+        <div className="flex w-fit items-center gap-2 rounded-full border border-border bg-muted/50 py-1 pl-3 pr-1 text-sm">
+          <span className="text-muted-foreground">
+            Filtered to one call:{' '}
+            <span className="font-mono text-foreground">{callIdFilter.slice(0, 8)}…</span>
+          </span>
+          <CustomButton type="text" size="icon-xs" onClick={handleClearCallIdFilter}>
+            <X className="size-3.5 text-muted-foreground" />
+          </CustomButton>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <SearchBar
