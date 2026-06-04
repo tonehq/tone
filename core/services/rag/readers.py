@@ -32,6 +32,10 @@ class DocumentReader(ABC):
     def read(self, file_bytes: bytes, content_type: str, page_range: Optional[Tuple[int, int]] = None) -> Document:
         ...
 
+    def read_path(self, file_path: str, content_type: str, page_range: Optional[Tuple[int, int]] = None) -> Document:
+        with open(file_path, "rb") as f:
+            return self.read(f.read(), content_type, page_range)
+
 
 class DoclingReader(DocumentReader):
     _EXT = {
@@ -98,6 +102,22 @@ class DoclingReader(DocumentReader):
         )
         return Document(text=text, native=result.document, metadata={"parser": "docling", "page_range": pr})
 
+    def read_path(self, file_path: str, content_type: str, page_range: Optional[Tuple[int, int]] = None) -> Document:
+        pr = page_range or self._page_range
+        kwargs = {"page_range": pr} if pr else {}
+        logger.info(
+            "Docling parsing path {} ({}), page_range={}, ocr={}, tables={} ...",
+            file_path, content_type, pr or "all", self._ocr, self._tables,
+        )
+        start = time.monotonic()
+        result = self._get_converter().convert(file_path, **kwargs)
+        text = result.document.export_to_markdown()
+        logger.info(
+            "Docling parsed {} -> {} chars in {:.1f}s (page_range={})",
+            content_type, len(text), time.monotonic() - start, pr or "all",
+        )
+        return Document(text=text, native=result.document, metadata={"parser": "docling", "page_range": pr})
+
 
 class PdfReader(DocumentReader):
     def supports(self, content_type: str) -> bool:
@@ -147,4 +167,10 @@ class CompositeReader(DocumentReader):
         for reader in self._readers:
             if reader.supports(content_type):
                 return reader.read(file_bytes, content_type, page_range)
+        raise ValueError(f"Unsupported content type for text extraction: {content_type}")
+
+    def read_path(self, file_path: str, content_type: str, page_range: Optional[Tuple[int, int]] = None) -> Document:
+        for reader in self._readers:
+            if reader.supports(content_type):
+                return reader.read_path(file_path, content_type, page_range)
         raise ValueError(f"Unsupported content type for text extraction: {content_type}")

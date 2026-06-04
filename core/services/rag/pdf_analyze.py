@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-import io
+import time
 from dataclasses import dataclass
+from html import escape
 from statistics import median
 from typing import List, Tuple
 
 import pdfplumber
+from loguru import logger
 
 
 @dataclass
@@ -34,11 +36,45 @@ class PdfInspection:
         }
 
 
-def _detect_headings(page) -> List[Tuple[float, str]]:
-    try:
-        words = page.extract_words(extra_attrs=["size"])
-    except Exception:
-        words = []
+@dataclass
+class AnalyzeResult:
+    inspection: PdfInspection
+    html_path: str
+    html_length: int
+    text_length: int
+    conversion_seconds: float
+
+
+def _word_in_bbox(word, bbox) -> bool:
+    x0, top, x1, bottom = bbox
+    cx = (word["x0"] + word["x1"]) / 2
+    cy = (word["top"] + word["bottom"]) / 2
+    return x0 <= cx <= x1 and top <= cy <= bottom
+
+
+def _reconstruct_lines(words) -> List[str]:
+    buckets: List[Tuple[float, list]] = []
+    for word in words:
+        top = word["top"]
+        placed = False
+        for bucket in buckets:
+            if abs(bucket[0] - top) <= 3:
+                bucket[1].append(word)
+                placed = True
+                break
+        if not placed:
+            buckets.append((top, [word]))
+    buckets.sort(key=lambda b: b[0])
+    lines = []
+    for _, bucket_words in buckets:
+        bucket_words.sort(key=lambda w: w["x0"])
+        line = " ".join(w["text"] for w in bucket_words).strip()
+        if line:
+            lines.append(line)
+    return lines
+
+
+def _headings_from_words(words) -> List[Tuple[float, str]]:
     if not words:
         return []
 
@@ -94,54 +130,52 @@ def _section_for(top: float, headings: List[Tuple[float, str]], page_number: int
     return headings[0][1]
 
 
-def _page_image_tops(page) -> List[float]:
-    tops: List[float] = []
-    try:
-        images = page.images or []
-    except Exception:
-        images = []
-    for img in images:
-        try:
-            tops.append(float(img.get("top") or 0))
-        except Exception:
-            tops.append(0.0)
-    return tops
-
-
-def _page_table_tops(page) -> List[float]:
-    tops: List[float] = []
-    try:
-        tables = page.find_tables()
-    except Exception:
-        tables = []
-    for table in tables:
-        try:
-            tops.append(float(table.bbox[1]))
-        except Exception:
-            tops.append(0.0)
-    return tops
-
-
-def inspect_pdf(file_bytes: bytes) -> PdfInspection:
-    total_pages = 0
-    image_counts: List[int] = []
-    table_counts: List[int] = []
-    sections_with_images: List[dict] = []
-    sections_with_tables: List[dict] = []
+def analyze_pdf(pdf_path: str, html_path: str) -> AnalyzeResult:
+    start = time.monotonic()
+    image_counts = []
+    table_counts = []
+    sections_with_images = []
+    sections_with_tables = []
     seen_images = set()
     seen_tables = set()
+    html_length = 0
+    text_length = 0
 
-    with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-        total_pages = len(pdf.pages)
+    with pdfplumber.open(pdf_path) as pdf, open(html_path, "w", encoding="utf-8") as out:
+        total = len(pdf.pages)
+        logger.info("[pdf-analyze] {} page(s) ...", total)
+
+        def write(chunk: str) -> None:
+            nonlocal html_length
+            out.write(chunk)
+            html_length += len(chunk)
+
+        write("<!DOCTYPE html><html><head><meta charset='utf-8'></head><body>")
         for i, page in enumerate(pdf.pages):
             page_number = i + 1
+            lines = []
+            image_tops = []
+            table_tops = []
+            headings = []
             try:
-                headings = _detect_headings(page)
+                words = page.extract_words(extra_attrs=["size"])
+                headings = _headings_from_words(words)
+                tables = page.find_tables()
+                table_bboxes = [t.bbox for t in tables]
+                table_tops = [float(b[1]) for b in table_bboxes]
+                image_tops = [float(im.get("top") or 0) for im in (page.images or [])]
+                kept = [
+                    w
+                    for w in words
+                    if not any(_word_in_bbox(w, bbox) for bbox in table_bboxes)
+                ]
+                lines = _reconstruct_lines(kept)
             except Exception:
+                lines = []
+                image_tops = []
+                table_tops = []
                 headings = []
 
-            image_tops = _page_image_tops(page)
-            table_tops = _page_table_tops(page)
             image_counts.append(len(image_tops))
             table_counts.append(len(table_tops))
 
@@ -159,12 +193,42 @@ def inspect_pdf(file_bytes: bytes) -> PdfInspection:
                     seen_tables.add(key)
                     sections_with_tables.append({"page": page_number, "section": section})
 
-    return PdfInspection(
-        total_pages=total_pages,
+            write(f"<section><h2>Page {page_number}</h2>")
+            for line in lines:
+                write(f"<p>{escape(line)}</p>")
+                text_length += len(line) + 1
+            write("</section>")
+
+            try:
+                page.flush_cache()
+            except Exception:
+                pass
+
+            if page_number % 25 == 0 or page_number == total:
+                logger.info(
+                    "[pdf-analyze] {}/{} pages ({} images, {} tables skipped, {:.1f}s)",
+                    page_number, total, sum(image_counts), sum(table_counts),
+                    time.monotonic() - start,
+                )
+
+        write("</body></html>")
+
+    elapsed = time.monotonic() - start
+    logger.info("[pdf-analyze] done: {} pages in {:.1f}s -> {}", total, elapsed, html_path)
+
+    inspection = PdfInspection(
+        total_pages=total,
         image_count=sum(image_counts),
         table_count=sum(table_counts),
         pages_with_images=[i + 1 for i, c in enumerate(image_counts) if c > 0],
         pages_with_tables=[i + 1 for i, c in enumerate(table_counts) if c > 0],
         sections_with_images=sections_with_images,
         sections_with_tables=sections_with_tables,
+    )
+    return AnalyzeResult(
+        inspection=inspection,
+        html_path=html_path,
+        html_length=html_length,
+        text_length=text_length,
+        conversion_seconds=elapsed,
     )

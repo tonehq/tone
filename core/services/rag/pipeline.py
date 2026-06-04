@@ -108,6 +108,15 @@ class RAGPipeline:
             raise ValueError("No text could be extracted from the file")
         return self._ingest_streaming(document, metadata, batch_size, on_batch)
 
+    def ingest_path(
+        self, file_path: str, content_type: str, *, metadata: Optional[dict] = None,
+        batch_size: int = 256, on_batch: Optional[Callable[[int, int, float], None]] = None,
+    ) -> int:
+        document = self.reader.read_path(file_path, content_type)
+        if not document.text.strip() and document.native is None:
+            raise ValueError("No text could be extracted from the file")
+        return self._ingest_streaming(document, metadata, batch_size, on_batch)
+
     def ingest_file_paged(
         self, file_bytes: bytes, content_type: str, *, page_batch: int = 50,
         metadata: Optional[dict] = None,
