@@ -17,7 +17,8 @@ from core.services.rag.readers import DoclingReader
 from core.services.rag.vector_stores.pgvector_store import PgVectorStore
 
 DIRECT_PDF_DOCLING = True
-DIRECT_PDF_OCR = False
+DIRECT_PDF_OCR = True
+DIRECT_PDF_MAX_PAGES = 50
 
 
 def _remove_files(*paths: str) -> None:
@@ -71,7 +72,12 @@ class DocumentProcessingService:
                 _remove_files(pdf_path)
                 pdf_path = None
 
-            reader = DoclingReader(ocr=DIRECT_PDF_OCR, tables=DIRECT_PDF_OCR) if direct else None
+            reader = None
+            if direct:
+                page_range = (1, DIRECT_PDF_MAX_PAGES) if DIRECT_PDF_MAX_PAGES else None
+                reader = DoclingReader(
+                    ocr=DIRECT_PDF_OCR, tables=DIRECT_PDF_OCR, page_range=page_range
+                )
             pipeline = RAGPipeline(
                 embedder=OpenAIEmbedder(api_key),
                 store=PgVectorStore(),
@@ -82,8 +88,8 @@ class DocumentProcessingService:
             try:
                 if direct:
                     logger.info(
-                        "[direct-pdf] docling parsing PDF directly (ocr={}, tables={})",
-                        DIRECT_PDF_OCR, DIRECT_PDF_OCR,
+                        "[direct-pdf] docling parsing PDF directly (ocr={}, tables={}, max_pages={})",
+                        DIRECT_PDF_OCR, DIRECT_PDF_OCR, DIRECT_PDF_MAX_PAGES,
                     )
                     num_chunks = pipeline.ingest_file_streaming(
                         file_bytes, file_type, metadata=metadata
