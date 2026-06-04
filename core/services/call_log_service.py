@@ -161,12 +161,11 @@ class CallLogService(BaseService):
         if upload_id:
             call.recording_upload_id = upload_id
 
-        # Store transcript, metrics, tool_calls in metadata JSONB
+        # Store transcript, tool_calls, audio_file_path in metadata JSONB.
+        # Metrics live in their own table (call_metrics) — see CallMetricsService.
         metadata = call.metadata_ or {}
         if transcript:
             metadata["transcript"] = transcript
-        if metrics:
-            metadata["metrics"] = metrics
         if tool_calls:
             metadata["tool_calls"] = tool_calls
         if audio_file_path:
@@ -175,6 +174,15 @@ class CallLogService(BaseService):
 
         self.db.commit()
         self.db.refresh(call)
+
+        if metrics:
+            try:
+                from core.services.call_metrics_service import CallMetricsService
+                CallMetricsService(self.db, org_id=call.organization_id).upsert_for_call(
+                    call.id, call.organization_id, metrics
+                )
+            except Exception as e:
+                logger.error("Failed to persist call_metrics for call {}: {}", call.id, e)
 
         # Additionally persist each tool/MCP invocation as a queryable row.
         # Wrapped so a persistence failure never breaks call completion.

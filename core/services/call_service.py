@@ -255,6 +255,5 @@ class CallService(BaseService):
             "trace_id": call.trace_id,
             "recording_upload_id": str(call.recording_upload_id) if call.recording_upload_id else None,
             "transcript": metadata.get("transcript"),
-            "metrics": metadata.get("metrics"),
             "tool_calls": metadata.get("tool_calls"),
         }
