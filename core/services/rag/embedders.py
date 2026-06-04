@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -94,64 +93,3 @@ class OpenAIEmbedder(Embedder):
             len(out), self.model, len(out[0]) if out else 0,
         )
         return out
-
-
-def _l2_normalize(vec: List[float]) -> List[float]:
-    norm = math.sqrt(sum(v * v for v in vec)) or 1.0
-    return [v / norm for v in vec]
-
-
-class GeminiEmbedder(Embedder):
-    MODEL = "gemini-embedding-001"
-    dimensions = 1536
-
-    def __init__(self, api_key: str, model: str = None, batch_size: int = 100,
-                 max_retries: int = 6, output_dimensionality: int = 1536):
-        self.api_key = api_key
-        self.model = model or self.MODEL
-        self.batch_size = batch_size
-        self.max_retries = max_retries
-        self.output_dimensionality = output_dimensionality
-        self.dimensions = output_dimensionality
-
-    def _call(self, client, batch: List[str], task_type: str):
-        from google.genai import types
-
-        config = types.EmbedContentConfig(
-            task_type=task_type, output_dimensionality=self.output_dimensionality
-        )
-        delay = 1.0
-        for attempt in range(self.max_retries):
-            try:
-                return client.models.embed_content(
-                    model=self.model, contents=batch, config=config
-                )
-            except Exception as e:
-                if attempt == self.max_retries - 1:
-                    raise
-                logger.warning(
-                    "Gemini embed retry {}/{}: {}", attempt + 1, self.max_retries, e
-                )
-                time.sleep(delay)
-                delay = min(delay * 2, 30.0)
-
-    def _embed(self, texts: List[str], task_type: str) -> List[List[float]]:
-        from google import genai
-
-        client = genai.Client(api_key=self.api_key)
-        out: List[List[float]] = []
-        for i in range(0, len(texts), self.batch_size):
-            batch = texts[i : i + self.batch_size]
-            response = self._call(client, batch, task_type)
-            out.extend(_l2_normalize(list(e.values)) for e in response.embeddings)
-        logger.info(
-            "Generated {} embeddings (model={}, dimensions={})",
-            len(out), self.model, len(out[0]) if out else 0,
-        )
-        return out
-
-    def embed_texts(self, texts: List[str]) -> List[List[float]]:
-        return self._embed(texts, "RETRIEVAL_DOCUMENT")
-
-    def embed_query(self, query: str) -> List[float]:
-        return self._embed([query], "RETRIEVAL_QUERY")[0]
