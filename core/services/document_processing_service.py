@@ -16,8 +16,8 @@ from core.services.rag.pipeline import RAGPipeline
 from core.services.rag.readers import DoclingReader
 from core.services.rag.vector_stores.pgvector_store import PgVectorStore
 
-DIRECT_PDF_DOCLING = True
-DIRECT_PDF_OCR = True
+DIRECT_PDF_DOCLING = False
+DIRECT_PDF_OCR = False
 DIRECT_PDF_MAX_PAGES = 0
 
 

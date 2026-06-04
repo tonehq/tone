@@ -12,7 +12,7 @@ HTML_CONTENT_TYPE = "text/html"
 PIPELINE_HTML_DOCLING = "html_docling"
 PIPELINE_OCR = "ocr"
 
-OCR_ENABLED = False
+OCR_ENABLED = True
 
 
 @dataclass
