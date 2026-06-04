@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import io
 import time
 from dataclasses import dataclass
 from html import escape
@@ -8,6 +10,34 @@ from typing import List, Tuple
 
 import pdfplumber
 from loguru import logger
+
+KEEP_BLOCKERS = True
+
+
+def _table_html(table) -> str:
+    try:
+        rows = table.extract()
+    except Exception:
+        return ""
+    parts = ["<table>"]
+    for row in rows:
+        parts.append("<tr>")
+        for cell in row:
+            parts.append(f"<td>{escape(cell or '')}</td>")
+        parts.append("</tr>")
+    parts.append("</table>")
+    return "".join(parts)
+
+
+def _image_data_uri(page, img) -> str:
+    try:
+        bbox = (img["x0"], img["top"], img["x1"], img["bottom"])
+        pil = page.crop(bbox).to_image(resolution=72).original
+        buf = io.BytesIO()
+        pil.save(buf, format="PNG")
+        return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        return ""
 
 
 @dataclass
@@ -157,13 +187,16 @@ def analyze_pdf(pdf_path: str, html_path: str) -> AnalyzeResult:
             image_tops = []
             table_tops = []
             headings = []
+            tables = []
+            page_images = []
             try:
                 words = page.extract_words(extra_attrs=["size"])
                 headings = _headings_from_words(words)
                 tables = page.find_tables()
                 table_bboxes = [t.bbox for t in tables]
                 table_tops = [float(b[1]) for b in table_bboxes]
-                image_tops = [float(im.get("top") or 0) for im in (page.images or [])]
+                page_images = list(page.images or [])
+                image_tops = [float(im.get("top") or 0) for im in page_images]
                 kept = [
                     w
                     for w in words
@@ -175,6 +208,8 @@ def analyze_pdf(pdf_path: str, html_path: str) -> AnalyzeResult:
                 image_tops = []
                 table_tops = []
                 headings = []
+                tables = []
+                page_images = []
 
             image_counts.append(len(image_tops))
             table_counts.append(len(table_tops))
@@ -197,6 +232,14 @@ def analyze_pdf(pdf_path: str, html_path: str) -> AnalyzeResult:
             for line in lines:
                 write(f"<p>{escape(line)}</p>")
                 text_length += len(line) + 1
+            if KEEP_BLOCKERS:
+                for table in tables:
+                    block = _table_html(table)
+                    write(block)
+                    text_length += len(block)
+                for img in page_images:
+                    uri = _image_data_uri(page, img)
+                    write(f'<img src="{uri}" />' if uri else '<img alt="image" />')
             write("</section>")
 
             try:
@@ -206,8 +249,8 @@ def analyze_pdf(pdf_path: str, html_path: str) -> AnalyzeResult:
 
             if page_number % 25 == 0 or page_number == total:
                 logger.info(
-                    "[pdf-analyze] {}/{} pages ({} images, {} tables skipped, {:.1f}s)",
-                    page_number, total, sum(image_counts), sum(table_counts),
+                    "[pdf-analyze] {}/{} pages ({} images, {} tables, keep_blockers={}, {:.1f}s)",
+                    page_number, total, sum(image_counts), sum(table_counts), KEEP_BLOCKERS,
                     time.monotonic() - start,
                 )
 
