@@ -169,51 +169,58 @@ def get_openai_api_key_for_agent(org_id: Any) -> Optional[str]:
     return None
 
 
-def register_document_tool(llm: Any, agent_id: int, org_id: Any, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None) -> Optional[ToolsSchema]:
-    """Main entry point — call this from agent_factory_service after LLM is created.
-
-    Checks if the agent has KB uploads, and if so:
-    1. Builds the tool schema with document names
-    2. Registers the handler on the LLM
-    3. Returns the ToolsSchema (to pass to LLMContext)
-
-    Returns None if the agent has no documents.
-    """
+def get_kb_document_names(agent_id: int) -> Optional[dict]:
+    """The agent's ready KB documents (the only DB query for KB), as a cacheable dict
+    `{"document_names": [...], "upload_ids": [...]}` or None when the agent has no KB.
+    Stored in the agent pipeline cache; `build_document_tool` consumes it with no DB query."""
     from core.database.session import get_db_context
     from core.models.upload import Upload
     from core.models.agent_knowledge_base import AgentKnowledgeBase
 
     with get_db_context() as db:
-        # Fetch upload names and IDs in one query
         upload_rows = (
             db.query(Upload.file_name, Upload.id)
             .join(AgentKnowledgeBase, AgentKnowledgeBase.upload_id == Upload.id)
             .filter(AgentKnowledgeBase.agent_id == agent_id, Upload.status == "ready")
             .all()
         )
+    doc_names = [row[0] for row in upload_rows if row[0]]
+    upload_ids = [str(row[1]) for row in upload_rows]
+    if not doc_names:
+        return None
+    return {"document_names": doc_names, "upload_ids": upload_ids}
 
-        if not upload_rows:
-            logger.info("Agent {} has no KB uploads, skipping tool registration", agent_id)
-            return None
 
-        doc_names = [row[0] for row in upload_rows if row[0]]
-        upload_ids = [row[1] for row in upload_rows]
+def build_document_tool(
+    llm: Any, agent_id: int, org_id: Any, kb: Optional[dict],
+    tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None,
+) -> Optional[ToolsSchema]:
+    """Build + register the read_document tool from the cached `kb` dict (no KB DB query).
 
-        if not doc_names:
-            logger.info("Agent {} has no KB uploads, skipping tool registration", agent_id)
-            return None
+    The pgvector search still runs live at call time inside the handler. Returns the
+    ToolsSchema (for LLMContext) or None if the agent has no KB documents.
+    """
+    if not kb or not kb.get("document_names"):
+        logger.info("Agent {} has no KB documents, skipping tool registration", agent_id)
+        return None
 
-        api_key = get_openai_api_key_for_agent(org_id)
-        if not api_key:
-            logger.warning("No OpenAI API key found for org {}, skipping document tool", org_id)
-            return None
+    doc_names = kb["document_names"]
+    upload_ids = kb.get("upload_ids") or []
 
-    # Build tool schema and handler
+    api_key = get_openai_api_key_for_agent(org_id)
+    if not api_key:
+        logger.warning("No OpenAI API key found for org {}, skipping document tool", org_id)
+        return None
+
     tools_schema = get_document_tool_schema(doc_names)
     handler = create_document_handler(agent_id, org_id, api_key, upload_ids, tool_call_entries=tool_call_entries, current_turn=current_turn)
-
-    # Register handler on the LLM
     llm.register_function("read_document", handler)
     logger.info("Registered read_document tool for agent {} with docs: {}", agent_id, doc_names)
-
     return tools_schema
+
+
+def register_document_tool(llm: Any, agent_id: int, org_id: Any, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None) -> Optional[ToolsSchema]:
+    """Back-compat entry point: fetch the agent's KB docs from the DB, then build the tool.
+    New callers should cache `get_kb_document_names()` and call `build_document_tool()`."""
+    kb = get_kb_document_names(agent_id)
+    return build_document_tool(llm, agent_id, org_id, kb, tool_call_entries=tool_call_entries, current_turn=current_turn)

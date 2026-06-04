@@ -98,22 +98,22 @@ class PipecatPipelineBuilder(PipelineBuilder):
         _t = _time.monotonic()
         rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
 
-        # Register document tool if agent has uploaded documents
+        # Register document tool from the cached KB data (no DB query; pgvector still
+        # searched live at call time inside the handler).
         doc_tools = None
         if agent:
-            from core.services.document_tool_service import register_document_tool
-            doc_tools = register_document_tool(llm, agent.id, agent.organization_id)
+            from core.services.document_tool_service import build_document_tool
+            doc_tools = build_document_tool(llm, agent.id, agent.organization_id, params.kb)
 
-        # Fetch custom tools for this agent
+        # Custom + built-in tools, rebuilt from the cached tool dicts (no DB query).
         custom_tools_schema = None
-        if agent:
+        if agent and params.tools:
             from core.services.custom_tool_service import (
                 build_custom_tool_schemas, create_built_in_tool_handler,
-                create_custom_tool_handler, get_custom_tools_for_agent,
-                sanitize_tool_name)
-            custom_tools = get_custom_tools_for_agent(agent.id)
+                create_custom_tool_handler, sanitize_tool_name, tool_from_cache)
+            custom_tools = [tool_from_cache(t) for t in params.tools]
             if custom_tools:
-                logger.info("Fetched {} custom tools for agent {}", len(custom_tools), agent.id)
+                logger.info("Building {} cached tools for agent {}", len(custom_tools), agent.id)
                 custom_tools_schema = build_custom_tool_schemas(custom_tools)
                 for tool in custom_tools:
                     # Only "custom" tools are customer webhooks; everything else

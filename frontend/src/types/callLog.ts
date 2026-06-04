@@ -57,6 +57,7 @@ export interface CallLogRow {
   from_number: string | null;
   to_number: string | null;
   provider_call_id: string | null;
+  trace_id: string | null;
   recording_upload_id: string | null;
   transcript: Array<{ role: string; text: string; timestamp?: string }> | null;
   metrics: CallMetrics | null;

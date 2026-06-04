@@ -12,3 +12,8 @@ export const ROUTE_LOGIN = '/login';
 export const ROUTE_HOME = '/home';
 
 export const BACKEND_URL = `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/v1`;
+
+// Grafana Loki logs link (Call History → per-call logs). Environment-specific: the base
+// host and the Loki "app" label differ between staging and production.
+export const GRAFANA_BASE_URL = process.env.NEXT_PUBLIC_GRAFANA_BASE_URL;
+export const GRAFANA_LOG_APP = process.env.NEXT_PUBLIC_GRAFANA_LOG_APP;

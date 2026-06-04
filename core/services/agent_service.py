@@ -1018,6 +1018,14 @@ class AgentService(BaseService):
         """
         incoming_numbers = {entry["number"] for entry in phone_numbers}
 
+        # Numbers currently mapped to this agent — captured before the sync so we can
+        # invalidate the phone_to_agent cache for every number that gains/loses a mapping.
+        prior_numbers = {
+            n for (n,) in self.db.query(PhoneNumber.number).filter(
+                PhoneNumber.agent_id == agent.id, PhoneNumber.organization_id == self.org_id
+            ).all()
+        }
+
         # Delete phone numbers removed from this agent
         if incoming_numbers:
             self.db.query(PhoneNumber).filter(
@@ -1060,6 +1068,13 @@ class AgentService(BaseService):
                     label=label,
                     organization_id=self.org_id,
                 ))
+
+        # Invalidate the phone→agent routing cache for every number that changed mapping
+        # (added or removed) so the next call routes to the correct agent immediately.
+        from core.services.redis_service import cache_delete
+        for num in prior_numbers | incoming_numbers:
+            if num:
+                cache_delete(f"phone_to_agent:{num.strip()}")
 
     def agent_response(self, agent: Agent) -> Dict[str, Any]:
         # Refresh to get latest state

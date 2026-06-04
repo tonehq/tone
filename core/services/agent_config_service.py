@@ -197,8 +197,9 @@ class AgentConfigService(BaseService):
             ) from e
         config = self.db.query(AgentConfig).filter(AgentConfig.uuid == config_uuid).first()
 
-        # Invalidate Redis cache for this agent so next call picks up the new config
-        from core.services.redis_service import cache_delete_pattern
-        cache_delete_pattern(f"agent_bot_data:{agent_id}:*")
+        # Invalidate the agent's pipeline cache so the next call picks up the new config.
+        # (The version stamp also auto-detects this; the explicit delete makes it immediate.)
+        from core.services.redis_service import cache_delete
+        cache_delete(f"agent_pipeline_config:{agent_id}")
 
         return config

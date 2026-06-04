@@ -9,9 +9,17 @@ import { Badge } from '@/components/ui/badge';
 import { AGENT_TYPE_OPTIONS, CALL_STATUS_OPTIONS } from '@/lib/constants/filters';
 import type { CallLogFilterParam, CallLogQueryParams, CallLogRow } from '@/types/callLog';
 import type { CustomTableColumn, CustomTableSortState } from '@/types/components';
+import { buildGrafanaLogsUrl, isGrafanaConfigured } from '@/utils/grafana';
 import { handleApiError } from '@/utils/helpers';
 import { useAtom } from 'jotai';
-import { CalendarDays, ChartNoAxesCombined, MessageSquareText, Phone, X } from 'lucide-react';
+import {
+  CalendarDays,
+  ChartNoAxesCombined,
+  MessageSquareText,
+  Phone,
+  ScrollText,
+  X,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import CallDetailDrawer from './CallDetailDrawer';
@@ -239,6 +247,22 @@ const CallHistory: React.FC = () => {
               <ChartNoAxesCombined className="size-3.5" />
             </CustomButton>
           </CustomTooltip>
+          {isGrafanaConfigured() && (
+            <CustomTooltip content="View logs">
+              <CustomButton
+                type="default"
+                size="icon-xs"
+                disabled={!record.trace_id}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const url = buildGrafanaLogsUrl(record);
+                  if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                }}
+              >
+                <ScrollText className="size-3.5" />
+              </CustomButton>
+            </CustomTooltip>
+          )}
         </div>
       ),
     },

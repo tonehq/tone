@@ -57,6 +57,9 @@ class PipelineParams:
     is_s2s: bool = False
     messages: List[dict] = field(default_factory=list)
     end_call_message: Optional[str] = None
+    # Cached, DB-free tool/KB data the builder rebuilds handlers from (MCP stays live).
+    tools: List[dict] = field(default_factory=list)
+    kb: Optional[dict] = None
     telephony_creds: Optional[dict] = None
 
     @property
@@ -124,6 +127,8 @@ class PipelineParams:
             messages=d.get("messages") or [],
             end_call_message=d.get("end_call_message"),
             telephony_creds=d.get("_telephony_creds"),
+            tools=d.get("tools") or [],
+            kb=d.get("kb"),
         )
 
     @classmethod
