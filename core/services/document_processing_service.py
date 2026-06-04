@@ -9,6 +9,7 @@ from core.services.document_tool_service import get_openai_api_key_for_agent
 from core.services.r2_storage_service import R2StorageService
 from core.services.rag.chunkers import DoclingHybridChunker
 from core.services.rag.embedders import OpenAIEmbedder
+from core.services.rag.pdf_router import PDF_CONTENT_TYPE, PdfRoutingService
 from core.services.rag.pipeline import RAGPipeline
 from core.services.rag.vector_stores.pgvector_store import PgVectorStore
 
@@ -40,23 +41,37 @@ class DocumentProcessingService:
                     start_page, end_page, count, elapsed,
                 )
 
+            build = None
+            if file_type == PDF_CONTENT_TYPE:
+                build = PdfRoutingService().build(file_bytes, file_type)
+
             pipeline = RAGPipeline(
                 embedder=OpenAIEmbedder(api_key),
                 store=PgVectorStore(),
                 chunker=DoclingHybridChunker(),
             )
-            num_chunks = pipeline.ingest_file_paged(
-                file_bytes,
-                file_type,
-                page_batch=50,
-                metadata={"organization_id": org_id, "upload_id": upload_id},
-                on_batch=_on_batch,
-            )
+            metadata = {"organization_id": org_id, "upload_id": upload_id}
+            if build is not None:
+                num_chunks = pipeline.ingest_file_streaming(
+                    build.html_bytes, build.content_type, metadata=metadata
+                )
+            else:
+                num_chunks = pipeline.ingest_file_paged(
+                    file_bytes,
+                    file_type,
+                    page_batch=50,
+                    metadata=metadata,
+                    on_batch=_on_batch,
+                )
             if not num_chunks:
                 raise ValueError("Text extraction produced no chunks")
 
             with get_db_context() as db:
-                db.query(Upload).filter(Upload.id == upload_id).update({"status": "ready"})
+                upload = db.query(Upload).filter(Upload.id == upload_id).first()
+                if upload:
+                    upload.status = "ready"
+                    if build is not None:
+                        upload.meta_data = {**(upload.meta_data or {}), "routing": build.metrics()}
                 db.commit()
             logger.info("Upload {} processed: {} chunks stored", upload_id, num_chunks)
 
