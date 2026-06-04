@@ -77,6 +77,8 @@ class CallMetricsService(BaseService):
         "started_at": Call.started_at,
         "ended_at": Call.ended_at,
         "duration_seconds": Call.duration_seconds,
+        # Used by the "show metrics for this call" deep-link from Call History.
+        "call_id": CallMetrics.call_id,
     }
 
     def _base_query(self):
