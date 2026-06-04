@@ -15,7 +15,5 @@ export const BACKEND_URL = `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://loc
 
 // Grafana Loki logs link (Call History → per-call logs). Environment-specific: the base
 // host and the Loki "app" label differ between staging and production.
-export const GRAFANA_BASE_URL =
-  process.env.NEXT_PUBLIC_GRAFANA_BASE_URL || 'https://tonehq.grafana.net';
-export const GRAFANA_LOG_APP =
-  process.env.NEXT_PUBLIC_GRAFANA_LOG_APP || 'staging-tone-call-worker';
+export const GRAFANA_BASE_URL = process.env.NEXT_PUBLIC_GRAFANA_BASE_URL;
+export const GRAFANA_LOG_APP = process.env.NEXT_PUBLIC_GRAFANA_LOG_APP;

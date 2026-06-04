@@ -30,13 +30,22 @@ interface GrafanaLogsCall {
 }
 
 /**
+ * Whether the Grafana logs link is configured for this environment (both the base URL and
+ * the app/service label are set). When false, the Call History "View logs" button is hidden
+ * since there is nowhere to redirect to.
+ */
+export function isGrafanaConfigured(): boolean {
+  return Boolean(GRAFANA_BASE_URL && GRAFANA_LOG_APP);
+}
+
+/**
  * Build a Grafana Loki Explore URL filtered to this call's trace_id. The time window is
  * derived from the call's start/end (padded by TIME_BUFFER_MS) so the logs load regardless
- * of the call's age. Returns null when the call has no trace_id (e.g. legacy rows).
+ * of the call's age. Returns null when Grafana is not configured or the call has no trace_id.
  */
 export function buildGrafanaLogsUrl(call: GrafanaLogsCall): string | null {
   const traceId = call.trace_id;
-  if (!traceId) return null;
+  if (!traceId || !GRAFANA_BASE_URL || !GRAFANA_LOG_APP) return null;
 
   const startMs = call.started_at ? Date.parse(call.started_at) : NaN;
   const endMs = call.ended_at ? Date.parse(call.ended_at) : NaN;
