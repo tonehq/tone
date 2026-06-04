@@ -18,7 +18,7 @@ from core.services.rag.vector_stores.pgvector_store import PgVectorStore
 
 DIRECT_PDF_DOCLING = True
 DIRECT_PDF_OCR = True
-DIRECT_PDF_MAX_PAGES = 50
+DIRECT_PDF_MAX_PAGES = 0
 
 
 def _remove_files(*paths: str) -> None:
