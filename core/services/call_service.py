@@ -252,6 +252,7 @@ class CallService(BaseService):
             "from_number": from_number or call.from_number_raw_by_provider,
             "to_number": to_number,
             "provider_call_id": call.provider_call_id,
+            "trace_id": call.trace_id,
             "recording_upload_id": str(call.recording_upload_id) if call.recording_upload_id else None,
             "transcript": metadata.get("transcript"),
             "metrics": metadata.get("metrics"),

@@ -54,7 +54,9 @@ class AgentRunnerService(BaseService):
         )
 
         if result:
-            cache_set(cache_key, result.id, ttl_seconds=1800)
+            # Store as a string — the Agent id is a UUID and json.dumps can't serialize it.
+            # No TTL: persists until invalidated (phone→agent mapping rarely changes).
+            cache_set(cache_key, str(result.id))
 
         return result
 

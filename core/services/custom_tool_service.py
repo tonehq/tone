@@ -2,6 +2,7 @@
 
 import json
 import re
+from types import SimpleNamespace
 from typing import Any, Callable, List, Optional
 
 import httpx
@@ -39,6 +40,36 @@ def get_custom_tools_for_agent(agent_id: int) -> List[Tool]:
 
     logger.info("Found {} custom tools for agent {}", len(tools), agent_id)
     return tools
+
+
+# Tool fields the schema builder + handlers read. Serialized into the agent pipeline
+# cache so the builder can rebuild tools/handlers without a DB query.
+_CACHED_TOOL_FIELDS = (
+    "name", "description", "tool_type", "parameters",
+    "url", "method", "auth_type", "auth_config", "meta_data", "oauth_connection_id",
+)
+
+
+def serialize_agent_tools(agent_id: int) -> List[dict]:
+    """Fetch the agent's active tools and return JSON-serializable dicts (auth_config
+    decrypted) for the pipeline cache. The builder rebuilds handlers from these via
+    `tool_from_cache` — no per-call DB query for tools."""
+    tools = get_custom_tools_for_agent(agent_id)
+    out: List[dict] = []
+    for t in tools:
+        d = {f: getattr(t, f, None) for f in _CACHED_TOOL_FIELDS}
+        # oauth_connection_id is a UUID; stringify so it survives JSON round-trip.
+        if d.get("oauth_connection_id") is not None:
+            d["oauth_connection_id"] = str(d["oauth_connection_id"])
+        out.append(d)
+    return out
+
+
+def tool_from_cache(d: dict) -> SimpleNamespace:
+    """Reconstruct a lightweight tool object from a cached dict. Exposes the same
+    attributes (`.name`, `.tool_type`, `.auth_config`, …) the handlers/schema builder
+    read, so they work unchanged whether given an ORM Tool or this."""
+    return SimpleNamespace(**d)
 
 
 def sanitize_tool_name(name: str) -> str:
