@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import {
+  BarChart3,
   BookOpen,
   Bot,
   Boxes,
@@ -72,6 +73,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'MCP', href: '/mcp', icon: Boxes },
       { label: 'Knowledge Base', href: '/knowledge-base', icon: BookOpen },
       { label: 'Call History', href: '/call-history', icon: Phone },
+      { label: 'Call Metrics', href: '/call-metrics', icon: BarChart3 },
     ],
   },
   {
