@@ -10,35 +10,16 @@ import { AGENT_TYPE_OPTIONS, CALL_STATUS_OPTIONS } from '@/lib/constants/filters
 import type { CallLogFilterParam, CallLogQueryParams, CallLogRow } from '@/types/callLog';
 import type { CustomTableColumn, CustomTableSortState } from '@/types/components';
 import { buildGrafanaLogsUrl, isGrafanaConfigured } from '@/utils/grafana';
+import { formatDuration, formatTimestamp } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { useAtom } from 'jotai';
-import {
-  CalendarDays,
-  ChartNoAxesCombined,
-  MessageSquareText,
-  Phone,
-  ScrollText,
-  X,
-} from 'lucide-react';
+import { CalendarDays, MessageSquareText, Phone, ScrollText, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import CallDetailDrawer from './CallDetailDrawer';
-import MetricsModal from './MetricsModal';
 import TranscriptionModal from './TranscriptionModal';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
-
-const formatTimestamp = (ts: string | null): string => {
-  if (!ts) return '-';
-  return new Date(ts).toLocaleString();
-};
-
-const formatDuration = (seconds: number | null): string => {
-  if (seconds == null) return '-';
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-};
 
 const STATUS_BADGE_CLASSES: Record<string, string> = {
   completed: 'bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15 dark:text-emerald-400',
@@ -62,7 +43,6 @@ const CallHistory: React.FC = () => {
 
   const [selectedCallLog, setSelectedCallLog] = useState<CallLogRow | null>(null);
   const [transcriptionCallLog, setTranscriptionCallLog] = useState<CallLogRow | null>(null);
-  const [metricsCallLog, setMetricsCallLog] = useState<CallLogRow | null>(null);
 
   const params = useMemo<CallLogQueryParams>(() => {
     const q: CallLogQueryParams = {
@@ -234,19 +214,6 @@ const CallHistory: React.FC = () => {
               <MessageSquareText className="size-3.5" />
             </CustomButton>
           </CustomTooltip>
-          <CustomTooltip content="Metrics">
-            <CustomButton
-              type="default"
-              size="icon-xs"
-              disabled={!record.metrics}
-              onClick={(e) => {
-                e.stopPropagation();
-                setMetricsCallLog(record);
-              }}
-            >
-              <ChartNoAxesCombined className="size-3.5" />
-            </CustomButton>
-          </CustomTooltip>
           {isGrafanaConfigured() && (
             <CustomTooltip content="View logs">
               <CustomButton
@@ -379,13 +346,6 @@ const CallHistory: React.FC = () => {
         onClose={() => setTranscriptionCallLog(null)}
         transcript={transcriptionCallLog?.transcript ?? null}
         agentName={transcriptionCallLog?.agent_name ?? ''}
-      />
-
-      <MetricsModal
-        open={!!metricsCallLog}
-        onClose={() => setMetricsCallLog(null)}
-        metrics={metricsCallLog?.metrics ?? null}
-        agentName={metricsCallLog?.agent_name ?? ''}
       />
     </div>
   );

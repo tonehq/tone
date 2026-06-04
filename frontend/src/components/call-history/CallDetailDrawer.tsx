@@ -14,6 +14,7 @@ import {
 import { getCallLogAudioUrl } from '@/services/callLogService';
 import type { CallLogRow } from '@/types/callLog';
 import { cn } from '@/utils/cn';
+import { formatDuration, formatTimestamp } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { Clock, Loader2, Phone, PhoneOff, Radio, Search } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -23,18 +24,6 @@ interface CallDetailDrawerProps {
   onClose: () => void;
   callLog: CallLogRow | null;
 }
-
-const formatTimestamp = (ts: string | null): string => {
-  if (!ts) return '-';
-  return new Date(ts).toLocaleString();
-};
-
-const formatDuration = (seconds: number | null): string => {
-  if (seconds == null) return '-';
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-};
 
 const escapeRegex = (str: string): string => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 

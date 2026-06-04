@@ -2,6 +2,7 @@ import uuid
 
 from sqlalchemy import Column, String, Integer, ForeignKey, DateTime
 from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.orm import relationship
 
 from core.models.base import OrgScopedModel
 
@@ -24,3 +25,10 @@ class Call(OrgScopedModel):
     recording_upload_id = Column(UUID(as_uuid=True), ForeignKey("uploads.id", ondelete="SET NULL"), nullable=True)
     recording_duration_seconds = Column(Integer, nullable=True)
     metadata_ = Column("metadata", JSONB, nullable=True)
+
+    metrics_record = relationship(
+        "CallMetrics",
+        uselist=False,
+        back_populates="call",
+        cascade="all, delete-orphan",
+    )

@@ -19,7 +19,7 @@ from core.internal.capabilities import init_capabilities, is_ee_enabled, get_cap
 from core.api.v1 import (
     auth, users, organizations, agent_configs, channels, oauth,
     knowledge_base, agents, mcp_servers, services, tools, dashboard,
-    call_logs,
+    call_logs, call_metrics,
 )
 import core.models
 
@@ -88,6 +88,7 @@ if ee_enabled:
     from ee.api.v1 import tools as ee_tools
     from ee.api.v1 import dashboard as ee_dashboard
     from ee.api.v1 import call_logs as ee_call_logs
+    from ee.api.v1 import call_metrics as ee_call_metrics
 
     api_v1.include_router(ee_auth.router, prefix="/auth", tags=["auth"])
     api_v1.include_router(ee_users.router, prefix="/user", tags=["users"])
@@ -102,6 +103,7 @@ if ee_enabled:
     api_v1.include_router(ee_tools.router, prefix="/tool", tags=["tool"])
     api_v1.include_router(ee_dashboard.router, prefix="/dashboard", tags=["dashboard"])
     api_v1.include_router(ee_call_logs.router, prefix="/call-log", tags=["call-log"])
+    api_v1.include_router(ee_call_metrics.router, prefix="/call-metrics", tags=["call-metrics"])
     print("EE edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
 else:
     api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -117,6 +119,7 @@ else:
     api_v1.include_router(tools.router, prefix="/tool", tags=["tool"])
     api_v1.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
     api_v1.include_router(call_logs.router, prefix="/call-log", tags=["call-log"])
+    api_v1.include_router(call_metrics.router, prefix="/call-metrics", tags=["call-metrics"])
     print("Core edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
 
 

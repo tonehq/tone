@@ -60,7 +60,6 @@ export interface CallLogRow {
   trace_id: string | null;
   recording_upload_id: string | null;
   transcript: Array<{ role: string; text: string; timestamp?: string }> | null;
-  metrics: CallMetrics | null;
   tool_calls: Array<Record<string, unknown>> | null;
 }
 
