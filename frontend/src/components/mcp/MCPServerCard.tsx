@@ -58,7 +58,7 @@ const MCPServerCard: React.FC<MCPServerCardProps> = ({ server, onClick, onEdit, 
       )}
       role="button"
       tabIndex={0}
-      aria-label={`Edit MCP server ${server.name}`}
+      aria-label={`View tools for MCP server ${server.name}`}
       onClick={onClick}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
