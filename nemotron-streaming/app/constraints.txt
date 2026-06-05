@@ -1,0 +1,6 @@
+# Pin torch to a cu124 build so it runs on the A16's CUDA 12.4 driver, while
+# being new enough to let pip pick a recent NeMo (nemotron-streaming needs a
+# newer NeMo than torch 2.4.1 allowed). Matches the 2.6.0-cuda12.4 base image.
+torch==2.6.0
+torchvision==0.21.0
+torchaudio==2.6.0

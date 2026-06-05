@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tone STT — live mic</title>
+<style>
+  :root { --bg:#0b0f17; --card:#141b2b; --accent:#5b8cff; --rec:#ff4d4f; --muted:#7c8aa5; --text:#e8edf6; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; background:var(--bg); color:var(--text);
+         font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         display:flex; align-items:center; justify-content:center; padding:24px; }
+  .card { width:min(760px,100%); background:var(--card); border:1px solid #1f2a40;
+          border-radius:18px; padding:28px; box-shadow:0 20px 60px rgba(0,0,0,.4); }
+  h1 { margin:0 0 4px; font-size:20px; }
+  .sub { color:var(--muted); font-size:13px; margin-bottom:20px; }
+  .row { display:flex; gap:10px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+  input[type=text] { flex:1; min-width:240px; background:#0e1524; border:1px solid #243150;
+          color:var(--text); border-radius:10px; padding:10px 12px; font-size:13px; }
+  button { border:none; border-radius:12px; padding:12px 20px; font-size:15px; font-weight:600;
+          cursor:pointer; color:#fff; background:var(--accent); transition:.15s; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  button.rec { background:var(--rec); }
+  .mic { display:flex; align-items:center; gap:14px; margin-bottom:20px; }
+  .dot { width:12px; height:12px; border-radius:50%; background:#33415c; }
+  .dot.on { background:var(--rec); animation:pulse 1s infinite; }
+  @keyframes pulse { 0%{opacity:1} 50%{opacity:.3} 100%{opacity:1} }
+  .status { color:var(--muted); font-size:13px; }
+  .box { background:#0e1524; border:1px solid #243150; border-radius:12px; padding:18px;
+         min-height:120px; font-size:18px; line-height:1.5; }
+  .partial { color:var(--muted); }
+  .final { color:var(--text); }
+  .meta { margin-top:12px; color:var(--muted); font-size:12px; display:flex; gap:18px; flex-wrap:wrap; }
+  .meta b { color:var(--accent); }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>🎙️ Tone STT — live</h1>
+    <div class="sub">nemotron-speech-streaming-0.6b · self-hosted on A16</div>
+
+    <div class="row">
+      <input id="url" type="text" value="ws://localhost:8000/ws/asr" />
+    </div>
+
+    <div class="mic">
+      <button id="btn">Start speaking</button>
+      <span class="dot" id="dot"></span>
+      <span class="status" id="status">idle</span>
+    </div>
+
+    <div class="box"><span id="final" class="final"></span><span id="partial" class="partial"></span></div>
+
+    <div class="meta">
+      <span>TTF: <b id="ttf">—</b></span>
+      <span>last update: <b id="lat">—</b></span>
+      <span>sample rate: <b id="sr">—</b></span>
+      <span>mic level: <b id="level">—</b></span>
+    </div>
+    <div class="meta"><span>last server msg: <b id="raw">—</b></span></div>
+  </div>
+
+<script>
+const $ = id => document.getElementById(id);
+let ws, audioCtx, processor, source, stream, recording = false, t0 = 0, gotFirst = false;
+
+function setStatus(s){ $("status").textContent = s; }
+
+function downsample(f32, inRate){
+  const outRate = 16000;
+  if (inRate === outRate) return f32.slice();
+  const ratio = inRate / outRate;
+  const outLen = Math.floor(f32.length / ratio);
+  const out = new Float32Array(outLen);
+  for (let i = 0; i < outLen; i++){
+    const start = Math.floor(i * ratio), end = Math.floor((i + 1) * ratio);
+    let sum = 0, n = 0;
+    for (let j = start; j < end && j < f32.length; j++){ sum += f32[j]; n++; }
+    out[i] = n ? sum / n : 0;   // box-average = simple anti-alias
+  }
+  return out;
+}
+function toInt16(f32){
+  const i16 = new Int16Array(f32.length);
+  for (let i = 0; i < f32.length; i++){
+    const s = Math.max(-1, Math.min(1, f32[i]));
+    i16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+  }
+  return i16;
+}
+
+async function start(){
+  $("final").textContent = ""; $("partial").textContent = "";
+  $("ttf").textContent = "—"; $("lat").textContent = "—";
+  gotFirst = false;
+
+  ws = new WebSocket($("url").value);
+  ws.binaryType = "arraybuffer";
+  setStatus("connecting…");
+
+  ws.onopen = async () => {
+    setStatus("listening — speak now");
+    t0 = performance.now();
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount:1, echoCancellation:true, noiseSuppression:true } });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    $("sr").textContent = audioCtx.sampleRate + " Hz → 16000 Hz";
+    source = audioCtx.createMediaStreamSource(stream);
+    processor = audioCtx.createScriptProcessor(4096, 1, 1);
+    source.connect(processor);
+    const sink = audioCtx.createGain(); sink.gain.value = 0;
+    processor.connect(sink); sink.connect(audioCtx.destination);
+    processor.onaudioprocess = e => {
+      if (!recording || ws.readyState !== 1) return;
+      const f32 = e.inputBuffer.getChannelData(0);
+      let peak = 0;
+      for (let i = 0; i < f32.length; i++) peak = Math.max(peak, Math.abs(f32[i]));
+      $("level").textContent = peak.toFixed(3) + (peak < 0.01 ? " (silent!)" : "");
+      const i16 = toInt16(downsample(f32, audioCtx.sampleRate));
+      ws.send(i16.buffer);
+    };
+    recording = true;
+    $("dot").classList.add("on");
+  };
+
+  ws.onmessage = ev => {
+    console.log("recv", ev.data);
+    $("raw").textContent = String(ev.data).slice(0, 160);
+    let m; try { m = JSON.parse(ev.data); } catch { return; }
+    const now = performance.now();
+    if (!gotFirst && (m.type === "partial" || m.type === "final")) {
+      gotFirst = true;
+      $("ttf").textContent = Math.round(now - t0) + " ms";
+    }
+    $("lat").textContent = Math.round(now - t0) + " ms";
+    if (m.type === "partial") { $("partial").textContent = " " + m.text; }
+    else if (m.type === "final") { $("final").textContent = m.text; $("partial").textContent = ""; stop(true); }
+    else if (m.type === "error") { setStatus("server error: " + m.detail); }
+  };
+
+  ws.onclose = () => { if (recording) stop(true); setStatus("closed"); };
+  ws.onerror = () => setStatus("connection error (is the port-forward running?)");
+}
+
+function stop(fromServer){
+  recording = false;
+  $("dot").classList.remove("on");
+  $("btn").textContent = "Start speaking";
+  $("btn").classList.remove("rec");
+  try { if (processor) processor.disconnect(); } catch {}
+  try { if (source) source.disconnect(); } catch {}
+  try { if (stream) stream.getTracks().forEach(t => t.stop()); } catch {}
+  try { if (audioCtx) audioCtx.close(); } catch {}
+  if (!fromServer && ws && ws.readyState === 1) { ws.send("eof"); setStatus("finishing…"); }
+  else if (fromServer) setStatus("done");
+}
+
+$("btn").onclick = () => {
+  if (!recording) { $("btn").textContent = "Stop"; $("btn").classList.add("rec"); start(); }
+  else { stop(false); }
+};
+</script>
+</body>
+</html>
