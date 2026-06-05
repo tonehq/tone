@@ -19,9 +19,8 @@ export type {
 };
 
 /**
- * Lightweight summary shape returned by `POST /call-metrics/list`.
- * The per-sample arrays are intentionally absent — they're only fetched
- * on row-click via `GET /call-metrics/{call_id}` (see CallMetricsDetail).
+ * Lightweight per-call summary fields. Reused as the base for
+ * `CallMetricsDetail`, which adds the per-sample arrays.
  */
 export interface CallMetricsRow {
   id: string;
@@ -41,7 +40,7 @@ export interface CallMetricsRow {
 
 /**
  * Full per-call payload returned by `GET /call-metrics/{call_id}`.
- * Extends the list row with the six per-sample arrays — fed to MetricsModal.
+ * Extends the list row with the six per-sample arrays — fed to the call-metrics detail page.
  */
 export interface CallMetricsDetail extends CallMetricsRow {
   ttfb: CallMetricsTTFB[];
@@ -50,26 +49,4 @@ export interface CallMetricsDetail extends CallMetricsRow {
   tts_usage: CallMetricsTTSUsage[];
   user_bot_latency: CallMetricsLatency[];
   turns: CallMetricsTurn[];
-}
-
-export interface CallMetricsState {
-  rows: CallMetricsRow[];
-  total: number;
-  loading: boolean;
-}
-
-export interface CallMetricsFilterParam {
-  field: string;
-  operator: string;
-  value: string | number | (string | number)[];
-}
-
-export interface CallMetricsQueryParams {
-  page_no: number;
-  page_size: number;
-  start_date_time?: string;
-  end_date_time?: string;
-  sort_by?: string;
-  sort_order?: 'asc' | 'desc';
-  filters?: CallMetricsFilterParam[];
 }

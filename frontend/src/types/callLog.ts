@@ -61,6 +61,13 @@ export interface CallLogRow {
   recording_upload_id: string | null;
   transcript: Array<{ role: string; text: string; timestamp?: string }> | null;
   tool_calls: Array<Record<string, unknown>> | null;
+  /**
+   * 1:1 join from `call_metrics` — `null` when no metrics record exists for this call.
+   * The dedicated `/call-metrics/{call_id}` endpoint is still available for
+   * single-call detail fetches; this field just lets the list response carry
+   * the full payload without a second round-trip.
+   */
+  metrics: (CallMetrics & { id: string }) | null;
 }
 
 export interface CallLogsState {

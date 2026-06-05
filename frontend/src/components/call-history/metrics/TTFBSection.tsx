@@ -1,14 +1,17 @@
 'use client';
 
 import { CustomButton } from '@/components/shared';
+import type { CallMetricsTTFB } from '@/types/callLog';
 import { cn } from '@/utils/cn';
+import { Zap } from 'lucide-react';
 import { useState } from 'react';
 
 import { AxisBarChart, type ReferenceLine } from './AxisBarChart';
-import { computeMedian } from './utils';
+import { SectionHeader } from './SectionHeader';
+import { computeMedian, formatMs } from './utils';
 
-interface LatencyAxisChartProps {
-  latencies: number[];
+interface TTFBSectionProps {
+  ttfbByProcessor: Record<string, CallMetricsTTFB[]>;
 }
 
 type StatKey = 'avg' | 'median' | 'min' | 'max';
@@ -23,44 +26,49 @@ const STAT_META: Record<
   max: { label: 'Max', color: 'red', dot: 'bg-red-500' },
 };
 
-const DEFAULT_VISIBLE_STATS: StatKey[] = ['avg', 'min'];
+interface TTFBProcessorCardProps {
+  processor: string;
+  entries: CallMetricsTTFB[];
+}
 
-const formatSeconds = (v: number) => `${v.toFixed(2)}s`;
-
-export function LatencyAxisChart({ latencies }: LatencyAxisChartProps) {
-  const max = Math.max(...latencies, 0);
-  const min = Math.min(...latencies);
-  const median = computeMedian(latencies);
-  const avg = latencies.reduce((s, v) => s + v, 0) / latencies.length;
+function TTFBProcessorCard({ processor, entries }: TTFBProcessorCardProps) {
+  const values = entries.map((e) => e.value);
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const median = computeMedian(values);
+  const avg = values.reduce((s, v) => s + v, 0) / values.length;
+  const model = entries.find((e) => e.model)?.model;
 
   const stats: Record<StatKey, number> = { avg, median, min, max };
-  const [visible, setVisible] = useState<Set<StatKey>>(
-    () => new Set<StatKey>(DEFAULT_VISIBLE_STATS),
-  );
+  // Each processor card holds its own visible-stats set; default is empty
+  // (no reference lines) so the chart starts uncluttered.
+  const [visible, setVisible] = useState<Set<StatKey>>(() => new Set());
 
-  const toggle = (key: StatKey) => {
+  const toggle = (key: StatKey) =>
     setVisible((prev) => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
       return next;
     });
-  };
 
   const referenceLines: ReferenceLine[] = (Object.keys(STAT_META) as StatKey[])
     .filter((key) => visible.has(key))
     .map((key) => ({
       value: stats[key],
-      label: `${STAT_META[key].label} ${stats[key].toFixed(3)}s`,
+      label: `${STAT_META[key].label} ${formatMs(stats[key])}`,
       color: STAT_META[key].color,
     }));
 
   return (
     <div className="rounded-lg border border-border p-3">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-sm font-medium text-foreground">Latency by measurement</span>
+        <div>
+          <span className="text-sm font-medium text-foreground">{processor}</span>
+          {model && <span className="ml-2 text-xs text-muted-foreground">{model}</span>}
+        </div>
         <span className="text-xs text-muted-foreground">
-          {latencies.length} measurement{latencies.length !== 1 ? 's' : ''}
+          {entries.length} sample{entries.length !== 1 ? 's' : ''}
         </span>
       </div>
       <div role="group" aria-label="Toggle reference lines" className="mb-3 flex flex-wrap gap-1.5">
@@ -93,20 +101,32 @@ export function LatencyAxisChart({ latencies }: LatencyAxisChartProps) {
                   {meta.label}
                 </span>
                 <span className="text-sm font-semibold text-foreground">
-                  {stats[key].toFixed(3)}s
+                  {formatMs(stats[key])}
                 </span>
               </span>
             </CustomButton>
           );
         })}
       </div>
-
       <AxisBarChart
-        values={latencies}
-        formatValue={formatSeconds}
-        xAxisLabel="Measurement"
+        values={values}
+        formatValue={formatMs}
+        xAxisLabel="Sample"
         referenceLines={referenceLines}
       />
+    </div>
+  );
+}
+
+export function TTFBSection({ ttfbByProcessor }: TTFBSectionProps) {
+  return (
+    <div className="space-y-3">
+      <SectionHeader icon={Zap} title="Time to First Byte (TTFB)" />
+      <div className="space-y-2">
+        {Object.entries(ttfbByProcessor).map(([processor, entries]) => (
+          <TTFBProcessorCard key={processor} processor={processor} entries={entries} />
+        ))}
+      </div>
     </div>
   );
 }

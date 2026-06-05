@@ -79,6 +79,13 @@ class CallMetricsService(BaseService):
         "duration_seconds": Call.duration_seconds,
         # Used by the "show metrics for this call" deep-link from Call History.
         "call_id": CallMetrics.call_id,
+        # JSONB snapshot of LLM/STT/TTS used to serve the call.
+        "llm_provider": Call.pipeline_config["llm"]["provider_name"].astext,
+        "llm_model": Call.pipeline_config["llm"]["model_name"].astext,
+        "stt_provider": Call.pipeline_config["stt"]["provider_name"].astext,
+        "stt_model": Call.pipeline_config["stt"]["model_name"].astext,
+        "tts_provider": Call.pipeline_config["tts"]["provider_name"].astext,
+        "tts_model": Call.pipeline_config["tts"]["model_name"].astext,
     }
 
     def _base_query(self):

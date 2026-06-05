@@ -25,6 +25,7 @@ class Call(OrgScopedModel):
     recording_upload_id = Column(UUID(as_uuid=True), ForeignKey("uploads.id", ondelete="SET NULL"), nullable=True)
     recording_duration_seconds = Column(Integer, nullable=True)
     metadata_ = Column("metadata", JSONB, nullable=True)
+    pipeline_config = Column(JSONB, nullable=True)
 
     metrics_record = relationship(
         "CallMetrics",
