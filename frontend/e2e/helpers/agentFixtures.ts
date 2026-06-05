@@ -65,10 +65,13 @@ export async function openEditAgent(
   page: Page,
   options: { agentType: 'inbound' | 'outbound'; id: string; nameContains?: string },
 ): Promise<void> {
+  // Opening an agent lands on its Overview; step into Basics for callers that
+  // expect the editable form fields.
   await page.goto(`/agents/edit/${options.agentType}/${options.id}`);
   if (options.nameContains) {
     await expect(page.getByText(options.nameContains).first()).toBeVisible({ timeout: 15_000 });
   } else {
+    await goToStep(page, 'basics');
     await page.locator('input[name="name"]').first().waitFor({ state: 'visible', timeout: 15_000 });
   }
 }

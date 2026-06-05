@@ -50,7 +50,7 @@ export async function createOrganizationViaUI(
 ): Promise<{ id: string; name: string }> {
   const name = values.name ?? uniqueOrgName('fixture');
 
-  await page.goto('/organizations');
+  await page.goto('/settings/organizations');
   await page
     .getByRole('button', { name: /new organization/i })
     .first()
@@ -79,7 +79,7 @@ export async function openEditOrganization(
   page: Page,
   options: { id: string; name: string },
 ): Promise<void> {
-  await page.goto('/organizations');
+  await page.goto('/settings/organizations');
   // Narrow the grid to a single card by typing the name into the search box
   // — works around stale `__e2e__org` cards from previous runs cluttering
   // the layout and making xpath ancestors ambiguous.
@@ -121,7 +121,7 @@ export async function deleteOrganizationViaUI(
   options: { id: string; name: string },
 ): Promise<void> {
   try {
-    await page.goto('/organizations');
+    await page.goto('/settings/organizations');
     await page.waitForLoadState('networkidle', { timeout: 10_000 });
     // Narrow the grid to a single card (see openEditOrganization).
     await page.locator('input[name="org-search"]').first().fill(options.name);

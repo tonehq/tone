@@ -5,16 +5,32 @@ Usage: python dev/seed_built_in_tools.py
 Skips if a tool with the same tool_type already exists for an org.
 """
 
-import uuid
-import sys
 import json
+import os
+import sys
+import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-# ── Hardcode your DB URL here ──
-DATABASE_URL = "postgresql://neondb_owner:npg_QSh4dqZ2NXpV@ep-solitary-block-ame1uzci-pooler.c-5.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+# ── DB URL ─────────────────────────────────────────────────────────────────
+# Resolved from the app config (Infisical / .env via shared.config) or the
+# DATABASE_URL environment variable — never hardcode credentials in source.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+try:
+    from shared.config import settings
+
+    DATABASE_URL = settings.DATABASE_URL
+except Exception:
+    DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise SystemExit(
+        "DATABASE_URL is not set. Configure it via the app config (.env / Infisical) "
+        "or export DATABASE_URL before running this script."
+    )
 
 BUILT_IN_TOOLS = [
     {

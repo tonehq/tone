@@ -41,7 +41,7 @@ const SERVICE_TYPE_LABELS: Record<ServiceType, string> = {
 // ── Navigation ─────────────────────────────────────────────────────────────
 
 export async function gotoProvidersList(page: Page): Promise<void> {
-  await page.goto('/model-providers');
+  await page.goto('/settings/model-providers');
   await expect(page.getByRole('button', { name: /add provider/i })).toBeVisible({
     timeout: 15_000,
   });
@@ -51,7 +51,7 @@ export async function gotoProviderDetail(
   page: Page,
   options: { providerId: string; serviceType: ServiceType },
 ): Promise<void> {
-  await page.goto(`/model-providers/${options.providerId}/${options.serviceType}`);
+  await page.goto(`/settings/model-providers/${options.providerId}/${options.serviceType}`);
   await expect(page.getByRole('button', { name: /^API Keys/i }).first()).toBeVisible({
     timeout: 15_000,
   });

@@ -1,5 +1,6 @@
-import OrganizationListPage from '@/components/organizations/OrganizationListPage';
+import { redirect } from 'next/navigation';
 
-export default function OrganizationsPage() {
-  return <OrganizationListPage />;
+// Moved into the dedicated Settings area.
+export default function OrganizationsRedirect() {
+  redirect('/settings/organizations');
 }

@@ -17,16 +17,25 @@
 - As a user, I can navigate to create a new tool or MCP server from inside
   the form; if the form is dirty, I'm asked to confirm before I lose changes.
 
+> **Routing update (focused editor):** Create is now a focused full-screen
+> editor with route-per-section. `/agents/create/{type}` (type ∈
+> `inbound | outbound`) redirects to `…/basics` (create mode has no Overview —
+> nothing to summarise yet). Sections live at `/agents/create/{type}/{section}`.
+> On successful create the app redirects to `/agents/edit/{type}/{id}/overview`.
+
 ## Routes
 
-| Route | Component |
+| Route | Renders |
 |---|---|
-| `/agents/create/inbound` | `AgentFormPage agentType="inbound"` |
-| `/agents/create/outbound` | `AgentFormPage agentType="outbound"` |
+| `/agents/create/{type}` | redirect → `/agents/create/{type}/basics` |
+| `/agents/create/{type}/{section}` | the matching step (Basics/Prompt/AI/Voice/Tools/Knowledge) |
+
+The form state + chrome live in `agents/create/[type]/layout.tsx` →
+`AgentEditorShell` (shared with the edit editor).
 
 ## Key files
 
-- `src/components/agents/AgentFormPage.tsx`
+- `src/components/agents/AgentEditorShell.tsx`
 - `src/components/agents/agent-form/AgentFormNav.tsx`
 - `src/components/agents/agent-form/steps/{Basics,Prompt,Ai,Voice,ToolsMcp,KnowledgePhone,Review,KnowledgeBaseUploadModal,AssignPhoneNumberModal}Step.tsx`
 - `src/hooks/useUnsavedChangesGuard.ts`
