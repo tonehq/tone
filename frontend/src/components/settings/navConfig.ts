@@ -80,7 +80,5 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
 // Flat list of every settings destination — used by the mobile nav.
 export const SETTINGS_NAV_ITEMS = SETTINGS_NAV_GROUPS.flatMap((g) => g.items);
 
-export function isSettingsItemActive(pathname: string, item: SettingsNavItem): boolean {
-  if (item.exact) return pathname === item.href;
-  return pathname === item.href || pathname.startsWith(`${item.href}/`);
-}
+// Active-route matching is shared with the sidebar rail — see
+// `isSidebarItemActive` in SidebarShell.tsx.
