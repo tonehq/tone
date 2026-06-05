@@ -19,6 +19,8 @@ import sys
 import json
 import re
 import getpass
+import time
+from datetime import datetime
 
 # Ensure project root is on path when run as script
 if __name__ == "__main__":
@@ -561,6 +563,9 @@ def main():
     org_name, email, password = prompt_setup_inputs()
 
     db = get_db_script()
+    started_at = datetime.now()
+    start = time.perf_counter()
+    print(f"\nSeed started at: {started_at.strftime('%Y-%m-%d %H:%M:%S')}")
     try:
         print("\nLoading seed data from dev-data.json...")
         data = load_seed_data()
@@ -583,6 +588,11 @@ def main():
         print(f"   Tools:            {stats['tools_created']} created")
     finally:
         db.close()
+        ended_at = datetime.now()
+        elapsed = time.perf_counter() - start
+        print(f"\nSeed started:  {started_at.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"Seed ended:    {ended_at.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"Total time:    {elapsed:.2f}s ({elapsed / 60:.2f} min)")
 
 
 if __name__ == "__main__":

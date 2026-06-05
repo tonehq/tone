@@ -281,6 +281,7 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
     from sqlalchemy import func, select
 
     from core.models.agent_knowledge_base import AgentKnowledgeBase
+    from core.models.knowledge_base import KnowledgeBase
     from core.models.agent_tool import AgentTool
     from core.models.tool import Tool
     from core.models.upload import Upload
@@ -326,15 +327,20 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
     _kb_where = (AgentKnowledgeBase.agent_id == agent_id, Upload.status == "ready")
     kb_cnt_sq = (
         select(func.count(Upload.id)).select_from(Upload)
-        .join(AgentKnowledgeBase, AgentKnowledgeBase.upload_id == Upload.id).where(*_kb_where).scalar_subquery()
+        .join(KnowledgeBase, KnowledgeBase.upload_id == Upload.id)
+        .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
+        .where(*_kb_where).scalar_subquery()
     )
     kb_link_sq = (
         select(func.max(AgentKnowledgeBase.updated_at)).select_from(AgentKnowledgeBase)
-        .join(Upload, Upload.id == AgentKnowledgeBase.upload_id).where(*_kb_where).scalar_subquery()
+        .join(KnowledgeBase, KnowledgeBase.id == AgentKnowledgeBase.knowledge_base_id)
+        .join(Upload, Upload.id == KnowledgeBase.upload_id).where(*_kb_where).scalar_subquery()
     )
     kb_max_sq = (
         select(func.max(Upload.updated_at)).select_from(Upload)
-        .join(AgentKnowledgeBase, AgentKnowledgeBase.upload_id == Upload.id).where(*_kb_where).scalar_subquery()
+        .join(KnowledgeBase, KnowledgeBase.upload_id == Upload.id)
+        .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
+        .where(*_kb_where).scalar_subquery()
     )
 
     (

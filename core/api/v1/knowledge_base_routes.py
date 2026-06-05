@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from core.database.session import get_db
 from core.models.agent import Agent
 from core.models.agent_knowledge_base import AgentKnowledgeBase
+from core.models.knowledge_base import KnowledgeBase
 from core.models.upload import Upload
 from core.services.crud import list_records
 from core.services.document_processing_service import DocumentProcessingService
@@ -87,9 +88,13 @@ def build_knowledge_base_router(
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid agent_id"
                 )
-            upload_ids_q = db.query(AgentKnowledgeBase.upload_id).filter(
-                AgentKnowledgeBase.agent_id == agent_uuid,
-                AgentKnowledgeBase.organization_id == org_id,
+            upload_ids_q = (
+                db.query(KnowledgeBase.upload_id)
+                .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
+                .filter(
+                    AgentKnowledgeBase.agent_id == agent_uuid,
+                    AgentKnowledgeBase.organization_id == org_id,
+                )
             )
             filters.append(Upload.id.in_(upload_ids_q))
         if status_filter:
@@ -114,9 +119,10 @@ def build_knowledge_base_router(
         agent_by_upload: dict[UUID, str] = {}
         if upload_ids:
             links = (
-                db.query(AgentKnowledgeBase.upload_id, AgentKnowledgeBase.agent_id)
+                db.query(KnowledgeBase.upload_id, AgentKnowledgeBase.agent_id)
+                .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
                 .filter(
-                    AgentKnowledgeBase.upload_id.in_(upload_ids),
+                    KnowledgeBase.upload_id.in_(upload_ids),
                     AgentKnowledgeBase.organization_id == org_id,
                 )
                 .all()
@@ -220,12 +226,22 @@ def build_knowledge_base_router(
             db.add(upload)
             db.flush()
 
+            knowledge_base = KnowledgeBase(
+                organization_id=org_id,
+                name=file_name,
+                status="processing",
+                upload_id=upload.id,
+                meta_data={},
+            )
+            db.add(knowledge_base)
+            db.flush()
+
             if agent_uuid is not None and agent_config is not None:
                 db.add(
                     AgentKnowledgeBase(
                         organization_id=org_id,
                         agent_id=agent_uuid,
-                        upload_id=upload.id,
+                        knowledge_base_id=knowledge_base.id,
                         agent_config_id=agent_config.id,
                     )
                 )
@@ -406,7 +422,9 @@ def build_knowledge_base_router(
 
         file_path = upload.file_path
 
-        # AgentKnowledgeBase rows cascade-delete via upload FK
+        db.query(KnowledgeBase).filter(
+            KnowledgeBase.upload_id == uid, KnowledgeBase.organization_id == org_id
+        ).delete(synchronize_session=False)
         db.delete(upload)
         db.commit()
 

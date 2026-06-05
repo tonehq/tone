@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from core.database.session import get_db_context
 from core.models.agent_knowledge_base import AgentKnowledgeBase
+from core.models.knowledge_base import KnowledgeBase
 from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 from core.models.upload import Upload
 from core.services.rag.types import SearchResult, VectorRecord
@@ -61,7 +62,8 @@ class PgVectorStore(VectorStore):
             if agent_id is not None:
                 q = (
                     q.join(Upload, KnowledgeBaseChunk.upload_id == Upload.id)
-                    .join(AgentKnowledgeBase, AgentKnowledgeBase.upload_id == Upload.id)
+                    .join(KnowledgeBase, KnowledgeBase.upload_id == Upload.id)
+                    .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
                     .filter(
                         AgentKnowledgeBase.agent_id == str(agent_id),
                         Upload.status == filters.get("status", "ready"),
