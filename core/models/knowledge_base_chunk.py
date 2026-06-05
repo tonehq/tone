@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, Integer, Text
+from sqlalchemy import Column, ForeignKey, Integer, Text, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -11,6 +11,15 @@ class KnowledgeBaseChunk(OrgScopedModel):
     """A chunk of text extracted from an Upload, with its embedding vector."""
 
     __tablename__ = "knowledge_base_chunks"
+    __table_args__ = (
+        Index(
+            "ix_knowledge_base_chunks_embedding_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_with={"m": 16, "ef_construction": 64},
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        ),
+    )
 
     upload_id = Column(
         UUID(as_uuid=True),
