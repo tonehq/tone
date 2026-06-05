@@ -1,13 +1,11 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import AgentFormPage from '@/components/agents/AgentFormPage';
-import { useParams } from 'next/navigation';
-
-export default function EditAgentPage() {
-  const params = useParams();
-  const type = (params?.type as string)?.toLowerCase();
-  const id = params?.id as string;
-  const agentType = type === 'outbound' ? 'outbound' : 'inbound';
-
-  return <AgentFormPage agentType={agentType} agentId={id} />;
+// Opening an agent lands on its Overview.
+export default async function EditAgentIndex({
+  params,
+}: {
+  params: Promise<{ type: string; id: string }>;
+}) {
+  const { type, id } = await params;
+  redirect(`/agents/edit/${type}/${id}/overview`);
 }

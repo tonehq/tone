@@ -63,9 +63,14 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const { sidebarWidth } = useNavigation();
   const pathname = usePathname();
 
-  // Settings is a focused, full-screen experience that supplies its own
-  // navigation rail — hide the primary app sidebar/chrome while inside it.
-  if (pathname.startsWith('/settings')) {
+  // Settings and the agent create/edit editor are focused, full-screen
+  // experiences that supply their own navigation rail — hide the primary app
+  // sidebar/chrome while inside them.
+  const isFocused =
+    pathname.startsWith('/settings') ||
+    pathname.startsWith('/agents/create') ||
+    pathname.startsWith('/agents/edit');
+  if (isFocused) {
     return <div className="h-screen w-screen overflow-hidden">{children}</div>;
   }
 
