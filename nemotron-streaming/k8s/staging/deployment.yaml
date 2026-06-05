@@ -1,0 +1,82 @@
+# nemotron-speech-streaming-en-0.6b — custom NeMo on Docker Hub (no NGC key).
+# STEP 1: load + batch /asr to prove it runs on the A16 (CUDA 12.4 driver).
+# Pinned to the 8 GB / $172 node (gpu-tier=8g) — 0.6B fits it easily.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staging-stt-nemotron-deployment
+  namespace: staging
+  labels:
+    app: staging-stt-nemotron
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: staging-stt-nemotron
+  template:
+    metadata:
+      labels:
+        app: staging-stt-nemotron
+    spec:
+      nodeSelector:
+        gpu-tier: "8g"
+      containers:
+        - name: nemotron
+          image: pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
+          workingDir: /app
+          command: ["bash", "-lc"]
+          args:
+            - |
+              set -e
+              pip install --no-cache-dir -c /app/constraints.txt -r /app/requirements.txt
+              exec uvicorn server:app --host 0.0.0.0 --port 8000
+          env:
+            - name: STT_MODEL
+              value: "nvidia/nemotron-speech-streaming-en-0.6b"
+            - name: HF_HOME
+              value: /cache/hf
+            - name: NEMO_CACHE_DIR
+              value: /cache/nemo
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: app
+              mountPath: /app
+            - name: cache
+              mountPath: /cache
+            - name: dshm
+              mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 150        # 25 min for pip + model download/load
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+      volumes:
+        - name: app
+          configMap:
+            name: stt-nemotron-app
+        - name: cache
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi

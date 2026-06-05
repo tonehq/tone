@@ -1,0 +1,4 @@
+.venv/
+sample.wav
+__pycache__/
+*.pyc
