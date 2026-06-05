@@ -258,7 +258,9 @@ def build_knowledge_base_router(
                 pass
             raise
 
-        await enqueue_upload(upload.id, org_id)
+        job_id = await enqueue_upload(upload.id, org_id)
+        knowledge_base.procrastinate_job_id = job_id
+        db.commit()
 
         return _upload_to_payload(upload)
 
@@ -353,7 +355,11 @@ def build_knowledge_base_router(
             except Exception:
                 pass
 
-        await enqueue_reprocess(upload.id, org_id)
+        job_id = await enqueue_reprocess(upload.id, org_id)
+        db.query(KnowledgeBase).filter(
+            KnowledgeBase.upload_id == upload.id, KnowledgeBase.organization_id == org_id
+        ).update({KnowledgeBase.procrastinate_job_id: job_id}, synchronize_session=False)
+        db.commit()
 
         return _upload_to_payload(upload)
 
@@ -398,7 +404,11 @@ def build_knowledge_base_router(
         db.commit()
         db.refresh(upload)
 
-        await enqueue_reprocess(upload.id, org_id)
+        job_id = await enqueue_reprocess(upload.id, org_id)
+        db.query(KnowledgeBase).filter(
+            KnowledgeBase.upload_id == upload.id, KnowledgeBase.organization_id == org_id
+        ).update({KnowledgeBase.procrastinate_job_id: job_id}, synchronize_session=False)
+        db.commit()
 
         return _upload_to_payload(upload)
 
