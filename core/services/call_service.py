@@ -1,11 +1,12 @@
 from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
-from sqlalchemy import asc, desc
+from sqlalchemy import Float, and_, asc, cast, desc, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from core.models.agent import Agent
 from core.models.call import Call
+from core.models.call_metrics import CallMetrics
 from core.models.channel import Channel
 from core.models.phone_number import PhoneNumber
 from core.models.upload import Upload
@@ -22,12 +23,23 @@ class CallService(BaseService):
     # ------------------------------------------------------------------
 
     def get_filter_values(self, column_name: str) -> Dict[str, Any]:
+        # JSONB path expressions for pipeline_config — distinct values come from
+        # the snapshot written at call start (see CallLogService.create_call_log).
+        pipeline_paths = {
+            "llm_provider": Call.pipeline_config["llm"]["provider_name"].astext,
+            "llm_model": Call.pipeline_config["llm"]["model_name"].astext,
+            "stt_provider": Call.pipeline_config["stt"]["provider_name"].astext,
+            "stt_model": Call.pipeline_config["stt"]["model_name"].astext,
+            "tts_provider": Call.pipeline_config["tts"]["provider_name"].astext,
+            "tts_model": Call.pipeline_config["tts"]["model_name"].astext,
+        }
         allowed = {
             "status": None,
             "direction": Call.direction,
             "agent_name": None,
             "agent_type": None,
             "channel_type": None,
+            **pipeline_paths,
         }
 
         if column_name not in allowed:
@@ -39,12 +51,18 @@ class CallService(BaseService):
 
         base = self.query(Call).join(Agent, Call.agent_id == Agent.id)
 
+        # Drop NULL and empty-string distinct values so legacy rows with
+        # partial JSONB (e.g. {"llm": {"provider_name": ""}}) don't surface a
+        # blank dropdown option.
+        def _clean(rs):
+            return sorted([r[0] for r in rs if r[0] is not None and r[0] != ""])
+
         if column_name == "agent_name":
             rows = base.with_entities(Agent.name).distinct().all()
-            values = sorted([r[0] for r in rows if r[0] is not None])
+            values = _clean(rows)
         elif column_name == "agent_type":
             rows = base.with_entities(Agent.agent_type).distinct().all()
-            values = sorted([r[0] for r in rows if r[0] is not None])
+            values = _clean(rows)
         elif column_name == "channel_type":
             rows = (
                 base.join(Channel, Call.channel_id == Channel.id)
@@ -52,14 +70,14 @@ class CallService(BaseService):
                 .distinct()
                 .all()
             )
-            values = sorted([r[0] for r in rows if r[0] is not None])
+            values = _clean(rows)
         elif column_name == "status":
             # Status is derived: ended_at IS NOT NULL → completed, else in_progress
             values = ["completed", "in_progress"]
         else:
             col = allowed[column_name]
             rows = base.with_entities(col).distinct().all()
-            values = sorted([r[0] for r in rows if r[0] is not None])
+            values = _clean(rows)
 
         return {"column": column_name, "values": values}
 
@@ -82,6 +100,9 @@ class CallService(BaseService):
             .join(Channel, Call.channel_id == Channel.id)
             .outerjoin(from_pn, Call.from_phone_number_id == from_pn.id)
             .outerjoin(to_pn, Call.to_phone_number_id == to_pn.id)
+            # 1:1 on call_id (unique) — keeps row count equal to call count
+            # so pagination math is unaffected.
+            .outerjoin(CallMetrics, CallMetrics.call_id == Call.id)
         )
 
         if start_date_time is not None:
@@ -96,9 +117,35 @@ class CallService(BaseService):
             "duration_seconds": Call.duration_seconds,
             "started_at": Call.started_at,
             "ended_at": Call.ended_at,
+            "agent_id": Agent.id,
             "agent_name": Agent.name,
             "agent_type": Agent.agent_type,
             "channel_type": Channel.channel_type,
+            # JSONB snapshot of LLM/STT/TTS used to serve the call.
+            "llm_provider": Call.pipeline_config["llm"]["provider_name"].astext,
+            "llm_model": Call.pipeline_config["llm"]["model_name"].astext,
+            "stt_provider": Call.pipeline_config["stt"]["provider_name"].astext,
+            "stt_model": Call.pipeline_config["stt"]["model_name"].astext,
+            "tts_provider": Call.pipeline_config["tts"]["provider_name"].astext,
+            "tts_model": Call.pipeline_config["tts"]["model_name"].astext,
+            # Computed: length of CallMetrics.turns JSONB array. NULL (calls
+            # without metrics or with non-array turns) is excluded by BETWEEN.
+            "turn_count": func.jsonb_array_length(CallMetrics.turns),
+            # Computed: AVG(latency) over CallMetrics.user_bot_latency JSONB
+            # array elements ({"latency": float}). NULL (no metrics / empty
+            # array) is excluded by BETWEEN, matching turn_count semantics.
+            "avg_latency_seconds": (
+                select(
+                    func.avg(
+                        cast(
+                            func.jsonb_array_elements(CallMetrics.user_bot_latency)
+                            .column_valued('e')
+                            .op('->>')('latency'),
+                            Float,
+                        )
+                    )
+                ).scalar_subquery()
+            ),
         }
 
         if filters:
@@ -108,12 +155,29 @@ class CallService(BaseService):
                 value = f.get("value")
 
                 if field == "status":
-                    # Derived: completed = ended_at IS NOT NULL
+                    # Derived from (Call.ended_at, Call.metadata_['status']):
+                    #   failed       → metadata.status == 'failed'
+                    #   completed    → ended_at IS NOT NULL AND not failed
+                    #   in_progress  → ended_at IS NULL
+                    # Selecting multiple statuses ORs the predicates together.
+                    # NOTE: coalesce(NULL, "") is required because most rows
+                    # have metadata_ = NULL (only fail_call writes it). Without
+                    # coalesce, `metadata_['status'].astext` returns SQL NULL,
+                    # ~NULL is NULL, and the WHERE clause drops every row.
                     if operator == "in" and isinstance(value, list):
-                        if "completed" in value and "in_progress" not in value:
-                            base_query = base_query.filter(Call.ended_at.isnot(None))
-                        elif "in_progress" in value and "completed" not in value:
-                            base_query = base_query.filter(Call.ended_at.is_(None))
+                        status_text = func.coalesce(
+                            Call.metadata_["status"].astext, ""
+                        )
+                        is_failed = status_text == "failed"
+                        preds = []
+                        if "failed" in value:
+                            preds.append(is_failed)
+                        if "completed" in value:
+                            preds.append(and_(Call.ended_at.isnot(None), ~is_failed))
+                        if "in_progress" in value:
+                            preds.append(Call.ended_at.is_(None))
+                        if preds:
+                            base_query = base_query.filter(or_(*preds))
                     continue
 
                 col = column_map.get(field)
@@ -153,6 +217,13 @@ class CallService(BaseService):
                 Channel.channel_type.label("channel_type"),
                 from_pn.number.label("from_number"),
                 to_pn.number.label("to_number"),
+                CallMetrics.id.label("metrics_id"),
+                CallMetrics.ttfb.label("metrics_ttfb"),
+                CallMetrics.processing.label("metrics_processing"),
+                CallMetrics.llm_usage.label("metrics_llm_usage"),
+                CallMetrics.tts_usage.label("metrics_tts_usage"),
+                CallMetrics.user_bot_latency.label("metrics_user_bot_latency"),
+                CallMetrics.turns.label("metrics_turns"),
             )
             .offset(offset)
             .limit(page_size)
@@ -167,6 +238,15 @@ class CallService(BaseService):
                 channel_type=row[3],
                 from_number=row[4],
                 to_number=row[5],
+                metrics=self._metrics_payload(
+                    metrics_id=row[6],
+                    ttfb=row[7],
+                    processing=row[8],
+                    llm_usage=row[9],
+                    tts_usage=row[10],
+                    user_bot_latency=row[11],
+                    turns=row[12],
+                ),
             )
             for row in results
         ]
@@ -188,12 +268,22 @@ class CallService(BaseService):
             .join(Channel, Call.channel_id == Channel.id)
             .outerjoin(from_pn, Call.from_phone_number_id == from_pn.id)
             .outerjoin(to_pn, Call.to_phone_number_id == to_pn.id)
+            # Mirror /list so the single-call response carries the joined
+            # CallMetrics record under the `metrics` key.
+            .outerjoin(CallMetrics, CallMetrics.call_id == Call.id)
             .add_columns(
                 Agent.name.label("agent_name"),
                 Agent.agent_type.label("agent_type"),
                 Channel.channel_type.label("channel_type"),
                 from_pn.number.label("from_number"),
                 to_pn.number.label("to_number"),
+                CallMetrics.id.label("metrics_id"),
+                CallMetrics.ttfb.label("metrics_ttfb"),
+                CallMetrics.processing.label("metrics_processing"),
+                CallMetrics.llm_usage.label("metrics_llm_usage"),
+                CallMetrics.tts_usage.label("metrics_tts_usage"),
+                CallMetrics.user_bot_latency.label("metrics_user_bot_latency"),
+                CallMetrics.turns.label("metrics_turns"),
             )
             .filter(Call.id == call_id)
             .first()
@@ -209,6 +299,15 @@ class CallService(BaseService):
             channel_type=result[3],
             from_number=result[4],
             to_number=result[5],
+            metrics=self._metrics_payload(
+                metrics_id=result[6],
+                ttfb=result[7],
+                processing=result[8],
+                llm_usage=result[9],
+                tts_usage=result[10],
+                user_bot_latency=result[11],
+                turns=result[12],
+            ),
         )
 
     def get_audio_url(self, call_id: str) -> Dict[str, Any]:
@@ -226,6 +325,30 @@ class CallService(BaseService):
         url = R2StorageService().generate_presigned_url(upload.file_path)
         return {"url": url}
 
+    def _metrics_payload(
+        self,
+        metrics_id,
+        ttfb,
+        processing,
+        llm_usage,
+        tts_usage,
+        user_bot_latency,
+        turns,
+    ) -> Optional[Dict[str, Any]]:
+        # Outer join returns all-NULL columns when no metrics row exists; surface
+        # that as `None` so the FE can branch on row.metrics == null.
+        if metrics_id is None:
+            return None
+        return {
+            "id": str(metrics_id),
+            "ttfb": ttfb or [],
+            "processing": processing or [],
+            "llm_usage": llm_usage or [],
+            "tts_usage": tts_usage or [],
+            "user_bot_latency": user_bot_latency or [],
+            "turns": turns or [],
+        }
+
     def call_response(
         self,
         call: Call,
@@ -234,9 +357,18 @@ class CallService(BaseService):
         channel_type: Optional[str] = None,
         from_number: Optional[str] = None,
         to_number: Optional[str] = None,
+        metrics: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         metadata = call.metadata_ or {}
-        status = "completed" if call.ended_at else "in_progress"
+        # Failure is stored on metadata.status by CallLogService.fail_call,
+        # which also sets ended_at. Check failure first so failed calls are not
+        # mis-reported as "completed".
+        if metadata.get("status") == "failed":
+            status = "failed"
+        elif call.ended_at:
+            status = "completed"
+        else:
+            status = "in_progress"
 
         return {
             "id": str(call.id),
@@ -256,4 +388,6 @@ class CallService(BaseService):
             "recording_upload_id": str(call.recording_upload_id) if call.recording_upload_id else None,
             "transcript": metadata.get("transcript"),
             "tool_calls": metadata.get("tool_calls"),
+            "pipeline_config": call.pipeline_config,
+            "metrics": metrics,
         }
