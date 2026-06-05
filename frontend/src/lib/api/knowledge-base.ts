@@ -71,11 +71,17 @@ export const knowledgeBaseApi = {
   },
 };
 
+const PROCESSING_POLL_INTERVAL_MS = 4000;
+
 export function useKnowledgeBase(params: ListDocumentsParams = {}) {
   return useQuery({
     queryKey: [KNOWLEDGE_BASE_QUERY_KEY, params],
     queryFn: () => knowledgeBaseApi.list(params),
     placeholderData: (prev) => prev,
+    refetchInterval: (query) =>
+      query.state.data?.items.some((doc) => doc.status === 'processing')
+        ? PROCESSING_POLL_INTERVAL_MS
+        : false,
   });
 }
 
