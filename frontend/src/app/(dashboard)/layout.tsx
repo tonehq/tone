@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
 import { Sidebar } from '@/components/layout/sidebar';
@@ -61,6 +61,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
 function DashboardShell({ children }: { children: React.ReactNode }) {
   const { sidebarWidth } = useNavigation();
+  const pathname = usePathname();
+
+  // Settings is a focused, full-screen experience that supplies its own
+  // navigation rail — hide the primary app sidebar/chrome while inside it.
+  if (pathname.startsWith('/settings')) {
+    return <div className="h-screen w-screen overflow-hidden">{children}</div>;
+  }
 
   return (
     <div className="h-screen overflow-hidden flex">

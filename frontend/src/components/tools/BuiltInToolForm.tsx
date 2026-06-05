@@ -340,7 +340,7 @@ export default function BuiltInToolForm({
               {connections.length === 0 && !connectionsLoading && (
                 <p className="mt-2 text-[12px] text-muted-foreground">
                   No Google accounts connected.{' '}
-                  <a href="/integrations" className="text-primary hover:underline">
+                  <a href="/settings/integrations" className="text-primary hover:underline">
                     Connect one in Integrations
                   </a>
                   .

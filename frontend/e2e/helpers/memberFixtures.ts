@@ -93,7 +93,7 @@ export async function inviteMemberViaUI(
  */
 export async function cancelInvitationViaUI(page: Page, options: { email: string }): Promise<void> {
   try {
-    await page.goto('/members');
+    await page.goto('/settings/members');
     await page.waitForLoadState('networkidle', { timeout: 10_000 });
     await gotoInvitationsTab(page);
     const row = page.locator('tbody tr').filter({ hasText: options.email }).first();

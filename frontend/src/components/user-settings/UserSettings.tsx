@@ -96,79 +96,64 @@ export default function UserSettings() {
     'Your account';
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      {/* ── Fixed page header ─────────────────────────────────── */}
-      <header className="shrink-0 border-b border-border/60 bg-background">
-        <div className="mx-auto flex max-w-4xl flex-col gap-3 px-6 py-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-[22px] font-semibold leading-tight tracking-tight text-foreground">
-              User settings
-            </h1>
-            <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
-              Manage your personal account details and how you appear across the workspace.
+    <div className="w-full">
+      {/* ── Page header (matches the other settings pages) ────── */}
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">User settings</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Manage your personal account details and how you appear across the workspace.
+        </p>
+      </div>
+
+      {/* ── Two-column body ───────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr] lg:items-start">
+        {/* ── Left: account summary (sticky) ─────────────────── */}
+        <aside className="lg:sticky lg:top-6">
+          <section className="relative overflow-hidden rounded-3xl border border-border/70 bg-gradient-to-br from-primary/[0.08] via-card to-card">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute -right-20 -top-20 size-52 rounded-full bg-primary/[0.10] blur-3xl"
+            />
+            <div className="relative flex flex-col items-center px-6 pb-6 pt-8 text-center">
+              <AvatarPreview url={user?.avatar_url} initials={initials} />
+              <p className="mt-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/80">
+                Account
+              </p>
+              <h2 className="mt-1 max-w-full truncate text-[20px] font-semibold leading-tight tracking-tight text-foreground">
+                {fullName}
+              </h2>
+              <div className="mt-1.5 flex max-w-full items-center gap-1.5 text-sm text-muted-foreground">
+                <Mail className="size-3.5 shrink-0" strokeWidth={2.25} />
+                <span className="truncate">{user?.email ?? '—'}</span>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                <RolePill role={user?.role} />
+                {user?.is_verified && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-700 ring-1 ring-inset ring-emerald-500/20 dark:text-emerald-300">
+                    <BadgeCheck className="size-3" strokeWidth={2.5} />
+                    Verified
+                  </span>
+                )}
+              </div>
+            </div>
+          </section>
+        </aside>
+
+        {/* ── Right: profile form ────────────────────────────── */}
+        <section className="min-w-0 space-y-3">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-1">
+            <div className="flex items-center gap-2">
+              <UserCircle className="size-4 text-primary" strokeWidth={2.25} />
+              <h2 className="text-[15px] font-semibold tracking-tight text-foreground">Profile</h2>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Update your name, avatar, and how teammates see you.
             </p>
           </div>
-        </div>
-      </header>
-
-      {/* ── Scrollable content ──────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-4xl space-y-6 px-6 pb-12 pt-6">
-          {/* ── Hero / account summary ─────────────────────────── */}
-          <section className="relative overflow-hidden rounded-3xl border border-border/70 bg-gradient-to-br from-violet-500/[0.08] via-background to-background p-6 sm:p-7">
-            <span
-              aria-hidden
-              className="pointer-events-none absolute -right-24 -top-24 size-64 rounded-full bg-violet-500/[0.10] blur-3xl"
-            />
-            <span
-              aria-hidden
-              className="pointer-events-none absolute -bottom-28 -left-24 size-72 rounded-full bg-indigo-500/[0.08] blur-3xl"
-            />
-
-            <div className="relative flex flex-col items-start gap-5 sm:flex-row sm:items-center sm:gap-6">
-              <AvatarPreview url={user?.avatar_url} initials={initials} />
-              <div className="min-w-0 flex-1">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground/80">
-                  Account
-                </p>
-                <h2 className="mt-1.5 truncate text-[26px] font-semibold leading-tight tracking-tight text-foreground">
-                  {fullName}
-                </h2>
-                <div className="mt-1.5 flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <Mail className="size-3.5" strokeWidth={2.25} />
-                  <span className="truncate">{user?.email ?? '—'}</span>
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <RolePill role={user?.role} />
-                  {user?.is_verified && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-emerald-700 ring-1 ring-inset ring-emerald-500/20 dark:text-emerald-300">
-                      <BadgeCheck className="size-3" strokeWidth={2.5} />
-                      Verified
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* ── Profile form ───────────────────────────────────── */}
-          <section className="space-y-3">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-1">
-              <div className="flex items-center gap-2">
-                <UserCircle className="size-4 text-violet-500" strokeWidth={2.25} />
-                <h2 className="text-[15px] font-semibold tracking-tight text-foreground">
-                  Profile
-                </h2>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Update your name, avatar, and how teammates see you.
-              </p>
-            </div>
-            <div className="overflow-hidden rounded-3xl border border-border/70 bg-card">
-              <ProfileForm />
-            </div>
-          </section>
-        </div>
+          <div className="overflow-hidden rounded-3xl border border-border/70 bg-card">
+            <ProfileForm />
+          </div>
+        </section>
       </div>
     </div>
   );

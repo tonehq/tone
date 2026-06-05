@@ -7,7 +7,6 @@ import {
   Bot,
   Boxes,
   Building2,
-  Cable,
   Check,
   ChevronDown,
   ChevronsLeft,
@@ -15,36 +14,19 @@ import {
   ChevronsUpDown,
   Home,
   LogOut,
-  Moon,
   Phone,
-  Plug,
   Settings,
-  Sun,
-  Users,
   Wrench,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useTheme } from 'next-themes';
-import { useEffect, useState } from 'react';
 
+import { AvatarBadge } from '@/components/layout/AvatarBadge';
+import { ThemeToggleRow } from '@/components/layout/ThemeToggleRow';
 import { Logo, LogoIcon } from '@/components/ui/logo';
 import { Button } from '@/components/ui/button';
 import { Separator, Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/primitives';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/primitives';
-
-function AvatarBadge({ children, size = 'md' }: { children: React.ReactNode; size?: 'sm' | 'md' }) {
-  return (
-    <div
-      className={cn(
-        'flex shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary',
-        size === 'md' ? 'h-8 w-8' : 'h-7 w-7',
-      )}
-    >
-      {children}
-    </div>
-  );
-}
 import { useNavigation } from '@/contexts/navigation';
 import { useAuthStore } from '@/stores/auth';
 import { cn, getInitials } from '@/lib/utils';
@@ -74,15 +56,6 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Knowledge Base', href: '/knowledge-base', icon: BookOpen },
       { label: 'Call History', href: '/call-history', icon: Phone },
       { label: 'Call Metrics', href: '/call-metrics', icon: BarChart3 },
-    ],
-  },
-  {
-    heading: 'Settings',
-    items: [
-      { label: 'Model Providers', href: '/model-providers', icon: Plug },
-      { label: 'Integrations', href: '/integrations', icon: Cable },
-      { label: 'Organizations', href: '/organizations', icon: Building2 },
-      { label: 'Members', href: '/members', icon: Users },
     ],
   },
 ];
@@ -147,34 +120,6 @@ function NavLink({
     );
   }
   return content;
-}
-
-function ThemeToggleRow() {
-  const { resolvedTheme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-  const isDark = mounted && resolvedTheme === 'dark';
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      fullWidth
-      onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      className="justify-start gap-3 px-3 h-9 font-normal"
-    >
-      {isDark ? (
-        <>
-          <Sun className="h-4 w-4 text-muted-foreground" />
-          Light mode
-        </>
-      ) : (
-        <>
-          <Moon className="h-4 w-4 text-muted-foreground" />
-          Dark mode
-        </>
-      )}
-    </Button>
-  );
 }
 
 function formatRole(role: string | null | undefined): string {
@@ -329,7 +274,7 @@ export function Sidebar() {
                   <Separator />
                   <div className="p-1.5">
                     <Link
-                      href="/organizations"
+                      href="/settings/organizations"
                       className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-[13px] text-foreground/85 hover:bg-sidebar-accent/60"
                     >
                       <Settings className="h-3.5 w-3.5 text-muted-foreground" />
@@ -441,21 +386,9 @@ export function Sidebar() {
                 fullWidth
                 className="justify-start gap-3 px-3 h-9 font-normal"
               >
-                <Link href="/user-settings">
+                <Link href="/settings">
                   <Settings className="h-4 w-4 text-muted-foreground" />
-                  User settings
-                </Link>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                asChild
-                fullWidth
-                className="justify-start gap-3 px-3 h-9 font-normal"
-              >
-                <Link href="/members">
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                  Team Members
+                  Settings
                 </Link>
               </Button>
               <ThemeToggleRow />

@@ -107,7 +107,7 @@ export default function ServiceProvidersPage() {
 
   const handleSelect = useCallback(
     (u: ProviderUsage) => {
-      router.push(`/model-providers/${u.provider.id}/${u.service_type}`);
+      router.push(`/settings/model-providers/${u.provider.id}/${u.service_type}`);
     },
     [router],
   );
@@ -138,7 +138,7 @@ export default function ServiceProvidersPage() {
         }
         if (!keyId) {
           setEditOpen(false);
-          router.push(`/model-providers/${u.provider.id}/${u.service_type}`);
+          router.push(`/settings/model-providers/${u.provider.id}/${u.service_type}`);
           return;
         }
         const svc = await fetchService(keyId);
