@@ -25,6 +25,7 @@ from core.services.meta_data_schema_validator import MetaDataSchemaValidator
 from core.models.agent_tool import AgentTool
 from core.models.agent_mcp_server import AgentMcpServer
 from core.models.agent_knowledge_base import AgentKnowledgeBase
+from core.models.knowledge_base import KnowledgeBase
 from core.models.phone_number import PhoneNumber
 from core.models.tool import Tool
 from core.models.mcp_server import McpServer
@@ -973,6 +974,7 @@ class AgentService(BaseService):
 
     def _sync_knowledge_base(self, agent: Agent, config: Optional[AgentConfig], upload_ids: List[str]) -> None:
         uuids = [UUID(str(uid)) for uid in upload_ids]
+        existing_uploads: List[Upload] = []
         if uuids:
             existing_uploads = self.query(Upload).filter(Upload.id.in_(uuids)).all()
             found = {u.id for u in existing_uploads}
@@ -980,32 +982,57 @@ class AgentService(BaseService):
             if missing:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Uploads not found: {', '.join(missing)}")
 
+        kb_ids: List[UUID] = []
         if uuids:
+            config_id = config.id if config else None
+            if config_id is None:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Agent config required to attach knowledge base documents")
+            kb_by_upload = {
+                kb.upload_id: kb
+                for kb in self.db.query(KnowledgeBase).filter(
+                    KnowledgeBase.upload_id.in_(uuids),
+                    KnowledgeBase.organization_id == self.org_id,
+                ).all()
+            }
+            upload_by_id = {u.id: u for u in existing_uploads}
+            for uid in uuids:
+                kb = kb_by_upload.get(uid)
+                if kb is None:
+                    up = upload_by_id.get(uid)
+                    kb = KnowledgeBase(
+                        organization_id=self.org_id,
+                        name=(up.file_name if up and up.file_name else str(uid)),
+                        status=(up.status if up else "ready"),
+                        upload_id=uid,
+                        meta_data={},
+                    )
+                    self.db.add(kb)
+                    self.db.flush()
+                kb_ids.append(kb.id)
+
+        if kb_ids:
             self.db.query(AgentKnowledgeBase).filter(
                 AgentKnowledgeBase.agent_id == agent.id, AgentKnowledgeBase.organization_id == self.org_id,
-                AgentKnowledgeBase.upload_id.notin_(uuids),
+                AgentKnowledgeBase.knowledge_base_id.notin_(kb_ids),
             ).delete(synchronize_session=False)
         else:
             self.db.query(AgentKnowledgeBase).filter(
                 AgentKnowledgeBase.agent_id == agent.id, AgentKnowledgeBase.organization_id == self.org_id,
             ).delete(synchronize_session=False)
 
-        if uuids:
+        if kb_ids:
             existing_rows = (
-                self.db.query(AgentKnowledgeBase.upload_id)
+                self.db.query(AgentKnowledgeBase.knowledge_base_id)
                 .filter(AgentKnowledgeBase.agent_id == agent.id, AgentKnowledgeBase.organization_id == self.org_id)
                 .all()
             )
             existing_set = {r[0] for r in existing_rows}
-            config_id = config.id if config else None
-            if config_id is None:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Agent config required to attach knowledge base documents")
-            for uid in uuids:
-                if uid not in existing_set:
+            for kid in kb_ids:
+                if kid not in existing_set:
                     self.db.add(AgentKnowledgeBase(
                         agent_id=agent.id,
-                        upload_id=uid,
-                        agent_config_id=config_id,
+                        knowledge_base_id=kid,
+                        agent_config_id=config.id,
                         organization_id=self.org_id,
                     ))
 
@@ -1138,7 +1165,8 @@ class AgentService(BaseService):
         # Documents (knowledge base uploads)
         kb_rows = (
             self.db.query(Upload)
-            .join(AgentKnowledgeBase, AgentKnowledgeBase.upload_id == Upload.id)
+            .join(KnowledgeBase, KnowledgeBase.upload_id == Upload.id)
+            .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
             .filter(AgentKnowledgeBase.agent_id == agent.id, AgentKnowledgeBase.organization_id == self.org_id)
             .all()
         )

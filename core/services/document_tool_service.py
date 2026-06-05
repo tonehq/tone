@@ -134,11 +134,13 @@ def get_document_names_for_agent(agent_id: int, org_id: Any) -> List[str]:
     from core.database.session import get_db_context
     from core.models.upload import Upload
     from core.models.agent_knowledge_base import AgentKnowledgeBase
+    from core.models.knowledge_base import KnowledgeBase
 
     with get_db_context() as db:
         rows = (
             db.query(Upload.file_name)
-            .join(AgentKnowledgeBase, AgentKnowledgeBase.upload_id == Upload.id)
+            .join(KnowledgeBase, KnowledgeBase.upload_id == Upload.id)
+            .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
             .filter(AgentKnowledgeBase.agent_id == agent_id, Upload.status == "ready")
             .all()
         )
@@ -176,11 +178,13 @@ def get_kb_document_names(agent_id: int) -> Optional[dict]:
     from core.database.session import get_db_context
     from core.models.upload import Upload
     from core.models.agent_knowledge_base import AgentKnowledgeBase
+    from core.models.knowledge_base import KnowledgeBase
 
     with get_db_context() as db:
         upload_rows = (
             db.query(Upload.file_name, Upload.id)
-            .join(AgentKnowledgeBase, AgentKnowledgeBase.upload_id == Upload.id)
+            .join(KnowledgeBase, KnowledgeBase.upload_id == Upload.id)
+            .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
             .filter(AgentKnowledgeBase.agent_id == agent_id, Upload.status == "ready")
             .all()
         )
