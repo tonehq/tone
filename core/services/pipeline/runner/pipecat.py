@@ -62,6 +62,20 @@ class PipecatPipelineRunner(PipelineRunner):
             from core.logging import get_trace_id, set_trace_id
             _call_trace_id = get_trace_id()
 
+            # Snapshot the resolved LLM/STT/TTS spec for this call, minus secrets.
+            # Stored in the same INSERT that creates the call row (no extra query).
+            def _strip_secret(spec):
+                if not spec:
+                    return None
+                return {k: v for k, v in spec.items() if k != "api_key"}
+
+            pipeline_snapshot = {
+                "llm": _strip_secret(self.params.llm),
+                "stt": _strip_secret(self.params.stt),
+                "tts": _strip_secret(self.params.tts),
+                "is_s2s": bool(self.params.is_s2s),
+            }
+
             def _create_call_log_in_thread():
                 """Run in a thread so synchronous DB work doesn't block the event loop."""
                 try:
@@ -76,6 +90,7 @@ class PipecatPipelineRunner(PipelineRunner):
                             from_number=from_number,
                             to_number=to_number,
                             trace_id=_call_trace_id if _call_trace_id != "none" else None,
+                            pipeline_config=pipeline_snapshot,
                         )
                         if call_log:
                             call_log_state["id"] = call_log.id

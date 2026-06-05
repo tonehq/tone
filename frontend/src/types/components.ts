@@ -282,3 +282,35 @@ export interface CustomDrawerProps {
   contentClassName?: string;
   showCloseButton?: boolean;
 }
+
+export interface CustomPopoverProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** The element that toggles the popover. Rendered with Radix `asChild`. */
+  trigger: React.ReactNode;
+  title?: React.ReactNode;
+  children?: React.ReactNode;
+  footer?: React.ReactNode | null;
+  align?: 'start' | 'center' | 'end';
+  side?: 'top' | 'right' | 'bottom' | 'left';
+  sideOffset?: number;
+  /** Tailwind width class (defaults to `w-60`). */
+  width?: string;
+  className?: string;
+  contentClassName?: string;
+  /**
+   * Extra props forwarded directly to the underlying Radix `PopoverContent`.
+   * Use this to attach `id`, `aria-*`, `data-testid`, or the Radix focus /
+   * dismissal handlers (`onOpenAutoFocus`, `onCloseAutoFocus`,
+   * `onEscapeKeyDown`, `onInteractOutside`, `onPointerDownOutside`, etc).
+   */
+  contentProps?: Omit<React.HTMLAttributes<HTMLDivElement>, 'className' | 'children'> & {
+    onOpenAutoFocus?: (event: Event) => void;
+    onCloseAutoFocus?: (event: Event) => void;
+    onEscapeKeyDown?: (event: KeyboardEvent) => void;
+    onInteractOutside?: (event: Event) => void;
+    onPointerDownOutside?: (event: PointerEvent) => void;
+    avoidCollisions?: boolean;
+    collisionPadding?: number | Partial<Record<'top' | 'right' | 'bottom' | 'left', number>>;
+  };
+}

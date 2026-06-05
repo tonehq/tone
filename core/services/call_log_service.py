@@ -65,6 +65,7 @@ class CallLogService(BaseService):
         from_number: Optional[str] = None,
         to_number: Optional[str] = None,
         trace_id: Optional[str] = None,
+        pipeline_config: Optional[dict] = None,
     ) -> Call:
         # Deduplicate
         if provider_call_id:
@@ -100,6 +101,7 @@ class CallLogService(BaseService):
             from_number_raw_by_provider=from_number,
             started_at=datetime.now(timezone.utc),
             metadata_={},
+            pipeline_config=pipeline_config,
         )
         self.db.add(call)
         self.db.commit()

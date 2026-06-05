@@ -6,6 +6,7 @@ import CustomCard from './CustomCard';
 import CustomDrawer from './CustomDrawer';
 import CustomLink from './CustomLink';
 import CustomModal from './CustomModal';
+import CustomPopover from './CustomPopover';
 import CustomTab from './CustomTab';
 import CustomTable from './CustomTable';
 import CustomTooltip from './CustomTooltip';
@@ -29,6 +30,7 @@ export type {
   CheckboxFieldBaseProps,
   CustomDrawerProps,
   CustomModalProps,
+  CustomPopoverProps,
   CustomTableColumn,
   CustomTablePagination,
   CustomTableProps,
@@ -62,6 +64,7 @@ export {
   CustomDrawer,
   CustomLink,
   CustomModal,
+  CustomPopover,
   CustomTab,
   CustomTable,
   CustomTooltip,
