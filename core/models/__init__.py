@@ -10,6 +10,7 @@ from core.models.channel import Channel
 from core.models.phone_number import PhoneNumber
 
 # Uploads & Knowledge Base
+from core.models.knowledge_base import KnowledgeBase
 from core.models.upload import Upload
 from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 

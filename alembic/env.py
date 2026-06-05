@@ -20,7 +20,9 @@ from core.models.model_voice import ModelVoice
 from core.models.model_language import ModelLanguage
 from core.models.channel import Channel
 from core.models.phone_number import PhoneNumber
+from core.models.knowledge_base import KnowledgeBase
 from core.models.upload import Upload
+from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
 from core.models.agent_knowledge_base import AgentKnowledgeBase
@@ -35,6 +37,7 @@ from core.models.api_key import ApiKey
 from core.models.mcp_server import McpServer
 from core.models.tool import Tool
 from core.models.call import Call
+from core.models.call_metrics import CallMetrics
 from core.models.tool_execution import ToolExecution
 from core.models.webhook import Webhook
 
@@ -54,6 +57,15 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def include_object(object, name, type_, reflected, compare_to):
+    if type_ == "table" and name and name.startswith("procrastinate_"):
+        return False
+    table = getattr(object, "table", None)
+    if table is not None and getattr(table, "name", "").startswith("procrastinate_"):
+        return False
+    return True
+
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
     url = config.get_main_option("sqlalchemy.url")
@@ -62,6 +74,7 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -78,7 +91,9 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            include_object=include_object,
         )
 
         with context.begin_transaction():
