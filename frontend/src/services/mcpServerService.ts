@@ -1,6 +1,6 @@
 import { listRequest } from '@/services/listHelpers';
 import type { ListRequest } from '@/types/list';
-import type { MCPServer, MCPServerUpsertPayload } from '@/types/mcp';
+import type { MCPServer, MCPServerUpsertPayload, MCPToolsResponse } from '@/types/mcp';
 import axiosInstance from '@/utils/axios';
 
 export const listMcpServers = (request: ListRequest = {}): Promise<MCPServer[]> =>
@@ -22,4 +22,11 @@ export const deleteMcpServer = async (mcpServerId: string): Promise<void> => {
   await axiosInstance.delete('/mcp-server/delete_mcp_server', {
     params: { mcp_server_id: mcpServerId },
   });
+};
+
+export const discoverMcpTools = async (mcpServerId: string): Promise<MCPToolsResponse> => {
+  const { data } = await axiosInstance.get<MCPToolsResponse>('/mcp-server/discover_tools', {
+    params: { mcp_server_id: mcpServerId },
+  });
+  return data;
 };
