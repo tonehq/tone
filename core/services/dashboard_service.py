@@ -33,10 +33,17 @@ class DashboardService(BaseService):
             self.query(Agent).filter(Agent.deleted_at.is_(None)).count()
         )
 
+        # Count via with_entities(count(id)) instead of Query.count(): the latter
+        # wraps a "SELECT <all Call columns>" subquery, which references model
+        # columns that may not exist on the live `calls` table (e.g.
+        # pipeline_config). Selecting only count(id) keeps tenant scoping while
+        # touching a single, guaranteed column.
         active_calls = (
             self.query(Call)
+            .with_entities(func.count(Call.id))
             .filter(Call.ended_at.is_(None), Call.started_at >= active_since)
-            .count()
+            .scalar()
+            or 0
         )
 
         total_seconds = (
@@ -49,21 +56,25 @@ class DashboardService(BaseService):
 
         finished_calls_30d = (
             self.query(Call)
+            .with_entities(func.count(Call.id))
             .filter(
                 Call.started_at >= thirty_days_ago,
                 Call.ended_at.isnot(None),
             )
-            .count()
+            .scalar()
+            or 0
         )
         if finished_calls_30d > 0:
             successful_calls_30d = (
                 self.query(Call)
+                .with_entities(func.count(Call.id))
                 .filter(
                     Call.started_at >= thirty_days_ago,
                     Call.ended_at.isnot(None),
                     Call.duration_seconds > 0,
                 )
-                .count()
+                .scalar()
+                or 0
             )
             success_rate = round((successful_calls_30d / finished_calls_30d) * 100, 1)
         else:

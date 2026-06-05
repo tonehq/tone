@@ -145,44 +145,48 @@ export default function HomePage() {
 
       {/* ── Stat Cards ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {statCards.map((card) => {
-          const value = loading || !stats ? '—' : `${stats[card.key]}${card.suffix}`;
+        {statCards.map((card) => (
+          <Card
+            key={card.label}
+            className="group relative gap-0 overflow-hidden border-border/60 py-0 transition-all duration-200 hover:-translate-y-0.5 hover:border-border hover:shadow-md"
+          >
+            <div
+              className={cn(
+                'pointer-events-none absolute inset-0 bg-gradient-to-br opacity-60 transition-opacity duration-200 group-hover:opacity-100',
+                card.accent,
+              )}
+            />
 
-          return (
-            <Card
-              key={card.label}
-              className="group relative gap-0 overflow-hidden border-border/60 py-0 transition-all duration-200 hover:-translate-y-0.5 hover:border-border hover:shadow-md"
-            >
+            <div className="relative flex items-start justify-between px-5 pt-5">
               <div
                 className={cn(
-                  'pointer-events-none absolute inset-0 bg-gradient-to-br opacity-60 transition-opacity duration-200 group-hover:opacity-100',
-                  card.accent,
+                  'flex size-10 items-center justify-center rounded-xl ring-1 ring-inset ring-border/40',
+                  card.iconBg,
                 )}
-              />
+              >
+                <card.icon size={18} className={card.iconColor} strokeWidth={2.25} />
+              </div>
+              <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
+                {card.subtitle}
+              </span>
+            </div>
 
-              <div className="relative flex items-start justify-between px-5 pt-5">
+            <div className="relative px-5 pt-4 pb-5">
+              <p className="text-[13px] font-medium text-muted-foreground">{card.label}</p>
+              {loading ? (
                 <div
-                  className={cn(
-                    'flex size-10 items-center justify-center rounded-xl ring-1 ring-inset ring-border/40',
-                    card.iconBg,
-                  )}
-                >
-                  <card.icon size={18} className={card.iconColor} strokeWidth={2.25} />
-                </div>
-                <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
-                  {card.subtitle}
-                </span>
-              </div>
-
-              <div className="relative px-5 pt-4 pb-5">
-                <p className="text-[13px] font-medium text-muted-foreground">{card.label}</p>
+                  className="mt-2 h-8 w-16 animate-pulse rounded-md bg-muted"
+                  role="status"
+                  aria-label={`Loading ${card.label}`}
+                />
+              ) : (
                 <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums text-foreground">
-                  {value}
+                  {stats ? `${stats[card.key]}${card.suffix}` : '—'}
                 </p>
-              </div>
-            </Card>
-          );
-        })}
+              )}
+            </div>
+          </Card>
+        ))}
       </div>
 
       {/* ── Quick Links ─────────────────────────────────────────────────── */}
