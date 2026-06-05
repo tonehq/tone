@@ -163,7 +163,7 @@ export default function KnowledgeBasePage() {
     [page, pageSize, sortBy, search, statusFilter],
   );
 
-  const { data, isLoading, isFetching } = useKnowledgeBase(queryParams);
+  const { data, isLoading } = useKnowledgeBase(queryParams);
   const documents = data?.items ?? [];
   const total = data?.total ?? 0;
 
@@ -554,7 +554,7 @@ export default function KnowledgeBasePage() {
           columns={columns}
           dataSource={documents}
           rowKey="id"
-          loading={isLoading || isFetching}
+          loading={isLoading}
           onRowClick={(record) => setSelectedDoc(record)}
           onSortChange={handleSortChange}
           initialSort={{ field: 'updated_at', order: 'desc' }}
