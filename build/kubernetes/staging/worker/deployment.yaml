@@ -8,15 +8,12 @@ metadata:
     environment: staging
     component: worker
 spec:
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       app: staging-tone-worker
   strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
+    type: Recreate
   template:
     metadata:
       labels:
@@ -44,10 +41,10 @@ spec:
           resources:
             requests:
               cpu: "1"
-              memory: "2Gi"
+              memory: "5Gi"
             limits:
               cpu: "2"
-              memory: "6Gi"
+              memory: "5Gi"
           env:
             - name: ENV
               value: "staging"
