@@ -81,18 +81,23 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     mode: 'onChange',
   });
 
+  const basePath = isEditMode
+    ? `/agents/edit/${agentType}/${agentId}`
+    : `/agents/create/${agentType}`;
+
   const isDirty = methods.formState.isDirty;
-  const { promptOpen, guardedAction, confirmLeave, cancelLeave } = useUnsavedChangesGuard(isDirty);
+  const { promptOpen, guardedAction, confirmLeave, cancelLeave } = useUnsavedChangesGuard(isDirty, {
+    // Switching sections stays under the editor base path and keeps the same
+    // persisted form — so it should never trigger the unsaved-changes prompt.
+    // Only navigating OUT of the editor warns.
+    isInternalNavigation: (dest) => dest.startsWith(basePath),
+  });
 
   const safeNavigate = useCallback(
     (href: string) => guardedAction(() => router.push(href)),
     [guardedAction, router],
   );
   const navContextValue = useMemo(() => ({ safeNavigate }), [safeNavigate]);
-
-  const basePath = isEditMode
-    ? `/agents/edit/${agentType}/${agentId}`
-    : `/agents/create/${agentType}`;
   const navGroups = useMemo(() => buildAgentNav(basePath, mode), [basePath, mode]);
   const flatItems = useMemo(() => navGroups.flatMap((g) => g.items), [navGroups]);
 

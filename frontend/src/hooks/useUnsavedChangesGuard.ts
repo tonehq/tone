@@ -3,6 +3,16 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+interface UnsavedChangesGuardOptions {
+  /**
+   * Return true for destinations that should NOT trigger the guard — i.e.
+   * navigations that stay "inside" the current editor and don't lose state
+   * (e.g. switching sections in the agent editor, which all share one
+   * persisted form). Only navigations that leave the editor prompt.
+   */
+  isInternalNavigation?: (dest: string) => boolean;
+}
+
 interface UnsavedChangesGuard {
   /** True when an attempted navigation is waiting on user confirmation. */
   promptOpen: boolean;
@@ -33,10 +43,17 @@ const SENTINEL_STATE = { __unsavedGuard: true };
  * - Intentional post-save / post-delete redirects: reset the form (so
  *   `isDirty` is false) before calling `router.push`.
  */
-export function useUnsavedChangesGuard(isDirty: boolean): UnsavedChangesGuard {
+export function useUnsavedChangesGuard(
+  isDirty: boolean,
+  options?: UnsavedChangesGuardOptions,
+): UnsavedChangesGuard {
   const router = useRouter();
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const skipNextPopRef = useRef(false);
+  // Kept in a ref so the click handler always sees the latest predicate
+  // without re-subscribing the capture-phase listener.
+  const isInternalRef = useRef(options?.isInternalNavigation);
+  isInternalRef.current = options?.isInternalNavigation;
 
   // ── beforeunload (refresh / tab close) ───────────────────────────────────
   useEffect(() => {
@@ -76,6 +93,10 @@ export function useUnsavedChangesGuard(isDirty: boolean): UnsavedChangesGuard {
       const dest = url.pathname + url.search + url.hash;
       const current = window.location.pathname + window.location.search;
       if (dest === current) return;
+
+      // In-editor navigation (e.g. switching agent sections) keeps the same
+      // persisted form, so it should pass through without prompting.
+      if (isInternalRef.current?.(dest)) return;
 
       // Capture-phase + preventDefault keeps Next.js Link from navigating
       // (it short-circuits on defaultPrevented).

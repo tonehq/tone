@@ -151,12 +151,12 @@ function SearchableSelectInner<T extends SearchableSelectOption>(
             aria-invalid={error || undefined}
             disabled={disabled}
             className={cn(
-              "border-input data-[placeholder]:text-muted-foreground [&_svg:not([class*='text-'])]:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 dark:hover:bg-input/50 flex w-full items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 h-9 overflow-hidden",
+              "border-input data-[placeholder]:text-muted-foreground [&_svg:not([class*='text-'])]:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 dark:hover:bg-input/50 flex w-full items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-left text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50 h-9 overflow-hidden",
               error &&
                 'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50',
             )}
           >
-            <span className="flex min-w-0 flex-1 items-center overflow-hidden">
+            <span className="flex min-w-0 flex-1 items-center justify-start overflow-hidden">
               {selectedOption ? (
                 renderSelectedValue ? (
                   renderSelectedValue(selectedOption)
