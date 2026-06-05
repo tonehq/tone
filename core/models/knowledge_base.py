@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import BigInteger, Column, String, Boolean, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from core.models.base import OrgScopedModel
@@ -14,6 +14,9 @@ class KnowledgeBase(OrgScopedModel):
     description = Column(String(1000), nullable=True)
     status = Column(String(32), nullable=False, default="ready")
     upload_id = Column(UUID(as_uuid=True), ForeignKey("uploads.id", ondelete="SET NULL"), nullable=True, index=True)
+    procrastinate_job_id = Column(BigInteger, nullable=True, index=True)
+    doc_type = Column(String(32), nullable=True)
+    ingestion_stats = Column(JSONB, nullable=True)
     meta_data = Column(JSONB, nullable=False, default=dict)
     is_active = Column(Boolean, nullable=False, default=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
@@ -25,6 +28,9 @@ class KnowledgeBase(OrgScopedModel):
             "name": self.name,
             "description": self.description,
             "status": self.status,
+            "procrastinate_job_id": self.procrastinate_job_id,
+            "doc_type": self.doc_type,
+            "ingestion_stats": self.ingestion_stats or {},
             "meta_data": self.meta_data or {},
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

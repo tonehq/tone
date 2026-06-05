@@ -5,6 +5,7 @@ from uuid import UUID
 from loguru import logger
 
 from core.database.session import get_db_context
+from core.models.knowledge_base import KnowledgeBase
 from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 from core.models.upload import Upload
 from core.services.document_tool_service import get_openai_api_key_for_agent
@@ -19,6 +20,25 @@ from core.services.rag.vector_stores.pgvector_store import PgVectorStore
 DIRECT_PDF_DOCLING = False
 DIRECT_PDF_OCR = False
 DIRECT_PDF_MAX_PAGES = 0
+
+
+_CONTENT_TYPE_DOC_TYPE = {
+    "application/pdf": "pdf",
+    "text/html": "html",
+    "text/plain": "txt",
+    "application/msword": "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.ms-excel": "xls",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+}
+
+
+def _derive_doc_type(file_name: str | None, file_type: str | None) -> str | None:
+    if file_name and "." in file_name:
+        return file_name.rsplit(".", 1)[-1].lower() or None
+    if file_type:
+        return _CONTENT_TYPE_DOC_TYPE.get(file_type.split(";")[0].strip().lower())
+    return None
 
 
 def _remove_files(*paths: str) -> None:
@@ -111,12 +131,25 @@ class DocumentProcessingService:
             if not num_chunks:
                 raise ValueError("Text extraction produced no chunks")
 
+            ingestion_stats = build.metrics() if build is not None else None
             with get_db_context() as db:
                 upload = db.query(Upload).filter(Upload.id == upload_id).first()
                 if upload:
                     upload.status = "ready"
-                    if build is not None:
-                        upload.meta_data = {**(upload.meta_data or {}), "routing": build.metrics()}
+                    if ingestion_stats is not None:
+                        upload.meta_data = {**(upload.meta_data or {}), "routing": ingestion_stats}
+                doc_type = _derive_doc_type(
+                    upload.file_name if upload else None, file_type
+                )
+                db.query(KnowledgeBase).filter(
+                    KnowledgeBase.upload_id == upload_id
+                ).update(
+                    {
+                        KnowledgeBase.doc_type: doc_type,
+                        KnowledgeBase.ingestion_stats: ingestion_stats,
+                    },
+                    synchronize_session=False,
+                )
                 db.commit()
             logger.info("Upload {} processed: {} chunks stored", upload_id, num_chunks)
 

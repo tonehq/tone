@@ -24,16 +24,16 @@ def ingest_upload(upload_id: str, org_id: str, delete_existing: bool = False) ->
     DocumentProcessingService().process_upload(UUID(upload_id), UUID(org_id), delete_existing=delete_existing)
 
 
-async def _defer_ingestion(upload_id, org_id, delete_existing: bool) -> None:
+async def _defer_ingestion(upload_id, org_id, delete_existing: bool) -> int:
     async with app.open_async():
-        await ingest_upload.defer_async(
+        return await ingest_upload.defer_async(
             upload_id=str(upload_id), org_id=str(org_id), delete_existing=delete_existing
         )
 
 
-async def enqueue_upload(upload_id, org_id) -> None:
-    await _defer_ingestion(upload_id, org_id, False)
+async def enqueue_upload(upload_id, org_id) -> int:
+    return await _defer_ingestion(upload_id, org_id, False)
 
 
-async def enqueue_reprocess(upload_id, org_id) -> None:
-    await _defer_ingestion(upload_id, org_id, True)
+async def enqueue_reprocess(upload_id, org_id) -> int:
+    return await _defer_ingestion(upload_id, org_id, True)
