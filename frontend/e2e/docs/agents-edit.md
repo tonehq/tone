@@ -18,16 +18,30 @@
 - If the agent ID is not found (404), the page redirects me back to the agent
   list with a toast.
 
+> **Routing update (focused editor):** The editor is now a focused full-screen
+> experience (the main app sidebar is hidden) and each section is its own URL
+> route. Opening an agent lands on its **Overview** first; the configuration
+> steps live at `/agents/edit/{type}/{id}/{section}` where section ∈
+> `overview | basics | prompt | ai | voice | tools | knowledge`. The bare
+> `/agents/edit/{type}/{id}` redirects to `…/overview`. Section navigation is
+> route-based (rail `<Link>`s), so it does **not** trigger the unsaved-changes
+> guard; only leaving the editor does.
+
 ## Routes
 
-| Route | Component |
+| Route | Renders |
 |---|---|
-| `/agents/edit/inbound/{id}` | `AgentFormPage agentType="inbound" agentId={id}` |
-| `/agents/edit/outbound/{id}` | `AgentFormPage agentType="outbound" agentId={id}` |
+| `/agents/edit/{type}/{id}` | redirect → `/agents/edit/{type}/{id}/overview` |
+| `/agents/edit/{type}/{id}/overview` | `AgentOverview` (Vercel-style detail card) |
+| `/agents/edit/{type}/{id}/{section}` | the matching step (Basics/Prompt/AI/Voice/Tools/Knowledge) |
+
+The form state + chrome (header save-bar, rail, modals) live in
+`agents/edit/[type]/[id]/layout.tsx` → `AgentEditorShell`, which persists across
+section navigation so values are never lost.
 
 ## Key files
 
-- `src/components/agents/AgentFormPage.tsx`
+- `src/components/agents/AgentEditorShell.tsx`
 - `src/components/agents/agent-form/steps/{KnowledgeBaseUploadModal,AssignPhoneNumberModal}.tsx`
 - `src/hooks/useUnsavedChangesGuard.ts`
 - `src/utils/agentFormUtils.ts` — `agentDetailToFormState`, `formStateToUpdatePayload`

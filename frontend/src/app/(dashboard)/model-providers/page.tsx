@@ -1,5 +1,6 @@
-import ServiceProvidersPage from '@/components/service-providers/ServiceProvidersPage';
+import { redirect } from 'next/navigation';
 
-const Page = () => <ServiceProvidersPage />;
-
-export default Page;
+// Moved into the dedicated Settings area.
+export default function ModelProvidersRedirect() {
+  redirect('/settings/model-providers');
+}

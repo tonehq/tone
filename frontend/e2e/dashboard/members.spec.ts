@@ -32,7 +32,7 @@ const getToast = (p: Page) => p.locator('[data-sonner-toast]').first();
 test.describe('Members', () => {
   test.beforeEach(async ({ page }) => {
     await page.unrouteAll({ behavior: 'ignoreErrors' });
-    await page.goto('/members');
+    await page.goto('/settings/members');
     await expect(page.getByRole('button', { name: /invite member/i })).toBeVisible({
       timeout: 15_000,
     });
@@ -146,7 +146,7 @@ test.describe('Members', () => {
       try {
         await inviteMemberViaUI(page, { email });
         // Re-open the modal and try to invite the SAME email again.
-        await page.goto('/members');
+        await page.goto('/settings/members');
         await openInviteModal(page);
         const dialog = page.getByRole('dialog');
         await dialog.locator('input[name="name"]').first().fill('Duplicate Probe');
@@ -239,7 +239,7 @@ test.describe('Members', () => {
       await cancelInvitationViaUI(page, { email });
 
       // 5. Confirm gone.
-      await page.goto('/members');
+      await page.goto('/settings/members');
       await gotoInvitationsTab(page);
       await expect(page.locator('tbody tr').filter({ hasText: email })).toHaveCount(0, {
         timeout: 10_000,

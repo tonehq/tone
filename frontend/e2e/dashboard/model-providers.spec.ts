@@ -178,7 +178,7 @@ test.describe('Model Providers — list page', () => {
         // 2. The list-page card aggregates by (provider, service_type) and
         //    does NOT expose the per-key label on the card body. Verify via
         //    the detail page where the key appears as a row.
-        const detailUrl = `/model-providers/${created.providerId}/llm`;
+        const detailUrl = `/settings/model-providers/${created.providerId}/llm`;
         await page.goto(detailUrl);
         await expect(page.locator('tbody tr').filter({ hasText: label }).first()).toBeVisible({
           timeout: 10_000,

@@ -1114,12 +1114,25 @@ class AgentService(BaseService):
             .first()
         )
 
+        # The model picker persists the selected LLM into config.llm_settings.model_id
+        # (a models.id), so resolve a human-readable name for the detail/overview.
+        # Fall back to the denormalised agent.llm_model column for older agents.
+        llm_model_name = agent.llm_model
+        if config and isinstance(config.llm_settings, dict):
+            model_id = config.llm_settings.get("model_id")
+            if model_id:
+                from core.models.model import Model
+
+                model = self.db.query(Model).filter(Model.id == model_id).first()
+                if model:
+                    llm_model_name = model.display_name or model.name or llm_model_name
+
         result: Dict[str, Any] = {
             "id": str(agent.id),
             "name": agent.name,
             "description": agent.description,
             "agent_type": agent.agent_type,
-            "llm_model": agent.llm_model,
+            "llm_model": llm_model_name,
             "is_active": agent.is_active,
             "created_by_user_id": str(agent.created_by_user_id) if agent.created_by_user_id else None,
             "created_at": agent.created_at.isoformat() if agent.created_at else None,

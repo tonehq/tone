@@ -1,11 +1,6 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import Members from '@/components/settings/Members';
-
-export default function MembersPage() {
-  return (
-    <div className="animate-page">
-      <Members />
-    </div>
-  );
+// Moved into the dedicated Settings area.
+export default function MembersRedirect() {
+  redirect('/settings/members');
 }

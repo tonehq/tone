@@ -1,11 +1,6 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import UserSettings from '@/components/user-settings/UserSettings';
-
-export default function UserSettingsPage() {
-  return (
-    <div className="animate-page flex h-full flex-col">
-      <UserSettings />
-    </div>
-  );
+// Moved into the dedicated Settings area.
+export default function UserSettingsRedirect() {
+  redirect('/settings/profile');
 }

@@ -49,7 +49,7 @@ test.describe('Organizations', () => {
 
   test.beforeEach(async ({ page }) => {
     await page.unrouteAll({ behavior: 'ignoreErrors' });
-    await page.goto('/organizations');
+    await page.goto('/settings/organizations');
     await expect(page.getByRole('button', { name: /new organization/i })).toBeVisible({
       timeout: 15_000,
     });
@@ -218,7 +218,7 @@ test.describe('Organizations', () => {
       });
       await deleteOrganizationViaUI(page, { id: throwaway.id, name: throwaway.name });
       // Card is gone.
-      await page.goto('/organizations');
+      await page.goto('/settings/organizations');
       await expect(
         page.locator(`button[aria-label="Actions for organization ${throwaway.id}"]`),
       ).toHaveCount(0, { timeout: 10_000 });

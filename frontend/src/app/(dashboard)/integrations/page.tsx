@@ -1,33 +1,27 @@
 'use client';
 
-import Integrations from '@/components/settings/Integrations';
-import { showToast } from '@/utils/toast';
-import { useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useEffect } from 'react';
 
-function IntegrationsWithCallback() {
+// Moved into the dedicated Settings area. OAuth callbacks land here with
+// ?provider=...&status=success (target is backend-controlled), so forward the
+// query string when redirecting to keep the success toast working.
+function IntegrationsRedirect() {
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const [callbackProvider, setCallbackProvider] = useState<string | null>(null);
 
   useEffect(() => {
-    const provider = searchParams.get('provider');
-    const status = searchParams.get('status');
-    if (provider && status === 'success') {
-      setCallbackProvider(provider);
-      showToast.success(`${provider.replaceAll('_', ' ')} connected successfully`);
-      window.history.replaceState({}, '', '/integrations');
-    }
-  }, [searchParams]);
+    const query = searchParams.toString();
+    router.replace(`/settings/integrations${query ? `?${query}` : ''}`);
+  }, [router, searchParams]);
 
-  return <Integrations refreshKey={callbackProvider} />;
+  return null;
 }
 
-export default function IntegrationsPage() {
+export default function IntegrationsRedirectPage() {
   return (
-    <div className="animate-page flex h-full flex-col">
-      <Suspense>
-        <IntegrationsWithCallback />
-      </Suspense>
-    </div>
+    <Suspense>
+      <IntegrationsRedirect />
+    </Suspense>
   );
 }

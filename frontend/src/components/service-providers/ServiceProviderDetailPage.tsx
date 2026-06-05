@@ -514,7 +514,7 @@ export default function ServiceProviderDetailPage() {
           type="text"
           size="sm"
           icon={<ArrowLeft className="size-4" />}
-          onClick={() => router.push('/model-providers')}
+          onClick={() => router.push('/settings/model-providers')}
           className="-ml-2 text-muted-foreground hover:text-foreground"
         >
           Back to Model Providers
