@@ -3,7 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from core.api.v1.call_logs import ListCallsRequest
+from core.api.v1.call_logs import FacetsRequest, ListCallsRequest
 from core.database.session import get_db
 from core.services.call_service import CallService
 from ee.middleware.auth import EEJWTClaims, require_ee_org_member
@@ -47,6 +47,20 @@ def get_calls(
         filters=filters,
         sort_by=body.sort_by,
         sort_order=body.sort_order,
+    )
+
+
+@router.post("/facets")
+def get_facets(
+    body: FacetsRequest,
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    filters = [f.model_dump() for f in body.filters] if body.filters else None
+    return _get_service(claims, db).get_facets(
+        start_date_time=body.start_date_time,
+        end_date_time=body.end_date_time,
+        filters=filters,
     )
 
 

@@ -925,9 +925,100 @@ import { Trash2 } from 'lucide-react';
 
 ---
 
+## DateRangePicker
+
+Timezone-aware date-range picker built on `react-day-picker` v9 + `@date-fns/tz`. A popover trigger opens a panel with relative presets, a range calendar, start/end time inputs, an Apply/Clear footer, and an IANA timezone selector. Drafts live inside the popover until **Apply**. Emits `{ start, end, timeZone }` where `start`/`end` are **UTC ISO** instants (the wall-clock time the user picked, resolved in `timeZone`).
+
+### Props
+
+| Prop             | Type                                | Default               | Description                                                      |
+| ---------------- | ----------------------------------- | --------------------- | --------------------------------------------------------------- |
+| value            | `DateRangeValue`                    | —                     | Applied value `{ start, end, timeZone }` (`start`/`end` UTC ISO). |
+| onChange         | `(value: DateRangeValue) => void`   | —                     | Fired on Apply / Clear with the new value.                      |
+| placeholder      | string                              | `'Select date range'` | Trigger text when no range is set.                              |
+| presets          | boolean                             | `true`                | Show the relative preset rail (Last 15m / 30m / 1h / 24h / 7d). |
+| align            | `'start' \| 'center' \| 'end'`      | `'start'`             | Popover alignment.                                              |
+| triggerClassName | string                              | —                     | Extra classes for the trigger button.                           |
+| disabled         | boolean                             | `false`               | Disables the trigger.                                           |
+
+**DateRangeValue:** `{ start: string \| null; end: string \| null; timeZone: string }`
+
+### Example
+
+```tsx
+const [range, setRange] = useState<DateRangeValue>({ start: null, end: null, timeZone: 'UTC' });
+
+<DateRangePicker value={range} onChange={setRange} />;
+
+// Send to an API expecting ISO bounds:
+const params = {
+  start_date_time: range.start ?? undefined,
+  end_date_time: range.end ?? undefined,
+};
+```
+
+### Do's and Don'ts
+
+- **Do** treat `start`/`end` as UTC ISO — pass them straight to backends that compare against UTC timestamps.
+- **Do** persist `timeZone` alongside the range so the trigger re-renders in the same zone.
+- **Don't** format `start`/`end` with `formatDate` (no timezone) for display — use `formatTzDateTime(iso, tz)` from `@/utils/date`.
+
+---
+
+## TokenSearchBar
+
+Tokenized `field:value` search bar with autocomplete chips (Vercel-style). Typing shows a field list; selecting a field loads its values (for `enum` fields, via `fetchValues`, cached after first load) and shows a value list; confirmed filters render as removable chips. Typing `status:` directly auto-activates that field. Emits a normalized `SearchToken[]`.
+
+### Props
+
+| Prop        | Type                            | Default | Description                                            |
+| ----------- | ------------------------------- | ------- | ------------------------------------------------------ |
+| fields      | `TokenSearchField[]`            | —       | **Required.** Field definitions (see below).           |
+| value       | `SearchToken[]`                 | —       | **Required.** Controlled list of active tokens.        |
+| onChange    | `(tokens: SearchToken[]) => void` | —     | **Required.** Fired when tokens are added/removed.     |
+| placeholder | string                          | `'Filter by field…'` | Placeholder when empty.                   |
+| className   | string                          | —       | Class for the outer wrapper.                           |
+| hideChips   | boolean                         | `false` | Hide the inline chips (e.g. when chips are shown elsewhere). |
+| onClear     | `() => void`                    | —       | Show a trailing clear (×) control inside the bar; called on click. |
+| showClear   | boolean                         | —       | Force-show the clear control (defaults to showing whenever there are tokens). |
+
+**TokenSearchField:** `{ key: string; label: string; type?: 'enum' \| 'text'; fetchValues?: () => Promise<string[]>; formatValue?: (value: string) => string }`
+
+**SearchToken:** `{ field: string; value: string }`
+
+### Keyboard
+
+↑/↓ move the highlight, Enter selects, Esc closes, **Backspace on an empty input** clears the active field (or removes the last chip). Adds/removals are announced via an `aria-live` region.
+
+### Example
+
+```tsx
+const [tokens, setTokens] = useState<SearchToken[]>([]);
+
+<TokenSearchBar
+  fields={[
+    { key: 'status', label: 'Status', type: 'enum', fetchValues: () => getFilterValues('status').then((r) => r.values) },
+    { key: 'agent_name', label: 'Agent', type: 'enum', fetchValues: () => getFilterValues('agent_name').then((r) => r.values) },
+  ]}
+  value={tokens}
+  onChange={setTokens}
+/>;
+
+// Map tokens → API filter params:
+const filters = tokens.map((t) => ({ field: t.field, operator: 'in', value: [t.value] }));
+```
+
+### Do's and Don'ts
+
+- **Do** group multiple tokens of the same field into one `in` filter when building API params.
+- **Do** provide `fetchValues` for `enum` fields so the value list autocompletes.
+- **Don't** call `fetchValues` eagerly — the component lazy-loads and caches per field on first open.
+
+---
+
 ## Exports from `@/components/shared`
 
-- **Components:** `ActionMenu`, `CheckboxField`, `CustomButton`, `CustomLink`, `CustomModal`, `CustomTab`, `CustomTable`, `CustomTooltip`, `Divider`, `Form`, `Logo`, `MultiSelectField`, `RadioGroupField`, `SearchableSelect`, `SelectInput`, `SliderField`, `TextAreaField`, `TextInput`
+- **Components:** `ActionMenu`, `CheckboxField`, `CustomButton`, `CustomLink`, `CustomModal`, `CustomTab`, `CustomTable`, `CustomTooltip`, `DateRangePicker`, `Divider`, `Form`, `Logo`, `MultiSelectField`, `RadioGroupField`, `SearchableSelect`, `SelectInput`, `SliderField`, `TextAreaField`, `TextInput`, `TokenSearchBar`
 - **Types:** `ActionMenuProps`, `CheckboxFieldBaseProps`, `CustomModalProps`, `CustomTableColumn`, `CustomTablePagination`, `CustomTableProps`, `FormCheckboxFieldProps`, `FormMultiSelectFieldProps`, `FormRadioGroupFieldProps`, `FormSelectInputProps`, `FormSliderFieldProps`, `FormTextAreaFieldProps`, `FormTextInputProps`, `MultiSelectFieldBaseProps`, `MultiSelectOption`, `RadioGroupOption`, `SearchableSelectOption`, `SelectInputBaseProps`, `SelectOption`, `SliderFieldBaseProps`, `TabItem`, `TextAreaFieldBaseProps`, `TextInputBaseProps`
 
 ---
