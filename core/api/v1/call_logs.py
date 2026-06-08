@@ -73,6 +73,26 @@ def get_calls(
     )
 
 
+class FacetsRequest(BaseModel):
+    start_date_time: Optional[str] = None
+    end_date_time: Optional[str] = None
+    filters: Optional[List[CallFilterParam]] = None
+
+
+@router.post("/facets")
+def get_facets(
+    body: FacetsRequest,
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    filters = [f.model_dump() for f in body.filters] if body.filters else None
+    return _get_service(claims, db).get_facets(
+        start_date_time=body.start_date_time,
+        end_date_time=body.end_date_time,
+        filters=filters,
+    )
+
+
 @router.get("/{call_id}/audio-url")
 def get_audio_url(
     call_id: str,

@@ -106,6 +106,68 @@ class TestListCallLogs:
         assert response.status_code in (401, 403)
 
 
+# --- POST /api/v1/call-log/facets ---
+
+class TestGetFacets:
+    """Tests for POST /api/v1/call-log/facets (faceted filter counts)."""
+
+    def test_facets_success_empty_body(self, client_as_member):
+        """Empty body returns a dict of facet -> [{value, count}] lists."""
+        response = client_as_member.post("/api/v1/call-log/facets", json={})
+        assert response.status_code == 200
+        data = response.json()
+        # Every faceted field is present, each mapping to a list.
+        for field in (
+            "status", "agent_name", "direction", "channel_type",
+            "llm_model", "stt_model", "tts_model",
+        ):
+            assert field in data
+            assert isinstance(data[field], list)
+
+    def test_facets_status_is_fixed_enum(self, client_as_member):
+        """Status facet always emits the three derived states (even at zero)."""
+        response = client_as_member.post("/api/v1/call-log/facets", json={})
+        assert response.status_code == 200
+        status = {row["value"]: row["count"] for row in response.json()["status"]}
+        assert set(status.keys()) == {"completed", "in_progress", "failed"}
+        assert all(isinstance(c, int) and c >= 0 for c in status.values())
+
+    def test_facets_with_date_range(self, client_as_member):
+        response = client_as_member.post("/api/v1/call-log/facets", json={
+            "start_date_time": "2026-01-01T00:00:00",
+            "end_date_time": "2026-12-31T23:59:59",
+        })
+        assert response.status_code == 200
+
+    def test_facets_excludes_own_field(self, client_as_member):
+        """A status selection must not collapse the status facet's own counts.
+
+        With status filtered to 'completed', the status facet should still
+        report all three states (its own field is excluded from its counts),
+        while remaining a valid response.
+        """
+        response = client_as_member.post("/api/v1/call-log/facets", json={
+            "filters": [
+                {"field": "status", "operator": "in", "value": ["completed"]},
+            ],
+        })
+        assert response.status_code == 200
+        status = {row["value"] for row in response.json()["status"]}
+        assert status == {"completed", "in_progress", "failed"}
+
+    def test_facets_value_rows_shape(self, client_as_member):
+        """Each non-status facet row is {value: str, count: int}."""
+        response = client_as_member.post("/api/v1/call-log/facets", json={})
+        assert response.status_code == 200
+        for row in response.json()["agent_name"]:
+            assert set(row.keys()) == {"value", "count"}
+            assert isinstance(row["count"], int)
+
+    def test_unauthenticated(self, client_unauthenticated):
+        response = client_unauthenticated.post("/api/v1/call-log/facets", json={})
+        assert response.status_code in (401, 403)
+
+
 # --- GET /api/v1/call-log/{call_id} ---
 
 class TestGetCallLogById:

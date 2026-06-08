@@ -283,9 +283,70 @@ export interface CustomDrawerProps {
   showCloseButton?: boolean;
 }
 
+/**
+ * Emitted value of the shared {@link DateRangePicker}. `start`/`end` are UTC ISO
+ * instants (or null when cleared); `timeZone` is the IANA zone the user picked
+ * the wall-clock time in (defaults to the browser zone).
+ */
+export interface DateRangeValue {
+  start: string | null;
+  end: string | null;
+  timeZone: string;
+}
+
+export interface DateRangePickerProps {
+  value?: DateRangeValue;
+  onChange?: (value: DateRangeValue) => void;
+  placeholder?: string;
+  /** Show the relative-range preset rail (Last 15m / 30m / 1h / 24h / 7d). */
+  presets?: boolean;
+  align?: 'start' | 'center' | 'end';
+  className?: string;
+  triggerClassName?: string;
+  disabled?: boolean;
+}
+
+/** A single `field:value` token in the {@link TokenSearchBar}. */
+export interface SearchToken {
+  field: string;
+  value: string;
+}
+
+/** Field definition consumed by {@link TokenSearchBar}. */
+export interface TokenSearchField {
+  key: string;
+  label: string;
+  /** `enum` fields autocomplete from `fetchValues`; `text` fields accept free input. */
+  type?: 'enum' | 'text';
+  /** Lazily fetch distinct values for an `enum` field (cached after first load). */
+  fetchValues?: () => Promise<string[]>;
+  /** Map a stored value to its display label (defaults to the raw value). */
+  formatValue?: (value: string) => string;
+}
+
+export interface TokenSearchBarProps {
+  fields: TokenSearchField[];
+  value: SearchToken[];
+  onChange: (tokens: SearchToken[]) => void;
+  placeholder?: string;
+  className?: string;
+  /** Hide the inline chips (e.g. when applied filters are shown in a separate row). */
+  hideChips?: boolean;
+  /** Render a trailing "clear" control inside the bar; called when clicked. */
+  onClear?: () => void;
+  /** Force-show the clear control. Defaults to showing whenever there are tokens. */
+  showClear?: boolean;
+}
+
 export interface CustomPopoverProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /**
+   * Radix modal mode. Enable when the popover has its own scrollable content and
+   * lives inside another scroll-locking layer (e.g. a Drawer/Sheet) — modal gives
+   * the popover its own scroll lock so wheel/trackpad scrolling works inside it.
+   */
+  modal?: boolean;
   /** The element that toggles the popover. Rendered with Radix `asChild`. */
   trigger: React.ReactNode;
   title?: React.ReactNode;

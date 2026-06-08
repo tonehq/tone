@@ -10,6 +10,7 @@ import CustomPopover from './CustomPopover';
 import CustomTab from './CustomTab';
 import CustomTable from './CustomTable';
 import CustomTooltip from './CustomTooltip';
+import DateRangePicker from './DateRangePicker';
 import Divider from './Divider';
 import ErrorBoundary from './ErrorBoundary';
 import Form from './Form';
@@ -25,6 +26,7 @@ import SliderField from './SliderField';
 import TextAreaField from './TextAreaField';
 import TextInput from './TextInput';
 import { ThemeToggle } from './ThemeToggle';
+import TokenSearchBar from './TokenSearchBar';
 
 export type {
   CheckboxFieldBaseProps,
@@ -34,6 +36,8 @@ export type {
   CustomTableColumn,
   CustomTablePagination,
   CustomTableProps,
+  DateRangePickerProps,
+  DateRangeValue,
   FormCheckboxFieldProps,
   FormMultiSelectFieldProps,
   FormRadioGroupFieldProps,
@@ -44,11 +48,14 @@ export type {
   MultiSelectFieldBaseProps,
   MultiSelectOption,
   RadioGroupOption,
+  SearchToken,
   SelectInputBaseProps,
   SelectOption,
   SliderFieldBaseProps,
   TextAreaFieldBaseProps,
   TextInputBaseProps,
+  TokenSearchBarProps,
+  TokenSearchField,
 } from '@/types/components';
 export type { CustomCardProps } from './CustomCard';
 export type { SearchableSelectOption } from './SearchableSelect';
@@ -68,6 +75,7 @@ export {
   CustomTab,
   CustomTable,
   CustomTooltip,
+  DateRangePicker,
   Divider,
   ErrorBoundary,
   Form,
@@ -83,4 +91,5 @@ export {
   TextAreaField,
   TextInput,
   ThemeToggle,
+  TokenSearchBar,
 };

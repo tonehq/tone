@@ -1,8 +1,13 @@
-import type { CallLogQueryParams, CallLogRow } from '@/types/callLog';
+import type { CallFacets, CallFacetsParams, CallLogQueryParams, CallLogRow } from '@/types/callLog';
 import axiosInstance from '@/utils/axios';
 
 export const getCallLogs = async (params: CallLogQueryParams) => {
   const res = await axiosInstance.post('/call-log/list', params);
+  return res.data;
+};
+
+export const getCallFacets = async (params: CallFacetsParams): Promise<CallFacets> => {
+  const res = await axiosInstance.post('/call-log/facets', params);
   return res.data;
 };
 

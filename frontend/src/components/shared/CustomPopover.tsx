@@ -22,8 +22,9 @@ const CustomPopover: React.FC<CustomPopoverProps> = ({
   className,
   contentClassName,
   contentProps,
+  modal,
 }) => (
-  <Popover open={open} onOpenChange={onOpenChange}>
+  <Popover open={open} onOpenChange={onOpenChange} modal={modal}>
     <PopoverTrigger asChild>{trigger}</PopoverTrigger>
     <PopoverContent
       align={align}
