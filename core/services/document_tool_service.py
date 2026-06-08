@@ -171,6 +171,27 @@ def get_openai_api_key_for_agent(org_id: Any) -> Optional[str]:
     return None
 
 
+def get_kb_refs(agent_id: int) -> List[dict]:
+    """`[{id, name}, ...]` for the agent's active knowledge bases.
+
+    Cached alongside the rest of the pipeline payload so the call-log snapshot can
+    record which KBs were available without a per-call DB hit. Mirrors the
+    `KnowledgeBase.is_active` filter the runner's original inline query used.
+    """
+    from core.database.session import get_db_context
+    from core.models.agent_knowledge_base import AgentKnowledgeBase
+    from core.models.knowledge_base import KnowledgeBase
+
+    with get_db_context() as db:
+        rows = (
+            db.query(KnowledgeBase.id, KnowledgeBase.name)
+            .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
+            .filter(AgentKnowledgeBase.agent_id == agent_id, KnowledgeBase.is_active.is_(True))
+            .all()
+        )
+    return [{"id": str(r.id), "name": r.name} for r in rows]
+
+
 def get_kb_document_names(agent_id: int) -> Optional[dict]:
     """The agent's ready KB documents (the only DB query for KB), as a cacheable dict
     `{"document_names": [...], "upload_ids": [...]}` or None when the agent has no KB.
