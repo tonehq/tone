@@ -193,6 +193,39 @@ export interface FormTextAreaFieldProps
   onValueChange?: (value: string) => void;
 }
 
+export interface RichPromptEditorFieldBaseProps {
+  name: string;
+  label?: string;
+  value?: string;
+  defaultValue?: string;
+  onChange?: (value: string) => void;
+  placeholder?: string;
+  isRequired?: boolean;
+  loading?: boolean;
+  disabled?: boolean;
+  error?: boolean;
+  helperText?: string;
+  labelClassName?: string;
+  className?: string;
+  id?: string;
+  /** Min height of the editing surface, e.g. '220px'. */
+  minHeight?: string;
+  /** Max height of the editing surface; beyond it the editor scrolls internally
+   * (e.g. '60vh'). Without it the editor grows to fit its content. */
+  maxHeight?: string;
+  /** Fill the parent's height (the editor area flex-grows and scrolls internally,
+   * so the surrounding page doesn't scroll). The parent chain must be height-bounded. */
+  fill?: boolean;
+}
+
+export interface FormRichPromptEditorFieldProps
+  extends Omit<RichPromptEditorFieldBaseProps, 'value' | 'onChange'> {
+  name: string;
+  control: import('react-hook-form').Control<any>;
+  rules?: import('react-hook-form').RegisterOptions;
+  onValueChange?: (value: string) => void;
+}
+
 export interface MultiSelectOption {
   value: string;
   label: string;

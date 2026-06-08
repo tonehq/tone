@@ -84,4 +84,8 @@ class Settings:
 
         self.LLAMA_CLOUD_API_KEY: str = get_secret("LLAMA_CLOUD_API_KEY", "")
 
+        # Global OpenAI key used as a fallback for AI helper features (e.g. system-prompt
+        # generation) when an org hasn't configured its own provider key.
+        self.OPENAI_API_KEY: str = get_secret("OPENAI_API_KEY", "")
+
 settings = Settings()

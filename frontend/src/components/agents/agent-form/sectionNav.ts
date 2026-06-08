@@ -13,8 +13,8 @@ export interface AgentSection {
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
 }
 
-// Order matters — this is also the order shown in the rail and the order the
-// ReviewStep's index-based jumps map onto (Overview is excluded from Review).
+// Order matters — this is the order shown in the rail and the order the routed
+// section pages follow.
 export const AGENT_SECTIONS: AgentSection[] = [
   { key: 'basics', label: 'Basics', icon: Bot },
   { key: 'prompt', label: 'Prompt', icon: MessageSquare },

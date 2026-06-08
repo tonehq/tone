@@ -65,7 +65,7 @@ def _sanitize_tool_schemas(tool_schemas):
 class PipecatPipelineBuilder(PipelineBuilder):
     """Assemble a Pipecat pipeline from `PipelineParams`."""
 
-    async def build(self, transport: Any, agent: Any = None, audio_buffer: Any = None, from_number: str = "") -> BuildResult:
+    async def build(self, transport: Any, agent: Any = None, audio_buffer: Any = None, from_number: str = "", prompt_context: Any = None) -> BuildResult:
         params = self.params
         is_s2s = params.is_s2s
 
@@ -170,10 +170,12 @@ class PipecatPipelineBuilder(PipelineBuilder):
         else:
             combined_tools = NOT_GIVEN
 
-        # Anchor the conversation to the real current date (fresh per call, not the
-        # resolver's cached messages) so clock-less models don't invent years or book
-        # past dates. No-op when there's no system message.
-        messages = params.messages_with_date_anchor()
+        # Anchor the conversation to the real current date AND substitute per-call
+        # {{variables}} (caller number, agent name, …) — both fresh per call, not the
+        # resolver's cached messages, so values never go stale or leak across calls.
+        # No-op for the date anchor when there's no system message; substitution is
+        # skipped when prompt_context is empty.
+        messages = params.messages_with_runtime_context(prompt_context)
 
         if is_s2s:
             # S2S pipeline: audio goes through the LLM directly (no separate STT/TTS).
@@ -306,5 +308,5 @@ class PipecatPipelineBuilder(PipelineBuilder):
             stt=stt,
             tts=tts,
             is_s2s=is_s2s,
-            first_message_text=params.first_message_text,
+            first_message_text=params.first_message_with_context(prompt_context),
         )

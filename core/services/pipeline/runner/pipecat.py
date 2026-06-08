@@ -111,7 +111,17 @@ class PipecatPipelineRunner(PipelineRunner):
             call_log_ready.set()
 
         # --- Build the pipeline (services + task + observers) ---
-        build = await self.builder.build(transport, agent=agent, audio_buffer=audio_buffer, from_number=from_number)
+        # Per-call variable context ({{caller_number}}, {{agent_name}}, …) resolved from
+        # this call's metadata and substituted into the prompt at build time.
+        from core.services.pipeline.prompt_variables import build_call_context
+        prompt_context = build_call_context(agent, call_data, transport_type)
+        build = await self.builder.build(
+            transport,
+            agent=agent,
+            audio_buffer=audio_buffer,
+            from_number=from_number,
+            prompt_context=prompt_context,
+        )
         task = build.task
         rtvi = build.rtvi
         is_s2s = build.is_s2s
