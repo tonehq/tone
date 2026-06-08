@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
 from sqlalchemy import Float, and_, asc, cast, desc, func, or_, select
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Query, Session, aliased
 
 from core.models.agent import Agent
 from core.models.call import Call
@@ -81,37 +81,17 @@ class CallService(BaseService):
 
         return {"column": column_name, "values": values}
 
-    def get_calls(
-        self,
-        page_no: int = 1,
-        page_size: int = 10,
-        start_date_time: Optional[str] = None,
-        end_date_time: Optional[str] = None,
-        filters: Optional[List[Dict[str, Any]]] = None,
-        sort_by: Optional[str] = None,
-        sort_order: str = "desc",
-    ) -> Dict[str, Any]:
-        from_pn = aliased(PhoneNumber, name="from_pn")
-        to_pn = aliased(PhoneNumber, name="to_pn")
+    # ------------------------------------------------------------------
+    # Filtering helpers (shared by get_calls and get_facets)
+    # ------------------------------------------------------------------
 
-        base_query = (
-            self.query(Call)
-            .join(Agent, Call.agent_id == Agent.id)
-            .join(Channel, Call.channel_id == Channel.id)
-            .outerjoin(from_pn, Call.from_phone_number_id == from_pn.id)
-            .outerjoin(to_pn, Call.to_phone_number_id == to_pn.id)
-            # 1:1 on call_id (unique) — keeps row count equal to call count
-            # so pagination math is unaffected.
-            .outerjoin(CallMetrics, CallMetrics.call_id == Call.id)
-        )
+    def _filter_column_map(self) -> Dict[str, Any]:
+        """Map filter/sort field names to their SQLAlchemy column expressions.
 
-        if start_date_time is not None:
-            base_query = base_query.filter(Call.started_at >= start_date_time)
-        if end_date_time is not None:
-            base_query = base_query.filter(Call.started_at <= end_date_time)
-
-        # Column mapping for filters and sorting
-        column_map = {
+        ``status`` is None because it is derived from (ended_at, metadata) and
+        handled specially in :meth:`_apply_filters`.
+        """
+        return {
             "status": None,  # derived, handled specially
             "direction": Call.direction,
             "duration_seconds": Call.duration_seconds,
@@ -148,56 +128,195 @@ class CallService(BaseService):
             ),
         }
 
-        if filters:
-            for f in filters:
-                field = f.get("field")
-                operator = f.get("operator")
-                value = f.get("value")
+    def _status_predicates(self) -> Dict[str, Any]:
+        """Map each derived call status to its SQL predicate.
 
-                if field == "status":
-                    # Derived from (Call.ended_at, Call.metadata_['status']):
-                    #   failed       → metadata.status == 'failed'
-                    #   completed    → ended_at IS NOT NULL AND not failed
-                    #   in_progress  → ended_at IS NULL
-                    # Selecting multiple statuses ORs the predicates together.
-                    # NOTE: coalesce(NULL, "") is required because most rows
-                    # have metadata_ = NULL (only fail_call writes it). Without
-                    # coalesce, `metadata_['status'].astext` returns SQL NULL,
-                    # ~NULL is NULL, and the WHERE clause drops every row.
-                    if operator == "in" and isinstance(value, list):
-                        status_text = func.coalesce(
-                            Call.metadata_["status"].astext, ""
-                        )
-                        is_failed = status_text == "failed"
-                        preds = []
-                        if "failed" in value:
-                            preds.append(is_failed)
-                        if "completed" in value:
-                            preds.append(and_(Call.ended_at.isnot(None), ~is_failed))
-                        if "in_progress" in value:
-                            preds.append(Call.ended_at.is_(None))
-                        if preds:
-                            base_query = base_query.filter(or_(*preds))
-                    continue
+        Status is derived from (Call.ended_at, Call.metadata_['status']):
+          failed       → metadata.status == 'failed'
+          completed    → ended_at IS NOT NULL AND not failed
+          in_progress  → ended_at IS NULL
 
-                col = column_map.get(field)
-                if col is None:
-                    continue
+        NOTE: coalesce(NULL, "") is required because most rows have
+        metadata_ = NULL (only fail_call writes it). Without coalesce,
+        `metadata_['status'].astext` returns SQL NULL, ~NULL is NULL, and the
+        WHERE clause drops every row. Shared by :meth:`_apply_filters` (status
+        filter) and :meth:`get_facets` (per-status counts) so the taxonomy lives
+        in one place.
+        """
+        status_text = func.coalesce(Call.metadata_["status"].astext, "")
+        is_failed = status_text == "failed"
+        return {
+            "completed": and_(Call.ended_at.isnot(None), ~is_failed),
+            "in_progress": Call.ended_at.is_(None),
+            "failed": is_failed,
+        }
 
-                if operator == "equal_to":
-                    base_query = base_query.filter(col == value)
-                elif operator == "greater_than":
-                    base_query = base_query.filter(col > value)
-                elif operator == "less_than":
-                    base_query = base_query.filter(col < value)
-                elif operator == "between":
-                    if isinstance(value, list) and len(value) == 2:
-                        base_query = base_query.filter(col.between(value[0], value[1]))
-                elif operator == "in":
-                    if isinstance(value, list):
-                        base_query = base_query.filter(col.in_(value))
-                elif operator == "contains":
-                    base_query = base_query.filter(col.ilike(f"%{value}%"))
+    def _apply_filters(
+        self,
+        query: Query,
+        filters: Optional[List[Dict[str, Any]]],
+        column_map: Optional[Dict[str, Any]] = None,
+        exclude_field: Optional[str] = None,
+    ) -> Query:
+        """Apply a list of {field, operator, value} filters to ``query``.
+
+        Returns a new ``Query`` (filters are applied immutably, never in place).
+        ``exclude_field`` skips one field — used by faceting so a facet's own
+        selection doesn't constrain its own counts (Vercel semantics).
+        """
+        if not filters:
+            return query
+        if column_map is None:
+            column_map = self._filter_column_map()
+
+        for f in filters:
+            field = f.get("field")
+            operator = f.get("operator")
+            value = f.get("value")
+
+            if exclude_field is not None and field == exclude_field:
+                continue
+
+            if field == "status":
+                # Selecting multiple statuses ORs the predicates together; see
+                # _status_predicates for how each state is derived.
+                if operator == "in" and isinstance(value, list):
+                    predicates = self._status_predicates()
+                    preds = [predicates[v] for v in value if v in predicates]
+                    if preds:
+                        query = query.filter(or_(*preds))
+                continue
+
+            col = column_map.get(field)
+            if col is None:
+                continue
+
+            if operator == "equal_to":
+                query = query.filter(col == value)
+            elif operator == "greater_than":
+                query = query.filter(col > value)
+            elif operator == "less_than":
+                query = query.filter(col < value)
+            elif operator == "between":
+                if isinstance(value, list) and len(value) == 2:
+                    query = query.filter(col.between(value[0], value[1]))
+            elif operator == "in":
+                if isinstance(value, list):
+                    query = query.filter(col.in_(value))
+            elif operator == "contains":
+                query = query.filter(col.ilike(f"%{value}%"))
+
+        return query
+
+    def get_facets(
+        self,
+        start_date_time: Optional[str] = None,
+        end_date_time: Optional[str] = None,
+        filters: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """Per-value counts for each facet field, for the filter drawer.
+
+        Each facet reflects the active date range and every *other* active
+        filter, but NOT its own selection — so toggling a value within a facet
+        doesn't zero out its siblings (Vercel-style faceting).
+        """
+        column_map = self._filter_column_map()
+        # Faceted (non-numeric, checkbox) fields and their column expressions.
+        facet_fields = [
+            "status",
+            "agent_name",
+            "direction",
+            "channel_type",
+            "llm_model",
+            "stt_model",
+            "tts_model",
+        ]
+        FACET_LIMIT = 50
+
+        def _base():
+            q = (
+                self.query(Call)
+                .join(Agent, Call.agent_id == Agent.id)
+                .join(Channel, Call.channel_id == Channel.id)
+                # 1:1 outerjoin keeps row count == call count so COUNT(*) is the
+                # number of calls; also lets turn_count/avg_latency filters apply.
+                .outerjoin(CallMetrics, CallMetrics.call_id == Call.id)
+            )
+            if start_date_time is not None:
+                q = q.filter(Call.started_at >= start_date_time)
+            if end_date_time is not None:
+                q = q.filter(Call.started_at <= end_date_time)
+            return q
+
+        result: Dict[str, List[Dict[str, Any]]] = {}
+
+        for field in facet_fields:
+            scoped = self._apply_filters(
+                _base(), filters, column_map=column_map, exclude_field=field
+            )
+
+            if field == "status":
+                predicates = self._status_predicates()
+                # One query, one filtered COUNT per state (Postgres FILTER
+                # clause), instead of a round-trip per status.
+                row = scoped.with_entities(
+                    *[func.count().filter(pred).label(name) for name, pred in predicates.items()]
+                ).one()
+                # Fixed enum set — emit all three even when zero (Vercel shows
+                # zero-count rows for known levels).
+                result[field] = [
+                    {"value": name, "count": getattr(row, name)} for name in predicates
+                ]
+                continue
+
+            col = column_map.get(field)
+            rows = (
+                scoped.with_entities(col, func.count())
+                .group_by(col)
+                .order_by(func.count().desc())
+                .limit(FACET_LIMIT)
+                .all()
+            )
+            result[field] = [
+                {"value": value, "count": count}
+                for value, count in rows
+                if value is not None and value != ""
+            ]
+
+        return result
+
+    def get_calls(
+        self,
+        page_no: int = 1,
+        page_size: int = 10,
+        start_date_time: Optional[str] = None,
+        end_date_time: Optional[str] = None,
+        filters: Optional[List[Dict[str, Any]]] = None,
+        sort_by: Optional[str] = None,
+        sort_order: str = "desc",
+    ) -> Dict[str, Any]:
+        from_pn = aliased(PhoneNumber, name="from_pn")
+        to_pn = aliased(PhoneNumber, name="to_pn")
+
+        base_query = (
+            self.query(Call)
+            .join(Agent, Call.agent_id == Agent.id)
+            .join(Channel, Call.channel_id == Channel.id)
+            .outerjoin(from_pn, Call.from_phone_number_id == from_pn.id)
+            .outerjoin(to_pn, Call.to_phone_number_id == to_pn.id)
+            # 1:1 on call_id (unique) — keeps row count equal to call count
+            # so pagination math is unaffected.
+            .outerjoin(CallMetrics, CallMetrics.call_id == Call.id)
+        )
+
+        if start_date_time is not None:
+            base_query = base_query.filter(Call.started_at >= start_date_time)
+        if end_date_time is not None:
+            base_query = base_query.filter(Call.started_at <= end_date_time)
+
+        # Column mapping for filters and sorting (shared with get_facets).
+        column_map = self._filter_column_map()
+        base_query = self._apply_filters(base_query, filters, column_map=column_map)
 
         total = base_query.count()
 

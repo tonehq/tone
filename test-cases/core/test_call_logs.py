@@ -182,6 +182,74 @@ class TestGetCallLogs:
 
 
 # ---------------------------------------------------------------------------
+# POST /api/v1/call-log/facets
+# ---------------------------------------------------------------------------
+
+PATCH_CALL_SERVICE = "core.api.v1.call_logs.CallService"
+
+
+@pytest.fixture
+def sample_facets():
+    return {
+        "status": [
+            {"value": "completed", "count": 12},
+            {"value": "in_progress", "count": 3},
+            {"value": "failed", "count": 1},
+        ],
+        "agent_name": [{"value": "Sales Agent", "count": 9}],
+        "direction": [{"value": "inbound", "count": 10}],
+        "channel_type": [{"value": "twilio", "count": 16}],
+        "llm_model": [{"value": "gpt-4o", "count": 16}],
+        "stt_model": [{"value": "nova-2", "count": 16}],
+        "tts_model": [{"value": "eleven_turbo_v2", "count": 16}],
+    }
+
+
+class TestGetFacets:
+    """Tests for POST /api/v1/call-log/facets"""
+
+    @patch(PATCH_CALL_SERVICE)
+    def test_success_empty_body(self, mock_service_cls, client_as_member, sample_facets):
+        mock_service_cls.return_value.get_facets.return_value = sample_facets
+        resp = client_as_member.post("/api/v1/call-log/facets", json={})
+        assert resp.status_code == 200
+        assert resp.json()["status"][0]["value"] == "completed"
+        mock_service_cls.return_value.get_facets.assert_called_once_with(
+            start_date_time=None,
+            end_date_time=None,
+            filters=None,
+        )
+
+    @patch(PATCH_CALL_SERVICE)
+    def test_passes_filters_and_dates(self, mock_service_cls, client_as_member, sample_facets):
+        mock_service_cls.return_value.get_facets.return_value = sample_facets
+        payload = {
+            "start_date_time": "2026-01-01T00:00:00",
+            "end_date_time": "2026-12-31T23:59:59",
+            "filters": [{"field": "status", "operator": "in", "value": ["completed"]}],
+        }
+        resp = client_as_member.post("/api/v1/call-log/facets", json=payload)
+        assert resp.status_code == 200
+        mock_service_cls.return_value.get_facets.assert_called_once_with(
+            start_date_time="2026-01-01T00:00:00",
+            end_date_time="2026-12-31T23:59:59",
+            filters=[{"field": "status", "operator": "in", "value": ["completed"]}],
+        )
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.post("/api/v1/call-log/facets", json={})
+        assert resp.status_code in (401, 403)
+
+    @patch(PATCH_CALL_SERVICE)
+    def test_service_error(self, mock_service_cls, client_as_member):
+        mock_service_cls.return_value.get_facets.side_effect = HTTPException(
+            status_code=500, detail="DB error"
+        )
+        resp = client_as_member.post("/api/v1/call-log/facets", json={})
+        assert resp.status_code in (500, 422, 400)
+
+
+# ---------------------------------------------------------------------------
 # GET /api/v1/call-log/{call_id}
 # ---------------------------------------------------------------------------
 

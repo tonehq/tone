@@ -30,6 +30,34 @@ export function formatTimestamp(ts: string | null): string {
   return new Date(ts).toLocaleString();
 }
 
+/**
+ * The browser's resolved IANA timezone (e.g. `Asia/Kolkata`), falling back to
+ * `UTC` on older runtimes that don't expose it. Shared by the DateRangePicker
+ * and Call History so the default zone is resolved in one place.
+ */
+export function getBrowserTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  } catch {
+    return 'UTC';
+  }
+}
+
+/**
+ * Format a UTC ISO instant for display in a specific IANA timezone
+ * (e.g. `Jun 5, 4:44 PM`). Used by the shared DateRangePicker trigger so the
+ * label always reflects the user's chosen zone, not the browser default.
+ */
+export function formatTzDateTime(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone,
+  }).format(new Date(iso));
+}
+
 /** Compact `<m>m <s>s` / `<s>s` rendering for a call duration in seconds. */
 export function formatDuration(seconds: number | null): string {
   if (seconds == null) return '-';

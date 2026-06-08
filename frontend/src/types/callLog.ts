@@ -91,3 +91,23 @@ export interface CallLogQueryParams {
   sort_order?: 'asc' | 'desc';
   filters?: CallLogFilterParam[];
 }
+
+/** A single faceted value + its count, from `POST /call-log/facets`. */
+export interface FacetValue {
+  value: string;
+  count: number;
+}
+
+/** Map of facet field → its values with counts (e.g. `{ status: [{value, count}] }`). */
+export type CallFacets = Record<string, FacetValue[]>;
+
+export interface CallFacetsParams {
+  start_date_time?: string;
+  end_date_time?: string;
+  filters?: CallLogFilterParam[];
+}
+
+export interface CallFacetsState {
+  facets: CallFacets;
+  loading: boolean;
+}
