@@ -215,7 +215,7 @@ def build_stt(spec: dict) -> Optional[Any]:
             return NvidiaSageMakerSTTService(api_key=api_key, params=build_input_params(NvidiaSageMakerSTTService, metadata))
         if provider_name == "nvidia_websocket":
             from pipecat.services.nvidia.websocket_stt import NvidiaWebSocketService
-            ws_url = model_meta.get("base_url") or model_meta.get("url") or metadata.get("url")
+            ws_url = "ws://staging-stt-nemotron-service.staging.svc.cluster.local/ws/asr"
             ws_kwargs = {}
             if metadata.get("sample_rate") is not None:
                 ws_kwargs["sample_rate"] = metadata["sample_rate"]

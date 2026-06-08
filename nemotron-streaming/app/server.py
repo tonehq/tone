@@ -15,9 +15,11 @@ IMPORTANT — vGPU workaround:
 Endpoints: GET /health, POST /asr (batch). Streaming /ws/asr is the next step.
 """
 
+import asyncio
 import logging
 import os
 import tempfile
+import time
 
 import numpy as np
 import soundfile as sf
@@ -31,6 +33,7 @@ log = logging.getLogger("stt")
 
 MODEL_NAME = os.environ.get("STT_MODEL", "nvidia/nemotron-speech-streaming-en-0.6b")
 TARGET_SR = 16000
+MAX_BUFFER_SEC = int(os.environ.get("STT_MAX_BUFFER_SEC", "30"))
 
 app = FastAPI(title="Tone STT — Nemotron Streaming 0.6B")
 _model = None
@@ -116,6 +119,7 @@ def health():
 async def asr(file: UploadFile = File(...)):
     model = _load_model()
     raw = await file.read()
+    log.info("/asr request: %s (%d bytes)", file.filename, len(raw))
     if not raw:
         raise HTTPException(status_code=400, detail="empty file")
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
@@ -131,7 +135,11 @@ async def asr(file: UploadFile = File(...)):
             t = torch.from_numpy(np.ascontiguousarray(data)).unsqueeze(0)
             t = torchaudio.functional.resample(t, sr, TARGET_SR)
             data = t.squeeze(0).numpy()
-        return {"text": _infer(model, data), "model": MODEL_NAME}
+        loop = asyncio.get_running_loop()
+        d0 = time.monotonic()
+        text = await loop.run_in_executor(None, _infer, model, data)
+        log.info("/asr result: %r (decode %dms)", text, round((time.monotonic() - d0) * 1000))
+        return {"text": text, "model": MODEL_NAME}
     except Exception as exc:  # noqa: BLE001
         log.exception("transcription failed")
         raise HTTPException(status_code=500, detail=str(exc))
@@ -152,11 +160,16 @@ async def ws_asr(ws: WebSocket):
     cache-aware incremental decoding is the next iteration.
     """
     await ws.accept()
+    client = f"{ws.client.host}:{ws.client.port}" if ws.client else "?"
+    log.info("ws/asr open from %s", client)
     model = _load_model()
+    loop = asyncio.get_running_loop()
     buf = bytearray()
-    last_len = 0
-    DECODE_EVERY = TARGET_SR * 2  # ~0.5 s of new audio (int16 -> 2 bytes/sample)
-    import time
+    received = 0
+    last_decode_at = 0
+    decodes = 0
+    DECODE_EVERY = TARGET_SR * 2
+    MAX_BUFFER_BYTES = TARGET_SR * 2 * MAX_BUFFER_SEC
 
     t0 = time.monotonic()
     first = True
@@ -164,30 +177,46 @@ async def ws_asr(ws: WebSocket):
         while True:
             msg = await ws.receive()
             if msg.get("type") == "websocket.disconnect":
+                log.info("ws/asr %s disconnected (%d bytes, %d decodes)", client, received, decodes)
                 break
             data = msg.get("bytes")
             if data is None:
                 if msg.get("text") == "eof":
+                    log.info("ws/asr %s eof (%d bytes, %.1fs buffered)", client, received,
+                             len(buf) / (TARGET_SR * 2))
                     audio = _pcm16_to_float(bytes(buf))
-                    text = _infer(model, audio) if audio.size else ""
+                    d0 = time.monotonic()
+                    text = await loop.run_in_executor(None, _infer, model, audio) if audio.size else ""
+                    log.info("ws/asr %s final: %r (decode %dms)", client, text,
+                             round((time.monotonic() - d0) * 1000))
                     await ws.send_json({"type": "final", "text": text,
                                         "ms": round((time.monotonic() - t0) * 1000)})
                     await ws.close()
                     return
                 continue
             buf.extend(data)
-            if len(buf) - last_len >= DECODE_EVERY:
-                last_len = len(buf)
+            received += len(data)
+            if len(buf) > MAX_BUFFER_BYTES:
+                trimmed = len(buf) - MAX_BUFFER_BYTES
+                del buf[:trimmed]
+                log.debug("ws/asr %s trimmed %d bytes (cap %ds)", client, trimmed, MAX_BUFFER_SEC)
+            if received - last_decode_at >= DECODE_EVERY:
+                last_decode_at = received
                 audio = _pcm16_to_float(bytes(buf))
-                text = _infer(model, audio)
+                d0 = time.monotonic()
+                text = await loop.run_in_executor(None, _infer, model, audio)
+                decodes += 1
+                log.info("ws/asr %s partial #%d: %r (decode %dms, %.1fs buffered)", client,
+                         decodes, text, round((time.monotonic() - d0) * 1000),
+                         len(buf) / (TARGET_SR * 2))
                 await ws.send_json({"type": "partial", "text": text,
                                     "ms": round((time.monotonic() - t0) * 1000),
                                     "ttf": first})
                 first = False
     except WebSocketDisconnect:
-        pass
+        log.info("ws/asr %s disconnected (WebSocketDisconnect)", client)
     except Exception as exc:  # noqa: BLE001
-        log.exception("ws transcription failed")
+        log.exception("ws/asr %s transcription failed", client)
         try:
             await ws.send_json({"type": "error", "detail": str(exc)})
         except Exception:  # noqa: BLE001
