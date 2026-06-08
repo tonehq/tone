@@ -83,7 +83,6 @@ const CallHistoryFilterDrawer: React.FC<CallHistoryFilterDrawerProps> = ({
           title="Timeline"
           count={draft.dateRange.start && draft.dateRange.end ? 1 : 0}
           defaultOpen={false}
-          defaultOpen
         >
           <DateRangePicker
             value={draft.dateRange}
