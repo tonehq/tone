@@ -60,6 +60,11 @@ class PipelineParams:
     # Cached, DB-free tool/KB data the builder rebuilds handlers from (MCP stays live).
     tools: List[dict] = field(default_factory=list)
     kb: Optional[dict] = None
+    # `{id, name}` refs cached for the call-log snapshot only — not consumed by the
+    # builder. Lets the runner record which KBs/MCP servers were wired to the agent
+    # without an extra DB hit on the call-insert path.
+    kb_refs: List[dict] = field(default_factory=list)
+    mcp_servers: List[dict] = field(default_factory=list)
     telephony_creds: Optional[dict] = None
 
     @property
@@ -159,6 +164,8 @@ class PipelineParams:
             telephony_creds=d.get("_telephony_creds"),
             tools=d.get("tools") or [],
             kb=d.get("kb"),
+            kb_refs=d.get("kb_refs") or [],
+            mcp_servers=d.get("mcp_servers") or [],
         )
 
     @classmethod

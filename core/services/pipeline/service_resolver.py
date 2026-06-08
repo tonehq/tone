@@ -42,7 +42,7 @@ from core.utils.encryption import decrypt
 # removed in `load_agent_service_config`'s `result` dict). It is folded into every cache
 # version stamp, so a deploy that changes the shape invalidates all persisted entries
 # instead of serving them with a stale shape — there is no TTL to clear them otherwise.
-PAYLOAD_FORMAT_VERSION = "v1"
+PAYLOAD_FORMAT_VERSION = "v2"
 
 
 def _resolve_org_id(org_id):
@@ -269,10 +269,12 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
 
     The stamp is a composite of updated_at timestamps AND row counts across EVERY input the
     cached pipeline payload depends on — the config, the referenced provider/model/voice/
-    api-key rows, the linked tools, and the KB uploads. Any change (incl. an in-place API-key
-    rotation, a model/voice edit, or a tool/KB add/remove) changes the stamp and invalidates
-    the cache; the counts catch removals that a bare max(updated_at) would miss. MCP is
-    intentionally excluded — it is never cached and is always resolved live in build().
+    api-key rows, the linked tools, the KB uploads, and the linked MCP servers. Any change
+    (incl. an in-place API-key rotation, a model/voice edit, or a tool/KB/MCP add/remove)
+    changes the stamp and invalidates the cache; the counts catch removals that a bare
+    max(updated_at) would miss. MCP runtime still resolves servers live in build(); the
+    stamp covers MCP only because the cached payload now snapshots `{id, name}` refs for
+    the call-log so filters on `pipeline_config.mcp_servers` stay accurate.
 
     Cost: one config lookup + ONE combined aggregate query (all the COUNT/MAX values are
     scalar subqueries in a single round-trip) — far cheaper than a full resolve, and keeps
@@ -281,7 +283,9 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
     from sqlalchemy import func, select
 
     from core.models.agent_knowledge_base import AgentKnowledgeBase
+    from core.models.agent_mcp_server import AgentMcpServer
     from core.models.knowledge_base import KnowledgeBase
+    from core.models.mcp_server import McpServer
     from core.models.agent_tool import AgentTool
     from core.models.tool import Tool
     from core.models.upload import Upload
@@ -343,13 +347,32 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
         .where(*_kb_where).scalar_subquery()
     )
 
+    _mcp_where = (AgentMcpServer.agent_id == agent_id, McpServer.is_active.is_(True))
+    mcp_cnt_sq = (
+        select(func.count(McpServer.id)).select_from(McpServer)
+        .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)
+        .where(*_mcp_where).scalar_subquery()
+    )
+    mcp_link_sq = (
+        select(func.max(AgentMcpServer.updated_at)).select_from(AgentMcpServer)
+        .join(McpServer, McpServer.id == AgentMcpServer.mcp_server_id)
+        .where(*_mcp_where).scalar_subquery()
+    )
+    mcp_max_sq = (
+        select(func.max(McpServer.updated_at)).select_from(McpServer)
+        .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)
+        .where(*_mcp_where).scalar_subquery()
+    )
+
     (
         prov_max, model_max, voice_ts, key_count, key_max,
         tool_count, tool_link_max, tool_max, kb_count, kb_link_max, kb_max,
+        mcp_count, mcp_link_max, mcp_max,
     ) = db.execute(
         select(
             prov_sq, model_sq, voice_sq, key_cnt_sq, key_max_sq,
             tool_cnt_sq, tool_link_sq, tool_max_sq, kb_cnt_sq, kb_link_sq, kb_max_sq,
+            mcp_cnt_sq, mcp_link_sq, mcp_max_sq,
         )
     ).one()
 
@@ -365,6 +388,7 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
         f"key:{key_count}:{_s(key_max)}",
         f"tools:{tool_count}:{_s(tool_link_max)}:{_s(tool_max)}",
         f"kb:{kb_count}:{_s(kb_link_max)}:{_s(kb_max)}",
+        f"mcp:{mcp_count}:{_s(mcp_link_max)}:{_s(mcp_max)}",
     ])
     return version, config
 
@@ -383,7 +407,8 @@ def load_agent_service_config(
     serializer, not cached here. Returns None if config/required services are missing.
     """
     from core.services.custom_tool_service import serialize_agent_tools
-    from core.services.document_tool_service import get_kb_document_names
+    from core.services.document_tool_service import get_kb_document_names, get_kb_refs
+    from core.services.mcp_tool_service import get_mcp_server_refs
     from core.services.redis_service import cache_get, cache_set
 
     _t = _time.monotonic()
@@ -421,6 +446,10 @@ def load_agent_service_config(
         "end_call_message": getattr(config, "end_call_message", None),
         "tools": serialize_agent_tools(agent_id),
         "kb": get_kb_document_names(agent_id),
+        # `{id, name}` refs for the call-log snapshot. Cached here so the runner can
+        # write them in the same INSERT that creates the call row — no per-call queries.
+        "kb_refs": get_kb_refs(agent_id),
+        "mcp_servers": get_mcp_server_refs(agent_id),
     }
     # Persistent (no TTL): the version stamp guarantees freshness on every read, and edits
     # overwrite/invalidate the entry — so there is no need to expire it on a timer.

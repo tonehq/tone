@@ -62,18 +62,35 @@ class PipecatPipelineRunner(PipelineRunner):
             from core.logging import get_trace_id, set_trace_id
             _call_trace_id = get_trace_id()
 
-            # Snapshot the resolved LLM/STT/TTS spec for this call, minus secrets.
+            # Snapshot the call's model identity: {provider_name, model_name, model_id}.
             # Stored in the same INSERT that creates the call row (no extra query).
-            def _strip_secret(spec):
+            def _spec_for_snapshot(spec):
                 if not spec:
                     return None
-                return {k: v for k, v in spec.items() if k != "api_key"}
+                md = spec.get("metadata") or {}
+                model_id = md.get("model_id")
+                return {
+                    "provider_name": spec.get("provider_name"),
+                    "model_name": spec.get("model_name"),
+                    "model_id": str(model_id) if model_id is not None else None,
+                }
 
+            # `custom_tools` mirrors the resolver's tool cache filtered to non-MCP tools
+            # (mcp_server_id IS NULL) to match the original snapshot semantics. MCP servers
+            # and knowledge bases come straight from the cached refs — no DB hit here.
+            custom_tool_refs = [
+                {"id": t.get("id"), "name": t.get("name")}
+                for t in (self.params.tools or [])
+                if t.get("mcp_server_id") is None and t.get("id") is not None
+            ]
             pipeline_snapshot = {
-                "llm": _strip_secret(self.params.llm),
-                "stt": _strip_secret(self.params.stt),
-                "tts": _strip_secret(self.params.tts),
+                "llm": _spec_for_snapshot(self.params.llm),
+                "stt": _spec_for_snapshot(self.params.stt),
+                "tts": _spec_for_snapshot(self.params.tts),
                 "is_s2s": bool(self.params.is_s2s),
+                "custom_tools": custom_tool_refs,
+                "mcp_servers": list(self.params.mcp_servers or []),
+                "knowledge_bases": list(self.params.kb_refs or []),
             }
 
             def _create_call_log_in_thread():
