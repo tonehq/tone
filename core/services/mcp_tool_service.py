@@ -151,6 +151,28 @@ def get_mcp_servers_for_agent(agent_id: int):
         return servers
 
 
+def get_mcp_server_refs(agent_id: int) -> list:
+    """`[{id, name}, ...]` for the agent's active MCP servers.
+
+    Cached alongside the rest of the pipeline payload so the call-log snapshot can
+    record which MCP servers were wired in without a per-call DB hit. Independent of
+    `get_mcp_servers_for_agent` (which returns full ORM rows the builder needs to
+    connect to each server live).
+    """
+    from core.database.session import get_db_context
+    from core.models.mcp_server import McpServer
+    from core.models.agent_mcp_server import AgentMcpServer
+
+    with get_db_context() as db:
+        rows = (
+            db.query(McpServer.id, McpServer.name)
+            .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)
+            .filter(AgentMcpServer.agent_id == agent_id, McpServer.is_active.is_(True))
+            .all()
+        )
+    return [{"id": str(r.id), "name": r.name} for r in rows]
+
+
 async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, current_turn=None, tool_dedup=None) -> Optional[ToolsSchema]:
     """Connect to all MCP servers linked to an agent and register their tools with the LLM.
 

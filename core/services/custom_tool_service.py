@@ -43,10 +43,13 @@ def get_custom_tools_for_agent(agent_id: int) -> List[Tool]:
 
 
 # Tool fields the schema builder + handlers read. Serialized into the agent pipeline
-# cache so the builder can rebuild tools/handlers without a DB query.
+# cache so the builder can rebuild tools/handlers without a DB query. `id` and
+# `mcp_server_id` are also cached so the call-log snapshot can list/filter tools
+# without re-querying the DB at call-insert time.
 _CACHED_TOOL_FIELDS = (
-    "name", "description", "tool_type", "parameters",
-    "url", "method", "auth_type", "auth_config", "meta_data", "oauth_connection_id",
+    "id", "name", "description", "tool_type", "parameters",
+    "url", "method", "auth_type", "auth_config", "meta_data",
+    "oauth_connection_id", "mcp_server_id",
 )
 
 
@@ -58,9 +61,10 @@ def serialize_agent_tools(agent_id: int) -> List[dict]:
     out: List[dict] = []
     for t in tools:
         d = {f: getattr(t, f, None) for f in _CACHED_TOOL_FIELDS}
-        # oauth_connection_id is a UUID; stringify so it survives JSON round-trip.
-        if d.get("oauth_connection_id") is not None:
-            d["oauth_connection_id"] = str(d["oauth_connection_id"])
+        # UUID columns must be stringified to survive a JSON round-trip through Redis.
+        for k in ("id", "oauth_connection_id", "mcp_server_id"):
+            if d.get(k) is not None:
+                d[k] = str(d[k])
         out.append(d)
     return out
 
