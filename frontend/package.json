@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
+    "@floating-ui/dom": "^1.7.6",
     "@hookform/resolvers": "^5.2.2",
     "@tailwindcss/postcss": "^4.2.1",
     "@tanstack/react-query": "^5.100.11",
@@ -39,6 +40,7 @@
     "@tiptap/extension-underline": "^3.18.0",
     "@tiptap/react": "^3.18.0",
     "@tiptap/starter-kit": "^3.18.0",
+    "@tiptap/suggestion": "3.20.1",
     "@types/js-cookie": "^3.0.6",
     "axios": "^1.11.0",
     "buffer": "^6.0.3",

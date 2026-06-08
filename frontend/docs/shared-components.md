@@ -628,6 +628,71 @@ Error state and helperText are auto-derived from `fieldState`.
 
 ---
 
+## RichPromptEditorField
+
+TipTap v3 rich editor for agent **system prompts**. Users insert two kinds of runtime
+variable as **atomic chips**:
+
+- **System variables** (`{{caller_number}}`, `{{agent_name}}`, …) — predefined; inserted
+  by typing `{{` (suggestion menu) or via the **Insert variable** button. Serialize to `{{key}}`.
+- **Custom variables** — user-defined via the **Custom variables** modal, each with a
+  default value. Stored inline in the prompt as `{{key|default}}` (no separate storage);
+  the backend replaces them with the default at runtime.
+
+The value is a plain string with `{{…}}` placeholders that round-trips into the backend
+`Text` column, so it drops into RHF exactly like a textarea. **Unified component** —
+passing `control` wraps it in an RHF `Controller`. Lives in
+`components/shared/RichPromptEditorField.tsx` (+ `rich-prompt-editor/` internals); the
+system-variable registry is `constants/promptVariables.ts` (keep in sync with the backend
+`core/services/pipeline/prompt_variables.py`, which resolves system vars from live call
+data and custom vars from their inline default).
+
+### Plain mode (no `control`)
+
+| Prop        | Type                      | Default   | Description                                |
+| ----------- | ------------------------- | --------- | ------------------------------------------ |
+| name        | string                    | —         | **Required.** Field name / fallback id.    |
+| value       | string                    | `''`      | Prompt text with `{{key}}` placeholders.   |
+| onChange    | `(value: string) => void` | —         | Fires with the serialized prompt string.   |
+| label       | string                    | —         | Label above the editor.                    |
+| placeholder | string                    | —         | Shown when the editor is empty.            |
+| minHeight   | string                    | `'220px'` | Min height of the editing surface.         |
+| isRequired  | boolean                   | `false`   | Shows asterisk on label.                   |
+| loading     | boolean                   | `false`   | Shows skeleton instead of the editor.      |
+| disabled    | boolean                   | `false`   | Read-only / dimmed.                        |
+| error       | boolean                   | `false`   | Destructive border + ring.                 |
+| helperText  | string                    | —         | Small text below the editor.               |
+| id          | string                    | —         | Editor element id (defaults to `name`).    |
+| className   | string                    | —         | Class for the editor surface wrapper.      |
+
+### RHF mode (with `control`)
+
+Error state and helperText are auto-derived from `fieldState`. The field value is the
+serialized prompt **string**.
+
+| Prop                                                   | Type                      | Default | Description                   |
+| ------------------------------------------------------ | ------------------------- | ------- | ----------------------------- |
+| name                                                   | string                    | —       | **Required.** RHF field name. |
+| control                                                | `Control<any>`            | —       | **Required.** RHF `control`.  |
+| rules                                                  | `RegisterOptions`         | —       | RHF validation rules.         |
+| onValueChange                                          | `(value: string) => void` | —       | Side-effect callback.         |
+| + plain props (minus `value`, `onChange`)              |                           |         | Forwarded.                    |
+
+### Example
+
+```tsx
+<RichPromptEditorField
+  name="config.system_prompt_template"
+  label="Prompt template"
+  control={control}
+  minHeight="220px"
+  placeholder="You are a helpful voice agent…"
+  helperText="Type {{ to insert a variable. Variables are substituted at runtime."
+/>
+```
+
+---
+
 ## CustomTab
 
 Ant Design-style line tabs built on Radix Tab primitives. Items-based API with `TabItem[]`.

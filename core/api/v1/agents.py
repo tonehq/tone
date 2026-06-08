@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -66,6 +67,24 @@ class UpdateAgentRequest(BaseModel):
     mcp_server_ids: Optional[List[str]] = None
     upload_ids: Optional[List[str]] = None
     phone_numbers: Optional[List[PhoneNumberAttachment]] = None
+
+
+class GeneratePromptRequest(BaseModel):
+    agent_name: Optional[str] = None
+    agent_description: Optional[str] = None
+    agent_type: Optional[str] = None
+    instruction: Optional[str] = None
+
+
+class ImprovePromptRequest(BaseModel):
+    text: str = Field(..., min_length=1)
+    agent_name: Optional[str] = None
+    agent_description: Optional[str] = None
+    agent_type: Optional[str] = None
+
+
+class GeneratedPromptResponse(BaseModel):
+    text: str
 
 
 # ---------------------------------------------------------------------------
@@ -225,3 +244,68 @@ def list_agents(
 ):
     org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
     return list_agents_for_org(db, org_id, body)
+
+
+# ---------------------------------------------------------------------------
+# AI prompt authoring helpers (Generate / Improve)
+# ---------------------------------------------------------------------------
+
+def _ai_service(claims: JWTClaims):
+    from fastapi import HTTPException
+
+    from core.services.ai_generation_service import (
+        AIGenerationService, resolve_openai_api_key)
+
+    org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
+    api_key = resolve_openai_api_key(org_id)
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No OpenAI API key configured. Add an OpenAI provider key to use AI generation.",
+        )
+    return AIGenerationService(api_key)
+
+
+@contextmanager
+def _prompt_errors():
+    """Translate AI-generation failures into clean HTTP 400s for the client."""
+    from fastapi import HTTPException
+
+    from core.services.ai_generation_service import PromptTruncatedError
+
+    try:
+        yield
+    except PromptTruncatedError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/generate_prompt", response_model=GeneratedPromptResponse)
+def generate_prompt(
+    body: GeneratePromptRequest,
+    claims: JWTClaims = Depends(require_org_member),
+):
+    svc = _ai_service(claims)
+    with _prompt_errors():
+        text = svc.generate_system_prompt(
+            agent_name=body.agent_name or "",
+            agent_description=body.agent_description or "",
+            agent_type=body.agent_type or "",
+            instruction=body.instruction or "",
+        )
+    return GeneratedPromptResponse(text=text)
+
+
+@router.post("/improve_prompt", response_model=GeneratedPromptResponse)
+def improve_prompt(
+    body: ImprovePromptRequest,
+    claims: JWTClaims = Depends(require_org_member),
+):
+    svc = _ai_service(claims)
+    with _prompt_errors():
+        text = svc.improve_system_prompt(
+            text=body.text,
+            agent_name=body.agent_name or "",
+            agent_description=body.agent_description or "",
+            agent_type=body.agent_type or "",
+        )
+    return GeneratedPromptResponse(text=text)

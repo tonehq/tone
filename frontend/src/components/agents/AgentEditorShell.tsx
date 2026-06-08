@@ -1,7 +1,7 @@
 'use client';
 
 import { useAtom } from 'jotai';
-import { ArrowLeft, Eye, Loader2, Phone, Save, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Phone, Save, Sparkles, Trash2 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
@@ -14,8 +14,7 @@ import {
 } from '@/atoms/AgentsAtom';
 import { AgentEditorProvider } from '@/components/agents/AgentEditorContext';
 import { AgentFormNavProvider } from '@/components/agents/agent-form/AgentFormNav';
-import { AGENT_SECTION_KEYS, buildAgentNav } from '@/components/agents/agent-form/sectionNav';
-import ReviewStep from '@/components/agents/agent-form/steps/ReviewStep';
+import { buildAgentNav } from '@/components/agents/agent-form/sectionNav';
 import { AccountMenu } from '@/components/layout/AccountMenu';
 import { isSidebarItemActive, SidebarShell } from '@/components/layout/SidebarShell';
 import { AppLoader, CustomButton, CustomModal } from '@/components/shared';
@@ -72,7 +71,6 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [previewOpen, setPreviewOpen] = useState(false);
   const [originalState, setOriginalState] = useState<AgentFormState | null>(null);
   const [detail, setDetail] = useState<AgentDetail | null>(null);
 
@@ -230,16 +228,6 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   const agentName = methods.watch('name') || (isEditMode ? 'Untitled agent' : 'New agent');
   const agentInitial = (agentName.trim().charAt(0) || 'A').toUpperCase();
 
-  const handleReviewJump = useCallback(
-    (stepIndex: number) => {
-      const key = AGENT_SECTION_KEYS[stepIndex];
-      if (!key) return;
-      setPreviewOpen(false);
-      router.push(`${basePath}/${key}`);
-    },
-    [basePath, router],
-  );
-
   return (
     <FormProvider {...methods}>
       <AgentFormNavProvider value={navContextValue}>
@@ -355,15 +343,6 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
                     </CustomButton>
                   )}
                   <CustomButton
-                    type="default"
-                    size="sm"
-                    icon={<Eye className="size-4" />}
-                    onClick={() => setPreviewOpen(true)}
-                    className="h-8"
-                  >
-                    Preview
-                  </CustomButton>
-                  <CustomButton
                     type="primary"
                     size="sm"
                     icon={
@@ -387,23 +366,10 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
                 {loading ? (
                   <AppLoader className="h-full" />
                 ) : (
-                  <div className="mx-auto max-w-3xl">{children}</div>
+                  <div className="mx-auto h-full max-w-3xl">{children}</div>
                 )}
               </main>
             </div>
-
-            <CustomModal
-              open={previewOpen}
-              onClose={() => setPreviewOpen(false)}
-              title="Agent preview"
-              description="Read-only sanity check of the current configuration."
-              hideFooter
-              width="sm:max-w-3xl"
-              className="max-h-[85vh] overflow-hidden"
-              contentClassName="max-h-[calc(85vh-90px)] overflow-y-auto"
-            >
-              <ReviewStep onJump={handleReviewJump} />
-            </CustomModal>
 
             <CustomModal
               open={deleteOpen}

@@ -6,7 +6,11 @@ from sqlalchemy.orm import Session
 
 from core.api.v1.agents import (
     CreateAgentRequest,
+    GeneratePromptRequest,
+    GeneratedPromptResponse,
+    ImprovePromptRequest,
     UpdateAgentRequest,
+    _prompt_errors,
     list_agents_for_org,
 )
 from core.database.session import get_db
@@ -21,6 +25,21 @@ def _get_service(claims: EEJWTClaims, db: Session) -> AgentService:
     org_id = UUID(claims.org_id)
     user_id = UUID(claims.user_id) if claims.user_id else None
     return AgentService(db, user_id=user_id, org_id=org_id)
+
+
+def _ai_service(claims: EEJWTClaims):
+    from fastapi import HTTPException
+
+    from core.services.ai_generation_service import (
+        AIGenerationService, resolve_openai_api_key)
+
+    api_key = resolve_openai_api_key(UUID(claims.org_id))
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No OpenAI API key configured. Add an OpenAI provider key to use AI generation.",
+        )
+    return AIGenerationService(api_key)
 
 
 @router.get("/get_all_agents")
@@ -93,3 +112,35 @@ def list_agents(
 ):
     org_id = UUID(claims.org_id)
     return list_agents_for_org(db, org_id, body)
+
+
+@router.post("/generate_prompt", response_model=GeneratedPromptResponse)
+def generate_prompt(
+    body: GeneratePromptRequest,
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+):
+    svc = _ai_service(claims)
+    with _prompt_errors():
+        text = svc.generate_system_prompt(
+            agent_name=body.agent_name or "",
+            agent_description=body.agent_description or "",
+            agent_type=body.agent_type or "",
+            instruction=body.instruction or "",
+        )
+    return GeneratedPromptResponse(text=text)
+
+
+@router.post("/improve_prompt", response_model=GeneratedPromptResponse)
+def improve_prompt(
+    body: ImprovePromptRequest,
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+):
+    svc = _ai_service(claims)
+    with _prompt_errors():
+        text = svc.improve_system_prompt(
+            text=body.text,
+            agent_name=body.agent_name or "",
+            agent_description=body.agent_description or "",
+            agent_type=body.agent_type or "",
+        )
+    return GeneratedPromptResponse(text=text)

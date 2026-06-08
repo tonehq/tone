@@ -18,6 +18,7 @@ import Logo from './Logo';
 import MultiSelectField from './MultiSelectField';
 import { PhoneNumberDisplay } from './PhoneNumberDisplay';
 import RadioGroupField from './RadioGroupField';
+import RichPromptEditorField from './RichPromptEditorField';
 import ScopeStatus from './ScopeStatus';
 import SearchBar from './SearchBar';
 import SearchableSelect from './SearchableSelect';
@@ -41,6 +42,7 @@ export type {
   FormCheckboxFieldProps,
   FormMultiSelectFieldProps,
   FormRadioGroupFieldProps,
+  FormRichPromptEditorFieldProps,
   FormSelectInputProps,
   FormSliderFieldProps,
   FormTextAreaFieldProps,
@@ -48,6 +50,7 @@ export type {
   MultiSelectFieldBaseProps,
   MultiSelectOption,
   RadioGroupOption,
+  RichPromptEditorFieldBaseProps,
   SearchToken,
   SelectInputBaseProps,
   SelectOption,
@@ -83,6 +86,7 @@ export {
   MultiSelectField,
   PhoneNumberDisplay,
   RadioGroupField,
+  RichPromptEditorField,
   ScopeStatus,
   SearchBar,
   SearchableSelect,

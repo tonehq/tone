@@ -92,6 +92,36 @@ class PipelineParams:
                 anchored.append(m)
         return anchored
 
+    def messages_with_runtime_context(self, context: Optional[dict] = None) -> List[dict]:
+        """Date-anchored messages with per-call ``{{variable}}`` substitution applied.
+
+        Substitutes known variables (caller number, agent name, date, …) into the system
+        and assistant (first_message) turns. Like the date anchor this runs per call in
+        the builder, NOT in the Redis-cached payload, so one caller's values never leak
+        into another call. Falls back to date-anchor-only when ``context`` is empty.
+        """
+        msgs = self.messages_with_date_anchor()
+        if not context:
+            return msgs
+        from core.services.pipeline.prompt_variables import substitute_variables
+
+        out = []
+        for m in msgs:
+            if m.get("role") in ("system", "assistant") and m.get("content"):
+                out.append({**m, "content": substitute_variables(m["content"], context)})
+            else:
+                out.append(m)
+        return out
+
+    def first_message_with_context(self, context: Optional[dict] = None) -> Optional[str]:
+        """The greeting to speak on connect, with ``{{variable}}`` substitution applied."""
+        text = self.first_message_text
+        if not text or not context:
+            return text
+        from core.services.pipeline.prompt_variables import substitute_variables
+
+        return substitute_variables(text, context)
+
     # ------------------------------------------------------------------ #
     # Construction
     # ------------------------------------------------------------------ #
