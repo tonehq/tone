@@ -1,0 +1,11 @@
+# torch/torchaudio/torchvision are pinned in constraints.txt (cu124, driver-safe).
+# pip will pick the newest nemo_toolkit compatible with torch 2.6.
+# If the model fails to load with "model not found / unsupported", the fix is to
+# install NeMo from main instead:  nemo_toolkit[asr] @ git+https://github.com/NVIDIA/NeMo.git@main
+Cython
+numpy<2
+nemo_toolkit[asr]
+fastapi
+uvicorn[standard]
+python-multipart
+soundfile

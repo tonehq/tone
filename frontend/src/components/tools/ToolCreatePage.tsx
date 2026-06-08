@@ -140,7 +140,7 @@ export default function ToolCreatePage() {
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* ── Header (soft, borderless toolbar) ──────────────────── */}
-      <header className="flex shrink-0 items-center gap-2 px-3 py-3 sm:px-5">
+      <header className="flex shrink-0 items-center gap-2 py-3">
         <CustomButton
           type="text"
           onClick={goBack}
@@ -154,7 +154,7 @@ export default function ToolCreatePage() {
 
       {/* ── Body ───────────────────────────────────────────────── */}
       <div className="min-h-0 flex-1 overflow-auto">
-        <div className="mx-auto w-full max-w-2xl px-6 pb-14 pt-10 sm:pt-14">
+        <div className="mx-auto w-full max-w-2xl px-6 pb-14 pt-6 sm:pt-10">
           {/* Hero */}
           <div className="text-center">
             <div className="inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-primary/80">

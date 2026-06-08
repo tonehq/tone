@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-stt-nemotron-service
+  namespace: staging
+  labels:
+    app: staging-stt-nemotron
+spec:
+  type: ClusterIP
+  selector:
+    app: staging-stt-nemotron
+  ports:
+    - name: http
+      port: 80
+      targetPort: http        # -> container 8000 (/health, /asr; /ws/asr in step 2)

@@ -41,6 +41,13 @@ export default function MCPListPage() {
     router.push('/mcp/create');
   }, [router]);
 
+  const handleViewTools = useCallback(
+    (server: MCPServer) => {
+      router.push(`/mcp/${server.id}/tools`);
+    },
+    [router],
+  );
+
   const handleEdit = useCallback(
     (server: MCPServer) => {
       router.push(`/mcp/edit/${server.id}`);
@@ -150,7 +157,7 @@ export default function MCPListPage() {
               >
                 <MCPServerCard
                   server={server}
-                  onClick={() => handleEdit(server)}
+                  onClick={() => handleViewTools(server)}
                   onEdit={() => handleEdit(server)}
                   onDelete={() => handleDelete(server)}
                 />

@@ -1,0 +1,31 @@
+# External ingress for the nemotron STT service, with WebSocket support.
+# Strips the /stt-stream prefix, so:
+#   /stt-stream/health   -> /health
+#   /stt-stream/asr      -> /asr   (POST multipart wav)
+#   /stt-stream/ws/asr   -> /ws/asr (WebSocket)
+# nginx-ingress upgrades WebSocket connections automatically; the long
+# proxy timeouts keep streaming sockets from being cut.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: staging-stt-nemotron-ingress
+  namespace: staging
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "25m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: staging-stt.trytone.ai
+      http:
+        paths:
+          - path: /stt-stream(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: staging-stt-nemotron-service
+                port:
+                  number: 80

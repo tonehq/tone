@@ -34,3 +34,18 @@ export interface MCPServersState {
   servers: MCPServer[];
   loading: boolean;
 }
+
+export interface MCPTool {
+  name: string;
+  description: string | null;
+  parameters: Record<string, unknown>;
+  required: string[];
+}
+
+export interface MCPToolsResponse {
+  server_name: string;
+  server_url: string;
+  transport_type: MCPTransportType;
+  tools: MCPTool[];
+  tool_count: number;
+}
