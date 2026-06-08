@@ -210,6 +210,16 @@ def build_stt(spec: dict) -> Optional[Any]:
         if provider_name == "nvidia":
             from pipecat.services.nvidia.stt import NvidiaSTTService
             return NvidiaSTTService(api_key=api_key, params=build_input_params(NvidiaSTTService, metadata))
+        if provider_name == "nvidia_sage":
+            from pipecat.services.stt_service import WebsocketSTTService
+            return NvidiaSageMakerSTTService(api_key=api_key, params=build_input_params(NvidiaSageMakerSTTService, metadata))
+        if provider_name == "nvidia_websocket":
+            from pipecat.services.nvidia.websocket_stt import NvidiaWebSocketService
+            ws_url = model_meta.get("base_url") or model_meta.get("url") or metadata.get("url")
+            ws_kwargs = {}
+            if metadata.get("sample_rate") is not None:
+                ws_kwargs["sample_rate"] = metadata["sample_rate"]
+            return NvidiaWebSocketService(url=ws_url, **ws_kwargs)
         if provider_name == "sarvam":
             from pipecat.services.sarvam.stt import SarvamSTTService
             return SarvamSTTService(
