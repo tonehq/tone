@@ -232,11 +232,12 @@ def build_stt(spec: dict) -> Optional[Any]:
             return NvidiaSageMakerSTTService(api_key=api_key, params=build_input_params(NvidiaSageMakerSTTService, metadata))
         if provider_name == "nvidia_websocket":
             from pipecat.services.nvidia.websocket_stt import NvidiaWebSocketService
+            from core.logging import get_trace_id
             ws_url = "ws://staging-stt-nemotron-service.staging.svc.cluster.local/ws/asr"
             ws_kwargs = {}
             if metadata.get("sample_rate") is not None:
                 ws_kwargs["sample_rate"] = metadata["sample_rate"]
-            return NvidiaWebSocketService(url=ws_url, **ws_kwargs)
+            return NvidiaWebSocketService(url=ws_url, trace_id=get_trace_id(), **ws_kwargs)
         if provider_name == "sarvam":
             from pipecat.services.sarvam.stt import SarvamSTTService
             return SarvamSTTService(
