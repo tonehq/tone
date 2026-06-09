@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from core.database.session import get_db
 from core.services.mcp_server_service import McpServerService
+from core.api.v1.faceted_schemas import FacetsRequest
 from core.utils.pagination import parse_sort, parse_page
 from ee.middleware.auth import require_ee_org_member, EEJWTClaims
 
@@ -45,7 +46,12 @@ def list_mcp_servers(
       page_size?: int,         # None/0 means "all"
     }
     """
-    sort_by, sort_order = parse_sort(data.get("sort"), _ALLOWED_SORT_FIELDS)
+    # Prefer the new sort_by/sort_order contract; fall back to legacy "-field" sort.
+    if data.get("sort_by") or data.get("sort_order"):
+        sort_by = data.get("sort_by") or "created_at"
+        sort_order = data.get("sort_order") or "desc"
+    else:
+        sort_by, sort_order = parse_sort(data.get("sort"), _ALLOWED_SORT_FIELDS)
     page, page_size = parse_page(data)
 
     is_active = data.get("is_active")
@@ -60,7 +66,27 @@ def list_mcp_servers(
         sort_order=sort_order,
         page=page,
         page_size=page_size,
+        filters=data.get("filters"),
     )
+
+
+@router.post("/facets")
+def get_mcp_facets(
+    body: FacetsRequest,
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    filters = [f.model_dump() for f in body.filters] if body.filters else None
+    return _get_service(claims, db).get_facets(filters=filters)
+
+
+@router.get("/filter-values")
+def get_mcp_filter_values(
+    column_name: str = Query(...),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    return _get_service(claims, db).get_filter_values(column_name=column_name)
 
 
 @router.post("/upsert_mcp_server", status_code=status.HTTP_200_OK)

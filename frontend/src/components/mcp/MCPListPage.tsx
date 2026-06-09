@@ -1,10 +1,18 @@
 'use client';
 
-import { deleteMcpServerAtom, fetchMcpServersAtom, mcpServersAtom } from '@/atoms/MCPAtom';
+import { deleteMcpServerAtom } from '@/atoms/MCPAtom';
 import MCPCardSkeleton from '@/components/mcp/MCPCardSkeleton';
 import MCPEmptyState from '@/components/mcp/MCPEmptyState';
 import MCPServerCard from '@/components/mcp/MCPServerCard';
-import { CustomButton, SearchBar } from '@/components/shared';
+import { mcpListConfig } from '@/components/mcp/mcpListConfig';
+import {
+  CustomButton,
+  FacetFilterBar,
+  FacetFilterDrawer,
+  useFacetedList,
+} from '@/components/shared';
+import SelectInput from '@/components/shared/SelectInput';
+import type { SelectOption } from '@/types/components';
 import type { MCPServer } from '@/types/mcp';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
@@ -12,30 +20,33 @@ import { motion } from 'framer-motion';
 import { useAtom } from 'jotai';
 import { Plus, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
+
+const SORT_OPTIONS: SelectOption[] = [
+  { value: 'created_at:desc', label: 'Newest' },
+  { value: 'created_at:asc', label: 'Oldest' },
+  { value: 'name:asc', label: 'Name A–Z' },
+  { value: 'name:desc', label: 'Name Z–A' },
+  { value: 'updated_at:desc', label: 'Recently updated' },
+];
 
 export default function MCPListPage() {
   const router = useRouter();
-  const [{ servers, loading }] = useAtom(mcpServersAtom);
-  const [, fetchServers] = useAtom(fetchMcpServersAtom);
   const [, deleteServer] = useAtom(deleteMcpServerAtom);
 
-  const [search, setSearch] = useState('');
+  const fl = useFacetedList(mcpListConfig);
+  const servers = fl.rows;
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+  const [sortValue, setSortValue] = useState('created_at:desc');
 
-  useEffect(() => {
-    fetchServers().catch(handleApiError);
-  }, [fetchServers]);
-
-  const filteredServers = useMemo(() => {
-    if (!search.trim()) return servers;
-    const q = search.toLowerCase();
-    return servers.filter(
-      (s) =>
-        (s.name ?? '').toLowerCase().includes(q) ||
-        (s.description ?? '').toLowerCase().includes(q) ||
-        (s.server_url ?? '').toLowerCase().includes(q),
-    );
-  }, [servers, search]);
+  const handleSort = useCallback(
+    (value: string) => {
+      setSortValue(value);
+      const [field, order] = value.split(':');
+      fl.handleSortChange({ field, order: order as 'asc' | 'desc' });
+    },
+    [fl],
+  );
 
   const handleCreate = useCallback(() => {
     router.push('/mcp/create');
@@ -60,13 +71,20 @@ export default function MCPListPage() {
       try {
         await deleteServer(server.id);
         showToast.success('MCP server deleted successfully');
-        await fetchServers();
+        fl.refresh();
       } catch (error) {
         handleApiError(error);
       }
     },
-    [deleteServer, fetchServers],
+    [deleteServer, fl],
   );
+
+  // Keep the toolbar visible during the initial skeleton load too; only hide it
+  // once we know there are genuinely no servers and no active filters.
+  const showToolbar = fl.listLoading || fl.total > 0 || fl.hasActiveFilters;
+  const isInitialLoading = fl.listLoading && servers.length === 0;
+  const noServersAtAll = !fl.listLoading && servers.length === 0 && !fl.hasActiveFilters;
+  const noMatches = !fl.listLoading && servers.length === 0 && fl.hasActiveFilters;
 
   return (
     <div className="animate-page flex h-full min-h-0 flex-col gap-5">
@@ -85,27 +103,32 @@ export default function MCPListPage() {
       </div>
 
       {/* Toolbar */}
-      {servers.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3">
-          <SearchBar
-            placeholder="Search MCP servers..."
-            value={search}
-            onSearch={setSearch}
-            debounceMs={300}
-            containerClassName="max-w-xs flex-1"
-          />
-          {search && filteredServers.length > 0 && (
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {filteredServers.length} of {servers.length} shown
-            </span>
-          )}
-        </div>
+      {showToolbar && (
+        <FacetFilterBar
+          fields={fl.tokenFields}
+          tokens={fl.tokens}
+          onTokensChange={fl.setTokens}
+          onClear={fl.clearAll}
+          showClear={fl.hasActiveFilters}
+          placeholder="Search MCP servers… (e.g. name:clickup)"
+          drawerFilterCount={fl.drawerFilterCount}
+          onOpenDrawer={() => setFilterDrawerOpen(true)}
+          rightSlot={
+            <SelectInput
+              name="mcp-sort"
+              options={SORT_OPTIONS}
+              value={sortValue}
+              onValueChange={handleSort}
+              size="sm"
+              triggerClassName="min-w-[170px]"
+            />
+          }
+        />
       )}
 
       {/* Content */}
       <div className="flex min-h-0 flex-1 flex-col">
-        {/* Loading state */}
-        {loading && servers.length === 0 && (
+        {isInitialLoading && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {[1, 2, 3].map((i) => (
               <MCPCardSkeleton key={i} />
@@ -113,30 +136,26 @@ export default function MCPListPage() {
           </div>
         )}
 
-        {/* Empty state */}
-        {!loading && servers.length === 0 && <MCPEmptyState onCreate={handleCreate} />}
+        {noServersAtAll && <MCPEmptyState onCreate={handleCreate} />}
 
-        {/* No search results */}
-        {!loading && search && filteredServers.length === 0 && servers.length > 0 && (
+        {noMatches && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <div className="mb-3 flex size-12 items-center justify-center rounded-xl bg-muted">
               <Search className="size-5 text-muted-foreground" />
             </div>
-            <p className="text-sm text-foreground">
-              No MCP servers matching &ldquo;{search}&rdquo;
-            </p>
+            <p className="text-sm text-foreground">No MCP servers match your filters</p>
             <button
               type="button"
-              onClick={() => setSearch('')}
+              onClick={fl.clearAll}
               className="mt-3 text-[13px] font-medium text-primary hover:underline"
             >
-              Clear search
+              Clear filters
             </button>
           </div>
         )}
 
         {/* Card grid */}
-        {!loading && filteredServers.length > 0 && (
+        {!fl.listLoading && servers.length > 0 && (
           <motion.div
             className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
             initial="hidden"
@@ -146,7 +165,7 @@ export default function MCPListPage() {
               visible: { transition: { staggerChildren: 0.04, delayChildren: 0.05 } },
             }}
           >
-            {filteredServers.map((server) => (
+            {servers.map((server) => (
               <motion.div
                 key={server.id}
                 className="h-full"
@@ -188,6 +207,17 @@ export default function MCPListPage() {
           </motion.div>
         )}
       </div>
+
+      <FacetFilterDrawer
+        open={filterDrawerOpen}
+        onClose={() => setFilterDrawerOpen(false)}
+        description="Filter MCP servers by status and transport."
+        sections={mcpListConfig.facetSections}
+        value={fl.facetSelections}
+        facets={fl.facets}
+        facetsLoading={fl.facetsLoading}
+        onApply={fl.applyDrawer}
+      />
     </div>
   );
 }

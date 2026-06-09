@@ -2,8 +2,9 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAtom } from 'jotai';
-import { ArrowLeft, KeyRound, Layers, Pencil, Plus, Trash2 } from 'lucide-react';
-import { useParams, useRouter } from 'next/navigation';
+import { ChevronRight, KeyRound, Layers, Pencil, Plus, Trash2 } from 'lucide-react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -16,11 +17,21 @@ import {
   upsertProviderModelAtom,
   upsertServiceAtom,
 } from '@/atoms/ServicesAtom';
-import { CustomButton, CustomModal, CustomTable, SearchBar } from '@/components/shared';
+import { CustomButton, CustomModal, CustomTable, TokenSearchBar } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
-import { deleteService, listProviderCatalog } from '@/services/servicesService';
+import {
+  deleteService,
+  listProviderCatalog,
+  listProviderKeyFilterValues,
+  listProviderModelFilterValues,
+} from '@/services/servicesService';
 import type { ModelUpsertPayload } from '@/services/servicesService';
-import type { CustomTableColumn, CustomTableSortState } from '@/types/components';
+import type {
+  CustomTableColumn,
+  CustomTableSortState,
+  SearchToken,
+  TokenSearchField,
+} from '@/types/components';
 import type {
   ProviderCatalogItem,
   ProviderModel,
@@ -43,7 +54,6 @@ const KEYS_PAGE_SIZE = 20;
 const MODELS_PAGE_SIZE = 20;
 
 export default function ServiceProviderDetailPage() {
-  const router = useRouter();
   const params = useParams<{ providerId: string; serviceType?: string }>();
   const providerId = params?.providerId;
   // The detail page is scoped to one (provider, service_type). The route is
@@ -254,8 +264,44 @@ export default function ServiceProviderDetailPage() {
     }
   };
 
-  const handleKeysSearch = useCallback((value: string) => {
-    setKeysSearch(value);
+  // Token-bar "Name" field — a value dropdown backed by /filter-values, scoped
+  // to this provider (and service_type).
+  const keysFields = useMemo<TokenSearchField[]>(
+    () => [
+      {
+        key: 'name',
+        label: 'Name',
+        type: 'enum',
+        fetchValues: () =>
+          providerId
+            ? listProviderKeyFilterValues(providerId, 'name', serviceType ?? undefined)
+            : Promise.resolve([]),
+      },
+    ],
+    [providerId, serviceType],
+  );
+  const modelsFields = useMemo<TokenSearchField[]>(
+    () => [
+      {
+        key: 'name',
+        label: 'Name',
+        type: 'enum',
+        fetchValues: () =>
+          providerId
+            ? listProviderModelFilterValues(providerId, 'name', serviceType ?? undefined)
+            : Promise.resolve([]),
+      },
+    ],
+    [providerId, serviceType],
+  );
+
+  const keysTokens = useMemo<SearchToken[]>(
+    () => (keysSearch ? [{ field: 'name', value: keysSearch }] : []),
+    [keysSearch],
+  );
+  const handleKeysTokens = useCallback((tokens: SearchToken[]) => {
+    const last = [...tokens].reverse().find((t) => t.field === 'name');
+    setKeysSearch(last?.value ?? '');
     setKeysPage(1);
   }, []);
   const handleKeysSort = useCallback((s: CustomTableSortState | null) => {
@@ -263,14 +309,29 @@ export default function ServiceProviderDetailPage() {
     if (!s) return setKeysSort('-updated_at');
     setKeysSort(s.order === 'desc' ? `-${s.field}` : s.field);
   }, []);
-  const handleModelsSearch = useCallback((value: string) => {
-    setModelsSearch(value);
+
+  const modelsTokens = useMemo<SearchToken[]>(
+    () => (modelsSearch ? [{ field: 'name', value: modelsSearch }] : []),
+    [modelsSearch],
+  );
+  const handleModelsTokens = useCallback((tokens: SearchToken[]) => {
+    const last = [...tokens].reverse().find((t) => t.field === 'name');
+    setModelsSearch(last?.value ?? '');
     setModelsPage(1);
   }, []);
   const handleModelsSort = useCallback((s: CustomTableSortState | null) => {
     setModelsPage(1);
     if (!s) return setModelsSort('name');
     setModelsSort(s.order === 'desc' ? `-${s.field}` : s.field);
+  }, []);
+
+  // Switching tabs starts clean — reset both tabs' search + pagination.
+  const handleTabChange = useCallback((tab: 'keys' | 'models') => {
+    setActiveTab(tab);
+    setKeysSearch('');
+    setKeysPage(1);
+    setModelsSearch('');
+    setModelsPage(1);
   }, []);
 
   // ─── columns ──────────────────────────────────────────────────────────────
@@ -507,19 +568,20 @@ export default function ServiceProviderDetailPage() {
   const isKeysTab = activeTab === 'keys';
 
   return (
-    <div className="animate-page flex h-full min-h-0 flex-col gap-2">
-      {/* back nav */}
-      <div className="shrink-0">
-        <CustomButton
-          type="text"
-          size="sm"
-          icon={<ArrowLeft className="size-4" />}
-          onClick={() => router.push('/settings/model-providers')}
-          className="-ml-2 text-muted-foreground hover:text-foreground"
-        >
-          Back to Model Providers
-        </CustomButton>
-      </div>
+    <div className="animate-page flex h-full min-h-0 flex-col gap-3">
+      {/* breadcrumb */}
+      <nav
+        aria-label="Breadcrumb"
+        className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground"
+      >
+        <Link href="/settings/model-providers" className="transition-colors hover:text-foreground">
+          Model Providers
+        </Link>
+        <ChevronRight className="size-3.5" aria-hidden />
+        <span className="truncate font-medium text-foreground">
+          {providerLoading ? 'Loading…' : (provider?.display_name ?? 'Unknown provider')}
+        </span>
+      </nav>
 
       {/* tight inline header */}
       <header className="flex shrink-0 items-center gap-3">
@@ -550,63 +612,64 @@ export default function ServiceProviderDetailPage() {
         </div>
       </header>
 
-      {/* tab strip + per-tab toolbar */}
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border">
-        <div className="relative -mb-px flex items-center gap-1">
-          <TabButton
-            active={isKeysTab}
-            onClick={() => setActiveTab('keys')}
-            icon={<KeyRound className="size-3.5" />}
-            label="API Keys"
-            count={keysState.total}
+      {/* tab strip */}
+      <div className="flex shrink-0 items-center gap-1 border-b border-border">
+        <TabButton
+          active={isKeysTab}
+          onClick={() => handleTabChange('keys')}
+          icon={<KeyRound className="size-3.5" />}
+          label="API Keys"
+          count={keysState.total}
+        />
+        <TabButton
+          active={!isKeysTab}
+          onClick={() => handleTabChange('models')}
+          icon={<Layers className="size-3.5" />}
+          label="Models"
+          count={modelsState.total}
+        />
+      </div>
+
+      {/* toolbar: search (left) + add (right) */}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
+        {isKeysTab ? (
+          <TokenSearchBar
+            key="keys-search"
+            fields={keysFields}
+            value={keysTokens}
+            onChange={handleKeysTokens}
+            placeholder="Search keys… (e.g. name:nemotron)"
+            className="w-full sm:max-w-sm"
           />
-          <TabButton
-            active={!isKeysTab}
-            onClick={() => setActiveTab('models')}
-            icon={<Layers className="size-3.5" />}
-            label="Models"
-            count={modelsState.total}
+        ) : (
+          <TokenSearchBar
+            key="models-search"
+            fields={modelsFields}
+            value={modelsTokens}
+            onChange={handleModelsTokens}
+            placeholder="Search models… (e.g. name:gpt)"
+            className="w-full sm:max-w-sm"
           />
-        </div>
-        <div className="flex items-center gap-2 pb-2">
-          {isKeysTab ? (
-            <>
-              <SearchBar
-                placeholder="Search keys…"
-                value={keysSearch}
-                onSearch={handleKeysSearch}
-                debounceMs={300}
-                containerClassName="max-w-[220px]"
-              />
-              <CustomButton
-                type="primary"
-                size="sm"
-                icon={<Plus className="size-4" />}
-                onClick={handleAddKey}
-              >
-                Add API key
-              </CustomButton>
-            </>
-          ) : (
-            <>
-              <SearchBar
-                placeholder="Search models…"
-                value={modelsSearch}
-                onSearch={handleModelsSearch}
-                debounceMs={300}
-                containerClassName="max-w-[220px]"
-              />
-              <CustomButton
-                type="primary"
-                size="sm"
-                icon={<Plus className="size-4" />}
-                onClick={handleAddModel}
-              >
-                Add model
-              </CustomButton>
-            </>
-          )}
-        </div>
+        )}
+        {isKeysTab ? (
+          <CustomButton
+            type="primary"
+            size="sm"
+            icon={<Plus className="size-4" />}
+            onClick={handleAddKey}
+          >
+            Add API key
+          </CustomButton>
+        ) : (
+          <CustomButton
+            type="primary"
+            size="sm"
+            icon={<Plus className="size-4" />}
+            onClick={handleAddModel}
+          >
+            Add model
+          </CustomButton>
+        )}
       </div>
 
       {/* table panes — animated swap; this is the only scroll surface */}

@@ -1,19 +1,24 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Wrench, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 
-import { ActionMenu, CustomButton, CustomModal, CustomTable } from '@/components/shared';
-import SearchBar from '@/components/shared/SearchBar';
-import SelectInput from '@/components/shared/SelectInput';
+import {
+  ActionMenu,
+  CustomButton,
+  CustomModal,
+  CustomTable,
+  FacetFilterBar,
+  FacetFilterDrawer,
+  useFacetedList,
+} from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { TOOL_TYPE_HEADER } from '@/constants/toolForm';
-import { TOOLS_QUERY_KEY, toolsApi, useDeleteTool, useTools } from '@/lib/api/tools';
-import { TOOL_STATUS_OPTIONS, TOOL_TYPE_OPTIONS } from '@/lib/constants/filters';
-import type { CustomTableColumn, CustomTableSortState } from '@/types/components';
+import { toolsApi, useDeleteTool } from '@/lib/api/tools';
+import { toolsListConfig } from '@/components/tools/toolsListConfig';
+import type { CustomTableColumn } from '@/types/components';
 import type { Tool } from '@/types/tool';
 import { cn } from '@/utils/cn';
 import { showToast } from '@/utils/toast';
@@ -26,69 +31,20 @@ const METHOD_COLORS: Record<string, string> = {
   PATCH: 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400',
 };
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50];
-
 export default function ToolsListPage() {
   const router = useRouter();
-  const queryClient = useQueryClient();
 
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [sortBy, setSortBy] = useState('-updated_at');
-  const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const fl = useFacetedList(toolsListConfig);
+  const tools = fl.rows;
+  const total = fl.total;
+
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
-  const queryParams = useMemo(
-    () => ({
-      page,
-      page_size: pageSize,
-      sort_by: sortBy,
-      search: search || undefined,
-      tool_type: typeFilter !== 'all' ? typeFilter : undefined,
-      is_active: statusFilter === 'active' ? true : statusFilter === 'inactive' ? false : undefined,
-    }),
-    [page, pageSize, sortBy, search, typeFilter, statusFilter],
-  );
-
-  const { data, isLoading, isFetching } = useTools(queryParams);
-  const tools = data?.items ?? [];
-  const total = data?.total ?? 0;
-
   const deleteMutation = useDeleteTool();
-
-  const handleSearch = useCallback((value: string) => {
-    setSearch(value);
-    setPage(1);
-  }, []);
-
-  const handleTypeFilter = useCallback((value: string) => {
-    setTypeFilter(value);
-    setPage(1);
-  }, []);
-
-  const handleStatusFilter = useCallback((value: string) => {
-    setStatusFilter(value);
-    setPage(1);
-  }, []);
-
-  const handleSortChange = useCallback((sort: CustomTableSortState | null) => {
-    if (!sort) {
-      setSortBy('-updated_at');
-    } else {
-      setSortBy(sort.order === 'desc' ? `-${sort.field}` : sort.field);
-    }
-    setPage(1);
-  }, []);
-
-  const handlePageChange = useCallback((nextPage: number, nextPageSize: number) => {
-    setPage(nextPage);
-    setPageSize(nextPageSize);
-  }, []);
 
   const handleEdit = useCallback(
     (tool: Tool) => {
@@ -103,7 +59,7 @@ export default function ToolsListPage() {
     const ids = Array.from(selectedIds);
     const results = await Promise.allSettled(ids.map((id) => toolsApi.delete(id)));
     const failed = results.filter((r) => r.status === 'rejected').length;
-    queryClient.invalidateQueries({ queryKey: [TOOLS_QUERY_KEY] });
+    fl.refresh();
     setBulkDeleting(false);
     setBulkDeleteOpen(false);
 
@@ -124,7 +80,7 @@ export default function ToolsListPage() {
       });
       setSelectedIds(failedIds);
     }
-  }, [selectedIds, queryClient]);
+  }, [selectedIds, fl]);
 
   const toggleRow = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -300,16 +256,26 @@ export default function ToolsListPage() {
                 next.delete(record.id);
                 return next;
               });
+              fl.refresh();
             }}
             itemName={record.name}
           />
         ),
       },
     ],
-    [allRowsSelected, someRowsSelected, toggleAllRows, selectedIds, toggleRow, handleEdit],
+    [
+      allRowsSelected,
+      someRowsSelected,
+      toggleAllRows,
+      selectedIds,
+      toggleRow,
+      handleEdit,
+      deleteMutation,
+      fl,
+    ],
   );
 
-  const hasFilter = !!search || typeFilter !== 'all' || statusFilter !== 'all';
+  const hasFilter = fl.hasActiveFilters;
 
   return (
     <div className="animate-page flex h-full min-h-0 flex-col gap-5">
@@ -338,33 +304,16 @@ export default function ToolsListPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-3">
-        <SearchBar
-          placeholder="Search tools..."
-          value={search}
-          onSearch={handleSearch}
-          debounceMs={400}
-          containerClassName="max-w-xs flex-1"
-        />
-        <SelectInput
-          name="type-filter"
-          options={TOOL_TYPE_OPTIONS}
-          value={typeFilter}
-          onValueChange={handleTypeFilter}
-          placeholder="All types"
-          size="sm"
-          triggerClassName="min-w-[160px]"
-        />
-        <SelectInput
-          name="status-filter"
-          options={TOOL_STATUS_OPTIONS}
-          value={statusFilter}
-          onValueChange={handleStatusFilter}
-          placeholder="All statuses"
-          size="sm"
-          triggerClassName="min-w-[160px]"
-        />
-      </div>
+      <FacetFilterBar
+        fields={fl.tokenFields}
+        tokens={fl.tokens}
+        onTokensChange={fl.setTokens}
+        onClear={fl.clearAll}
+        showClear={fl.hasActiveFilters}
+        placeholder="Search tools… (e.g. name:weather, status:active)"
+        drawerFilterCount={fl.drawerFilterCount}
+        onOpenDrawer={() => setFilterDrawerOpen(true)}
+      />
 
       {/* Table */}
       <div className="flex min-h-0 flex-1 flex-col">
@@ -372,22 +321,34 @@ export default function ToolsListPage() {
           columns={columns}
           dataSource={tools}
           rowKey="id"
-          loading={isLoading || isFetching}
+          loading={fl.listLoading}
           onRowClick={handleEdit}
-          onSortChange={handleSortChange}
-          initialSort={{ field: 'updated_at', order: 'desc' }}
+          onSortChange={fl.handleSortChange}
+          initialSort={toolsListConfig.defaultSort ?? undefined}
           pagination={{
-            current: page,
-            pageSize,
+            current: fl.page,
+            pageSize: fl.pageSize,
             total,
-            pageSizeOptions: PAGE_SIZE_OPTIONS,
-            onChange: handlePageChange,
+            pageSizeOptions: fl.pageSizeOptions,
+            onChange: fl.handlePaginationChange,
           }}
           emptyState={
             <EmptyState onAdd={() => router.push('/tools/create')} hasFilter={hasFilter} />
           }
         />
       </div>
+
+      {/* Filter drawer */}
+      <FacetFilterDrawer
+        open={filterDrawerOpen}
+        onClose={() => setFilterDrawerOpen(false)}
+        description="Filter tools by type and status."
+        sections={toolsListConfig.facetSections}
+        value={fl.facetSelections}
+        facets={fl.facets}
+        facetsLoading={fl.facetsLoading}
+        onApply={fl.applyDrawer}
+      />
 
       {/* Selection bar */}
       <SelectionBar

@@ -6,11 +6,14 @@ from uuid import UUID
 
 from fastapi import HTTPException, status
 from loguru import logger
+from sqlalchemy import case, or_
 
 from core.services.base import BaseService
 from core.models.tool import Tool
 from core.models.agent_tool import AgentTool
 from core.utils.encryption import encrypt, decrypt
+from core.utils.faceted_query import apply_filters, apply_sort, build_facets, distinct_values
+from core.utils.list_params import resolve_sort
 
 
 def encrypt_auth_config(auth_config: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -317,6 +320,76 @@ class ToolService(BaseService):
             .filter(AgentTool.agent_id == agent_id, Tool.is_active == True)
             .all()
         )
+
+    # ------------------------------------------------------------------
+    # Faceted list / facets / filter-values
+    # ------------------------------------------------------------------
+
+    # ``status`` is derived from the boolean ``is_active`` via a CASE expression
+    # so it flows through the generic faceted-query helpers as a string facet.
+    TOOL_FACET_FIELDS = ["tool_type", "status"]
+
+    def _tool_column_map(self) -> Dict[str, Any]:
+        return {
+            "name": Tool.name,
+            "tool_type": Tool.tool_type,
+            "status": case((Tool.is_active.is_(True), "active"), else_="inactive"),
+            "is_active": Tool.is_active,
+            "created_at": Tool.created_at,
+            "updated_at": Tool.updated_at,
+        }
+
+    def _tool_base_query(self):
+        """Org-scoped base query for the tools list surface (no MCP, no templates)."""
+        return self.query(Tool).filter(Tool.tool_type != 'mcp', Tool.is_template != True)
+
+    def _apply_tool_named_filters(self, query, body: Dict[str, Any]):
+        """Apply the legacy named params (search / tool_type / is_active)."""
+        search = body.get("search")
+        if search:
+            query = query.filter(or_(
+                Tool.name.ilike(f"%{search}%"),
+                Tool.description.ilike(f"%{search}%"),
+            ))
+        tool_type = body.get("tool_type")
+        if tool_type:
+            query = query.filter(Tool.tool_type == tool_type)
+        is_active = body.get("is_active")
+        if is_active is not None:
+            query = query.filter(Tool.is_active == is_active)
+        return query
+
+    def list_tools(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        page = max(int(body.get("page") or 1), 1)
+        page_size = min(max(int(body.get("page_size") or 20), 1), 100)
+        column_map = self._tool_column_map()
+
+        query = self._apply_tool_named_filters(self._tool_base_query(), body)
+        query = apply_filters(query, body.get("filters"), column_map)
+
+        total = query.count()
+
+        sort_by, sort_order = resolve_sort(body, "updated_at")
+        query = apply_sort(query, column_map, sort_by, sort_order, Tool.updated_at)
+
+        offset = (page - 1) * page_size
+        items = query.offset(offset).limit(page_size).all()
+        return {
+            "items": [self.tool_response(t) for t in items],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+    def get_facets(self, filters: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        return build_facets(
+            self._tool_base_query, self._tool_column_map(), self.TOOL_FACET_FIELDS, filters
+        )
+
+    def get_filter_values(self, column_name: str) -> Dict[str, Any]:
+        column_map = self._tool_column_map()
+        allowed = {k: column_map[k] for k in ("name", "tool_type", "status")}
+        return distinct_values(self._tool_base_query(), allowed, column_name)
 
     def tool_response(self, tool: Tool) -> Dict[str, Any]:
         return {
