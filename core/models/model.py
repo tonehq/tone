@@ -23,6 +23,7 @@ class Model(TimestampModel):
     is_active = Column(Boolean, nullable=False, default=True)
     meta_data = Column(JSONB, nullable=True)
     meta_data_schema = Column(JSONB, nullable=True)
+    base_url = Column(String(500), nullable=True)
 
     # relationships
     provider = relationship("ModelProvider", backref="models", lazy="select")

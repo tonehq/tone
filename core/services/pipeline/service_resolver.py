@@ -190,9 +190,22 @@ def _build_service_specs(
         allowed = {f["name"] for f in m.meta_data_schema if "name" in f} | _structural
         return {k: v for k, v in settings.items() if k in allowed}
 
+    def _build_metadata(settings: dict, model_id) -> dict:
+        """Filter agent settings to model-allowed keys, then inject `Model.base_url`
+        from the DB row when present. Missing/NULL `base_url` falls through — the
+        factory's per-provider default (or Pipecat's class default) applies, so
+        behavior is byte-identical to pre-base_url for any model without a URL.
+        """
+        metadata = _filter_by_model_schema(settings, model_id)
+        if model_id:
+            m = model_by_id.get(model_id)
+            if m and m.base_url:
+                metadata["base_url"] = m.base_url
+        return metadata
+
     # ── LLM ──
     is_s2s = bool(llm_settings.get("is_s2s"))
-    llm_metadata = _filter_by_model_schema(llm_settings, llm_mid)
+    llm_metadata = _build_metadata(llm_settings, llm_mid)
     if is_s2s and config.system_prompt_template:
         # OpenAI Realtime reads metadata["system_prompt"]; Gemini Live reads
         # metadata["system_instruction"]. Set both so either S2S provider picks it up.
@@ -210,14 +223,14 @@ def _build_service_specs(
         provider_by_id.get(stt_pid),
         stt_model_literal or _mname(stt_mid),
         _key(stt_pid, "stt") if stt_pid else None,
-        _filter_by_model_schema(stt_settings, stt_mid),
+        _build_metadata(stt_settings, stt_mid),
     )
 
     # ── TTS ──
     resolved_voice = (voice_row.voice_id if voice_row else None) or (
         voice_id_raw if (voice_id_raw and not _looks_like_uuid(voice_id_raw)) else None
     )
-    tts_metadata = _filter_by_model_schema(voice_settings, tts_mid)
+    tts_metadata = _build_metadata(voice_settings, tts_mid)
     tts_metadata["voice_id"] = resolved_voice
     # The factory reads metadata["language"]; prefer the language *code* (e.g. "en")
     # over the display name (e.g. "English"), which Pipecat's Language enum rejects.
