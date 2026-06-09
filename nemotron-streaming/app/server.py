@@ -16,6 +16,7 @@ Endpoints: GET /health, POST /asr (batch). Streaming /ws/asr is the next step.
 """
 
 import asyncio
+import contextvars
 import logging
 import os
 import tempfile
@@ -24,11 +25,27 @@ import time
 import numpy as np
 import soundfile as sf
 import torch
-from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, Header, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 
 import nemo.collections.asr as nemo_asr
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+_trace_ctx: contextvars.ContextVar = contextvars.ContextVar("trace_id", default="none")
+
+
+class _TraceFilter(logging.Filter):
+    def filter(self, record):
+        record.trace_id = _trace_ctx.get()
+        return True
+
+
+_handler = logging.StreamHandler()
+_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s trace_id=%(trace_id)s %(message)s"))
+_handler.addFilter(_TraceFilter())
+logging.basicConfig(level=logging.INFO, handlers=[_handler], force=True)
+for _name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
+    _lg = logging.getLogger(_name)
+    _lg.handlers = [_handler]
+    _lg.propagate = False
 log = logging.getLogger("stt")
 
 MODEL_NAME = os.environ.get("STT_MODEL", "nvidia/nemotron-speech-streaming-en-0.6b")
@@ -116,7 +133,8 @@ def health():
 
 
 @app.post("/asr")
-async def asr(file: UploadFile = File(...)):
+async def asr(file: UploadFile = File(...), x_trace_id: str = Header(default="none")):
+    _trace_ctx.set(x_trace_id)
     model = _load_model()
     raw = await file.read()
     log.info("/asr request: %s (%d bytes)", file.filename, len(raw))
@@ -160,6 +178,7 @@ async def ws_asr(ws: WebSocket):
     cache-aware incremental decoding is the next iteration.
     """
     await ws.accept()
+    _trace_ctx.set(ws.query_params.get("trace_id", "none"))
     client = f"{ws.client.host}:{ws.client.port}" if ws.client else "?"
     log.info("ws/asr open from %s", client)
     model = _load_model()
