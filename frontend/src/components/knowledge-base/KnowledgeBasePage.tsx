@@ -1,6 +1,5 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
 import { useAtom } from 'jotai';
 import {
   AlertTriangle,
@@ -21,21 +20,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import agentsAtom, { fetchAllAgentsAtom } from '@/atoms/AgentsAtom';
 import DocumentUpload from '@/components/knowledge-base/DocumentUpload';
 import EditDocument from '@/components/knowledge-base/EditDocument';
-import { CustomButton, CustomModal, CustomTable } from '@/components/shared';
-import SearchBar from '@/components/shared/SearchBar';
-import SelectInput from '@/components/shared/SelectInput';
+import {
+  CustomButton,
+  CustomModal,
+  CustomTable,
+  FacetFilterBar,
+  FacetFilterDrawer,
+  useFacetedList,
+} from '@/components/shared';
+import { knowledgeBaseListConfig } from '@/components/knowledge-base/knowledgeBaseListConfig';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
-  KNOWLEDGE_BASE_QUERY_KEY,
   knowledgeBaseApi,
   useDeleteKnowledgeBase,
-  useKnowledgeBase,
   useReprocessKnowledgeBase,
 } from '@/lib/api/knowledge-base';
-import { KNOWLEDGE_BASE_STATUS_OPTIONS } from '@/lib/constants/filters';
 import type { AgentDropdownItem } from '@/types/agent';
-import type { CustomTableColumn, CustomTableSortState } from '@/types/components';
+import type { CustomTableColumn } from '@/types/components';
 import type { KnowledgeBaseDocument } from '@/types/knowledgeBase';
 import { cn } from '@/utils/cn';
 import { formatDate } from '@/utils/date';
@@ -129,20 +131,16 @@ const statusConfig: Record<StatusKey, { label: string; className: string }> = {
   },
 };
 
-const PAGE_SIZE_OPTIONS = [10, 20, 50];
-
 export default function KnowledgeBasePage() {
-  const queryClient = useQueryClient();
-
   const [agentData] = useAtom(agentsAtom);
   const [, fetchAgents] = useAtom(fetchAllAgentsAtom);
   const hasFetchedAgentsRef = useRef(false);
 
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [sortBy, setSortBy] = useState('-updated_at');
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const fl = useFacetedList(knowledgeBaseListConfig);
+  const documents = fl.rows;
+  const total = fl.total;
+
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -151,21 +149,6 @@ export default function KnowledgeBasePage() {
   const [deleteTarget, setDeleteTarget] = useState<KnowledgeBaseDocument | null>(null);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
-
-  const queryParams = useMemo(
-    () => ({
-      page,
-      page_size: pageSize,
-      sort_by: sortBy,
-      search: search || undefined,
-      status: statusFilter && statusFilter !== 'all' ? statusFilter : undefined,
-    }),
-    [page, pageSize, sortBy, search, statusFilter],
-  );
-
-  const { data, isLoading } = useKnowledgeBase(queryParams);
-  const documents = data?.items ?? [];
-  const total = data?.total ?? 0;
 
   const deleteMutation = useDeleteKnowledgeBase();
   const reprocessMutation = useReprocessKnowledgeBase();
@@ -187,30 +170,6 @@ export default function KnowledgeBasePage() {
     });
     return map;
   }, [agentData.agentList]);
-
-  const handleSearch = useCallback((value: string) => {
-    setSearch(value);
-    setPage(1);
-  }, []);
-
-  const handleStatusFilter = useCallback((value: string) => {
-    setStatusFilter(value);
-    setPage(1);
-  }, []);
-
-  const handleSortChange = useCallback((sort: CustomTableSortState | null) => {
-    if (!sort) {
-      setSortBy('-updated_at');
-    } else {
-      setSortBy(sort.order === 'desc' ? `-${sort.field}` : sort.field);
-    }
-    setPage(1);
-  }, []);
-
-  const handlePageChange = useCallback((nextPage: number, nextPageSize: number) => {
-    setPage(nextPage);
-    setPageSize(nextPageSize);
-  }, []);
 
   const toggleRow = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -255,10 +214,11 @@ export default function KnowledgeBasePage() {
       });
       if (selectedDoc?.id === deleteTarget.id) setSelectedDoc(null);
       setDeleteTarget(null);
+      fl.refresh();
     } catch (error) {
       handleApiError(error);
     }
-  }, [deleteTarget, deleteMutation, selectedDoc]);
+  }, [deleteTarget, deleteMutation, selectedDoc, fl]);
 
   const handleBulkDelete = useCallback(async () => {
     if (selectedIds.size === 0) return;
@@ -266,7 +226,7 @@ export default function KnowledgeBasePage() {
     const ids = Array.from(selectedIds);
     const results = await Promise.allSettled(ids.map((id) => knowledgeBaseApi.delete(id)));
     const failed = results.filter((r) => r.status === 'rejected').length;
-    queryClient.invalidateQueries({ queryKey: [KNOWLEDGE_BASE_QUERY_KEY] });
+    fl.refresh();
     setBulkDeleting(false);
     setBulkDeleteOpen(false);
 
@@ -288,12 +248,12 @@ export default function KnowledgeBasePage() {
       });
       setSelectedIds(failedIds);
     }
-  }, [selectedIds, queryClient]);
+  }, [selectedIds, fl]);
 
   const handleUploadSuccess = useCallback(() => {
     setUploadModalOpen(false);
-    queryClient.invalidateQueries({ queryKey: [KNOWLEDGE_BASE_QUERY_KEY] });
-  }, [queryClient]);
+    fl.refresh();
+  }, [fl]);
 
   const handleReprocess = useCallback(
     async (doc: KnowledgeBaseDocument) => {
@@ -305,13 +265,15 @@ export default function KnowledgeBasePage() {
         // Keep the detail modal in sync if it's open on this document. Merge so
         // fields not returned by the reprocess endpoint (e.g. agent_id) survive.
         setSelectedDoc((prev) => (prev && prev.id === doc.id ? { ...prev, ...updated } : prev));
+        // Reflect the status flip immediately; pollWhile keeps it fresh after.
+        fl.refresh();
       } catch (error) {
         handleApiError(error);
       } finally {
         setReprocessingId(null);
       }
     },
-    [reprocessMutation, reprocessingId],
+    [reprocessMutation, reprocessingId, fl],
   );
 
   const columns = useMemo<CustomTableColumn<KnowledgeBaseDocument>[]>(
@@ -529,24 +491,16 @@ export default function KnowledgeBasePage() {
       </div>
 
       {/* ─── toolbar ──────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-3">
-        <SearchBar
-          placeholder="Search documents by name…"
-          value={search}
-          onSearch={handleSearch}
-          debounceMs={400}
-          containerClassName="max-w-xs flex-1"
-        />
-        <SelectInput
-          name="status-filter"
-          options={KNOWLEDGE_BASE_STATUS_OPTIONS}
-          value={statusFilter}
-          onValueChange={handleStatusFilter}
-          placeholder="All statuses"
-          size="sm"
-          triggerClassName="min-w-[160px]"
-        />
-      </div>
+      <FacetFilterBar
+        fields={fl.tokenFields}
+        tokens={fl.tokens}
+        onTokensChange={fl.setTokens}
+        onClear={fl.clearAll}
+        showClear={fl.hasActiveFilters}
+        placeholder="Search documents… (e.g. name:resort, status:ready)"
+        drawerFilterCount={fl.drawerFilterCount}
+        onOpenDrawer={() => setFilterDrawerOpen(true)}
+      />
 
       {/* ─── table ────────────────────────────────────────────────────── */}
       <div className="flex min-h-0 flex-1 flex-col">
@@ -554,25 +508,34 @@ export default function KnowledgeBasePage() {
           columns={columns}
           dataSource={documents}
           rowKey="id"
-          loading={isLoading}
+          loading={fl.listLoading}
           onRowClick={(record) => setSelectedDoc(record)}
-          onSortChange={handleSortChange}
-          initialSort={{ field: 'updated_at', order: 'desc' }}
+          onSortChange={fl.handleSortChange}
+          initialSort={knowledgeBaseListConfig.defaultSort ?? undefined}
           pagination={{
-            current: page,
-            pageSize,
+            current: fl.page,
+            pageSize: fl.pageSize,
             total,
-            pageSizeOptions: PAGE_SIZE_OPTIONS,
-            onChange: handlePageChange,
+            pageSizeOptions: fl.pageSizeOptions,
+            onChange: fl.handlePaginationChange,
           }}
           emptyState={
-            <EmptyState
-              onAdd={() => setUploadModalOpen(true)}
-              hasFilter={!!search || statusFilter !== 'all'}
-            />
+            <EmptyState onAdd={() => setUploadModalOpen(true)} hasFilter={fl.hasActiveFilters} />
           }
         />
       </div>
+
+      {/* ─── filter drawer ────────────────────────────────────────────── */}
+      <FacetFilterDrawer
+        open={filterDrawerOpen}
+        onClose={() => setFilterDrawerOpen(false)}
+        description="Filter documents by status."
+        sections={knowledgeBaseListConfig.facetSections}
+        value={fl.facetSelections}
+        facets={fl.facets}
+        facetsLoading={fl.facetsLoading}
+        onApply={fl.applyDrawer}
+      />
 
       {/* ─── floating selection bar ───────────────────────────────────── */}
       <SelectionBar
