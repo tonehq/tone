@@ -12,6 +12,22 @@ from typing import Any, Optional
 from loguru import logger
 
 
+def _url_kwargs(metadata: dict, kwarg: str = "base_url") -> dict:
+    """Return splat-style URL kwargs for a Pipecat constructor.
+
+    If `metadata["base_url"]` is set (because `Model.base_url` is populated in the DB),
+    return `{kwarg: url}` to splat into the constructor. Otherwise return `{}` so the
+    Pipecat class falls back to its own hardcoded default — preserving today's behavior
+    for any model without a URL.
+
+    `kwarg` picks the constructor parameter name. Pipecat is inconsistent: most providers
+    use `base_url`, several use `url`, AssemblyAI uses `api_endpoint_base_url`, NVIDIA STT
+    uses `server`. Each call site passes the right name for its provider.
+    """
+    url = metadata.get("base_url")
+    return {kwarg: url} if url else {}
+
+
 def build_input_params(service_class, metadata: dict):
     """Convert metadata dict to proper InputParams for a Pipecat service class.
 
@@ -56,7 +72,7 @@ def build_llm(spec: dict) -> Optional[Any]:
     try:
         if provider_name == "openai":  # done
             from pipecat.services.openai.llm import OpenAILLMService
-            return OpenAILLMService(api_key=api_key, model=model or "gpt-4.1", params=build_input_params(OpenAILLMService, metadata))
+            return OpenAILLMService(api_key=api_key, model=model or "gpt-4.1", params=build_input_params(OpenAILLMService, metadata), **_url_kwargs(metadata))
         if provider_name == "anthropic":  # done
             from pipecat.services.anthropic.llm import AnthropicLLMService
             if "enable_prompt_caching" not in metadata:
@@ -65,10 +81,10 @@ def build_llm(spec: dict) -> Optional[Any]:
             return AnthropicLLMService(api_key=api_key, model=model or "claude-haiku-4-5-20251001", params=params)
         if provider_name == "groq":  # done
             from pipecat.services.groq.llm import GroqLLMService
-            return GroqLLMService(api_key=api_key, model=model or "llama-3.3-70b-versatile", params=build_input_params(GroqLLMService, metadata))
+            return GroqLLMService(api_key=api_key, model=model or "llama-3.3-70b-versatile", params=build_input_params(GroqLLMService, metadata), **_url_kwargs(metadata))
         if provider_name == "openrouter":  # done
             from pipecat.services.openrouter.llm import OpenRouterLLMService
-            return OpenRouterLLMService(api_key=api_key, model=model or "openai/gpt-4o-2024-11-20", params=build_input_params(OpenRouterLLMService, metadata))
+            return OpenRouterLLMService(api_key=api_key, model=model or "openai/gpt-4o-2024-11-20", params=build_input_params(OpenRouterLLMService, metadata), **_url_kwargs(metadata))
         if provider_name == "aws_bedrock":  # done
             from pipecat.services.aws.llm import AWSBedrockLLMService
             return AWSBedrockLLMService(api_key=api_key, model=model or "amazon.nova-pro-v1:0", params=build_input_params(AWSBedrockLLMService, metadata))
@@ -174,7 +190,7 @@ def build_stt(spec: dict) -> Optional[Any]:
             live_options = None
             if metadata.get("language"):
                 live_options = LiveOptions(language=metadata["language"])
-            return DeepgramSTTService(api_key=api_key, live_options=live_options, **dg_kwargs)
+            return DeepgramSTTService(api_key=api_key, live_options=live_options, **dg_kwargs, **_url_kwargs(metadata))
         if provider_name == "openai":
             from pipecat.services.openai.stt import OpenAISTTService
             return OpenAISTTService(
@@ -192,6 +208,7 @@ def build_stt(spec: dict) -> Optional[Any]:
                 language=metadata.get("language"),
                 prompt=metadata.get("prompt"),
                 temperature=metadata.get("temperature"),
+                **_url_kwargs(metadata),
             )
         if provider_name == "azure":
             from pipecat.services.azure.stt import AzureSTTService
@@ -240,7 +257,7 @@ def build_stt(spec: dict) -> Optional[Any]:
                 metadata["max_delay"] = 0.7
             return ToneSpeechmaticsSTTService(
                 api_key=api_key,
-                base_url="wss://us2.rt.speechmatics.com/v2",
+                base_url=metadata.get("base_url") or "wss://us2.rt.speechmatics.com/v2",
                 sample_rate=metadata.get("sample_rate"),
                 params=build_input_params(ToneSpeechmaticsSTTService, metadata),
             )
@@ -261,7 +278,7 @@ def build_stt(spec: dict) -> Optional[Any]:
                 asm_kwargs["language"] = metadata["language"]
             if conn_kwargs:
                 asm_kwargs["connection_params"] = AssemblyAIConnectionParams(**conn_kwargs)
-            return AssemblyAISTTService(api_key=api_key, **asm_kwargs)
+            return AssemblyAISTTService(api_key=api_key, **asm_kwargs, **_url_kwargs(metadata, "api_endpoint_base_url"))
         if provider_name == "cartesia":
             from pipecat.services.cartesia.stt import (CartesiaLiveOptions,
                                                        CartesiaSTTService)
@@ -273,10 +290,11 @@ def build_stt(spec: dict) -> Optional[Any]:
                 api_key=api_key,
                 sample_rate=metadata.get("sample_rate") or 16000,
                 live_options=live_options,
+                **_url_kwargs(metadata),
             )
         if provider_name == "elevenlabs":
             from pipecat.services.elevenlabs.stt import ElevenLabsRealtimeSTTService
-            return ElevenLabsRealtimeSTTService(api_key=api_key, model=model or "scribe_v2_realtime", params=build_input_params(ElevenLabsRealtimeSTTService, metadata))
+            return ElevenLabsRealtimeSTTService(api_key=api_key, model=model or "scribe_v2_realtime", params=build_input_params(ElevenLabsRealtimeSTTService, metadata), **_url_kwargs(metadata))
         if provider_name == "gladia":
             from pipecat.services.gladia.stt import GladiaSTTService
             return GladiaSTTService(
@@ -285,10 +303,11 @@ def build_stt(spec: dict) -> Optional[Any]:
                 region=metadata.get("region"),
                 sample_rate=metadata.get("sample_rate"),
                 params=build_input_params(GladiaSTTService, metadata),
+                **_url_kwargs(metadata, "url"),
             )
         if provider_name == "soniox":
             from pipecat.services.soniox.stt import SonioxSTTService
-            return SonioxSTTService(api_key=api_key, params=build_input_params(SonioxSTTService, metadata))
+            return SonioxSTTService(api_key=api_key, params=build_input_params(SonioxSTTService, metadata), **_url_kwargs(metadata, "url"))
         if provider_name == "hathora":
             from pipecat.services.hathora.stt import HathoraSTTService
             return HathoraSTTService(api_key=api_key, model=model or "parakeet", params=build_input_params(HathoraSTTService, metadata))
@@ -353,7 +372,7 @@ def build_tts(spec: dict) -> Optional[Any]:
             if tts_language is not None:
                 voice_kwargs["language"] = tts_language or "en"
             logger.debug("[TTS {}] voice_kwargs: {}", provider_name, voice_kwargs)
-            return CartesiaTTSService(api_key=api_key, model=model or "sonic-3", params=build_input_params(CartesiaTTSService, metadata), **voice_kwargs)
+            return CartesiaTTSService(api_key=api_key, model=model or "sonic-3", params=build_input_params(CartesiaTTSService, metadata), **voice_kwargs, **_url_kwargs(metadata, "url"))
         if provider_name == "openai":  # In code
             from pipecat.services.openai.tts import OpenAITTSService
             voice_kwargs = {}
@@ -364,7 +383,7 @@ def build_tts(spec: dict) -> Optional[Any]:
             else:
                 voice_kwargs["language"] = None
             logger.debug("[TTS {}] voice_kwargs: {}", provider_name, voice_kwargs)
-            return OpenAITTSService(api_key=api_key, model=model or "gpt-4o-mini-tts", params=build_input_params(OpenAITTSService, metadata), **voice_kwargs)
+            return OpenAITTSService(api_key=api_key, model=model or "gpt-4o-mini-tts", params=build_input_params(OpenAITTSService, metadata), **voice_kwargs, **_url_kwargs(metadata))
         if provider_name == "elevenlabs":
             from pipecat.services.elevenlabs.tts import ElevenLabsTTSService
             voice_kwargs = {}
@@ -391,7 +410,7 @@ def build_tts(spec: dict) -> Optional[Any]:
                 voice_kwargs["language"] = None
             logger.debug("[TTS {}] voice_kwargs: {}", provider_name, voice_kwargs)
             session = aiohttp.ClientSession()
-            return AsyncAIHttpTTSService(api_key=api_key, aiohttp_session=session, params=build_input_params(AsyncAIHttpTTSService, metadata), **voice_kwargs)
+            return AsyncAIHttpTTSService(api_key=api_key, aiohttp_session=session, params=build_input_params(AsyncAIHttpTTSService, metadata), **voice_kwargs, **_url_kwargs(metadata, "url"))
         if provider_name == "aws_polly":  # In code
             from pipecat.services.aws.tts import AWSPollyTTSService
             aws_access_key_id = model_meta.get("aws_access_key_id") or metadata.get("aws_access_key_id") or ""
@@ -424,7 +443,7 @@ def build_tts(spec: dict) -> Optional[Any]:
                 dg_kwargs["sample_rate"] = metadata["sample_rate"]
             logger.debug("[TTS {}] model: {}, voice: {}", provider_name, dg_model, dg_voice)
             session = aiohttp.ClientSession()
-            return DeepgramHttpTTSService(api_key=api_key, model=dg_model, voice=dg_voice, aiohttp_session=session, **dg_kwargs)
+            return DeepgramHttpTTSService(api_key=api_key, model=dg_model, voice=dg_voice, aiohttp_session=session, **dg_kwargs, **_url_kwargs(metadata))
         if provider_name == "google":  # Done
             from pipecat.services.google.tts import GoogleTTSService
             voice_kwargs = {}
@@ -465,7 +484,7 @@ def build_tts(spec: dict) -> Optional[Any]:
                 voice_kwargs["language"] = tts_language
             logger.debug("[TTS {}] voice_kwargs: {}", provider_name, voice_kwargs)
             session = aiohttp.ClientSession()
-            return MiniMaxHttpTTSService(api_key=api_key, group_id=group_id, model=model or "speech-2.8-turbo", aiohttp_session=session, params=build_input_params(MiniMaxHttpTTSService, metadata), **voice_kwargs)
+            return MiniMaxHttpTTSService(api_key=api_key, group_id=group_id, model=model or "speech-2.8-turbo", aiohttp_session=session, params=build_input_params(MiniMaxHttpTTSService, metadata), **voice_kwargs, **_url_kwargs(metadata))
         if provider_name == "neuphonic":  # In code
             from pipecat.services.neuphonic.tts import NeuphonicHttpTTSService
             voice_kwargs = {}
@@ -474,7 +493,7 @@ def build_tts(spec: dict) -> Optional[Any]:
                 voice_kwargs["language"] = tts_language
             logger.debug("[TTS {}] voice_kwargs: {}", provider_name, voice_kwargs)
             session = aiohttp.ClientSession()
-            return NeuphonicHttpTTSService(api_key=api_key, model=model or "neu_hq", aiohttp_session=session, params=build_input_params(NeuphonicHttpTTSService, metadata), **voice_kwargs)
+            return NeuphonicHttpTTSService(api_key=api_key, model=model or "neu_hq", aiohttp_session=session, params=build_input_params(NeuphonicHttpTTSService, metadata), **voice_kwargs, **_url_kwargs(metadata, "url"))
         if provider_name == "nvidia":  # In code
             from pipecat.services.nvidia.tts import NvidiaTTSService
             server = model_meta.get("server") or metadata.get("server") or "grpc.nvcf.nvidia.com:443"
@@ -527,7 +546,7 @@ def build_tts(spec: dict) -> Optional[Any]:
                 voice_kwargs["language"] = tts_language
             logger.debug("[TTS {}] voice_kwargs: {}", provider_name, voice_kwargs)
             session = aiohttp.ClientSession()
-            return SarvamHttpTTSService(api_key=api_key, model=model or "bulbul:v3", aiohttp_session=session, params=build_input_params(SarvamHttpTTSService, metadata), **voice_kwargs)
+            return SarvamHttpTTSService(api_key=api_key, model=model or "bulbul:v3", aiohttp_session=session, params=build_input_params(SarvamHttpTTSService, metadata), **voice_kwargs, **_url_kwargs(metadata))
         if provider_name == "speechmatics":  # In code
             from pipecat.services.speechmatics.tts import SpeechmaticsTTSService
             voice_kwargs = {}
@@ -578,7 +597,7 @@ def build_tts(spec: dict) -> Optional[Any]:
             else:
                 voice_kwargs["language"] = None
             logger.debug("[TTS {}] voice_kwargs: {}", provider_name, voice_kwargs)
-            return InworldTTSService(api_key=api_key, model=model or "inworld-tts-1.5-max", params=build_input_params(InworldTTSService, metadata), **voice_kwargs)
+            return InworldTTSService(api_key=api_key, model=model or "inworld-tts-1.5-max", params=build_input_params(InworldTTSService, metadata), **voice_kwargs, **_url_kwargs(metadata, "url"))
         if provider_name == "lmnt":
             from pipecat.services.lmnt.tts import LmntTTSService
             voice_kwargs = {}
@@ -597,7 +616,7 @@ def build_tts(spec: dict) -> Optional[Any]:
             if metadata.get("sample_rate") is not None:
                 voice_kwargs["sample_rate"] = metadata["sample_rate"]
             logger.debug("[TTS {}] voice_kwargs: {}", provider_name, voice_kwargs)
-            return ResembleAITTSService(api_key=api_key, **voice_kwargs)
+            return ResembleAITTSService(api_key=api_key, **voice_kwargs, **_url_kwargs(metadata, "url"))
 
         logger.warning("Unsupported TTS provider: %s", provider_name)
         return None
