@@ -188,6 +188,9 @@ async def _ws_stream_loop(ws, model, client):
     decodes = 0
     first = True
     STEP = TARGET_SR * 2
+    SILENCE_TICKS = int(os.environ.get("STT_SILENCE_TICKS", "2"))
+    last_text = ""
+    stable = 0
     t0 = time.monotonic()
     try:
         while True:
@@ -199,10 +202,9 @@ async def _ws_stream_loop(ws, model, client):
             if data is None:
                 if msg.get("text") == "eof":
                     audio = _pcm16_to_float(bytes(chunk))
-                    d0 = time.monotonic()
                     text = await loop.run_in_executor(None, session.feed, audio, True) if audio.size else session.text
-                    log.info("ws/asr %s final: %r (decode %dms, stream)", client, text,
-                             round((time.monotonic() - d0) * 1000))
+                    text = text or last_text
+                    log.info("ws/asr %s final(eof): %r", client, text)
                     await ws.send_json({"type": "final", "text": text,
                                         "ms": round((time.monotonic() - t0) * 1000)})
                     await ws.close()
@@ -215,11 +217,22 @@ async def _ws_stream_loop(ws, model, client):
                 d0 = time.monotonic()
                 text = await loop.run_in_executor(None, session.feed, audio, False)
                 decodes += 1
-                log.info("ws/asr %s partial #%d: %r (decode %dms, stream)", client,
-                         decodes, text, round((time.monotonic() - d0) * 1000))
-                await ws.send_json({"type": "partial", "text": text,
-                                    "ms": round((time.monotonic() - t0) * 1000), "ttf": first})
-                first = False
+                dms = round((time.monotonic() - d0) * 1000)
+                if text and text != last_text:
+                    last_text = text
+                    stable = 0
+                    log.info("ws/asr %s partial #%d: %r (decode %dms, stream)", client, decodes, text, dms)
+                    await ws.send_json({"type": "partial", "text": text,
+                                        "ms": round((time.monotonic() - t0) * 1000), "ttf": first})
+                    first = False
+                elif last_text:
+                    stable += 1
+                    if stable >= SILENCE_TICKS:
+                        log.info("ws/asr %s end-of-turn reset: %r", client, last_text)
+                        session = _StreamSession(model)
+                        last_text = ""
+                        stable = 0
+                        first = True
     except WebSocketDisconnect:
         log.info("ws/asr %s disconnected (stream, WebSocketDisconnect)", client)
     except Exception as exc:  # noqa: BLE001
