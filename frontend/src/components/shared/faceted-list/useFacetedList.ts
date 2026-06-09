@@ -245,6 +245,14 @@ export function useFacetedList<TRow>(config: FacetedListConfig<TRow>): UseFacete
     setPageSize(nextPageSize);
   }, []);
 
+  // Re-fetch both the list and the facet counts. Mutations (create / delete /
+  // upload / reprocess) call this, and the facet counts must reflect the change
+  // too — the facets effect only fires when the active filters change.
+  const refresh = useCallback(() => {
+    runListFetch();
+    runFacetsFetch();
+  }, [runListFetch, runFacetsFetch]);
+
   return {
     rows,
     total,
@@ -264,6 +272,6 @@ export function useFacetedList<TRow>(config: FacetedListConfig<TRow>): UseFacete
     clearAll,
     handleSortChange,
     handlePaginationChange,
-    refresh: runListFetch,
+    refresh,
   };
 }

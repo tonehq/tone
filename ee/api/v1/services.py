@@ -7,6 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Body, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from core.api.v1.faceted_schemas import FacetsRequest
 from core.database.session import get_db
 from core.services.model_provider_service import ModelProviderService
 from ee.middleware.auth import (
@@ -32,6 +33,25 @@ def list_services(
     db: Session = Depends(get_db),
 ):
     return _service(claims, db).list_services(body)
+
+
+@router.post("/facets")
+def get_service_facets(
+    body: FacetsRequest,
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    filters = [f.model_dump() for f in body.filters] if body.filters else None
+    return _service(claims, db).get_service_facets(filters)
+
+
+@router.get("/filter-values")
+def get_service_filter_values(
+    column_name: str = Query(...),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    return _service(claims, db).get_service_filter_values(column_name)
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
@@ -107,6 +127,19 @@ def list_provider_keys(
     return _service(claims, db).list_provider_keys(provider_id, body)
 
 
+@router.get("/providers/{provider_id}/keys/filter-values")
+def get_provider_key_filter_values(
+    provider_id: str,
+    column_name: str = Query(...),
+    service_type: str | None = None,
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    return _service(claims, db).get_provider_key_filter_values(
+        provider_id, column_name, service_type
+    )
+
+
 @router.post("/providers/{provider_id}/models")
 def list_provider_models(
     provider_id: str,
@@ -115,6 +148,19 @@ def list_provider_models(
     db: Session = Depends(get_db),
 ):
     return _service(claims, db).list_provider_models(provider_id, body)
+
+
+@router.get("/providers/{provider_id}/models/filter-values")
+def get_provider_model_filter_values(
+    provider_id: str,
+    column_name: str = Query(...),
+    service_type: str | None = None,
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    return _service(claims, db).get_provider_model_filter_values(
+        provider_id, column_name, service_type
+    )
 
 
 # The `models` table is a global catalog (no organization_id) referenced by

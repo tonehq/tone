@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import case, or_
+from sqlalchemy import and_, case, exists, or_
 from sqlalchemy.orm import Session
 
 from core.api.v1.faceted_schemas import FacetsRequest
@@ -21,16 +21,20 @@ from shared.config import settings
 router = APIRouter()
 
 
-# ``status`` is derived from the boolean ``is_active`` via a CASE expression so
-# it flows through the generic faceted-query helpers as a string facet.
 AGENT_FACET_FIELDS = ["agent_type", "status"]
 
 
-def _agent_column_map() -> Dict[str, Any]:
+def _agent_column_map(org_id: UUID) -> Dict[str, Any]:
+    # ``status`` mirrors the list UI, where an agent is "active" when it has at
+    # least one phone number attached. A CASE over an EXISTS subquery lets it
+    # flow through the generic faceted-query helpers as a string facet.
+    has_phone = exists().where(
+        and_(PhoneNumber.agent_id == Agent.id, PhoneNumber.organization_id == org_id)
+    )
     return {
         "name": Agent.name,
         "agent_type": Agent.agent_type,
-        "status": case((Agent.is_active.is_(True), "active"), else_="inactive"),
+        "status": case((has_phone, "active"), else_="inactive"),
         "is_active": Agent.is_active,
         "created_at": Agent.created_at,
         "updated_at": Agent.updated_at,
@@ -164,7 +168,7 @@ def list_agents_for_org(db: Session, org_id: UUID, body: dict) -> dict:
     is_active = body.get("is_active")
     agent_type = body.get("agent_type")
 
-    column_map = _agent_column_map()
+    column_map = _agent_column_map(org_id)
     query = _agent_base_query(db, org_id)
 
     # Named params (back-compat).
@@ -197,7 +201,7 @@ def agent_facets_for_org(db: Session, org_id: UUID, filters=None) -> dict:
     """Per-value facet counts for the agent filter drawer."""
     return build_facets(
         lambda: _agent_base_query(db, org_id),
-        _agent_column_map(),
+        _agent_column_map(org_id),
         AGENT_FACET_FIELDS,
         filters,
     )
@@ -205,7 +209,7 @@ def agent_facets_for_org(db: Session, org_id: UUID, filters=None) -> dict:
 
 def agent_filter_values_for_org(db: Session, org_id: UUID, column_name: str) -> dict:
     """Distinct values of a column for token-search autocomplete."""
-    column_map = _agent_column_map()
+    column_map = _agent_column_map(org_id)
     allowed = {k: column_map[k] for k in ("name", "agent_type", "status")}
     return distinct_values(_agent_base_query(db, org_id), allowed, column_name)
 

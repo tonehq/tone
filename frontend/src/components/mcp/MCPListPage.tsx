@@ -79,7 +79,9 @@ export default function MCPListPage() {
     [deleteServer, fl],
   );
 
-  const showToolbar = fl.total > 0 || fl.hasActiveFilters;
+  // Keep the toolbar visible during the initial skeleton load too; only hide it
+  // once we know there are genuinely no servers and no active filters.
+  const showToolbar = fl.listLoading || fl.total > 0 || fl.hasActiveFilters;
   const isInitialLoading = fl.listLoading && servers.length === 0;
   const noServersAtAll = !fl.listLoading && servers.length === 0 && !fl.hasActiveFilters;
   const noMatches = !fl.listLoading && servers.length === 0 && fl.hasActiveFilters;

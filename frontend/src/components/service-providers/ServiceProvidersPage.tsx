@@ -3,18 +3,20 @@
 import { useAtom } from 'jotai';
 import { Plug, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 
-import servicesAtom, {
-  deleteProviderAtom,
-  fetchServiceAtom,
-  fetchServicesAtom,
-  upsertServiceAtom,
-} from '@/atoms/ServicesAtom';
-import { CustomButton, CustomModal, SearchBar, SelectInput } from '@/components/shared';
+import { deleteProviderAtom, fetchServiceAtom, upsertServiceAtom } from '@/atoms/ServicesAtom';
+import {
+  CustomButton,
+  CustomModal,
+  FacetFilterBar,
+  FacetFilterDrawer,
+  useFacetedList,
+} from '@/components/shared';
+import { servicesListConfig } from '@/components/service-providers/servicesListConfig';
 import { Badge } from '@/components/ui/badge';
 import { listProviderKeys } from '@/services/servicesService';
-import type { ProviderUsage, Service, ServiceKind, ServiceUpsertPayload } from '@/types/service';
+import type { ProviderUsage, Service, ServiceUpsertPayload } from '@/types/service';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
@@ -23,25 +25,17 @@ import ApiKeyEditDrawer from './api-key-edit-drawer';
 import ServiceGrid from './service-grid';
 import ServiceGridSkeleton from './service-grid-skeleton';
 
-const PAGE_SIZE = 12;
-
-const TYPE_FILTER_OPTIONS = [
-  { value: 'all', label: 'All types' },
-  { value: 'llm', label: 'LLM' },
-  { value: 'stt', label: 'STT' },
-  { value: 'tts', label: 'TTS' },
-];
+const noop = () => {};
 
 export default function ServiceProvidersPage() {
   const router = useRouter();
-  const [state] = useAtom(servicesAtom);
-  const [, fetchServices] = useAtom(fetchServicesAtom);
   const [, fetchService] = useAtom(fetchServiceAtom);
   const [, upsertService] = useAtom(upsertServiceAtom);
   const [, deleteProvider] = useAtom(deleteProviderAtom);
 
-  const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'all' | ServiceKind>('all');
+  const fl = useFacetedList(servicesListConfig);
+
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editingService, setEditingService] = useState<Service | null>(null);
@@ -49,61 +43,6 @@ export default function ServiceProvidersPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProviderUsage | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-
-  const pageRef = useRef(state.page);
-  pageRef.current = state.page;
-
-  const loadInitial = useCallback(
-    (overrides?: { search?: string; service_type?: 'all' | ServiceKind }) =>
-      fetchServices({
-        page: 1,
-        page_size: PAGE_SIZE,
-        search: overrides?.search ?? search ?? undefined,
-        service_type: overrides?.service_type ?? typeFilter,
-        append: false,
-      }),
-    [fetchServices, search, typeFilter],
-  );
-
-  const hasFetchedRef = useRef(false);
-  useEffect(() => {
-    if (hasFetchedRef.current) return;
-    hasFetchedRef.current = true;
-    loadInitial().catch(handleApiError);
-  }, [loadInitial]);
-
-  const handleSearch = useCallback(
-    (value: string) => {
-      setSearch(value);
-      loadInitial({ search: value }).catch(handleApiError);
-    },
-    [loadInitial],
-  );
-
-  const handleTypeFilter = useCallback(
-    (value: string) => {
-      const v = value as 'all' | ServiceKind;
-      setTypeFilter(v);
-      loadInitial({ service_type: v }).catch(handleApiError);
-    },
-    [loadInitial],
-  );
-
-  const hasNextPage = useMemo(
-    () => state.items.length < state.total,
-    [state.items.length, state.total],
-  );
-
-  const handleFetchNext = useCallback(() => {
-    if (state.loadingMore) return;
-    fetchServices({
-      page: pageRef.current + 1,
-      page_size: PAGE_SIZE,
-      search: search || undefined,
-      service_type: typeFilter,
-      append: true,
-    }).catch(handleApiError);
-  }, [fetchServices, search, typeFilter, state.loadingMore]);
 
   const handleSelect = useCallback(
     (u: ProviderUsage) => {
@@ -170,40 +109,35 @@ export default function ServiceProvidersPage() {
         providerId: deleteTarget.provider.id,
         serviceType: deleteTarget.service_type,
       });
-      // Keep the modal open with the Delete button still in its loading state
-      // until the listing refresh lands, so the user doesn't see a stale card
-      // briefly remain after dismissing the dialog.
-      await loadInitial();
       const typeLabel = deleteTarget.service_type.toUpperCase();
       showToast.success(
         `Removed ${deleted} key${deleted === 1 ? '' : 's'}`,
         `${deleteTarget.provider.display_name} · ${typeLabel} keys have been deleted.`,
       );
       setDeleteTarget(null);
+      fl.refresh();
     } catch (err) {
       handleApiError(err);
     } finally {
       setIsDeleting(false);
     }
-  }, [deleteTarget, deleteProvider, loadInitial]);
+  }, [deleteTarget, deleteProvider, fl]);
 
   const handleCreate = useCallback(
     async (payload: ServiceUpsertPayload) => {
       setIsSaving(true);
       try {
         await upsertService({ values: payload });
-        // Wait for the listing refresh before dismissing the drawer so the
-        // Create button keeps its loading state until the new card is in view.
-        await loadInitial();
         showToast.success('Provider added');
         setCreateOpen(false);
+        fl.refresh();
       } catch (err) {
         handleApiError(err);
       } finally {
         setIsSaving(false);
       }
     },
-    [upsertService, loadInitial],
+    [upsertService, fl],
   );
 
   const handleUpdate = useCallback(
@@ -211,24 +145,22 @@ export default function ServiceProvidersPage() {
       setIsSaving(true);
       try {
         await upsertService({ id, values: payload as ServiceUpsertPayload });
-        // Mirror handleCreate / handleDeleteConfirm: keep the Save button in
-        // its loading state until the refreshed list lands.
-        await loadInitial();
         showToast.success('Provider updated');
         setEditOpen(false);
         setEditingService(null);
+        fl.refresh();
       } catch (err) {
         handleApiError(err);
       } finally {
         setIsSaving(false);
       }
     },
-    [upsertService, loadInitial],
+    [upsertService, fl],
   );
 
-  const isInitialLoading = state.loading && state.items.length === 0;
-  const isEmpty = !isInitialLoading && state.items.length === 0;
-  const hasActiveFilter = !!search || typeFilter !== 'all';
+  const isInitialLoading = fl.listLoading && fl.rows.length === 0;
+  const isEmpty = !isInitialLoading && fl.rows.length === 0;
+  const hasActiveFilter = fl.hasActiveFilters;
 
   return (
     <div className="animate-page flex h-full min-h-0 flex-col gap-5">
@@ -239,9 +171,9 @@ export default function ServiceProvidersPage() {
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               Model Providers
             </h1>
-            {state.total > 0 && (
+            {fl.total > 0 && (
               <Badge variant="secondary" className="text-xs tabular-nums">
-                {state.total}
+                {fl.total}
               </Badge>
             )}
           </div>
@@ -255,24 +187,16 @@ export default function ServiceProvidersPage() {
       </div>
 
       {/* toolbar */}
-      <div className="flex flex-wrap items-center gap-3">
-        <SearchBar
-          placeholder="Search providers or services…"
-          value={search}
-          onSearch={handleSearch}
-          debounceMs={300}
-          containerClassName="max-w-xs flex-1"
-        />
-        <SelectInput
-          name="type-filter"
-          options={TYPE_FILTER_OPTIONS}
-          value={typeFilter}
-          onValueChange={handleTypeFilter}
-          placeholder="All types"
-          size="sm"
-          triggerClassName="min-w-[160px]"
-        />
-      </div>
+      <FacetFilterBar
+        fields={fl.tokenFields}
+        tokens={fl.tokens}
+        onTokensChange={fl.setTokens}
+        onClear={fl.clearAll}
+        showClear={fl.hasActiveFilters}
+        placeholder="Search providers… (e.g. name:OpenAI, type:llm)"
+        drawerFilterCount={fl.drawerFilterCount}
+        onOpenDrawer={() => setFilterDrawerOpen(true)}
+      />
 
       {/* grid */}
       <div className="flex min-h-0 flex-1 flex-col">
@@ -282,17 +206,29 @@ export default function ServiceProvidersPage() {
           <EmptyState onAdd={handleAdd} hasFilter={hasActiveFilter} />
         ) : (
           <ServiceGrid
-            items={state.items}
-            total={state.total}
-            hasNextPage={hasNextPage}
-            isFetchingNextPage={state.loadingMore}
-            fetchNextPage={handleFetchNext}
+            items={fl.rows}
+            total={fl.total}
+            hasNextPage={false}
+            isFetchingNextPage={false}
+            fetchNextPage={noop}
             onSelect={handleSelect}
             onEdit={handleEdit}
             onDelete={handleDeleteRequest}
           />
         )}
       </div>
+
+      {/* filter drawer */}
+      <FacetFilterDrawer
+        open={filterDrawerOpen}
+        onClose={() => setFilterDrawerOpen(false)}
+        description="Filter providers by type."
+        sections={servicesListConfig.facetSections}
+        value={fl.facetSelections}
+        facets={fl.facets}
+        facetsLoading={fl.facetsLoading}
+        onApply={fl.applyDrawer}
+      />
 
       {/* create drawer */}
       <ApiKeyCreateDrawer

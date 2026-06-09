@@ -4,7 +4,7 @@ from typing import Dict, Any, List
 
 from fastapi import HTTPException, status
 
-from sqlalchemy import asc, case, desc, or_
+from sqlalchemy import case, or_
 
 from core.services.base import BaseService
 from core.models.mcp_server import McpServer

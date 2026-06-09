@@ -208,7 +208,7 @@ const AgentListPage: React.FC = () => {
       <FacetFilterDrawer
         open={filterDrawerOpen}
         onClose={() => setFilterDrawerOpen(false)}
-        description="Filter agents by type."
+        description="Filter agents by type and status."
         sections={agentsListConfig.facetSections}
         value={fl.facetSelections}
         facets={fl.facets}
