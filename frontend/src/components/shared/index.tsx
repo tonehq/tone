@@ -64,6 +64,17 @@ export type { CustomCardProps } from './CustomCard';
 export type { SearchableSelectOption } from './SearchableSelect';
 export type { TabItem } from './CustomTab';
 export type { ActionMenuProps } from './ActionMenu';
+export {
+  FacetFilterBar,
+  FacetFilterDrawer,
+  useFacetedList,
+  countFacetFilters,
+  facetsToFilterParams,
+  facetsToTokens,
+  titleCase as facetTitleCase,
+  tokensToFacets,
+} from './faceted-list';
+export type { FacetFilterBarProps, UseFacetedListResult } from './faceted-list';
 
 export {
   ActionMenu,

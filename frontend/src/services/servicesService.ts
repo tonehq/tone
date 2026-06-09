@@ -94,6 +94,30 @@ export async function listProviderKeys(
   return pagedListRequest<Service>(`/services/providers/${providerId}/keys`, body);
 }
 
+export async function listProviderKeyFilterValues(
+  providerId: string,
+  columnName: string,
+  serviceType?: string,
+): Promise<string[]> {
+  const { data } = await axios.get<{ column: string; values: string[] }>(
+    `/services/providers/${providerId}/keys/filter-values`,
+    { params: { column_name: columnName, ...(serviceType ? { service_type: serviceType } : {}) } },
+  );
+  return data?.values ?? [];
+}
+
+export async function listProviderModelFilterValues(
+  providerId: string,
+  columnName: string,
+  serviceType?: string,
+): Promise<string[]> {
+  const { data } = await axios.get<{ column: string; values: string[] }>(
+    `/services/providers/${providerId}/models/filter-values`,
+    { params: { column_name: columnName, ...(serviceType ? { service_type: serviceType } : {}) } },
+  );
+  return data?.values ?? [];
+}
+
 export interface ListProviderModelsParams {
   page?: number;
   page_size?: number;

@@ -17,6 +17,7 @@ from core.models.model_voice import ModelVoice
 from core.services.base import BaseService
 from core.services.crud import list_records
 from core.utils.encryption import encrypt
+from core.utils.faceted_query import apply_filters
 
 
 ALLOWED_SERVICE_TYPES = {"llm", "stt", "tts"}
@@ -243,6 +244,67 @@ class ModelProviderService(BaseService):
             )
         return record
 
+    # ─── faceted list helpers ──────────────────────────────────────────────
+
+    # Faceted (drawer) fields for the aggregated usage list. ``name`` is a
+    # token-bar-only multi-select (provider display name); ``service_type`` is
+    # the drawer facet.
+    USAGE_FACET_FIELDS = ["service_type"]
+
+    def _usage_base_query(self):
+        """Org-scoped base for the usage list — one ApiKey row per key, joined to
+        its provider, excluding legacy NULL service_type rows."""
+        return (
+            self.db.query(ApiKey)
+            .join(ModelProvider, ModelProvider.id == ApiKey.provider_id)
+            .filter(
+                ApiKey.organization_id == self.org_id,
+                ApiKey.service_type.isnot(None),
+            )
+        )
+
+    def _usage_column_map(self) -> dict:
+        return {
+            "service_type": ApiKey.service_type,
+            "name": ModelProvider.display_name,
+            "status": case((ApiKey.is_active.is_(True), "active"), else_="inactive"),
+        }
+
+    def get_service_facets(self, filters: list | None = None) -> dict:
+        """Per-value facet counts for the Model Providers filter drawer. Counts
+        are by distinct (provider, service_type) card, not raw ApiKey rows."""
+        column_map = self._usage_column_map()
+        result: dict = {}
+        for field in self.USAGE_FACET_FIELDS:
+            col = column_map.get(field)
+            if col is None:
+                continue
+            scoped = apply_filters(
+                self._usage_base_query(), filters, column_map, exclude_field=field
+            )
+            rows = (
+                scoped.with_entities(col, func.count(distinct(ApiKey.provider_id)))
+                .group_by(col)
+                .all()
+            )
+            result[field] = [{"value": v, "count": int(c)} for v, c in rows if v]
+        return result
+
+    def get_service_filter_values(self, column_name: str) -> dict:
+        """Distinct values for token-search autocomplete."""
+        base = self._usage_base_query()
+        if column_name == "service_type":
+            rows = base.with_entities(ApiKey.service_type).distinct().all()
+        elif column_name == "name":
+            rows = base.with_entities(ModelProvider.display_name).distinct().all()
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid column: {column_name}. Allowed: name, service_type",
+            )
+        values = sorted([r[0] for r in rows if r[0]])
+        return {"column": column_name, "values": values}
+
     # ─── list / aggregate ──────────────────────────────────────────────────
 
     def list_services(self, body: dict) -> dict:
@@ -297,6 +359,11 @@ class ModelProviderService(BaseService):
             q = q.filter(ApiKey.is_active.is_(True))
         elif status_filter == "inactive":
             q = q.filter(ApiKey.is_active.is_(False))
+
+        # Generic faceted filters (token bar Name multi-select + Type facet).
+        generic_filters = body.get("filters")
+        if generic_filters:
+            q = apply_filters(q, generic_filters, self._usage_column_map())
 
         q = q.group_by(
             ApiKey.provider_id,
@@ -745,6 +812,45 @@ class ModelProviderService(BaseService):
             "page": page,
             "page_size": page_size,
         }
+
+    def get_provider_key_filter_values(
+        self, provider_id: str, column_name: str, service_type: str | None = None
+    ) -> dict:
+        """Distinct API-key names (labels) for token-search autocomplete."""
+        prov_uuid = _parse_uuid(provider_id, field="provider id")
+        self._provider_or_404(prov_uuid)
+        if column_name not in ("name", "label"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid column: {column_name}. Allowed: name",
+            )
+        q = self.db.query(ApiKey.label).filter(
+            ApiKey.organization_id == self.org_id,
+            ApiKey.provider_id == prov_uuid,
+        )
+        if service_type and service_type != "all":
+            _validate_service_type(service_type, required=False)
+            q = q.filter(ApiKey.service_type == service_type)
+        values = sorted([r[0] for r in q.distinct().all() if r[0]])
+        return {"column": column_name, "values": values}
+
+    def get_provider_model_filter_values(
+        self, provider_id: str, column_name: str, service_type: str | None = None
+    ) -> dict:
+        """Distinct model names for token-search autocomplete."""
+        prov_uuid = _parse_uuid(provider_id, field="provider id")
+        self._provider_or_404(prov_uuid)
+        if column_name != "name":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid column: {column_name}. Allowed: name",
+            )
+        q = self.db.query(Model.name).filter(Model.provider_id == prov_uuid)
+        service_type = _validate_service_type(service_type, required=False)
+        if service_type:
+            q = q.filter(Model.kind == service_type)
+        values = sorted([r[0] for r in q.distinct().all() if r[0]])
+        return {"column": column_name, "values": values}
 
     # ─── model CRUD ────────────────────────────────────────────────────────
 

@@ -1,64 +1,36 @@
 'use client';
 
-import { deleteAgentAtom, fetchPaginatedAgentList, paginatedAgentsAtom } from '@/atoms/AgentsAtom';
+import { deleteAgentAtom } from '@/atoms/AgentsAtom';
 import { AgentActionMenu } from '@/components/agents/AgentActionMenu';
 import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
+import { agentsListConfig } from '@/components/agents/agentsListConfig';
 import CreateAgentModal from '@/components/agents/CreateAgentModal';
-import { CustomButton, CustomTable, PhoneNumberDisplay } from '@/components/shared';
-import SearchBar from '@/components/shared/SearchBar';
-import SelectInput from '@/components/shared/SelectInput';
+import {
+  CustomButton,
+  CustomTable,
+  FacetFilterBar,
+  FacetFilterDrawer,
+  PhoneNumberDisplay,
+  useFacetedList,
+} from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
-import { AGENT_TYPE_OPTIONS } from '@/lib/constants/filters';
-import type { AgentDirection, ApiAgent, ListAgentsParams } from '@/types/agent';
-import type { CustomTableColumn, CustomTableSortState } from '@/types/components';
+import type { ApiAgent } from '@/types/agent';
+import type { CustomTableColumn } from '@/types/components';
 import { formatDate } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
 import { Bot, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-
-const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+import { useCallback, useState } from 'react';
 
 const AgentListPage: React.FC = () => {
   const router = useRouter();
-  const [data] = useAtom(paginatedAgentsAtom);
-  const [, fetchList] = useAtom(fetchPaginatedAgentList);
   const [, removeAgent] = useAtom(deleteAgentAtom);
 
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [search, setSearch] = useState('');
-  const [sortBy, setSortBy] = useState<string | undefined>(undefined);
-  const [agentTypeFilter, setAgentTypeFilter] = useState<string>('all');
+  const fl = useFacetedList(agentsListConfig);
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
-
-  const params = useMemo<ListAgentsParams>(
-    () => ({
-      page,
-      page_size: pageSize,
-      search: search.trim() || undefined,
-      sort_by: sortBy,
-      agent_type: agentTypeFilter === 'all' ? undefined : (agentTypeFilter as AgentDirection),
-    }),
-    [page, pageSize, search, sortBy, agentTypeFilter],
-  );
-
-  const refresh = useCallback(
-    async (overrides: ListAgentsParams = {}) => {
-      try {
-        await fetchList({ ...params, ...overrides });
-      } catch (error) {
-        handleApiError(error);
-      }
-    },
-    [fetchList, params],
-  );
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
 
   const handleEdit = useCallback(
     (row: ApiAgent) => {
@@ -74,37 +46,17 @@ const AgentListPage: React.FC = () => {
       try {
         await removeAgent(agentId);
         showToast.success('Agent deleted successfully');
-        const remaining = Math.max(0, data.total - 1);
-        const lastPage = Math.max(1, Math.ceil(remaining / pageSize));
-        const nextPage = Math.min(page, lastPage);
-        if (nextPage !== page) setPage(nextPage);
-        else await refresh();
+        // Step back a page if we just removed the last row on the final page.
+        const remaining = Math.max(0, fl.total - 1);
+        const lastPage = Math.max(1, Math.ceil(remaining / fl.pageSize));
+        if (fl.page > lastPage) fl.handlePaginationChange(lastPage, fl.pageSize);
+        else fl.refresh();
       } catch (error) {
         handleApiError(error);
       }
     },
-    [removeAgent, data.total, pageSize, page, refresh],
+    [removeAgent, fl],
   );
-
-  const handleSearchChange = useCallback((value: string) => {
-    setSearch(value);
-    setPage(1);
-  }, []);
-
-  const handleAgentTypeFilter = useCallback((value: string) => {
-    setAgentTypeFilter(value);
-    setPage(1);
-  }, []);
-
-  const handleSortChange = useCallback((sort: CustomTableSortState | null) => {
-    setSortBy(sort ? `${sort.order === 'desc' ? '-' : ''}${sort.field}` : undefined);
-    setPage(1);
-  }, []);
-
-  const handlePaginationChange = useCallback((nextPage: number, nextPageSize: number) => {
-    setPage(nextPage);
-    setPageSize(nextPageSize);
-  }, []);
 
   const columns: CustomTableColumn<ApiAgent>[] = [
     {
@@ -194,9 +146,9 @@ const AgentListPage: React.FC = () => {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">Agents</h1>
-            {data.total > 0 && (
+            {fl.total > 0 && (
               <Badge variant="secondary" className="text-xs tabular-nums">
-                {data.total}
+                {fl.total}
               </Badge>
             )}
           </div>
@@ -207,39 +159,32 @@ const AgentListPage: React.FC = () => {
         </CustomButton>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <SearchBar
-          placeholder="Search agents..."
-          value={search}
-          onSearch={handleSearchChange}
-          debounceMs={400}
-          containerClassName="max-w-xs flex-1"
-        />
-        <SelectInput
-          name="agent-type-filter"
-          options={AGENT_TYPE_OPTIONS}
-          value={agentTypeFilter}
-          onValueChange={handleAgentTypeFilter}
-          placeholder="All types"
-          size="sm"
-          triggerClassName="min-w-[160px]"
-        />
-      </div>
+      <FacetFilterBar
+        fields={fl.tokenFields}
+        tokens={fl.tokens}
+        onTokensChange={fl.setTokens}
+        onClear={fl.clearAll}
+        showClear={fl.hasActiveFilters}
+        placeholder="Search agents… (e.g. name:hotel)"
+        drawerFilterCount={fl.drawerFilterCount}
+        onOpenDrawer={() => setFilterDrawerOpen(true)}
+      />
 
       <div className="flex min-h-0 flex-1 flex-col">
         <CustomTable
           columns={columns}
-          dataSource={data.items}
+          dataSource={fl.rows}
           rowKey="id"
-          loading={data.loading}
+          loading={fl.listLoading}
           onRowClick={handleEdit}
-          onSortChange={handleSortChange}
+          onSortChange={fl.handleSortChange}
+          initialSort={agentsListConfig.defaultSort ?? undefined}
           pagination={{
-            current: page,
-            pageSize,
-            total: data.total,
-            pageSizeOptions: PAGE_SIZE_OPTIONS,
-            onChange: handlePaginationChange,
+            current: fl.page,
+            pageSize: fl.pageSize,
+            total: fl.total,
+            pageSizeOptions: fl.pageSizeOptions,
+            onChange: fl.handlePaginationChange,
           }}
           emptyState={
             <div className="flex flex-col items-center gap-4 py-8">
@@ -259,6 +204,17 @@ const AgentListPage: React.FC = () => {
           }
         />
       </div>
+
+      <FacetFilterDrawer
+        open={filterDrawerOpen}
+        onClose={() => setFilterDrawerOpen(false)}
+        description="Filter agents by type and status."
+        sections={agentsListConfig.facetSections}
+        value={fl.facetSelections}
+        facets={fl.facets}
+        facetsLoading={fl.facetsLoading}
+        onApply={fl.applyDrawer}
+      />
 
       <CreateAgentModal open={modalOpen} onClose={() => setModalOpen(false)} />
     </div>

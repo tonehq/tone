@@ -11,8 +11,11 @@ from core.api.v1.agents import (
     ImprovePromptRequest,
     UpdateAgentRequest,
     _prompt_errors,
+    agent_facets_for_org,
+    agent_filter_values_for_org,
     list_agents_for_org,
 )
+from core.api.v1.faceted_schemas import FacetsRequest
 from core.database.session import get_db
 from core.models.agent import Agent
 from core.services.agent_service import AgentService
@@ -112,6 +115,27 @@ def list_agents(
 ):
     org_id = UUID(claims.org_id)
     return list_agents_for_org(db, org_id, body)
+
+
+@router.post("/facets")
+def get_agent_facets(
+    body: FacetsRequest,
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    org_id = UUID(claims.org_id)
+    filters = [f.model_dump() for f in body.filters] if body.filters else None
+    return agent_facets_for_org(db, org_id, filters)
+
+
+@router.get("/filter-values")
+def get_agent_filter_values(
+    column_name: str = Query(...),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    org_id = UUID(claims.org_id)
+    return agent_filter_values_for_org(db, org_id, column_name)
 
 
 @router.post("/generate_prompt", response_model=GeneratedPromptResponse)

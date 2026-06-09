@@ -24,16 +24,41 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 
+from core.api.v1.faceted_schemas import FacetsRequest
 from core.database.session import get_db
 from core.models.agent import Agent
 from core.models.agent_knowledge_base import AgentKnowledgeBase
 from core.models.knowledge_base import KnowledgeBase
 from core.models.upload import Upload
-from core.services.crud import list_records
 from core.services.document_processing_service import DocumentProcessingService
 from core.services.ingestion_queue import enqueue_reprocess, enqueue_upload
 from core.services.r2_storage_service import R2StorageService
+from core.utils.faceted_query import apply_filters, apply_sort, build_facets, distinct_values
+from core.utils.list_params import resolve_sort
 from shared.config import settings
+
+# Knowledge-base documents are ``Upload`` rows scoped to the kb_document purpose.
+KB_FACET_FIELDS = ["status"]
+
+
+def _kb_column_map() -> dict:
+    """Scalar columns exposed for filtering / sorting / faceting on documents."""
+    return {
+        "file_name": Upload.file_name,
+        "status": Upload.status,
+        "size_bytes": Upload.size_bytes,
+        "created_at": Upload.created_at,
+        "updated_at": Upload.updated_at,
+    }
+
+
+def _kb_base_query(db: Session, org_id: UUID):
+    """Org-scoped base query for kb documents (excludes soft-deleted rows)."""
+    return db.query(Upload).filter(
+        Upload.organization_id == org_id,
+        Upload.purpose == "kb_document",
+        Upload.deleted_at.is_(None),
+    )
 
 
 def _signed_url(file_path: str | None, r2: R2StorageService | None = None) -> str | None:
@@ -74,13 +99,15 @@ def build_knowledge_base_router(
         page = max(int(body.get("page") or 1), 1)
         page_size = min(max(int(body.get("page_size") or 20), 1), 100)
         search = body.get("search")
-        sort_by = body.get("sort_by")
         agent_id = body.get("agent_id")
         status_filter = body.get("status")
 
-        filters = [Upload.purpose == "kb_document"]
+        column_map = _kb_column_map()
+        query = _kb_base_query(db, org_id)
+
+        # Named params (back-compat): free-text search, owning-agent and status.
         if search:
-            filters.append(Upload.file_name.ilike(f"%{search}%"))
+            query = query.filter(Upload.file_name.ilike(f"%{search}%"))
         if agent_id:
             try:
                 agent_uuid = UUID(str(agent_id))
@@ -96,20 +123,18 @@ def build_knowledge_base_router(
                     AgentKnowledgeBase.organization_id == org_id,
                 )
             )
-            filters.append(Upload.id.in_(upload_ids_q))
+            query = query.filter(Upload.id.in_(upload_ids_q))
         if status_filter:
-            filters.append(Upload.status == status_filter)
+            query = query.filter(Upload.status == status_filter)
 
-        allowed_sort_fields = {"file_name", "size_bytes", "created_at", "updated_at", "status"}
-        order_by = Upload.updated_at.desc()
-        if sort_by:
-            desc = sort_by.startswith("-")
-            field_name = sort_by.lstrip("-")
-            if field_name in allowed_sort_fields:
-                col = getattr(Upload, field_name)
-                order_by = col.desc() if desc else col.asc()
+        # Generic faceted filters + sort.
+        query = apply_filters(query, body.get("filters"), column_map)
+        total = query.count()
+        sort_by, sort_order = resolve_sort(body, "updated_at")
+        query = apply_sort(query, column_map, sort_by, sort_order, Upload.updated_at)
 
-        items, total = list_records(db, Upload, org_id, page, page_size, filters, order_by)
+        offset = (page - 1) * page_size
+        items = query.offset(offset).limit(page_size).all()
         r2 = R2StorageService()
 
         # Map each upload to its linked agent (if any) so the UI can show the
@@ -445,5 +470,28 @@ def build_knowledge_base_router(
                 pass
 
         return {"ok": True}
+
+    @router.post("/facets")
+    def get_document_facets(
+        body: FacetsRequest,
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        org_id = resolve_org_id(claims)
+        filters = [f.model_dump() for f in body.filters] if body.filters else None
+        return build_facets(
+            lambda: _kb_base_query(db, org_id), _kb_column_map(), KB_FACET_FIELDS, filters
+        )
+
+    @router.get("/filter-values")
+    def get_document_filter_values(
+        column_name: str,
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        org_id = resolve_org_id(claims)
+        column_map = _kb_column_map()
+        allowed = {k: column_map[k] for k in ("status", "file_name")}
+        return distinct_values(_kb_base_query(db, org_id), allowed, column_name)
 
     return router

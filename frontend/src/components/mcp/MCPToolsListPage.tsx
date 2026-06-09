@@ -3,12 +3,11 @@
 import { ArrowLeft, RefreshCw, Wrench } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { AppLoader, CustomButton, CustomTable } from '@/components/shared';
-import SearchBar from '@/components/shared/SearchBar';
+import { AppLoader, CustomButton, CustomTable, TokenSearchBar } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { useGoBack } from '@/hooks/useGoBack';
 import { discoverMcpTools, getMcpServer } from '@/services/mcpServerService';
-import type { CustomTableColumn } from '@/types/components';
+import type { CustomTableColumn, SearchToken, TokenSearchField } from '@/types/components';
 import type { MCPServer, MCPTool } from '@/types/mcp';
 import { handleApiError } from '@/utils/helpers';
 
@@ -81,6 +80,27 @@ export default function MCPToolsListPage({ serverId }: MCPToolsListPageProps) {
       (t) => t.name.toLowerCase().includes(q) || (t.description ?? '').toLowerCase().includes(q),
     );
   }, [tools, trimmedSearch]);
+
+  // Token-bar "Name" field — a value dropdown sourced from the loaded tools.
+  const searchFields = useMemo<TokenSearchField[]>(
+    () => [
+      {
+        key: 'name',
+        label: 'Name',
+        type: 'enum',
+        fetchValues: () => Promise.resolve([...new Set(tools.map((t) => t.name))].sort()),
+      },
+    ],
+    [tools],
+  );
+  const searchTokens = useMemo<SearchToken[]>(
+    () => (search ? [{ field: 'name', value: search }] : []),
+    [search],
+  );
+  const handleSearchTokens = useCallback((tokens: SearchToken[]) => {
+    const last = [...tokens].reverse().find((t) => t.field === 'name');
+    setSearch(last?.value ?? '');
+  }, []);
 
   const columns = useMemo<CustomTableColumn<MCPTool>[]>(
     () => [
@@ -192,12 +212,12 @@ export default function MCPToolsListPage({ serverId }: MCPToolsListPageProps) {
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
-        <SearchBar
-          placeholder="Search tools..."
-          value={search}
-          onSearch={setSearch}
-          debounceMs={300}
-          containerClassName="max-w-xs flex-1"
+        <TokenSearchBar
+          fields={searchFields}
+          value={searchTokens}
+          onChange={handleSearchTokens}
+          placeholder="Search tools… (e.g. name:get_weather)"
+          className="w-full sm:max-w-xs"
         />
       </div>
 

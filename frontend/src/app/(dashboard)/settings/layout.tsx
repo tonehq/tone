@@ -56,12 +56,6 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
   // switching between the app and settings never changes the rail width.
   const { sidebarCollapsed, toggleSidebar } = useNavigation();
 
-  // The Model Providers detail editor is a focused, full-width page with its own
-  // back navigation — render it without any settings chrome.
-  if (pathname.startsWith('/settings/model-providers/')) {
-    return <div className="h-full w-full overflow-y-auto">{children}</div>;
-  }
-
   return (
     <div className="flex h-full w-full min-w-0 bg-background">
       {/* ── Settings rail (desktop) — shares SidebarShell with the app sidebar ── */}

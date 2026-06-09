@@ -4,13 +4,14 @@ from typing import Dict, Any, List
 
 from fastapi import HTTPException, status
 
-from sqlalchemy import asc, desc, or_
+from sqlalchemy import case, or_
 
 from core.services.base import BaseService
 from core.models.mcp_server import McpServer
 from core.models.agent_mcp_server import AgentMcpServer
 from core.models.tool import Tool
 from core.utils.encryption import encrypt, decrypt
+from core.utils.faceted_query import apply_filters, apply_sort, build_facets, distinct_values
 
 
 def encrypt_auth_config(auth_config):
@@ -294,6 +295,20 @@ class McpServerService(BaseService):
         self._sync_mcp_tools(mcp_server, validation_result["tools"])
         return mcp_server
 
+    # ``status`` is derived from the boolean ``is_active`` via a CASE expression
+    # so it flows through the generic faceted-query helpers as a string facet.
+    MCP_FACET_FIELDS = ["status", "transport_type"]
+
+    def _mcp_column_map(self) -> Dict[str, Any]:
+        return {
+            "name": McpServer.name,
+            "status": case((McpServer.is_active.is_(True), "active"), else_="inactive"),
+            "is_active": McpServer.is_active,
+            "transport_type": McpServer.transport_type,
+            "created_at": McpServer.created_at,
+            "updated_at": McpServer.updated_at,
+        }
+
     def list_mcp_servers(
         self,
         search: str = None,
@@ -302,11 +317,13 @@ class McpServerService(BaseService):
         sort_order: str = "desc",
         page: int = 1,
         page_size: int = None,
+        filters: List[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """List MCP servers with search, filter, sort, and pagination.
 
         Returns {"data": [...], "pagination": {...}}.
         """
+        column_map = self._mcp_column_map()
         query = self.query(McpServer)
 
         if search:
@@ -321,16 +338,14 @@ class McpServerService(BaseService):
         if is_active is not None:
             query = query.filter(McpServer.is_active == is_active)
 
+        query = apply_filters(query, filters, column_map)
+
         total = query.count()
 
-        sort_column_map = {
-            "created_at": McpServer.created_at,
-            "updated_at": McpServer.updated_at,
-            "name": McpServer.name,
-        }
-        sort_column = sort_column_map.get(sort_by, McpServer.created_at)
-        order_func = asc if sort_order == "asc" else desc
-        ordered_query = query.order_by(order_func(sort_column), McpServer.id)
+        # Secondary order by id keeps pagination stable across equal sort keys.
+        ordered_query = apply_sort(
+            query, column_map, sort_by, sort_order, McpServer.created_at
+        ).order_by(McpServer.id)
 
         if page_size is not None:
             offset = (page - 1) * page_size
@@ -354,6 +369,19 @@ class McpServerService(BaseService):
                 "total_pages": total_pages,
             },
         }
+
+    def get_facets(self, filters: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+        return build_facets(
+            lambda: self.query(McpServer),
+            self._mcp_column_map(),
+            self.MCP_FACET_FIELDS,
+            filters,
+        )
+
+    def get_filter_values(self, column_name: str) -> Dict[str, Any]:
+        column_map = self._mcp_column_map()
+        allowed = {k: column_map[k] for k in ("name", "status", "transport_type")}
+        return distinct_values(self.query(McpServer), allowed, column_name)
 
     def get_mcp_server(self, mcp_server_id) -> McpServer:
         mcp_server = self.query(McpServer).filter(McpServer.id == mcp_server_id).first()
