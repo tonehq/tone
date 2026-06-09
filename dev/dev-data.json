@@ -9,6 +9,7 @@
       "models": [
         {
           "name": "gpt-5",
+          "base_url": "https://api.openai.com/v1",
           "meta_data": {
             "model": "gpt-5",
             "max_completion_tokens": 128000
@@ -31,6 +32,7 @@
         },
         {
           "name": "gpt-5-mini",
+          "base_url": "https://api.openai.com/v1",
           "meta_data": {
             "model": "gpt-5-mini",
             "max_completion_tokens": 128000
@@ -53,6 +55,7 @@
         },
         {
           "name": "gpt-5-nano",
+          "base_url": "https://api.openai.com/v1",
           "meta_data": {
             "model": "gpt-5-nano",
             "max_completion_tokens": 128000
@@ -75,6 +78,7 @@
         },
         {
           "name": "o3",
+          "base_url": "https://api.openai.com/v1",
           "meta_data": {
             "model": "o3",
             "max_completion_tokens": 100000
@@ -97,6 +101,7 @@
         },
         {
           "name": "gpt-5.5",
+          "base_url": "https://api.openai.com/v1",
           "meta_data": {
             "model": "gpt-5.5",
             "max_completion_tokens": 128000
@@ -119,6 +124,7 @@
         },
         {
           "name": "gpt-5.4",
+          "base_url": "https://api.openai.com/v1",
           "meta_data": {
             "model": "gpt-5.4",
             "max_completion_tokens": 128000
@@ -141,6 +147,7 @@
         },
         {
           "name": "gpt-5.4-mini",
+          "base_url": "https://api.openai.com/v1",
           "meta_data": {
             "model": "gpt-5.4-mini",
             "max_completion_tokens": 128000
@@ -163,6 +170,7 @@
         },
         {
           "name": "o3-pro",
+          "base_url": "https://api.openai.com/v1",
           "meta_data": {
             "model": "o3-pro",
             "max_completion_tokens": 100000
@@ -185,6 +193,7 @@
         },
         {
           "name": "gpt-4o",
+          "base_url": "https://api.openai.com/v1",
           "meta_data": {
             "model": "gpt-4o",
             "max_completion_tokens": 16384
@@ -207,6 +216,7 @@
         },
         {
           "name": "gpt-4o-mini",
+          "base_url": "https://api.openai.com/v1",
           "meta_data": {
             "model": "gpt-4o-mini",
             "max_completion_tokens": 16384
@@ -229,6 +239,7 @@
         },
         {
           "name": "gpt-4.1-nano",
+          "base_url": "https://api.openai.com/v1",
           "meta_data": {
             "model": "gpt-4.1-nano",
             "max_completion_tokens": 32768
@@ -251,6 +262,7 @@
         },
         {
           "name": "gpt-5.4-nano",
+          "base_url": "https://api.openai.com/v1",
           "meta_data": {
             "model": "gpt-5.4-nano",
             "max_completion_tokens": 128000
@@ -273,6 +285,7 @@
         },
         {
           "name": "gpt-4.1-mini",
+          "base_url": "https://api.openai.com/v1",
           "meta_data": {
             "model": "gpt-4.1-mini",
             "max_completion_tokens": 32768
@@ -377,6 +390,7 @@
       "models": [
         {
           "name": "groq/compound",
+          "base_url": "https://api.groq.com/openai/v1",
           "meta_data": {
             "model": "groq/compound",
             "max_completion_tokens": 8192
@@ -434,6 +448,7 @@
         },
         {
           "name": "groq/compound-mini",
+          "base_url": "https://api.groq.com/openai/v1",
           "meta_data": {
             "model": "groq/compound-mini",
             "max_completion_tokens": 8192
@@ -491,6 +506,7 @@
         },
         {
           "name": "llama-3.1-8b-instant",
+          "base_url": "https://api.groq.com/openai/v1",
           "meta_data": {
             "model": "llama-3.1-8b-instant",
             "max_completion_tokens": 131072
@@ -548,6 +564,7 @@
         },
         {
           "name": "llama-3.3-70b-versatile",
+          "base_url": "https://api.groq.com/openai/v1",
           "meta_data": {
             "model": "llama-3.3-70b-versatile",
             "max_completion_tokens": 32768
@@ -605,6 +622,7 @@
         },
         {
           "name": "openai/gpt-oss-20b",
+          "base_url": "https://api.groq.com/openai/v1",
           "meta_data": {
             "model": "openai/gpt-oss-20b",
             "max_completion_tokens": 65536
@@ -662,6 +680,7 @@
         },
         {
           "name": "openai/gpt-oss-120b",
+          "base_url": "https://api.groq.com/openai/v1",
           "meta_data": {
             "model": "openai/gpt-oss-120b",
             "max_completion_tokens": 65536
@@ -1946,6 +1965,7 @@
       "models": [
         {
           "name": "anthropic/claude-opus-4.6",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "anthropic/claude-opus-4.6",
             "max_tokens": 128000,
@@ -1993,6 +2013,7 @@
         },
         {
           "name": "anthropic/claude-opus-4.5",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "anthropic/claude-opus-4.5",
             "max_tokens": 128000,
@@ -2040,6 +2061,7 @@
         },
         {
           "name": "anthropic/claude-opus-4.1",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "anthropic/claude-opus-4.1",
             "max_tokens": 32000,
@@ -2087,6 +2109,7 @@
         },
         {
           "name": "anthropic/claude-opus-4",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "anthropic/claude-opus-4",
             "max_tokens": 32000,
@@ -2134,6 +2157,7 @@
         },
         {
           "name": "anthropic/claude-sonnet-4.5",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "anthropic/claude-sonnet-4.5",
             "max_tokens": 64000,
@@ -2181,6 +2205,7 @@
         },
         {
           "name": "anthropic/claude-sonnet-4",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "anthropic/claude-sonnet-4",
             "max_tokens": 64000,
@@ -2228,6 +2253,7 @@
         },
         {
           "name": "anthropic/claude-3.5-haiku",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "anthropic/claude-3.5-haiku",
             "max_tokens": 64000,
@@ -2275,6 +2301,7 @@
         },
         {
           "name": "anthropic/claude-3-haiku",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "anthropic/claude-3-haiku",
             "max_tokens": 4096,
@@ -2322,6 +2349,7 @@
         },
         {
           "name": "openai/gpt-5",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-5",
             "max_tokens": 128000,
@@ -2356,6 +2384,7 @@
         },
         {
           "name": "openai/gpt-5-chat",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-5-chat",
             "max_tokens": 128000,
@@ -2390,6 +2419,7 @@
         },
         {
           "name": "openai/gpt-5-mini",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-5-mini",
             "max_tokens": 128000,
@@ -2424,6 +2454,7 @@
         },
         {
           "name": "openai/gpt-5-nano",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-5-nano",
             "max_tokens": 128000,
@@ -2458,6 +2489,7 @@
         },
         {
           "name": "openai/gpt-5-pro",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-5-pro",
             "max_tokens": 128000,
@@ -2492,6 +2524,7 @@
         },
         {
           "name": "openai/gpt-5.2",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-5.2",
             "max_tokens": 128000,
@@ -2526,6 +2559,7 @@
         },
         {
           "name": "openai/gpt-5.2-chat",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-5.2-chat",
             "max_tokens": 128000,
@@ -2560,6 +2594,7 @@
         },
         {
           "name": "openai/gpt-5.2-pro",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-5.2-pro",
             "max_tokens": 128000,
@@ -2594,6 +2629,7 @@
         },
         {
           "name": "openai/gpt-5.2-codex",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-5.2-codex",
             "max_tokens": 128000,
@@ -2628,6 +2664,7 @@
         },
         {
           "name": "openai/gpt-5.1",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-5.1",
             "max_tokens": 128000,
@@ -2662,6 +2699,7 @@
         },
         {
           "name": "openai/gpt-5.1-chat",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-5.1-chat",
             "max_tokens": 128000,
@@ -2696,6 +2734,7 @@
         },
         {
           "name": "openai/gpt-5.1-codex",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-5.1-codex",
             "max_tokens": 128000,
@@ -2730,6 +2769,7 @@
         },
         {
           "name": "openai/gpt-5.1-codex-mini",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-5.1-codex-mini",
             "max_tokens": 128000,
@@ -2764,6 +2804,7 @@
         },
         {
           "name": "openai/gpt-5.1-codex-max",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-5.1-codex-max",
             "max_tokens": 128000,
@@ -2798,6 +2839,7 @@
         },
         {
           "name": "openai/gpt-4",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-4",
             "max_tokens": 8192,
@@ -2892,6 +2934,7 @@
         },
         {
           "name": "openai/gpt-4-turbo",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-4-turbo",
             "max_tokens": 4096,
@@ -2986,6 +3029,7 @@
         },
         {
           "name": "openai/gpt-4-1106-preview",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-4-1106-preview",
             "max_tokens": 4096,
@@ -3080,6 +3124,7 @@
         },
         {
           "name": "openai/gpt-4o",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-4o",
             "max_tokens": 16384,
@@ -3174,6 +3219,7 @@
         },
         {
           "name": "openai/gpt-4o-2024-05-13",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-4o-2024-05-13",
             "max_tokens": 4096,
@@ -3268,6 +3314,7 @@
         },
         {
           "name": "openai/gpt-4o-2024-11-20",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-4o-2024-11-20",
             "max_tokens": 16384,
@@ -3362,6 +3409,7 @@
         },
         {
           "name": "openai/gpt-4.1",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-4.1",
             "max_tokens": 32768,
@@ -3456,6 +3504,7 @@
         },
         {
           "name": "openai/gpt-4.1-mini",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-4.1-mini",
             "max_tokens": 32768,
@@ -3550,6 +3599,7 @@
         },
         {
           "name": "openai/gpt-4.1-nano",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-4.1-nano",
             "max_tokens": 32768,
@@ -3644,6 +3694,7 @@
         },
         {
           "name": "openai/gpt-3.5-turbo",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-3.5-turbo",
             "max_tokens": 4096,
@@ -3738,6 +3789,7 @@
         },
         {
           "name": "openai/gpt-3.5-turbo-0613",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-3.5-turbo-0613",
             "max_tokens": 4096,
@@ -3832,6 +3884,7 @@
         },
         {
           "name": "openai/gpt-3.5-turbo-16k",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-3.5-turbo-16k",
             "max_tokens": 4096,
@@ -3926,6 +3979,7 @@
         },
         {
           "name": "openai/gpt-3.5-turbo-instruct",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/gpt-3.5-turbo-instruct",
             "max_tokens": 4096,
@@ -4020,6 +4074,7 @@
         },
         {
           "name": "openai/o1",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/o1",
             "max_tokens": 100000,
@@ -4054,6 +4109,7 @@
         },
         {
           "name": "openai/o1-pro",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/o1-pro",
             "max_tokens": 100000,
@@ -4088,6 +4144,7 @@
         },
         {
           "name": "openai/o3",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/o3",
             "max_tokens": 100000,
@@ -4122,6 +4179,7 @@
         },
         {
           "name": "openai/o3-mini",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/o3-mini",
             "max_tokens": 100000,
@@ -4156,6 +4214,7 @@
         },
         {
           "name": "openai/o3-mini-high",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/o3-mini-high",
             "max_tokens": 100000,
@@ -4190,6 +4249,7 @@
         },
         {
           "name": "openai/o3-pro",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/o3-pro",
             "max_tokens": 100000,
@@ -4224,6 +4284,7 @@
         },
         {
           "name": "openai/o4-mini",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/o4-mini",
             "max_tokens": 100000,
@@ -4258,6 +4319,7 @@
         },
         {
           "name": "openai/o4-mini-high",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "openai/o4-mini-high",
             "max_tokens": 100000,
@@ -4292,6 +4354,7 @@
         },
         {
           "name": "meta-llama/llama-4-maverick",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "meta-llama/llama-4-maverick",
             "max_tokens": 65536,
@@ -4374,6 +4437,7 @@
         },
         {
           "name": "meta-llama/llama-4-scout",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "meta-llama/llama-4-scout",
             "max_tokens": 65536,
@@ -4456,6 +4520,7 @@
         },
         {
           "name": "meta-llama/llama-3.3-70b-instruct",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "meta-llama/llama-3.3-70b-instruct",
             "max_tokens": 8192,
@@ -4538,6 +4603,7 @@
         },
         {
           "name": "meta-llama/llama-3.2-3b-instruct",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "meta-llama/llama-3.2-3b-instruct",
             "max_tokens": 8192,
@@ -4620,6 +4686,7 @@
         },
         {
           "name": "meta-llama/llama-3.2-1b-instruct",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "meta-llama/llama-3.2-1b-instruct",
             "max_tokens": 8192,
@@ -4702,6 +4769,7 @@
         },
         {
           "name": "meta-llama/llama-3.1-8b-instruct",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "meta-llama/llama-3.1-8b-instruct",
             "max_tokens": 8192,
@@ -4784,6 +4852,7 @@
         },
         {
           "name": "meta-llama/llama-3.1-70b-instruct",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "meta-llama/llama-3.1-70b-instruct",
             "max_tokens": 8192,
@@ -4866,6 +4935,7 @@
         },
         {
           "name": "meta-llama/llama-3-70b-instruct",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "meta-llama/llama-3-70b-instruct",
             "max_tokens": 8192,
@@ -4948,6 +5018,7 @@
         },
         {
           "name": "meta-llama/llama-3-8b-instruct",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "meta-llama/llama-3-8b-instruct",
             "max_tokens": 8192,
@@ -5030,6 +5101,7 @@
         },
         {
           "name": "qwen/qwen3-max",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "qwen/qwen3-max",
             "max_tokens": 81920,
@@ -5100,6 +5172,7 @@
         },
         {
           "name": "qwen/qwen3-max-thinking",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "qwen/qwen3-max-thinking",
             "max_tokens": 81920,
@@ -5170,6 +5243,7 @@
         },
         {
           "name": "qwen/qwen3-8b",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "qwen/qwen3-8b",
             "max_tokens": 16384,
@@ -5240,6 +5314,7 @@
         },
         {
           "name": "qwen/qwen3-14b",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "qwen/qwen3-14b",
             "max_tokens": 16384,
@@ -5310,6 +5385,7 @@
         },
         {
           "name": "qwen/qwen3-30b-a3b",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "qwen/qwen3-30b-a3b",
             "max_tokens": 16384,
@@ -5380,6 +5456,7 @@
         },
         {
           "name": "qwen/qwen3-32b",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "qwen/qwen3-32b",
             "max_tokens": 16384,
@@ -5450,6 +5527,7 @@
         },
         {
           "name": "qwen/qwen3-235b-a22b",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "qwen/qwen3-235b-a22b",
             "max_tokens": 81920,
@@ -5520,6 +5598,7 @@
         },
         {
           "name": "qwen/qwen3-235b-a22b-thinking-2507",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "qwen/qwen3-235b-a22b-thinking-2507",
             "max_tokens": 81920,
@@ -5590,6 +5669,7 @@
         },
         {
           "name": "qwen/qwen3-next-80b-a3b-instruct",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "qwen/qwen3-next-80b-a3b-instruct",
             "max_tokens": 16384,
@@ -5660,6 +5740,7 @@
         },
         {
           "name": "qwen/qwen3-next-80b-a3b-thinking",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "qwen/qwen3-next-80b-a3b-thinking",
             "max_tokens": 81920,
@@ -5730,6 +5811,7 @@
         },
         {
           "name": "qwen/qwen-plus",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "qwen/qwen-plus",
             "max_tokens": 16384,
@@ -5800,6 +5882,7 @@
         },
         {
           "name": "qwen/qwen-plus-2025-07-28",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "qwen/qwen-plus-2025-07-28",
             "max_tokens": 16384,
@@ -5870,6 +5953,7 @@
         },
         {
           "name": "qwen/qwen-plus-2025-07-28:thinking",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "qwen/qwen-plus-2025-07-28:thinking",
             "max_tokens": 81920,
@@ -5940,6 +6024,7 @@
         },
         {
           "name": "qwen/qwen3-coder",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "qwen/qwen3-coder",
             "max_tokens": 16384,
@@ -6010,6 +6095,7 @@
         },
         {
           "name": "qwen/qwen3-coder-plus",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "qwen/qwen3-coder-plus",
             "max_tokens": 16384,
@@ -6080,6 +6166,7 @@
         },
         {
           "name": "qwen/qwen3-coder-flash",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "qwen/qwen3-coder-flash",
             "max_tokens": 16384,
@@ -6150,6 +6237,7 @@
         },
         {
           "name": "qwen/qwen3-coder-next",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "qwen/qwen3-coder-next",
             "max_tokens": 16384,
@@ -6220,6 +6308,7 @@
         },
         {
           "name": "qwen/qwen3-coder-30b-a3b-instruct",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "qwen/qwen3-coder-30b-a3b-instruct",
             "max_tokens": 16384,
@@ -6290,6 +6379,7 @@
         },
         {
           "name": "qwen/qwen-2.5-coder-32b-instruct",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "qwen/qwen-2.5-coder-32b-instruct",
             "max_tokens": 8192,
@@ -6360,6 +6450,7 @@
         },
         {
           "name": "mistralai/mistral-large",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "mistralai/mistral-large",
             "max_tokens": 131072,
@@ -6442,6 +6533,7 @@
         },
         {
           "name": "mistralai/mistral-large-2407",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "mistralai/mistral-large-2407",
             "max_tokens": 131072,
@@ -6524,6 +6616,7 @@
         },
         {
           "name": "mistralai/mistral-medium-3",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "mistralai/mistral-medium-3",
             "max_tokens": 131072,
@@ -6606,6 +6699,7 @@
         },
         {
           "name": "mistralai/mistral-medium-3.1",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "mistralai/mistral-medium-3.1",
             "max_tokens": 131072,
@@ -6688,6 +6782,7 @@
         },
         {
           "name": "mistralai/mistral-small-3.1-24b-instruct",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "mistralai/mistral-small-3.1-24b-instruct",
             "max_tokens": 32768,
@@ -6770,6 +6865,7 @@
         },
         {
           "name": "mistralai/mistral-small-3.2-24b-instruct",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "mistralai/mistral-small-3.2-24b-instruct",
             "max_tokens": 32768,
@@ -6852,6 +6948,7 @@
         },
         {
           "name": "mistralai/mixtral-8x22b-instruct",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "mistralai/mixtral-8x22b-instruct",
             "max_tokens": 65536,
@@ -6934,6 +7031,7 @@
         },
         {
           "name": "mistralai/ministral-14b-2512",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "mistralai/ministral-14b-2512",
             "max_tokens": 32768,
@@ -7016,6 +7114,7 @@
         },
         {
           "name": "mistralai/devstral-2512",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "mistralai/devstral-2512",
             "max_tokens": 32768,
@@ -7098,6 +7197,7 @@
         },
         {
           "name": "mistralai/codestral-2508",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "mistralai/codestral-2508",
             "max_tokens": 32768,
@@ -7180,6 +7280,7 @@
         },
         {
           "name": "deepseek/deepseek-chat",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "deepseek/deepseek-chat",
             "max_tokens": 8192,
@@ -7251,6 +7352,7 @@
         },
         {
           "name": "deepseek/deepseek-chat-v3-0324",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "deepseek/deepseek-chat-v3-0324",
             "max_tokens": 8192,
@@ -7322,6 +7424,7 @@
         },
         {
           "name": "deepseek/deepseek-chat-v3.1",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "deepseek/deepseek-chat-v3.1",
             "max_tokens": 16384,
@@ -7393,6 +7496,7 @@
         },
         {
           "name": "deepseek/deepseek-v3.2",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "deepseek/deepseek-v3.2",
             "max_tokens": 16384,
@@ -7464,6 +7568,7 @@
         },
         {
           "name": "deepseek/deepseek-v3.2-exp",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "deepseek/deepseek-v3.2-exp",
             "max_tokens": 16384,
@@ -7535,6 +7640,7 @@
         },
         {
           "name": "deepseek/deepseek-r1",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "deepseek/deepseek-r1",
             "max_tokens": 8192,
@@ -7617,6 +7723,7 @@
         },
         {
           "name": "deepseek/deepseek-r1-0528",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "deepseek/deepseek-r1-0528",
             "max_tokens": 8192,
@@ -7699,6 +7806,7 @@
         },
         {
           "name": "deepseek/deepseek-r1-distill-qwen-32b",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "deepseek/deepseek-r1-distill-qwen-32b",
             "max_tokens": 8192,
@@ -7781,6 +7889,7 @@
         },
         {
           "name": "deepseek/deepseek-r1-distill-llama-70b",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "deepseek/deepseek-r1-distill-llama-70b",
             "max_tokens": 8192,
@@ -7863,6 +7972,7 @@
         },
         {
           "name": "google/gemini-3.1-pro-preview",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "google/gemini-3.1-pro-preview",
             "max_tokens": 65536,
@@ -7921,6 +8031,7 @@
         },
         {
           "name": "google/gemini-3-flash-preview",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "google/gemini-3-flash-preview",
             "max_tokens": 65536,
@@ -7979,6 +8090,7 @@
         },
         {
           "name": "google/gemini-3.1-flash-lite-preview",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "google/gemini-3.1-flash-lite-preview",
             "max_tokens": 65536,
@@ -8037,6 +8149,7 @@
         },
         {
           "name": "google/gemini-2.5-pro",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "google/gemini-2.5-pro",
             "max_tokens": 65536,
@@ -8095,6 +8208,7 @@
         },
         {
           "name": "google/gemini-2.5-flash",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "google/gemini-2.5-flash",
             "max_tokens": 65536,
@@ -8153,6 +8267,7 @@
         },
         {
           "name": "google/gemini-2.5-flash-lite",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "google/gemini-2.5-flash-lite",
             "max_tokens": 65536,
@@ -8211,6 +8326,7 @@
         },
         {
           "name": "ai21/jamba-large-1.7",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "ai21/jamba-large-1.7",
             "max_tokens": 4096,
@@ -8281,6 +8397,7 @@
         },
         {
           "name": "cohere/command-a",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "cohere/command-a",
             "max_tokens": 4096,
@@ -8374,6 +8491,7 @@
         },
         {
           "name": "cohere/command-r-08-2024",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "cohere/command-r-08-2024",
             "max_tokens": 4096,
@@ -8467,6 +8585,7 @@
         },
         {
           "name": "cohere/command-r-plus-08-2024",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "cohere/command-r-plus-08-2024",
             "max_tokens": 4096,
@@ -8560,6 +8679,7 @@
         },
         {
           "name": "cohere/command-r7b-12-2024",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "cohere/command-r7b-12-2024",
             "max_tokens": 4096,
@@ -8653,6 +8773,7 @@
         },
         {
           "name": "microsoft/phi-4",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "microsoft/phi-4",
             "max_tokens": 16384,
@@ -8723,6 +8844,7 @@
         },
         {
           "name": "inflection/inflection-3-pi",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "inflection/inflection-3-pi",
             "max_tokens": 8192,
@@ -8793,6 +8915,7 @@
         },
         {
           "name": "inflection/inflection-3-productivity",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "inflection/inflection-3-productivity",
             "max_tokens": 8192,
@@ -8863,6 +8986,7 @@
         },
         {
           "name": "prime-intellect/intellect-3",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "prime-intellect/intellect-3",
             "max_tokens": 8192,
@@ -8933,6 +9057,7 @@
         },
         {
           "name": "nousresearch/hermes-4-70b",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "nousresearch/hermes-4-70b",
             "max_tokens": 8192,
@@ -9003,6 +9128,7 @@
         },
         {
           "name": "nousresearch/hermes-4-405b",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "nousresearch/hermes-4-405b",
             "max_tokens": 8192,
@@ -9073,6 +9199,7 @@
         },
         {
           "name": "nousresearch/hermes-3-llama-3.1-70b",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "nousresearch/hermes-3-llama-3.1-70b",
             "max_tokens": 8192,
@@ -9143,6 +9270,7 @@
         },
         {
           "name": "nousresearch/hermes-3-llama-3.1-405b",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "nousresearch/hermes-3-llama-3.1-405b",
             "max_tokens": 8192,
@@ -9213,6 +9341,7 @@
         },
         {
           "name": "baidu/ernie-4.5-300b-a47b",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "baidu/ernie-4.5-300b-a47b",
             "max_tokens": 8192,
@@ -9283,6 +9412,7 @@
         },
         {
           "name": "z-ai/glm-4.5",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "z-ai/glm-4.5",
             "max_tokens": 4096,
@@ -9353,6 +9483,7 @@
         },
         {
           "name": "z-ai/glm-4.6",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "z-ai/glm-4.6",
             "max_tokens": 4096,
@@ -9423,6 +9554,7 @@
         },
         {
           "name": "z-ai/glm-4.7",
+          "base_url": "https://openrouter.ai/api/v1",
           "meta_data": {
             "model": "z-ai/glm-4.7",
             "max_tokens": 4096,
@@ -9586,6 +9718,7 @@
       "models": [
         {
           "name": "qwen3-max",
+          "base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
           "meta_data": {
             "model": "qwen3-max",
             "max_tokens": 32768
@@ -9655,6 +9788,7 @@
         },
         {
           "name": "qwen3-coder-flash",
+          "base_url": "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
           "meta_data": {
             "model": "qwen3-coder-flash",
             "max_tokens": 65536
@@ -9806,6 +9940,7 @@
       "models": [
         {
           "name": "deepseek-v4-pro",
+          "base_url": "https://api.deepseek.com/v1",
           "meta_data": {
             "model": "deepseek-v4-pro",
             "max_tokens": 384000
@@ -9852,6 +9987,7 @@
         },
         {
           "name": "deepseek-v4-flash",
+          "base_url": "https://api.deepseek.com/v1",
           "meta_data": {
             "model": "deepseek-v4-flash",
             "max_tokens": 384000
@@ -9969,6 +10105,7 @@
       "models": [
         {
           "name": "grok-4.3",
+          "base_url": "https://api.x.ai/v1",
           "meta_data": {
             "model": "grok-4.3",
             "max_completion_tokens": 131072
@@ -10026,6 +10163,7 @@
         },
         {
           "name": "grok-build-0.1",
+          "base_url": "https://api.x.ai/v1",
           "meta_data": {
             "model": "grok-build-0.1",
             "max_completion_tokens": 131072
@@ -10083,6 +10221,7 @@
         },
         {
           "name": "grok-4-fast",
+          "base_url": "https://api.x.ai/v1",
           "meta_data": {
             "model": "grok-4-fast",
             "max_completion_tokens": 131072
@@ -10337,6 +10476,7 @@
       "models": [
         {
           "name": "sonar",
+          "base_url": "https://api.perplexity.ai",
           "meta_data": {
             "model": "sonar",
             "max_tokens": 128000
@@ -10383,6 +10523,7 @@
         },
         {
           "name": "sonar-pro",
+          "base_url": "https://api.perplexity.ai",
           "meta_data": {
             "model": "sonar-pro",
             "max_tokens": 8000
@@ -10429,6 +10570,7 @@
         },
         {
           "name": "sonar-reasoning-pro",
+          "base_url": "https://api.perplexity.ai",
           "meta_data": {
             "model": "sonar-reasoning-pro",
             "max_tokens": 128000
@@ -10475,6 +10617,7 @@
         },
         {
           "name": "sonar-deep-research",
+          "base_url": "https://api.perplexity.ai",
           "meta_data": {
             "model": "sonar-deep-research",
             "max_tokens": 128000
@@ -10521,6 +10664,7 @@
         },
         {
           "name": "perplexity/sonar",
+          "base_url": "https://api.perplexity.ai",
           "meta_data": {
             "model": "perplexity/sonar",
             "max_tokens": 128000
@@ -11449,6 +11593,7 @@
       "models": [
         {
           "name": "nvidia/nemotron-4-340b-instruct",
+          "base_url": "https://integrate.api.nvidia.com/v1",
           "meta_data": {
             "model": "nvidia/nemotron-4-340b-instruct",
             "max_completion_tokens": 4096
@@ -11530,6 +11675,7 @@
         },
         {
           "name": "nvidia/nvidia-nemotron-nano-9b-v2",
+          "base_url": "https://integrate.api.nvidia.com/v1",
           "meta_data": {
             "model": "nvidia/nvidia-nemotron-nano-9b-v2",
             "max_completion_tokens": 8192
@@ -11611,6 +11757,7 @@
         },
         {
           "name": "nvidia/llama-3.1-nemotron-70b-instruct",
+          "base_url": "https://integrate.api.nvidia.com/v1",
           "meta_data": {
             "model": "nvidia/llama-3.1-nemotron-70b-instruct",
             "max_completion_tokens": 4096
@@ -12054,6 +12201,7 @@
       "models": [
         {
           "name": "gpt-4o-realtime-preview",
+          "base_url": "wss://api.openai.com/v1/realtime",
           "meta_data": {
             "model": "gpt-4o-realtime-preview",
             "is_s2s": true,
@@ -12089,6 +12237,7 @@
         },
         {
           "name": "gpt-4o-mini-realtime-preview",
+          "base_url": "wss://api.openai.com/v1/realtime",
           "meta_data": {
             "model": "gpt-4o-mini-realtime-preview",
             "is_s2s": true,
@@ -12124,6 +12273,7 @@
         },
         {
           "name": "gpt-realtime",
+          "base_url": "wss://api.openai.com/v1/realtime",
           "meta_data": {
             "model": "gpt-realtime",
             "is_s2s": true,
@@ -14623,6 +14773,7 @@
       "models": [
         {
           "name": "whisper-large-v3-turbo",
+          "base_url": "https://api.groq.com/openai/v1",
           "meta_data": {
             "model": "whisper-large-v3-turbo"
           },
@@ -14661,6 +14812,7 @@
         },
         {
           "name": "whisper-large-v3",
+          "base_url": "https://api.groq.com/openai/v1",
           "meta_data": {
             "model": "whisper-large-v3"
           },
@@ -14830,6 +14982,7 @@
       "models": [
         {
           "name": "Universal-3-Pro",
+          "base_url": "wss://streaming.assemblyai.com/v3/ws",
           "meta_data": {
             "model": "Universal-3-Pro"
           },
@@ -14892,6 +15045,7 @@
         },
         {
           "name": "Universal-2",
+          "base_url": "wss://streaming.assemblyai.com/v3/ws",
           "meta_data": {
             "model": "Universal-2"
           },
@@ -14945,6 +15099,7 @@
         },
         {
           "name": "u3-rt-pro",
+          "base_url": "wss://streaming.assemblyai.com/v3/ws",
           "meta_data": {
             "model": "u3-rt-pro"
           },
@@ -15067,6 +15222,7 @@
       "models": [
         {
           "name": "ink-whisper",
+          "base_url": "wss://api.cartesia.ai/stt/websocket",
           "meta_data": {
             "model": "ink-whisper"
           },
@@ -15095,6 +15251,7 @@
         },
         {
           "name": "ink-whisper-2025-06-04",
+          "base_url": "wss://api.cartesia.ai/stt/websocket",
           "meta_data": {
             "model": "ink-whisper-2025-06-04"
           },
@@ -15123,6 +15280,7 @@
         },
         {
           "name": "ink-2",
+          "base_url": "wss://api.cartesia.ai/stt/websocket",
           "meta_data": {
             "model": "ink-2"
           },
@@ -15186,6 +15344,7 @@
       "models": [
         {
           "name": "stt-rt-v4",
+          "base_url": "wss://stt-rt.soniox.com/transcribe-websocket",
           "meta_data": {
             "model": "stt-rt-v4"
           },
@@ -15230,6 +15389,7 @@
         },
         {
           "name": "stt-async-v4",
+          "base_url": "wss://stt-rt.soniox.com/transcribe-websocket",
           "meta_data": {
             "model": "stt-async-v4"
           },
@@ -15274,6 +15434,7 @@
         },
         {
           "name": "stt-rt-v3",
+          "base_url": "wss://stt-rt.soniox.com/transcribe-websocket",
           "meta_data": {
             "model": "stt-rt-v3"
           },
@@ -15318,6 +15479,7 @@
         },
         {
           "name": "stt-async-v3",
+          "base_url": "wss://stt-rt.soniox.com/transcribe-websocket",
           "meta_data": {
             "model": "stt-async-v3"
           },
@@ -15413,6 +15575,7 @@
       "models": [
         {
           "name": "scribe_v2",
+          "base_url": "https://api.elevenlabs.io/v1/speech-to-text",
           "meta_data": {
             "model": "scribe_v2"
           },
@@ -15511,6 +15674,7 @@
         },
         {
           "name": "scribe_v2_realtime",
+          "base_url": "wss://api.elevenlabs.io/v1/speech-to-text/realtime",
           "meta_data": {
             "model": "scribe_v2_realtime"
           },
@@ -15725,6 +15889,7 @@
       "models": [
         {
           "name": "solaria-1",
+          "base_url": "https://api.gladia.io/v2/live",
           "meta_data": {
             "model": "solaria-1"
           },
@@ -15856,6 +16021,7 @@
       "models": [
         {
           "name": "nvidia/Parakeet 0.6b CTC",
+          "base_url": "grpc.nvcf.nvidia.com:443",
           "meta_data": {
             "model": "nvidia/Parakeet 0.6b CTC"
           },
@@ -15873,6 +16039,7 @@
         },
         {
           "name": "nvidia/Parakeet 1.1b CTC",
+          "base_url": "grpc.nvcf.nvidia.com:443",
           "meta_data": {
             "model": "nvidia/Parakeet 1.1b CTC"
           },
@@ -15890,6 +16057,7 @@
         },
         {
           "name": "nvidia/Parakeet 0.6b TDT v2",
+          "base_url": "grpc.nvcf.nvidia.com:443",
           "meta_data": {
             "model": "nvidia/Parakeet 0.6b TDT v2"
           },
@@ -15907,6 +16075,7 @@
         },
         {
           "name": "nvidia/Parakeet 1.1b RNNT Multilingual",
+          "base_url": "grpc.nvcf.nvidia.com:443",
           "meta_data": {
             "model": "nvidia/Parakeet 1.1b RNNT Multilingual"
           },
@@ -15924,6 +16093,7 @@
         },
         {
           "name": "nvidia/Conformer CTC",
+          "base_url": "grpc.nvcf.nvidia.com:443",
           "meta_data": {
             "model": "nvidia/Conformer CTC"
           },
@@ -15941,6 +16111,7 @@
         },
         {
           "name": "nvidia/Conformer CTC XL",
+          "base_url": "grpc.nvcf.nvidia.com:443",
           "meta_data": {
             "model": "nvidia/Conformer CTC XL"
           },
@@ -15958,6 +16129,7 @@
         },
         {
           "name": "nvidia/Canary 1b Multilingual",
+          "base_url": "grpc.nvcf.nvidia.com:443",
           "meta_data": {
             "model": "nvidia/Canary 1b Multilingual"
           },
@@ -15975,6 +16147,7 @@
         },
         {
           "name": "nvidia/Parakeet 1.1B Unified Universal CTC",
+          "base_url": "grpc.nvcf.nvidia.com:443",
           "meta_data": {
             "model": "nvidia/Parakeet 1.1B Unified Universal CTC"
           },
@@ -15992,6 +16165,7 @@
         },
         {
           "name": "nvidia/Parakeet 1.1B Unified Universal RNNT",
+          "base_url": "grpc.nvcf.nvidia.com:443",
           "meta_data": {
             "model": "nvidia/Parakeet 1.1B Unified Universal RNNT"
           },
@@ -16009,6 +16183,7 @@
         },
         {
           "name": "nvidia/Canary 1B",
+          "base_url": "grpc.nvcf.nvidia.com:443",
           "meta_data": {
             "model": "nvidia/Canary 1B"
           },
@@ -16026,6 +16201,7 @@
         },
         {
           "name": "nvidia/Canary 0.6B Turbo",
+          "base_url": "grpc.nvcf.nvidia.com:443",
           "meta_data": {
             "model": "nvidia/Canary 0.6B Turbo"
           },
@@ -16065,6 +16241,7 @@
       "models": [
         {
           "name": "Standard Operating Point",
+          "base_url": "wss://eu2.rt.speechmatics.com/v2",
           "meta_data": {
             "model": "Standard Operating Point"
           },
@@ -16221,6 +16398,7 @@
         },
         {
           "name": "Enhanced Operating Point",
+          "base_url": "wss://eu2.rt.speechmatics.com/v2",
           "meta_data": {
             "model": "Enhanced Operating Point"
           },
@@ -16377,6 +16555,7 @@
         },
         {
           "name": "Medical English",
+          "base_url": "wss://eu2.rt.speechmatics.com/v2",
           "meta_data": {
             "model": "Medical English"
           },
@@ -16533,6 +16712,7 @@
         },
         {
           "name": "Medical Danish",
+          "base_url": "wss://eu2.rt.speechmatics.com/v2",
           "meta_data": {
             "model": "Medical Danish"
           },
@@ -16689,6 +16869,7 @@
         },
         {
           "name": "Medical Dutch",
+          "base_url": "wss://eu2.rt.speechmatics.com/v2",
           "meta_data": {
             "model": "Medical Dutch"
           },
@@ -16845,6 +17026,7 @@
         },
         {
           "name": "Medical Finnish",
+          "base_url": "wss://eu2.rt.speechmatics.com/v2",
           "meta_data": {
             "model": "Medical Finnish"
           },
@@ -17001,6 +17183,7 @@
         },
         {
           "name": "Medical French",
+          "base_url": "wss://eu2.rt.speechmatics.com/v2",
           "meta_data": {
             "model": "Medical French"
           },
@@ -17157,6 +17340,7 @@
         },
         {
           "name": "Medical German",
+          "base_url": "wss://eu2.rt.speechmatics.com/v2",
           "meta_data": {
             "model": "Medical German"
           },
@@ -17313,6 +17497,7 @@
         },
         {
           "name": "Medical Norwegian",
+          "base_url": "wss://eu2.rt.speechmatics.com/v2",
           "meta_data": {
             "model": "Medical Norwegian"
           },
@@ -17469,6 +17654,7 @@
         },
         {
           "name": "Medical Spanish",
+          "base_url": "wss://eu2.rt.speechmatics.com/v2",
           "meta_data": {
             "model": "Medical Spanish"
           },
@@ -17625,6 +17811,7 @@
         },
         {
           "name": "Medical Swedish",
+          "base_url": "wss://eu2.rt.speechmatics.com/v2",
           "meta_data": {
             "model": "Medical Swedish"
           },
@@ -19236,6 +19423,7 @@
       "models": [
         {
           "name": "sonic-3",
+          "base_url": "wss://api.cartesia.ai/tts/websocket",
           "meta_data": {
             "model": "sonic-3"
           },
@@ -19267,6 +19455,7 @@
         },
         {
           "name": "sonic-2",
+          "base_url": "wss://api.cartesia.ai/tts/websocket",
           "meta_data": {
             "model": "sonic-2"
           },
@@ -19289,6 +19478,7 @@
         },
         {
           "name": "sonic-turbo",
+          "base_url": "wss://api.cartesia.ai/tts/websocket",
           "meta_data": {
             "model": "sonic-turbo"
           },
@@ -19311,6 +19501,7 @@
         },
         {
           "name": "sonic-3.5",
+          "base_url": "wss://api.cartesia.ai/tts/websocket",
           "meta_data": {
             "model": "sonic-3.5"
           },
@@ -20640,6 +20831,7 @@
       "models": [
         {
           "name": "aura-2",
+          "base_url": "wss://api.deepgram.com/v1/speak",
           "meta_data": {
             "model": "aura-2"
           },
@@ -20647,6 +20839,7 @@
         },
         {
           "name": "aura",
+          "base_url": "wss://api.deepgram.com/v1/speak",
           "meta_data": {
             "model": "aura"
           },
@@ -22095,6 +22288,7 @@
       "models": [
         {
           "name": "speech-2.8-hd",
+          "base_url": "https://api.minimax.io/v1/t2a_v2",
           "meta_data": {
             "model": "speech-2.8-hd"
           },
@@ -22145,6 +22339,7 @@
         },
         {
           "name": "speech-2.8-turbo",
+          "base_url": "https://api.minimax.io/v1/t2a_v2",
           "meta_data": {
             "model": "speech-2.8-turbo"
           },
@@ -22195,6 +22390,7 @@
         },
         {
           "name": "speech-2.6-hd",
+          "base_url": "https://api.minimax.io/v1/t2a_v2",
           "meta_data": {
             "model": "speech-2.6-hd"
           },
@@ -22245,6 +22441,7 @@
         },
         {
           "name": "speech-2.6-turbo",
+          "base_url": "https://api.minimax.io/v1/t2a_v2",
           "meta_data": {
             "model": "speech-2.6-turbo"
           },
@@ -22295,6 +22492,7 @@
         },
         {
           "name": "speech-02-hd",
+          "base_url": "https://api.minimax.io/v1/t2a_v2",
           "meta_data": {
             "model": "speech-02-hd"
           },
@@ -22345,6 +22543,7 @@
         },
         {
           "name": "speech-02-turbo",
+          "base_url": "https://api.minimax.io/v1/t2a_v2",
           "meta_data": {
             "model": "speech-02-turbo"
           },
@@ -39398,6 +39597,7 @@
       "models": [
         {
           "name": "arcana",
+          "base_url": "wss://users.rime.ai/ws2",
           "meta_data": {
             "model": "arcana"
           },
@@ -39445,6 +39645,7 @@
         },
         {
           "name": "mistv2",
+          "base_url": "wss://users.rime.ai/ws2",
           "meta_data": {
             "model": "mistv2"
           },
@@ -39492,6 +39693,7 @@
         },
         {
           "name": "mist",
+          "base_url": "wss://users.rime.ai/ws2",
           "meta_data": {
             "model": "mist"
           },
@@ -46447,6 +46649,7 @@
       "models": [
         {
           "name": "bulbul:v3",
+          "base_url": "wss://api.sarvam.ai/text-to-speech/ws",
           "meta_data": {
             "model": "bulbul:v3"
           },
@@ -46488,6 +46691,7 @@
         },
         {
           "name": "bulbul:v2",
+          "base_url": "wss://api.sarvam.ai/text-to-speech/ws",
           "meta_data": {
             "model": "bulbul:v2"
           },
@@ -53195,6 +53399,7 @@
       "models": [
         {
           "name": "s1",
+          "base_url": "wss://api.fish.audio/v1/tts/live",
           "meta_data": {
             "model": "s1"
           },
@@ -53249,6 +53454,7 @@
         },
         {
           "name": "speech-1.6",
+          "base_url": "wss://api.fish.audio/v1/tts/live",
           "meta_data": {
             "model": "speech-1.6"
           },
@@ -53303,6 +53509,7 @@
         },
         {
           "name": "speech-1.5",
+          "base_url": "wss://api.fish.audio/v1/tts/live",
           "meta_data": {
             "model": "speech-1.5"
           },
@@ -53357,6 +53564,7 @@
         },
         {
           "name": "s2-pro",
+          "base_url": "wss://api.fish.audio/v1/tts/live",
           "meta_data": {
             "model": "s2-pro"
           },
@@ -53582,6 +53790,7 @@
       "models": [
         {
           "name": "inworld-tts-1.5-max",
+          "base_url": "wss://api.inworld.ai/tts/v1/voice:streamBidirectional",
           "meta_data": {
             "model": "inworld-tts-1.5-max"
           },
@@ -53614,6 +53823,7 @@
         },
         {
           "name": "inworld-tts-1.5-mini",
+          "base_url": "wss://api.inworld.ai/tts/v1/voice:streamBidirectional",
           "meta_data": {
             "model": "inworld-tts-1.5-mini"
           },
@@ -55429,6 +55639,7 @@
       "models": [
         {
           "name": "tts-v4",
+          "base_url": "wss://websocket.cluster.resemble.ai/stream",
           "meta_data": {
             "model": "tts-v4"
           },
@@ -55436,6 +55647,7 @@
         },
         {
           "name": "tts-v4-turbo",
+          "base_url": "wss://websocket.cluster.resemble.ai/stream",
           "meta_data": {
             "model": "tts-v4-turbo"
           },
@@ -56738,6 +56950,7 @@
       "models": [
         {
           "name": "neu_hq",
+          "base_url": "wss://api.neuphonic.com",
           "meta_data": {
             "model": "neu_hq"
           },
@@ -57529,6 +57742,7 @@
       "models": [
         {
           "name": "Blizzard",
+          "base_url": "wss://api.lmnt.com/v1/ai/speech/stream",
           "meta_data": {
             "model": "Blizzard"
           },
@@ -62609,6 +62823,7 @@
       "models": [
         {
           "name": "Async Flash 1.0",
+          "base_url": "https://api.async.ai/text_to_speech/streaming",
           "meta_data": {
             "model": "Async Flash 1.0"
           },
