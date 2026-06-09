@@ -372,7 +372,7 @@ export function Sidebar() {
                 )}
               </AnimatePresence>
             ) : (
-              <p className="mb-1 px-2.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/50">
+              <p className="mb-1.5 px-2.5 font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground/50">
                 {section.heading}
               </p>
             )}

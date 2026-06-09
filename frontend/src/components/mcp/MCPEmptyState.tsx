@@ -7,8 +7,8 @@ interface MCPEmptyStateProps {
 
 const MCPEmptyState: React.FC<MCPEmptyStateProps> = ({ onCreate }) => (
   <div className="flex flex-col items-center justify-center py-24">
-    <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10">
-      <Boxes className="size-8 text-primary" />
+    <div className="flex size-16 items-center justify-center rounded-lg border border-border bg-background">
+      <Boxes className="size-8 text-foreground" strokeWidth={1.75} />
     </div>
     <h3 className="mt-5 text-[15px] font-semibold text-foreground">No MCP servers yet</h3>
     <p className="mt-1.5 max-w-sm text-center text-[13px] leading-relaxed text-muted-foreground">

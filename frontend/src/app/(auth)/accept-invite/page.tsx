@@ -6,12 +6,14 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { Building2, CheckCircle, LogIn, XCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { ArrowRight } from 'lucide-react';
 
 import { acceptInviteSchema, type AcceptInviteFormData } from '@/schemas/auth';
 import { showToast, handleApiError } from '@/lib/toast';
-import { Button } from '@/components/ui/button';
-import { AppLoader, CustomCard, Form, TextInput } from '@/components/shared';
+import { AppLoader, CustomButton, Form } from '@/components/shared';
+import { AuthField } from '@/components/auth/auth-field';
+import { AuthHeading, AuthResult, AuthSubmit, fadeUp } from '@/components/auth/auth-ui';
 import { useAcceptInvitation, useValidateInvitation } from '@/lib/api/auth';
 import { useAuthStore } from '@/stores/auth';
 
@@ -98,134 +100,173 @@ function AcceptInviteContent() {
 
   if (!token) {
     return (
-      <CustomCard
-        centered
-        icon={<XCircle className="h-12 w-12 text-destructive" />}
-        title="Invalid invitation"
-        description="No invitation token provided."
-        contentClassName="pt-0 text-center"
+      <AuthResult
+        tone="error"
+        code="ERR"
+        kicker="Invitation"
+        title="Invalid invitation."
+        description="No invitation token was provided in this link."
       >
         <Link href="/login">
-          <Button>Go to login</Button>
+          <CustomButton type="default" fullWidth className="h-11">
+            Go to sign in
+          </CustomButton>
         </Link>
-      </CustomCard>
+      </AuthResult>
     );
   }
 
   if (isLoading) {
-    return <AppLoader label="Validating invitation..." />;
+    return <AppLoader label="Validating invitation…" />;
   }
 
   if (error || !invitation?.valid) {
     const errorMessage =
       (error as any)?.response?.data?.detail || 'This invitation is invalid or has expired.';
     return (
-      <CustomCard
-        centered
-        icon={<XCircle className="h-12 w-12 text-destructive" />}
-        title="Invalid invitation"
+      <AuthResult
+        tone="error"
+        code="ERR"
+        kicker="Invitation"
+        title="Invalid invitation."
         description={errorMessage}
-        contentClassName="pt-0 text-center"
       >
         <Link href="/login">
-          <Button>Go to login</Button>
+          <CustomButton type="default" fullWidth className="h-11">
+            Go to sign in
+          </CustomButton>
         </Link>
-      </CustomCard>
+      </AuthResult>
     );
   }
 
+  // Already signed in — one-click accept.
   if (user) {
     return (
-      <CustomCard
-        centered
-        icon={
-          <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-            <Building2 className="h-6 w-6 text-primary" />
-          </div>
-        }
-        title={`Join ${invitation.organization_name}`}
-        description={`You're signed in as ${user.email}. Accept this invite to join as ${invitation.role}.`}
-      >
-        <Button
-          className="w-full"
+      <>
+        <AuthHeading
+          index="05"
+          kicker="Invitation"
+          title={`Join ${invitation.organization_name}.`}
+          subtitle={
+            <>
+              You're signed in as <strong className="text-foreground">{user.email}</strong>. Accept
+              to join as {invitation.role}.
+            </>
+          }
+        />
+        <CustomButton
+          type="primary"
+          fullWidth
           loading={acceptInvitation.isPending}
           onClick={onAcceptAsExistingUser}
+          className="group h-11 text-[14px]"
         >
           Accept invitation
-        </Button>
-      </CustomCard>
+          <ArrowRight className="ml-1 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
+        </CustomButton>
+      </>
     );
   }
 
+  // Existing account, not signed in.
   if (invitation.account_exists) {
     return (
-      <CustomCard
-        centered
-        icon={
-          <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-            <LogIn className="h-6 w-6 text-primary" />
-          </div>
-        }
-        title={`Join ${invitation.organization_name}`}
-        description={`${invitation.email} already has a Tone account. Accept to add it to ${invitation.organization_name}, then sign in.`}
-      >
-        <div className="flex flex-col gap-2">
-          <Button
-            className="w-full"
+      <>
+        <AuthHeading
+          index="05"
+          kicker="Invitation"
+          title={`Join ${invitation.organization_name}.`}
+          subtitle={
+            <>
+              <strong className="text-foreground">{invitation.email}</strong> already has a Tone
+              account. Accept to add it to {invitation.organization_name}, then sign in.
+            </>
+          }
+        />
+        <div className="flex flex-col gap-3">
+          <CustomButton
+            type="primary"
+            fullWidth
             loading={acceptInvitation.isPending}
             onClick={onAcceptAsExistingUser}
+            className="group h-11 text-[14px]"
           >
             Accept invitation
-          </Button>
+            <ArrowRight className="ml-1 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
+          </CustomButton>
           <Link href={`/login?next=${encodeURIComponent(`/accept-invite?token=${token}`)}`}>
-            <Button variant="outline" className="w-full" type="button">
+            <CustomButton type="default" fullWidth htmlType="button" className="h-11">
               Sign in first
-            </Button>
+            </CustomButton>
           </Link>
         </div>
-      </CustomCard>
+      </>
     );
   }
 
+  // New user — create an account to join.
   return (
-    <CustomCard
-      centered
-      icon={
-        <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-          <CheckCircle className="h-6 w-6 text-primary" />
-        </div>
-      }
-      title={`Join ${invitation.organization_name}`}
-      description={`You've been invited to join as a ${invitation.role}. Create your account below.`}
-    >
-      <Form handleSubmit={handleSubmit} onSubmit={onSubmitNewUser}>
-        <TextInput name="email" label="Email" value={invitation.email} disabled />
-        <div className="grid grid-cols-2 gap-4">
-          <TextInput name="first_name" control={control} label="First name" isRequired />
-          <TextInput name="last_name" control={control} label="Last name" isRequired />
-        </div>
-        <TextInput name="password" control={control} label="Password" type="password" isRequired />
-        <TextInput
-          name="confirm_password"
-          control={control}
-          label="Confirm password"
-          type="password"
-          isRequired
-        />
-        <Button type="submit" className="w-full" loading={acceptInvitation.isPending}>
-          Create account &amp; join
-        </Button>
+    <>
+      <AuthHeading
+        index="05"
+        kicker="Invitation"
+        title={`Join ${invitation.organization_name}.`}
+        subtitle={`You've been invited as a ${invitation.role}. Create your account below.`}
+      />
+
+      <Form handleSubmit={handleSubmit} onSubmit={onSubmitNewUser} className="space-y-7">
+        <motion.div variants={fadeUp}>
+          <div className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            Email
+          </div>
+          <div className="mt-1 border-b border-border pb-2.5 text-[15px] text-foreground/60">
+            {invitation.email}
+          </div>
+        </motion.div>
+
+        <motion.div className="grid grid-cols-2 gap-5" variants={fadeUp}>
+          <AuthField name="first_name" control={control} label="First name" index="A1" />
+          <AuthField name="last_name" control={control} label="Last name" index="A2" />
+        </motion.div>
+
+        <motion.div variants={fadeUp}>
+          <AuthField
+            name="password"
+            control={control}
+            type="password"
+            label="Password"
+            autoComplete="new-password"
+            index="A3"
+          />
+        </motion.div>
+
+        <motion.div variants={fadeUp}>
+          <AuthField
+            name="confirm_password"
+            control={control}
+            type="password"
+            label="Confirm password"
+            autoComplete="new-password"
+            index="A4"
+          />
+        </motion.div>
+
+        <motion.div variants={fadeUp} className="pt-1">
+          <AuthSubmit loading={acceptInvitation.isPending}>Create account &amp; join</AuthSubmit>
+        </motion.div>
       </Form>
-      <p className="mt-4 text-center text-sm text-muted-foreground">
+
+      <motion.p className="mt-8 text-center text-[13px] text-muted-foreground" variants={fadeUp}>
         Already have an account?{' '}
         <Link
           href={`/login?next=${encodeURIComponent(`/accept-invite?token=${token}`)}`}
-          className="text-primary hover:underline"
+          className="font-medium text-foreground underline-offset-4 transition-colors hover:underline"
         >
           Sign in
         </Link>
-      </p>
-    </CustomCard>
+      </motion.p>
+    </>
   );
 }
 

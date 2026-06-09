@@ -5,7 +5,7 @@ import * as React from 'react';
 import { cn } from '@/utils/cn';
 import type { Row as TanStackRow, Table as TanStackTable } from '@tanstack/react-table';
 import { flexRender } from '@tanstack/react-table';
-import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, SearchX } from 'lucide-react';
 
 declare module '@tanstack/react-table' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-unnecessary-type-constraint
@@ -118,9 +118,9 @@ function TableCaption({ className, ...props }: React.ComponentProps<'caption'>) 
 type TableDensity = 'compact' | 'cozy' | 'comfortable';
 
 const DENSITY_CELL_CLASS: Record<TableDensity, string> = {
-  compact: 'px-3 py-2',
-  cozy: 'px-4 py-3.5',
-  comfortable: 'px-5 py-5',
+  compact: 'px-3 py-2.5',
+  cozy: 'px-4 py-4',
+  comfortable: 'px-5 py-[1.35rem]',
 };
 
 interface DataTableProps<TData> {
@@ -155,32 +155,40 @@ function DataTableInner<TData>(
   return (
     <Table>
       <TableHeader className="sticky top-0 z-10 bg-card">
-        <TableRow className="border-b border-border bg-muted/40 hover:bg-muted/40">
+        <TableRow className="border-b border-border hover:bg-transparent">
           {headerGroup.headers.map((header) => {
             const meta = header.column.columnDef.meta;
             const canSort = header.column.getCanSort();
+            const sorted = header.column.getIsSorted();
             return (
               <TableHead
                 key={header.id}
                 className={cn(
-                  'h-11 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground',
+                  'h-12 px-4 text-[11px] font-semibold uppercase tracking-[0.11em] text-muted-foreground/80',
+                  'first:pl-6 last:pr-6',
                   alignClass(meta?.align),
                   canSort && 'cursor-pointer select-none transition-colors hover:text-foreground',
+                  sorted && 'text-foreground',
                   meta?.width,
                   meta?.className,
                 )}
                 onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
               >
-                <span className="inline-flex items-center gap-1.5">
+                <span
+                  className={cn(
+                    'inline-flex items-center gap-1.5',
+                    meta?.align === 'right' && 'flex-row-reverse',
+                  )}
+                >
                   {flexRender(header.column.columnDef.header, header.getContext())}
                   {canSort && (
                     <span className="inline-flex">
-                      {header.column.getIsSorted() === 'asc' ? (
-                        <ArrowUp className="size-3.5 text-foreground" />
-                      ) : header.column.getIsSorted() === 'desc' ? (
-                        <ArrowDown className="size-3.5 text-foreground" />
+                      {sorted === 'asc' ? (
+                        <ArrowUp className="size-3 text-foreground" />
+                      ) : sorted === 'desc' ? (
+                        <ArrowDown className="size-3 text-foreground" />
                       ) : (
-                        <ArrowUpDown className="size-3.5 opacity-30" />
+                        <ArrowUpDown className="size-3 opacity-25" />
                       )}
                     </span>
                   )}
@@ -194,12 +202,13 @@ function DataTableInner<TData>(
       <TableBody>
         {loading ? (
           Array.from({ length: skeletonRows }).map((_, i) => (
-            <TableRow key={`skeleton-${i}`} className="border-b border-border/50">
+            <TableRow key={`skeleton-${i}`} className="border-b border-border/40 last:border-0">
               {visibleColumns.map((col) => (
                 <TableCell
                   key={col.id}
                   className={cn(
                     cellPadding,
+                    'first:pl-6 last:pr-6',
                     alignClass(col.columnDef.meta?.align),
                     col.columnDef.meta?.width,
                   )}
@@ -210,10 +219,17 @@ function DataTableInner<TData>(
             </TableRow>
           ))
         ) : displayRows.length === 0 ? (
-          <TableRow className="hover:bg-transparent">
+          <TableRow className="hover:bg-transparent hover:shadow-none">
             <TableCell colSpan={visibleColumns.length} className="h-56 text-center">
               {emptyState ?? (
-                <span className="text-sm text-muted-foreground">No results found.</span>
+                <div className="flex flex-col items-center justify-center gap-3 py-6">
+                  <span className="flex size-12 items-center justify-center rounded-xl border border-border bg-background">
+                    <SearchX className="size-5 text-muted-foreground/60" strokeWidth={1.75} />
+                  </span>
+                  <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground/60">
+                    No results found
+                  </span>
+                </div>
               )}
             </TableCell>
           </TableRow>
@@ -222,7 +238,8 @@ function DataTableInner<TData>(
             <TableRow
               key={getRowKey ? getRowKey(row.original) : row.id}
               className={cn(
-                'border-b border-border/50 transition-colors hover:bg-muted/20',
+                'border-b border-border/50 transition-colors duration-150 last:border-0',
+                'hover:bg-muted/40',
                 onRowClick && 'cursor-pointer',
               )}
               onClick={
@@ -246,7 +263,8 @@ function DataTableInner<TData>(
                     key={cell.id}
                     className={cn(
                       cellPadding,
-                      'text-sm',
+                      'text-sm text-foreground first:pl-6 last:pr-6',
+                      meta?.align === 'right' && 'tabular-nums',
                       alignClass(meta?.align),
                       meta?.width,
                       meta?.className,

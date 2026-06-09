@@ -1,5 +1,6 @@
 'use client';
 
+import { PageHeader } from '@/components/layout/page-header';
 import {
   CustomButton,
   ScopeStatus,
@@ -161,108 +162,98 @@ export default function BuiltInToolForm({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center justify-between border-b border-border bg-background px-5 py-3">
-        <div className="flex items-center gap-3">
-          <CustomButton
-            type="text"
-            size="icon-sm"
-            onClick={onBack}
-            className="text-muted-foreground hover:text-foreground"
-            aria-label="Back"
-          >
-            <ArrowLeft size={16} />
-          </CustomButton>
-
-          <div
-            className={cn(
-              'flex size-9 items-center justify-center rounded-xl',
-              headerConfig?.bg ?? 'bg-muted',
-            )}
-          >
-            <HeaderIcon size={18} className={headerConfig?.color ?? 'text-muted-foreground'} />
-          </div>
-
-          <div className="min-w-0">
-            <h1 className="truncate text-sm font-semibold text-foreground">
-              {watchedName || 'Untitled Tool'}
-            </h1>
-            {toolRecord?.uuid && (
+      <div className="shrink-0 border-b border-border bg-background px-6 py-6">
+        <PageHeader
+          index={isEditMode ? undefined : '01'}
+          kicker={isEditMode ? 'Edit tool' : 'New tool'}
+          title={
+            <span className="flex items-center gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background">
+                <HeaderIcon size={18} className="text-foreground" strokeWidth={1.75} />
+              </span>
+              <span>{watchedName || 'Untitled tool'}</span>
+            </span>
+          }
+          description={
+            toolRecord?.uuid ? (
               <button
                 type="button"
                 onClick={handleCopyUuid}
-                className="group mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                className="group inline-flex items-center gap-1 text-[12px] text-muted-foreground transition-colors hover:text-foreground"
                 aria-label="Copy UUID"
               >
                 <span className="font-mono">{toolRecord.uuid.slice(0, 13)}...</span>
                 {uuidCopied ? (
-                  <Check size={10} className="text-emerald-500" />
+                  <Check size={11} className="text-primary" />
                 ) : (
                   <Copy
-                    size={10}
+                    size={11}
                     className="opacity-0 transition-opacity group-hover:opacity-100"
                   />
                 )}
               </button>
-            )}
-          </div>
-        </div>
+            ) : (
+              'Configure this built-in tool for your agents.'
+            )
+          }
+          actions={
+            <>
+              <CustomButton type="default" className="h-10 text-[13px]" onClick={onBack}>
+                <ArrowLeft className="h-4 w-4" />
+                Cancel
+              </CustomButton>
+              <CustomButton
+                type="primary"
+                className="h-10 min-w-[88px] text-[13px]"
+                icon={
+                  saving ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : saved ? (
+                    <Check size={14} />
+                  ) : (
+                    <Save size={14} />
+                  )
+                }
+                onClick={handleSubmit(onSubmit)}
+                loading={saving}
+              >
+                {saved ? 'Saved' : 'Save'}
+              </CustomButton>
 
-        <div className="flex items-center gap-2">
-          <CustomButton
-            type="primary"
-            size="sm"
-            icon={
-              saving ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : saved ? (
-                <Check size={14} />
-              ) : (
-                <Save size={13} />
-              )
-            }
-            onClick={handleSubmit(onSubmit)}
-            loading={saving}
-            className={cn(
-              'min-w-[80px] transition-colors',
-              saved &&
-                'bg-emerald-600 hover:bg-emerald-700 dark:bg-emerald-600 dark:hover:bg-emerald-700',
-            )}
-          >
-            {saved ? 'Saved' : 'Save'}
-          </CustomButton>
-
-          {isEditMode && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <CustomButton
-                  type="text"
-                  size="icon-sm"
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <MoreVertical size={16} />
-                </CustomButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[160px]">
-                <DropdownMenuItem
-                  onClick={() => {
-                    if (toolRecord?.uuid) {
-                      navigator.clipboard.writeText(toolRecord.uuid);
-                      showToast.success('Tool ID copied');
-                    }
-                  }}
-                >
-                  <Copy size={14} />
-                  Copy Tool ID
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" onClick={onDelete}>
-                  <Trash2 size={14} />
-                  Delete Tool
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
+              {isEditMode && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <CustomButton
+                      type="text"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      <MoreVertical size={16} />
+                    </CustomButton>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[160px]">
+                    <DropdownMenuItem
+                      onClick={() => {
+                        if (toolRecord?.uuid) {
+                          navigator.clipboard.writeText(toolRecord.uuid);
+                          showToast.success('Tool ID copied');
+                        }
+                      }}
+                    >
+                      <Copy size={14} />
+                      Copy Tool ID
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem variant="destructive" onClick={onDelete}>
+                      <Trash2 size={14} />
+                      Delete Tool
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </>
+          }
+        />
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto bg-muted/20">

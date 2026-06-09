@@ -1,12 +1,12 @@
 'use client';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { CustomButton, SelectInput, TextAreaField, TextInput } from '@/components/shared';
 import CheckboxField from '@/components/shared/CheckboxField';
 import ParameterBuilder from '@/components/tools/ParameterBuilder';
-import { AUTH_TYPE_OPTIONS, METHOD_COLORS, METHOD_OPTIONS } from '@/constants/toolForm';
+import { AUTH_TYPE_OPTIONS, METHOD_OPTIONS } from '@/constants/toolForm';
 import { type CustomToolFormData, customToolSchema } from '@/schemas/tool';
 import type { ToolAuthType, ToolHttpMethod, ToolParametersSchema } from '@/types/tool';
-import { cn } from '@/utils/cn';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, Loader2, Save } from 'lucide-react';
 import { useEffect } from 'react';
@@ -81,35 +81,30 @@ export default function CustomToolForm({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="flex shrink-0 items-center justify-between border-b border-border bg-background px-4 py-2">
-        <div className="flex items-center gap-2">
-          <CustomButton
-            type="text"
-            size="icon-sm"
-            onClick={onBack}
-            className="text-muted-foreground hover:text-foreground"
-            aria-label="Back"
-          >
-            <ArrowLeft size={16} />
-          </CustomButton>
-          <span className="text-[13px] font-medium text-foreground">
-            {watchedName || (isEditMode ? 'Edit Tool' : 'New Tool')}
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <CustomButton type="default" size="sm" onClick={onBack}>
-            Cancel
-          </CustomButton>
-          <CustomButton
-            type="primary"
-            size="sm"
-            icon={saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save size={13} />}
-            onClick={handleSubmit(onSave)}
-            loading={saving}
-          >
-            {isEditMode ? 'Save' : 'Create'}
-          </CustomButton>
-        </div>
+      <div className="shrink-0 border-b border-border bg-background px-6 py-6">
+        <PageHeader
+          index={isEditMode ? undefined : '01'}
+          kicker={isEditMode ? 'Edit tool' : 'New tool'}
+          title={watchedName || (isEditMode ? 'Edit tool.' : 'Custom tool.')}
+          description="Call any external API or webhook from your agents."
+          actions={
+            <>
+              <CustomButton type="default" className="h-10 text-[13px]" onClick={onBack}>
+                <ArrowLeft className="h-4 w-4" />
+                Cancel
+              </CustomButton>
+              <CustomButton
+                type="primary"
+                className="h-10 text-[13px]"
+                icon={saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save size={14} />}
+                onClick={handleSubmit(onSave)}
+                loading={saving}
+              >
+                {isEditMode ? 'Save' : 'Create'}
+              </CustomButton>
+            </>
+          }
+        />
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto bg-muted/30">
@@ -168,12 +163,7 @@ export default function CustomToolForm({
                     />
                   </div>
                   <div className="flex shrink-0 items-center border-l border-border px-2.5">
-                    <span
-                      className={cn(
-                        'inline-flex rounded px-1.5 py-0.5 font-mono text-[10px] font-bold ring-1 ring-inset',
-                        METHOD_COLORS[method] ?? 'bg-muted text-muted-foreground ring-border',
-                      )}
-                    >
+                    <span className="inline-flex rounded px-1.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-foreground ring-1 ring-inset ring-border">
                       {method}
                     </span>
                   </div>

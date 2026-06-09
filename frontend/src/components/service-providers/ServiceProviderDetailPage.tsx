@@ -16,6 +16,7 @@ import {
   upsertProviderModelAtom,
   upsertServiceAtom,
 } from '@/atoms/ServicesAtom';
+import { PageHeader } from '@/components/layout/page-header';
 import { CustomButton, CustomModal, CustomTable, SearchBar } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { deleteService, listProviderCatalog } from '@/services/servicesService';
@@ -37,7 +38,11 @@ import ApiKeyCreateDrawer from './api-key-create-drawer';
 import ApiKeyEditDrawer from './api-key-edit-drawer';
 import ModelFormDrawer from './model-form-drawer';
 import ProviderLogo from './ProviderLogo';
-import { TYPE_BADGE_STYLES } from './constants';
+
+// Neutral, editorial type pill — a single mono label instead of a rainbow
+// of per-type accent colors. The real brand identity lives in ProviderLogo.
+const TYPE_PILL =
+  'rounded-full border border-border bg-background px-2 py-0 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground';
 
 const KEYS_PAGE_SIZE = 20;
 const MODELS_PAGE_SIZE = 20;
@@ -298,16 +303,7 @@ export default function ServiceProviderDetailPage() {
         dataIndex: 'service_type',
         sorter: true,
         width: 'w-[100px]',
-        render: (_v, r) => (
-          <Badge
-            className={cn(
-              'px-2 py-0 text-[10px] font-semibold uppercase tracking-wider',
-              TYPE_BADGE_STYLES[r.service_type] ?? '',
-            )}
-          >
-            {r.service_type}
-          </Badge>
-        ),
+        render: (_v, r) => <Badge className={TYPE_PILL}>{r.service_type}</Badge>,
       },
       {
         key: 'is_default',
@@ -333,16 +329,16 @@ export default function ServiceProviderDetailPage() {
         render: (_v, r) => (
           <span
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
+              'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em]',
               r.is_active
-                ? 'bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/20 dark:text-emerald-400'
-                : 'bg-muted text-muted-foreground ring-1 ring-border',
+                ? 'border border-amber-400/30 bg-amber-400/10 text-amber-500'
+                : 'border border-border bg-background text-muted-foreground',
             )}
           >
             <span
               className={cn(
                 'h-1.5 w-1.5 rounded-full',
-                r.is_active ? 'bg-emerald-500' : 'bg-muted-foreground/40',
+                r.is_active ? 'bg-amber-400' : 'bg-muted-foreground/40',
               )}
             />
             {r.is_active ? 'Active' : 'Inactive'}
@@ -409,16 +405,7 @@ export default function ServiceProviderDetailPage() {
         dataIndex: 'kind',
         sorter: true,
         width: 'w-[100px]',
-        render: (_v, m) => (
-          <Badge
-            className={cn(
-              'px-2 py-0 text-[10px] font-semibold uppercase tracking-wider',
-              TYPE_BADGE_STYLES[m.kind] ?? '',
-            )}
-          >
-            {m.kind}
-          </Badge>
-        ),
+        render: (_v, m) => <Badge className={TYPE_PILL}>{m.kind}</Badge>,
       },
       {
         key: 'description',
@@ -437,16 +424,16 @@ export default function ServiceProviderDetailPage() {
         render: (_v, m) => (
           <span
             className={cn(
-              'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
+              'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[10px] uppercase tracking-[0.18em]',
               m.is_active
-                ? 'bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/20 dark:text-emerald-400'
-                : 'bg-muted text-muted-foreground ring-1 ring-border',
+                ? 'border border-amber-400/30 bg-amber-400/10 text-amber-500'
+                : 'border border-border bg-background text-muted-foreground',
             )}
           >
             <span
               className={cn(
                 'h-1.5 w-1.5 rounded-full',
-                m.is_active ? 'bg-emerald-500' : 'bg-muted-foreground/40',
+                m.is_active ? 'bg-amber-400' : 'bg-muted-foreground/40',
               )}
             />
             {m.is_active ? 'Active' : 'Inactive'}
@@ -506,49 +493,48 @@ export default function ServiceProviderDetailPage() {
   // ─── render ───────────────────────────────────────────────────────────────
   const isKeysTab = activeTab === 'keys';
 
+  const providerTitle = providerLoading
+    ? 'Loading…'
+    : (provider?.display_name ?? 'Unknown provider');
+  // Display titles end with a period in the editorial system; skip it while
+  // loading or when the name itself already terminates with punctuation.
+  const headerTitle =
+    !providerLoading && providerTitle && !/[.!?…]$/.test(providerTitle)
+      ? `${providerTitle}.`
+      : providerTitle;
+
   return (
-    <div className="animate-page flex h-full min-h-0 flex-col gap-2">
-      {/* back nav */}
+    <div className="animate-page flex h-full min-h-0 flex-col gap-4">
+      {/* quiet mono breadcrumb */}
       <div className="shrink-0">
-        <CustomButton
-          type="text"
-          size="sm"
-          icon={<ArrowLeft className="size-4" />}
+        <button
+          type="button"
           onClick={() => router.push('/model-providers')}
-          className="-ml-2 text-muted-foreground hover:text-foreground"
+          className="-ml-1 inline-flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground transition-colors hover:text-foreground"
         >
-          Back to Model Providers
-        </CustomButton>
+          <ArrowLeft className="size-3.5" />
+          Model providers
+        </button>
       </div>
 
-      {/* tight inline header */}
-      <header className="flex shrink-0 items-center gap-3">
-        <ProviderLogo
-          providerName={provider?.slug}
-          serviceType={serviceType ?? provider?.kinds[0] ?? ''}
-          className="size-10"
-        />
-        <div className="min-w-0 flex-1">
-          <h1 className="flex items-center gap-2 font-display text-2xl font-semibold leading-tight tracking-tight text-foreground">
-            <span className="truncate">
-              {providerLoading ? 'Loading…' : (provider?.display_name ?? 'Unknown provider')}
+      {/* editorial page header */}
+      <div className="shrink-0">
+        <PageHeader
+          kicker={serviceType ? `Provider · ${serviceType.toUpperCase()}` : 'Model provider'}
+          title={
+            <span className="flex items-center gap-3">
+              <ProviderLogo
+                providerName={provider?.slug}
+                serviceType={serviceType ?? provider?.kinds[0] ?? ''}
+                className="size-9 shrink-0"
+              />
+              <span className="min-w-0 truncate">{headerTitle}</span>
+              {serviceType && <Badge className={TYPE_PILL}>{serviceType}</Badge>}
             </span>
-            {serviceType && (
-              <Badge
-                className={cn(
-                  'px-2 py-0 text-[10px] font-semibold uppercase tracking-wider',
-                  TYPE_BADGE_STYLES[serviceType] ?? '',
-                )}
-              >
-                {serviceType}
-              </Badge>
-            )}
-          </h1>
-          {provider?.description && (
-            <p className="truncate text-xs text-muted-foreground">{provider.description}</p>
-          )}
-        </div>
-      </header>
+          }
+          description={provider?.description ?? undefined}
+        />
+      </div>
 
       {/* tab strip + per-tab toolbar */}
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border">
@@ -637,7 +623,9 @@ export default function ServiceProviderDetailPage() {
                 }}
                 emptyState={
                   <div className="flex flex-col items-center gap-3 py-12 text-center">
-                    <KeyRound className="size-8 text-muted-foreground" />
+                    <span className="flex size-12 items-center justify-center rounded-lg border border-border bg-background">
+                      <KeyRound className="size-5 text-foreground" strokeWidth={1.75} />
+                    </span>
                     <p className="text-sm font-medium text-foreground">
                       No API keys for this provider
                     </p>
@@ -681,7 +669,9 @@ export default function ServiceProviderDetailPage() {
                 }}
                 emptyState={
                   <div className="flex flex-col items-center gap-3 py-12 text-center">
-                    <Layers className="size-8 text-muted-foreground" />
+                    <span className="flex size-12 items-center justify-center rounded-lg border border-border bg-background">
+                      <Layers className="size-5 text-foreground" strokeWidth={1.75} />
+                    </span>
                     <p className="text-sm font-medium text-foreground">No models registered</p>
                     <p className="max-w-xs text-xs text-muted-foreground">
                       Add a model to make it available in the catalog for this provider.

@@ -2,6 +2,7 @@
 'use client';
 
 import { fetchMcpServersAtom, upsertMcpServerAtom } from '@/atoms/MCPAtom';
+import { PageHeader } from '@/components/layout/page-header';
 import HttpHeadersBuilder from '@/components/mcp/HttpHeadersBuilder';
 import {
   AppLoader,
@@ -25,7 +26,6 @@ import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
 import {
-  ArrowLeft,
   Boxes,
   Cable,
   Check,
@@ -335,49 +335,41 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* Top bar */}
-      <div className="relative flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background py-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <CustomButton
-            type="text"
-            size="icon-sm"
-            onClick={onBack}
-            aria-label="Back to MCP servers"
-            className="shrink-0 text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft size={16} />
-          </CustomButton>
-          <PreviewFavicon key={hostname ?? 'top'} hostname={hostname} size="sm" />
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1 className="truncate text-[15px] font-semibold tracking-tight text-foreground">
-                {watchedName || (isEditMode ? 'Edit MCP Server' : 'New MCP Server')}
-              </h1>
+      <div className="relative shrink-0 border-b border-border bg-background px-6 py-6">
+        <PageHeader
+          index={isEditMode ? undefined : '01'}
+          kicker={isEditMode ? 'Edit MCP server' : 'New MCP server'}
+          title={
+            <span className="flex items-center gap-3">
+              <PreviewFavicon key={hostname ?? 'top'} hostname={hostname} size="sm" />
+              <span className="truncate">
+                {watchedName || (isEditMode ? 'Edit MCP server.' : 'New MCP server.')}
+              </span>
               <StatusPill active={!!watchedIsActive} />
-            </div>
-            <p className="truncate text-[11.5px] text-muted-foreground">
-              {hostname ?? 'Configure endpoint, auth, and protocol'}
-            </p>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <CustomButton type="default" size="sm" onClick={onBack} disabled={saving}>
-            Cancel
-          </CustomButton>
-          <CustomButton
-            type="primary"
-            size="sm"
-            icon={saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-            onClick={handleSubmit(onSave)}
-            loading={saving}
-          >
-            {isEditMode ? 'Save Changes' : 'Save'}
-          </CustomButton>
-        </div>
-
-        {/* Hairline gradient accent under the top bar */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-primary/60 to-transparent"
+            </span>
+          }
+          description={hostname ?? 'Configure the endpoint, auth, and protocol.'}
+          actions={
+            <>
+              <CustomButton
+                type="default"
+                className="h-10 text-[13px]"
+                onClick={onBack}
+                disabled={saving}
+              >
+                Cancel
+              </CustomButton>
+              <CustomButton
+                type="primary"
+                className="h-10 text-[13px]"
+                icon={saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                onClick={handleSubmit(onSave)}
+                loading={saving}
+              >
+                {isEditMode ? 'Save Changes' : 'Save'}
+              </CustomButton>
+            </>
+          }
         />
       </div>
 
@@ -448,22 +440,11 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
             )}
             <div className="mx-auto max-w-[780px] space-y-4 px-6 py-8 lg:px-8">
               {/* Header band */}
-              <div
-                className={cn(
-                  'relative overflow-hidden rounded-xl border border-border p-5 sm:p-6',
-                  'bg-gradient-to-br from-primary/5 via-background to-background',
-                  'dark:from-primary/10 dark:via-background dark:to-muted/20',
-                )}
-              >
-                <div
-                  aria-hidden="true"
-                  className="pointer-events-none absolute -right-16 -top-16 size-48 rounded-full bg-primary/10 blur-3xl dark:bg-primary/15"
-                />
-
+              <div className="group relative overflow-hidden rounded-xl border border-border bg-card p-5 transition-all duration-200 hover:border-foreground/20 sm:p-6">
                 <div className="relative">
                   <div className="flex items-center gap-2">
-                    <span className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary">
-                      <Boxes size={15} />
+                    <span className="flex size-9 items-center justify-center rounded-lg border border-border bg-background transition-colors group-hover:border-primary/40">
+                      <Boxes size={16} className="text-foreground" strokeWidth={1.75} />
                     </span>
                     <h2 className="text-[15px] font-semibold tracking-tight text-foreground">
                       Configure MCP Server
@@ -484,6 +465,8 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
                     />
                   </div>
                 </div>
+
+                <span className="absolute bottom-0 left-0 h-[2px] w-full origin-left scale-x-0 bg-primary transition-transform duration-500 ease-out group-hover:scale-x-100" />
               </div>
 
               {/* Tool Settings */}
@@ -527,8 +510,8 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
                 title="Server Settings"
                 description="Endpoint, timeout, authentication, and headers"
                 icon={Globe}
-                iconColor="text-sky-600 dark:text-sky-400"
-                iconBg="bg-sky-50 dark:bg-sky-500/10"
+                iconColor="text-foreground/70"
+                iconBg="bg-foreground/5 dark:bg-foreground/10"
                 isOpen={openSections.server}
                 onToggle={() => toggleSection('server')}
               >
@@ -600,7 +583,7 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
                         Resolves a fresh bearer token at call time and validates scopes. */}
                     <div className="rounded-md border border-border/60 bg-muted/20 p-3">
                       <div className="flex items-center gap-2">
-                        <Sparkles size={13} className="text-violet-500" />
+                        <Sparkles size={13} className="text-primary" />
                         <p className="text-[12.5px] font-semibold text-foreground">
                           Use an OAuth connection
                         </p>
@@ -745,8 +728,8 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
                 title="Protocol"
                 description="How packets flow between Tone and your server"
                 icon={Cable}
-                iconColor="text-violet-600 dark:text-violet-400"
-                iconBg="bg-violet-50 dark:bg-violet-500/10"
+                iconColor="text-foreground/70"
+                iconBg="bg-foreground/5 dark:bg-foreground/10"
                 isOpen={openSections.protocol}
                 onToggle={() => toggleSection('protocol')}
               >
@@ -780,8 +763,8 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
                 title="Status"
                 description="Enable or pause this MCP server for your agents"
                 icon={Power}
-                iconColor="text-emerald-600 dark:text-emerald-400"
-                iconBg="bg-emerald-50 dark:bg-emerald-500/10"
+                iconColor="text-foreground/70"
+                iconBg="bg-foreground/5 dark:bg-foreground/10"
                 isOpen={openSections.status}
                 onToggle={() => toggleSection('status')}
               >
@@ -824,19 +807,21 @@ function StatusPill({ active, compact = false }: { active: boolean; compact?: bo
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full text-[10px] font-medium',
+        'inline-flex items-center gap-1.5 rounded-full border text-[10px] font-medium',
         compact ? 'px-2 py-0.5' : 'px-2 py-0.5',
         active
-          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
-          : 'bg-muted text-muted-foreground',
+          ? 'border-amber-400/30 bg-amber-400/10 text-amber-600 dark:text-amber-400'
+          : 'border-border bg-muted text-muted-foreground',
       )}
     >
-      <span
-        className={cn(
-          'size-1.5 rounded-full',
-          active ? 'animate-pulse bg-emerald-500' : 'bg-muted-foreground/50',
-        )}
-      />
+      {active ? (
+        <span className="relative flex h-1.5 w-1.5">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400/70" />
+          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-400" />
+        </span>
+      ) : (
+        <span className="size-1.5 rounded-full bg-muted-foreground/50" />
+      )}
       {active ? 'Active' : 'Paused'}
     </span>
   );

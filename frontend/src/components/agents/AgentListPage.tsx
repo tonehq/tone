@@ -4,6 +4,7 @@ import { deleteAgentAtom, fetchPaginatedAgentList, paginatedAgentsAtom } from '@
 import { AgentActionMenu } from '@/components/agents/AgentActionMenu';
 import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 import CreateAgentModal from '@/components/agents/CreateAgentModal';
+import { PageHeader } from '@/components/layout/page-header';
 import { CustomButton, CustomTable, PhoneNumberDisplay } from '@/components/shared';
 import SearchBar from '@/components/shared/SearchBar';
 import SelectInput from '@/components/shared/SelectInput';
@@ -129,11 +130,15 @@ const AgentListPage: React.FC = () => {
       render: (_value, record) => {
         const hasPhone = record.phone_number && record.phone_number.length > 0;
         return hasPhone ? (
-          <Badge className="bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15 dark:text-emerald-400">
+          <Badge className="gap-1.5 border-transparent bg-amber-400/15 text-amber-600 hover:bg-amber-400/15 dark:text-amber-500">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400/70" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-400" />
+            </span>
             Active
           </Badge>
         ) : (
-          <Badge className="bg-amber-500/15 text-amber-600 hover:bg-amber-500/15 dark:text-amber-400">
+          <Badge className="border-transparent bg-muted text-muted-foreground hover:bg-muted">
             Inactive
           </Badge>
         );
@@ -189,23 +194,17 @@ const AgentListPage: React.FC = () => {
   ];
 
   return (
-    <div className="animate-page flex h-full flex-col gap-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Agents</h1>
-            {data.total > 0 && (
-              <Badge variant="secondary" className="text-xs tabular-nums">
-                {data.total}
-              </Badge>
-            )}
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">Manage your voice agents</p>
-        </div>
-        <CustomButton type="primary" icon={<Plus />} onClick={() => setModalOpen(true)}>
-          Create Agent
-        </CustomButton>
-      </div>
+    <div className="animate-page flex h-full flex-col gap-6">
+      <PageHeader
+        kicker={data.total > 0 ? `Agents · ${data.total}` : 'Agents'}
+        title="Agents."
+        description="Manage your AI voice agents."
+        actions={
+          <CustomButton type="primary" icon={<Plus />} onClick={() => setModalOpen(true)}>
+            Create Agent
+          </CustomButton>
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-3">
         <SearchBar
@@ -243,8 +242,8 @@ const AgentListPage: React.FC = () => {
           }}
           emptyState={
             <div className="flex flex-col items-center gap-4 py-8">
-              <div className="flex size-12 items-center justify-center rounded-xl bg-muted">
-                <Bot className="size-6 text-muted-foreground" />
+              <div className="flex size-12 items-center justify-center rounded-lg border border-border bg-background">
+                <Bot className="size-6 text-foreground" strokeWidth={1.75} />
               </div>
               <div className="text-center">
                 <p className="font-semibold text-foreground">No agents yet</p>

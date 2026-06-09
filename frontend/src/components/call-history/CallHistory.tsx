@@ -2,6 +2,7 @@
 
 import callLogsAtom, { fetchCallLogs } from '@/atoms/CallLogAtom';
 import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
+import { PageHeader } from '@/components/layout/page-header';
 import { CustomButton, CustomTable, CustomTooltip, PhoneNumberDisplay } from '@/components/shared';
 import SearchBar from '@/components/shared/SearchBar';
 import SelectInput from '@/components/shared/SelectInput';
@@ -24,8 +25,9 @@ const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
 const STATUS_BADGE_CLASSES: Record<string, string> = {
   completed: 'bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15 dark:text-emerald-400',
+  // Amber is reserved for live / in-flight signals.
   in_progress: 'bg-amber-500/15 text-amber-600 hover:bg-amber-500/15 dark:text-amber-400',
-  failed: 'bg-red-500/15 text-red-600 hover:bg-red-500/15 dark:text-red-400',
+  failed: 'bg-destructive/15 text-destructive hover:bg-destructive/15',
 };
 
 const CallHistory: React.FC = () => {
@@ -250,13 +252,12 @@ const CallHistory: React.FC = () => {
   ];
 
   return (
-    <div className="animate-page flex h-full flex-col gap-5">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Call History</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          View and filter your voice agent call logs
-        </p>
-      </div>
+    <div className="animate-page flex h-full flex-col gap-6">
+      <PageHeader
+        kicker="Call history"
+        title="Call history."
+        description="View and filter your voice agent call logs."
+      />
 
       <div className="flex flex-wrap items-center gap-3">
         <SearchBar
@@ -335,8 +336,8 @@ const CallHistory: React.FC = () => {
           }}
           emptyState={
             <div className="flex flex-col items-center gap-4 py-8">
-              <div className="flex size-12 items-center justify-center rounded-xl bg-muted">
-                <Phone className="size-6 text-muted-foreground" />
+              <div className="flex size-12 items-center justify-center rounded-lg border border-border bg-background">
+                <Phone className="size-6 text-foreground" />
               </div>
               <div className="text-center">
                 <p className="font-semibold text-foreground">No call logs found</p>

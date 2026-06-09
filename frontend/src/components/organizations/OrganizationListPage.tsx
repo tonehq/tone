@@ -11,6 +11,7 @@ import organizationAtom, {
   fetchOrganizationList,
   updateOrganizationAtom,
 } from '@/atoms/OrganizationAtom';
+import { PageHeader } from '@/components/layout/page-header';
 import OrganizationCard from '@/components/organizations/OrganizationCard';
 import OrganizationCardSkeleton from '@/components/organizations/OrganizationCardSkeleton';
 import OrganizationDeleteModal from '@/components/organizations/OrganizationDeleteModal';
@@ -21,7 +22,6 @@ import { CustomButton } from '@/components/shared';
 import { TextInput } from '@/components/shared';
 import { getOrganizationDetails } from '@/services/organizationService';
 import type { OrganizationDetails, OrganizationUpdatePayload } from '@/types/organization';
-import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
@@ -29,23 +29,24 @@ interface StatChipProps {
   label: string;
   value: number;
   icon: React.ComponentType<{ className?: string }>;
-  accent: string;
 }
 
-function StatChip({ label, value, icon: Icon, accent }: StatChipProps) {
+function StatChip({ label, value, icon: Icon }: StatChipProps) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-sm">
-      <div
-        className={cn(
-          'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ring-1',
-          accent,
-        )}
-      >
-        <Icon className="h-4 w-4" />
+    <div className="group flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:border-foreground/20">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border bg-background transition-colors group-hover:border-primary/40">
+        <Icon className="h-4 w-4 text-foreground" />
       </div>
       <div className="leading-tight">
-        <p className="text-[20px] font-semibold tracking-tight">{value}</p>
-        <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">{label}</p>
+        <p
+          className="text-[20px] font-semibold tracking-tight tabular-nums text-foreground"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          {value}
+        </p>
+        <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          {label}
+        </p>
       </div>
     </div>
   );
@@ -162,29 +163,23 @@ const OrganizationListPage: React.FC = () => {
   }, [orgs, searchQuery]);
 
   return (
-    <div className="animate-page">
+    <div className="animate-page space-y-6">
       {/* Header */}
-      <motion.div
-        className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"
-        initial={{ opacity: 0, y: -6 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Organizations</h1>
-          <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
-            Manage your workspaces and team collaboration
-          </p>
-        </div>
-        <CustomButton type="primary" icon={<Plus />} onClick={handleOpenCreate}>
-          New Organization
-        </CustomButton>
-      </motion.div>
+      <PageHeader
+        kicker="Organizations"
+        title="Organizations."
+        description="Manage your workspaces and team collaboration."
+        actions={
+          <CustomButton type="primary" icon={<Plus />} onClick={handleOpenCreate}>
+            New Organization
+          </CustomButton>
+        }
+      />
 
       {/* Stats strip */}
       {!loading && orgs.length > 0 && (
         <motion.div
-          className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4"
+          className="grid grid-cols-2 gap-3 md:grid-cols-4"
           initial="hidden"
           animate="visible"
           variants={{
@@ -197,25 +192,21 @@ const OrganizationListPage: React.FC = () => {
               label: 'Workspaces',
               value: stats.total,
               icon: Building2,
-              accent: 'bg-primary/10 text-primary ring-primary/15',
             },
             {
               label: 'Owner',
               value: stats.owner,
               icon: Crown,
-              accent: 'bg-amber-500/10 text-amber-600 ring-amber-500/15',
             },
             {
               label: 'Admin',
               value: stats.admin,
               icon: Shield,
-              accent: 'bg-blue-500/10 text-blue-600 ring-blue-500/15',
             },
             {
               label: 'Member',
               value: stats.member,
               icon: User,
-              accent: 'bg-muted text-muted-foreground ring-border',
             },
           ].map((s) => (
             <motion.div
@@ -233,7 +224,7 @@ const OrganizationListPage: React.FC = () => {
 
       {/* Search */}
       {orgs.length > 0 && (
-        <div className="mb-6 max-w-sm">
+        <div className="max-w-sm">
           <TextInput
             name="org-search"
             placeholder="Search organizations..."
@@ -316,13 +307,9 @@ const OrganizationListPage: React.FC = () => {
           <p className="text-sm text-foreground">
             No organizations matching &ldquo;{searchQuery}&rdquo;
           </p>
-          <button
-            type="button"
-            onClick={() => setSearchQuery('')}
-            className="mt-3 text-[13px] font-medium text-primary hover:underline"
-          >
+          <CustomButton type="link" onClick={() => setSearchQuery('')} className="mt-3 text-[13px]">
             Clear search
-          </button>
+          </CustomButton>
         </div>
       )}
 

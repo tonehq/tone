@@ -11,8 +11,8 @@ import servicesAtom, {
   fetchServicesAtom,
   upsertServiceAtom,
 } from '@/atoms/ServicesAtom';
+import { PageHeader } from '@/components/layout/page-header';
 import { CustomButton, CustomModal, SearchBar, SelectInput } from '@/components/shared';
-import { Badge } from '@/components/ui/badge';
 import { listProviderKeys } from '@/services/servicesService';
 import type { ProviderUsage, Service, ServiceKind, ServiceUpsertPayload } from '@/types/service';
 import { handleApiError } from '@/utils/helpers';
@@ -231,28 +231,17 @@ export default function ServiceProvidersPage() {
   const hasActiveFilter = !!search || typeFilter !== 'all';
 
   return (
-    <div className="animate-page flex h-full min-h-0 flex-col gap-5">
-      {/* header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              Model Providers
-            </h1>
-            {state.total > 0 && (
-              <Badge variant="secondary" className="text-xs tabular-nums">
-                {state.total}
-              </Badge>
-            )}
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Connect LLM, STT, and TTS providers with API keys.
-          </p>
-        </div>
-        <CustomButton type="primary" icon={<Plus className="size-4" />} onClick={handleAdd}>
-          Add Provider
-        </CustomButton>
-      </div>
+    <div className="animate-page flex h-full min-h-0 flex-col gap-6">
+      <PageHeader
+        kicker={state.total > 0 ? `Model providers · ${state.total}` : 'Model providers'}
+        title="Model providers."
+        description="Connect LLM, STT, and TTS providers with API keys."
+        actions={
+          <CustomButton type="primary" icon={<Plus className="size-4" />} onClick={handleAdd}>
+            Add Provider
+          </CustomButton>
+        }
+      />
 
       {/* toolbar */}
       <div className="flex flex-wrap items-center gap-3">

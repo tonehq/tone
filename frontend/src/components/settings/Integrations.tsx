@@ -6,6 +6,7 @@ import AvailableIntegrationsCatalog from '@/components/integrations/available-in
 import ChannelGrid, { type ChannelGridHandle } from '@/components/integrations/channel-grid';
 import CustomCredentialModal from '@/components/integrations/custom-credential-modal';
 import OAuthConnectionGrid from '@/components/integrations/oauth-connection-grid';
+import { PageHeader } from '@/components/layout/page-header';
 import { CustomButton } from '@/components/shared';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { getOAuthCatalog } from '@/services/oauthService';
@@ -127,34 +128,33 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
     <div className="flex min-h-0 flex-1 flex-col">
       {/* ── Fixed page header ─────────────────────────────────── */}
       <header className="shrink-0 border-b border-border/60 bg-background">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 px-6 py-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-[22px] font-semibold leading-tight tracking-tight text-foreground">
-              Integrations
-            </h1>
-            <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
-              Connect services and manage credentials that power your voice agents.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            <CustomButton
-              type="default"
-              size="sm"
-              onClick={() => setCustomCredentialOpen(true)}
-              icon={<KeyRound className="size-3.5" />}
-            >
-              Custom credential
-            </CustomButton>
-            <CustomButton
-              type="default"
-              size="sm"
-              onClick={handleRefreshAll}
-              loading={isRefreshing}
-              icon={<RefreshCw className="size-3.5" />}
-            >
-              Refresh
-            </CustomButton>
-          </div>
+        <div className="mx-auto max-w-7xl px-6 py-5">
+          <PageHeader
+            kicker="Integrations"
+            title="Integrations."
+            description="Connect services and manage credentials that power your voice agents."
+            actions={
+              <>
+                <CustomButton
+                  type="default"
+                  size="sm"
+                  onClick={() => setCustomCredentialOpen(true)}
+                  icon={<KeyRound className="size-3.5" />}
+                >
+                  Custom credential
+                </CustomButton>
+                <CustomButton
+                  type="default"
+                  size="sm"
+                  onClick={handleRefreshAll}
+                  loading={isRefreshing}
+                  icon={<RefreshCw className="size-3.5" />}
+                >
+                  Refresh
+                </CustomButton>
+              </>
+            }
+          />
         </div>
       </header>
 
@@ -173,7 +173,7 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
           <section id={CATALOG_ANCHOR_ID} className="space-y-4 scroll-mt-6">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <Sparkles className="size-4 text-violet-500" strokeWidth={2.25} />
+                <Sparkles className="size-4 text-primary" strokeWidth={2.25} />
                 <h2 className="text-[15px] font-semibold tracking-tight text-foreground">
                   Available providers
                 </h2>
@@ -189,12 +189,7 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
           </section>
 
           {/* Your integrations (workspace) */}
-          <section className="relative overflow-hidden rounded-3xl border border-border/70 bg-gradient-to-b from-muted/40 to-muted/15 p-5 sm:p-6">
-            <span
-              aria-hidden
-              className="pointer-events-none absolute -right-24 -top-24 size-64 rounded-full bg-violet-500/[0.06] blur-3xl"
-            />
-
+          <section className="relative overflow-hidden rounded-xl border border-border bg-card p-5 sm:p-6">
             <div className="relative mb-4 flex items-center gap-2">
               <h2 className="text-[15px] font-semibold tracking-tight text-foreground">
                 Your integrations

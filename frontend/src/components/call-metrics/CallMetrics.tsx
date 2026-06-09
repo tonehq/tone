@@ -2,6 +2,7 @@
 
 import callMetricsAtom, { fetchCallMetrics } from '@/atoms/CallMetricsAtom';
 import MetricsModal from '@/components/call-history/MetricsModal';
+import { PageHeader } from '@/components/layout/page-header';
 import { CustomButton, CustomTable } from '@/components/shared';
 import SearchBar from '@/components/shared/SearchBar';
 import { getCallMetricsByCallId } from '@/services/callMetricsService';
@@ -224,20 +225,19 @@ const CallMetrics: React.FC = () => {
   ];
 
   return (
-    <div className="animate-page flex h-full flex-col gap-5">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Call Metrics</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Per-call pipeline metrics — TTFB, latency, token usage, TTS characters and turns
-        </p>
-      </div>
+    <div className="animate-page flex h-full flex-col gap-6">
+      <PageHeader
+        kicker="Call metrics"
+        title="Call metrics."
+        description="Per-call pipeline metrics — TTFB, latency, token usage, TTS characters and turns."
+      />
 
       {callIdFilter && (
-        <div className="flex w-fit items-center gap-2 rounded-full border border-border bg-muted/50 py-1 pl-3 pr-1 text-sm">
-          <span className="text-muted-foreground">
-            Filtered to one call:{' '}
-            <span className="font-mono text-foreground">{callIdFilter.slice(0, 8)}…</span>
+        <div className="flex w-fit items-center gap-2 rounded-full border border-border bg-card py-1 pl-3 pr-1 text-sm">
+          <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            Call
           </span>
+          <span className="font-mono text-[13px] text-foreground">{callIdFilter.slice(0, 8)}…</span>
           <CustomButton type="text" size="icon-xs" onClick={handleClearCallIdFilter}>
             <X className="size-3.5 text-muted-foreground" />
           </CustomButton>
@@ -303,8 +303,8 @@ const CallMetrics: React.FC = () => {
           }}
           emptyState={
             <div className="flex flex-col items-center gap-4 py-8">
-              <div className="flex size-12 items-center justify-center rounded-xl bg-muted">
-                <BarChart3 className="size-6 text-muted-foreground" />
+              <div className="flex size-12 items-center justify-center rounded-lg border border-border bg-background">
+                <BarChart3 className="size-6 text-foreground" />
               </div>
               <div className="text-center">
                 <p className="font-semibold text-foreground">No call metrics yet</p>

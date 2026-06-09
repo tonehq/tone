@@ -19,6 +19,7 @@ import {
   setMembersParamsAtom,
   updateMemberRoleAtom,
 } from '@/atoms/SettingsAtom';
+import { PageHeader } from '@/components/layout/page-header';
 import { AppLoader, CustomButton, CustomTab } from '@/components/shared';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
@@ -178,22 +179,21 @@ export default function Members() {
   ];
 
   return (
-    <div className="w-full">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Members</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Manage your team and invite new members
-          </p>
-        </div>
-        <CustomButton
-          type="primary"
-          icon={<UserPlus size={18} />}
-          onClick={() => setModalOpen(true)}
-        >
-          Invite Member
-        </CustomButton>
-      </div>
+    <div className="w-full space-y-8">
+      <PageHeader
+        kicker="Members"
+        title="Members."
+        description="Manage your team and invite new members."
+        actions={
+          <CustomButton
+            type="primary"
+            icon={<UserPlus size={18} />}
+            onClick={() => setModalOpen(true)}
+          >
+            Invite Member
+          </CustomButton>
+        }
+      />
 
       <CustomTab items={tabItems} defaultActiveKey="members" />
 

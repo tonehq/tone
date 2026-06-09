@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import agentsAtom, { fetchAllAgentsAtom } from '@/atoms/AgentsAtom';
 import DocumentUpload from '@/components/knowledge-base/DocumentUpload';
 import EditDocument from '@/components/knowledge-base/EditDocument';
+import { PageHeader } from '@/components/layout/page-header';
 import { CustomButton, CustomModal, CustomTable } from '@/components/shared';
 import SearchBar from '@/components/shared/SearchBar';
 import SelectInput from '@/components/shared/SelectInput';
@@ -42,39 +43,24 @@ import { formatDate } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
-const contentTypeBadgeColors: Record<string, { label: string; color: string }> = {
-  'application/pdf': {
-    label: 'PDF',
-    color: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400',
-  },
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
-    label: 'DOCX',
-    color: 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400',
-  },
-  'text/plain': {
-    label: 'TXT',
-    color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400',
-  },
-  'text/csv': {
-    label: 'CSV',
-    color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400',
-  },
-  'text/html': {
-    label: 'HTML',
-    color: 'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400',
-  },
-  'application/json': {
-    label: 'JSON',
-    color: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400',
-  },
+// Single-accent design: file-type chips are neutral and read as mono labels.
+// The type is signal-free, so it carries no color — only the status dot does.
+const NEUTRAL_CHIP = 'border border-border bg-background text-muted-foreground';
+
+const contentTypeLabels: Record<string, string> = {
+  'application/pdf': 'PDF',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX',
+  'text/plain': 'TXT',
+  'text/csv': 'CSV',
+  'text/html': 'HTML',
+  'application/json': 'JSON',
 };
 
 function getTypeBadge(contentType?: string | null) {
-  if (!contentType) return { label: 'FILE', color: 'bg-muted text-muted-foreground' };
-  const config = contentTypeBadgeColors[contentType];
-  if (config) return config;
-  const ext = contentType.split('/').pop()?.toUpperCase() ?? 'FILE';
-  return { label: ext, color: 'bg-muted text-muted-foreground' };
+  if (!contentType) return { label: 'FILE', color: NEUTRAL_CHIP };
+  const label =
+    contentTypeLabels[contentType] ?? contentType.split('/').pop()?.toUpperCase() ?? 'FILE';
+  return { label, color: NEUTRAL_CHIP };
 }
 
 /** Extract the human-readable failure reason stored on a failed upload. */
@@ -364,7 +350,7 @@ export default function KnowledgeBasePage() {
                   </span>
                   <span
                     className={cn(
-                      'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase leading-none tracking-wider',
+                      'shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase leading-none tracking-wider',
                       badge.color,
                     )}
                   >
@@ -501,32 +487,31 @@ export default function KnowledgeBasePage() {
     selectedDoc && selectedDoc.status === 'failed' ? getErrorMessage(selectedDoc) : null;
 
   return (
-    <div className="animate-page flex h-full min-h-0 flex-col gap-5">
-      {/* ─── header (lightweight) ─────────────────────────────────────── */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              Knowledge Base
-            </h1>
+    <div className="animate-page flex h-full min-h-0 flex-col gap-6">
+      {/* ─── header ───────────────────────────────────────────────────── */}
+      <PageHeader
+        kicker="Knowledge base"
+        title={
+          <span className="inline-flex items-center gap-3">
+            Knowledge base.
             {total > 0 && (
-              <Badge variant="secondary" className="text-xs tabular-nums">
+              <span className="font-mono text-[13px] font-medium tabular-nums tracking-normal text-muted-foreground">
                 {total}
-              </Badge>
+              </span>
             )}
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Upload documents to enhance your AI agents with custom knowledge.
-          </p>
-        </div>
-        <CustomButton
-          type="primary"
-          icon={<Plus className="size-4" />}
-          onClick={() => setUploadModalOpen(true)}
-        >
-          Add Sources
-        </CustomButton>
-      </div>
+          </span>
+        }
+        description="Upload documents to enhance your AI agents with custom knowledge."
+        actions={
+          <CustomButton
+            type="primary"
+            icon={<Plus className="size-4" />}
+            onClick={() => setUploadModalOpen(true)}
+          >
+            Add Sources
+          </CustomButton>
+        }
+      />
 
       {/* ─── toolbar ──────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
@@ -639,8 +624,8 @@ export default function KnowledgeBasePage() {
         {selectedDoc && (
           <div className="space-y-4">
             <div className="flex items-start gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
-                <FileText className="size-5 text-primary" />
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-background">
+                <FileText className="size-5 text-foreground" />
               </div>
               <div className="min-w-0 flex-1">
                 <p
@@ -653,7 +638,7 @@ export default function KnowledgeBasePage() {
                   {detailBadge && (
                     <span
                       className={cn(
-                        'inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider leading-none',
+                        'inline-flex rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase leading-none tracking-wider',
                         detailBadge.color,
                       )}
                     >
@@ -791,8 +776,8 @@ function DetailRow({
 function EmptyState({ onAdd, hasFilter }: { onAdd: () => void; hasFilter: boolean }) {
   return (
     <div className="flex flex-col items-center gap-4 py-10">
-      <div className="flex size-12 items-center justify-center rounded-xl bg-muted">
-        <BookOpen className="size-6 text-muted-foreground" />
+      <div className="flex size-12 items-center justify-center rounded-lg border border-border bg-background">
+        <BookOpen className="size-6 text-foreground" />
       </div>
       <div className="max-w-sm text-center">
         <p className="font-semibold text-foreground">

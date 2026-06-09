@@ -10,7 +10,6 @@ import {
   MessageSquare,
   Phone,
   Save,
-  Sparkles,
   Trash2,
   Volume2,
   Wrench,
@@ -53,16 +52,11 @@ interface AgentFormPageProps {
   agentId?: string;
 }
 
-// The avatar chip and the direction badge both reuse this. In dark mode the
-// 15% backgrounds disappear against the dark canvas, so we bump opacity and
-// add a 1px inset ring for legibility on both themes.
-const DIRECTION_STYLES: Record<AgentDirection, string> = {
-  inbound:
-    'bg-emerald-500/15 text-emerald-700 ring-1 ring-inset ring-emerald-500/20 dark:bg-emerald-500/25 dark:text-emerald-200 dark:ring-emerald-400/40',
-  outbound:
-    'bg-violet-500/15 text-violet-700 ring-1 ring-inset ring-violet-500/20 dark:bg-violet-500/25 dark:text-violet-200 dark:ring-violet-400/40',
-  both: 'bg-sky-500/15 text-sky-700 ring-1 ring-inset ring-sky-500/20 dark:bg-sky-500/25 dark:text-sky-200 dark:ring-sky-400/40',
-};
+// Single indigo primary accent across all directions — the editorial system
+// avoids per-direction rainbow tints. The avatar chip and direction badge
+// share this neutral, theme-token-based treatment.
+const DIRECTION_BADGE =
+  'border-primary/20 bg-primary/10 text-primary ring-1 ring-inset ring-primary/15';
 
 interface NavItem {
   key: string;
@@ -263,20 +257,8 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
     <FormProvider {...methods}>
       <AgentFormNavProvider value={navContextValue}>
         <div className="flex h-full min-h-0 flex-col bg-background">
-          {/* ─── identity header (soft direction-tinted strip) ─────────────── */}
-          <header
-            className={cn(
-              'relative flex shrink-0 items-center gap-3 overflow-hidden border-b border-border/60 px-5 py-3',
-              // Subtle gradient washes the header in the direction's accent
-              // colour without overwhelming the form below.
-              agentType === 'inbound' &&
-                'bg-gradient-to-r from-emerald-500/5 via-transparent to-transparent dark:from-emerald-500/10',
-              agentType === 'outbound' &&
-                'bg-gradient-to-r from-violet-500/5 via-transparent to-transparent dark:from-violet-500/10',
-              agentType === 'both' &&
-                'bg-gradient-to-r from-sky-500/5 via-transparent to-transparent dark:from-sky-500/10',
-            )}
-          >
+          {/* ─── identity header (editorial: mono kicker + display title) ───── */}
+          <header className="relative flex shrink-0 items-center gap-3 border-b border-border/60 px-5 py-3">
             <CustomButton
               type="text"
               size="sm"
@@ -286,38 +268,34 @@ export default function AgentFormPage({ agentType, agentId }: AgentFormPageProps
               aria-label="Back to agents"
             />
             <div
-              className={cn(
-                'flex size-10 shrink-0 items-center justify-center rounded-xl text-base font-semibold shadow-sm',
-                DIRECTION_STYLES[agentType],
-              )}
+              className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-base font-semibold text-foreground"
               aria-hidden
             >
               {agentInitial}
             </div>
             <div className="min-w-0 flex-1">
+              <div className="mb-1 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                <span className="text-primary">{isEditMode ? 'Edit agent' : 'New agent'}</span>
+                <span className="h-px w-6 bg-border" />
+                <span>{agentType}</span>
+              </div>
               <div className="flex items-center gap-2">
-                <h1 className="truncate font-display text-base font-semibold tracking-tight text-foreground">
+                <h1
+                  className="truncate text-base font-semibold tracking-tight text-foreground"
+                  style={{ fontFamily: 'var(--font-display)' }}
+                >
                   {agentName}
                 </h1>
                 <Badge
                   className={cn(
                     'inline-flex shrink-0 items-center gap-1 px-1.5 py-0 text-[10px] capitalize',
-                    DIRECTION_STYLES[agentType],
+                    DIRECTION_BADGE,
                   )}
                 >
                   <Phone className="size-2.5" />
                   {agentType}
                 </Badge>
-                {!isEditMode && (
-                  <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
-                    <Sparkles className="size-3" />
-                    New
-                  </span>
-                )}
               </div>
-              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                {isEditMode ? 'Editing agent configuration' : 'Set up a new voice agent'}
-              </p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               {isEditMode && (

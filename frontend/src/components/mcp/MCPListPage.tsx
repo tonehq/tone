@@ -4,6 +4,7 @@ import { deleteMcpServerAtom, fetchMcpServersAtom, mcpServersAtom } from '@/atom
 import MCPCardSkeleton from '@/components/mcp/MCPCardSkeleton';
 import MCPEmptyState from '@/components/mcp/MCPEmptyState';
 import MCPServerCard from '@/components/mcp/MCPServerCard';
+import { PageHeader } from '@/components/layout/page-header';
 import { CustomButton, SearchBar } from '@/components/shared';
 import type { MCPServer } from '@/types/mcp';
 import { handleApiError } from '@/utils/helpers';
@@ -62,20 +63,17 @@ export default function MCPListPage() {
   );
 
   return (
-    <div className="animate-page flex h-full min-h-0 flex-col gap-5">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">MCP Servers</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Connect Model Context Protocol servers to extend your agents with external tools and
-            resources.
-          </p>
-        </div>
-        <CustomButton type="primary" icon={<Plus className="size-4" />} onClick={handleCreate}>
-          Create MCP Server
-        </CustomButton>
-      </div>
+    <div className="animate-page flex h-full min-h-0 flex-col gap-6">
+      <PageHeader
+        kicker={servers.length > 0 ? `MCP · ${servers.length}` : 'MCP'}
+        title="MCP servers."
+        description="Connect Model Context Protocol servers to extend your agents with external tools and resources."
+        actions={
+          <CustomButton type="primary" icon={<Plus className="size-4" />} onClick={handleCreate}>
+            Create MCP Server
+          </CustomButton>
+        }
+      />
 
       {/* Toolbar */}
       {servers.length > 0 && (
@@ -112,19 +110,15 @@ export default function MCPListPage() {
         {/* No search results */}
         {!loading && search && filteredServers.length === 0 && servers.length > 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="mb-3 flex size-12 items-center justify-center rounded-xl bg-muted">
-              <Search className="size-5 text-muted-foreground" />
+            <div className="mb-3 flex size-12 items-center justify-center rounded-lg border border-border bg-background">
+              <Search className="size-5 text-foreground" strokeWidth={1.75} />
             </div>
             <p className="text-sm text-foreground">
               No MCP servers matching &ldquo;{search}&rdquo;
             </p>
-            <button
-              type="button"
-              onClick={() => setSearch('')}
-              className="mt-3 text-[13px] font-medium text-primary hover:underline"
-            >
+            <CustomButton type="link" size="sm" className="mt-3" onClick={() => setSearch('')}>
               Clear search
-            </button>
+            </CustomButton>
           </div>
         )}
 
@@ -167,10 +161,10 @@ export default function MCPListPage() {
                 visible: { opacity: 1, y: 0, transition: { duration: 0.35 } },
               }}
               whileHover={{ y: -2 }}
-              className="group relative flex h-full min-h-[164px] cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-card/40 transition-colors hover:border-sky-500/50 hover:bg-sky-500/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className="group relative flex h-full min-h-[164px] cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-card/40 transition-colors hover:border-primary/50 hover:bg-primary/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               <div className="flex flex-col items-center gap-2 p-8">
-                <div className="flex size-11 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 transition-transform group-hover:scale-110 dark:text-sky-400">
+                <div className="flex size-11 items-center justify-center rounded-lg border border-border bg-background text-foreground transition-all group-hover:scale-110 group-hover:border-primary/40">
                   <Plus className="size-5" />
                 </div>
                 <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground">

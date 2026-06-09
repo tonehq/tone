@@ -4,13 +4,17 @@ import { motion, type Variants } from 'framer-motion';
 import { ChevronRight, KeyRound, Layers, Pencil, Trash2 } from 'lucide-react';
 import type React from 'react';
 
+import { CustomButton } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import type { ProviderUsage } from '@/types/service';
 import { cn } from '@/utils/cn';
 
 import ProviderLogo from './ProviderLogo';
-import { TYPE_BADGE_STYLES } from './constants';
+
+// Neutral, editorial type pill — one mono label, no per-type rainbow accent.
+const TYPE_PILL =
+  'rounded-full border border-border bg-background px-2 py-0 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground';
 
 export const cardVariants: Variants = {
   hidden: { opacity: 0, y: 8, scale: 0.98 },
@@ -51,8 +55,8 @@ export default function ServiceCard({ usage, onClick, onEdit, onDelete }: Servic
       <Card
         onClick={handleClick}
         className={cn(
-          'group relative flex h-full cursor-pointer flex-col gap-4 overflow-hidden p-5 transition-all',
-          'border-border/70 hover:border-border hover:shadow-[0_4px_24px_-12px_rgb(0_0_0/0.12)]',
+          'group relative flex h-full cursor-pointer flex-col gap-4 overflow-hidden rounded-xl p-5 transition-all duration-200',
+          'border-border hover:-translate-y-0.5 hover:border-foreground/20',
         )}
       >
         {/* header: logo + title + actions */}
@@ -81,43 +85,38 @@ export default function ServiceCard({ usage, onClick, onEdit, onDelete }: Servic
 
           {/* hover actions — anchored top-right, no layout shift */}
           <div className="absolute right-3 top-3 flex items-center gap-0.5 rounded-md bg-card/95 p-0.5 opacity-0 shadow-sm ring-1 ring-border/60 backdrop-blur transition-opacity group-hover:opacity-100">
-            <button
-              type="button"
+            <CustomButton
+              type="text"
+              size="icon-xs"
               onClick={handleEdit}
               aria-label="Edit service"
               title="Edit"
-              className="inline-flex size-7 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <Pencil className="size-3.5" />
-            </button>
-            <button
-              type="button"
+            </CustomButton>
+            <CustomButton
+              type="text"
+              size="icon-xs"
               onClick={handleDelete}
               aria-label="Delete service"
               title="Delete"
-              className="inline-flex size-7 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
             >
               <Trash2 className="size-3.5" />
-            </button>
+            </CustomButton>
           </div>
         </div>
 
         {/* type pill + default indicator */}
         <div className="flex flex-wrap items-center gap-2">
-          <Badge
-            className={cn(
-              'px-2 py-0 text-[10px] font-semibold uppercase tracking-wider',
-              TYPE_BADGE_STYLES[usage.service_type] ?? '',
-            )}
-          >
-            {usage.service_type}
-          </Badge>
+          <Badge className={TYPE_PILL}>{usage.service_type}</Badge>
           {usage.default_api_key && (
             <span
-              className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground"
+              className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-amber-500"
               title={`Default: ${usage.default_api_key.label ?? '—'}`}
             >
-              <span className="size-1.5 rounded-full bg-emerald-500" />
+              <span className="size-1.5 rounded-full bg-amber-400" />
               Default
             </span>
           )}
@@ -145,6 +144,9 @@ export default function ServiceCard({ usage, onClick, onEdit, onDelete }: Servic
             <span>{usage.model_count === 1 ? 'model' : 'models'}</span>
           </span>
         </div>
+
+        {/* hairline accent that wipes in on hover */}
+        <span className="absolute bottom-0 left-0 h-[2px] w-full origin-left scale-x-0 bg-primary transition-transform duration-500 ease-out group-hover:scale-x-100" />
       </Card>
     </motion.div>
   );

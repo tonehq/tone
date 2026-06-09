@@ -53,8 +53,7 @@ const MCPServerCard: React.FC<MCPServerCardProps> = ({ server, onClick, onEdit, 
       className={cn(
         'group relative h-full cursor-pointer gap-0 overflow-hidden border-border/80 py-0',
         'transition-all duration-200 hover:-translate-y-0.5 hover:border-foreground/20',
-        'hover:shadow-[0_10px_30px_-14px_rgba(2,132,199,0.35)]',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
       )}
       role="button"
       tabIndex={0}
@@ -67,16 +66,17 @@ const MCPServerCard: React.FC<MCPServerCardProps> = ({ server, onClick, onEdit, 
         }
       }}
     >
-      {/* Brand accent stripe + soft hover glow */}
+      {/* Accent stripe — amber for live servers, neutral otherwise */}
       <span
         className={cn(
           'absolute inset-y-0 left-0 w-1 transition-colors',
-          server.is_active ? 'bg-sky-500/70' : 'bg-muted-foreground/30',
+          server.is_active ? 'bg-amber-400' : 'bg-muted-foreground/30',
         )}
         aria-hidden
       />
+      {/* Hairline indigo accent that wipes in on hover */}
       <span
-        className="pointer-events-none absolute -right-12 -top-12 size-32 rounded-full bg-sky-500 opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-15"
+        className="absolute bottom-0 left-0 h-[2px] w-full origin-left scale-x-0 bg-primary transition-transform duration-500 ease-out group-hover:scale-x-100"
         aria-hidden
       />
 
@@ -85,10 +85,10 @@ const MCPServerCard: React.FC<MCPServerCardProps> = ({ server, onClick, onEdit, 
         <div className="flex items-start gap-3">
           <div
             className={cn(
-              'flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border shadow-sm transition-all group-hover:scale-[1.04]',
+              'flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border transition-all group-hover:scale-[1.04] group-hover:border-primary/40',
               showFavicon
-                ? 'border-border/60 bg-white p-1.5'
-                : 'border-sky-500/20 bg-sky-500/10 text-sky-600 dark:text-sky-400',
+                ? 'border-border bg-white p-1.5'
+                : 'border-border bg-background text-foreground',
             )}
           >
             {showFavicon ? (
@@ -140,18 +140,18 @@ const MCPServerCard: React.FC<MCPServerCardProps> = ({ server, onClick, onEdit, 
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[10.5px] font-semibold',
               server.is_active
-                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                ? 'bg-amber-400/15 text-amber-600 dark:text-amber-500'
                 : 'bg-muted text-muted-foreground',
             )}
           >
             <span className="relative inline-flex size-1.5">
               {server.is_active && (
-                <span className="absolute inset-0 animate-ping rounded-full bg-emerald-500/60" />
+                <span className="absolute inset-0 animate-ping rounded-full bg-amber-400/70" />
               )}
               <span
                 className={cn(
                   'relative inline-flex size-1.5 rounded-full',
-                  server.is_active ? 'bg-emerald-500' : 'bg-muted-foreground/40',
+                  server.is_active ? 'bg-amber-400' : 'bg-muted-foreground/40',
                 )}
               />
             </span>

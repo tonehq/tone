@@ -333,7 +333,7 @@ function CustomTableInner<TRow>({
         </div>
       )}
 
-      <div className="flex flex-col min-h-0 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div className="flex flex-col min-h-0 overflow-hidden rounded-2xl border border-border/70 bg-card">
         <DataTable
           table={table}
           rows={paginatedRows}

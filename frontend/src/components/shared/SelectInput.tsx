@@ -82,10 +82,12 @@ const PlainSelectInput = forwardRef<HTMLButtonElement, SelectInputBaseProps>(
                   name={name}
                   aria-invalid={error || undefined}
                   className={cn(
-                    'border-input data-[state=open]:border-ring data-[state=open]:ring-ring/50 dark:bg-input/30 dark:hover:bg-input/50 flex h-9 w-full cursor-pointer items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none data-[state=open]:ring-[3px] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
-                    size === 'sm' ? 'h-8' : 'h-9',
+                    'flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg border border-input bg-background px-3.5 text-sm text-foreground shadow-sm outline-none transition-all duration-150',
+                    'hover:border-foreground/20 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20',
+                    'data-[state=open]:border-primary data-[state=open]:ring-2 data-[state=open]:ring-primary/20',
+                    size === 'sm' ? 'h-9' : 'h-10',
                     error &&
-                      'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50',
+                      'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/20',
                     triggerClassName,
                   )}
                 >

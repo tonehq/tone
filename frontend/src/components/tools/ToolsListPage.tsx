@@ -5,10 +5,10 @@ import { Plus, Trash2, Wrench, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 
+import { PageHeader } from '@/components/layout/page-header';
 import { ActionMenu, CustomButton, CustomModal, CustomTable } from '@/components/shared';
 import SearchBar from '@/components/shared/SearchBar';
 import SelectInput from '@/components/shared/SelectInput';
-import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { TOOL_TYPE_HEADER } from '@/constants/toolForm';
 import { TOOLS_QUERY_KEY, toolsApi, useDeleteTool, useTools } from '@/lib/api/tools';
@@ -17,14 +17,6 @@ import type { CustomTableColumn, CustomTableSortState } from '@/types/components
 import type { Tool } from '@/types/tool';
 import { cn } from '@/utils/cn';
 import { showToast } from '@/utils/toast';
-
-const METHOD_COLORS: Record<string, string> = {
-  GET: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400',
-  POST: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
-  PUT: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
-  DELETE: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400',
-  PATCH: 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400',
-};
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
 
@@ -194,19 +186,8 @@ export default function ToolsListPage() {
           const headerConfig = TOOL_TYPE_HEADER[record.tool_type];
           const label =
             headerConfig?.label ?? (record.tool_type === 'custom' ? 'Custom' : record.tool_type);
-          const badgeClass =
-            record.tool_type === 'custom'
-              ? 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-400'
-              : headerConfig
-                ? `${headerConfig.bg} ${headerConfig.color}`
-                : 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400';
           return (
-            <span
-              className={cn(
-                'inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-medium',
-                badgeClass,
-              )}
-            >
+            <span className="inline-flex rounded-full border border-border bg-background px-2.5 py-0.5 text-[11px] font-medium text-foreground">
               {label}
             </span>
           );
@@ -220,12 +201,7 @@ export default function ToolsListPage() {
         render: (_val: unknown, record: Tool) => {
           const m = record.method?.toUpperCase() ?? 'POST';
           return (
-            <span
-              className={cn(
-                'inline-flex rounded-md px-2 py-0.5 text-[11px] font-semibold',
-                METHOD_COLORS[m] ?? 'bg-muted text-muted-foreground',
-              )}
-            >
+            <span className="inline-flex rounded-md border border-border bg-background px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-foreground">
               {m}
             </span>
           );
@@ -274,12 +250,18 @@ export default function ToolsListPage() {
         render: (_val: unknown, record: Tool) => (
           <span
             className={cn(
-              'inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium',
+              'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
               record.is_active
-                ? 'bg-emerald-500/15 text-emerald-600'
+                ? 'bg-amber-400/15 text-amber-600 dark:text-amber-500'
                 : 'bg-muted text-muted-foreground',
             )}
           >
+            {record.is_active && (
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400/70" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-400" />
+              </span>
+            )}
             {record.is_active ? 'Active' : 'Inactive'}
           </span>
         ),
@@ -312,30 +294,21 @@ export default function ToolsListPage() {
   const hasFilter = !!search || typeFilter !== 'all' || statusFilter !== 'all';
 
   return (
-    <div className="animate-page flex h-full min-h-0 flex-col gap-5">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Tools</h1>
-            {total > 0 && (
-              <Badge variant="secondary" className="text-xs tabular-nums">
-                {total}
-              </Badge>
-            )}
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Define external API tools your voice agents can call during conversations.
-          </p>
-        </div>
-        <CustomButton
-          type="primary"
-          icon={<Plus className="size-4" />}
-          onClick={() => router.push('/tools/create')}
-        >
-          Create New Tool
-        </CustomButton>
-      </div>
+    <div className="animate-page flex h-full min-h-0 flex-col gap-6">
+      <PageHeader
+        kicker={total > 0 ? `Tools · ${total}` : 'Tools'}
+        title="Tools."
+        description="Define external API tools your voice agents can call during conversations."
+        actions={
+          <CustomButton
+            type="primary"
+            icon={<Plus className="size-4" />}
+            onClick={() => router.push('/tools/create')}
+          >
+            Create New Tool
+          </CustomButton>
+        }
+      />
 
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
@@ -418,8 +391,8 @@ export default function ToolsListPage() {
 function EmptyState({ onAdd, hasFilter }: { onAdd: () => void; hasFilter: boolean }) {
   return (
     <div className="flex flex-col items-center gap-4 py-10">
-      <div className="flex size-12 items-center justify-center rounded-xl bg-muted">
-        <Wrench className="size-6 text-muted-foreground" />
+      <div className="flex size-12 items-center justify-center rounded-lg border border-border bg-background">
+        <Wrench className="size-6 text-foreground" strokeWidth={1.75} />
       </div>
       <div className="max-w-sm text-center">
         <p className="font-semibold text-foreground">

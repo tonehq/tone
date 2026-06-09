@@ -5,12 +5,13 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, CheckCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 import { resetPasswordSchema, type ResetPasswordFormData } from '@/schemas/auth';
 import { showToast, handleApiError } from '@/lib/toast';
-import { AppLoader, Form, TextInput } from '@/components/shared';
-import { Button } from '@/components/ui/button';
+import { AppLoader, Form } from '@/components/shared';
+import { AuthField } from '@/components/auth/auth-field';
+import { AuthHeading, AuthResult, AuthSubmit, fadeUp } from '@/components/auth/auth-ui';
 import { useResetPassword } from '@/lib/api/auth';
 
 function ResetPasswordContent() {
@@ -42,56 +43,69 @@ function ResetPasswordContent() {
 
   if (mutation.isSuccess) {
     return (
-      <div className="animate-page text-center">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-          <CheckCircle className="h-8 w-8 text-green-600" />
-        </div>
-        <h2 className="text-2xl font-bold">Password Reset!</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Your password has been reset successfully.
-        </p>
+      <AuthResult
+        tone="success"
+        code="OK"
+        kicker="All set"
+        title="Password updated."
+        description="Your password has been reset. You can sign in with it now."
+      >
         <Link href="/login">
-          <Button className="mt-6">Sign In</Button>
+          <AuthSubmit>Sign in</AuthSubmit>
         </Link>
-      </div>
+      </AuthResult>
     );
   }
 
   if (!token) return null;
 
   return (
-    <div className="animate-page">
-      <h2 className="text-[28px] font-semibold tracking-tight">Set new password</h2>
-      <p className="mt-2 text-sm text-muted-foreground">Enter your new password below</p>
-      <Form handleSubmit={handleSubmit} onSubmit={onSubmit} className="mt-6">
-        <TextInput
-          name="password"
-          control={control}
-          label="New Password"
-          type="password"
-          placeholder="Min. 8 characters"
-          isRequired
-        />
-        <TextInput
-          name="confirm_password"
-          control={control}
-          label="Confirm Password"
-          type="password"
-          placeholder="Confirm your password"
-          isRequired
-        />
-        <Button type="submit" className="w-full" loading={mutation.isPending}>
-          Reset Password
-        </Button>
+    <>
+      <AuthHeading
+        index="04"
+        kicker="New password"
+        title="Set a new password."
+        subtitle="Choose a strong password you don't use elsewhere."
+      />
+
+      <Form handleSubmit={handleSubmit} onSubmit={onSubmit} className="space-y-7">
+        <motion.div variants={fadeUp}>
+          <AuthField
+            name="password"
+            control={control}
+            type="password"
+            label="New password"
+            autoComplete="new-password"
+            index="A1"
+          />
+        </motion.div>
+
+        <motion.div variants={fadeUp}>
+          <AuthField
+            name="confirm_password"
+            control={control}
+            type="password"
+            label="Confirm password"
+            autoComplete="new-password"
+            index="A2"
+          />
+        </motion.div>
+
+        <motion.div variants={fadeUp} className="pt-1">
+          <AuthSubmit loading={mutation.isPending}>Update password</AuthSubmit>
+        </motion.div>
       </Form>
-      <Link
-        href="/login"
-        className="mt-4 inline-flex items-center text-sm text-primary hover:underline"
-      >
-        <ArrowLeft className="mr-1 h-3 w-3" />
-        Back to login
-      </Link>
-    </div>
+
+      <motion.p className="mt-8 text-center text-[13px] text-muted-foreground" variants={fadeUp}>
+        Remembered it?{' '}
+        <Link
+          href="/login"
+          className="font-medium text-foreground underline-offset-4 transition-colors hover:underline"
+        >
+          Sign in
+        </Link>
+      </motion.p>
+    </>
   );
 }
 

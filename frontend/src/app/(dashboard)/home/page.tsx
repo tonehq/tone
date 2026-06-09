@@ -1,233 +1,232 @@
 'use client';
 
-import dashboardAtom, { fetchDashboardStatsAtom } from '@/atoms/DashboardAtom';
-import { Card } from '@/components/ui/card';
-import { cn } from '@/utils/cn';
-import { useAtomValue, useSetAtom } from 'jotai';
-import {
-  Activity,
-  ArrowUpRight,
-  Bot,
-  CheckCircle2,
-  Clock,
-  Plus,
-  Settings,
-  Users,
-} from 'lucide-react';
-import Link from 'next/link';
 import { useEffect } from 'react';
+import Link from 'next/link';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { motion } from 'framer-motion';
+import { Activity, ArrowUpRight, Bot, Cable, CheckCircle2, Clock, Plus, Users } from 'lucide-react';
 
-/* ── Stat card config ────────────────────────────────────────────────────── */
+import dashboardAtom, { fetchDashboardStatsAtom } from '@/atoms/DashboardAtom';
+import { PageHeader } from '@/components/layout/page-header';
+import { CustomButton } from '@/components/shared';
+import { useAuthStore } from '@/stores/auth';
+import { cn } from '@/utils/cn';
 
-interface StatCardConfig {
+/* ── config ──────────────────────────────────────────────────────────────── */
+
+interface StatConfig {
+  index: string;
   label: string;
   key: 'total_agents' | 'active_calls' | 'minutes_used' | 'success_rate';
   suffix: string;
   subtitle: string;
   icon: typeof Bot;
-  iconBg: string;
-  iconColor: string;
-  accent: string;
+  live?: boolean;
 }
 
-const statCards: StatCardConfig[] = [
+const STATS: StatConfig[] = [
   {
-    label: 'Total Agents',
+    index: 'S1',
+    label: 'Total agents',
     key: 'total_agents',
     suffix: '',
     subtitle: 'All agents',
     icon: Bot,
-    iconBg: 'bg-violet-500/10',
-    iconColor: 'text-violet-600 dark:text-violet-400',
-    accent: 'from-violet-500/10 via-transparent to-transparent',
   },
   {
-    label: 'Active Calls',
+    index: 'S2',
+    label: 'Active calls',
     key: 'active_calls',
     suffix: '',
     subtitle: 'Real-time',
     icon: Activity,
-    iconBg: 'bg-emerald-500/10',
-    iconColor: 'text-emerald-600 dark:text-emerald-400',
-    accent: 'from-emerald-500/10 via-transparent to-transparent',
+    live: true,
   },
   {
-    label: 'Minutes Used',
+    index: 'S3',
+    label: 'Minutes used',
     key: 'minutes_used',
     suffix: '',
     subtitle: 'This month',
     icon: Clock,
-    iconBg: 'bg-sky-500/10',
-    iconColor: 'text-sky-600 dark:text-sky-400',
-    accent: 'from-sky-500/10 via-transparent to-transparent',
   },
   {
-    label: 'Success Rate',
+    index: 'S4',
+    label: 'Success rate',
     key: 'success_rate',
     suffix: '%',
     subtitle: 'Last 30 days',
     icon: CheckCircle2,
-    iconBg: 'bg-amber-500/10',
-    iconColor: 'text-amber-600 dark:text-amber-400',
-    accent: 'from-amber-500/10 via-transparent to-transparent',
   },
 ];
 
-interface QuickLinkConfig {
+interface LinkConfig {
+  index: string;
   title: string;
   description: string;
   icon: typeof Bot;
   href: string;
-  iconBg: string;
-  iconColor: string;
-  hoverRing: string;
 }
 
-const quickLinks: QuickLinkConfig[] = [
+const QUICK_LINKS: LinkConfig[] = [
   {
+    index: '01',
     title: 'Agents',
-    description: 'Create and manage your AI voice agents',
+    description: 'Create and manage your AI voice agents.',
     icon: Bot,
     href: '/agents',
-    iconBg: 'bg-violet-500/10',
-    iconColor: 'text-violet-600 dark:text-violet-400',
-    hoverRing: 'group-hover:ring-violet-500/20',
   },
   {
-    title: 'Team Members',
-    description: 'Manage your team and invite new members',
+    index: '02',
+    title: 'Team members',
+    description: 'Invite teammates and manage roles.',
     icon: Users,
     href: '/members',
-    iconBg: 'bg-pink-500/10',
-    iconColor: 'text-pink-600 dark:text-pink-400',
-    hoverRing: 'group-hover:ring-pink-500/20',
   },
   {
+    index: '03',
     title: 'Integrations',
-    description: 'Connect services and manage API credentials',
-    icon: Settings,
+    description: 'Connect services and API credentials.',
+    icon: Cable,
     href: '/integrations',
-    iconBg: 'bg-slate-500/10',
-    iconColor: 'text-slate-600 dark:text-slate-300',
-    hoverRing: 'group-hover:ring-slate-500/20',
   },
 ];
 
-/* ── Page ──────────────────────────────────────────────────────────────────── */
+const stagger = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.06, delayChildren: 0.1 } },
+};
+const item = {
+  hidden: { opacity: 0, y: 14 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.22, 1, 0.36, 1] as const } },
+};
+
+/* ── page ────────────────────────────────────────────────────────────────── */
 
 export default function HomePage() {
   const { stats, loading } = useAtomValue(dashboardAtom);
   const fetchStats = useSetAtom(fetchDashboardStatsAtom);
+  const firstName = useAuthStore((s) => s.user?.first_name);
 
   useEffect(() => {
     fetchStats();
   }, [fetchStats]);
 
   return (
-    <div className="animate-page space-y-8">
-      {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-1.5">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Welcome to Tone</h1>
-          <p className="text-sm text-muted-foreground">
-            Build and deploy AI voice agents in minutes. Get started with the quick links below.
-          </p>
-        </div>
+    <div className="space-y-10">
+      <PageHeader
+        index="01"
+        kicker="Overview"
+        title={firstName ? `Welcome back, ${firstName}.` : 'Welcome to Tone.'}
+        description="Build and deploy AI voice agents in minutes. Here's where things stand."
+        actions={
+          <Link href="/agents">
+            <CustomButton type="primary" className="group h-10 text-[13px]">
+              <Plus className="h-4 w-4" />
+              Create agent
+            </CustomButton>
+          </Link>
+        }
+      />
 
-        <Link
-          href="/agents"
-          className="inline-flex items-center gap-1.5 self-start rounded-lg bg-primary px-3.5 py-2 text-[13px] font-medium text-primary-foreground no-underline shadow-sm transition-all hover:bg-primary/90 hover:shadow sm:self-auto"
-        >
-          <Plus size={15} />
-          Create Agent
-        </Link>
-      </div>
-
-      {/* ── Stat Cards ──────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {statCards.map((card) => {
-          const value = loading || !stats ? '—' : `${stats[card.key]}${card.suffix}`;
-
+      {/* ── stats ─────────────────────────────────────────────────────────── */}
+      <motion.div
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
+        variants={stagger}
+        initial="hidden"
+        animate="visible"
+      >
+        {STATS.map((stat) => {
+          const value = loading || !stats ? '—' : `${stats[stat.key]}${stat.suffix}`;
+          const isLive = stat.live && !loading && !!stats && Number(stats[stat.key]) > 0;
           return (
-            <Card
-              key={card.label}
-              className="group relative gap-0 overflow-hidden border-border/60 py-0 transition-all duration-200 hover:-translate-y-0.5 hover:border-border hover:shadow-md"
+            <motion.div
+              key={stat.key}
+              variants={item}
+              className="group relative overflow-hidden rounded-xl border border-border bg-card p-5"
             >
-              <div
-                className={cn(
-                  'pointer-events-none absolute inset-0 bg-gradient-to-br opacity-60 transition-opacity duration-200 group-hover:opacity-100',
-                  card.accent,
-                )}
-              />
-
-              <div className="relative flex items-start justify-between px-5 pt-5">
-                <div
-                  className={cn(
-                    'flex size-10 items-center justify-center rounded-xl ring-1 ring-inset ring-border/40',
-                    card.iconBg,
-                  )}
-                >
-                  <card.icon size={18} className={card.iconColor} strokeWidth={2.25} />
-                </div>
-                <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
-                  {card.subtitle}
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                  {stat.label}
+                </span>
+                <span className="font-mono text-[10px] tracking-widest text-muted-foreground/40">
+                  {stat.index}
                 </span>
               </div>
 
-              <div className="relative px-5 pt-4 pb-5">
-                <p className="text-[13px] font-medium text-muted-foreground">{card.label}</p>
-                <p className="mt-1 text-3xl font-semibold tracking-tight tabular-nums text-foreground">
+              <div className="mt-5 flex items-end justify-between">
+                <span
+                  className="text-[2.6rem] font-semibold leading-none tracking-tight tabular-nums text-foreground"
+                  style={{ fontFamily: 'var(--font-display)' }}
+                >
                   {value}
-                </p>
+                </span>
+                <stat.icon className="h-5 w-5 text-muted-foreground/35" strokeWidth={1.75} />
               </div>
-            </Card>
+
+              <div className="mt-3 flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                {isLive && (
+                  <span className="relative flex h-1.5 w-1.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400/70" />
+                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-amber-400" />
+                  </span>
+                )}
+                <span>{stat.subtitle}</span>
+              </div>
+
+              {/* hairline accent that wipes in on hover */}
+              <span className="absolute bottom-0 left-0 h-[2px] w-full origin-left scale-x-0 bg-primary transition-transform duration-500 ease-out group-hover:scale-x-100" />
+            </motion.div>
           );
         })}
-      </div>
+      </motion.div>
 
-      {/* ── Quick Links ─────────────────────────────────────────────────── */}
+      {/* ── quick links ───────────────────────────────────────────────────── */}
       <div className="space-y-4">
-        <div className="flex items-end justify-between">
-          <div>
-            <h2 className="text-base font-semibold text-foreground">Quick Links</h2>
-            <p className="text-xs text-muted-foreground">Jump to the most-used parts of Tone.</p>
-          </div>
+        <div className="flex items-center gap-3 font-mono text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
+          <span className="text-primary">02</span>
+          <span className="h-px w-8 bg-border" />
+          <span>Jump back in</span>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {quickLinks.map((link) => (
-            <Link key={link.title} href={link.href} className="group block no-underline">
-              <Card
-                className={cn(
-                  'h-full gap-0 border-border/60 py-0 ring-1 ring-transparent transition-all duration-200 hover:-translate-y-0.5 hover:border-border hover:shadow-md',
-                  link.hoverRing,
-                )}
-              >
-                <div className="flex h-full flex-col p-5">
-                  <div className="mb-4 flex items-start justify-between">
-                    <div
-                      className={cn(
-                        'flex size-11 items-center justify-center rounded-xl ring-1 ring-inset ring-border/40 transition-transform group-hover:scale-[1.04]',
-                        link.iconBg,
-                      )}
-                    >
-                      <link.icon size={20} className={link.iconColor} strokeWidth={2.25} />
+        <motion.div
+          className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
+          variants={stagger}
+          initial="hidden"
+          animate="visible"
+        >
+          {QUICK_LINKS.map((link) => (
+            <motion.div key={link.href} variants={item}>
+              <Link href={link.href} className="group block no-underline">
+                <div
+                  className={cn(
+                    'relative h-full overflow-hidden rounded-xl border border-border bg-card p-5',
+                    'transition-all duration-200 hover:-translate-y-0.5 hover:border-foreground/20',
+                  )}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-background transition-colors group-hover:border-primary/40">
+                      <link.icon className="h-5 w-5 text-foreground" strokeWidth={1.75} />
                     </div>
-                    <ArrowUpRight
-                      size={16}
-                      className="text-muted-foreground/40 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground"
-                    />
+                    <ArrowUpRight className="h-4 w-4 text-muted-foreground/40 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
                   </div>
 
-                  <h3 className="text-[15px] font-semibold text-foreground">{link.title}</h3>
+                  <div className="mt-4 flex items-center gap-2">
+                    <h3 className="text-[15px] font-semibold tracking-tight text-foreground">
+                      {link.title}
+                    </h3>
+                    <span className="font-mono text-[10px] tracking-widest text-muted-foreground/40">
+                      {link.index}
+                    </span>
+                  </div>
                   <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
                     {link.description}
                   </p>
                 </div>
-              </Card>
-            </Link>
+              </Link>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </div>
     </div>
   );
