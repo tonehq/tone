@@ -18,11 +18,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up kubeconfig (Vultr VKE)
-        run: |
-          mkdir -p "$HOME/.kube"
-          echo "${{ secrets.VULTR_KUBECONFIG }}" | base64 -d > "$HOME/.kube/config"
-          chmod 600 "$HOME/.kube/config"
+      - uses: azure/k8s-set-context@v4
+        with:
+          kubeconfig: ${{ secrets.STAGING_KUBE_CONFIG_JSON }}
 
       - name: Update STT app ConfigMap
         run: |
