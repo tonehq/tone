@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { buildCallDetailNav } from './callDetailNav';
 import { CallDetailProvider } from './CallDetailContext';
+import CallSummaryCard from './CallSummaryCard';
 
 interface CallDetailShellProps {
   callId: string;
@@ -117,22 +118,33 @@ const CallDetailShell: React.FC<CallDetailShellProps> = ({ callId, children }) =
             </nav>
           </div>
 
-          {/* Page header — breadcrumb + section heading */}
-          <header className="flex shrink-0 flex-col gap-1.5 border-b border-border/60 px-5 py-4 lg:px-8">
-            <nav
-              aria-label="Breadcrumb"
-              className="flex items-center gap-1.5 text-sm text-muted-foreground"
-            >
-              <Link href={CALL_HISTORY_HREF} className="transition-colors hover:text-foreground">
-                Call History
-              </Link>
-              <ChevronRight className="size-3.5" aria-hidden />
-              <span className="truncate font-medium text-foreground">{crumbLabel}</span>
-            </nav>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">
-              {agentName || 'Call Details'}
-            </h1>
+          {/* Page header — breadcrumb + section heading. Inner wrapper uses
+              the same `max-w-6xl mx-auto` constraint as the summary card and
+              body below, so all three regions share the exact same content
+              edges on wide displays. */}
+          <header className="shrink-0 border-b border-border/60 px-5 py-4 lg:px-8">
+            <div className="mx-auto flex w-full max-w-6xl flex-col gap-1.5">
+              <nav
+                aria-label="Breadcrumb"
+                className="flex items-center gap-1.5 text-sm text-muted-foreground"
+              >
+                <Link href={CALL_HISTORY_HREF} className="transition-colors hover:text-foreground">
+                  Call History
+                </Link>
+                <ChevronRight className="size-3.5" aria-hidden />
+                <span className="truncate font-medium text-foreground">{crumbLabel}</span>
+              </nav>
+              <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                {agentName || 'Call Details'}
+              </h1>
+            </div>
           </header>
+
+          {/* Persistent call-summary card — pinned above every tab body.
+              Lives outside `<main>` so the badges + Call Details stay
+              visible while the tab content scrolls below. Rendered only
+              once the call has loaded to avoid a layout flash. */}
+          {callLog && <CallSummaryCard callLog={callLog} />}
 
           {/* Body — the routed section. `max-w-6xl` matches the header's
               effective width (header is full-bleed within the same padding),
