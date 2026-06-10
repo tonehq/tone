@@ -7,10 +7,9 @@ metadata:
     app: staging-tts-qwen
 spec:
   type: ClusterIP
-  # Selects the SAME pod as STT (the TTS container is a sidecar in it),
-  # but routes to the TTS container's port.
+  # Standalone Qwen TTS pod (its own GPU node).
   selector:
-    app: staging-stt-nemotron
+    app: staging-tts-qwen
   ports:
     - name: tts
       port: 80
