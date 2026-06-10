@@ -62,8 +62,12 @@ const CallConfigurationsSection: React.FC<CallConfigurationsSectionProps> = ({ c
 
   // Hold the entire tab on the project's shared loader until the pipeline is
   // ready, so the page doesn't paint a partial state and then shift.
+  // `min-h-0` overrides AppLoader's default `min-h-screen` (via tailwind-merge),
+  // letting it size to its parent so it centers within the tab body — not at
+  // 50vh, which would sit below the visible area now that the sticky summary
+  // card consumes space above.
   if (pipelineLoading && !pipeline) {
-    return <AppLoader className="h-full" />;
+    return <AppLoader className="min-h-0 h-full" />;
   }
 
   return (
