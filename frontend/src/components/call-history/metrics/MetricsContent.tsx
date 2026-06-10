@@ -43,7 +43,12 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, className }) =
   }, [userBotLatency, llmUsage, ttsUsage, turnsList]);
 
   const ttfbByProcessor = useMemo(() => {
-    const entries = ttfbList.filter((e) => e.model && e.value > 0);
+    // Keep entries even when `model` is null — some custom STT services
+    // (e.g. NvidiaWebSocketService in the tonehq/pipecat fork) emit TTFB
+    // without setting `set_model_name(...)`. Filtering on `e.model` would
+    // silently drop the entire STT card. The processor name is enough to
+    // identify the source; the model label simply renders blank when absent.
+    const entries = ttfbList.filter((e) => e.value > 0);
     return entries.reduce(
       (acc, e) => {
         const name = extractProcessorName(e.processor);
