@@ -5,7 +5,7 @@ import { CustomTooltip, PhoneNumberDisplay } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import type { CallLogRow } from '@/types/callLog';
 import { cn } from '@/utils/cn';
-import { formatDuration, formatShortDateTime } from '@/utils/date';
+import { formatDuration, formatTimeOnly } from '@/utils/date';
 import { ArrowRight, Clock, Phone, Radio } from 'lucide-react';
 import React from 'react';
 
@@ -67,8 +67,8 @@ const muted = <span className="text-muted-foreground">—</span>;
  * visible while the tab body scrolls — no `position: sticky` needed.
  */
 const CallSummaryCard: React.FC<CallSummaryCardProps> = ({ callLog }) => {
-  const startedAt = formatShortDateTime(callLog.started_at);
-  const endedAt = formatShortDateTime(callLog.ended_at);
+  const startedAt = formatTimeOnly(callLog.started_at);
+  const endedAt = formatTimeOnly(callLog.ended_at);
 
   const hasPhones = !!callLog.from_number || !!callLog.to_number;
   const hasTimes = !!startedAt || !!endedAt;
