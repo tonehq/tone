@@ -9,8 +9,7 @@ on:
 
 env:
   NAMESPACE: staging
-  # TTS is a sidecar in the STT pod, so it shares the STT deployment + rollout.
-  DEPLOYMENT: staging-stt-nemotron-deployment
+  DEPLOYMENT: staging-tts-qwen-deployment
   CONFIGMAP: qwen-tts-app
 
 jobs:
@@ -31,10 +30,10 @@ jobs:
             --from-file=constraints.txt=qwen-tts-streaming/app/constraints.txt \
             --dry-run=client -o yaml | kubectl -n "$NAMESPACE" apply -f -
 
-      - name: Apply manifests (shared deployment + TTS service/ingress)
+      - name: Apply manifests (standalone TTS deployment + service/ingress)
         run: |
           kubectl -n "$NAMESPACE" apply -f qwen-tts-streaming/k8s/staging/service.yaml
-          kubectl -n "$NAMESPACE" apply -f nemotron-streaming/k8s/staging/deployment.yaml
+          kubectl -n "$NAMESPACE" apply -f qwen-tts-streaming/k8s/staging/deployment.yaml
           kubectl -n "$NAMESPACE" apply -f qwen-tts-streaming/k8s/staging/ingress.yaml
 
       - name: Restart and wait for rollout

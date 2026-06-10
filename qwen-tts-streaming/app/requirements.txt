@@ -1,4 +1,4 @@
-# Qwen3-TTS sidecar deps. Installed at container start (Ubuntu 24.04 / Python 3.12).
+# Qwen3-TTS deps. Installed at container start (Ubuntu 24.04 / Python 3.12).
 # torch from the cu124 wheel index to match the node's CUDA 12.4 driver.
 --extra-index-url https://download.pytorch.org/whl/cu124
 torch==2.6.0
@@ -6,7 +6,10 @@ torch==2.6.0
 # pulls the latest torchaudio built against CUDA 13 (libcudart.so.13) and the model
 # import dies with "libcudart.so.13: cannot open shared object file".
 torchaudio==2.6.0
-qwen-tts
+# faster-qwen3-tts: same Qwen3-TTS weights, but CUDA-graph capture + true chunk
+# streaming (generate_custom_voice_streaming). Falls back to plain `qwen-tts` if
+# CUDA-graph capture misbehaves on the A16 vGPU — swap this line back to `qwen-tts`.
+faster-qwen3-tts
 soundfile
 numpy
 fastapi
