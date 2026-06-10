@@ -1,0 +1,14 @@
+# Qwen3-TTS sidecar deps. Installed at container start (Ubuntu 24.04 / Python 3.12).
+# torch from the cu124 wheel index to match the node's CUDA 12.4 driver.
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch==2.6.0
+# Must match torch's CUDA build (cu124 -> libcudart.so.12). Without this pin, pip
+# pulls the latest torchaudio built against CUDA 13 (libcudart.so.13) and the model
+# import dies with "libcudart.so.13: cannot open shared object file".
+torchaudio==2.6.0
+qwen-tts
+soundfile
+numpy
+fastapi
+uvicorn[standard]
+pydantic>=2

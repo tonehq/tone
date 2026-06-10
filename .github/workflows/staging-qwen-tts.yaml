@@ -1,0 +1,43 @@
+name: Staging TTS (Qwen3) Deploy
+
+on:
+  push:
+    branches: ["staging"]
+    paths:
+      - "qwen-tts-streaming/**"
+  workflow_dispatch:
+
+env:
+  NAMESPACE: staging
+  # TTS is a sidecar in the STT pod, so it shares the STT deployment + rollout.
+  DEPLOYMENT: staging-stt-nemotron-deployment
+  CONFIGMAP: qwen-tts-app
+
+jobs:
+  deploy-tts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/k8s-set-context@v4
+        with:
+          kubeconfig: ${{ secrets.STAGING_KUBE_CONFIG_JSON }}
+
+      - name: Update TTS app ConfigMap
+        run: |
+          kubectl -n "$NAMESPACE" create configmap "$CONFIGMAP" \
+            --from-file=server.py=qwen-tts-streaming/app/server.py \
+            --from-file=requirements.txt=qwen-tts-streaming/app/requirements.txt \
+            --from-file=constraints.txt=qwen-tts-streaming/app/constraints.txt \
+            --dry-run=client -o yaml | kubectl -n "$NAMESPACE" apply -f -
+
+      - name: Apply manifests (shared deployment + TTS service/ingress)
+        run: |
+          kubectl -n "$NAMESPACE" apply -f qwen-tts-streaming/k8s/staging/service.yaml
+          kubectl -n "$NAMESPACE" apply -f nemotron-streaming/k8s/staging/deployment.yaml
+          kubectl -n "$NAMESPACE" apply -f qwen-tts-streaming/k8s/staging/ingress.yaml
+
+      - name: Restart and wait for rollout
+        run: |
+          kubectl -n "$NAMESPACE" rollout restart deploy/"$DEPLOYMENT"
+          kubectl -n "$NAMESPACE" rollout status deploy/"$DEPLOYMENT" --timeout=1200s

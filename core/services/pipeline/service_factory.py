@@ -619,6 +619,20 @@ def build_tts(spec: dict) -> Optional[Any]:
             logger.debug("[TTS {}] voice_kwargs: {}", provider_name, voice_kwargs)
             return ResembleAITTSService(api_key=api_key, **voice_kwargs, **_url_kwargs(metadata, "url"))
 
+        if provider_name == "qwen_websocket":
+            from core.services.pipeline.qwen_tts_service import QwenWebSocketTTSService
+            from core.logging import get_trace_id
+            ws_url = "ws://staging-tts-qwen-service.staging.svc.cluster.local/ws/tts"
+            qwen_kwargs = {}
+            if tts_voice_id is not None:
+                qwen_kwargs["voice_id"] = tts_voice_id
+            if tts_language is not None:
+                qwen_kwargs["language"] = tts_language
+            if metadata.get("sample_rate") is not None:
+                qwen_kwargs["sample_rate"] = metadata["sample_rate"]
+            logger.debug("[TTS {}] qwen_kwargs: {}", provider_name, qwen_kwargs)
+            return QwenWebSocketTTSService(url=ws_url, trace_id=get_trace_id(), **qwen_kwargs)
+
         logger.warning("Unsupported TTS provider: %s", provider_name)
         return None
     except ImportError as e:
