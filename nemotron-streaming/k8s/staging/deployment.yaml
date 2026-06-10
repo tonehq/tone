@@ -1,6 +1,6 @@
-# nemotron-speech-streaming-en-0.6b — custom NeMo on Docker Hub (no NGC key).
-# STEP 1: load + batch /asr to prove it runs on the A16 (CUDA 12.4 driver).
-# Pinned to the 8 GB / $172 node (gpu-tier=8g) — 0.6B fits it easily.
+# STT — nvidia/nemotron-speech-streaming-en-0.6b (NeMo + FastAPI).
+# Standalone: owns one GPU (nvidia.com/gpu: 1) on whichever GPU node the
+# scheduler picks. TTS runs in its own deployment on the other GPU node.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -20,8 +20,9 @@ spec:
       labels:
         app: staging-stt-nemotron
     spec:
-      nodeSelector:
-        gpu-tier: "8g"
+      # No nodeSelector needed: the `nvidia.com/gpu: 1` request below already
+      # forces this onto a GPU node. Avoids depending on the manual `gpu-tier=8g`
+      # label, which fresh pool nodes don't have (left STT Pending after a recycle).
       containers:
         - name: nemotron
           image: pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
@@ -70,74 +71,13 @@ spec:
               port: http
             periodSeconds: 20
             failureThreshold: 3
-        # --- TTS sidecar: Qwen3-TTS 0.6B CustomVoice ---
-        # Shares this pod's single A16-8Q vGPU. It does NOT request nvidia.com/gpu
-        # (the nemotron container owns the one integer GPU allocation); instead it
-        # sees the same physical GPU via NVIDIA_VISIBLE_DEVICES=all.
-        # Python 3.12 (qwen-tts floor) -> Ubuntu 24.04 CUDA base, not the pytorch 3.11 image.
-        # No readiness/startupProbe ON PURPOSE: pod Ready = all containers ready, so a
-        # gating probe here would drop the STT Service endpoint while TTS loads. Liveness
-        # only, with a long initial delay so the ~20-30 min pip+model load isn't killed.
-        # Plain Ubuntu 24.04 (Python 3.12). The torch cu124 wheel bundles its own
-        # CUDA/cuDNN libs; only the host driver (libcuda) is needed, which the
-        # NVIDIA container runtime injects because of NVIDIA_VISIBLE_DEVICES=all
-        # (+ utility cap also injects nvidia-smi). Avoids the nvidia/cuda image
-        # tag matrix, which has no 12.4.1-runtime-ubuntu24.04.
-        - name: qwen-tts
-          image: ubuntu:24.04
-          workingDir: /app-tts
-          command: ["bash", "-lc"]
-          args:
-            - |
-              set -e
-              apt-get update -qq
-              apt-get install -y -qq --no-install-recommends python3-pip libsndfile1 libgomp1 ca-certificates
-              pip install --break-system-packages --no-cache-dir -c /app-tts/constraints.txt -r /app-tts/requirements.txt
-              exec uvicorn server:app --host 0.0.0.0 --port 8001
-          env:
-            - name: TTS_MODEL
-              value: "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
-            - name: QWEN_ATTN
-              value: "sdpa"
-            - name: NVIDIA_VISIBLE_DEVICES
-              value: "all"
-            - name: NVIDIA_DRIVER_CAPABILITIES
-              value: "compute,utility"
-            - name: HF_HOME
-              value: /cache/hf-tts
-          ports:
-            - name: tts
-              containerPort: 8001
-          resources:
-            requests:
-              cpu: "250m"
-              memory: 3Gi
-            limits:
-              memory: 8Gi
-          volumeMounts:
-            - name: app-tts
-              mountPath: /app-tts
-            - name: cache
-              mountPath: /cache
-            - name: dshm
-              mountPath: /dev/shm
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: tts
-            initialDelaySeconds: 1800       # don't kill during pip + model download/load
-            periodSeconds: 30
-            failureThreshold: 3
       volumes:
         - name: app
           configMap:
             name: stt-nemotron-app
-        - name: app-tts
-          configMap:
-            name: qwen-tts-app
         - name: cache
           emptyDir: {}
         - name: dshm
           emptyDir:
             medium: Memory
-            sizeLimit: 4Gi
+            sizeLimit: 2Gi
