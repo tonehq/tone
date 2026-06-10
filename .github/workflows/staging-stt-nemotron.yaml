@@ -30,6 +30,16 @@ jobs:
             --from-file=constraints.txt=nemotron-streaming/app/constraints.txt \
             --dry-run=client -o yaml | kubectl -n "$NAMESPACE" apply -f -
 
+      # The shared deployment now mounts the TTS sidecar's configmap. Ensure it
+      # exists so an STT-only deploy doesn't leave the pod stuck on a missing volume.
+      - name: Ensure TTS app ConfigMap exists
+        run: |
+          kubectl -n "$NAMESPACE" create configmap qwen-tts-app \
+            --from-file=server.py=qwen-tts-streaming/app/server.py \
+            --from-file=requirements.txt=qwen-tts-streaming/app/requirements.txt \
+            --from-file=constraints.txt=qwen-tts-streaming/app/constraints.txt \
+            --dry-run=client -o yaml | kubectl -n "$NAMESPACE" apply -f -
+
       - name: Apply deployment manifests
         run: |
           kubectl -n "$NAMESPACE" apply -f nemotron-streaming/k8s/staging/service.yaml

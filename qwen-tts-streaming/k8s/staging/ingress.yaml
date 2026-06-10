@@ -1,0 +1,31 @@
+# External ingress for the Qwen3-TTS service, with WebSocket support.
+# Strips the /tts-stream prefix, so:
+#   /tts-stream/health  -> /health
+#   /tts-stream/tts     -> /tts     (POST JSON, debug WAV)
+#   /tts-stream/ws/tts  -> /ws/tts  (WebSocket streaming PCM16)
+# Internal callers (Pipecat) should prefer the cluster DNS:
+#   ws://staging-tts-qwen-service.staging.svc.cluster.local/ws/tts
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: staging-tts-qwen-ingress
+  namespace: staging
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "25m"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: staging-tts.trytone.ai
+      http:
+        paths:
+          - path: /tts-stream(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: staging-tts-qwen-service
+                port:
+                  number: 80
