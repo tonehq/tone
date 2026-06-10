@@ -69,7 +69,8 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   const isFocused =
     pathname.startsWith('/settings') ||
     pathname.startsWith('/agents/create') ||
-    pathname.startsWith('/agents/edit');
+    pathname.startsWith('/agents/edit') ||
+    /^\/call-history\/[^/]+/.test(pathname);
   if (isFocused) {
     return <div className="h-screen w-screen overflow-hidden">{children}</div>;
   }
