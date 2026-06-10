@@ -27,7 +27,10 @@ const CallDetailSectionBody: React.FC<CallDetailSectionBodyProps> = ({ section, 
   }, [known, router, basePath]);
 
   if (!known) return null;
-  if (loading) return <AppLoader className="h-full" />;
+  // `min-h-0` overrides AppLoader's default `min-h-screen` so it centers
+  // within the tab body, not at viewport mid-point (which would sit below
+  // the visible area once the sticky summary card consumes space above).
+  if (loading) return <AppLoader className="min-h-0 h-full" />;
   if (!callLog) {
     return (
       <div className="flex flex-1 items-center justify-center py-12">
