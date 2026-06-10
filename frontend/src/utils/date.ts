@@ -76,6 +76,13 @@ const CHAT_TIMESTAMP_FORMATTER = new Intl.DateTimeFormat(undefined, {
   minute: '2-digit',
 });
 
+const SHORT_DATETIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
 /**
  * Compact, human-readable timestamp for chat/transcript bubbles
  * (e.g. `Wed, Jun 10 · 2:03 PM`). Returns `null` for empty / invalid input
@@ -86,4 +93,16 @@ export function formatChatTimestamp(ts: string | null | undefined): string | nul
   const date = new Date(ts);
   if (Number.isNaN(date.getTime())) return null;
   return CHAT_TIMESTAMP_FORMATTER.format(date);
+}
+
+/**
+ * Compact timestamp for badge/chip-style displays (e.g. `Jun 10, 4:15 PM`).
+ * Returns `null` for empty / invalid input so callers can decide whether to
+ * render the chip at all.
+ */
+export function formatShortDateTime(ts: string | null | undefined): string | null {
+  if (!ts) return null;
+  const date = new Date(ts);
+  if (Number.isNaN(date.getTime())) return null;
+  return SHORT_DATETIME_FORMATTER.format(date);
 }

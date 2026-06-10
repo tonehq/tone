@@ -5,13 +5,29 @@ import { Separator } from '@/components/ui/separator';
 import { getCallLogAudioUrl } from '@/services/callLogService';
 import type { CallLogRow } from '@/types/callLog';
 import { cn } from '@/utils/cn';
-import { formatChatTimestamp } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { Loader2, Search } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 
 interface TranscriptionRecordingsSectionProps {
   callLog: CallLogRow;
+}
+
+// Time-only formatter for transcript bubbles (e.g. `2:03:47 PM`). Hoisted
+// to module scope so a long transcript doesn't reconstruct the formatter per
+// message render. File-local so other consumers of `formatChatTimestamp`
+// keep their full date+time display.
+const TRANSCRIPT_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  hour: 'numeric',
+  minute: '2-digit',
+  second: '2-digit',
+});
+
+function formatTranscriptTime(ts: string | null | undefined): string | null {
+  if (!ts) return null;
+  const date = new Date(ts);
+  if (Number.isNaN(date.getTime())) return null;
+  return TRANSCRIPT_TIME_FORMATTER.format(date);
 }
 
 const escapeRegex = (str: string): string => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -122,7 +138,7 @@ const TranscriptionRecordingsSection: React.FC<TranscriptionRecordingsSectionPro
               ) : (
                 filteredTranscript.map((msg, index) => {
                   const isUser = msg.role === 'user';
-                  const formattedTime = formatChatTimestamp(msg.timestamp);
+                  const formattedTime = formatTranscriptTime(msg.timestamp);
                   return (
                     <div
                       key={index}
