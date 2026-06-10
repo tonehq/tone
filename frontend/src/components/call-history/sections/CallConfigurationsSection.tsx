@@ -1,13 +1,13 @@
 'use client';
 
 import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
-import { PhoneNumberDisplay } from '@/components/shared';
+import { AppLoader, PhoneNumberDisplay } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import type { CallLogRow } from '@/types/callLog';
 import { cn } from '@/utils/cn';
 import { formatDuration, formatTimestamp } from '@/utils/date';
-import { BrainCircuit, Clock, Loader2, Mic, Phone, PhoneOff, Radio, Volume2 } from 'lucide-react';
+import { BrainCircuit, Clock, Mic, Phone, PhoneOff, Radio, Volume2 } from 'lucide-react';
 import React from 'react';
 
 import { getCallStatusLabel, getCallStatusTone } from '../callStatus';
@@ -83,6 +83,13 @@ const CallConfigurationsSection: React.FC<CallConfigurationsSectionProps> = ({ c
     metrics: callLog.metrics,
   });
 
+  // Hold the entire tab on the project's shared loader until the pipeline is
+  // ready, so the page doesn't paint Call Details first and then shift when
+  // Pipeline lands.
+  if (pipelineLoading && !pipeline) {
+    return <AppLoader className="h-full" />;
+  }
+
   return (
     <div className="flex flex-col">
       {/* Header badges */}
@@ -135,10 +142,7 @@ const CallConfigurationsSection: React.FC<CallConfigurationsSectionProps> = ({ c
 
       {/* Pipeline */}
       <div>
-        <div className="mb-1 flex items-center gap-2">
-          <h3 className="text-sm font-medium text-foreground">Pipeline</h3>
-          {pipelineLoading && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
-        </div>
+        <h3 className="mb-1 text-sm font-medium text-foreground">Pipeline</h3>
         <p className="mb-3 text-xs text-muted-foreground">
           Reflects the agent&apos;s current configuration. Model names come from this call&apos;s
           metrics when available.
@@ -146,9 +150,7 @@ const CallConfigurationsSection: React.FC<CallConfigurationsSectionProps> = ({ c
 
         {!pipeline ? (
           <p className="text-sm text-muted-foreground">
-            {pipelineLoading
-              ? 'Loading pipeline configuration…'
-              : 'Pipeline configuration is not available for this call.'}
+            Pipeline configuration is not available for this call.
           </p>
         ) : (
           <div className="grid grid-cols-1 gap-3">

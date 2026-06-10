@@ -134,9 +134,13 @@ const CallDetailShell: React.FC<CallDetailShellProps> = ({ callId, children }) =
             </h1>
           </header>
 
-          {/* Body — the routed section */}
+          {/* Body — the routed section. `max-w-6xl` matches the header's
+              effective width (header is full-bleed within the same padding),
+              so the breadcrumb, audio bar, metrics grid and pipeline cards
+              all align to the same left/right edges instead of pinching
+              narrower than the heading. */}
           <main className="min-h-0 flex-1 overflow-auto px-5 py-5 lg:px-8 lg:py-6">
-            <div className="mx-auto h-full max-w-4xl">{children}</div>
+            <div className="mx-auto h-full max-w-6xl">{children}</div>
           </main>
         </div>
       </div>

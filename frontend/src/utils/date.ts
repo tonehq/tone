@@ -65,3 +65,25 @@ export function formatDuration(seconds: number | null): string {
   const secs = seconds % 60;
   return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
 }
+
+// Hoisted to module scope so a long transcript doesn't reconstruct the
+// formatter per message render.
+const CHAT_TIMESTAMP_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
+/**
+ * Compact, human-readable timestamp for chat/transcript bubbles
+ * (e.g. `Wed, Jun 10 · 2:03 PM`). Returns `null` for empty / invalid input
+ * so callers can decide whether to render anything at all.
+ */
+export function formatChatTimestamp(ts: string | null | undefined): string | null {
+  if (!ts) return null;
+  const date = new Date(ts);
+  if (Number.isNaN(date.getTime())) return null;
+  return CHAT_TIMESTAMP_FORMATTER.format(date);
+}

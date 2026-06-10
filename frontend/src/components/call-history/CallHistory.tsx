@@ -6,7 +6,6 @@ import {
   CustomButton,
   CustomPopover,
   CustomTable,
-  CustomTooltip,
   PhoneNumberDisplay,
   TokenSearchBar,
 } from '@/components/shared';
@@ -26,10 +25,9 @@ import type {
   TokenSearchField,
 } from '@/types/components';
 import { formatDuration, formatTimestamp, getBrowserTimeZone } from '@/utils/date';
-import { buildGrafanaLogsUrl, isGrafanaConfigured } from '@/utils/grafana';
 import { handleApiError } from '@/utils/helpers';
 import { useAtom } from 'jotai';
-import { Columns3, Phone, ScrollText, SlidersHorizontal, X } from 'lucide-react';
+import { Columns3, Phone, SlidersHorizontal, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -94,7 +92,7 @@ const COLUMN_GROUPS: Array<{
 ];
 const ALL_COLUMN_KEYS = COLUMN_GROUPS.flatMap((g) => g.columns.map((c) => c.key));
 /** Columns that are pinned to the table regardless of popover selection. */
-const ALWAYS_VISIBLE_COLUMN_KEYS = new Set<string>(['agent_name', 'actions']);
+const ALWAYS_VISIBLE_COLUMN_KEYS = new Set<string>(['agent_name']);
 
 function summarizeMetrics(metrics: CallLogRow['metrics']) {
   if (!metrics) return null;
@@ -328,11 +326,9 @@ const CallHistory: React.FC = () => {
     setPage(1);
   }, []);
 
-  // Sticky class applied to the first and last columns so the agent column
-  // stays pinned on the left and the quick-view column stays pinned on the
-  // right while the user scrolls the inner columns horizontally.
+  // Sticky class pins the agent column on the left while the inner columns
+  // scroll horizontally.
   const STICKY_LEFT = 'sticky left-0 z-[1] bg-card border-r border-border';
-  const STICKY_RIGHT = 'sticky right-0 z-[1] bg-card border-l border-border';
 
   const columns: CustomTableColumn<CallLogRow>[] = [
     {
@@ -429,30 +425,6 @@ const CallHistory: React.FC = () => {
         const s = summarizeMetrics(record.metrics);
         return <span className="tabular-nums text-sm">{formatCount(s?.turnCount ?? null)}</span>;
       },
-    },
-    {
-      key: 'actions',
-      title: 'Quick View',
-      className: STICKY_RIGHT,
-      render: (_value, record) =>
-        isGrafanaConfigured() ? (
-          <div className="flex items-center justify-center gap-1.5">
-            <CustomTooltip content="View logs">
-              <CustomButton
-                type="default"
-                size="icon-xs"
-                disabled={!record.trace_id}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const url = buildGrafanaLogsUrl(record);
-                  if (url) window.open(url, '_blank', 'noopener,noreferrer');
-                }}
-              >
-                <ScrollText className="size-3.5" />
-              </CustomButton>
-            </CustomTooltip>
-          </div>
-        ) : null,
     },
   ];
 

@@ -5,6 +5,7 @@ import { Separator } from '@/components/ui/separator';
 import { getCallLogAudioUrl } from '@/services/callLogService';
 import type { CallLogRow } from '@/types/callLog';
 import { cn } from '@/utils/cn';
+import { formatChatTimestamp } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { Loader2, Search } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -121,6 +122,7 @@ const TranscriptionRecordingsSection: React.FC<TranscriptionRecordingsSectionPro
               ) : (
                 filteredTranscript.map((msg, index) => {
                   const isUser = msg.role === 'user';
+                  const formattedTime = formatChatTimestamp(msg.timestamp);
                   return (
                     <div
                       key={index}
@@ -140,8 +142,8 @@ const TranscriptionRecordingsSection: React.FC<TranscriptionRecordingsSectionPro
                         <p className="whitespace-pre-wrap">
                           <HighlightText text={msg.text} highlight={searchTerm} />
                         </p>
-                        {msg.timestamp && (
-                          <p className="mt-1 text-right text-[10px] opacity-50">{msg.timestamp}</p>
+                        {formattedTime && (
+                          <p className="mt-1 text-right text-[10px] opacity-50">{formattedTime}</p>
                         )}
                       </div>
                     </div>
