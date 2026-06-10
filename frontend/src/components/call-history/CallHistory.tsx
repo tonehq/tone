@@ -29,19 +29,11 @@ import { formatDuration, formatTimestamp, getBrowserTimeZone } from '@/utils/dat
 import { buildGrafanaLogsUrl, isGrafanaConfigured } from '@/utils/grafana';
 import { handleApiError } from '@/utils/helpers';
 import { useAtom } from 'jotai';
-import {
-  BarChart3,
-  Columns3,
-  MessageSquareText,
-  Phone,
-  ScrollText,
-  SlidersHorizontal,
-  X,
-} from 'lucide-react';
+import { Columns3, Phone, ScrollText, SlidersHorizontal, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import CallDetailDrawer from './CallDetailDrawer';
+import { getCallStatusLabel, getCallStatusTone } from './callStatus';
 import CallHistoryFilterDrawer, {
   countDrawerFilters,
   createEmptyFilterState,
@@ -51,7 +43,6 @@ import CallHistoryFilterDrawer, {
   titleCase,
   type CallFilterState,
 } from './filter-drawer';
-import TranscriptionModal from './TranscriptionModal';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
@@ -68,12 +59,6 @@ const TOKEN_FIELDS: TokenSearchField[] = DRAWER_FACET_SECTIONS.map((s) => ({
   fetchValues: () => getFilterValues(s.field).then((r) => r.values),
   formatValue: s.titleCase ? titleCase : undefined,
 }));
-
-const STATUS_BADGE_CLASSES: Record<string, string> = {
-  completed: 'bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15 dark:text-emerald-400',
-  in_progress: 'bg-amber-500/15 text-amber-600 hover:bg-amber-500/15 dark:text-amber-400',
-  failed: 'bg-red-500/15 text-red-600 hover:bg-red-500/15 dark:text-red-400',
-};
 
 const formatSeconds = (v: number | null) => (v == null ? '-' : `${v.toFixed(2)}s`);
 const formatCount = (v: number | null) => (v == null ? '-' : v.toLocaleString());
@@ -148,9 +133,6 @@ const CallHistory: React.FC = () => {
   const [draftColumnKeys, setDraftColumnKeys] = useState<Set<string>>(
     () => new Set(ALL_COLUMN_KEYS),
   );
-
-  const [selectedCallLog, setSelectedCallLog] = useState<CallLogRow | null>(null);
-  const [transcriptionCallLog, setTranscriptionCallLog] = useState<CallLogRow | null>(null);
 
   useEffect(() => {
     if (columnFilterOpen) {
@@ -372,8 +354,7 @@ const CallHistory: React.FC = () => {
       sorter: true,
       render: (value) => {
         const status = (value as string) || 'unknown';
-        const classes = STATUS_BADGE_CLASSES[status] ?? 'bg-muted text-muted-foreground';
-        return <Badge className={classes}>{titleCase(status)}</Badge>;
+        return <Badge className={getCallStatusTone(status)}>{getCallStatusLabel(status)}</Badge>;
       },
     },
     {
@@ -453,34 +434,9 @@ const CallHistory: React.FC = () => {
       key: 'actions',
       title: 'Quick View',
       className: STICKY_RIGHT,
-      render: (_value, record) => (
-        <div className="flex items-center justify-center gap-1.5">
-          <CustomTooltip content="Transcription">
-            <CustomButton
-              type="default"
-              size="icon-xs"
-              disabled={!(record.transcript && record.transcript.length > 0)}
-              onClick={(e) => {
-                e.stopPropagation();
-                setTranscriptionCallLog(record);
-              }}
-            >
-              <MessageSquareText className="size-3.5" />
-            </CustomButton>
-          </CustomTooltip>
-          <CustomTooltip content="View metrics">
-            <CustomButton
-              type="default"
-              size="icon-xs"
-              onClick={(e) => {
-                e.stopPropagation();
-                router.push(`/call-metrics/${record.id}`);
-              }}
-            >
-              <BarChart3 className="size-3.5" />
-            </CustomButton>
-          </CustomTooltip>
-          {isGrafanaConfigured() && (
+      render: (_value, record) =>
+        isGrafanaConfigured() ? (
+          <div className="flex items-center justify-center gap-1.5">
             <CustomTooltip content="View logs">
               <CustomButton
                 type="default"
@@ -495,9 +451,8 @@ const CallHistory: React.FC = () => {
                 <ScrollText className="size-3.5" />
               </CustomButton>
             </CustomTooltip>
-          )}
-        </div>
-      ),
+          </div>
+        ) : null,
     },
   ];
 
@@ -644,7 +599,7 @@ const CallHistory: React.FC = () => {
           dataSource={data.callLogs}
           rowKey="id"
           loading={data.loading}
-          onRowClick={(record) => setSelectedCallLog(record)}
+          onRowClick={(record) => router.push(`/call-history/${record.id}`)}
           onSortChange={handleSortChange}
           pagination={{
             current: page,
@@ -684,19 +639,6 @@ const CallHistory: React.FC = () => {
         facets={facetsState.facets}
         facetsLoading={facetsState.loading}
         onApply={handleApplyFilters}
-      />
-
-      <CallDetailDrawer
-        open={!!selectedCallLog}
-        onClose={() => setSelectedCallLog(null)}
-        callLog={selectedCallLog}
-      />
-
-      <TranscriptionModal
-        open={!!transcriptionCallLog}
-        onClose={() => setTranscriptionCallLog(null)}
-        transcript={transcriptionCallLog?.transcript ?? null}
-        agentName={transcriptionCallLog?.agent_name ?? ''}
       />
     </div>
   );
