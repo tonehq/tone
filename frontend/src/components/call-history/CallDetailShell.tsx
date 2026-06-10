@@ -2,16 +2,16 @@
 
 import { AccountMenu } from '@/components/layout/AccountMenu';
 import { isSidebarItemActive, SidebarShell } from '@/components/layout/SidebarShell';
-import { CustomButton } from '@/components/shared';
+import { CustomButton, CustomTooltip } from '@/components/shared';
 import { useNavigation } from '@/contexts/navigation';
 import { getCallLogById } from '@/services/callLogService';
 import type { CallLogRow } from '@/types/callLog';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
-import { ArrowLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, Copy } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { buildCallDetailNav } from './callDetailNav';
 import { CallDetailProvider } from './CallDetailContext';
@@ -134,9 +134,15 @@ const CallDetailShell: React.FC<CallDetailShellProps> = ({ callId, children }) =
                 <ChevronRight className="size-3.5" aria-hidden />
                 <span className="truncate font-medium text-foreground">{crumbLabel}</span>
               </nav>
-              <h1 className="text-xl font-semibold tracking-tight text-foreground">
-                {agentName || 'Call Details'}
-              </h1>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <h1 className="truncate text-xl font-semibold tracking-tight text-foreground">
+                    {agentName || 'Call Details'}
+                  </h1>
+                  <CallIdPill callId={callId} />
+                </div>
+                <CopyLinkButton />
+              </div>
             </div>
           </header>
 
@@ -191,6 +197,81 @@ function BackToCallHistory({ collapsed }: { collapsed: boolean }) {
         </p>
       </div>
     </Link>
+  );
+}
+
+/** Truncate a UUID-style id to `xxxxxxxx…xxxx` for compact display. */
+function truncateCallId(id: string): string {
+  if (id.length <= 14) return id;
+  return `${id.slice(0, 8)}…${id.slice(-4)}`;
+}
+
+/**
+ * Small monospace pill rendered next to the title — shows a truncated call id
+ * with the full id available via tooltip.
+ */
+function CallIdPill({ callId }: { callId: string }) {
+  return (
+    <CustomTooltip content={callId}>
+      <span className="inline-flex shrink-0 items-center rounded-md bg-muted/60 px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
+        {truncateCallId(callId)}
+      </span>
+    </CustomTooltip>
+  );
+}
+
+/**
+ * Top-right action — copies the current page URL to the clipboard and
+ * surfaces a transient "Copied" state for ~1.5s. Silently no-ops if the
+ * clipboard API is unavailable (e.g. insecure context).
+ */
+function CopyLinkButton() {
+  const [copied, setCopied] = useState(false);
+  // Track the reset timer so we can (a) clear it on unmount to avoid a late
+  // setState on a stale component, and (b) cancel a stale timer if the user
+  // clicks Copy again before the prior one fires.
+  const resetTimerRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (resetTimerRef.current != null) window.clearTimeout(resetTimerRef.current);
+    },
+    [],
+  );
+
+  const onCopy = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      if (resetTimerRef.current != null) window.clearTimeout(resetTimerRef.current);
+      resetTimerRef.current = window.setTimeout(() => {
+        setCopied(false);
+        resetTimerRef.current = null;
+      }, 1500);
+    } catch {
+      // Clipboard write can fail in insecure contexts — fail silently.
+    }
+  }, []);
+
+  return (
+    <CustomTooltip content={copied ? 'Copied' : 'Copy page link'}>
+      <CustomButton
+        type="default"
+        size="xs"
+        icon={
+          copied ? (
+            <Check className="size-3 text-emerald-600 dark:text-emerald-400" />
+          ) : (
+            <Copy className="size-3" />
+          )
+        }
+        onClick={onCopy}
+        aria-label="Copy page link"
+      >
+        {copied ? 'Copied' : 'Copy link'}
+      </CustomButton>
+    </CustomTooltip>
   );
 }
 
