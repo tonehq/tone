@@ -27,18 +27,18 @@ jobs:
   detect:
     runs-on: ubuntu-latest
     outputs:
-      qwen3-tts: ${{ steps.filter.outputs.qwen3-tts }}
-      nemotron-stt: ${{ steps.filter.outputs.nemotron-stt }}
+      qwen3_tts: ${{ steps.filter.outputs.qwen3_tts }}
+      nemotron_stt: ${{ steps.filter.outputs.nemotron_stt }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
         id: filter
         with:
           filters: |
-            qwen3-tts:
+            qwen3_tts:
               - 'build/kubernetes/qwen3-tts/**'
               - 'qwen-tts-streaming/app/**'
-            nemotron-stt:
+            nemotron_stt:
               - 'build/kubernetes/nemotron-stt/**'
               - 'nemotron-streaming/app/**'
 
@@ -50,13 +50,13 @@ jobs:
       matrix:
         include:
           - model: qwen3-tts
-            changed: ${{ needs.detect.outputs.qwen3-tts }}
+            changed: ${{ needs.detect.outputs.qwen3_tts }}
             deployment: staging-tts-qwen-deployment
             configmap: qwen-tts-app
             app_dir: qwen-tts-streaming/app
             extra_files: "qwen3_tts_a16.yaml"
           - model: nemotron-stt
-            changed: ${{ needs.detect.outputs.nemotron-stt }}
+            changed: ${{ needs.detect.outputs.nemotron_stt }}
             deployment: staging-stt-nemotron-deployment
             configmap: stt-nemotron-app
             app_dir: nemotron-streaming/app
