@@ -37,8 +37,6 @@ class _TraceFilter(logging.Filter):
         record.trace_id = _trace_ctx.get()
         return True
 
-
-
 _handler = logging.StreamHandler()
 _handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s trace_id=%(trace_id)s %(message)s"))
 _handler.addFilter(_TraceFilter())
