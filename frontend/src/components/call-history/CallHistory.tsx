@@ -6,7 +6,6 @@ import {
   CustomButton,
   CustomPopover,
   CustomTable,
-  CustomTooltip,
   PhoneNumberDisplay,
   TokenSearchBar,
 } from '@/components/shared';
@@ -26,22 +25,14 @@ import type {
   TokenSearchField,
 } from '@/types/components';
 import { formatDuration, formatTimestamp, getBrowserTimeZone } from '@/utils/date';
-import { buildGrafanaLogsUrl, isGrafanaConfigured } from '@/utils/grafana';
 import { handleApiError } from '@/utils/helpers';
 import { useAtom } from 'jotai';
-import {
-  BarChart3,
-  Columns3,
-  MessageSquareText,
-  Phone,
-  ScrollText,
-  SlidersHorizontal,
-  X,
-} from 'lucide-react';
+import { Columns3, Phone, SlidersHorizontal, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import CallDetailDrawer from './CallDetailDrawer';
+import { getDisplayDurationSeconds } from './callDuration';
+import { getCallStatusLabel, getCallStatusTone } from './callStatus';
 import CallHistoryFilterDrawer, {
   countDrawerFilters,
   createEmptyFilterState,
@@ -51,7 +42,6 @@ import CallHistoryFilterDrawer, {
   titleCase,
   type CallFilterState,
 } from './filter-drawer';
-import TranscriptionModal from './TranscriptionModal';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
@@ -68,12 +58,6 @@ const TOKEN_FIELDS: TokenSearchField[] = DRAWER_FACET_SECTIONS.map((s) => ({
   fetchValues: () => getFilterValues(s.field).then((r) => r.values),
   formatValue: s.titleCase ? titleCase : undefined,
 }));
-
-const STATUS_BADGE_CLASSES: Record<string, string> = {
-  completed: 'bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15 dark:text-emerald-400',
-  in_progress: 'bg-amber-500/15 text-amber-600 hover:bg-amber-500/15 dark:text-amber-400',
-  failed: 'bg-red-500/15 text-red-600 hover:bg-red-500/15 dark:text-red-400',
-};
 
 const formatSeconds = (v: number | null) => (v == null ? '-' : `${v.toFixed(2)}s`);
 const formatCount = (v: number | null) => (v == null ? '-' : v.toLocaleString());
@@ -109,7 +93,7 @@ const COLUMN_GROUPS: Array<{
 ];
 const ALL_COLUMN_KEYS = COLUMN_GROUPS.flatMap((g) => g.columns.map((c) => c.key));
 /** Columns that are pinned to the table regardless of popover selection. */
-const ALWAYS_VISIBLE_COLUMN_KEYS = new Set<string>(['agent_name', 'actions']);
+const ALWAYS_VISIBLE_COLUMN_KEYS = new Set<string>(['agent_name']);
 
 function summarizeMetrics(metrics: CallLogRow['metrics']) {
   if (!metrics) return null;
@@ -119,7 +103,14 @@ function summarizeMetrics(metrics: CallLogRow['metrics']) {
     : null;
   const totalTokens = metrics.llm_usage.reduce((s, u) => s + u.total_tokens, 0);
   const totalChars = metrics.tts_usage.reduce((s, u) => s + u.characters, 0);
-  const turnCount = metrics.turns.length;
+  // Count real user→bot exchanges when per-turn data is available — matches
+  // the Turns stat card on the metrics detail page. Falls back to the raw
+  // pipecat turn count for legacy calls without `turn_metrics`.
+  const turnMetrics = Array.isArray(metrics.turn_metrics) ? metrics.turn_metrics : [];
+  const turnCount =
+    turnMetrics.length > 0
+      ? turnMetrics.filter((t) => t.end_to_end != null).length
+      : metrics.turns.length;
   return { avgLatencyS, totalTokens, totalChars, turnCount };
 }
 
@@ -148,9 +139,6 @@ const CallHistory: React.FC = () => {
   const [draftColumnKeys, setDraftColumnKeys] = useState<Set<string>>(
     () => new Set(ALL_COLUMN_KEYS),
   );
-
-  const [selectedCallLog, setSelectedCallLog] = useState<CallLogRow | null>(null);
-  const [transcriptionCallLog, setTranscriptionCallLog] = useState<CallLogRow | null>(null);
 
   useEffect(() => {
     if (columnFilterOpen) {
@@ -346,11 +334,9 @@ const CallHistory: React.FC = () => {
     setPage(1);
   }, []);
 
-  // Sticky class applied to the first and last columns so the agent column
-  // stays pinned on the left and the quick-view column stays pinned on the
-  // right while the user scrolls the inner columns horizontally.
+  // Sticky class pins the agent column on the left while the inner columns
+  // scroll horizontally.
   const STICKY_LEFT = 'sticky left-0 z-[1] bg-card border-r border-border';
-  const STICKY_RIGHT = 'sticky right-0 z-[1] bg-card border-l border-border';
 
   const columns: CustomTableColumn<CallLogRow>[] = [
     {
@@ -372,8 +358,7 @@ const CallHistory: React.FC = () => {
       sorter: true,
       render: (value) => {
         const status = (value as string) || 'unknown';
-        const classes = STATUS_BADGE_CLASSES[status] ?? 'bg-muted text-muted-foreground';
-        return <Badge className={classes}>{titleCase(status)}</Badge>;
+        return <Badge className={getCallStatusTone(status)}>{getCallStatusLabel(status)}</Badge>;
       },
     },
     {
@@ -381,7 +366,12 @@ const CallHistory: React.FC = () => {
       title: 'Duration',
       dataIndex: 'duration_seconds',
       sorter: true,
-      render: (value) => formatDuration(value as number | null),
+      // Display the recording's actual length when available so the cell
+      // matches the audio player on the detail page; fall back to the raw
+      // duration_seconds when the call has no recording. Sort still uses
+      // duration_seconds (the indexed column) so the order is approximate
+      // — the two values usually differ by only a few seconds.
+      render: (_value, record) => formatDuration(getDisplayDurationSeconds(record)),
     },
     {
       key: 'from_number',
@@ -448,56 +438,6 @@ const CallHistory: React.FC = () => {
         const s = summarizeMetrics(record.metrics);
         return <span className="tabular-nums text-sm">{formatCount(s?.turnCount ?? null)}</span>;
       },
-    },
-    {
-      key: 'actions',
-      title: 'Quick View',
-      className: STICKY_RIGHT,
-      render: (_value, record) => (
-        <div className="flex items-center justify-center gap-1.5">
-          <CustomTooltip content="Transcription">
-            <CustomButton
-              type="default"
-              size="icon-xs"
-              disabled={!(record.transcript && record.transcript.length > 0)}
-              onClick={(e) => {
-                e.stopPropagation();
-                setTranscriptionCallLog(record);
-              }}
-            >
-              <MessageSquareText className="size-3.5" />
-            </CustomButton>
-          </CustomTooltip>
-          <CustomTooltip content="View metrics">
-            <CustomButton
-              type="default"
-              size="icon-xs"
-              onClick={(e) => {
-                e.stopPropagation();
-                router.push(`/call-metrics/${record.id}`);
-              }}
-            >
-              <BarChart3 className="size-3.5" />
-            </CustomButton>
-          </CustomTooltip>
-          {isGrafanaConfigured() && (
-            <CustomTooltip content="View logs">
-              <CustomButton
-                type="default"
-                size="icon-xs"
-                disabled={!record.trace_id}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  const url = buildGrafanaLogsUrl(record);
-                  if (url) window.open(url, '_blank', 'noopener,noreferrer');
-                }}
-              >
-                <ScrollText className="size-3.5" />
-              </CustomButton>
-            </CustomTooltip>
-          )}
-        </div>
-      ),
     },
   ];
 
@@ -644,7 +584,7 @@ const CallHistory: React.FC = () => {
           dataSource={data.callLogs}
           rowKey="id"
           loading={data.loading}
-          onRowClick={(record) => setSelectedCallLog(record)}
+          onRowClick={(record) => router.push(`/call-history/${record.id}`)}
           onSortChange={handleSortChange}
           pagination={{
             current: page,
@@ -684,19 +624,6 @@ const CallHistory: React.FC = () => {
         facets={facetsState.facets}
         facetsLoading={facetsState.loading}
         onApply={handleApplyFilters}
-      />
-
-      <CallDetailDrawer
-        open={!!selectedCallLog}
-        onClose={() => setSelectedCallLog(null)}
-        callLog={selectedCallLog}
-      />
-
-      <TranscriptionModal
-        open={!!transcriptionCallLog}
-        onClose={() => setTranscriptionCallLog(null)}
-        transcript={transcriptionCallLog?.transcript ?? null}
-        agentName={transcriptionCallLog?.agent_name ?? ''}
       />
     </div>
   );

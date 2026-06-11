@@ -5,15 +5,12 @@ import { cn } from '@/utils/cn';
 import { BrainCircuit, Gauge, MessageSquare, Mic } from 'lucide-react';
 import React, { useMemo } from 'react';
 
-import { Separator } from '@/components/ui/separator';
-
-import { EndToEndLatencySection } from './EndToEndLatencySection';
 import { LLMUsageSection } from './LLMUsageSection';
+import { MetricsCategory } from './MetricsCategory';
 import { ProcessingTimesSection } from './ProcessingTimesSection';
 import { StatCard } from './StatCard';
-import { TTFBSection } from './TTFBSection';
 import { TTSUsageSection } from './TTSUsageSection';
-import { extractProcessorName } from './utils';
+import { TurnLatencySection } from './TurnLatencySection';
 
 interface MetricsContentProps {
   metrics: CallMetrics;
@@ -28,8 +25,8 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, className }) =
   const llmUsage = Array.isArray(metrics.llm_usage) ? metrics.llm_usage : [];
   const ttsUsage = Array.isArray(metrics.tts_usage) ? metrics.tts_usage : [];
   const turnsList = Array.isArray(metrics.turns) ? metrics.turns : [];
-  const ttfbList = Array.isArray(metrics.ttfb) ? metrics.ttfb : [];
   const processingList = Array.isArray(metrics.processing) ? metrics.processing : [];
+  const turnMetrics = Array.isArray(metrics.turn_metrics) ? metrics.turn_metrics : [];
 
   const overview = useMemo(() => {
     const avgLatency =
@@ -38,26 +35,21 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, className }) =
         : null;
     const totalTokens = llmUsage.reduce((sum, u) => sum + u.total_tokens, 0);
     const totalChars = ttsUsage.reduce((sum, u) => sum + u.characters, 0);
-    const totalTurns = turnsList.length;
+    // Count real user→bot exchanges when per-turn data is available — drops
+    // the greeting (bot spoke first), abandoned turns, and pre/inter-turn
+    // buckets. Falls back to the raw pipecat turn count for legacy calls
+    // recorded before `turn_metrics` was being collected.
+    const totalTurns =
+      turnMetrics.length > 0
+        ? turnMetrics.filter((t) => t.end_to_end != null).length
+        : turnsList.length;
     return { avgLatency, totalTokens, totalChars, totalTurns };
-  }, [userBotLatency, llmUsage, ttsUsage, turnsList]);
+  }, [userBotLatency, llmUsage, ttsUsage, turnsList, turnMetrics]);
 
-  const ttfbByProcessor = useMemo(() => {
-    const entries = ttfbList.filter((e) => e.model && e.value > 0);
-    return entries.reduce(
-      (acc, e) => {
-        const name = extractProcessorName(e.processor);
-        if (!acc[name]) acc[name] = [];
-        acc[name].push(e);
-        return acc;
-      },
-      {} as Record<string, typeof entries>,
-    );
-  }, [ttfbList]);
-
-  const hasTtfb = Object.keys(ttfbByProcessor).length > 0;
   const hasProcessing = processingList.some((p) => p.model && p.value > 0);
-  const completedTurns = turnsList.filter((t) => t.status === 'completed').length;
+  const hasTurnMetrics = turnMetrics.length > 0;
+  const hasLatency = hasTurnMetrics || hasProcessing;
+  const hasUsage = llmUsage.length > 0 || ttsUsage.length > 0;
   const llmModels = [...new Set(llmUsage.map((u) => u.model))].join(', ');
 
   return (
@@ -74,7 +66,6 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, className }) =
           icon={MessageSquare}
           label="Turns"
           value={String(overview.totalTurns)}
-          sub={overview.totalTurns > 0 ? `${completedTurns} completed` : undefined}
           color="bg-blue-500"
         />
         <StatCard
@@ -93,39 +84,22 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, className }) =
         />
       </div>
 
-      {hasTtfb && (
-        <>
-          <Separator />
-          <TTFBSection ttfbByProcessor={ttfbByProcessor} />
-        </>
+      {hasLatency && (
+        <MetricsCategory title="Latency">
+          {hasTurnMetrics && <TurnLatencySection turns={turnMetrics} />}
+          {hasProcessing && <ProcessingTimesSection processing={processingList} />}
+        </MetricsCategory>
       )}
 
-      {llmUsage.length > 0 && (
-        <>
-          <Separator />
-          <LLMUsageSection llmUsage={llmUsage} totalTokens={overview.totalTokens} />
-        </>
-      )}
-
-      {ttsUsage.length > 0 && (
-        <>
-          <Separator />
-          <TTSUsageSection ttsUsage={ttsUsage} totalChars={overview.totalChars} />
-        </>
-      )}
-
-      {userBotLatency.length > 0 && (
-        <>
-          <Separator />
-          <EndToEndLatencySection latencies={userBotLatency} />
-        </>
-      )}
-
-      {hasProcessing && (
-        <>
-          <Separator />
-          <ProcessingTimesSection processing={processingList} />
-        </>
+      {hasUsage && (
+        <MetricsCategory title="Usage">
+          {llmUsage.length > 0 && (
+            <LLMUsageSection llmUsage={llmUsage} totalTokens={overview.totalTokens} />
+          )}
+          {ttsUsage.length > 0 && (
+            <TTSUsageSection ttsUsage={ttsUsage} totalChars={overview.totalChars} />
+          )}
+        </MetricsCategory>
       )}
     </div>
   );

@@ -37,7 +37,6 @@ class _TraceFilter(logging.Filter):
         record.trace_id = _trace_ctx.get()
         return True
 
-
 _handler = logging.StreamHandler()
 _handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s trace_id=%(trace_id)s %(message)s"))
 _handler.addFilter(_TraceFilter())
@@ -51,6 +50,7 @@ log = logging.getLogger("stt")
 MODEL_NAME = os.environ.get("STT_MODEL", "nvidia/nemotron-speech-streaming-en-0.6b")
 TARGET_SR = 16000
 MAX_BUFFER_SEC = int(os.environ.get("STT_MAX_BUFFER_SEC", "30"))
+STT_DECODE_MODE = os.environ.get("STT_DECODE_MODE", "streaming").lower()
 
 app = FastAPI(title="Tone STT — Nemotron Streaming 0.6B")
 _model = None
@@ -88,10 +88,72 @@ def _load_model():
         log.info("Moving model to CUDA ...")
         m = m.to("cuda")
     m.eval()
-    _disable_cuda_graph_decoder(m)
+    if STT_DECODE_MODE == "streaming":
+        _setup_streaming(m)
+        _set_streaming_decoding(m)
+    else:
+        _disable_cuda_graph_decoder(m)
     _model = m
-    log.info("Model ready on %s", "cuda" if torch.cuda.is_available() else "cpu")
+    log.info("Model ready on %s (decode_mode=%s)", "cuda" if torch.cuda.is_available() else "cpu", STT_DECODE_MODE)
     return _model
+
+
+def _set_streaming_decoding(m):
+    try:
+        from omegaconf import open_dict
+
+        cfg = m.cfg.decoding
+        with open_dict(cfg):
+            if cfg.get("greedy") is None:
+                cfg.greedy = {}
+            cfg.greedy.use_cuda_graph_decoder = False
+            cfg.greedy.loop_labels = True
+        m.change_decoding_strategy(cfg)
+        log.info("streaming decoding set: loop_labels=True, cuda_graph=False")
+    except Exception as exc:  # noqa: BLE001
+        log.warning("streaming decoding config failed: %s", exc)
+
+
+def _setup_streaming(m):
+    try:
+        m.encoder.setup_streaming_params()
+        cfg = getattr(m.encoder, "streaming_cfg", None)
+        log.info("streaming setup ok | att_context_size=%s | streaming_cfg=%s",
+                 getattr(m.encoder, "att_context_size", None), cfg)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("streaming setup failed (model may not be cache-aware): %s", exc)
+
+
+class _StreamSession:
+    def __init__(self, model):
+        self.m = model
+        self.device = next(model.parameters()).device
+        (self.cache_ch, self.cache_t, self.cache_ch_len) = model.encoder.get_initial_cache_state(batch_size=1)
+        self.prev_hyp = None
+        self.pred_out = None
+        self.text = ""
+
+    def feed(self, audio_f32, last=False):
+        sig = torch.from_numpy(np.ascontiguousarray(audio_f32, dtype=np.float32)).to(self.device).unsqueeze(0)
+        ln = torch.tensor([sig.shape[1]], device=self.device, dtype=torch.long)
+        with torch.no_grad():
+            feat, flen = self.m.preprocessor(input_signal=sig, length=ln)
+            out = self.m.conformer_stream_step(
+                processed_signal=feat,
+                processed_signal_length=flen,
+                cache_last_channel=self.cache_ch,
+                cache_last_time=self.cache_t,
+                cache_last_channel_len=self.cache_ch_len,
+                keep_all_outputs=last,
+                previous_hypotheses=self.prev_hyp,
+                previous_pred_out=self.pred_out,
+                drop_extra_pre_encoded=None,
+                return_transcription=True,
+            )
+        self.pred_out, transcribed, self.cache_ch, self.cache_t, self.cache_ch_len, self.prev_hyp = out
+        t = transcribed[0] if transcribed else ""
+        self.text = (t.text if hasattr(t, "text") else t) or self.text
+        return self.text
 
 
 def _decode_text(hyps):
@@ -116,6 +178,68 @@ def _infer(model, audio):
             enc, enc_len, return_hypotheses=False
         )
     return _decode_text(hyps)
+
+
+async def _ws_stream_loop(ws, model, client):
+    loop = asyncio.get_running_loop()
+    session = _StreamSession(model)
+    chunk = bytearray()
+    decodes = 0
+    first = True
+    STEP = TARGET_SR * 2
+    SILENCE_TICKS = int(os.environ.get("STT_SILENCE_TICKS", "2"))
+    last_text = ""
+    stable = 0
+    t0 = time.monotonic()
+    try:
+        while True:
+            msg = await ws.receive()
+            if msg.get("type") == "websocket.disconnect":
+                log.info("ws/asr %s disconnected (stream, %d decodes)", client, decodes)
+                break
+            data = msg.get("bytes")
+            if data is None:
+                if msg.get("text") == "eof":
+                    audio = _pcm16_to_float(bytes(chunk))
+                    text = await loop.run_in_executor(None, session.feed, audio, True) if audio.size else session.text
+                    text = text or last_text
+                    log.info("ws/asr %s final(eof): %r", client, text)
+                    await ws.send_json({"type": "final", "text": text,
+                                        "ms": round((time.monotonic() - t0) * 1000)})
+                    await ws.close()
+                    return
+                continue
+            chunk.extend(data)
+            if len(chunk) >= STEP:
+                audio = _pcm16_to_float(bytes(chunk))
+                chunk = bytearray()
+                d0 = time.monotonic()
+                text = await loop.run_in_executor(None, session.feed, audio, False)
+                decodes += 1
+                dms = round((time.monotonic() - d0) * 1000)
+                if text and text != last_text:
+                    last_text = text
+                    stable = 0
+                    log.info("ws/asr %s partial #%d: %r (decode %dms, stream)", client, decodes, text, dms)
+                    await ws.send_json({"type": "partial", "text": text,
+                                        "ms": round((time.monotonic() - t0) * 1000), "ttf": first})
+                    first = False
+                elif last_text:
+                    stable += 1
+                    if stable >= SILENCE_TICKS:
+                        log.info("ws/asr %s end-of-turn reset: %r", client, last_text)
+                        session = _StreamSession(model)
+                        last_text = ""
+                        stable = 0
+                        first = True
+    except WebSocketDisconnect:
+        log.info("ws/asr %s disconnected (stream, WebSocketDisconnect)", client)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("ws/asr %s stream transcription failed", client)
+        try:
+            await ws.send_json({"type": "error", "detail": str(exc)})
+        except Exception:  # noqa: BLE001
+            pass
 
 
 @app.on_event("startup")
@@ -180,8 +304,11 @@ async def ws_asr(ws: WebSocket):
     await ws.accept()
     _trace_ctx.set(ws.query_params.get("trace_id", "none"))
     client = f"{ws.client.host}:{ws.client.port}" if ws.client else "?"
-    log.info("ws/asr open from %s", client)
+    log.info("ws/asr open from %s (mode=%s)", client, STT_DECODE_MODE)
     model = _load_model()
+    if STT_DECODE_MODE == "streaming":
+        await _ws_stream_loop(ws, model, client)
+        return
     loop = asyncio.get_running_loop()
     buf = bytearray()
     received = 0

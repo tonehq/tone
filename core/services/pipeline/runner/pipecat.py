@@ -10,6 +10,8 @@ back half.
 import asyncio
 import io
 import time as _time
+from datetime import datetime, timezone
+from typing import Optional
 
 from loguru import logger
 
@@ -30,6 +32,11 @@ class PipecatPipelineRunner(PipelineRunner):
         from core.utils.telephony import provider_call_id as _provider_call_id
 
         _t_comp_start = _time.monotonic()
+        # Wall-clock anchor for `Call.started_at`. Captured here — at the very
+        # start of run() — so it reflects when the call entered the system,
+        # not when the background INSERT in `_create_call_log_in_thread`
+        # eventually finishes (which can lag by seconds under load).
+        call_started_at = datetime.now(timezone.utc)
         agent = self.agent
         runner_args = self.runner_args
         transport = self.transport
@@ -108,6 +115,7 @@ class PipecatPipelineRunner(PipelineRunner):
                             to_number=to_number,
                             trace_id=_call_trace_id if _call_trace_id != "none" else None,
                             pipeline_config=pipeline_snapshot,
+                            started_at=call_started_at,
                         )
                         if call_log:
                             call_log_state["id"] = call_log.id
@@ -181,10 +189,13 @@ class PipecatPipelineRunner(PipelineRunner):
                     "timestamp": message.timestamp,
                 })
 
-        # Turn tracking
+        # Turn tracking — the same events drive (a) the simple ``turns``
+        # log persisted alongside legacy metrics and (b) the per-turn
+        # latency aggregation inside ``MetricsCollectorProcessor``.
         @turn_observer.event_handler("on_turn_started")
         async def on_turn_started(observer, turn_number):
             logger.info("Turn {} started", turn_number)
+            metrics_collector.on_turn_started(turn_number)
 
         @turn_observer.event_handler("on_turn_ended")
         async def on_turn_ended(observer, turn_number, duration, was_interrupted):
@@ -195,6 +206,9 @@ class PipecatPipelineRunner(PipelineRunner):
                 "duration": round(duration, 3),
                 "status": status,
             })
+            metrics_collector.on_turn_ended(
+                turn_number, duration=duration, was_interrupted=was_interrupted
+            )
 
         # Save audio + update DB inside this event handler.
         # This runs DURING pipeline lifecycle (before cleanup() returns),
@@ -217,6 +231,10 @@ class PipecatPipelineRunner(PipelineRunner):
                 # Convert raw audio to MP3
                 audio_bytes = None
                 file_name = None
+                # Length of the encoded MP3 in seconds — what the audio player
+                # actually plays. Stored on the call row so the UI's duration
+                # chip lines up with the recording.
+                recording_seconds: Optional[int] = None
                 try:
                     audio_segment = AudioSegment(
                         data=audio,
@@ -231,7 +249,9 @@ class PipecatPipelineRunner(PipelineRunner):
                     mp3_buffer = io.BytesIO()
                     audio_segment.export(mp3_buffer, format="mp3")
                     audio_bytes = mp3_buffer.getvalue()
-                    logger.info("Encoded call recording: {} ({:.1f}s, {} bytes)", file_name, len(audio_segment) / 1000, len(audio_bytes))
+                    recording_seconds_exact = len(audio_segment) / 1000.0
+                    recording_seconds = int(recording_seconds_exact)
+                    logger.info("Encoded call recording: {} ({:.1f}s, {} bytes)", file_name, recording_seconds_exact, len(audio_bytes))
                 except Exception as e:
                     logger.error("Failed to encode call recording: {}", e)
 
@@ -272,6 +292,7 @@ class PipecatPipelineRunner(PipelineRunner):
                                 upload_id=upload_id,
                                 transcript=transcript_data,
                                 metrics=collected_metrics,
+                                recording_duration_seconds=recording_seconds,
                             )
                         call_log_updated["done"] = True
                         logger.info(

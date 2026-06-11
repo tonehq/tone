@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-tts-qwen-service
+  namespace: staging
+  labels:
+    app: staging-tts-qwen
+spec:
+  type: ClusterIP
+  # Standalone Qwen TTS pod (its own GPU node).
+  selector:
+    app: staging-tts-qwen
+  ports:
+    - name: tts
+      port: 80
+      targetPort: tts          # -> container 8001 (/health, /tts, /ws/tts)

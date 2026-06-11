@@ -1,62 +1,102 @@
+'use client';
+
 import type { CallMetricsProcessing } from '@/types/callLog';
 import { Clock } from 'lucide-react';
 
+import { MetricsDataTable, type MetricsTableColumn } from './MetricsDataTable';
 import { SectionHeader } from './SectionHeader';
+import { useChartTableView } from './useChartTableView';
 import { formatMs, groupByProcessor } from './utils';
 
 interface ProcessingTimesSectionProps {
   processing: CallMetricsProcessing[];
 }
 
+interface ProcessorRow {
+  processor: string;
+  model: string;
+  avg: number;
+  total: number;
+  calls: number;
+}
+
+const TABLE_COLUMNS: MetricsTableColumn<ProcessorRow>[] = [
+  { key: 'processor', header: 'Processor', align: 'left', cell: (row) => row.processor },
+  {
+    key: 'model',
+    header: 'Model',
+    align: 'left',
+    cell: (row) => <span className="text-muted-foreground">{row.model}</span>,
+  },
+  { key: 'avg', header: 'Avg', align: 'right', cell: (row) => formatMs(row.avg) },
+  { key: 'total', header: 'Total', align: 'right', cell: (row) => formatMs(row.total) },
+  { key: 'calls', header: 'Calls', align: 'right', cell: (row) => row.calls },
+];
+
+interface ProcessingChartProps {
+  rows: ProcessorRow[];
+}
+
+/**
+ * Horizontal bar chart of avg processing time per processor. Rendered as the
+ * chart view of ProcessingTimesSection — table view stays in the shared
+ * MetricsDataTable. File-local because it has only one consumer.
+ */
+function ProcessingChart({ rows }: ProcessingChartProps) {
+  const max = Math.max(...rows.map((r) => r.avg), 0);
+  const scale = max > 0 ? max : 1;
+  return (
+    <div className="space-y-2">
+      {rows.map((row) => {
+        const widthPct = Math.max((row.avg / scale) * 100, 2);
+        return (
+          <div key={row.processor} className="space-y-1">
+            <div className="flex items-baseline justify-between gap-2 text-xs">
+              <span className="truncate font-medium text-foreground">{row.processor}</span>
+              <span className="tabular-nums text-muted-foreground">{formatMs(row.avg)} avg</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden>
+              <div
+                className="h-full rounded-full bg-primary/60 transition-all"
+                style={{ width: `${widthPct}%` }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function ProcessingTimesSection({ processing }: ProcessingTimesSectionProps) {
   const significant = processing.filter((p) => p.model && p.value > 0);
+  const { view, toggle } = useChartTableView('table', 'Processing times view');
+
   if (significant.length === 0) return null;
 
   const grouped = groupByProcessor(significant);
+  const rows: ProcessorRow[] = Object.entries(grouped).map(([processor, data]) => {
+    const total = data.entries.reduce((s, v) => s + v, 0);
+    return {
+      processor,
+      model: data.model,
+      avg: total / data.entries.length,
+      total,
+      calls: data.entries.length,
+    };
+  });
 
   return (
     <div className="space-y-3">
-      <SectionHeader icon={Clock} title="Processing Times" />
-      <div className="overflow-hidden rounded-lg border border-border">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border bg-muted/50">
-              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
-                Processor
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">
-                Model
-              </th>
-              <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">
-                Avg
-              </th>
-              <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">
-                Total
-              </th>
-              <th className="px-3 py-2 text-right text-xs font-medium text-muted-foreground">
-                Calls
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {Object.entries(grouped).map(([processor, data]) => {
-              const total = data.entries.reduce((s, v) => s + v, 0);
-              const avg = total / data.entries.length;
-              return (
-                <tr key={processor} className="border-b border-border last:border-0">
-                  <td className="px-3 py-2 font-medium text-foreground">{processor}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{data.model}</td>
-                  <td className="px-3 py-2 text-right text-muted-foreground">{formatMs(avg)}</td>
-                  <td className="px-3 py-2 text-right text-muted-foreground">{formatMs(total)}</td>
-                  <td className="px-3 py-2 text-right text-muted-foreground">
-                    {data.entries.length}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      <div className="flex items-center justify-between gap-2">
+        <SectionHeader icon={Clock} title="Processing Times" />
+        {toggle}
       </div>
+      {view === 'chart' ? (
+        <ProcessingChart rows={rows} />
+      ) : (
+        <MetricsDataTable columns={TABLE_COLUMNS} rows={rows} getRowKey={(row) => row.processor} />
+      )}
     </div>
   );
 }

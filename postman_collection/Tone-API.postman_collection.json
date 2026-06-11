@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "tone-api-v2-2026-05-27",
     "name": "Tone API",
-    "description": "Comprehensive Postman collection for the Tone voice-agent platform API (Core edition). Reverse-engineered from `core/api/v1/*.py` on 2026-05-27. Supersedes the legacy `postman_collection/` directory which targets the pre-v2 schema.\n\n**Auth**: most endpoints require a Bearer JWT. Run `Authentication > Login` first; the test script captures `access_token` into the collection variable.\n\n**Variables**:\n- `base_url` — defaults to `http://localhost:8000`\n- `access_token`, `refresh_token` — populated by Login/Refresh\n- `org_id`, `user_id`, `agent_id`, `channel_id`, `tool_id`, `mcp_server_id` — example UUIDs\n\nFolders mirror the 13 mounted controllers. Each endpoint includes:\n- **Success** example (200/201/204)\n- **Validation** errors (400 / 422)\n- **Auth** errors (401 / 403) where applicable\n- **Not found** (404), **Conflict** (409), and other controller-specific raises\n\n⚠ Flagged in folder descriptions: `Call Logs` router is disabled in `main.py:19`; three Organizations endpoints call non-existent service methods; `Tools > update_tool` has a `NameError` bug.",
+    "description": "Comprehensive Postman collection for the Tone voice-agent platform API (Core edition). Reverse-engineered from `core/api/v1/*.py` on 2026-05-27. Supersedes the legacy `postman_collection/` directory which targets the pre-v2 schema.\n\n**Auth**: most endpoints require a Bearer JWT. Run `Authentication > Login` first; the test script captures `access_token` into the collection variable.\n\n**Variables**:\n- `base_url` \u2014 defaults to `http://localhost:8000`\n- `access_token`, `refresh_token` \u2014 populated by Login/Refresh\n- `org_id`, `user_id`, `agent_id`, `channel_id`, `tool_id`, `mcp_server_id` \u2014 example UUIDs\n\nFolders mirror the 13 mounted controllers. Each endpoint includes:\n- **Success** example (200/201/204)\n- **Validation** errors (400 / 422)\n- **Auth** errors (401 / 403) where applicable\n- **Not found** (404), **Conflict** (409), and other controller-specific raises\n\n\u26a0 Flagged in folder descriptions: `Call Logs` router is disabled in `main.py:19`; three Organizations endpoints call non-existent service methods; `Tools > update_tool` has a `NameError` bug.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -471,7 +471,7 @@
               "body": "{\"detail\": \"email is required\"}"
             },
             {
-              "name": "400 Already verified ⚠ leaks existence",
+              "name": "400 Already verified \u26a0 leaks existence",
               "code": 400,
               "status": "Bad Request",
               "body": "{\"detail\": \"Email is already verified\"}"
@@ -597,7 +597,7 @@
           ]
         },
         {
-          "name": "POST /auth/change-password ⚠ no current_password check",
+          "name": "POST /auth/change-password \u26a0 no current_password check",
           "request": {
             "method": "POST",
             "header": [
@@ -779,13 +779,13 @@
           },
           "response": [
             {
-              "name": "200 OK — new account",
+              "name": "200 OK \u2014 new account",
               "code": 200,
               "status": "OK",
               "body": "{\n  \"access_token\": \"eyJ...\",\n  \"refresh_token\": \"eyJ...\",\n  \"token_type\": \"bearer\",\n  \"user\": {\"id\": \"{{user_id}}\", \"email\": \"invitee@acme.com\", \"role\": \"developer\"},\n  \"organization\": {\"id\": \"{{org_id}}\"}\n}"
             },
             {
-              "name": "200 OK — existing user, requires_login",
+              "name": "200 OK \u2014 existing user, requires_login",
               "code": 200,
               "status": "OK",
               "body": "{\n  \"message\": \"You have been added to the organization. Please sign in to continue.\",\n  \"account_exists\": true,\n  \"email\": \"invitee@acme.com\",\n  \"requires_login\": true\n}"
@@ -898,7 +898,7 @@
     },
     {
       "name": "Users & Account",
-      "description": "Profile + org member directory. Prefix: `/api/v1/user`. Requires Bearer. ⚠ `UPDATABLE_PROFILE_FIELDS` whitelist silently drops `phone_number` / `profile` etc.; `avatar_url` cannot be cleared via PATCH (null is treated as omitted).",
+      "description": "Profile + org member directory. Prefix: `/api/v1/user`. Requires Bearer. \u26a0 `UPDATABLE_PROFILE_FIELDS` whitelist silently drops `phone_number` / `profile` etc.; `avatar_url` cannot be cleared via PATCH (null is treated as omitted).",
       "item": [
         {
           "name": "GET /user/me",
@@ -1108,7 +1108,7 @@
     },
     {
       "name": "Organizations & Members",
-      "description": "Org info, member roster, invite/accept/cancel/resend, role updates, org settings. Prefix: `/api/v1/organization`. ⚠ Three Core endpoints (`accept_invitation`, `validate_invitation`, `accept_invitation_with_password`) call non-existent `AuthService` methods — they 500 at runtime. The `/auth/accept-invitation` route in the Authentication folder is the working v2 path. ⚠ `require_admin_or_owner` middleware is a name-only stub — no actual role check.",
+      "description": "Org info, member roster, invite/accept/cancel/resend, role updates, org settings. Prefix: `/api/v1/organization`. \u26a0 Three Core endpoints (`accept_invitation`, `validate_invitation`, `accept_invitation_with_password`) call non-existent `AuthService` methods \u2014 they 500 at runtime. The `/auth/accept-invitation` route in the Authentication folder is the working v2 path. \u26a0 `require_admin_or_owner` middleware is a name-only stub \u2014 no actual role check.",
       "item": [
         {
           "name": "GET /organization/me",
@@ -1209,7 +1209,7 @@
           ]
         },
         {
-          "name": "GET /organization/accept_invitation ⚠ BROKEN",
+          "name": "GET /organization/accept_invitation \u26a0 BROKEN",
           "request": {
             "auth": {
               "type": "noauth"
@@ -1241,15 +1241,15 @@
           },
           "response": [
             {
-              "name": "500 AttributeError ⚠",
+              "name": "500 AttributeError \u26a0",
               "code": 500,
               "status": "Internal Server Error",
-              "body": "{\"detail\": \"Internal Server Error\"}\n\n# ⚠ Calls AuthService.accept_invitation(email, code) which does NOT exist.\n# Use POST /auth/accept-invitation (with token) instead — that's the v2 working path."
+              "body": "{\"detail\": \"Internal Server Error\"}\n\n# \u26a0 Calls AuthService.accept_invitation(email, code) which does NOT exist.\n# Use POST /auth/accept-invitation (with token) instead \u2014 that's the v2 working path."
             }
           ]
         },
         {
-          "name": "GET /organization/validate_invitation ⚠ BROKEN",
+          "name": "GET /organization/validate_invitation \u26a0 BROKEN",
           "request": {
             "auth": {
               "type": "noauth"
@@ -1281,15 +1281,15 @@
           },
           "response": [
             {
-              "name": "500 AttributeError ⚠",
+              "name": "500 AttributeError \u26a0",
               "code": 500,
               "status": "Internal Server Error",
-              "body": "{\"detail\": \"Internal Server Error\"}\n\n# ⚠ Calls AuthService.validate_invitation_token(email, code) which does NOT exist.\n# Use GET /auth/validate-invitation?token=... instead — that's the v2 working path."
+              "body": "{\"detail\": \"Internal Server Error\"}\n\n# \u26a0 Calls AuthService.validate_invitation_token(email, code) which does NOT exist.\n# Use GET /auth/validate-invitation?token=... instead \u2014 that's the v2 working path."
             }
           ]
         },
         {
-          "name": "POST /organization/accept_invitation_with_password ⚠ BROKEN",
+          "name": "POST /organization/accept_invitation_with_password \u26a0 BROKEN",
           "request": {
             "auth": {
               "type": "noauth"
@@ -1331,10 +1331,10 @@
               "body": "{\"detail\": \"Email, code, and password are required\"}"
             },
             {
-              "name": "500 AttributeError ⚠",
+              "name": "500 AttributeError \u26a0",
               "code": 500,
               "status": "Internal Server Error",
-              "body": "{\"detail\": \"Internal Server Error\"}\n\n# ⚠ Calls AuthService.accept_invitation_with_password(email, code, password) which does NOT exist.\n# Use POST /auth/accept-invitation (with token) instead."
+              "body": "{\"detail\": \"Internal Server Error\"}\n\n# \u26a0 Calls AuthService.accept_invitation_with_password(email, code, password) which does NOT exist.\n# Use POST /auth/accept-invitation (with token) instead."
             }
           ]
         },
@@ -1737,7 +1737,7 @@
     },
     {
       "name": "Agents",
-      "description": "Voice agent CRUD with embedded config + tools + MCP servers + knowledge base + phone numbers. Prefix: `/api/v1/agent`. ⚠ `phone_numbers[]` is a declarative replace — omitting a number on update DELETES it. ⚠ Reassigning a phone number across agents returns 409. ⚠ `delete_agent` hard-deletes despite `deleted_at` column existing.",
+      "description": "Voice agent CRUD with embedded config + tools + MCP servers + knowledge base + phone numbers. Prefix: `/api/v1/agent`. \u26a0 `phone_numbers[]` is a declarative replace \u2014 omitting a number on update DELETES it. \u26a0 Reassigning a phone number across agents returns 409. \u26a0 `delete_agent` hard-deletes despite `deleted_at` column existing.",
       "item": [
         {
           "name": "GET /agent/get_all_agents (dropdown)",
@@ -2073,7 +2073,7 @@
     },
     {
       "name": "Agent Configs",
-      "description": "Per-agent LLM/STT/TTS configuration upsert. Prefix: `/api/v1/agent_config`. Frontend agent form does NOT call this directly — it bundles config inside `/agent/create_agent` and `/agent/update_agent`. ⚠ Schema drift: model declares v2 (`llm_settings` etc.) but service writes legacy columns (`llm_metadata` etc.). ⚠ `UPSERT_DEBUG` INFO logs leak `system_prompt`.",
+      "description": "Per-agent LLM/STT/TTS configuration upsert. Prefix: `/api/v1/agent_config`. Frontend agent form does NOT call this directly \u2014 it bundles config inside `/agent/create_agent` and `/agent/update_agent`. \u26a0 Schema drift: model declares v2 (`llm_settings` etc.) but service writes legacy columns (`llm_metadata` etc.). \u26a0 `UPSERT_DEBUG` INFO logs leak `system_prompt`.",
       "item": [
         {
           "name": "POST /agent_config/upsert_agent_config",
@@ -2138,7 +2138,7 @@
     },
     {
       "name": "Channels",
-      "description": "Telephony/transport provider integrations (Twilio, Telnyx, Exotel, Plivo, Daily, WebSocket). Prefix: `/api/v1/channel`. Credentials AES-encrypted in `encrypted_config`. ⚠ `delete_channel` does not catch `IntegrityError` from `phone_numbers.channel_id ON DELETE RESTRICT` — channels with attached numbers raise 500. ⚠ Frontend hard-codes only Twilio.",
+      "description": "Telephony/transport provider integrations (Twilio, Telnyx, Exotel, Plivo, Daily, WebSocket). Prefix: `/api/v1/channel`. Credentials AES-encrypted in `encrypted_config`. \u26a0 `delete_channel` does not catch `IntegrityError` from `phone_numbers.channel_id ON DELETE RESTRICT` \u2014 channels with attached numbers raise 500. \u26a0 Frontend hard-codes only Twilio.",
       "item": [
         {
           "name": "POST /channel/upsert",
@@ -2444,10 +2444,10 @@
               "body": "{\"detail\": \"Channel not found\"}"
             },
             {
-              "name": "500 IntegrityError (attached phone numbers) ⚠",
+              "name": "500 IntegrityError (attached phone numbers) \u26a0",
               "code": 500,
               "status": "Internal Server Error",
-              "body": "{\"detail\": \"Internal Server Error\"}\n\n# ⚠ Channel has phone_numbers attached and FK is ON DELETE RESTRICT.\n# Should ideally return 409 with a friendly message — current code doesn't catch the IntegrityError."
+              "body": "{\"detail\": \"Internal Server Error\"}\n\n# \u26a0 Channel has phone_numbers attached and FK is ON DELETE RESTRICT.\n# Should ideally return 409 with a friendly message \u2014 current code doesn't catch the IntegrityError."
             }
           ]
         },
@@ -2500,7 +2500,7 @@
     },
     {
       "name": "Knowledge Base",
-      "description": "Document upload + chunking + embedding for agent RAG. Prefix: `/api/v1/knowledge-base`. Pipeline: R2 upload → PyPDF2/docx text extract → LangChain RecursiveCharacterTextSplitter (1000/200) → OpenAI text-embedding-3-small in batches of 100 → pgvector chunks. ⚠ EE controller skips processing — uploads stay un-RAG'd. ⚠ R2 leak on 409 path.",
+      "description": "Document upload + chunking + embedding for agent RAG. Prefix: `/api/v1/knowledge-base`. Pipeline: R2 upload \u2192 PyPDF2/docx text extract \u2192 LangChain RecursiveCharacterTextSplitter (1000/200) \u2192 OpenAI text-embedding-3-small in batches of 100 \u2192 pgvector chunks. \u26a0 EE controller skips processing \u2014 uploads stay un-RAG'd. \u26a0 R2 leak on 409 path.",
       "item": [
         {
           "name": "POST /knowledge-base/list",
@@ -2809,7 +2809,7 @@
     },
     {
       "name": "MCP Servers",
-      "description": "Model Context Protocol external tool servers. Prefix: `/api/v1/mcp-server`. Servers attach to agents many-to-many via `agent_mcp_servers`. ⚠ `selected_tools` parameter is currently a no-op — all tools always exposed.",
+      "description": "Model Context Protocol external tool servers. Prefix: `/api/v1/mcp-server`. Servers attach to agents many-to-many via `agent_mcp_servers`. \u26a0 `selected_tools` parameter is currently a no-op \u2014 all tools always exposed.",
       "item": [
         {
           "name": "POST /mcp-server/list",
@@ -3376,7 +3376,7 @@
     },
     {
       "name": "Tools",
-      "description": "Custom function-calling tools (webhooks, built-ins like send_sms / google_calendar). Prefix: `/api/v1/tool`. Distinct from MCP servers. ⚠ `PUT /update_tool` raises NameError — `time.time()` used without `import time`. ⚠ Template tools cannot be edited or deleted. ⚠ MCP tools cannot be deleted via this surface.",
+      "description": "Custom function-calling tools (webhooks, built-ins like send_sms / google_calendar). Prefix: `/api/v1/tool`. Distinct from MCP servers. \u26a0 `PUT /update_tool` raises NameError \u2014 `time.time()` used without `import time`. \u26a0 Template tools cannot be edited or deleted. \u26a0 MCP tools cannot be deleted via this surface.",
       "item": [
         {
           "name": "POST /tool/create_tool",
@@ -3655,7 +3655,7 @@
           ]
         },
         {
-          "name": "PUT /tool/update_tool ⚠ BUGGY",
+          "name": "PUT /tool/update_tool \u26a0 BUGGY",
           "request": {
             "method": "PUT",
             "header": [
@@ -3700,10 +3700,10 @@
               "body": "{\"id\": \"{{tool_id}}\", \"description\": \"Updated description\", \"is_active\": false}"
             },
             {
-              "name": "500 NameError ⚠",
+              "name": "500 NameError \u26a0",
               "code": 500,
               "status": "Internal Server Error",
-              "body": "{\"detail\": \"Internal Server Error\"}\n\n# ⚠ KNOWN BUG: tool_service.py uses time.time() without import time. Fix: add `import time` at top of file."
+              "body": "{\"detail\": \"Internal Server Error\"}\n\n# \u26a0 KNOWN BUG: tool_service.py uses time.time() without import time. Fix: add `import time` at top of file."
             },
             {
               "name": "400 Template cannot be edited",
@@ -3925,7 +3925,7 @@
     },
     {
       "name": "Model Providers",
-      "description": "LLM / STT / TTS provider catalog + per-org encrypted API keys + TTS voice catalog. Prefix: `/api/v1/services`. ⚠ `JWT_SECRET` doubles as the encryption master key — rotating it invalidates every stored API key. ⚠ Static PBKDF2 salt. ⚠ `agent_configs` has no FK to `models` — orphan possible.",
+      "description": "LLM / STT / TTS provider catalog + per-org encrypted API keys + TTS voice catalog. Prefix: `/api/v1/services`. \u26a0 `JWT_SECRET` doubles as the encryption master key \u2014 rotating it invalidates every stored API key. \u26a0 Static PBKDF2 salt. \u26a0 `agent_configs` has no FK to `models` \u2014 orphan possible.",
       "item": [
         {
           "name": "POST /services/list (org API keys)",
@@ -4545,7 +4545,7 @@
     },
     {
       "name": "OAuth Integrations",
-      "description": "3-legged OAuth flow for Google Calendar / Google Sheets. Prefix: `/api/v1/oauth`. Tokens AES-encrypted at rest; auto-refresh via OAuthService.get_valid_access_token_for_connection. ⚠ State parameter is plaintext `<org>:<user>:<provider>` — no CSRF protection. ⚠ `disconnect` and `get_connection` are NOT org-scoped — cross-org leak by UUID.",
+      "description": "3-legged OAuth flow for Google Calendar / Google Sheets. Prefix: `/api/v1/oauth`. Tokens AES-encrypted at rest; auto-refresh via OAuthService.get_valid_access_token_for_connection. \u26a0 State parameter is plaintext `<org>:<user>:<provider>` \u2014 no CSRF protection. \u26a0 `disconnect` and `get_connection` are NOT org-scoped \u2014 cross-org leak by UUID.",
       "item": [
         {
           "name": "GET /oauth/providers (public)",
@@ -4623,7 +4623,7 @@
           ]
         },
         {
-          "name": "POST /oauth/list (org-wide ⚠ not user-scoped)",
+          "name": "POST /oauth/list (org-wide \u26a0 not user-scoped)",
           "request": {
             "method": "POST",
             "header": [
@@ -4703,7 +4703,7 @@
           ]
         },
         {
-          "name": "DELETE /oauth/disconnect ⚠ not org-scoped",
+          "name": "DELETE /oauth/disconnect \u26a0 not org-scoped",
           "request": {
             "method": "DELETE",
             "header": [],
@@ -4868,7 +4868,7 @@
     },
     {
       "name": "Dashboard",
-      "description": "Org-wide aggregate KPIs for the home page. Prefix: `/api/v1/dashboard`. ⚠ The voice pipeline does not yet write to the v2 `calls` table — `active_calls`, `minutes_used`, and `success_rate` may all report 0 until the pipeline cut-over lands. ⚠ No index on `calls.started_at`. ⚠ No caching.",
+      "description": "Org-wide aggregate KPIs for the home page. Prefix: `/api/v1/dashboard`. \u26a0 The voice pipeline does not yet write to the v2 `calls` table \u2014 `active_calls`, `minutes_used`, and `success_rate` may all report 0 until the pipeline cut-over lands. \u26a0 No index on `calls.started_at`. \u26a0 No caching.",
       "item": [
         {
           "name": "GET /dashboard/stats",
@@ -4918,11 +4918,11 @@
       ]
     },
     {
-      "name": "Call Logs ⚠ DISABLED",
-      "description": "⚠ This entire router is **NOT MOUNTED** in `main.py:19` — endpoints return 404. Comment in code says: \"call_logs router is temporarily disabled (references dropped pre-v2 models).\" Service file imports non-existent `core.models.call_log.CallLog`. Re-enable after fixing the imports + reconciling the v2 schema. Prefix (when re-enabled): `/api/v1/call_logs`.",
+      "name": "Call Logs \u26a0 DISABLED",
+      "description": "\u26a0 This entire router is **NOT MOUNTED** in `main.py:19` \u2014 endpoints return 404. Comment in code says: \"call_logs router is temporarily disabled (references dropped pre-v2 models).\" Service file imports non-existent `core.models.call_log.CallLog`. Re-enable after fixing the imports + reconciling the v2 schema. Prefix (when re-enabled): `/api/v1/call_logs`.",
       "item": [
         {
-          "name": "GET /call_logs/filter-values ⚠ disabled",
+          "name": "GET /call_logs/filter-values \u26a0 disabled",
           "request": {
             "method": "GET",
             "header": [],
@@ -4967,7 +4967,7 @@
           ]
         },
         {
-          "name": "POST /call_logs/list ⚠ disabled",
+          "name": "POST /call_logs/list \u26a0 disabled",
           "request": {
             "method": "POST",
             "header": [
@@ -5014,7 +5014,7 @@
           ]
         },
         {
-          "name": "GET /call_logs/{call_id} ⚠ disabled",
+          "name": "GET /call_logs/{call_id} \u26a0 disabled",
           "request": {
             "method": "GET",
             "header": [],
@@ -5053,7 +5053,7 @@
           ]
         },
         {
-          "name": "GET /call_logs/{call_id}/audio-url ⚠ disabled",
+          "name": "GET /call_logs/{call_id}/audio-url \u26a0 disabled",
           "request": {
             "method": "GET",
             "header": [],
@@ -5099,7 +5099,7 @@
           ]
         },
         {
-          "name": "GET /call_logs/{call_id}/audio (range support) ⚠ disabled",
+          "name": "GET /call_logs/{call_id}/audio (range support) \u26a0 disabled",
           "request": {
             "method": "GET",
             "header": [
@@ -5162,6 +5162,152 @@
               "code": 404,
               "status": "Not Found",
               "body": "{\"detail\": \"Not Found\"}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Call Metrics",
+      "description": "Per-call latency, token, and turn metrics for the call analytics modal and trends dashboard. Prefix: `/api/v1/call-metrics`. Each row is upserted by `CallLogService.complete_call` after the pipeline drains. `POST /list` returns a summary view (scalars only) for the table; `GET /{call_id}` returns the same row plus the six per-sample arrays (`ttfb`, `processing`, `llm_usage`, `tts_usage`, `user_bot_latency`, `turns`) for the per-call breakdown modal. Whitelisted filter/sort fields: `agent_name`, `agent_type`, `started_at`, `ended_at`, `duration_seconds`, `call_id`, `llm_provider`, `llm_model`, `stt_provider`, `stt_model`, `tts_provider`, `tts_model`. Filter operators: `equal_to`, `greater_than`, `less_than`, `between`, `in`, `contains`. Unknown fields are silently ignored.",
+      "item": [
+        {
+          "name": "POST /call-metrics/list",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"page_no\": 1,\n  \"page_size\": 10,\n  \"start_date_time\": \"2026-05-01T00:00:00Z\",\n  \"end_date_time\": \"2026-06-09T23:59:59Z\",\n  \"filters\": [\n    {\"field\": \"agent_type\", \"operator\": \"equal_to\", \"value\": \"inbound\"},\n    {\"field\": \"duration_seconds\", \"operator\": \"greater_than\", \"value\": 30}\n  ],\n  \"sort_by\": \"started_at\",\n  \"sort_order\": \"desc\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/call-metrics/list",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "call-metrics",
+                "list"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"9c1f0b6e-3a2d-4b8e-91c2-7c8c1c4a8f01\",\n      \"call_id\": \"550e8400-call-001\",\n      \"agent_id\": \"{{agent_id}}\",\n      \"agent_name\": \"Acme Support Bot\",\n      \"started_at\": \"2026-06-08T14:22:10+00:00\",\n      \"ended_at\": \"2026-06-08T14:25:55+00:00\",\n      \"duration_seconds\": 225,\n      \"avg_ttfb_ms\": 312.5,\n      \"avg_latency_s\": 1.245,\n      \"total_tokens\": 1840,\n      \"total_tts_chars\": 1276,\n      \"turn_count\": 14\n    },\n    {\n      \"id\": \"1f2a3b4c-5d6e-7f80-9a0b-c1d2e3f4a5b6\",\n      \"call_id\": \"550e8400-call-002\",\n      \"agent_id\": \"{{agent_id}}\",\n      \"agent_name\": \"Outbound Reminder Bot\",\n      \"started_at\": \"2026-06-08T13:01:02+00:00\",\n      \"ended_at\": \"2026-06-08T13:02:48+00:00\",\n      \"duration_seconds\": 106,\n      \"avg_ttfb_ms\": 280.1,\n      \"avg_latency_s\": 0.987,\n      \"total_tokens\": 612,\n      \"total_tts_chars\": 402,\n      \"turn_count\": 6\n    }\n  ],\n  \"total\": 2,\n  \"page_no\": 1,\n  \"page_size\": 10\n}"
+            },
+            {
+              "name": "200 OK (filter by pipeline provider)",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"data\": [\n    {\n      \"id\": \"9c1f0b6e-3a2d-4b8e-91c2-7c8c1c4a8f01\",\n      \"call_id\": \"550e8400-call-001\",\n      \"agent_id\": \"{{agent_id}}\",\n      \"agent_name\": \"Acme Support Bot\",\n      \"started_at\": \"2026-06-08T14:22:10+00:00\",\n      \"ended_at\": \"2026-06-08T14:25:55+00:00\",\n      \"duration_seconds\": 225,\n      \"avg_ttfb_ms\": 312.5,\n      \"avg_latency_s\": 1.245,\n      \"total_tokens\": 1840,\n      \"total_tts_chars\": 1276,\n      \"turn_count\": 14\n    }\n  ],\n  \"total\": 1,\n  \"page_no\": 1,\n  \"page_size\": 10\n}\n\n# Filter by pipeline provider snapshot fields (llm_provider, stt_provider, tts_provider).",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"page_no\": 1,\n  \"page_size\": 10,\n  \"filters\": [\n    {\"field\": \"llm_provider\", \"operator\": \"equal_to\", \"value\": \"openai\"},\n    {\"field\": \"tts_provider\", \"operator\": \"in\", \"value\": [\"elevenlabs\", \"cartesia\"]}\n  ],\n  \"sort_by\": \"duration_seconds\",\n  \"sort_order\": \"asc\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/call-metrics/list",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "call-metrics",
+                    "list"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "200 OK (empty org / no matches)",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"data\": [],\n  \"total\": 0,\n  \"page_no\": 1,\n  \"page_size\": 10\n}"
+            },
+            {
+              "name": "401 No bearer token",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\"detail\": \"Could not validate credentials\"}"
+            },
+            {
+              "name": "422 Invalid sort_order",
+              "code": 422,
+              "status": "Unprocessable Entity",
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [\"body\", \"sort_order\"],\n      \"msg\": \"String should match pattern '^(asc|desc)$'\",\n      \"type\": \"string_pattern_mismatch\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "422 page_size out of range",
+              "code": 422,
+              "status": "Unprocessable Entity",
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [\"body\", \"page_size\"],\n      \"msg\": \"Input should be less than or equal to 100\",\n      \"type\": \"less_than_equal\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /call-metrics/{call_id}",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/call-metrics/550e8400-call-001",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "call-metrics",
+                "550e8400-call-001"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK (full per-sample breakdown)",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"id\": \"9c1f0b6e-3a2d-4b8e-91c2-7c8c1c4a8f01\",\n  \"call_id\": \"550e8400-call-001\",\n  \"agent_id\": \"{{agent_id}}\",\n  \"agent_name\": \"Acme Support Bot\",\n  \"started_at\": \"2026-06-08T14:22:10+00:00\",\n  \"ended_at\": \"2026-06-08T14:25:55+00:00\",\n  \"duration_seconds\": 225,\n  \"avg_ttfb_ms\": 312.5,\n  \"avg_latency_s\": 1.245,\n  \"total_tokens\": 1840,\n  \"total_tts_chars\": 1276,\n  \"turn_count\": 14,\n  \"ttfb\": [\n    {\"turn\": 1, \"value\": 305.2},\n    {\"turn\": 2, \"value\": 319.8}\n  ],\n  \"processing\": [\n    {\"turn\": 1, \"value\": 142.0},\n    {\"turn\": 2, \"value\": 138.5}\n  ],\n  \"llm_usage\": [\n    {\"turn\": 1, \"prompt_tokens\": 412, \"completion_tokens\": 78, \"total_tokens\": 490},\n    {\"turn\": 2, \"prompt_tokens\": 488, \"completion_tokens\": 92, \"total_tokens\": 580}\n  ],\n  \"tts_usage\": [\n    {\"turn\": 1, \"characters\": 320},\n    {\"turn\": 2, \"characters\": 412}\n  ],\n  \"user_bot_latency\": [\n    {\"turn\": 1, \"latency\": 1.180},\n    {\"turn\": 2, \"latency\": 1.310}\n  ],\n  \"turns\": [\n    {\"role\": \"agent\", \"text\": \"Hi, this is Acme. How can I help?\"},\n    {\"role\": \"user\", \"text\": \"I need to reschedule my appointment.\"}\n  ]\n}"
+            },
+            {
+              "name": "404 Metrics not found for this call",
+              "code": 404,
+              "status": "Not Found",
+              "body": "{\"detail\": \"Metrics not found for this call\"}"
+            },
+            {
+              "name": "401 No bearer token",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\"detail\": \"Could not validate credentials\"}"
             }
           ]
         }
@@ -5733,7 +5879,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organization_id\": \"{{org_id}}\",\n  \"message\": \"Please add me to Acme — I work in support.\"\n}",
+              "raw": "{\n  \"organization_id\": \"{{org_id}}\",\n  \"message\": \"Please add me to Acme \u2014 I work in support.\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

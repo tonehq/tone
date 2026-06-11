@@ -3,14 +3,19 @@ import { atom } from 'jotai';
 import {
   createAgent,
   deleteAgent,
+  deleteAgentVersion,
   getAgent,
   getAllAgents,
+  listAgentVersions,
   listAgents,
+  saveAgentAsNewVersion,
+  switchActiveAgentVersion,
   updateAgent,
 } from '@/services/agentsService';
 import type {
   AgentDetail,
   AgentDropdownItem,
+  AgentVersionSummary,
   AgentsState,
   CreateAgentPayload,
   ListAgentsParams,
@@ -75,7 +80,14 @@ export const fetchPaginatedAgentList = atom(null, async (_get, set, params: List
 
 export const fetchAgentAtom = atom(
   null,
-  async (_get, _set, agentId: string): Promise<AgentDetail> => getAgent(agentId),
+  async (
+    _get,
+    _set,
+    args: string | { agentId: string; configId?: string },
+  ): Promise<AgentDetail> => {
+    if (typeof args === 'string') return getAgent(args);
+    return getAgent(args.agentId, args.configId);
+  },
 );
 
 // ─── create / update / delete ──────────────────────────────────────────────
@@ -94,5 +106,33 @@ export const updateAgentAtom = atom(
 export const deleteAgentAtom = atom(null, async (_get, _set, agentId: string) => {
   await deleteAgent(agentId);
 });
+
+// ─── versioning ────────────────────────────────────────────────────────────
+
+export const listAgentVersionsAtom = atom(
+  null,
+  async (_get, _set, agentId: string): Promise<AgentVersionSummary[]> => listAgentVersions(agentId),
+);
+
+export const saveAgentAsNewVersionAtom = atom(
+  null,
+  async (
+    _get,
+    _set,
+    args: { agentId: string; values: Parameters<typeof saveAgentAsNewVersion>[1] },
+  ): Promise<AgentDetail> => saveAgentAsNewVersion(args.agentId, args.values),
+);
+
+export const switchActiveAgentVersionAtom = atom(
+  null,
+  async (_get, _set, args: { agentId: string; configId: string }): Promise<AgentDetail> =>
+    switchActiveAgentVersion(args.agentId, args.configId),
+);
+
+export const deleteAgentVersionAtom = atom(
+  null,
+  async (_get, _set, args: { agentId: string; configId: string }) =>
+    deleteAgentVersion(args.agentId, args.configId),
+);
 
 export default agentsAtom;

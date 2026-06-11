@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staging-tts-qwen-deployment
+  namespace: staging
+  labels:
+    app: staging-tts-qwen
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: staging-tts-qwen
+  template:
+    metadata:
+      labels:
+        app: staging-tts-qwen
+    spec:
+      containers:
+        - name: qwen-tts
+          image: ubuntu:24.04
+          workingDir: /app-tts
+          command: ["bash", "-lc"]
+          args:
+            - |
+              set -e
+              apt-get update -qq
+              apt-get install -y -qq --no-install-recommends python3-pip python3-dev gcc git libsndfile1 libgomp1 ca-certificates
+              pip install --break-system-packages --no-cache-dir -c /app-tts/constraints.txt -r /app-tts/requirements.txt
+              pip install --break-system-packages --no-cache-dir --no-deps "nano-qwen3tts-vllm @ git+https://github.com/tsdocode/nano-qwen3tts-vllm.git"
+              exec uvicorn server:app --host 0.0.0.0 --port 8001
+          env:
+            - name: TTS_MODEL
+              value: "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
+            - name: HF_HOME
+              value: /cache/hf-tts
+          ports:
+            - name: tts
+              containerPort: 8001
+          resources:
+            requests:
+              cpu: "500m"
+              memory: 4Gi
+              nvidia.com/gpu: 1
+            limits:
+              memory: 10Gi
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: app-tts
+              mountPath: /app-tts
+            - name: cache
+              mountPath: /cache
+            - name: dshm
+              mountPath: /dev/shm
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: tts
+            initialDelaySeconds: 1800
+            periodSeconds: 30
+            failureThreshold: 3
+      volumes:
+        - name: app-tts
+          configMap:
+            name: qwen-tts-app
+        - name: cache
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 4Gi

@@ -699,7 +699,12 @@ class AgentService(BaseService):
         return agent
 
     def update_agent(self, agent_id: str, data: Dict[str, Any], user_id: Optional[UUID]) -> Agent:
-        """Update an existing agent. Only provided fields are changed."""
+        """Update an existing agent in place. Only provided fields are changed.
+
+        Mutates the live config (resolved via ``published_config_id``) rather
+        than the latest version, so editing while viewing v2 with v3 live
+        cannot silently flip the live pointer.
+        """
         aid = UUID(str(agent_id))
         agent = self.query(Agent).filter(Agent.id == aid, Agent.deleted_at.is_(None)).first()
         if not agent:
@@ -723,28 +728,149 @@ class AgentService(BaseService):
             self.db.rollback()
             raise
 
+        self._invalidate_pipeline_cache(agent.id)
         return agent
 
-    def _apply_attachments(self, agent: Agent, data: Dict[str, Any], user_id: Optional[UUID]) -> None:
-        """Shared logic for syncing config and attachments (used by both create and update)."""
+    # ------------------------------------------------------------------
+    # Versioning
+    # ------------------------------------------------------------------
+
+    def list_versions(self, agent_id: str) -> List[Dict[str, Any]]:
+        """All non-deleted versions for an agent, newest first. Each row is
+        flagged with ``is_live`` against ``Agent.published_config_id``."""
+        agent = self.get_agent(agent_id)
+        rows = (
+            self.query(AgentConfig)
+            .filter(AgentConfig.agent_id == agent.id, AgentConfig.deleted_at.is_(None))
+            .order_by(AgentConfig.version.desc())
+            .all()
+        )
+        live_id = agent.published_config_id
+        return [self.version_response(r, is_live=(r.id == live_id)) for r in rows]
+
+    def get_version(self, agent_id: str, config_id: str) -> AgentConfig:
+        """Fetch one version, scoped to the agent. Raises 404 if missing."""
+        agent = self.get_agent(agent_id)
+        cfg = (
+            self.query(AgentConfig)
+            .filter(
+                AgentConfig.id == UUID(str(config_id)),
+                AgentConfig.agent_id == agent.id,
+                AgentConfig.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if not cfg:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Version not found for this agent",
+            )
+        return cfg
+
+    def save_as_new_version(
+        self, agent_id: str, data: Dict[str, Any], user_id: Optional[UUID]
+    ) -> Agent:
+        """Clone the live config, apply edits, persist as a new version, mark it live."""
+        agent = self.get_agent(agent_id)
+        try:
+            self._apply_attachments(agent, data, user_id, create_new_version=True)
+            self.db.commit()
+        except IntegrityError as e:
+            self.db.rollback()
+            detail = _agent_unique_constraint_detail(e)
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from e
+        except HTTPException:
+            self.db.rollback()
+            raise
+        except Exception:
+            self.db.rollback()
+            raise
+
+        self._invalidate_pipeline_cache(agent.id)
+        return agent
+
+    def switch_active_version(self, agent_id: str, config_id: str) -> Agent:
+        """Point ``Agent.published_config_id`` at an existing version."""
+        agent = self.get_agent(agent_id)
+        cfg = self.get_version(agent_id, config_id)
+        if agent.published_config_id == cfg.id:
+            return agent
+        try:
+            agent.published_config_id = cfg.id
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise
+
+        self._invalidate_pipeline_cache(agent.id)
+        return agent
+
+    def delete_version(self, agent_id: str, config_id: str) -> Dict[str, str]:
+        """Soft-delete a version. The live version cannot be deleted."""
+        agent = self.get_agent(agent_id)
+        cfg = self.get_version(agent_id, config_id)
+        if agent.published_config_id == cfg.id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot delete the live version. Switch to another version first.",
+            )
+        from datetime import datetime, timezone
+        cfg.deleted_at = datetime.now(timezone.utc)
+        self.db.commit()
+        self._invalidate_pipeline_cache(agent.id)
+        return {"message": "Version deleted successfully"}
+
+    def version_response(self, config: AgentConfig, is_live: bool) -> Dict[str, Any]:
+        """Lightweight summary used in version-list responses."""
+        return {
+            "id": str(config.id),
+            "version": config.version,
+            "is_live": is_live,
+            "created_at": config.created_at.isoformat() if config.created_at else None,
+            "updated_at": config.updated_at.isoformat() if config.updated_at else None,
+            "published_at": config.published_at.isoformat() if config.published_at else None,
+            "created_by_user_id": (
+                str(config.created_by_user_id) if config.created_by_user_id else None
+            ),
+        }
+
+    def _apply_attachments(
+        self,
+        agent: Agent,
+        data: Dict[str, Any],
+        user_id: Optional[UUID],
+        *,
+        create_new_version: bool = False,
+    ) -> None:
+        """Shared logic for syncing config and attachments.
+
+        ``create_new_version=False`` (default): the live config is mutated in
+        place — the behaviour used by both ``create_agent`` and ``update_agent``.
+
+        ``create_new_version=True``: the live config is cloned into a fresh row
+        with the next version number, the new row becomes live, and attachments
+        are wired against it. Used by ``save_as_new_version``.
+        """
         config_data = data.get("config")
         tool_ids = data.get("tool_ids")
         mcp_server_ids = data.get("mcp_server_ids")
         upload_ids = data.get("upload_ids")
         phone_numbers = data.get("phone_numbers")
 
-        config = None
+        config: Optional[AgentConfig] = None
         if config_data is not None:
-            config = self._upsert_new_config(agent, config_data, user_id)
+            if create_new_version:
+                config = self._create_new_version_config(agent, config_data, user_id)
+            else:
+                config = self._upsert_new_config(agent, config_data, user_id)
+        elif create_new_version:
+            # Versioning a save with no config edits = clone live config as-is.
+            config = self._create_new_version_config(agent, {}, user_id)
 
-        if tool_ids is not None or mcp_server_ids is not None or upload_ids is not None:
-            if config is None:
-                config = (
-                    self.query(AgentConfig)
-                    .filter(AgentConfig.agent_id == agent.id, AgentConfig.deleted_at.is_(None))
-                    .order_by(AgentConfig.version.desc())
-                    .first()
-                )
+        if config is None and (
+            tool_ids is not None or mcp_server_ids is not None or upload_ids is not None
+        ):
+            config = self._resolve_current_config(agent)
 
         if tool_ids is not None:
             self._sync_tools(agent, config, tool_ids)
@@ -851,46 +977,134 @@ class AgentService(BaseService):
                 detail={"message": "Validation failed", "errors": all_errors},
             )
 
-    def _upsert_new_config(self, agent: Agent, config_data: Dict[str, Any], user_id: Optional[UUID]) -> AgentConfig:
-        self._validate_meta_data_schema(config_data)
+    # ── Config field metadata (shared by in-place updates and version cloning) ──
+    _CONFIG_FIELDS = (
+        "first_message", "end_call_message", "system_prompt_template",
+        "conversation_history_token_limit", "language_id", "knowledge_model_id",
+        "llm_settings", "voice_settings", "stt_settings", "conversation_settings",
+    )
+    _CONFIG_UUID_FIELDS = frozenset({"language_id", "knowledge_model_id"})
 
-        existing = (
+    def _apply_config_fields(self, target: AgentConfig, data: Dict[str, Any]) -> None:
+        """Copy provided config field values onto an AgentConfig row.
+
+        Only keys present in `data` are written, so partial updates don't wipe
+        unsent fields. UUID-typed columns are normalised from strings.
+        """
+        for field in self._CONFIG_FIELDS:
+            if field not in data:
+                continue
+            val = data[field]
+            if val is not None and field in self._CONFIG_UUID_FIELDS:
+                val = UUID(str(val))
+            setattr(target, field, val)
+
+    def _resolve_current_config(self, agent: Agent) -> Optional[AgentConfig]:
+        """Return the live AgentConfig: published_config_id first, then latest version."""
+        if agent.published_config_id:
+            cfg = (
+                self.query(AgentConfig)
+                .filter(
+                    AgentConfig.id == agent.published_config_id,
+                    AgentConfig.deleted_at.is_(None),
+                )
+                .first()
+            )
+            if cfg:
+                return cfg
+        return (
             self.query(AgentConfig)
             .filter(AgentConfig.agent_id == agent.id, AgentConfig.deleted_at.is_(None))
             .order_by(AgentConfig.version.desc())
             .first()
         )
 
-        config_fields = (
-            "first_message", "end_call_message", "system_prompt_template",
-            "conversation_history_token_limit", "language_id", "knowledge_model_id",
-            "llm_settings", "voice_settings", "stt_settings", "conversation_settings",
+    def _next_version_number(self, agent_id: UUID) -> int:
+        """Return ``max(version)+1`` across **all** rows for this agent —
+        including soft-deleted ones.
+
+        The unique constraint ``uq_agent_configs_agent_version`` on
+        ``(agent_id, version)`` does not exclude soft-deleted rows. If we
+        computed the next version from non-deleted rows only, a sequence of
+        *switch-live → delete-the-highest → save-as-new-version* would attempt
+        to reuse a version number that still occupies the unique index and
+        fail with an ``IntegrityError``. Version numbers stay monotonically
+        increasing for the lifetime of the agent.
+        """
+        row = (
+            self.query(AgentConfig)
+            .filter(AgentConfig.agent_id == agent_id)
+            .with_entities(AgentConfig.version)
+            .order_by(AgentConfig.version.desc())
+            .first()
         )
+        return (row[0] + 1) if row else 1
+
+    @staticmethod
+    def _invalidate_pipeline_cache(agent_id) -> None:
+        """Drop the resolver's cached pipeline so the next call re-reads the DB."""
+        from core.services.redis_service import cache_delete
+        cache_delete(f"agent_pipeline_config:{agent_id}")
+
+    def _upsert_new_config(self, agent: Agent, config_data: Dict[str, Any], user_id: Optional[UUID]) -> AgentConfig:
+        """Update the live config in place, or create v1 if the agent has none yet."""
+        self._validate_meta_data_schema(config_data)
+        existing = self._resolve_current_config(agent)
 
         if existing:
-            for field in config_fields:
-                if field in config_data:
-                    val = config_data[field]
-                    if field in ("language_id", "knowledge_model_id") and val is not None:
-                        val = UUID(str(val))
-                    setattr(existing, field, val)
-            agent.published_config_id = existing.id
+            self._apply_config_fields(existing, config_data)
+            if agent.published_config_id != existing.id:
+                agent.published_config_id = existing.id
             return existing
-        else:
-            if not user_id:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="user_id is required to create config")
-            kwargs = {"agent_id": agent.id, "version": 1, "created_by_user_id": user_id, "organization_id": self.org_id}
-            for field in config_fields:
-                if field in config_data:
-                    val = config_data[field]
-                    if field in ("language_id", "knowledge_model_id") and val is not None:
-                        val = UUID(str(val))
-                    kwargs[field] = val
-            config = AgentConfig(**kwargs)
-            self.db.add(config)
-            self.db.flush()
-            agent.published_config_id = config.id
-            return config
+
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="user_id is required to create config",
+            )
+        from datetime import datetime, timezone
+        config = AgentConfig(
+            agent_id=agent.id,
+            version=1,
+            created_by_user_id=user_id,
+            organization_id=self.org_id,
+            published_at=datetime.now(timezone.utc),
+        )
+        self._apply_config_fields(config, config_data)
+        self.db.add(config)
+        self.db.flush()
+        agent.published_config_id = config.id
+        return config
+
+    def _create_new_version_config(
+        self, agent: Agent, config_data: Dict[str, Any], user_id: Optional[UUID]
+    ) -> AgentConfig:
+        """Clone the live config, apply edits, persist as version N+1, mark live."""
+        self._validate_meta_data_schema(config_data)
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="user_id is required to create a version",
+            )
+
+        from datetime import datetime, timezone
+        current = self._resolve_current_config(agent)
+        new_config = AgentConfig(
+            agent_id=agent.id,
+            version=self._next_version_number(agent.id),
+            created_by_user_id=user_id,
+            organization_id=self.org_id,
+            published_at=datetime.now(timezone.utc),
+        )
+        # Seed from the live config so fields the request didn't touch are preserved.
+        if current is not None:
+            for field in self._CONFIG_FIELDS:
+                setattr(new_config, field, getattr(current, field, None))
+        self._apply_config_fields(new_config, config_data)
+        self.db.add(new_config)
+        self.db.flush()
+        agent.published_config_id = new_config.id
+        return new_config
 
     def _sync_tools(self, agent: Agent, config: Optional[AgentConfig], tool_ids: List[str]) -> None:
         uuids = [UUID(str(tid)) for tid in tool_ids]
@@ -1103,16 +1317,21 @@ class AgentService(BaseService):
             if num:
                 cache_delete(f"phone_to_agent:{num.strip()}")
 
-    def agent_response(self, agent: Agent) -> Dict[str, Any]:
+    def agent_response(
+        self, agent: Agent, config: Optional[AgentConfig] = None
+    ) -> Dict[str, Any]:
+        """Serialise an agent + a chosen config version.
+
+        ``config`` is optional: when omitted the live config (resolved via
+        ``published_config_id``, falling back to the latest version) is used.
+        Pass an explicit ``AgentConfig`` to render the agent at a non-live
+        version for the version-preview endpoint.
+        """
         # Refresh to get latest state
         self.db.refresh(agent)
 
-        config = (
-            self.query(AgentConfig)
-            .filter(AgentConfig.agent_id == agent.id, AgentConfig.deleted_at.is_(None))
-            .order_by(AgentConfig.version.desc())
-            .first()
-        )
+        if config is None:
+            config = self._resolve_current_config(agent)
 
         # The model picker persists the selected LLM into config.llm_settings.model_id
         # (a models.id), so resolve a human-readable name for the detail/overview.
@@ -1202,6 +1421,18 @@ class AgentService(BaseService):
                 "label": p.label,
             }
             for p in phone_rows
+        ]
+
+        # Version history (single query — driving the editor's version selector)
+        version_rows = (
+            self.query(AgentConfig)
+            .filter(AgentConfig.agent_id == agent.id, AgentConfig.deleted_at.is_(None))
+            .order_by(AgentConfig.version.desc())
+            .all()
+        )
+        live_id = agent.published_config_id
+        result["versions"] = [
+            self.version_response(v, is_live=(v.id == live_id)) for v in version_rows
         ]
 
         return result

@@ -22,6 +22,19 @@ import getpass
 import time
 from datetime import datetime
 
+# Trailing " LLM" / " STT" / " TTS" on a provider description is redundant
+# (the kind is conveyed by the service-type badge on the card) and misleading
+# for providers that serve multiple kinds — seed dedupes by name and only the
+# first bucket's description survives, so OpenAI would get "OpenAI LLM" even
+# on its STT/TTS cards. Strip the suffix at seed time so all envs stay clean.
+_PROVIDER_DESC_SUFFIX_RE = re.compile(r"\s+(LLM|STT|TTS)\s*$", re.IGNORECASE)
+
+
+def _clean_provider_description(description):
+    if not description:
+        return description
+    return _PROVIDER_DESC_SUFFIX_RE.sub("", description).rstrip() or None
+
 # Ensure project root is on path when run as script
 if __name__ == "__main__":
     _root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -339,7 +352,7 @@ def seed_from_configs(db, org_name, email, password):
             provider_id=provider_id_str,
             slug=slug,
             display_name=config["display_name"],
-            description=config.get("description"),
+            description=_clean_provider_description(config.get("description")),
             is_active=config.get("status", "active") == "active",
         )
         db.add(mp)
@@ -510,7 +523,12 @@ def seed_from_configs(db, org_name, email, password):
     db.flush()
 
     # --- Phase 5: Insert ApiKey records (from env vars) ---
-    seen_api_keys = set()  # track provider IDs already keyed
+    # One row per (provider, service_type). A provider that appears in multiple
+    # buckets (e.g. OpenAI in llm/stt/tts) gets one ApiKey per kind, all
+    # sharing the same encrypted secret. service_type must be populated so the
+    # Model Providers UI can render each card and per-kind defaults work via
+    # the partial unique index on (org_id, service_type, is_default).
+    seen_api_keys = set()  # tracks (provider_id, service_type) tuples
     for i, config in enumerate(all_providers):
         api_key_env = config.get("api_key_env")
         api_key_value = _get_api_key_from_env(api_key_env)
@@ -523,15 +541,18 @@ def seed_from_configs(db, org_name, email, password):
             continue
 
         mp = provider_map[i]
+        kind = config["provider_type"]  # llm | stt | tts
 
-        if mp.id in seen_api_keys:
+        key = (mp.id, kind)
+        if key in seen_api_keys:
             continue
-        seen_api_keys.add(mp.id)
+        seen_api_keys.add(key)
 
         api_key = ApiKey(
             organization_id=org_id,
             provider_id=mp.id,
-            label="seed",
+            service_type=kind,
+            label=f"seed ({kind})",
             encrypted_key=encrypt(api_key_value),
             is_active=True,
         )

@@ -34,6 +34,28 @@ export interface CallMetricsLatency {
   latency: number;
 }
 
+export interface CallMetricsTurnMetric {
+  turn: number;
+  status: string;
+  duration: number | null;
+  started_at: number | null;
+  user_stopped_at: number | null;
+  bot_started_at: number | null;
+  end_to_end: number | null;
+  stt_ttfb: number | null;
+  llm_ttfb: number | null;
+  tts_ttfb: number | null;
+  stt_ttfb_all: number[];
+  llm_ttfb_all: number[];
+  tts_ttfb_all: number[];
+  llm_usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  } | null;
+  tts_characters: number | null;
+}
+
 export interface CallMetrics {
   ttfb: CallMetricsTTFB[];
   turns: CallMetricsTurn[];
@@ -41,6 +63,12 @@ export interface CallMetrics {
   tts_usage: CallMetricsTTSUsage[];
   processing: CallMetricsProcessing[];
   user_bot_latency: CallMetricsLatency[];
+  /**
+   * Per-turn aggregated latency rows produced by the backend
+   * `MetricsCollectorProcessor`. Optional — rows persisted before the
+   * `turn_metrics` column existed will return `null`/missing.
+   */
+  turn_metrics?: CallMetricsTurnMetric[] | null;
 }
 
 export interface CallLogRow {
@@ -54,6 +82,13 @@ export interface CallLogRow {
   started_at: string | null;
   ended_at: string | null;
   duration_seconds: number | null;
+  /**
+   * Length of the encoded MP3 recording in seconds. Differs from
+   * `duration_seconds` (wall-clock incl. pipeline setup + R2 upload) and
+   * matches what the audio player plays. Falls back to `duration_seconds`
+   * when no recording exists.
+   */
+  recording_duration_seconds: number | null;
   from_number: string | null;
   to_number: string | null;
   provider_call_id: string | null;
