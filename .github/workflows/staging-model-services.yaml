@@ -1,0 +1,109 @@
+name: Staging Model Services Deploy
+
+on:
+  push:
+    branches: ["staging"]
+    paths:
+      - "build/kubernetes/qwen3-tts/**"
+      - "qwen-tts-streaming/app/**"
+      - "build/kubernetes/nemotron-stt/**"
+      - "nemotron-streaming/app/**"
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Model to deploy"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - qwen3-tts
+          - nemotron-stt
+
+env:
+  NAMESPACE: staging
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      qwen3-tts: ${{ steps.filter.outputs.qwen3-tts }}
+      nemotron-stt: ${{ steps.filter.outputs.nemotron-stt }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            qwen3-tts:
+              - 'build/kubernetes/qwen3-tts/**'
+              - 'qwen-tts-streaming/app/**'
+            nemotron-stt:
+              - 'build/kubernetes/nemotron-stt/**'
+              - 'nemotron-streaming/app/**'
+
+  deploy:
+    needs: detect
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - model: qwen3-tts
+            changed: ${{ needs.detect.outputs.qwen3-tts }}
+            deployment: staging-tts-qwen-deployment
+            configmap: qwen-tts-app
+            app_dir: qwen-tts-streaming/app
+            extra_files: "qwen3_tts_a16.yaml"
+          - model: nemotron-stt
+            changed: ${{ needs.detect.outputs.nemotron-stt }}
+            deployment: staging-stt-nemotron-deployment
+            configmap: stt-nemotron-app
+            app_dir: nemotron-streaming/app
+            extra_files: ""
+    steps:
+      - name: Should deploy
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ github.event.inputs.model }}" = "all" ] || [ "${{ github.event.inputs.model }}" = "${{ matrix.model }}" ]; then
+              echo "run=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "run=false" >> "$GITHUB_OUTPUT"
+            fi
+          elif [ "${{ matrix.changed }}" = "true" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'true'
+
+      - uses: azure/k8s-set-context@v4
+        if: steps.gate.outputs.run == 'true'
+        with:
+          kubeconfig: ${{ secrets.STAGING_KUBE_CONFIG_JSON }}
+
+      - name: Update app ConfigMap
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          ARGS="--from-file=server.py=${{ matrix.app_dir }}/server.py"
+          ARGS="$ARGS --from-file=requirements.txt=${{ matrix.app_dir }}/requirements.txt"
+          ARGS="$ARGS --from-file=constraints.txt=${{ matrix.app_dir }}/constraints.txt"
+          for f in ${{ matrix.extra_files }}; do
+            ARGS="$ARGS --from-file=$f=${{ matrix.app_dir }}/$f"
+          done
+          kubectl -n "$NAMESPACE" create configmap "${{ matrix.configmap }}" $ARGS \
+            --dry-run=client -o yaml | kubectl -n "$NAMESPACE" apply -f -
+
+      - name: Apply manifests
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          kubectl -n "$NAMESPACE" apply -f "build/kubernetes/${{ matrix.model }}/"
+
+      - name: Restart and wait for rollout
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          kubectl -n "$NAMESPACE" rollout restart deploy/"${{ matrix.deployment }}"
+          kubectl -n "$NAMESPACE" rollout status deploy/"${{ matrix.deployment }}" --timeout=1800s
