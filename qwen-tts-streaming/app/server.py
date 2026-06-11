@@ -65,6 +65,8 @@ async def _warmup_engine():
     log.info("engine warmup done in %dms", round((time.monotonic() - t0) * 1000))
 
 
+
+
 @app.on_event("startup")
 async def _startup():
     global _client
