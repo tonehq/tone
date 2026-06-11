@@ -31,16 +31,23 @@ jobs:
       nemotron_stt: ${{ steps.filter.outputs.nemotron_stt }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
         with:
-          filters: |
-            qwen3_tts:
-              - 'build/kubernetes/qwen3-tts/**'
-              - 'qwen-tts-streaming/app/**'
-            nemotron_stt:
-              - 'build/kubernetes/nemotron-stt/**'
-              - 'nemotron-streaming/app/**'
+          fetch-depth: 0
+      - id: filter
+        run: |
+          BEFORE="${{ github.event.before }}"
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BEFORE" 2>/dev/null; then
+            BEFORE=$(git rev-parse "${{ github.sha }}~1")
+          fi
+          CHANGED=$(git diff --name-only "$BEFORE" "${{ github.sha }}")
+          echo "changed files between $BEFORE and ${{ github.sha }}:"
+          echo "$CHANGED"
+          q=false; n=false
+          echo "$CHANGED" | grep -qE '^(build/kubernetes/qwen3-tts/|qwen-tts-streaming/app/)' && q=true || true
+          echo "$CHANGED" | grep -qE '^(build/kubernetes/nemotron-stt/|nemotron-streaming/app/)' && n=true || true
+          echo "qwen3_tts=$q" >> "$GITHUB_OUTPUT"
+          echo "nemotron_stt=$n" >> "$GITHUB_OUTPUT"
+          echo "qwen3_tts=$q nemotron_stt=$n"
 
   deploy:
     needs: detect
