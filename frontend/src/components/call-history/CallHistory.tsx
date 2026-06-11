@@ -103,7 +103,14 @@ function summarizeMetrics(metrics: CallLogRow['metrics']) {
     : null;
   const totalTokens = metrics.llm_usage.reduce((s, u) => s + u.total_tokens, 0);
   const totalChars = metrics.tts_usage.reduce((s, u) => s + u.characters, 0);
-  const turnCount = metrics.turns.length;
+  // Count real user→bot exchanges when per-turn data is available — matches
+  // the Turns stat card on the metrics detail page. Falls back to the raw
+  // pipecat turn count for legacy calls without `turn_metrics`.
+  const turnMetrics = Array.isArray(metrics.turn_metrics) ? metrics.turn_metrics : [];
+  const turnCount =
+    turnMetrics.length > 0
+      ? turnMetrics.filter((t) => t.end_to_end != null).length
+      : metrics.turns.length;
   return { avgLatencyS, totalTokens, totalChars, turnCount };
 }
 
