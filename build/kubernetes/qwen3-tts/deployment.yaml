@@ -19,16 +19,14 @@ spec:
     spec:
       containers:
         - name: qwen-tts
-          image: ubuntu:24.04
+          image: vllm/vllm-omni:v0.22.0
           workingDir: /app-tts
           command: ["bash", "-lc"]
           args:
             - |
               set -e
-              apt-get update -qq
-              apt-get install -y -qq --no-install-recommends python3-pip python3-dev gcc git libsndfile1 libgomp1 ca-certificates
-              pip install --break-system-packages --no-cache-dir -c /app-tts/constraints.txt -r /app-tts/requirements.txt
-              pip install --break-system-packages --no-cache-dir --no-deps "nano-qwen3tts-vllm @ git+https://github.com/tsdocode/nano-qwen3tts-vllm.git"
+              pip install --no-cache-dir httpx soundfile || pip install --break-system-packages --no-cache-dir httpx soundfile
+              vllm-omni serve "$TTS_MODEL" --deploy-config /app-tts/qwen3_tts_a16.yaml --omni --host 127.0.0.1 --port 8091 --trust-remote-code &
               exec uvicorn server:app --host 0.0.0.0 --port 8001
           env:
             - name: TTS_MODEL
@@ -57,7 +55,7 @@ spec:
             httpGet:
               path: /health
               port: tts
-            initialDelaySeconds: 1800
+            initialDelaySeconds: 600
             periodSeconds: 30
             failureThreshold: 3
       volumes:
