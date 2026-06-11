@@ -150,6 +150,7 @@ class CallLogService(BaseService):
         transcript: Optional[List[dict]] = None,
         metrics: Optional[dict] = None,
         tool_calls: Optional[List[dict]] = None,
+        recording_duration_seconds: Optional[int] = None,
     ) -> Optional[Call]:
         call = self.db.query(Call).filter(Call.id == call_log_id).first()
         if not call:
@@ -159,6 +160,13 @@ class CallLogService(BaseService):
         call.ended_at = now
         if call.started_at:
             call.duration_seconds = int((now - call.started_at).total_seconds())
+
+        # Recording length differs from `duration_seconds`: the latter is the
+        # wall-clock from call_log creation to completion (includes pipeline
+        # setup, client handshake, R2 upload, DB writes), while this value is
+        # the length of the encoded MP3 the audio player actually plays.
+        if recording_duration_seconds is not None:
+            call.recording_duration_seconds = recording_duration_seconds
 
         if upload_id:
             call.recording_upload_id = upload_id

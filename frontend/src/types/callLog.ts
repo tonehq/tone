@@ -54,6 +54,13 @@ export interface CallLogRow {
   started_at: string | null;
   ended_at: string | null;
   duration_seconds: number | null;
+  /**
+   * Length of the encoded MP3 recording in seconds. Differs from
+   * `duration_seconds` (wall-clock incl. pipeline setup + R2 upload) and
+   * matches what the audio player plays. Falls back to `duration_seconds`
+   * when no recording exists.
+   */
+  recording_duration_seconds: number | null;
   from_number: string | null;
   to_number: string | null;
   provider_call_id: string | null;

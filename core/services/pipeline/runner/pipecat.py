@@ -10,6 +10,7 @@ back half.
 import asyncio
 import io
 import time as _time
+from typing import Optional
 
 from loguru import logger
 
@@ -217,6 +218,10 @@ class PipecatPipelineRunner(PipelineRunner):
                 # Convert raw audio to MP3
                 audio_bytes = None
                 file_name = None
+                # Length of the encoded MP3 in seconds — what the audio player
+                # actually plays. Stored on the call row so the UI's duration
+                # chip lines up with the recording.
+                recording_seconds: Optional[int] = None
                 try:
                     audio_segment = AudioSegment(
                         data=audio,
@@ -231,7 +236,9 @@ class PipecatPipelineRunner(PipelineRunner):
                     mp3_buffer = io.BytesIO()
                     audio_segment.export(mp3_buffer, format="mp3")
                     audio_bytes = mp3_buffer.getvalue()
-                    logger.info("Encoded call recording: {} ({:.1f}s, {} bytes)", file_name, len(audio_segment) / 1000, len(audio_bytes))
+                    recording_seconds_exact = len(audio_segment) / 1000.0
+                    recording_seconds = int(recording_seconds_exact)
+                    logger.info("Encoded call recording: {} ({:.1f}s, {} bytes)", file_name, recording_seconds_exact, len(audio_bytes))
                 except Exception as e:
                     logger.error("Failed to encode call recording: {}", e)
 
@@ -272,6 +279,7 @@ class PipecatPipelineRunner(PipelineRunner):
                                 upload_id=upload_id,
                                 transcript=transcript_data,
                                 metrics=collected_metrics,
+                                recording_duration_seconds=recording_seconds,
                             )
                         call_log_updated["done"] = True
                         logger.info(

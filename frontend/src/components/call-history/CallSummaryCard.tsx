@@ -9,6 +9,7 @@ import { formatDuration, formatTimeOnly } from '@/utils/date';
 import { ArrowRight, Clock, Phone, Radio } from 'lucide-react';
 import React from 'react';
 
+import { getDisplayDurationSeconds } from './callDuration';
 import { getCallStatusLabel, getCallStatusTone } from './callStatus';
 
 interface CallSummaryCardProps {
@@ -69,6 +70,7 @@ const muted = <span className="text-muted-foreground">—</span>;
 const CallSummaryCard: React.FC<CallSummaryCardProps> = ({ callLog }) => {
   const startedAt = formatTimeOnly(callLog.started_at);
   const endedAt = formatTimeOnly(callLog.ended_at);
+  const displayDuration = getDisplayDurationSeconds(callLog);
 
   const hasPhones = !!callLog.from_number || !!callLog.to_number;
   const hasTimes = !!startedAt || !!endedAt;
@@ -85,9 +87,9 @@ const CallSummaryCard: React.FC<CallSummaryCardProps> = ({ callLog }) => {
         <Badge className={cn('rounded-full px-2.5 py-1', getCallStatusTone(callLog.status))}>
           {getCallStatusLabel(callLog.status)}
         </Badge>
-        {callLog.duration_seconds != null && (
+        {displayDuration != null && (
           <InfoChip icon={Clock} tooltip="Call Duration">
-            {formatDuration(callLog.duration_seconds)}
+            {formatDuration(displayDuration)}
           </InfoChip>
         )}
 
