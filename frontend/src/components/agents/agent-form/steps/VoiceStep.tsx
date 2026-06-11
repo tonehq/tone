@@ -333,7 +333,9 @@ export default function VoiceStep() {
     return matched?.meta_data_schema?.stt ?? [];
   }, [sttModel, sttModels, sttProviderId, sttProviders]);
 
-  // Clear stale TTS schema field values when TTS model changes
+  // Clear stale TTS schema field values when TTS model changes.
+  // shouldDirty:false — reactive cleanup, not a user edit. Save-time diff
+  // against originalState still persists the cleanup.
   useEffect(() => {
     if (!ttsSchema.length) return;
     const allowedKeys = new Set(ttsSchema.map((f) => f.name));
@@ -344,13 +346,15 @@ export default function VoiceStep() {
     for (const key of Object.keys(current)) {
       if (!TTS_STRUCTURAL_KEYS.has(key) && !allowedKeys.has(key)) {
         setValue(`config.voice_settings.${key}` as never, undefined as never, {
-          shouldDirty: true,
+          shouldDirty: false,
         });
       }
     }
   }, [ttsSchema]);
 
-  // Clear stale STT schema field values when STT model changes
+  // Clear stale STT schema field values when STT model changes.
+  // shouldDirty:false — reactive cleanup, not a user edit. Save-time diff
+  // against originalState still persists the cleanup.
   useEffect(() => {
     if (!sttSchema.length) return;
     const allowedKeys = new Set(sttSchema.map((f) => f.name));
@@ -361,7 +365,7 @@ export default function VoiceStep() {
     for (const key of Object.keys(current)) {
       if (!STT_STRUCTURAL_KEYS.has(key) && !allowedKeys.has(key)) {
         setValue(`config.stt_settings.${key}` as never, undefined as never, {
-          shouldDirty: true,
+          shouldDirty: false,
         });
       }
     }

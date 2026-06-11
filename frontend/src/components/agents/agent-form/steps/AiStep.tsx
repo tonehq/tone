@@ -120,6 +120,8 @@ export default function AiStep() {
 
   // Clear stale schema field values when model changes (e.g. switching from
   // GPT-4o to GPT-5 should remove temperature/top_p that GPT-5 doesn't support).
+  // shouldDirty:false — this is a reactive cleanup, not a user edit. Save-time
+  // diff against originalState still persists the cleanup.
   useEffect(() => {
     if (!llmSchema.length) return;
     const allowedKeys = new Set(llmSchema.map((f) => f.name));
@@ -130,7 +132,7 @@ export default function AiStep() {
     for (const key of Object.keys(current)) {
       if (!LLM_STRUCTURAL_KEYS.has(key) && !allowedKeys.has(key)) {
         setValue(`config.llm_settings.${key}` as never, undefined as never, {
-          shouldDirty: true,
+          shouldDirty: false,
         });
       }
     }
