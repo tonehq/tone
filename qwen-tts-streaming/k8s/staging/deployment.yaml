@@ -1,8 +1,3 @@
-# Standalone Qwen3-TTS deployment — its OWN pod on its OWN GPU node.
-# Split out of the STT pod so STT and TTS no longer time-slice one A16.
-# Requests nvidia.com/gpu: 1, so it claims a whole GPU. With two single-GPU A16
-# nodes (STT already holds one), the scheduler is forced to place this on the other.
-# Python 3.12 (qwen-tts floor) on ubuntu:24.04; torch+torchaudio pinned to 2.6.0 cu124.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -31,7 +26,7 @@ spec:
             - |
               set -e
               apt-get update -qq
-              apt-get install -y -qq --no-install-recommends python3-pip libsndfile1 libgomp1 ca-certificates
+              apt-get install -y -qq --no-install-recommends python3-pip git libsndfile1 libgomp1 ca-certificates
               pip install --break-system-packages --no-cache-dir -c /app-tts/constraints.txt -r /app-tts/requirements.txt
               exec uvicorn server:app --host 0.0.0.0 --port 8001
           env:

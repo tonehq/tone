@@ -1,15 +1,11 @@
-# Qwen3-TTS deps. Installed at container start (Ubuntu 24.04 / Python 3.12).
-# torch from the cu124 wheel index to match the node's CUDA 12.4 driver.
---extra-index-url https://download.pytorch.org/whl/cu124
-torch==2.6.0
-# Must match torch's CUDA build (cu124 -> libcudart.so.12). Without this pin, pip
-# pulls the latest torchaudio built against CUDA 13 (libcudart.so.13) and the model
-# import dies with "libcudart.so.13: cannot open shared object file".
-torchaudio==2.6.0
-# faster-qwen3-tts: same Qwen3-TTS weights, but CUDA-graph capture + true chunk
-# streaming (generate_custom_voice_streaming). Falls back to plain `qwen-tts` if
-# CUDA-graph capture misbehaves on the A16 vGPU — swap this line back to `qwen-tts`.
-faster-qwen3-tts
+--extra-index-url https://download.pytorch.org/whl/cu126
+torch==2.10.0
+torchaudio==2.10.0
+nano-qwen3tts-vllm @ git+https://github.com/tsdocode/nano-qwen3tts-vllm.git
+qwen-tts>=0.0.5
+pyzmq>=27.1.0
+xxhash>=3.6.0
+transformers>=4.57.3
 soundfile
 numpy
 fastapi
