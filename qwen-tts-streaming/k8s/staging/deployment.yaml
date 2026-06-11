@@ -28,6 +28,7 @@ spec:
               apt-get update -qq
               apt-get install -y -qq --no-install-recommends python3-pip git libsndfile1 libgomp1 ca-certificates
               pip install --break-system-packages --no-cache-dir -c /app-tts/constraints.txt -r /app-tts/requirements.txt
+              pip install --break-system-packages --no-cache-dir --no-deps "nano-qwen3tts-vllm @ git+https://github.com/tsdocode/nano-qwen3tts-vllm.git"
               exec uvicorn server:app --host 0.0.0.0 --port 8001
           env:
             - name: TTS_MODEL
