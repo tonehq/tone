@@ -53,6 +53,19 @@ export interface AgentConfigResponse extends AgentConfig {
   version: number;
 }
 
+/** Lightweight summary returned by the version-history endpoint and embedded
+ * in {@link AgentDetail.versions}. The `is_live` flag mirrors whether
+ * `agents.published_config_id` points at this row. */
+export interface AgentVersionSummary {
+  id: string;
+  version: number;
+  is_live: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+  published_at: string | null;
+  created_by_user_id: string | null;
+}
+
 export interface AgentPhoneNumberInput {
   number: string;
   channel_id: string;
@@ -118,6 +131,9 @@ export interface AgentDetail {
   mcp_servers: AgentMcpServerRef[];
   documents: AgentDocumentRef[];
   phone_numbers: AgentPhoneNumberRef[];
+  /** Version history, newest first. The row with `is_live: true` is the one
+   * `agents.published_config_id` currently points at. */
+  versions?: AgentVersionSummary[];
 }
 
 /** Lightweight listing row (POST /agent/list). `phone_number` is the legacy
