@@ -343,6 +343,7 @@ class CallService(BaseService):
                 CallMetrics.tts_usage.label("metrics_tts_usage"),
                 CallMetrics.user_bot_latency.label("metrics_user_bot_latency"),
                 CallMetrics.turns.label("metrics_turns"),
+                CallMetrics.turn_metrics.label("metrics_turn_metrics"),
             )
             .offset(offset)
             .limit(page_size)
@@ -365,6 +366,7 @@ class CallService(BaseService):
                     tts_usage=row[10],
                     user_bot_latency=row[11],
                     turns=row[12],
+                    turn_metrics=row[13],
                 ),
             )
             for row in results
@@ -403,6 +405,7 @@ class CallService(BaseService):
                 CallMetrics.tts_usage.label("metrics_tts_usage"),
                 CallMetrics.user_bot_latency.label("metrics_user_bot_latency"),
                 CallMetrics.turns.label("metrics_turns"),
+                CallMetrics.turn_metrics.label("metrics_turn_metrics"),
             )
             .filter(Call.id == call_id)
             .first()
@@ -426,6 +429,7 @@ class CallService(BaseService):
                 tts_usage=result[10],
                 user_bot_latency=result[11],
                 turns=result[12],
+                turn_metrics=result[13],
             ),
         )
 
@@ -453,6 +457,7 @@ class CallService(BaseService):
         tts_usage,
         user_bot_latency,
         turns,
+        turn_metrics=None,
     ) -> Optional[Dict[str, Any]]:
         # Outer join returns all-NULL columns when no metrics row exists; surface
         # that as `None` so the FE can branch on row.metrics == null.
@@ -466,6 +471,7 @@ class CallService(BaseService):
             "tts_usage": tts_usage or [],
             "user_bot_latency": user_bot_latency or [],
             "turns": turns or [],
+            "turn_metrics": turn_metrics or [],
         }
 
     def call_response(
