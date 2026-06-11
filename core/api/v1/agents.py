@@ -95,6 +95,24 @@ class UpdateAgentRequest(BaseModel):
     phone_numbers: Optional[List[PhoneNumberAttachment]] = None
 
 
+class SaveAsNewVersionRequest(BaseModel):
+    """Body for ``POST /agent/save_as_new_version``.
+
+    Mirrors ``UpdateAgentRequest`` minus the top-level agent attributes
+    (name/description/agent_type/is_active) — a new version is purely a config
+    snapshot, not an agent rename.
+    """
+    config: Optional[AgentConfigRequest] = None
+    tool_ids: Optional[List[str]] = None
+    mcp_server_ids: Optional[List[str]] = None
+    upload_ids: Optional[List[str]] = None
+    phone_numbers: Optional[List[PhoneNumberAttachment]] = None
+
+
+class SwitchActiveVersionRequest(BaseModel):
+    config_id: str
+
+
 class GeneratePromptRequest(BaseModel):
     agent_name: Optional[str] = None
     agent_description: Optional[str] = None
@@ -248,12 +266,20 @@ def create_agent(
 @router.get("/get_agent")
 def get_agent(
     agent_id: str = Query(..., description="The agent ID to fetch"),
+    config_id: Optional[str] = Query(
+        None,
+        description=(
+            "Optional version id. When provided, returns the agent rendered "
+            "against this specific config version instead of the live one."
+        ),
+    ),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
     svc = _get_service(claims, db)
     agent = svc.get_agent(agent_id)
-    return svc.agent_response(agent)
+    config = svc.get_version(agent_id, config_id) if config_id else None
+    return svc.agent_response(agent, config=config)
 
 
 @router.put("/update_agent")
@@ -278,6 +304,57 @@ def delete_agent(
 ):
     svc = _get_service(claims, db)
     return svc.delete_agent(agent_id)
+
+
+# ---------------------------------------------------------------------------
+# Versioning
+# ---------------------------------------------------------------------------
+
+@router.get("/list_versions")
+def list_agent_versions(
+    agent_id: str = Query(..., description="The agent ID to list versions for"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    svc = _get_service(claims, db)
+    return svc.list_versions(agent_id)
+
+
+@router.post("/save_as_new_version", status_code=status.HTTP_201_CREATED)
+def save_as_new_version(
+    body: SaveAsNewVersionRequest,
+    agent_id: str = Query(..., description="The agent ID to version"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    svc = _get_service(claims, db)
+    user_id = UUID(claims.user_id) if claims.user_id else None
+    data = body.model_dump(exclude_unset=True)
+    agent = svc.save_as_new_version(agent_id, data, user_id)
+    return svc.agent_response(agent)
+
+
+@router.post("/switch_active_version")
+def switch_active_version(
+    body: SwitchActiveVersionRequest,
+    agent_id: str = Query(..., description="The agent ID to switch live version for"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    svc = _get_service(claims, db)
+    agent = svc.switch_active_version(agent_id, body.config_id)
+    return svc.agent_response(agent)
+
+
+@router.delete("/delete_version", status_code=status.HTTP_200_OK)
+def delete_agent_version(
+    agent_id: str = Query(..., description="The agent ID owning the version"),
+    config_id: str = Query(..., description="The version (agent_config) ID to delete"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    svc = _get_service(claims, db)
+    return svc.delete_version(agent_id, config_id)
 
 
 @router.post("/list")

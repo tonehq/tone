@@ -1,7 +1,7 @@
 'use client';
 
 import { useAtom } from 'jotai';
-import { ArrowLeft, Loader2, Phone, Save, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, Phone, Sparkles, Trash2 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
@@ -9,10 +9,15 @@ import { FormProvider, useForm } from 'react-hook-form';
 import {
   createAgentAtom,
   deleteAgentAtom,
+  deleteAgentVersionAtom,
   fetchAgentAtom,
+  saveAgentAsNewVersionAtom,
+  switchActiveAgentVersionAtom,
   updateAgentAtom,
 } from '@/atoms/AgentsAtom';
 import { AgentEditorProvider } from '@/components/agents/AgentEditorContext';
+import AgentSaveActions, { type AgentSaveAction } from '@/components/agents/AgentSaveActions';
+import AgentVersionSelector from '@/components/agents/AgentVersionSelector';
 import { AgentFormNavProvider } from '@/components/agents/agent-form/AgentFormNav';
 import { buildAgentNav } from '@/components/agents/agent-form/sectionNav';
 import { AccountMenu } from '@/components/layout/AccountMenu';
@@ -64,15 +69,21 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   const [, createAgent] = useAtom(createAgentAtom);
   const [, updateAgent] = useAtom(updateAgentAtom);
   const [, deleteAgent] = useAtom(deleteAgentAtom);
+  const [, saveAgentAsNewVersion] = useAtom(saveAgentAsNewVersionAtom);
+  const [, switchActiveAgentVersion] = useAtom(switchActiveAgentVersionAtom);
+  const [, deleteAgentVersion] = useAtom(deleteAgentVersionAtom);
 
   const { sidebarCollapsed, toggleSidebar } = useNavigation();
 
   const [loading, setLoading] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
+  const [switchingLive, setSwitchingLive] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [originalState, setOriginalState] = useState<AgentFormState | null>(null);
   const [detail, setDetail] = useState<AgentDetail | null>(null);
+  /** Which version is loaded in the form. Null until the agent has loaded. */
+  const [viewedConfigId, setViewedConfigId] = useState<string | null>(null);
 
   const methods = useForm<AgentFormState>({
     defaultValues: defaultFormState(agentType),
@@ -99,6 +110,19 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   const navGroups = useMemo(() => buildAgentNav(basePath, mode), [basePath, mode]);
   const flatItems = useMemo(() => navGroups.flatMap((g) => g.items), [navGroups]);
 
+  /** Push a freshly-loaded AgentDetail into local state + the RHF form.
+   * Centralised so save, version-switch, and initial load all stay consistent. */
+  const applyDetail = useCallback(
+    (d: AgentDetail) => {
+      setDetail(d);
+      const hydrated = agentDetailToFormState(d);
+      methods.reset(hydrated);
+      setOriginalState(hydrated);
+      setViewedConfigId(d.config?.id ?? null);
+    },
+    [methods],
+  );
+
   // ─── load on edit ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isEditMode || !agentId) return;
@@ -107,10 +131,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     fetchAgent(agentId)
       .then((d) => {
         if (cancelled) return;
-        setDetail(d);
-        const hydrated = agentDetailToFormState(d);
-        methods.reset(hydrated);
-        setOriginalState(hydrated);
+        applyDetail(d);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -127,65 +148,162 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     return () => {
       cancelled = true;
     };
-  }, [agentId, fetchAgent, isEditMode, methods, router]);
+  }, [agentId, applyDetail, fetchAgent, isEditMode, router]);
+
+  /** Map a server validation-error payload onto RHF fields and jump to the
+   * tab where the first failure lives. Shared between save-in-place and
+   * save-as-new-version paths so behaviour matches in both. */
+  const applyServerValidation = useCallback(
+    (err: unknown): boolean => {
+      const detailErr = (err as any)?.response?.data?.detail;
+      if (!detailErr || typeof detailErr !== 'object' || !detailErr.errors) return false;
+      const validationErrors = detailErr.errors as Record<string, Record<string, string[]>>;
+      let navigated = false;
+      for (const [settingsKey, fields] of Object.entries(validationErrors)) {
+        for (const [fieldName, messages] of Object.entries(fields)) {
+          const path = `config.${settingsKey}.${fieldName}` as any;
+          methods.setError(path, { type: 'server', message: messages[0] });
+        }
+        if (!navigated) {
+          if (settingsKey === 'llm_settings') router.push(`${basePath}/ai`);
+          else if (settingsKey === 'voice_settings' || settingsKey === 'stt_settings')
+            router.push(`${basePath}/voice`);
+          navigated = true;
+        }
+      }
+      showToast.error(
+        'Validation failed',
+        detailErr.message || 'Please fix the highlighted fields.',
+      );
+      return true;
+    },
+    [basePath, methods, router],
+  );
 
   // ─── save / delete / activate ───────────────────────────────────────────────
-  const handleSave = useCallback(async () => {
-    const valid = await methods.trigger();
-    if (!valid) {
-      router.push(`${basePath}/basics`);
-      return;
-    }
-    const values = methods.getValues();
-    setSaving(true);
-    try {
-      if (isEditMode && agentId && originalState) {
+  const handleSave = useCallback(
+    async (action: AgentSaveAction = 'save_in_place') => {
+      const valid = await methods.trigger();
+      if (!valid) {
+        router.push(`${basePath}/basics`);
+        return;
+      }
+      const values = methods.getValues();
+      setSaving(true);
+      try {
+        // Create flow — first save always goes through createAgent.
+        if (!isEditMode || !agentId) {
+          const created = await createAgent(formStateToCreatePayload(values));
+          showToast.success('Agent created');
+          methods.reset(values);
+          router.push(`/agents/edit/${created.agent_type}/${created.id}/overview`);
+          return;
+        }
+
+        if (action === 'save_as_new_version') {
+          // Send the full form state, NOT a diff. The backend clones the live
+          // config first and overlays config_data; if we sent only the diff
+          // while the user is previewing v1, the new version would be
+          // "live(v3) + just my temperature tweak" instead of "what I see now."
+          // Sending all editable keys makes the snapshot reflect the form.
+          const full = formStateToCreatePayload(values);
+          const updated = await saveAgentAsNewVersion({
+            agentId,
+            values: {
+              config: full.config,
+              tool_ids: full.tool_ids,
+              mcp_server_ids: full.mcp_server_ids,
+              upload_ids: full.upload_ids,
+              phone_numbers: full.phone_numbers,
+            },
+          });
+          applyDetail(updated);
+          showToast.success(
+            'New version saved',
+            updated.config?.version != null ? `v${updated.config.version} is now live.` : undefined,
+          );
+          return;
+        }
+
+        // Save in place — only valid when viewing the live version.
+        if (!originalState) return;
         const diff = formStateToUpdatePayload(values, originalState);
         if (Object.keys(diff).length === 0) {
           showToast.success('No changes', 'Nothing to update.');
-          setSaving(false);
           return;
         }
         const updated = await updateAgent({ id: agentId, values: diff });
-        setDetail(updated);
-        const fresh = agentDetailToFormState(updated);
-        methods.reset(fresh);
-        setOriginalState(fresh);
+        applyDetail(updated);
         showToast.success('Agent updated');
-      } else {
-        const created = await createAgent(formStateToCreatePayload(values));
-        showToast.success('Agent created');
-        methods.reset(values);
-        router.push(`/agents/edit/${created.agent_type}/${created.id}/overview`);
+      } catch (err) {
+        if (!applyServerValidation(err)) handleApiError(err);
+      } finally {
+        setSaving(false);
       }
+    },
+    [
+      agentId,
+      applyDetail,
+      applyServerValidation,
+      basePath,
+      createAgent,
+      isEditMode,
+      methods,
+      originalState,
+      router,
+      saveAgentAsNewVersion,
+      updateAgent,
+    ],
+  );
+
+  const handleViewVersion = useCallback(
+    async (configId: string) => {
+      if (!agentId || configId === viewedConfigId) return;
+      setLoading(true);
+      try {
+        const d = await fetchAgent({ agentId, configId });
+        applyDetail(d);
+        // Override viewedConfigId in case the backend resolved a different live
+        // config — we want to track what the user explicitly picked.
+        setViewedConfigId(configId);
+      } catch (err) {
+        handleApiError(err);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [agentId, applyDetail, fetchAgent, viewedConfigId],
+  );
+
+  const handleMakeLive = useCallback(async () => {
+    if (!agentId || !viewedConfigId) return;
+    setSwitchingLive(true);
+    try {
+      const updated = await switchActiveAgentVersion({ agentId, configId: viewedConfigId });
+      applyDetail(updated);
+      const v = updated.versions?.find((row) => row.id === viewedConfigId)?.version;
+      showToast.success('Live version updated', v != null ? `v${v} is now live.` : undefined);
     } catch (err) {
-      const detailErr = (err as any)?.response?.data?.detail;
-      if (typeof detailErr === 'object' && detailErr?.errors) {
-        const validationErrors = detailErr.errors as Record<string, Record<string, string[]>>;
-        let navigated = false;
-        for (const [settingsKey, fields] of Object.entries(validationErrors)) {
-          for (const [fieldName, messages] of Object.entries(fields)) {
-            const path = `config.${settingsKey}.${fieldName}` as any;
-            methods.setError(path, { type: 'server', message: messages[0] });
-          }
-          if (!navigated) {
-            if (settingsKey === 'llm_settings') router.push(`${basePath}/ai`);
-            else if (settingsKey === 'voice_settings' || settingsKey === 'stt_settings')
-              router.push(`${basePath}/voice`);
-            navigated = true;
-          }
-        }
-        showToast.error(
-          'Validation failed',
-          detailErr.message || 'Please fix the highlighted fields.',
-        );
-      } else {
+      handleApiError(err);
+    } finally {
+      setSwitchingLive(false);
+    }
+  }, [agentId, applyDetail, switchActiveAgentVersion, viewedConfigId]);
+
+  const handleDeleteVersion = useCallback(
+    async (configId: string) => {
+      if (!agentId) return;
+      try {
+        await deleteAgentVersion({ agentId, configId });
+        showToast.success('Version deleted');
+        const refreshed = await fetchAgent(agentId);
+        applyDetail(refreshed);
+      } catch (err) {
         handleApiError(err);
       }
-    } finally {
-      setSaving(false);
-    }
-  }, [agentId, basePath, createAgent, isEditMode, methods, originalState, router, updateAgent]);
+    },
+    [agentId, applyDetail, deleteAgentVersion, fetchAgent],
+  );
 
   const handleConfirmDelete = useCallback(async () => {
     if (!agentId) return;
@@ -227,6 +345,42 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   // ─── derived ──────────────────────────────────────────────────────────────
   const agentName = methods.watch('name') || (isEditMode ? 'Untitled agent' : 'New agent');
   const agentInitial = (agentName.trim().charAt(0) || 'A').toUpperCase();
+
+  const versions = detail?.versions ?? [];
+  const liveVersion = useMemo(() => versions.find((v) => v.is_live) ?? null, [versions]);
+  const viewedVersion = useMemo(
+    () => versions.find((v) => v.id === viewedConfigId) ?? null,
+    [versions, viewedConfigId],
+  );
+  const viewingLive =
+    liveVersion === null
+      ? true // create flow / first save — treat as live
+      : viewedConfigId === null
+        ? true
+        : viewedConfigId === liveVersion.id;
+
+  // Switching the viewed version or moving the live pointer overwrites the
+  // form with fetched data — wrap both in guardedAction so unsaved edits get
+  // the same "Discard changes?" prompt as other navigations.
+  const safeViewVersion = useCallback(
+    (configId: string) => guardedAction(() => void handleViewVersion(configId)),
+    [guardedAction, handleViewVersion],
+  );
+  const safeMakeLive = useCallback(
+    () => guardedAction(() => void handleMakeLive()),
+    [guardedAction, handleMakeLive],
+  );
+
+  const dispatchSave = useCallback(
+    (action: AgentSaveAction) => {
+      if (action === 'make_live') {
+        safeMakeLive();
+        return;
+      }
+      void handleSave(action);
+    },
+    [handleSave, safeMakeLive],
+  );
 
   return (
     <FormProvider {...methods}>
@@ -331,6 +485,15 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
+                  {isEditMode && versions.length > 0 && (
+                    <AgentVersionSelector
+                      versions={versions}
+                      selectedConfigId={viewedConfigId}
+                      onSelect={safeViewVersion}
+                      onDelete={handleDeleteVersion}
+                      disabled={loading || saving || switchingLive}
+                    />
+                  )}
                   {isEditMode && (
                     <CustomButton
                       type="text"
@@ -342,24 +505,26 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
                       Delete
                     </CustomButton>
                   )}
-                  <CustomButton
-                    type="primary"
-                    size="sm"
-                    icon={
-                      saving ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : (
-                        <Save className="size-3.5" />
-                      )
-                    }
-                    onClick={handleSave}
-                    loading={saving}
-                    className="h-8"
-                  >
-                    {isEditMode ? 'Save changes' : 'Create agent'}
-                  </CustomButton>
+                  <AgentSaveActions
+                    mode={isEditMode ? 'edit' : 'create'}
+                    viewingLive={viewingLive}
+                    liveVersionNumber={liveVersion?.version ?? null}
+                    viewedVersionNumber={viewedVersion?.version ?? null}
+                    saving={saving}
+                    switchingLive={switchingLive}
+                    onAction={dispatchSave}
+                  />
                 </div>
               </header>
+
+              {/* Non-live banner: surfaces what live is so the user isn't surprised
+                  that "Save changes" is hidden while they're previewing v2. */}
+              {isEditMode && !viewingLive && viewedVersion && liveVersion && (
+                <div className="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-5 py-2 text-[12px] text-amber-900 dark:text-amber-200">
+                  Viewing v{viewedVersion.version} (not live). v{liveVersion.version} is currently
+                  serving calls — edits here can be saved as a new version or made live.
+                </div>
+              )}
 
               {/* Body — the routed section */}
               <main className="min-h-0 flex-1 overflow-auto px-5 py-5 lg:px-8 lg:py-6">
