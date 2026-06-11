@@ -1,2 +1,0 @@
-# Pin transitive deps that have broken qwen-tts / torch in the past.
-# Kept deliberately small — add entries here if a deploy pulls an incompatible wheel.
