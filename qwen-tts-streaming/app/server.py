@@ -40,13 +40,15 @@ MODEL_NAME = os.environ.get("TTS_MODEL", "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice")
 TOKENIZER_NAME = os.environ.get("TTS_TOKENIZER", "Qwen/Qwen3-TTS-Tokenizer-12Hz")
 DEFAULT_SPEAKER = os.environ.get("TTS_SPEAKER", "Ryan")
 DEFAULT_LANGUAGE = os.environ.get("TTS_LANGUAGE", "English")
-GPU_MEM_UTIL = float(os.environ.get("TTS_GPU_MEM_UTIL", "0.85"))
+GPU_MEM_UTIL = float(os.environ.get("TTS_GPU_MEM_UTIL", "0.5"))
+TOKENIZER_GRAPHS = int(os.environ.get("TTS_TOKENIZER_GRAPHS", "24"))
 WARMUP_MAX_BATCH = int(os.environ.get("TTS_WARMUP_MAX_BATCH", "8"))
 
 TARGET_SAMPLE_RATE = 24000
 FIRST_CHUNK_SIZE = int(os.environ.get("TTS_FIRST_CHUNK_SIZE", "2"))
 FIRST_CHUNK_COUNT = int(os.environ.get("TTS_FIRST_CHUNK_COUNT", "8"))
 STREAMING_CHUNK_SIZE = int(os.environ.get("TTS_CHUNK_FRAMES", "4"))
+STREAMING_CONTEXT_SIZE = int(os.environ.get("TTS_CONTEXT_FRAMES", "8"))
 _FIRST_CODES_THRESHOLD = FIRST_CHUNK_COUNT * FIRST_CHUNK_SIZE
 
 SPEAKERS = ["Vivian", "Serena", "Uncle_Fu", "Dylan", "Eric", "Ryan", "Aiden", "Ono_Anna", "Sohee"]
@@ -73,7 +75,11 @@ def _load_interface() -> Qwen3TTSInterface:
 def _load_tokenizer() -> SpeechTokenizerCUDAGraph:
     global _tokenizer
     if _tokenizer is None:
-        _tokenizer = SpeechTokenizerCUDAGraph(TOKENIZER_NAME, device="cuda:0" if torch.cuda.is_available() else "cpu")
+        _tokenizer = SpeechTokenizerCUDAGraph(
+            TOKENIZER_NAME,
+            device="cuda:0" if torch.cuda.is_available() else "cpu",
+            num_graph_lengths=TOKENIZER_GRAPHS,
+        )
     return _tokenizer
 
 
@@ -177,7 +183,8 @@ async def synthesize_stream(text: str, speaker: str, language: str):
                 break
             if len(item) <= prev_pos:
                 continue
-            pcm = await _decode_batched(item, prev_pos)
+            start = max(0, prev_pos - STREAMING_CONTEXT_SIZE)
+            pcm = await _decode_batched(item[start:], prev_pos - start)
             prev_pos = len(item)
             if pcm:
                 yield pcm
