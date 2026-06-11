@@ -205,15 +205,21 @@ async def lifespan(app: FastAPI):
     _decode_queue = asyncio.Queue()
     _decode_worker_task = asyncio.create_task(_decode_worker_loop())
 
-    async def _warm_one(i: int):
+    async def _warm_one(i: int, strict: bool = False):
         try:
+            got_audio = False
             async for _ in synthesize_stream("Hello.", DEFAULT_SPEAKER, DEFAULT_LANGUAGE):
-                pass
+                got_audio = True
+            if strict and not got_audio:
+                raise RuntimeError("warmup produced no audio — engine workers are not running")
         except Exception:
-            log.exception("warmup synth %d failed (continuing)", i)
+            log.exception("warmup synth %d failed", i)
+            if strict:
+                raise
 
     t0 = time.monotonic()
-    batch = 1
+    await _warm_one(0, strict=True)
+    batch = 2
     while batch <= WARMUP_MAX_BATCH:
         await asyncio.gather(*(_warm_one(i) for i in range(batch)))
         batch *= 2
