@@ -10,6 +10,7 @@ back half.
 import asyncio
 import io
 import time as _time
+from datetime import datetime, timezone
 from typing import Optional
 
 from loguru import logger
@@ -31,6 +32,11 @@ class PipecatPipelineRunner(PipelineRunner):
         from core.utils.telephony import provider_call_id as _provider_call_id
 
         _t_comp_start = _time.monotonic()
+        # Wall-clock anchor for `Call.started_at`. Captured here — at the very
+        # start of run() — so it reflects when the call entered the system,
+        # not when the background INSERT in `_create_call_log_in_thread`
+        # eventually finishes (which can lag by seconds under load).
+        call_started_at = datetime.now(timezone.utc)
         agent = self.agent
         runner_args = self.runner_args
         transport = self.transport
@@ -109,6 +115,7 @@ class PipecatPipelineRunner(PipelineRunner):
                             to_number=to_number,
                             trace_id=_call_trace_id if _call_trace_id != "none" else None,
                             pipeline_config=pipeline_snapshot,
+                            started_at=call_started_at,
                         )
                         if call_log:
                             call_log_state["id"] = call_log.id

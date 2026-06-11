@@ -66,6 +66,7 @@ class CallLogService(BaseService):
         to_number: Optional[str] = None,
         trace_id: Optional[str] = None,
         pipeline_config: Optional[dict] = None,
+        started_at: Optional[datetime] = None,
     ) -> Call:
         # Deduplicate
         if provider_call_id:
@@ -89,6 +90,9 @@ class CallLogService(BaseService):
 
         direction = "outbound" if transport_type == "outbound" else "inbound"
 
+        # Callers (the pipeline runner) can pass in the moment the call truly
+        # began so this timestamp is not skewed by background-thread / INSERT
+        # latency. Fallback keeps the original behaviour for any other caller.
         call = Call(
             agent_id=agent_id,
             organization_id=organization_id,
@@ -99,7 +103,7 @@ class CallLogService(BaseService):
             from_phone_number_id=from_pn_id,
             to_phone_number_id=to_pn_id,
             from_number_raw_by_provider=from_number,
-            started_at=datetime.now(timezone.utc),
+            started_at=started_at or datetime.now(timezone.utc),
             metadata_={},
             pipeline_config=pipeline_config,
         )
