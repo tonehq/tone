@@ -189,10 +189,13 @@ class PipecatPipelineRunner(PipelineRunner):
                     "timestamp": message.timestamp,
                 })
 
-        # Turn tracking
+        # Turn tracking — the same events drive (a) the simple ``turns``
+        # log persisted alongside legacy metrics and (b) the per-turn
+        # latency aggregation inside ``MetricsCollectorProcessor``.
         @turn_observer.event_handler("on_turn_started")
         async def on_turn_started(observer, turn_number):
             logger.info("Turn {} started", turn_number)
+            metrics_collector.on_turn_started(turn_number)
 
         @turn_observer.event_handler("on_turn_ended")
         async def on_turn_ended(observer, turn_number, duration, was_interrupted):
@@ -203,6 +206,9 @@ class PipecatPipelineRunner(PipelineRunner):
                 "duration": round(duration, 3),
                 "status": status,
             })
+            metrics_collector.on_turn_ended(
+                turn_number, duration=duration, was_interrupted=was_interrupted
+            )
 
         # Save audio + update DB inside this event handler.
         # This runs DURING pipeline lifecycle (before cleanup() returns),

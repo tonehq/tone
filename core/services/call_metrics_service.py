@@ -21,6 +21,7 @@ _METRIC_FIELDS = (
     "tts_usage",
     "user_bot_latency",
     "turns",
+    "turn_metrics",
 )
 
 

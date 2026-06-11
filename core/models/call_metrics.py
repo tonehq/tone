@@ -22,5 +22,6 @@ class CallMetrics(OrgScopedModel):
     tts_usage = Column(JSONB, nullable=True)
     user_bot_latency = Column(JSONB, nullable=True)
     turns = Column(JSONB, nullable=True)
+    turn_metrics = Column(JSONB, nullable=True)
 
     call = relationship("Call", back_populates="metrics_record")

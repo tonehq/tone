@@ -11,6 +11,12 @@ interface AxisBarChartProps {
   formatValue: (value: number) => string;
   xAxisLabel?: string;
   referenceLines?: ReferenceLine[];
+  /**
+   * Optional per-bar labels for the x-axis. When omitted, bars are
+   * labelled 1..N (the historical behaviour). Used by the per-turn
+   * latency charts so every chart shares the same turn-number axis.
+   */
+  xLabels?: string[];
 }
 
 const CHART_HEIGHT = 140;
@@ -34,7 +40,9 @@ export function AxisBarChart({
   formatValue,
   xAxisLabel = 'Sample',
   referenceLines,
+  xLabels,
 }: AxisBarChartProps) {
+  const labelFor = (i: number) => xLabels?.[i] ?? String(i + 1);
   const max = Math.max(...values, 0);
   const refMax = referenceLines?.reduce((m, r) => Math.max(m, r.value), 0) ?? 0;
   const scaleMax = Math.max(max, refMax) > 0 ? Math.max(max, refMax) : 1;
@@ -79,7 +87,7 @@ export function AxisBarChart({
                     key={i}
                     className="group relative flex-1 rounded-t bg-primary/60 transition-colors hover:bg-primary"
                     style={{ height: `${heightPct}%`, minWidth: MIN_BAR_WIDTH }}
-                    title={`${xAxisLabel} ${i + 1}: ${formatValue(v)}`}
+                    title={`${xAxisLabel} ${labelFor(i)}: ${formatValue(v)}`}
                   />
                 );
               })}
@@ -117,7 +125,7 @@ export function AxisBarChart({
           >
             {values.map((_, i) => (
               <span key={i} className="flex-1 text-center" style={{ minWidth: MIN_BAR_WIDTH }}>
-                {i + 1}
+                {labelFor(i)}
               </span>
             ))}
           </div>
