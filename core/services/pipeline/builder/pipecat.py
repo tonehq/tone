@@ -62,6 +62,20 @@ def _sanitize_tool_schemas(tool_schemas):
     return cleaned
 
 
+def _build_service_categories(*, stt: Any, llm: Any, tts: Any) -> dict:
+    """Map each built service instance's ``.name`` to its role category.
+
+    Consumed by ``MetricsCollectorProcessor`` to classify TTFB metrics
+    without inspecting class names. Skips ``None`` services (e.g. STT/TTS
+    are unset on the S2S path).
+    """
+    from core.processors.metrics_collector import (CATEGORY_LLM, CATEGORY_STT,
+                                                   CATEGORY_TTS)
+
+    role_map = {CATEGORY_STT: stt, CATEGORY_LLM: llm, CATEGORY_TTS: tts}
+    return {svc.name: role for role, svc in role_map.items() if svc is not None}
+
+
 class PipecatPipelineBuilder(PipelineBuilder):
     """Assemble a Pipecat pipeline from `PipelineParams`."""
 
@@ -246,8 +260,13 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 assistant_aggregator,
             ]
 
-        # MetricsCollectorProcessor collects metrics for DB storage
-        metrics_collector = MetricsCollectorProcessor()
+        # MetricsCollectorProcessor collects metrics for DB storage.
+        # The {service_name -> role} map lets the collector classify TTFB
+        # samples by STT / LLM / TTS without string-matching class names.
+        # Built from the actual instances so it covers the auto-assigned
+        # "#N" suffix pipecat uses for processor identity.
+        service_categories = _build_service_categories(stt=stt, llm=llm, tts=tts)
+        metrics_collector = MetricsCollectorProcessor(service_categories=service_categories)
         pipeline_processors.append(metrics_collector)
 
         # AudioBufferProcessor sees both InputAudioRawFrame and OutputAudioRawFrame
