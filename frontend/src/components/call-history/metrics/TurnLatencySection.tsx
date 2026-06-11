@@ -71,7 +71,10 @@ export function TurnLatencySection({ turns }: TurnLatencySectionProps) {
 
   if (sorted.length === 0) return null;
 
-  const turnLabels = sorted.map((t) => String(t.turn));
+  // Display labels start at 1 for the first real turn (the "Turns" stat card
+  // counts the same set). Pipecat's raw `turn` number is preserved on each
+  // row for traceability if we ever need to cross-reference with logs.
+  const turnLabels = sorted.map((_, i) => String(i + 1));
 
   const series: MetricSeries[] = [
     {
