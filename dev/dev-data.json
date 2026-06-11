@@ -4,7 +4,7 @@
       "name": "openai",
       "provider_type": "llm",
       "display_name": "OpenAI",
-      "description": "OpenAI LLM",
+      "description": "OpenAI",
       "api_key_env": "OPENAI_API_KEY",
       "models": [
         {
@@ -385,7 +385,7 @@
       "name": "groq",
       "provider_type": "llm",
       "display_name": "Groq",
-      "description": "Groq LLM",
+      "description": "Groq",
       "api_key_env": "GROQ_API_KEY",
       "models": [
         {
@@ -815,7 +815,7 @@
       "name": "anthropic",
       "provider_type": "llm",
       "display_name": "Anthropic",
-      "description": "Anthropic Claude LLM",
+      "description": "Anthropic Claude",
       "api_key_env": "ANTHROPIC_API_KEY",
       "models": [
         {
@@ -1446,7 +1446,7 @@
       "name": "google",
       "provider_type": "llm",
       "display_name": "Google",
-      "description": "Google Gemini LLM",
+      "description": "Google Gemini",
       "api_key_env": "GOOGLE_API_KEY",
       "models": [
         {
@@ -1960,7 +1960,7 @@
       "name": "openrouter",
       "provider_type": "llm",
       "display_name": "OpenRouter",
-      "description": "OpenRouter LLM",
+      "description": "OpenRouter",
       "api_key_env": "OPENROUTER_API_KEY",
       "models": [
         {
@@ -9713,7 +9713,7 @@
       "name": "qwen",
       "provider_type": "llm",
       "display_name": "Qwen",
-      "description": "Qwen LLM",
+      "description": "Qwen",
       "api_key_env": "QWEN_API_KEY",
       "models": [
         {
@@ -9935,7 +9935,7 @@
       "name": "deepseek",
       "provider_type": "llm",
       "display_name": "DeepSeek",
-      "description": "DeepSeek LLM",
+      "description": "DeepSeek",
       "api_key_env": "DEEPSEEK_API_KEY",
       "models": [
         {
@@ -10100,7 +10100,7 @@
       "name": "grok",
       "provider_type": "llm",
       "display_name": "Grok",
-      "description": "Grok LLM",
+      "description": "Grok",
       "api_key_env": "GROK_API_KEY",
       "models": [
         {
@@ -10471,7 +10471,7 @@
       "name": "perplexity",
       "provider_type": "llm",
       "display_name": "Perplexity",
-      "description": "Perplexity LLM",
+      "description": "Perplexity",
       "api_key_env": "PERPLEXITY_API_KEY",
       "models": [
         {
@@ -10777,7 +10777,7 @@
       "name": "azure",
       "provider_type": "llm",
       "display_name": "Azure",
-      "description": "Azure AI LLM",
+      "description": "Azure AI",
       "api_key_env": "AZURE_API_KEY",
       "models": [
         {
@@ -11588,7 +11588,7 @@
       "name": "nvidia_nim",
       "provider_type": "llm",
       "display_name": "NVIDIA NIM",
-      "description": "NVIDIA NIM LLM",
+      "description": "NVIDIA NIM",
       "api_key_env": "NVIDIA_API_KEY",
       "models": [
         {
@@ -11916,7 +11916,7 @@
       "name": "aws_bedrock",
       "provider_type": "llm",
       "display_name": "AWS Bedrock",
-      "description": "AWS Bedrock LLM",
+      "description": "AWS Bedrock",
       "api_key_env": "AWS_ACCESS_KEY_ID",
       "models": [
         {
@@ -12193,7 +12193,7 @@
       "name": "openai_realtime",
       "provider_type": "llm",
       "display_name": "OpenAI Realtime",
-      "description": "OpenAI Realtime Speech-to-Speech LLM",
+      "description": "OpenAI Realtime Speech-to-Speech",
       "api_key_env": "OPENAI_API_KEY",
       "meta_data": {
         "is_s2s": true
@@ -12346,7 +12346,7 @@
       "name": "gemini_live",
       "provider_type": "llm",
       "display_name": "Gemini Live",
-      "description": "Google Gemini Live Speech-to-Speech LLM",
+      "description": "Google Gemini Live Speech-to-Speech",
       "api_key_env": "GOOGLE_API_KEY",
       "meta_data": {
         "is_s2s": true
@@ -12620,7 +12620,7 @@
       "name": "deepgram",
       "provider_type": "stt",
       "display_name": "Deepgram",
-      "description": "Deepgram STT",
+      "description": "Deepgram",
       "api_key_env": "DEEPGRAM_API_KEY",
       "models": [
         {
@@ -14532,7 +14532,7 @@
       "name": "openai",
       "provider_type": "stt",
       "display_name": "OpenAI",
-      "description": "OpenAI STT",
+      "description": "OpenAI",
       "api_key_env": "OPENAI_API_KEY",
       "models": [
         {
@@ -14768,7 +14768,7 @@
       "name": "groq",
       "provider_type": "stt",
       "display_name": "Groq",
-      "description": "Groq STT",
+      "description": "Groq",
       "api_key_env": "GROQ_API_KEY",
       "models": [
         {
@@ -14892,7 +14892,7 @@
       "name": "sarvam",
       "provider_type": "stt",
       "display_name": "Sarvam",
-      "description": "Sarvam STT",
+      "description": "Sarvam",
       "api_key_env": "SARVAM_API_KEY",
       "models": [
         {
@@ -14977,7 +14977,7 @@
       "name": "assemblyai",
       "provider_type": "stt",
       "display_name": "AssemblyAI",
-      "description": "AssemblyAI STT",
+      "description": "AssemblyAI",
       "api_key_env": "ASSEMBLYAI_API_KEY",
       "models": [
         {
@@ -15217,7 +15217,7 @@
       "name": "cartesia",
       "provider_type": "stt",
       "display_name": "Cartesia",
-      "description": "Cartesia STT",
+      "description": "Cartesia",
       "api_key_env": "CARTESIA_API_KEY",
       "models": [
         {
@@ -15339,7 +15339,7 @@
       "name": "soniox",
       "provider_type": "stt",
       "display_name": "Soniox",
-      "description": "Soniox STT",
+      "description": "Soniox",
       "api_key_env": "SONIOX_API_KEY",
       "models": [
         {
@@ -15570,7 +15570,7 @@
       "name": "elevenlabs",
       "provider_type": "stt",
       "display_name": "ElevenLabs",
-      "description": "ElevenLabs STT",
+      "description": "ElevenLabs",
       "api_key_env": "ELEVENLABS_API_KEY",
       "models": [
         {
@@ -15884,7 +15884,7 @@
       "name": "gladia",
       "provider_type": "stt",
       "display_name": "Gladia",
-      "description": "Gladia STT",
+      "description": "Gladia",
       "api_key_env": "GLADIA_API_KEY",
       "models": [
         {
@@ -16016,7 +16016,7 @@
       "name": "nvidia",
       "provider_type": "stt",
       "display_name": "NVIDIA",
-      "description": "NVIDIA RIVA STT",
+      "description": "NVIDIA RIVA",
       "api_key_env": "NVIDIA_API_KEY",
       "models": [
         {
@@ -16236,7 +16236,7 @@
       "name": "speechmatics",
       "provider_type": "stt",
       "display_name": "Speechmatics",
-      "description": "Speechmatics STT",
+      "description": "Speechmatics",
       "api_key_env": "SPEECHMATICS_API_KEY",
       "models": [
         {
@@ -18133,7 +18133,7 @@
       "name": "google",
       "provider_type": "stt",
       "display_name": "Google",
-      "description": "Google Cloud STT",
+      "description": "Google Cloud",
       "api_key_env": "GOOGLE_SERVICE_ACCOUNT_JSON",
       "models": [
         {
@@ -19225,7 +19225,7 @@
       "name": "azure",
       "provider_type": "stt",
       "display_name": "Azure",
-      "description": "Microsoft Azure STT",
+      "description": "Microsoft Azure",
       "api_key_env": "AZURE_API_KEY",
       "models": [
         {
@@ -19418,7 +19418,7 @@
       "name": "cartesia",
       "provider_type": "tts",
       "display_name": "Cartesia",
-      "description": "Cartesia TTS",
+      "description": "Cartesia",
       "api_key_env": "CARTESIA_API_KEY",
       "models": [
         {
@@ -20826,7 +20826,7 @@
       "name": "deepgram",
       "provider_type": "tts",
       "display_name": "Deepgram",
-      "description": "Deepgram TTS",
+      "description": "Deepgram",
       "api_key_env": "DEEPGRAM_API_KEY",
       "models": [
         {
@@ -22096,7 +22096,7 @@
       "name": "groq",
       "provider_type": "tts",
       "display_name": "Groq",
-      "description": "Groq TTS",
+      "description": "Groq",
       "api_key_env": "GROQ_API_KEY",
       "models": [
         {
@@ -22283,7 +22283,7 @@
       "name": "minimax",
       "provider_type": "tts",
       "display_name": "MiniMax",
-      "description": "MiniMax TTS",
+      "description": "MiniMax",
       "api_key_env": "MINIMAX_API_KEY",
       "models": [
         {
@@ -39592,7 +39592,7 @@
       "name": "rime",
       "provider_type": "tts",
       "display_name": "Rime",
-      "description": "Rime TTS",
+      "description": "Rime",
       "api_key_env": "RIME_API_KEY",
       "models": [
         {
@@ -46644,7 +46644,7 @@
       "name": "sarvam",
       "provider_type": "tts",
       "display_name": "Sarvam",
-      "description": "Sarvam TTS",
+      "description": "Sarvam",
       "api_key_env": "SARVAM_API_KEY",
       "models": [
         {
@@ -53394,7 +53394,7 @@
       "name": "fish",
       "provider_type": "tts",
       "display_name": "Fish",
-      "description": "Fish TTS",
+      "description": "Fish",
       "api_key_env": "FISHER_API_KEY",
       "models": [
         {
@@ -53785,7 +53785,7 @@
       "name": "inworld",
       "provider_type": "tts",
       "display_name": "Inworld",
-      "description": "Inworld TTS",
+      "description": "Inworld",
       "api_key_env": "INWORLD_API_KEY",
       "models": [
         {
@@ -54645,7 +54645,7 @@
       "name": "openai",
       "provider_type": "tts",
       "display_name": "OpenAI",
-      "description": "OpenAI TTS",
+      "description": "OpenAI",
       "api_key_env": "OPENAI_API_KEY",
       "models": [
         {
@@ -55634,7 +55634,7 @@
       "name": "resemble",
       "provider_type": "tts",
       "display_name": "Resemble AI",
-      "description": "Resemble TTS",
+      "description": "Resemble",
       "api_key_env": "RESEMBLE_API_KEY",
       "models": [
         {
@@ -55662,7 +55662,7 @@
       "name": "nvidia",
       "provider_type": "tts",
       "display_name": "NVIDIA",
-      "description": "NVIDIA TTS",
+      "description": "NVIDIA",
       "api_key_env": "NVIDIA_API_KEY",
       "models": [
         {
@@ -56945,7 +56945,7 @@
       "name": "neuphonic",
       "provider_type": "tts",
       "display_name": "Neuphonic",
-      "description": "Neuphonic TTS",
+      "description": "Neuphonic",
       "api_key_env": "NEUPHONIC_API_KEY",
       "models": [
         {
@@ -57737,7 +57737,7 @@
       "name": "lmnt",
       "provider_type": "tts",
       "display_name": "LMNT",
-      "description": "LMNT TTS",
+      "description": "LMNT",
       "api_key_env": "LMNT_API_KEY",
       "models": [
         {
@@ -58286,7 +58286,7 @@
       "name": "hume",
       "provider_type": "tts",
       "display_name": "Hume AI",
-      "description": "Hume TTS",
+      "description": "Hume",
       "api_key_env": "HUME_API_KEY",
       "models": [
         {
@@ -60325,7 +60325,7 @@
       "name": "elevenlabs",
       "provider_type": "tts",
       "display_name": "ElevenLabs",
-      "description": "ElevenLabs TTS",
+      "description": "ElevenLabs",
       "api_key_env": "ELEVENLABS_API_KEY",
       "models": [
         {
@@ -62523,7 +62523,7 @@
       "name": "camb",
       "provider_type": "tts",
       "display_name": "Camb AI",
-      "description": "Camb TTS",
+      "description": "Camb",
       "api_key_env": "CAMB_API_KEY",
       "models": [
         {
@@ -62818,7 +62818,7 @@
       "name": "asyncai_http",
       "provider_type": "tts",
       "display_name": "Async AI",
-      "description": "Async AI TTS",
+      "description": "Async AI",
       "api_key_env": "ASYNC_API_KEY",
       "models": [
         {
@@ -63045,7 +63045,7 @@
       "name": "aws_polly",
       "provider_type": "tts",
       "display_name": "AWS Polly",
-      "description": "AWS Amazon Polly TTS",
+      "description": "AWS Amazon Polly",
       "api_key_env": "AWS_ACCESS_KEY_ID",
       "models": [
         {
@@ -64128,7 +64128,7 @@
       "name": "google",
       "provider_type": "tts",
       "display_name": "Google",
-      "description": "Google Gemini TTS",
+      "description": "Google Gemini",
       "api_key_env": "GOOGLE_SERVICE_ACCOUNT_JSON",
       "models": [
         {
@@ -67101,7 +67101,7 @@
       "name": "azure",
       "provider_type": "tts",
       "display_name": "Azure",
-      "description": "Microsoft Azure TTS",
+      "description": "Microsoft Azure",
       "api_key_env": "AZURE_API_KEY",
       "models": [
         {
@@ -68190,7 +68190,7 @@
       "name": "speechmatics",
       "provider_type": "tts",
       "display_name": "Speechmatics",
-      "description": "Speechmatics TTS",
+      "description": "Speechmatics",
       "api_key_env": "SPEECHMATICS_API_KEY",
       "models": [
         {
