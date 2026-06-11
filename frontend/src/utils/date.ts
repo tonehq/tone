@@ -76,11 +76,14 @@ const CHAT_TIMESTAMP_FORMATTER = new Intl.DateTimeFormat(undefined, {
   minute: '2-digit',
 });
 
-const SHORT_DATETIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
-  month: 'short',
-  day: 'numeric',
+// Time-only display (e.g. `2:03:47 PM`) for places where the surrounding
+// context already implies the date — call detail header chips, transcript
+// bubbles, per-sample timestamps. Hoisted to module scope so long lists
+// don't reconstruct the formatter per render.
+const TIME_ONLY_FORMATTER = new Intl.DateTimeFormat(undefined, {
   hour: 'numeric',
   minute: '2-digit',
+  second: '2-digit',
 });
 
 /**
@@ -96,13 +99,13 @@ export function formatChatTimestamp(ts: string | null | undefined): string | nul
 }
 
 /**
- * Compact timestamp for badge/chip-style displays (e.g. `Jun 10, 4:15 PM`).
- * Returns `null` for empty / invalid input so callers can decide whether to
- * render the chip at all.
+ * Time-only timestamp (e.g. `2:03:47 PM`) for places where the surrounding
+ * context already conveys the date — call detail header chips, transcript
+ * bubbles, per-sample charts. Returns `null` for empty / invalid input.
  */
-export function formatShortDateTime(ts: string | null | undefined): string | null {
+export function formatTimeOnly(ts: string | null | undefined): string | null {
   if (!ts) return null;
   const date = new Date(ts);
   if (Number.isNaN(date.getTime())) return null;
-  return SHORT_DATETIME_FORMATTER.format(date);
+  return TIME_ONLY_FORMATTER.format(date);
 }
