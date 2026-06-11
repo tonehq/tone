@@ -56,6 +56,8 @@ app = FastAPI(title="Tone STT — Nemotron Streaming 0.6B")
 _model = None
 
 
+
+
 def _disable_cuda_graph_decoder(m):
     # The vGPU's CUDA 12.4 driver can't do CUDA-graph capture; force the plain
     # decode path so the greedy RNNT decoder doesn't try graphs.
