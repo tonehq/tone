@@ -66,6 +66,7 @@ class CallLogService(BaseService):
         to_number: Optional[str] = None,
         trace_id: Optional[str] = None,
         pipeline_config: Optional[dict] = None,
+        started_at: Optional[datetime] = None,
     ) -> Call:
         # Deduplicate
         if provider_call_id:
@@ -89,6 +90,9 @@ class CallLogService(BaseService):
 
         direction = "outbound" if transport_type == "outbound" else "inbound"
 
+        # Callers (the pipeline runner) can pass in the moment the call truly
+        # began so this timestamp is not skewed by background-thread / INSERT
+        # latency. Fallback keeps the original behaviour for any other caller.
         call = Call(
             agent_id=agent_id,
             organization_id=organization_id,
@@ -99,7 +103,7 @@ class CallLogService(BaseService):
             from_phone_number_id=from_pn_id,
             to_phone_number_id=to_pn_id,
             from_number_raw_by_provider=from_number,
-            started_at=datetime.now(timezone.utc),
+            started_at=started_at or datetime.now(timezone.utc),
             metadata_={},
             pipeline_config=pipeline_config,
         )
@@ -150,6 +154,7 @@ class CallLogService(BaseService):
         transcript: Optional[List[dict]] = None,
         metrics: Optional[dict] = None,
         tool_calls: Optional[List[dict]] = None,
+        recording_duration_seconds: Optional[int] = None,
     ) -> Optional[Call]:
         call = self.db.query(Call).filter(Call.id == call_log_id).first()
         if not call:
@@ -159,6 +164,13 @@ class CallLogService(BaseService):
         call.ended_at = now
         if call.started_at:
             call.duration_seconds = int((now - call.started_at).total_seconds())
+
+        # Recording length differs from `duration_seconds`: the latter is the
+        # wall-clock from call_log creation to completion (includes pipeline
+        # setup, client handshake, R2 upload, DB writes), while this value is
+        # the length of the encoded MP3 the audio player actually plays.
+        if recording_duration_seconds is not None:
+            call.recording_duration_seconds = recording_duration_seconds
 
         if upload_id:
             call.recording_upload_id = upload_id

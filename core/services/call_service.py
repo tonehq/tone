@@ -500,6 +500,7 @@ class CallService(BaseService):
             "started_at": call.started_at.isoformat() if call.started_at else None,
             "ended_at": call.ended_at.isoformat() if call.ended_at else None,
             "duration_seconds": call.duration_seconds,
+            "recording_duration_seconds": call.recording_duration_seconds,
             "from_number": from_number or call.from_number_raw_by_provider,
             "to_number": to_number,
             "provider_call_id": call.provider_call_id,

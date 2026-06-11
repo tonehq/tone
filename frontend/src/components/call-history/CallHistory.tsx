@@ -31,6 +31,7 @@ import { Columns3, Phone, SlidersHorizontal, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { getDisplayDurationSeconds } from './callDuration';
 import { getCallStatusLabel, getCallStatusTone } from './callStatus';
 import CallHistoryFilterDrawer, {
   countDrawerFilters,
@@ -358,7 +359,12 @@ const CallHistory: React.FC = () => {
       title: 'Duration',
       dataIndex: 'duration_seconds',
       sorter: true,
-      render: (value) => formatDuration(value as number | null),
+      // Display the recording's actual length when available so the cell
+      // matches the audio player on the detail page; fall back to the raw
+      // duration_seconds when the call has no recording. Sort still uses
+      // duration_seconds (the indexed column) so the order is approximate
+      // — the two values usually differ by only a few seconds.
+      render: (_value, record) => formatDuration(getDisplayDurationSeconds(record)),
     },
     {
       key: 'from_number',
