@@ -1,7 +1,7 @@
 'use client';
 
 import { Brain, Settings2 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import DynamicProviderFields from '@/components/agents/agent-form/DynamicProviderFields';
@@ -118,13 +118,26 @@ export default function AiStep() {
     return model?.meta_data ?? null;
   }, [llmModelId, llmModels]);
 
-  // Clear stale schema field values when model changes (e.g. switching from
-  // GPT-4o to GPT-5 should remove temperature/top_p that GPT-5 doesn't support).
-  // shouldDirty:false — this is a reactive cleanup, not a user edit. Save-time
-  // diff against originalState still persists the cleanup.
+  // Clear stale schema field values when the user CHANGES the provider/model
+  // (e.g. switching from GPT-4o to GPT-5 should remove temperature/top_p that
+  // GPT-5 doesn't support). Skipped on the initial settle so the saved
+  // llm_settings isn't silently mutated on load — that mutation would desync
+  // _formValues from _defaultValues, and any later RHF deep-equality recheck
+  // (focus/blur, version select, etc.) would flip isDirty true, triggering a
+  // spurious "discard changes?" prompt despite zero user edits. shouldDirty:
+  // true here because at this point it IS a user edit (changing the model).
+  const prevAllowedKeysRef = useRef<Set<string> | null>(null);
   useEffect(() => {
-    if (!llmSchema.length) return;
+    if (!llmSchema.length) {
+      prevAllowedKeysRef.current = null;
+      return;
+    }
     const allowedKeys = new Set(llmSchema.map((f) => f.name));
+    const prev = prevAllowedKeysRef.current;
+    prevAllowedKeysRef.current = allowedKeys;
+    if (prev === null) return;
+    if (prev.size === allowedKeys.size && [...prev].every((k) => allowedKeys.has(k))) return;
+
     const current = getValues('config.llm_settings' as never) as
       | Record<string, unknown>
       | undefined;
@@ -132,7 +145,7 @@ export default function AiStep() {
     for (const key of Object.keys(current)) {
       if (!LLM_STRUCTURAL_KEYS.has(key) && !allowedKeys.has(key)) {
         setValue(`config.llm_settings.${key}` as never, undefined as never, {
-          shouldDirty: false,
+          shouldDirty: true,
         });
       }
     }

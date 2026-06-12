@@ -19,15 +19,24 @@ from core.utils.logging import truncate_for_log
 
 
 def get_custom_tools_for_agent(agent_id: int) -> List[Tool]:
-    """Fetch all active custom tools linked to an agent."""
+    """Fetch all active custom tools linked to an agent's published version."""
     from core.database.session import get_db_context
     from core.services.tool_service import decrypt_auth_config
+    from core.utils.agent_scope import published_config_subquery
+
+    # Attachments are per-version: filter to the agent's published config so
+    # the runtime never picks up draft-version tools.
+    published_config_sq = published_config_subquery(agent_id)
 
     with get_db_context() as db:
         tools = (
             db.query(Tool)
             .join(AgentTool, AgentTool.tool_id == Tool.id)
-            .filter(AgentTool.agent_id == agent_id, Tool.is_active == True)
+            .filter(
+                AgentTool.agent_id == agent_id,
+                AgentTool.agent_config_id == published_config_sq,
+                Tool.is_active == True,
+            )
             .all()
         )
         # Detach from session so they can be used after db closes
