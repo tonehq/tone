@@ -12,7 +12,6 @@ import {
   BackgroundVariant,
   Controls,
   MarkerType,
-  MiniMap,
   ReactFlow,
   ReactFlowProvider,
   useEdgesState,
@@ -336,28 +335,7 @@ function BuilderInner({ workflowId }: Props) {
             fitView
           >
             <Background variant={BackgroundVariant.Dots} gap={22} size={1.4} />
-            <Controls className="!shadow-md" />
-            <MiniMap
-              pannable
-              zoomable
-              className="!bg-card/80 !backdrop-blur"
-              nodeColor={(n) => {
-                const reg = (nodeTypes as Record<string, unknown>)[n.type ?? 'conversation']
-                  ? n.type
-                  : 'conversation';
-                return (
-                  (
-                    {
-                      conversation: '#6366f1',
-                      decision: '#f59e0b',
-                      tool: '#8b5cf6',
-                      transferCall: '#0ea5e9',
-                      endCall: '#f43f5e',
-                    } as Record<string, string>
-                  )[reg ?? 'conversation'] ?? '#6366f1'
-                );
-              }}
-            />
+            <Controls className="!shadow-md" showInteractive={false} />
           </ReactFlow>
 
           {/* bottom-left utility bar */}

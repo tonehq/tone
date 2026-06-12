@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { motion } from 'framer-motion';
-import { GitBranch, Plus, Workflow as WorkflowIcon } from 'lucide-react';
+import { Plus, RefreshCw, TriangleAlert, Workflow as WorkflowIcon } from 'lucide-react';
 
 import { cn } from '@/utils/cn';
 import CustomButton from '@/components/shared/CustomButton';
@@ -14,6 +14,7 @@ import { showToast } from '@/utils/toast';
 import { handleApiError } from '@/utils/helpers';
 import type { WorkflowSummary } from '@/types/workflow';
 import CreateWorkflowModal from './CreateWorkflowModal';
+import WorkflowEmptyState from './WorkflowEmptyState';
 
 const WorkflowListPage: React.FC = () => {
   const router = useRouter();
@@ -22,27 +23,51 @@ const WorkflowListPage: React.FC = () => {
   const remove = useSetAtom(deleteWorkflowAtom);
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [errored, setErrored] = useState(false);
+  const [loadedOnce, setLoadedOnce] = useState(false);
+
+  const load = useCallback(
+    (silent = false) => {
+      setErrored(false);
+      fetchList()
+        .catch((err) => {
+          setErrored(true);
+          if (!silent) handleApiError(err);
+        })
+        .finally(() => setLoadedOnce(true));
+    },
+    [fetchList],
+  );
 
   useEffect(() => {
-    fetchList().catch(handleApiError);
-  }, [fetchList]);
+    load(true);
+  }, [load]);
 
   const handleDelete = async (wf: WorkflowSummary) => {
     try {
       await remove(wf.id);
       showToast.success('Workflow deleted');
-      await fetchList();
+      load(true);
     } catch (err) {
       handleApiError(err);
     }
   };
 
+  const showSkeleton = (loading || !loadedOnce) && list.length === 0 && !errored;
+
   return (
-    <div className="mx-auto h-full max-w-6xl px-6 py-6">
-      <div className="mb-6 flex items-center justify-between">
+    <div className="mx-auto h-full max-w-6xl px-6 py-8">
+      <div className="mb-7 flex items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Workflows</h1>
-          <p className="mt-0.5 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Workflows</h1>
+            {list.length > 0 && (
+              <span className="rounded-full bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
+                {list.length}
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
             Visual conversation pathways you can assign to any agent.
           </p>
         </div>
@@ -55,33 +80,35 @@ const WorkflowListPage: React.FC = () => {
         </CustomButton>
       </div>
 
-      {loading && list.length === 0 ? (
+      {showSkeleton ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
-              className="h-32 animate-pulse rounded-xl border border-border bg-muted/40"
+              className="h-36 animate-pulse rounded-xl border border-border bg-muted/40"
             />
           ))}
         </div>
-      ) : list.length === 0 ? (
+      ) : errored && list.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border py-20 text-center">
-          <span className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary ring-1 ring-inset ring-primary/20">
-            <GitBranch className="h-7 w-7" />
+          <span className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-destructive/10 text-destructive ring-1 ring-inset ring-destructive/20">
+            <TriangleAlert className="h-6 w-6" />
           </span>
-          <h2 className="text-lg font-semibold text-foreground">Design your first workflow</h2>
+          <h2 className="text-base font-semibold text-foreground">Couldn’t load workflows</h2>
           <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-            Build a branching conversation flow on a visual canvas, then assign it to an agent.
+            Something went wrong while fetching your workflows. Check your connection and try again.
           </p>
           <CustomButton
-            type="primary"
+            type="default"
             className="mt-5"
-            icon={<Plus className="h-4 w-4" />}
-            onClick={() => setCreateOpen(true)}
+            icon={<RefreshCw className="h-4 w-4" />}
+            onClick={() => load()}
           >
-            New workflow
+            Retry
           </CustomButton>
         </div>
+      ) : list.length === 0 ? (
+        <WorkflowEmptyState onCreate={() => setCreateOpen(true)} />
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {list.map((wf, i) => (
@@ -89,11 +116,23 @@ const WorkflowListPage: React.FC = () => {
               key={wf.id}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2, delay: i * 0.04, ease: 'easeOut' }}
+              transition={{ duration: 0.2, delay: Math.min(i, 8) * 0.04, ease: 'easeOut' }}
+              role="button"
+              tabIndex={0}
               onClick={() => router.push(`/workflows/${wf.id}`)}
-              className="group relative flex cursor-pointer flex-col rounded-xl border border-border bg-card p-4 text-left shadow-sm transition-all hover:-translate-y-px hover:border-primary/40 hover:shadow-md"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  router.push(`/workflows/${wf.id}`);
+                }
+              }}
+              className="group relative flex cursor-pointer flex-col rounded-xl border border-border bg-card p-4 text-left shadow-sm outline-none transition-all hover:-translate-y-px hover:border-primary/40 hover:shadow-md focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
-              <div className="mb-2 flex items-start justify-between gap-2">
+              <span
+                aria-hidden
+                className="absolute inset-x-0 top-0 h-[3px] rounded-t-xl bg-gradient-to-r from-indigo-500/60 via-violet-500/50 to-transparent opacity-0 transition-opacity group-hover:opacity-100"
+              />
+              <div className="mb-2.5 flex items-start justify-between gap-2">
                 <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600 ring-1 ring-inset ring-indigo-500/20 dark:text-indigo-300">
                   <WorkflowIcon className="h-5 w-5" />
                 </span>
@@ -107,11 +146,9 @@ const WorkflowListPage: React.FC = () => {
                 </div>
               </div>
               <div className="truncate text-sm font-semibold text-foreground">{wf.name}</div>
-              {wf.description && (
-                <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                  {wf.description}
-                </div>
-              )}
+              <div className="mt-0.5 line-clamp-2 min-h-[2rem] text-xs text-muted-foreground">
+                {wf.description || 'No description'}
+              </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <span
                   className={cn(
@@ -133,7 +170,8 @@ const WorkflowListPage: React.FC = () => {
                   {wf.agents_using} agent{wf.agents_using === 1 ? '' : 's'}
                 </span>
                 {!wf.is_valid && (
-                  <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive ring-1 ring-inset ring-destructive/20">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-medium text-destructive ring-1 ring-inset ring-destructive/20">
+                    <TriangleAlert className="h-3 w-3" />
                     Has issues
                   </span>
                 )}

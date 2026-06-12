@@ -1,11 +1,18 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
+import { useAtomValue, useSetAtom } from 'jotai';
 import { Plus, Trash2 } from 'lucide-react';
 
 import { cn } from '@/utils/cn';
 import CustomDrawer from '@/components/shared/CustomDrawer';
 import CustomButton from '@/components/shared/CustomButton';
+import TextInput from '@/components/shared/TextInput';
+import TextAreaField from '@/components/shared/TextAreaField';
+import CheckboxField from '@/components/shared/CheckboxField';
+import SelectInput from '@/components/shared/SelectInput';
+import SearchableSelect from '@/components/shared/SearchableSelect';
+import { fetchToolsAtom, toolsAtom } from '@/atoms/ToolAtom';
 import { NODE_REGISTRY } from '@/components/workflows/nodeRegistry';
 import type {
   ConditionEdgeData,
@@ -26,34 +33,18 @@ interface Props {
   onDeleteNode: (id: string) => void;
 }
 
-// ── small styled primitives ──────────────────────────────────────────────────
-const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="mb-1.5 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+// ── layout primitives ─────────────────────────────────────────────────────────
+const SectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div className="mb-2 font-mono text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
     {children}
   </div>
 );
 
-const input =
-  'w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground focus:ring-2';
-
-const Section: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="mb-4">{children}</div>
-);
-
-const Toggle: React.FC<{ label: string; checked: boolean; onChange: (v: boolean) => void }> = ({
-  label,
-  checked,
-  onChange,
+const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({
+  children,
+  className,
 }) => (
-  <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
-    <input
-      type="checkbox"
-      checked={checked}
-      onChange={(e) => onChange(e.target.checked)}
-      className="h-4 w-4 accent-primary"
-    />
-    {label}
-  </label>
+  <div className={cn('rounded-lg border border-border bg-muted/30 p-3', className)}>{children}</div>
 );
 
 const NodeConfigDrawer: React.FC<Props> = ({
@@ -65,6 +56,15 @@ const NodeConfigDrawer: React.FC<Props> = ({
   onDeleteNode,
 }) => {
   const open = Boolean(node || edge);
+  const { tools, loading: toolsLoading } = useAtomValue(toolsAtom);
+  const fetchTools = useSetAtom(fetchToolsAtom);
+
+  const isToolNode = node?.type === 'tool';
+  useEffect(() => {
+    if (isToolNode && tools.length === 0 && !toolsLoading) fetchTools();
+  }, [isToolNode, tools.length, toolsLoading, fetchTools]);
+
+  const toolOptions = useMemo(() => tools.map((t) => ({ value: t.id, label: t.name })), [tools]);
 
   // ── node editing ──
   const renderNode = () => {
@@ -74,7 +74,7 @@ const NodeConfigDrawer: React.FC<Props> = ({
     const Icon = meta.icon;
     const data = node.data as D;
     const patch = (p: D) => onChangeNode(node.id, { ...data, ...p });
-    const fm = (data.messagePlan as D | undefined)?.firstMessage ?? '';
+    const fm = String((data.messagePlan as D | undefined)?.firstMessage ?? '');
     const setFirstMessage = (v: string) =>
       patch({ messagePlan: { ...(data.messagePlan as D), firstMessage: v } });
 
@@ -82,185 +82,189 @@ const NodeConfigDrawer: React.FC<Props> = ({
     const setVars = (next: D[]) => patch({ variableExtractionPlan: { output: next } });
 
     return (
-      <>
-        <div className="mb-4 flex items-center gap-2.5">
-          <span
-            className={cn(
-              'inline-flex h-8 w-8 items-center justify-center rounded-md',
-              meta.accent.chip,
-            )}
-          >
-            <Icon className="h-4 w-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
-              {meta.label}
-            </div>
-            <input
-              className="-ml-0.5 w-full rounded bg-transparent px-0.5 text-sm font-semibold outline-none focus:bg-accent"
-              value={String(data.name ?? node.id)}
-              onChange={(e) => patch({ name: e.target.value })}
-            />
+      <div className="flex flex-col gap-5">
+        {/* identity */}
+        <div>
+          <div className="mb-2.5 flex items-center gap-2.5">
+            <span
+              className={cn(
+                'inline-flex h-9 w-9 items-center justify-center rounded-lg',
+                meta.accent.chip,
+              )}
+            >
+              <Icon className="h-4.5 w-4.5" />
+            </span>
+            <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+              {meta.label} node
+            </span>
           </div>
+          <TextInput
+            name="node-name"
+            label="Node name"
+            value={String(data.name ?? node.id)}
+            onChange={(e) => patch({ name: e.target.value })}
+            placeholder="e.g. collect_name"
+          />
         </div>
 
-        {type === 'conversation' && (
-          <Section>
-            <Label>First message (spoken on entry)</Label>
-            <textarea
-              className={cn(input, 'min-h-[60px] resize-y')}
-              value={String(fm)}
-              onChange={(e) => setFirstMessage(e.target.value)}
-            />
-          </Section>
+        {/* conversation: first message */}
+        {(type === 'conversation' || type === 'transferCall' || type === 'endCall') && (
+          <TextAreaField
+            name="first-message"
+            label={
+              type === 'endCall'
+                ? 'Goodbye message'
+                : type === 'transferCall'
+                  ? 'Message before transfer'
+                  : 'First message (spoken on entry)'
+            }
+            rows={type === 'conversation' ? 2 : 3}
+            value={fm}
+            onChange={(e) => setFirstMessage(e.target.value)}
+            placeholder="What the agent says when it reaches this node…"
+          />
         )}
 
+        {/* conversation / decision: prompt */}
         {(type === 'conversation' || type === 'decision') && (
-          <Section>
-            <Label>Prompt</Label>
-            <textarea
-              className={cn(input, 'min-h-[100px] resize-y')}
-              value={String(data.prompt ?? '')}
-              onChange={(e) => patch({ prompt: e.target.value })}
-              placeholder={
-                type === 'decision'
-                  ? 'Optional guidance for AI-routed branches'
-                  : 'What should the agent do at this step?'
-              }
-            />
-            <p className="mt-1 text-xs text-muted-foreground">
-              The LLM (model/temperature) comes from the agent. Use {'{{variables}}'} for dynamic
-              values.
-            </p>
-          </Section>
+          <TextAreaField
+            name="prompt"
+            label={type === 'decision' ? 'Routing guidance (optional)' : 'Prompt'}
+            rows={5}
+            value={String(data.prompt ?? '')}
+            onChange={(e) => patch({ prompt: e.target.value })}
+            placeholder={
+              type === 'decision'
+                ? 'Optional hint for AI-routed branches'
+                : 'What should the agent do at this step? Use {{variables}} for dynamic values.'
+            }
+            helperText="The LLM (model & temperature) is inherited from the assigned agent."
+          />
         )}
 
+        {/* tool */}
+        {type === 'tool' && (
+          <SearchableSelect
+            name="tool"
+            label="Tool"
+            options={toolOptions}
+            value={String(data.toolId ?? '')}
+            onValueChange={(v) => patch({ toolId: v, tool: undefined })}
+            loading={toolsLoading}
+            placeholder="Select a tool (webhook / custom / MCP)"
+          />
+        )}
+
+        {/* transfer destination */}
+        {type === 'transferCall' && (
+          <TextInput
+            name="destination"
+            label="Destination number"
+            value={String((data.destination as D | undefined)?.number ?? '')}
+            onChange={(e) => patch({ destination: { type: 'number', number: e.target.value } })}
+            placeholder="+15551234567"
+            className="font-mono"
+          />
+        )}
+
+        {/* extract variables */}
         {type === 'conversation' && (
-          <Section>
-            <div className="mb-1.5 flex items-center justify-between">
-              <Label>Extract variables</Label>
-              <button
-                type="button"
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <SectionTitle>Extract variables</SectionTitle>
+              <CustomButton
+                type="text"
+                size="xs"
+                icon={<Plus className="h-3.5 w-3.5" />}
                 onClick={() =>
                   setVars([...vars, { title: '', type: 'string', enum: [], description: '' }])
                 }
-                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-primary hover:bg-accent"
               >
-                <Plus className="h-3 w-3" /> Add
-              </button>
+                Add
+              </CustomButton>
             </div>
-            <div className="flex flex-col gap-2">
-              {vars.map((v, i) => (
-                <div key={i} className="flex items-center gap-1.5">
-                  <input
-                    className={cn(input, 'font-mono')}
-                    placeholder="variable_name"
-                    value={String(v.title ?? '')}
-                    onChange={(e) =>
-                      setVars(vars.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))
-                    }
-                  />
-                  <input
-                    className={input}
-                    placeholder="description"
-                    value={String(v.description ?? '')}
-                    onChange={(e) =>
-                      setVars(
-                        vars.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)),
-                      )
-                    }
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setVars(vars.filter((_, j) => j !== i))}
-                    className="shrink-0 rounded p-1 text-muted-foreground hover:text-destructive"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ))}
-              {vars.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  No variables extracted at this node.
-                </p>
-              )}
-            </div>
-          </Section>
-        )}
-
-        {type === 'tool' && (
-          <Section>
-            <Label>Tool</Label>
-            <input
-              className={cn(input, 'font-mono')}
-              placeholder="tool id (webhook / custom / MCP)"
-              value={String(data.toolId ?? '')}
-              onChange={(e) => patch({ toolId: e.target.value, tool: undefined })}
-            />
-            <p className="mt-1 text-xs text-muted-foreground">
-              Reference an existing Tool. Built-in actions use an inline tool type.
-            </p>
-          </Section>
-        )}
-
-        {type === 'transferCall' && (
-          <Section>
-            <Label>Destination number</Label>
-            <input
-              className={cn(input, 'font-mono')}
-              placeholder="+15551234567"
-              value={String((data.destination as D | undefined)?.number ?? '')}
-              onChange={(e) => patch({ destination: { type: 'number', number: e.target.value } })}
-            />
-            <div className="mt-3" />
-            <Label>Message before transfer</Label>
-            <textarea
-              className={cn(input, 'min-h-[50px] resize-y')}
-              value={String(fm)}
-              onChange={(e) => setFirstMessage(e.target.value)}
-            />
-          </Section>
-        )}
-
-        {type === 'endCall' && (
-          <Section>
-            <Label>Goodbye message</Label>
-            <textarea
-              className={cn(input, 'min-h-[60px] resize-y')}
-              value={String(fm)}
-              onChange={(e) => setFirstMessage(e.target.value)}
-            />
-          </Section>
-        )}
-
-        <Section>
-          <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-3">
-            {!meta.terminal && (
-              <Toggle
-                label="Start node (entry point)"
-                checked={Boolean(data.isStart)}
-                onChange={(v) => patch({ isStart: v })}
-              />
-            )}
-            <Toggle
-              label="Global (reachable from anywhere)"
-              checked={Boolean(data.isGlobal)}
-              onChange={(v) => patch({ isGlobal: v })}
-            />
-            {Boolean(data.isGlobal) && (
-              <div>
-                <Label>Enter condition (Liquid)</Label>
-                <input
-                  className={cn(input, 'font-mono')}
-                  placeholder="{{ wants_human == true }}"
-                  value={String(data.condition ?? '')}
-                  onChange={(e) => patch({ condition: e.target.value })}
-                />
+            {vars.length === 0 ? (
+              <Card className="text-xs text-muted-foreground">
+                No variables extracted here. Add one to capture what the caller says (e.g.{' '}
+                <span className="font-mono">customer_name</span>).
+              </Card>
+            ) : (
+              <div className="flex flex-col gap-2.5">
+                {vars.map((v, i) => (
+                  <Card key={i} className="bg-card">
+                    <div className="flex items-start gap-2">
+                      <div className="flex flex-1 flex-col gap-2">
+                        <TextInput
+                          name={`var-name-${i}`}
+                          value={String(v.title ?? '')}
+                          onChange={(e) =>
+                            setVars(
+                              vars.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)),
+                            )
+                          }
+                          placeholder="variable_name"
+                          className="font-mono"
+                        />
+                        <TextInput
+                          name={`var-desc-${i}`}
+                          value={String(v.description ?? '')}
+                          onChange={(e) =>
+                            setVars(
+                              vars.map((x, j) =>
+                                j === i ? { ...x, description: e.target.value } : x,
+                              ),
+                            )
+                          }
+                          placeholder="What to capture (description)"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="Remove variable"
+                        onClick={() => setVars(vars.filter((_, j) => j !== i))}
+                        className="mt-1 shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </Card>
+                ))}
               </div>
             )}
           </div>
-        </Section>
-      </>
+        )}
+
+        {/* behaviour */}
+        <div>
+          <SectionTitle>Behaviour</SectionTitle>
+          <Card className="flex flex-col gap-3">
+            {!meta.terminal && (
+              <CheckboxField
+                id="is-start"
+                label="Start node (entry point)"
+                checked={Boolean(data.isStart)}
+                onCheckedChange={(c) => patch({ isStart: c })}
+              />
+            )}
+            <CheckboxField
+              id="is-global"
+              label="Global (reachable from anywhere)"
+              checked={Boolean(data.isGlobal)}
+              onCheckedChange={(c) => patch({ isGlobal: c })}
+            />
+            {Boolean(data.isGlobal) && (
+              <TextInput
+                name="enter-condition"
+                label="Enter condition (Liquid)"
+                value={String(data.condition ?? '')}
+                onChange={(e) => patch({ condition: e.target.value })}
+                placeholder="{{ wants_human == true }}"
+                className="font-mono"
+              />
+            )}
+          </Card>
+        </div>
+      </div>
     );
   };
 
@@ -273,50 +277,44 @@ const NodeConfigDrawer: React.FC<Props> = ({
     };
     const set = (type: EdgeConditionType, prompt: string) =>
       onChangeEdge(edge.id, { condition: { type, prompt } });
+    const isLogic = cond.type === 'logic';
+
     return (
-      <>
-        <div className="mb-4">
-          <div className="text-sm font-semibold">Edge condition</div>
-          <div className="mt-0.5 font-mono text-xs text-muted-foreground">
-            {edge.source} → {edge.target}
+      <div className="flex flex-col gap-5">
+        <Card className="bg-card">
+          <div className="font-mono text-xs text-muted-foreground">
+            {edge.source} <span className="text-primary">→</span> {edge.target}
           </div>
-        </div>
-        <Section>
-          <Label>Type</Label>
-          <div className="inline-flex rounded-lg border border-border p-0.5">
-            {(['ai', 'logic'] as EdgeConditionType[]).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => set(t, cond.prompt)}
-                className={cn(
-                  'rounded-md px-3 py-1 text-sm capitalize transition-colors',
-                  cond.type === t
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-        </Section>
-        <Section>
-          <Label>
-            {cond.type === 'logic' ? 'Liquid expression' : 'Condition (plain language)'}
-          </Label>
-          <textarea
-            className={cn(input, 'min-h-[80px] resize-y', cond.type === 'logic' && 'font-mono')}
-            placeholder={
-              cond.type === 'logic'
-                ? '{{ user_confirmed == true }}'
-                : 'e.g. user said yes (leave blank for always)'
-            }
-            value={cond.prompt}
-            onChange={(e) => set(cond.type, e.target.value)}
-          />
-        </Section>
-      </>
+        </Card>
+
+        <SelectInput
+          name="condition-type"
+          label="Condition type"
+          options={[
+            { value: 'ai', label: 'AI — plain language (LLM-evaluated)' },
+            { value: 'logic', label: 'Logic — Liquid expression (deterministic)' },
+          ]}
+          value={cond.type}
+          onValueChange={(v) => set(v as EdgeConditionType, cond.prompt)}
+        />
+
+        <TextAreaField
+          name="condition-prompt"
+          label={isLogic ? 'Liquid expression' : 'Condition'}
+          rows={4}
+          value={cond.prompt}
+          onChange={(e) => set(cond.type, e.target.value)}
+          placeholder={
+            isLogic ? '{{ user_confirmed == true }}' : 'e.g. user said yes (leave blank for always)'
+          }
+          helperText={
+            isLogic
+              ? 'Evaluated against extracted variables. No LLM call.'
+              : 'The agent decides if this is satisfied. Leave blank to always follow this edge.'
+          }
+          className={isLogic ? 'font-mono' : undefined}
+        />
+      </div>
     );
   };
 
