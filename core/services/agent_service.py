@@ -982,8 +982,10 @@ class AgentService(BaseService):
         "first_message", "end_call_message", "system_prompt_template",
         "conversation_history_token_limit", "language_id", "knowledge_model_id",
         "llm_settings", "voice_settings", "stt_settings", "conversation_settings",
+        # Workflow assignment lives on the live config (per-agent toggle + assigned workflow).
+        "mode", "workflow_id",
     )
-    _CONFIG_UUID_FIELDS = frozenset({"language_id", "knowledge_model_id"})
+    _CONFIG_UUID_FIELDS = frozenset({"language_id", "knowledge_model_id", "workflow_id"})
 
     def _apply_config_fields(self, target: AgentConfig, data: Dict[str, Any]) -> None:
         """Copy provided config field values onto an AgentConfig row.
@@ -1372,6 +1374,8 @@ class AgentService(BaseService):
                 "voice_settings": config.voice_settings,
                 "stt_settings": config.stt_settings,
                 "conversation_settings": config.conversation_settings,
+                "mode": getattr(config, "mode", "prompt") or "prompt",
+                "workflow_id": str(config.workflow_id) if getattr(config, "workflow_id", None) else None,
             }
         else:
             result["config"] = None

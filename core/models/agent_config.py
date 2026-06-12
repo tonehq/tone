@@ -15,6 +15,14 @@ class AgentConfig(OrgScopedModel):
     agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
     version = Column(Integer, nullable=False)
     canvas_label = Column(String(200), nullable=True)
+    # Conversation-flow driver: "prompt" (single system prompt) | "workflow" (assigned graph).
+    mode = Column(String(16), nullable=False, server_default="prompt")
+    # The assigned org-level workflow when mode == "workflow" (SET NULL on workflow delete).
+    workflow_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("workflows.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     is_default = Column(Boolean, nullable=False, default=False)
     published_at = Column(DateTime(timezone=True), nullable=True)
     first_message = Column(String(1000), nullable=True)
