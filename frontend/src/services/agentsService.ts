@@ -56,15 +56,19 @@ export const listAgentVersions = async (agentId: string): Promise<AgentVersionSu
   return Array.isArray(res.data) ? res.data : [];
 };
 
-/** Clone the live config, apply edits, persist as the next version, and make
- * it live. Body mirrors {@link UpdateAgentPayload} minus the top-level agent
- * attributes (name/description/agent_type/is_active). */
+/** Clone an existing config, apply edits, persist as the next version (as a
+ *  draft — not auto-promoted). The body mirrors {@link UpdateAgentPayload}
+ *  minus the top-level agent attributes (name/description/agent_type/
+ *  is_active), plus `source_config_id`: the version whose fields and
+ *  tool/MCP/KB attachments should be cloned. The editor sends the version
+ *  currently loaded in the form so "save while previewing v9" produces a new
+ *  version mirroring v9. Omit to fall back to the published version. */
 export const saveAgentAsNewVersion = async (
   agentId: string,
   payload: Pick<
     UpdateAgentPayload,
     'config' | 'tool_ids' | 'mcp_server_ids' | 'upload_ids' | 'phone_numbers'
-  >,
+  > & { source_config_id?: string | null },
 ): Promise<AgentDetail> => {
   const res = await axiosInstance.post<AgentDetail>('/agent/save_as_new_version', payload, {
     params: { agent_id: agentId },

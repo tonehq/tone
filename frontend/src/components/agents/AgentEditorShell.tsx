@@ -226,7 +226,10 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
       // version that's serving calls is not touched until the user clicks
       // Publish. We send the full form state (not a diff) so the new draft
       // reflects exactly what the user sees — see backend
-      // `_create_new_version_config` for how the snapshot is built.
+      // `_create_new_version_config` for how the snapshot is built. We also
+      // declare `source_config_id` so the backend clones tools / MCP / KB
+      // from the version the user was previewing rather than the published
+      // one.
       const full = formStateToCreatePayload(values);
       const updated = await saveAgentAsNewVersion({
         agentId,
@@ -236,6 +239,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
           mcp_server_ids: full.mcp_server_ids,
           upload_ids: full.upload_ids,
           phone_numbers: full.phone_numbers,
+          source_config_id: detail?.config?.id ?? null,
         },
       });
       applyDetail(updated);
@@ -256,6 +260,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     applyServerValidation,
     basePath,
     createAgent,
+    detail,
     isEditMode,
     methods,
     router,

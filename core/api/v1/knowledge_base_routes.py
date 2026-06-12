@@ -203,21 +203,28 @@ def build_knowledge_base_router(
                     status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found"
                 )
 
-            # Resolve the latest agent_config up-front so we fail fast (before
-            # touching R2) when the agent has no config yet — otherwise raising
-            # 409 after the blob is written would orphan the R2 object.
+            # Resolve the agent's PUBLISHED config up-front so we fail fast
+            # (before touching R2) when the agent has no live version yet —
+            # otherwise raising 409 after the blob is written would orphan
+            # the R2 object. The upload attaches to the published version so
+            # it's immediately available to the live agent; draft versions
+            # get their own copy via cloning on the next save.
             from core.models.agent_config import AgentConfig
 
-            agent_config = (
-                db.query(AgentConfig)
-                .filter(AgentConfig.agent_id == agent_uuid, AgentConfig.deleted_at.is_(None))
-                .order_by(AgentConfig.version.desc())
-                .first()
-            )
+            agent_config = None
+            if agent.published_config_id:
+                agent_config = (
+                    db.query(AgentConfig)
+                    .filter(
+                        AgentConfig.id == agent.published_config_id,
+                        AgentConfig.deleted_at.is_(None),
+                    )
+                    .first()
+                )
             if not agent_config:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail="Agent has no configuration yet. Save the agent before uploading knowledge base documents.",
+                    detail="Agent has no published configuration yet. Save and publish the agent before uploading knowledge base documents.",
                 )
 
         file_name = file.filename or "upload.bin"
