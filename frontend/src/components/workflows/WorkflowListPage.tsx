@@ -54,9 +54,12 @@ const WorkflowListPage: React.FC = () => {
   };
 
   const showSkeleton = (loading || !loadedOnce) && list.length === 0 && !errored;
+  // Empty / error views read better centered in a comfortable column with generous
+  // whitespace on the sides; the populated grid uses the full wide container.
+  const wide = list.length > 0;
 
   return (
-    <div className="mx-auto h-full max-w-6xl px-6 py-8">
+    <div className={cn('mx-auto h-full px-6 py-8', wide ? 'max-w-6xl' : 'max-w-3xl')}>
       <div className="mb-7 flex items-end justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5">

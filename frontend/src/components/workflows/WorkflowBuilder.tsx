@@ -319,11 +319,13 @@ function BuilderInner({ workflowId }: Props) {
             edgeTypes={edgeTypes}
             defaultEdgeOptions={defaultEdgeOptions}
             colorMode={(resolvedTheme as 'light' | 'dark') ?? 'light'}
-            onNodeClick={(_, n) => {
+            nodesDraggable
+            nodeDragThreshold={1}
+            onNodeDoubleClick={(_, n) => {
               setSelectedNodeId(n.id);
               setSelectedEdgeId(null);
             }}
-            onEdgeClick={(_, e) => {
+            onEdgeDoubleClick={(_, e) => {
               setSelectedEdgeId(e.id);
               setSelectedNodeId(null);
             }}
@@ -337,6 +339,13 @@ function BuilderInner({ workflowId }: Props) {
             <Background variant={BackgroundVariant.Dots} gap={22} size={1.4} />
             <Controls className="!shadow-md" showInteractive={false} />
           </ReactFlow>
+
+          {/* interaction hint */}
+          <div className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2">
+            <span className="rounded-full border border-border bg-card/80 px-3 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur">
+              Drag to move · double-click to edit · drag a handle to connect
+            </span>
+          </div>
 
           {/* bottom-left utility bar */}
           <div className="pointer-events-none absolute bottom-4 left-4 z-10 flex gap-2">

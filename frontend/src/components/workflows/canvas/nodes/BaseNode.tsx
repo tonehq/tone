@@ -21,6 +21,9 @@ export interface BaseNodeProps {
   sourceHandles?: { id?: string; label?: string }[];
 }
 
+const HANDLE_CLS =
+  '!h-3.5 !w-3.5 !rounded-full !border-2 !border-card !bg-muted-foreground/55 !shadow-sm transition-all hover:!bg-primary hover:!scale-110';
+
 const BaseNode: React.FC<BaseNodeProps> = ({
   meta,
   title,
@@ -38,46 +41,40 @@ const BaseNode: React.FC<BaseNodeProps> = ({
   return (
     <div
       className={cn(
-        'group relative min-w-[240px] max-w-[300px] overflow-hidden rounded-xl border bg-card shadow-sm transition-all',
-        'hover:-translate-y-px hover:shadow-md',
+        'group relative w-[268px] cursor-grab overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow active:cursor-grabbing',
+        'hover:shadow-lg',
         selected
-          ? 'border-primary ring-2 ring-primary ring-offset-2 ring-offset-background'
-          : 'border-border',
+          ? 'border-primary shadow-md ring-1 ring-primary/40'
+          : 'border-border hover:border-primary/30',
       )}
     >
-      {/* top accent bar */}
-      <div className={cn('h-[2px] w-full', meta.accent.bar)} />
+      {/* top accent strip */}
+      <div className={cn('h-1 w-full', meta.accent.bar)} />
 
       {/* target handle */}
-      {meta.hasTarget && (
-        <Handle
-          type="target"
-          position={Position.Top}
-          className="!h-2.5 !w-2.5 !border-2 !border-muted-foreground/50 !bg-background"
-        />
-      )}
+      {meta.hasTarget && <Handle type="target" position={Position.Top} className={HANDLE_CLS} />}
 
-      <div className="flex items-start gap-2.5 px-3.5 pb-2 pt-3">
+      <div className="flex items-start gap-3 px-4 pb-2.5 pt-3.5">
         <span
           className={cn(
-            'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md',
+            'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl',
             meta.accent.chip,
           )}
         >
-          <Icon className="h-4 w-4" strokeWidth={2} />
+          <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+        <div className="min-w-0 flex-1 pt-0.5">
+          <div className="font-mono text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
             {meta.label}
           </div>
-          <div className="truncate text-sm font-semibold leading-tight text-foreground">
+          <div className="truncate text-[15px] font-semibold leading-tight text-foreground">
             {title}
           </div>
         </div>
         <div className="flex items-center gap-1">
           {isStart && (
             <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 ring-1 ring-inset ring-emerald-500/20 dark:text-emerald-300">
-              <Play className="h-2.5 w-2.5" /> Start
+              <Play className="h-2.5 w-2.5 fill-current" /> Start
             </span>
           )}
           {isGlobal && (
@@ -89,7 +86,7 @@ const BaseNode: React.FC<BaseNodeProps> = ({
           )}
           {errorCount > 0 && (
             <CustomTooltip content={errorMessages.join('\n') || `${errorCount} issue(s)`}>
-              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive/10 px-1 text-[10px] font-semibold text-destructive ring-1 ring-inset ring-destructive/20">
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500/10 px-1 text-[10px] font-semibold text-amber-600 ring-1 ring-inset ring-amber-500/25 dark:text-amber-300">
                 {errorCount}
               </span>
             </CustomTooltip>
@@ -97,15 +94,14 @@ const BaseNode: React.FC<BaseNodeProps> = ({
         </div>
       </div>
 
-      {summary ? (
-        <div className="px-3.5 pb-3 text-[13px] leading-snug text-muted-foreground line-clamp-2">
-          {summary}
-        </div>
-      ) : (
-        <div className="px-3.5 pb-3 text-[13px] italic leading-snug text-muted-foreground/60">
-          No content yet
-        </div>
-      )}
+      <div
+        className={cn(
+          'px-4 pb-3.5 text-[13px] leading-relaxed line-clamp-2',
+          summary ? 'text-muted-foreground' : 'italic text-muted-foreground/55',
+        )}
+      >
+        {summary || 'No content yet'}
+      </div>
 
       {/* source handle(s) */}
       {handles.map((h, i) => {
@@ -118,7 +114,7 @@ const BaseNode: React.FC<BaseNodeProps> = ({
             type="source"
             position={Position.Bottom}
             style={{ left: `${left}%` }}
-            className="!h-2.5 !w-2.5 !border-2 !border-muted-foreground/50 !bg-background transition-colors hover:!border-primary"
+            className={HANDLE_CLS}
           />
         );
       })}
