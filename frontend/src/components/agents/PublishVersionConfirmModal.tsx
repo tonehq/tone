@@ -111,7 +111,12 @@ export default function PublishVersionConfirmModal({
                 )}
               >
                 <span className="flex items-center gap-2.5">
-                  <RadioGroupItem id={rowId} value={v.id} disabled={isPublished || loading} />
+                  <RadioGroupItem
+                    id={rowId}
+                    value={v.id}
+                    disabled={isPublished || loading}
+                    className={cn(!isPublished && !loading && 'cursor-pointer')}
+                  />
                   <span className="font-medium">v{v.version}</span>
                   {isPublished && (
                     <Badge className="h-4 px-1.5 py-0 text-[10px] uppercase tracking-wide">

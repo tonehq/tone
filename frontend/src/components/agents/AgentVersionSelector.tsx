@@ -97,7 +97,7 @@ export default function AgentVersionSelector({
                   onSelect(v.id);
                 }}
                 className={cn(
-                  'flex items-center justify-between gap-2 text-[13px]',
+                  'flex cursor-pointer items-center justify-between gap-2 text-[13px]',
                   isSelected && 'bg-accent/60',
                 )}
               >
