@@ -203,12 +203,13 @@ def build_knowledge_base_router(
                     status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found"
                 )
 
-            # Resolve the agent's PUBLISHED config up-front so we fail fast
-            # (before touching R2) when the agent has no live version yet —
-            # otherwise raising 409 after the blob is written would orphan
-            # the R2 object. The upload attaches to the published version so
-            # it's immediately available to the live agent; draft versions
-            # get their own copy via cloning on the next save.
+            # Uploads from this admin route attach directly to the agent's
+            # PUBLISHED config — i.e. the document goes live for the call
+            # pipeline as soon as the upload finishes ingesting. That is the
+            # established behaviour for this endpoint; per-version isolation
+            # only applies to the editor flow, where saves clone the chosen
+            # source version. Resolving up-front here (before touching R2)
+            # also means a missing-publication 409 doesn't orphan the blob.
             from core.models.agent_config import AgentConfig
 
             agent_config = None

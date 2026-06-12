@@ -63,15 +63,9 @@ class PgVectorStore(VectorStore):
                 # Per-version KB: only chunks attached to the agent's published
                 # config should be retrievable at call-time. Otherwise a draft
                 # version's docs could leak into a live conversation.
-                from sqlalchemy import select
+                from core.utils.agent_scope import published_config_subquery
 
-                from core.models.agent import Agent
-
-                published_config_sq = (
-                    select(Agent.published_config_id)
-                    .where(Agent.id == str(agent_id))
-                    .scalar_subquery()
-                )
+                published_config_sq = published_config_subquery(str(agent_id))
                 q = (
                     q.join(Upload, KnowledgeBaseChunk.upload_id == Upload.id)
                     .join(KnowledgeBase, KnowledgeBase.upload_id == Upload.id)

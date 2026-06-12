@@ -274,9 +274,7 @@ class ToolService(BaseService):
 
         # Per-version attachments: each row must declare the config it belongs
         # to. The admin "attach to agents" action targets each agent's
-        # published version (the one serving calls right now). Agents with no
-        # published version yet are silently skipped — there's nowhere to wire
-        # the tool to.
+        # published version (the one serving calls right now).
         published_map = {
             aid: cid
             for aid, cid in self.db.query(Agent.id, Agent.published_config_id)
@@ -285,22 +283,32 @@ class ToolService(BaseService):
             if cid is not None
         }
 
+        # Reject up-front when every requested agent lacks a published version
+        # — without this, the empty-published_map case falls through to the
+        # generic "already attached" error, which misleads the caller.
+        if not published_map:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "None of the specified agents have a published version to attach to."
+                    " Publish each agent first, then retry."
+                ),
+            )
+
         # Already-attached lookup scoped to each agent's published config — an
         # agent whose published version already has this tool is a skip.
         agent_config_pairs = list(published_map.items())
-        already_attached: set = set()
-        if agent_config_pairs:
-            already_attached = {
-                row.agent_id
-                for row in self.db.query(AgentTool.agent_id)
-                .filter(
-                    AgentTool.tool_id == tool_id,
-                    tuple_(AgentTool.agent_id, AgentTool.agent_config_id).in_(
-                        agent_config_pairs
-                    ),
-                )
-                .all()
-            }
+        already_attached = {
+            row.agent_id
+            for row in self.db.query(AgentTool.agent_id)
+            .filter(
+                AgentTool.tool_id == tool_id,
+                tuple_(AgentTool.agent_id, AgentTool.agent_config_id).in_(
+                    agent_config_pairs
+                ),
+            )
+            .all()
+        }
 
         new_ids = [aid for aid in published_map if aid not in already_attached]
 
@@ -366,13 +374,9 @@ class ToolService(BaseService):
         # Per-version attachments: only return the agent's published-version
         # tools so admin views and runtime callers see the same set the live
         # agent is using.
-        from sqlalchemy import select
+        from core.utils.agent_scope import published_config_subquery
 
-        from core.models.agent import Agent
-
-        published_config_sq = (
-            select(Agent.published_config_id).where(Agent.id == agent_id).scalar_subquery()
-        )
+        published_config_sq = published_config_subquery(agent_id)
         return (
             self.query(Tool)
             .join(AgentTool, AgentTool.tool_id == Tool.id)

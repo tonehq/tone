@@ -131,27 +131,14 @@ def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, cur
     return lambda: setattr(llm, "register_function", original_register)
 
 
-def _published_config_subquery(agent_id):
-    """Scalar subquery: the published config id for the given agent.
-
-    Attachments are per-version, so MCP-server reads from the runtime must
-    filter by the agent's currently-published config — draft versions and
-    historical versions must not bleed into a live call.
-    """
-    from sqlalchemy import select
-
-    from core.models.agent import Agent
-
-    return select(Agent.published_config_id).where(Agent.id == agent_id).scalar_subquery()
-
-
 def get_mcp_servers_for_agent(agent_id: int):
     """Fetch all active MCP servers linked to an agent's published version."""
     from core.database.session import get_db_context
     from core.models.mcp_server import McpServer
     from core.models.agent_mcp_server import AgentMcpServer
+    from core.utils.agent_scope import published_config_subquery
 
-    published_config_sq = _published_config_subquery(agent_id)
+    published_config_sq = published_config_subquery(agent_id)
 
     with get_db_context() as db:
         rows = (
@@ -182,8 +169,9 @@ def get_mcp_server_refs(agent_id: int) -> list:
     from core.database.session import get_db_context
     from core.models.mcp_server import McpServer
     from core.models.agent_mcp_server import AgentMcpServer
+    from core.utils.agent_scope import published_config_subquery
 
-    published_config_sq = _published_config_subquery(agent_id)
+    published_config_sq = published_config_subquery(agent_id)
 
     with get_db_context() as db:
         rows = (

@@ -409,7 +409,6 @@ class McpServerService(BaseService):
         self._validate_oauth_scopes(mcp_server.oauth_connection_id)
 
         # Per-version attachments: attach to each agent's published config.
-        # Agents without one are skipped (nothing to wire to).
         published_map = {
             aid: cid
             for aid, cid in self.db.query(Agent.id, Agent.published_config_id)
@@ -418,20 +417,30 @@ class McpServerService(BaseService):
             if cid is not None
         }
 
+        # Reject up-front when every requested agent lacks a published version
+        # — otherwise the empty case falls through to the generic "already
+        # attached" error, which misleads the caller.
+        if not published_map:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "None of the specified agents have a published version to attach to."
+                    " Publish each agent first, then retry."
+                ),
+            )
+
         agent_config_pairs = list(published_map.items())
-        already_attached: set = set()
-        if agent_config_pairs:
-            already_attached = {
-                row.agent_id
-                for row in self.db.query(AgentMcpServer.agent_id)
-                .filter(
-                    AgentMcpServer.mcp_server_id == mcp_server_id,
-                    tuple_(AgentMcpServer.agent_id, AgentMcpServer.agent_config_id).in_(
-                        agent_config_pairs
-                    ),
-                )
-                .all()
-            }
+        already_attached = {
+            row.agent_id
+            for row in self.db.query(AgentMcpServer.agent_id)
+            .filter(
+                AgentMcpServer.mcp_server_id == mcp_server_id,
+                tuple_(AgentMcpServer.agent_id, AgentMcpServer.agent_config_id).in_(
+                    agent_config_pairs
+                ),
+            )
+            .all()
+        }
 
         new_ids = [aid for aid in published_map if aid not in already_attached]
         if not new_ids:
@@ -488,13 +497,9 @@ class McpServerService(BaseService):
 
     def get_mcp_servers_by_agent(self, agent_id) -> List[Dict[str, Any]]:
         # Per-version: only return the agent's published-version MCP servers.
-        from sqlalchemy import select
+        from core.utils.agent_scope import published_config_subquery
 
-        from core.models.agent import Agent
-
-        published_config_sq = (
-            select(Agent.published_config_id).where(Agent.id == agent_id).scalar_subquery()
-        )
+        published_config_sq = published_config_subquery(agent_id)
         rows = (
             self.db.query(McpServer)
             .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)

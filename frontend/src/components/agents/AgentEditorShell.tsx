@@ -269,7 +269,12 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
 
   const handleViewVersion = useCallback(
     async (configId: string) => {
-      if (!agentId || configId === viewedConfigId) return;
+      // Compare against what's actually loaded in the form — NOT viewedConfigId
+      // (the chip). After Save, the chip stays pinned to the published version
+      // while the form shows the new draft; clicking the published row in the
+      // dropdown must still reload it into the form, so we key the no-op
+      // check off `detail.config.id`.
+      if (!agentId || configId === detail?.config?.id) return;
       setLoading(true);
       try {
         const d = await fetchAgent({ agentId, configId });
@@ -282,7 +287,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
         setLoading(false);
       }
     },
-    [agentId, applyDetail, fetchAgent, viewedConfigId],
+    [agentId, applyDetail, detail?.config?.id, fetchAgent],
   );
 
   const handlePublish = useCallback(

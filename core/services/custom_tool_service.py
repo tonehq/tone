@@ -20,17 +20,13 @@ from core.utils.logging import truncate_for_log
 
 def get_custom_tools_for_agent(agent_id: int) -> List[Tool]:
     """Fetch all active custom tools linked to an agent's published version."""
-    from sqlalchemy import select
-
     from core.database.session import get_db_context
-    from core.models.agent import Agent
     from core.services.tool_service import decrypt_auth_config
+    from core.utils.agent_scope import published_config_subquery
 
     # Attachments are per-version: filter to the agent's published config so
     # the runtime never picks up draft-version tools.
-    published_config_sq = (
-        select(Agent.published_config_id).where(Agent.id == agent_id).scalar_subquery()
-    )
+    published_config_sq = published_config_subquery(agent_id)
 
     with get_db_context() as db:
         tools = (
