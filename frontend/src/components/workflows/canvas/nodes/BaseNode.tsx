@@ -43,7 +43,6 @@ const BaseNode: React.FC<BaseNodeProps> = ({
         selected
           ? 'border-primary ring-2 ring-primary ring-offset-2 ring-offset-background'
           : 'border-border',
-        errorCount > 0 && !selected && 'ring-2 ring-destructive',
       )}
     >
       {/* top accent bar */}
