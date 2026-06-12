@@ -130,18 +130,25 @@ def create_document_handler(agent_id: int, org_id: Any, api_key: str, upload_ids
 
 
 def get_document_names_for_agent(agent_id: int, org_id: Any) -> List[str]:
-    """Fetch file names of all ready KB uploads for an agent."""
+    """Fetch file names of all ready KB uploads for an agent's published version."""
     from core.database.session import get_db_context
     from core.models.upload import Upload
     from core.models.agent_knowledge_base import AgentKnowledgeBase
     from core.models.knowledge_base import KnowledgeBase
+    from core.utils.agent_scope import published_config_subquery
+
+    published_config_sq = published_config_subquery(agent_id)
 
     with get_db_context() as db:
         rows = (
             db.query(Upload.file_name)
             .join(KnowledgeBase, KnowledgeBase.upload_id == Upload.id)
             .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
-            .filter(AgentKnowledgeBase.agent_id == agent_id, Upload.status == "ready")
+            .filter(
+                AgentKnowledgeBase.agent_id == agent_id,
+                AgentKnowledgeBase.agent_config_id == published_config_sq,
+                Upload.status == "ready",
+            )
             .all()
         )
     return [row[0] for row in rows if row[0]]
@@ -181,12 +188,19 @@ def get_kb_refs(agent_id: int) -> List[dict]:
     from core.database.session import get_db_context
     from core.models.agent_knowledge_base import AgentKnowledgeBase
     from core.models.knowledge_base import KnowledgeBase
+    from core.utils.agent_scope import published_config_subquery
+
+    published_config_sq = published_config_subquery(agent_id)
 
     with get_db_context() as db:
         rows = (
             db.query(KnowledgeBase.id, KnowledgeBase.name)
             .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
-            .filter(AgentKnowledgeBase.agent_id == agent_id, KnowledgeBase.is_active.is_(True))
+            .filter(
+                AgentKnowledgeBase.agent_id == agent_id,
+                AgentKnowledgeBase.agent_config_id == published_config_sq,
+                KnowledgeBase.is_active.is_(True),
+            )
             .all()
         )
     return [{"id": str(r.id), "name": r.name} for r in rows]
@@ -201,12 +215,20 @@ def get_kb_document_names(agent_id: int) -> Optional[dict]:
     from core.models.agent_knowledge_base import AgentKnowledgeBase
     from core.models.knowledge_base import KnowledgeBase
 
+    from core.utils.agent_scope import published_config_subquery
+
+    published_config_sq = published_config_subquery(agent_id)
+
     with get_db_context() as db:
         upload_rows = (
             db.query(Upload.file_name, Upload.id)
             .join(KnowledgeBase, KnowledgeBase.upload_id == Upload.id)
             .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
-            .filter(AgentKnowledgeBase.agent_id == agent_id, Upload.status == "ready")
+            .filter(
+                AgentKnowledgeBase.agent_id == agent_id,
+                AgentKnowledgeBase.agent_config_id == published_config_sq,
+                Upload.status == "ready",
+            )
             .all()
         )
     doc_names = [row[0] for row in upload_rows if row[0]]

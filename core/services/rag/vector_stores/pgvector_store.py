@@ -60,12 +60,19 @@ class PgVectorStore(VectorStore):
             )
 
             if agent_id is not None:
+                # Per-version KB: only chunks attached to the agent's published
+                # config should be retrievable at call-time. Otherwise a draft
+                # version's docs could leak into a live conversation.
+                from core.utils.agent_scope import published_config_subquery
+
+                published_config_sq = published_config_subquery(str(agent_id))
                 q = (
                     q.join(Upload, KnowledgeBaseChunk.upload_id == Upload.id)
                     .join(KnowledgeBase, KnowledgeBase.upload_id == Upload.id)
                     .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
                     .filter(
                         AgentKnowledgeBase.agent_id == str(agent_id),
+                        AgentKnowledgeBase.agent_config_id == published_config_sq,
                         Upload.status == filters.get("status", "ready"),
                     )
                 )

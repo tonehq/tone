@@ -26,9 +26,10 @@ interface AgentVersionSelectorProps {
 
 /**
  * Header dropdown that lists every saved version of an agent. The row matching
- * `selectedConfigId` is highlighted; the row with `is_live` carries a "Live"
- * badge. Non-live rows expose a small trash control that delegates to
- * `onDelete` — wrapped in a confirm modal so a misclick can't drop history.
+ * `selectedConfigId` is highlighted; the row tagged `is_live` (the version
+ * currently serving calls) carries a "Published" badge. Other rows are drafts
+ * and expose a small trash control that delegates to `onDelete` — wrapped in
+ * a confirm modal so a misclick can't drop history.
  */
 export default function AgentVersionSelector({
   versions,
@@ -48,7 +49,7 @@ export default function AgentVersionSelector({
   if (versions.length === 0) return null;
 
   const triggerLabel = selected ? `v${selected.version}` : 'Select version';
-  const triggerLive = selected?.is_live ?? false;
+  const triggerPublished = selected?.is_live ?? false;
 
   const handleConfirmDelete = async () => {
     if (!pendingDelete || !onDelete) return;
@@ -73,9 +74,9 @@ export default function AgentVersionSelector({
             icon={<History className="size-3.5" />}
           >
             <span>{triggerLabel}</span>
-            {triggerLive && (
+            {triggerPublished && (
               <Badge className="ml-1 h-4 px-1.5 py-0 text-[10px] uppercase tracking-wide">
-                Live
+                Published
               </Badge>
             )}
             <ChevronDown className="size-3.5 opacity-60" />
@@ -96,7 +97,7 @@ export default function AgentVersionSelector({
                   onSelect(v.id);
                 }}
                 className={cn(
-                  'flex items-center justify-between gap-2 text-[13px]',
+                  'flex cursor-pointer items-center justify-between gap-2 text-[13px]',
                   isSelected && 'bg-accent/60',
                 )}
               >
@@ -105,7 +106,7 @@ export default function AgentVersionSelector({
                   <span className="font-medium">v{v.version}</span>
                   {v.is_live && (
                     <Badge className="h-4 px-1.5 py-0 text-[10px] uppercase tracking-wide">
-                      Live
+                      Published
                     </Badge>
                   )}
                 </span>
@@ -134,7 +135,7 @@ export default function AgentVersionSelector({
         open={pendingDelete !== null}
         onClose={() => setPendingDelete(null)}
         title={pendingDelete ? `Delete v${pendingDelete.version}?` : 'Delete version'}
-        description="This version will be removed from history. The live version is not affected."
+        description="This version will be removed from history. The published version is not affected."
         confirmText="Delete"
         confirmType="danger"
         confirmLoading={deleting}
