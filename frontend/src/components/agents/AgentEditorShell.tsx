@@ -18,6 +18,7 @@ import {
 import { AgentEditorProvider } from '@/components/agents/AgentEditorContext';
 import AgentSaveActions, { type AgentSaveAction } from '@/components/agents/AgentSaveActions';
 import AgentVersionSelector from '@/components/agents/AgentVersionSelector';
+import PublishVersionConfirmModal from '@/components/agents/PublishVersionConfirmModal';
 import { AgentFormNavProvider } from '@/components/agents/agent-form/AgentFormNav';
 import { buildAgentNav } from '@/components/agents/agent-form/sectionNav';
 import { AccountMenu } from '@/components/layout/AccountMenu';
@@ -31,7 +32,6 @@ import {
   agentDetailToFormState,
   defaultFormState,
   formStateToCreatePayload,
-  formStateToUpdatePayload,
 } from '@/utils/agentFormUtils';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
@@ -77,10 +77,10 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
 
   const [loading, setLoading] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
-  const [switchingLive, setSwitchingLive] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [originalState, setOriginalState] = useState<AgentFormState | null>(null);
+  const [publishOpen, setPublishOpen] = useState(false);
   const [detail, setDetail] = useState<AgentDetail | null>(null);
   /** Which version is loaded in the form. Null until the agent has loaded. */
   const [viewedConfigId, setViewedConfigId] = useState<string | null>(null);
@@ -111,14 +111,28 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   const flatItems = useMemo(() => navGroups.flatMap((g) => g.items), [navGroups]);
 
   /** Push a freshly-loaded AgentDetail into local state + the RHF form.
-   * Centralised so save, version-switch, and initial load all stay consistent. */
+   *
+   * Does NOT touch `viewedConfigId` — that's the user's explicit chip
+   * selection and only moves when the user picks a different version from the
+   * dropdown (or on initial load). Save creates a draft and updates the form,
+   * but the chip should stay where the user put it (typically the published
+   * version) — otherwise the chip would jump to the draft right after Save,
+   * and the user would see Publish enable for a version they didn't choose.
+   *
+   * Dirty-state hygiene: the synchronous `reset` clears `isDirty`, but some
+   * child components (notably the TipTap-backed prompt editor) sync their
+   * internal state via a `useEffect` on the form value and can re-fire
+   * `field.onChange` with a normalised string that differs subtly from the
+   * loaded value — which flips RHF's deep-equality back to dirty. A second
+   * reset deferred past React's effect cycle re-baselines after those
+   * children settle, so the unsaved-changes guard doesn't fire spuriously on
+   * the very next click (e.g. opening the version dropdown after Save).
+   */
   const applyDetail = useCallback(
     (d: AgentDetail) => {
       setDetail(d);
-      const hydrated = agentDetailToFormState(d);
-      methods.reset(hydrated);
-      setOriginalState(hydrated);
-      setViewedConfigId(d.config?.id ?? null);
+      methods.reset(agentDetailToFormState(d));
+      setTimeout(() => methods.reset(methods.getValues()), 0);
     },
     [methods],
   );
@@ -132,6 +146,9 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
       .then((d) => {
         if (cancelled) return;
         applyDetail(d);
+        // Initial chip selection = whatever the backend resolved as current
+        // (the published version when no config_id is requested).
+        setViewedConfigId(d.config?.id ?? null);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -151,8 +168,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   }, [agentId, applyDetail, fetchAgent, isEditMode, router]);
 
   /** Map a server validation-error payload onto RHF fields and jump to the
-   * tab where the first failure lives. Shared between save-in-place and
-   * save-as-new-version paths so behaviour matches in both. */
+   * tab where the first failure lives. */
   const applyServerValidation = useCallback(
     (err: unknown): boolean => {
       const detailErr = (err as any)?.response?.data?.detail;
@@ -180,81 +196,71 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     [basePath, methods, router],
   );
 
-  // ─── save / delete / activate ───────────────────────────────────────────────
-  const handleSave = useCallback(
-    async (action: AgentSaveAction = 'save_in_place') => {
-      const valid = await methods.trigger();
-      if (!valid) {
-        router.push(`${basePath}/basics`);
+  // ─── save / delete / publish ────────────────────────────────────────────────
+  const handleSave = useCallback(async () => {
+    const valid = await methods.trigger();
+    if (!valid) {
+      router.push(`${basePath}/basics`);
+      return;
+    }
+    // In edit mode, no edits → no new draft. Without this guard, spam-clicking
+    // Save would pile up identical empty drafts in the version history. The
+    // create flow always proceeds because the agent itself doesn't exist yet.
+    if (isEditMode && agentId && !methods.formState.isDirty) {
+      showToast.success('No changes', 'Nothing to save.');
+      return;
+    }
+    const values = methods.getValues();
+    setSaving(true);
+    try {
+      // Create flow — first save creates the agent (which is born already published).
+      if (!isEditMode || !agentId) {
+        const created = await createAgent(formStateToCreatePayload(values));
+        showToast.success('Agent created');
+        methods.reset(values);
+        router.push(`/agents/edit/${created.agent_type}/${created.id}/overview`);
         return;
       }
-      const values = methods.getValues();
-      setSaving(true);
-      try {
-        // Create flow — first save always goes through createAgent.
-        if (!isEditMode || !agentId) {
-          const created = await createAgent(formStateToCreatePayload(values));
-          showToast.success('Agent created');
-          methods.reset(values);
-          router.push(`/agents/edit/${created.agent_type}/${created.id}/overview`);
-          return;
-        }
 
-        if (action === 'save_as_new_version') {
-          // Send the full form state, NOT a diff. The backend clones the live
-          // config first and overlays config_data; if we sent only the diff
-          // while the user is previewing v1, the new version would be
-          // "live(v3) + just my temperature tweak" instead of "what I see now."
-          // Sending all editable keys makes the snapshot reflect the form.
-          const full = formStateToCreatePayload(values);
-          const updated = await saveAgentAsNewVersion({
-            agentId,
-            values: {
-              config: full.config,
-              tool_ids: full.tool_ids,
-              mcp_server_ids: full.mcp_server_ids,
-              upload_ids: full.upload_ids,
-              phone_numbers: full.phone_numbers,
-            },
-          });
-          applyDetail(updated);
-          showToast.success(
-            'New version saved',
-            updated.config?.version != null ? `v${updated.config.version} is now live.` : undefined,
-          );
-          return;
-        }
-
-        // Save in place — only valid when viewing the live version.
-        if (!originalState) return;
-        const diff = formStateToUpdatePayload(values, originalState);
-        if (Object.keys(diff).length === 0) {
-          showToast.success('No changes', 'Nothing to update.');
-          return;
-        }
-        const updated = await updateAgent({ id: agentId, values: diff });
-        applyDetail(updated);
-        showToast.success('Agent updated');
-      } catch (err) {
-        if (!applyServerValidation(err)) handleApiError(err);
-      } finally {
-        setSaving(false);
-      }
-    },
-    [
-      agentId,
-      applyDetail,
-      applyServerValidation,
-      basePath,
-      createAgent,
-      isEditMode,
-      methods,
-      originalState,
-      router,
-      saveAgentAsNewVersion,
-      updateAgent,
-    ],
-  );
+      // Edit flow — every Save creates a fresh draft version. The published
+      // version that's serving calls is not touched until the user clicks
+      // Publish. We send the full form state (not a diff) so the new draft
+      // reflects exactly what the user sees — see backend
+      // `_create_new_version_config` for how the snapshot is built.
+      const full = formStateToCreatePayload(values);
+      const updated = await saveAgentAsNewVersion({
+        agentId,
+        values: {
+          config: full.config,
+          tool_ids: full.tool_ids,
+          mcp_server_ids: full.mcp_server_ids,
+          upload_ids: full.upload_ids,
+          phone_numbers: full.phone_numbers,
+        },
+      });
+      applyDetail(updated);
+      showToast.success(
+        'Draft saved',
+        updated.config?.version != null
+          ? `v${updated.config.version} was saved as a new draft. Select it in the version dropdown to publish.`
+          : undefined,
+      );
+    } catch (err) {
+      if (!applyServerValidation(err)) handleApiError(err);
+    } finally {
+      setSaving(false);
+    }
+  }, [
+    agentId,
+    applyDetail,
+    applyServerValidation,
+    basePath,
+    createAgent,
+    isEditMode,
+    methods,
+    router,
+    saveAgentAsNewVersion,
+  ]);
 
   const handleViewVersion = useCallback(
     async (configId: string) => {
@@ -263,8 +269,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
       try {
         const d = await fetchAgent({ agentId, configId });
         applyDetail(d);
-        // Override viewedConfigId in case the backend resolved a different live
-        // config — we want to track what the user explicitly picked.
+        // Explicit user pick — chip + form both move to this version.
         setViewedConfigId(configId);
       } catch (err) {
         handleApiError(err);
@@ -275,20 +280,32 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     [agentId, applyDetail, fetchAgent, viewedConfigId],
   );
 
-  const handleMakeLive = useCallback(async () => {
-    if (!agentId || !viewedConfigId) return;
-    setSwitchingLive(true);
-    try {
-      const updated = await switchActiveAgentVersion({ agentId, configId: viewedConfigId });
-      applyDetail(updated);
-      const v = updated.versions?.find((row) => row.id === viewedConfigId)?.version;
-      showToast.success('Live version updated', v != null ? `v${v} is now live.` : undefined);
-    } catch (err) {
-      handleApiError(err);
-    } finally {
-      setSwitchingLive(false);
-    }
-  }, [agentId, applyDetail, switchActiveAgentVersion, viewedConfigId]);
+  const handlePublish = useCallback(
+    async (configId: string) => {
+      if (!agentId || !configId) return;
+      setPublishing(true);
+      try {
+        const updated = await switchActiveAgentVersion({ agentId, configId });
+        applyDetail(updated);
+        // Chip follows the published version once promotion succeeds — so the
+        // user lands on the version they just made live.
+        setViewedConfigId(updated.config?.id ?? configId);
+        const v = updated.versions?.find((row) => row.id === configId)?.version;
+        showToast.success(
+          'Version published',
+          v != null ? `v${v} is now serving calls.` : undefined,
+        );
+        setPublishOpen(false);
+      } catch (err) {
+        // Leave the modal open on error — the user can immediately retry or
+        // cancel without losing the dialog context.
+        handleApiError(err);
+      } finally {
+        setPublishing(false);
+      }
+    },
+    [agentId, applyDetail, switchActiveAgentVersion],
+  );
 
   const handleDeleteVersion = useCallback(
     async (configId: string) => {
@@ -298,11 +315,16 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
         showToast.success('Version deleted');
         const refreshed = await fetchAgent(agentId);
         applyDetail(refreshed);
+        // If the chip was pointing at the row we just deleted, fall back to
+        // whatever the backend now resolves as current (the published one).
+        if (configId === viewedConfigId) {
+          setViewedConfigId(refreshed.config?.id ?? null);
+        }
       } catch (err) {
         handleApiError(err);
       }
     },
-    [agentId, applyDetail, deleteAgentVersion, fetchAgent],
+    [agentId, applyDetail, deleteAgentVersion, fetchAgent, viewedConfigId],
   );
 
   const handleConfirmDelete = useCallback(async () => {
@@ -326,9 +348,13 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
       try {
         const updated = await updateAgent({ id: agentId, values: { is_active: active } });
         setDetail(updated);
-        // Keep the form in sync without marking it dirty.
-        methods.setValue('is_active', active, { shouldDirty: false });
-        setOriginalState((prev) => (prev ? { ...prev, is_active: active } : prev));
+        // Reset (not setValue with shouldDirty:false) so _formValues AND
+        // _defaultValues update together. A bare setValue would leave the
+        // defaults stale, and any later RHF dirty recompute would flip
+        // isDirty true even though the user changed nothing — surfacing
+        // as a spurious "discard changes?" prompt on the next navigation
+        // or version pick.
+        methods.reset({ ...methods.getValues(), is_active: active });
         showToast.success(active ? 'Agent activated' : 'Agent deactivated');
       } catch (err) {
         handleApiError(err);
@@ -347,39 +373,48 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   const agentInitial = (agentName.trim().charAt(0) || 'A').toUpperCase();
 
   const versions = detail?.versions ?? [];
-  const liveVersion = useMemo(() => versions.find((v) => v.is_live) ?? null, [versions]);
-  const viewedVersion = useMemo(
-    () => versions.find((v) => v.id === viewedConfigId) ?? null,
-    [versions, viewedConfigId],
+  const publishedVersion = useMemo(() => versions.find((v) => v.is_live) ?? null, [versions]);
+  /** What the form is rendering right now. Driven by the backend response
+   *  (`detail.config`) — Save returns the new draft here, which is how the
+   *  user keeps seeing their edits even though the chip stays put. */
+  const loadedVersion = useMemo(
+    () => versions.find((v) => v.id === detail?.config?.id) ?? null,
+    [versions, detail?.config?.id],
   );
-  const viewingLive =
-    liveVersion === null
-      ? true // create flow / first save — treat as live
-      : viewedConfigId === null
-        ? true
-        : viewedConfigId === liveVersion.id;
+  /** Publish opens its own version picker; the toolbar button is enabled as
+   *  long as there's at least one non-published version available to pick. */
+  const canPublish = useMemo(
+    () =>
+      publishedVersion === null
+        ? versions.length > 0
+        : versions.some((v) => v.id !== publishedVersion.id),
+    [versions, publishedVersion],
+  );
+  /** True when the form is showing a draft (something other than the
+   *  published version). Triggers the amber banner. */
+  const formHasDraft =
+    publishedVersion !== null && loadedVersion !== null && loadedVersion.id !== publishedVersion.id;
 
-  // Switching the viewed version or moving the live pointer overwrites the
-  // form with fetched data — wrap both in guardedAction so unsaved edits get
-  // the same "Discard changes?" prompt as other navigations.
+  // Switching the viewed version overwrites the form with fetched data — wrap
+  // in guardedAction so unsaved edits get the same "Discard changes?" prompt
+  // as other navigations.
   const safeViewVersion = useCallback(
     (configId: string) => guardedAction(() => void handleViewVersion(configId)),
     [guardedAction, handleViewVersion],
   );
-  const safeMakeLive = useCallback(
-    () => guardedAction(() => void handleMakeLive()),
-    [guardedAction, handleMakeLive],
-  );
 
-  const dispatchSave = useCallback(
+  const dispatchAction = useCallback(
     (action: AgentSaveAction) => {
-      if (action === 'make_live') {
-        safeMakeLive();
+      if (action === 'publish') {
+        // Publish reloads the response into the form — any unsaved edits would
+        // be silently discarded. Route through guardedAction so the user gets
+        // the standard "Discard changes?" prompt first.
+        guardedAction(() => setPublishOpen(true));
         return;
       }
-      void handleSave(action);
+      void handleSave();
     },
-    [handleSave, safeMakeLive],
+    [guardedAction, handleSave],
   );
 
   return (
@@ -491,7 +526,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
                       selectedConfigId={viewedConfigId}
                       onSelect={safeViewVersion}
                       onDelete={handleDeleteVersion}
-                      disabled={loading || saving || switchingLive}
+                      disabled={loading || saving || publishing}
                     />
                   )}
                   {isEditMode && (
@@ -507,22 +542,23 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
                   )}
                   <AgentSaveActions
                     mode={isEditMode ? 'edit' : 'create'}
-                    viewingLive={viewingLive}
-                    liveVersionNumber={liveVersion?.version ?? null}
-                    viewedVersionNumber={viewedVersion?.version ?? null}
+                    canPublish={canPublish}
                     saving={saving}
-                    switchingLive={switchingLive}
-                    onAction={dispatchSave}
+                    publishing={publishing}
+                    onAction={dispatchAction}
                   />
                 </div>
               </header>
 
-              {/* Non-live banner: surfaces what live is so the user isn't surprised
-                  that "Save changes" is hidden while they're previewing v2. */}
-              {isEditMode && !viewingLive && viewedVersion && liveVersion && (
+              {/* Draft banner: drives off the form-loaded version, not the chip.
+                  The chip stays pinned to the published version after Save, so
+                  without this we'd hide the banner exactly when the user most
+                  needs to know they're looking at unpublished edits. */}
+              {isEditMode && formHasDraft && loadedVersion && publishedVersion && (
                 <div className="shrink-0 border-b border-amber-500/30 bg-amber-500/10 px-5 py-2 text-[12px] text-amber-900 dark:text-amber-200">
-                  Viewing v{viewedVersion.version} (not live). v{liveVersion.version} is currently
-                  serving calls — edits here can be saved as a new version or made live.
+                  Viewing v{loadedVersion.version} (draft). v{publishedVersion.version} is the
+                  published version serving calls — click Publish to promote v
+                  {loadedVersion.version}.
                 </div>
               )}
 
@@ -556,6 +592,20 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
               confirmType="danger"
               cancelText="Keep editing"
               onConfirm={confirmLeave}
+            />
+
+            <PublishVersionConfirmModal
+              open={publishOpen}
+              // Ignore close requests while the publish call is in flight —
+              // ESC / overlay-click would otherwise abandon the dialog while
+              // the version pointer is mid-flip.
+              onClose={() => {
+                if (!publishing) setPublishOpen(false);
+              }}
+              onConfirm={handlePublish}
+              versions={versions}
+              publishedVersionId={publishedVersion?.id ?? null}
+              loading={publishing}
             />
           </div>
         </AgentEditorProvider>

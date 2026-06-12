@@ -1,7 +1,7 @@
 from decimal import Decimal
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import time
 import uuid as uuid_lib
 from uuid import UUID
@@ -769,11 +769,23 @@ class AgentService(BaseService):
 
     def save_as_new_version(
         self, agent_id: str, data: Dict[str, Any], user_id: Optional[UUID]
-    ) -> Agent:
-        """Clone the live config, apply edits, persist as a new version, mark it live."""
+    ) -> Tuple[Agent, Optional[AgentConfig]]:
+        """Clone the live config, apply edits, persist as a new **draft** version.
+
+        The new version is NOT promoted to live — ``published_config_id`` stays
+        on the version that was live before. Callers must invoke
+        ``switch_active_version`` (the Publish action) to promote a draft.
+
+        Returns the agent along with the newly-created config so the router can
+        render ``agent_response`` against the draft — otherwise the response
+        would still reflect the live version and the UI would lose the edits
+        the user just saved.
+        """
         agent = self.get_agent(agent_id)
         try:
-            self._apply_attachments(agent, data, user_id, create_new_version=True)
+            new_config = self._apply_attachments(
+                agent, data, user_id, create_new_version=True, make_live=False
+            )
             self.db.commit()
         except IntegrityError as e:
             self.db.rollback()
@@ -787,16 +799,23 @@ class AgentService(BaseService):
             raise
 
         self._invalidate_pipeline_cache(agent.id)
-        return agent
+        return agent, new_config
 
     def switch_active_version(self, agent_id: str, config_id: str) -> Agent:
-        """Point ``Agent.published_config_id`` at an existing version."""
+        """Promote an existing version to live.
+
+        Points ``Agent.published_config_id`` at the target config and stamps
+        ``published_at`` on it — drafts created via ``save_as_new_version`` have
+        a null ``published_at`` until they are promoted here.
+        """
         agent = self.get_agent(agent_id)
         cfg = self.get_version(agent_id, config_id)
         if agent.published_config_id == cfg.id:
             return agent
         try:
+            from datetime import datetime, timezone
             agent.published_config_id = cfg.id
+            cfg.published_at = datetime.now(timezone.utc)
             self.db.commit()
         except Exception:
             self.db.rollback()
@@ -841,15 +860,25 @@ class AgentService(BaseService):
         user_id: Optional[UUID],
         *,
         create_new_version: bool = False,
-    ) -> None:
+        make_live: bool = False,
+    ) -> Optional[AgentConfig]:
         """Shared logic for syncing config and attachments.
 
         ``create_new_version=False`` (default): the live config is mutated in
         place — the behaviour used by both ``create_agent`` and ``update_agent``.
 
         ``create_new_version=True``: the live config is cloned into a fresh row
-        with the next version number, the new row becomes live, and attachments
-        are wired against it. Used by ``save_as_new_version``.
+        with the next version number and attachments are wired against it.
+        ``make_live`` controls whether that new row is promoted to live:
+
+        * ``make_live=False`` (default) — the new row is a draft;
+          ``published_config_id`` is untouched. Used by ``save_as_new_version``.
+        * ``make_live=True`` — the new row becomes live immediately. Reserved
+          for internal callers; the editor flow goes through
+          ``switch_active_version`` instead.
+
+        Returns the affected config (the new draft when versioning, otherwise
+        the in-place row) so callers can render a response against it.
         """
         config_data = data.get("config")
         tool_ids = data.get("tool_ids")
@@ -860,12 +889,16 @@ class AgentService(BaseService):
         config: Optional[AgentConfig] = None
         if config_data is not None:
             if create_new_version:
-                config = self._create_new_version_config(agent, config_data, user_id)
+                config = self._create_new_version_config(
+                    agent, config_data, user_id, make_live=make_live
+                )
             else:
                 config = self._upsert_new_config(agent, config_data, user_id)
         elif create_new_version:
             # Versioning a save with no config edits = clone live config as-is.
-            config = self._create_new_version_config(agent, {}, user_id)
+            config = self._create_new_version_config(
+                agent, {}, user_id, make_live=make_live
+            )
 
         if config is None and (
             tool_ids is not None or mcp_server_ids is not None or upload_ids is not None
@@ -880,6 +913,8 @@ class AgentService(BaseService):
             self._sync_knowledge_base(agent, config, upload_ids)
         if phone_numbers is not None:
             self._sync_phone_numbers(agent, phone_numbers)
+
+        return config
 
     def get_agent(self, agent_id: str) -> Agent:
         """Fetch a single agent by UUID. Raises 404 if not found."""
@@ -1077,9 +1112,23 @@ class AgentService(BaseService):
         return config
 
     def _create_new_version_config(
-        self, agent: Agent, config_data: Dict[str, Any], user_id: Optional[UUID]
+        self,
+        agent: Agent,
+        config_data: Dict[str, Any],
+        user_id: Optional[UUID],
+        *,
+        make_live: bool = False,
     ) -> AgentConfig:
-        """Clone the live config, apply edits, persist as version N+1, mark live."""
+        """Clone the live config, apply edits, persist as version N+1.
+
+        ``make_live`` controls promotion:
+
+        * ``False`` (default) — the new row is a draft. ``published_at`` stays
+          null and ``agent.published_config_id`` is not touched; the currently
+          live version keeps serving calls.
+        * ``True`` — the new row becomes live: ``published_config_id`` is
+          repointed and ``published_at`` is stamped to now.
+        """
         self._validate_meta_data_schema(config_data)
         if not user_id:
             raise HTTPException(
@@ -1089,12 +1138,13 @@ class AgentService(BaseService):
 
         from datetime import datetime, timezone
         current = self._resolve_current_config(agent)
+        now = datetime.now(timezone.utc) if make_live else None
         new_config = AgentConfig(
             agent_id=agent.id,
             version=self._next_version_number(agent.id),
             created_by_user_id=user_id,
             organization_id=self.org_id,
-            published_at=datetime.now(timezone.utc),
+            published_at=now,
         )
         # Seed from the live config so fields the request didn't touch are preserved.
         if current is not None:
@@ -1103,7 +1153,8 @@ class AgentService(BaseService):
         self._apply_config_fields(new_config, config_data)
         self.db.add(new_config)
         self.db.flush()
-        agent.published_config_id = new_config.id
+        if make_live:
+            agent.published_config_id = new_config.id
         return new_config
 
     def _sync_tools(self, agent: Agent, config: Optional[AgentConfig], tool_ids: List[str]) -> None:
