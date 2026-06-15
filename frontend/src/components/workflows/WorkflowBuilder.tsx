@@ -20,6 +20,7 @@ import {
   type Connection,
   type EdgeChange,
   type NodeChange,
+  type ReactFlowInstance,
 } from '@xyflow/react';
 import AppLoader from '@/components/shared/AppLoader';
 import CustomButton from '@/components/shared/CustomButton';
@@ -82,6 +83,7 @@ function BuilderInner({ workflowId }: Props) {
   const [globalOpen, setGlobalOpen] = useState(false);
   const artifactPlanRef = useRef<Record<string, unknown> | null>(null);
   const checksumRef = useRef<string | null>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowEdge>([]);
@@ -276,6 +278,31 @@ function BuilderInner({ workflowId }: Props) {
     [fitView, getNodes],
   );
 
+  // Default view: 100% zoom, content centered horizontally and pinned near the top
+  // (so a fresh single-node workflow doesn't get blown up by fitView). Falls back to
+  // a zoom-clamped fitView when the graph is too large to fit at 1×.
+  const positionInitialView = useCallback(
+    (instance: ReactFlowInstance<WorkflowNode, WorkflowEdge>) => {
+      const rf = instance.getNodes();
+      if (!rf.length) return;
+      const W = canvasRef.current?.clientWidth ?? 0;
+      const H = canvasRef.current?.clientHeight ?? 0;
+      const w = (n: (typeof rf)[number]) => n.measured?.width ?? 268;
+      const h = (n: (typeof rf)[number]) => n.measured?.height ?? 120;
+      const minX = Math.min(...rf.map((n) => n.position.x));
+      const maxX = Math.max(...rf.map((n) => n.position.x + w(n)));
+      const minY = Math.min(...rf.map((n) => n.position.y));
+      const maxY = Math.max(...rf.map((n) => n.position.y + h(n)));
+      const fitsAtFullZoom = W > 0 && maxX - minX <= W * 0.9 && maxY - minY <= H * 0.8;
+      if (fitsAtFullZoom) {
+        instance.setViewport({ x: W / 2 - (minX + maxX) / 2, y: 72 - minY, zoom: 1 });
+      } else {
+        instance.fitView({ maxZoom: 1, padding: 0.2 });
+      }
+    },
+    [],
+  );
+
   const selectedNode = useMemo(
     () => nodes.find((n) => n.id === selectedNodeId) ?? null,
     [nodes, selectedNodeId],
@@ -308,6 +335,7 @@ function BuilderInner({ workflowId }: Props) {
 
       <div className="flex min-h-0 flex-1">
         <div
+          ref={canvasRef}
           className="workflow-canvas relative min-h-0 flex-1"
           onDrop={onDrop}
           onDragOver={onDragOver}
@@ -337,7 +365,8 @@ function BuilderInner({ workflowId }: Props) {
               setSelectedEdgeId(null);
             }}
             proOptions={{ hideAttribution: true }}
-            fitView
+            onInit={positionInitialView}
+            minZoom={0.2}
           >
             <Background variant={BackgroundVariant.Dots} gap={22} size={1.4} />
             <Controls className="!shadow-md" showInteractive={false} />
