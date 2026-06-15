@@ -132,16 +132,23 @@ def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, cur
 
 
 def get_mcp_servers_for_agent(agent_id: int):
-    """Fetch all active MCP servers linked to an agent."""
+    """Fetch all active MCP servers linked to an agent's published version."""
     from core.database.session import get_db_context
     from core.models.mcp_server import McpServer
     from core.models.agent_mcp_server import AgentMcpServer
+    from core.utils.agent_scope import published_config_subquery
+
+    published_config_sq = published_config_subquery(agent_id)
 
     with get_db_context() as db:
         rows = (
             db.query(McpServer)
             .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)
-            .filter(AgentMcpServer.agent_id == agent_id, McpServer.is_active == True)
+            .filter(
+                AgentMcpServer.agent_id == agent_id,
+                AgentMcpServer.agent_config_id == published_config_sq,
+                McpServer.is_active == True,
+            )
             .all()
         )
         servers = []
@@ -162,12 +169,19 @@ def get_mcp_server_refs(agent_id: int) -> list:
     from core.database.session import get_db_context
     from core.models.mcp_server import McpServer
     from core.models.agent_mcp_server import AgentMcpServer
+    from core.utils.agent_scope import published_config_subquery
+
+    published_config_sq = published_config_subquery(agent_id)
 
     with get_db_context() as db:
         rows = (
             db.query(McpServer.id, McpServer.name)
             .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)
-            .filter(AgentMcpServer.agent_id == agent_id, McpServer.is_active.is_(True))
+            .filter(
+                AgentMcpServer.agent_id == agent_id,
+                AgentMcpServer.agent_config_id == published_config_sq,
+                McpServer.is_active.is_(True),
+            )
             .all()
         )
     return [{"id": str(r.id), "name": r.name} for r in rows]

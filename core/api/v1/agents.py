@@ -104,12 +104,18 @@ class SaveAsNewVersionRequest(BaseModel):
     Mirrors ``UpdateAgentRequest`` minus the top-level agent attributes
     (name/description/agent_type/is_active) — a new version is purely a config
     snapshot, not an agent rename.
+
+    ``source_config_id`` declares which existing version the new draft should
+    clone its fields and tool/MCP/KB attachments from. The editor sends the
+    version currently loaded in the form ("save what I'm looking at"). When
+    omitted, the service falls back to the published version.
     """
     config: Optional[AgentConfigRequest] = None
     tool_ids: Optional[List[str]] = None
     mcp_server_ids: Optional[List[str]] = None
     upload_ids: Optional[List[str]] = None
     phone_numbers: Optional[List[PhoneNumberAttachment]] = None
+    source_config_id: Optional[str] = None
 
 
 class SwitchActiveVersionRequest(BaseModel):
@@ -333,8 +339,14 @@ def save_as_new_version(
     svc = _get_service(claims, db)
     user_id = UUID(claims.user_id) if claims.user_id else None
     data = body.model_dump(exclude_unset=True)
-    agent = svc.save_as_new_version(agent_id, data, user_id)
-    return svc.agent_response(agent)
+    source_config_uuid = UUID(body.source_config_id) if body.source_config_id else None
+    # New draft is returned alongside the agent so the response renders the
+    # freshly-saved version — otherwise the response would still resolve to the
+    # currently-live config and the editor would lose the user's edits.
+    agent, new_config = svc.save_as_new_version(
+        agent_id, data, user_id, source_config_id=source_config_uuid
+    )
+    return svc.agent_response(agent, config=new_config)
 
 
 @router.post("/switch_active_version")

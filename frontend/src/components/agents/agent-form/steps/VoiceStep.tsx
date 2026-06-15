@@ -42,7 +42,7 @@ const TTS_STRUCTURAL_KEYS = new Set([
 const STT_STRUCTURAL_KEYS = new Set(['provider_id', 'model_id', 'model']);
 
 export default function VoiceStep() {
-  const { control, setValue, getValues } = useFormContext<AgentFormState>();
+  const { control, setValue, getValues, reset } = useFormContext<AgentFormState>();
   const voiceSettings = useWatch({ control, name: 'config.voice_settings' });
   // STT provider lives on config.stt_settings.provider_id. RHF accepts the
   // dotted path; we cast `name` to `never` to satisfy the strongly-typed
@@ -106,11 +106,24 @@ export default function VoiceStep() {
 
         // Backward compat: if saved language is a raw code (e.g. "en")
         // from an older agent, resolve it to the display name (e.g. "English").
+        // Use reset so both _formValues AND _defaultValues update together —
+        // setValue(.., shouldDirty:false) alone desyncs them and any later RHF
+        // dirty recompute flips isDirty true even with no user edits.
         const saved = voiceSettings?.language;
         if (saved && !rows.some((l) => l.name === saved)) {
           const match = rows.find((l) => l.codes?.includes(saved));
           if (match) {
-            setValue('config.voice_settings.language', match.name, { shouldDirty: false });
+            const current = getValues();
+            reset(
+              {
+                ...current,
+                config: {
+                  ...current.config,
+                  voice_settings: { ...current.config.voice_settings, language: match.name },
+                },
+              },
+              { keepDirty: true, keepDirtyValues: true },
+            );
           }
         }
       })
@@ -333,12 +346,24 @@ export default function VoiceStep() {
     return matched?.meta_data_schema?.stt ?? [];
   }, [sttModel, sttModels, sttProviderId, sttProviders]);
 
-  // Clear stale TTS schema field values when TTS model changes.
-  // shouldDirty:false — reactive cleanup, not a user edit. Save-time diff
-  // against originalState still persists the cleanup.
+  // Clear stale TTS / STT schema field values when the user CHANGES the
+  // model. Skipped on the initial settle so the saved settings aren't
+  // silently mutated on load — see AiStep for the same rationale (silent
+  // setValue with shouldDirty:false desyncs _formValues from _defaultValues
+  // and later trips RHF's deep-equality isDirty check, causing a spurious
+  // discard-changes prompt).
+  const prevTtsAllowedKeysRef = useRef<Set<string> | null>(null);
   useEffect(() => {
-    if (!ttsSchema.length) return;
+    if (!ttsSchema.length) {
+      prevTtsAllowedKeysRef.current = null;
+      return;
+    }
     const allowedKeys = new Set(ttsSchema.map((f) => f.name));
+    const prev = prevTtsAllowedKeysRef.current;
+    prevTtsAllowedKeysRef.current = allowedKeys;
+    if (prev === null) return;
+    if (prev.size === allowedKeys.size && [...prev].every((k) => allowedKeys.has(k))) return;
+
     const current = getValues('config.voice_settings' as never) as
       | Record<string, unknown>
       | undefined;
@@ -346,18 +371,24 @@ export default function VoiceStep() {
     for (const key of Object.keys(current)) {
       if (!TTS_STRUCTURAL_KEYS.has(key) && !allowedKeys.has(key)) {
         setValue(`config.voice_settings.${key}` as never, undefined as never, {
-          shouldDirty: false,
+          shouldDirty: true,
         });
       }
     }
   }, [ttsSchema]);
 
-  // Clear stale STT schema field values when STT model changes.
-  // shouldDirty:false — reactive cleanup, not a user edit. Save-time diff
-  // against originalState still persists the cleanup.
+  const prevSttAllowedKeysRef = useRef<Set<string> | null>(null);
   useEffect(() => {
-    if (!sttSchema.length) return;
+    if (!sttSchema.length) {
+      prevSttAllowedKeysRef.current = null;
+      return;
+    }
     const allowedKeys = new Set(sttSchema.map((f) => f.name));
+    const prev = prevSttAllowedKeysRef.current;
+    prevSttAllowedKeysRef.current = allowedKeys;
+    if (prev === null) return;
+    if (prev.size === allowedKeys.size && [...prev].every((k) => allowedKeys.has(k))) return;
+
     const current = getValues('config.stt_settings' as never) as
       | Record<string, unknown>
       | undefined;
@@ -365,7 +396,7 @@ export default function VoiceStep() {
     for (const key of Object.keys(current)) {
       if (!STT_STRUCTURAL_KEYS.has(key) && !allowedKeys.has(key)) {
         setValue(`config.stt_settings.${key}` as never, undefined as never, {
-          shouldDirty: false,
+          shouldDirty: true,
         });
       }
     }

@@ -141,8 +141,13 @@ def save_as_new_version(
     svc = _get_service(claims, db)
     user_id = UUID(claims.user_id) if claims.user_id else None
     data = body.model_dump(exclude_unset=True)
-    agent = svc.save_as_new_version(agent_id, data, user_id)
-    return svc.agent_response(agent)
+    source_config_uuid = UUID(body.source_config_id) if body.source_config_id else None
+    # New draft is returned alongside the agent so the response renders the
+    # freshly-saved version (see core router for the full rationale).
+    agent, new_config = svc.save_as_new_version(
+        agent_id, data, user_id, source_config_id=source_config_uuid
+    )
+    return svc.agent_response(agent, config=new_config)
 
 
 @router.post("/switch_active_version")

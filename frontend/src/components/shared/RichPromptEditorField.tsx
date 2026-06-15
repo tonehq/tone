@@ -118,8 +118,12 @@ function PlainRichPromptEditorField({
     }
   }, [value, editor]);
 
+  // Pass emitUpdate=false: setEditable defaults to firing an "update" event,
+  // which would call onUpdate → field.onChange on mount and mark the RHF form
+  // dirty (ProseMirror's schema normalisation makes the round-tripped text
+  // differ subtly from the loaded value, so RHF's deep-equality flips isDirty).
   useEffect(() => {
-    editor?.setEditable(!disabled);
+    editor?.setEditable(!disabled, false);
   }, [disabled, editor]);
 
   const [pickerOpen, setPickerOpen] = useState(false);

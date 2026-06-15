@@ -1,7 +1,7 @@
 from decimal import Decimal
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import time
 import uuid as uuid_lib
 from uuid import UUID
@@ -768,12 +768,34 @@ class AgentService(BaseService):
         return cfg
 
     def save_as_new_version(
-        self, agent_id: str, data: Dict[str, Any], user_id: Optional[UUID]
-    ) -> Agent:
-        """Clone the live config, apply edits, persist as a new version, mark it live."""
+        self,
+        agent_id: str,
+        data: Dict[str, Any],
+        user_id: Optional[UUID],
+        *,
+        source_config_id: Optional[UUID] = None,
+    ) -> Tuple[Agent, Optional[AgentConfig]]:
+        """Clone the live config, apply edits, persist as a new **draft** version.
+
+        The new version is NOT promoted to live — ``published_config_id`` stays
+        on the version that was live before. Callers must invoke
+        ``switch_active_version`` (the Publish action) to promote a draft.
+
+        Returns the agent along with the newly-created config so the router can
+        render ``agent_response`` against the draft — otherwise the response
+        would still reflect the live version and the UI would lose the edits
+        the user just saved.
+        """
         agent = self.get_agent(agent_id)
         try:
-            self._apply_attachments(agent, data, user_id, create_new_version=True)
+            new_config = self._apply_attachments(
+                agent,
+                data,
+                user_id,
+                create_new_version=True,
+                make_live=False,
+                source_config_id=source_config_id,
+            )
             self.db.commit()
         except IntegrityError as e:
             self.db.rollback()
@@ -787,16 +809,23 @@ class AgentService(BaseService):
             raise
 
         self._invalidate_pipeline_cache(agent.id)
-        return agent
+        return agent, new_config
 
     def switch_active_version(self, agent_id: str, config_id: str) -> Agent:
-        """Point ``Agent.published_config_id`` at an existing version."""
+        """Promote an existing version to live.
+
+        Points ``Agent.published_config_id`` at the target config and stamps
+        ``published_at`` on it — drafts created via ``save_as_new_version`` have
+        a null ``published_at`` until they are promoted here.
+        """
         agent = self.get_agent(agent_id)
         cfg = self.get_version(agent_id, config_id)
         if agent.published_config_id == cfg.id:
             return agent
         try:
+            from datetime import datetime, timezone
             agent.published_config_id = cfg.id
+            cfg.published_at = datetime.now(timezone.utc)
             self.db.commit()
         except Exception:
             self.db.rollback()
@@ -841,15 +870,26 @@ class AgentService(BaseService):
         user_id: Optional[UUID],
         *,
         create_new_version: bool = False,
-    ) -> None:
+        make_live: bool = False,
+        source_config_id: Optional[UUID] = None,
+    ) -> Optional[AgentConfig]:
         """Shared logic for syncing config and attachments.
 
         ``create_new_version=False`` (default): the live config is mutated in
         place — the behaviour used by both ``create_agent`` and ``update_agent``.
 
         ``create_new_version=True``: the live config is cloned into a fresh row
-        with the next version number, the new row becomes live, and attachments
-        are wired against it. Used by ``save_as_new_version``.
+        with the next version number and attachments are wired against it.
+        ``make_live`` controls whether that new row is promoted to live:
+
+        * ``make_live=False`` (default) — the new row is a draft;
+          ``published_config_id`` is untouched. Used by ``save_as_new_version``.
+        * ``make_live=True`` — the new row becomes live immediately. Reserved
+          for internal callers; the editor flow goes through
+          ``switch_active_version`` instead.
+
+        Returns the affected config (the new draft when versioning, otherwise
+        the in-place row) so callers can render a response against it.
         """
         config_data = data.get("config")
         tool_ids = data.get("tool_ids")
@@ -860,12 +900,24 @@ class AgentService(BaseService):
         config: Optional[AgentConfig] = None
         if config_data is not None:
             if create_new_version:
-                config = self._create_new_version_config(agent, config_data, user_id)
+                config = self._create_new_version_config(
+                    agent,
+                    config_data,
+                    user_id,
+                    make_live=make_live,
+                    source_config_id=source_config_id,
+                )
             else:
                 config = self._upsert_new_config(agent, config_data, user_id)
         elif create_new_version:
-            # Versioning a save with no config edits = clone live config as-is.
-            config = self._create_new_version_config(agent, {}, user_id)
+            # Versioning a save with no config edits = clone source config as-is.
+            config = self._create_new_version_config(
+                agent,
+                {},
+                user_id,
+                make_live=make_live,
+                source_config_id=source_config_id,
+            )
 
         if config is None and (
             tool_ids is not None or mcp_server_ids is not None or upload_ids is not None
@@ -880,6 +932,8 @@ class AgentService(BaseService):
             self._sync_knowledge_base(agent, config, upload_ids)
         if phone_numbers is not None:
             self._sync_phone_numbers(agent, phone_numbers)
+
+        return config
 
     def get_agent(self, agent_id: str) -> Agent:
         """Fetch a single agent by UUID. Raises 404 if not found."""
@@ -1079,9 +1133,31 @@ class AgentService(BaseService):
         return config
 
     def _create_new_version_config(
-        self, agent: Agent, config_data: Dict[str, Any], user_id: Optional[UUID]
+        self,
+        agent: Agent,
+        config_data: Dict[str, Any],
+        user_id: Optional[UUID],
+        *,
+        make_live: bool = False,
+        source_config_id: Optional[UUID] = None,
     ) -> AgentConfig:
-        """Clone the live config, apply edits, persist as version N+1, mark live."""
+        """Clone an existing config, apply edits, persist as version N+1.
+
+        The clone source is ``source_config_id`` when the caller specifies it
+        (the editor passes the version the user was previewing — so saving
+        while viewing v9 produces a new version mirroring v9), otherwise the
+        currently-published config. Both unsent config fields AND the tool /
+        MCP / knowledge-base attachments are cloned from the source so the
+        new version starts as a faithful snapshot.
+
+        ``make_live`` controls promotion:
+
+        * ``False`` (default) — the new row is a draft. ``published_at`` stays
+          null and ``agent.published_config_id`` is not touched; the currently
+          live version keeps serving calls.
+        * ``True`` — the new row becomes live: ``published_config_id`` is
+          repointed and ``published_at`` is stamped to now.
+        """
         self._validate_meta_data_schema(config_data)
         if not user_id:
             raise HTTPException(
@@ -1090,23 +1166,129 @@ class AgentService(BaseService):
             )
 
         from datetime import datetime, timezone
-        current = self._resolve_current_config(agent)
+        source = self._resolve_clone_source(agent, source_config_id)
+        now = datetime.now(timezone.utc) if make_live else None
         new_config = AgentConfig(
             agent_id=agent.id,
             version=self._next_version_number(agent.id),
             created_by_user_id=user_id,
             organization_id=self.org_id,
-            published_at=datetime.now(timezone.utc),
+            published_at=now,
         )
-        # Seed from the live config so fields the request didn't touch are preserved.
-        if current is not None:
+        # Seed from the source so fields the request didn't touch are preserved.
+        if source is not None:
             for field in self._CONFIG_FIELDS:
-                setattr(new_config, field, getattr(current, field, None))
+                setattr(new_config, field, getattr(source, field, None))
         self._apply_config_fields(new_config, config_data)
         self.db.add(new_config)
         self.db.flush()
-        agent.published_config_id = new_config.id
+        # Clone attachment rows so the new version owns its own snapshot.
+        # _sync_* may overwrite specific lists later in the same transaction
+        # if the caller explicitly sent tool_ids / mcp_server_ids / upload_ids.
+        if source is not None:
+            self._clone_attachments(
+                agent, source_config_id=source.id, target_config_id=new_config.id
+            )
+            # The session is configured `autoflush=False`, so the cloned
+            # `db.add(...)` calls above stay PENDING in memory. Without an
+            # explicit flush, the subsequent `_sync_*` queries (which run a
+            # SELECT for "existing rows scoped to this config") would not see
+            # the clones, conclude that the config has no attachments, and
+            # re-INSERT every tool/MCP/KB — colliding with the flushed clones
+            # at commit on `uq_agent_tools_config_tool` and friends. Flushing
+            # here makes the clones visible to those follow-up queries in the
+            # same transaction.
+            self.db.flush()
+        if make_live:
+            agent.published_config_id = new_config.id
         return new_config
+
+    def _resolve_clone_source(
+        self, agent: Agent, source_config_id: Optional[UUID]
+    ) -> Optional[AgentConfig]:
+        """Pick the config to clone from when versioning.
+
+        Explicit ``source_config_id`` wins (validated to belong to the agent);
+        otherwise we fall back to whatever ``_resolve_current_config`` returns
+        (published version → latest version → None).
+        """
+        if source_config_id is not None:
+            cfg = (
+                self.query(AgentConfig)
+                .filter(
+                    AgentConfig.id == source_config_id,
+                    AgentConfig.agent_id == agent.id,
+                    AgentConfig.deleted_at.is_(None),
+                )
+                .first()
+            )
+            if not cfg:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="source_config_id does not belong to this agent",
+                )
+            return cfg
+        return self._resolve_current_config(agent)
+
+    def _clone_attachments(
+        self,
+        agent: Agent,
+        *,
+        source_config_id: UUID,
+        target_config_id: UUID,
+    ) -> None:
+        """Duplicate tool / MCP / KB rows from one config to another.
+
+        Each row keeps its foreign-id (tool_id / mcp_server_id /
+        knowledge_base_id) but is rewritten under ``target_config_id`` so the
+        per-config unique constraint stays valid.
+        """
+        base = {
+            "agent_id": agent.id,
+            "agent_config_id": target_config_id,
+            "organization_id": self.org_id,
+        }
+
+        for row in (
+            self.query(AgentTool)
+            .filter(
+                AgentTool.agent_id == agent.id,
+                AgentTool.organization_id == self.org_id,
+                AgentTool.agent_config_id == source_config_id,
+            )
+            .all()
+        ):
+            self.db.add(AgentTool(**base, tool_id=row.tool_id))
+
+        for row in (
+            self.query(AgentMcpServer)
+            .filter(
+                AgentMcpServer.agent_id == agent.id,
+                AgentMcpServer.organization_id == self.org_id,
+                AgentMcpServer.agent_config_id == source_config_id,
+            )
+            .all()
+        ):
+            self.db.add(
+                AgentMcpServer(
+                    **base,
+                    mcp_server_id=row.mcp_server_id,
+                    oauth_connection_id=row.oauth_connection_id,
+                )
+            )
+
+        for row in (
+            self.query(AgentKnowledgeBase)
+            .filter(
+                AgentKnowledgeBase.agent_id == agent.id,
+                AgentKnowledgeBase.organization_id == self.org_id,
+                AgentKnowledgeBase.agent_config_id == source_config_id,
+            )
+            .all()
+        ):
+            self.db.add(
+                AgentKnowledgeBase(**base, knowledge_base_id=row.knowledge_base_id)
+            )
 
     def _sync_tools(self, agent: Agent, config: Optional[AgentConfig], tool_ids: List[str]) -> None:
         uuids = [UUID(str(tid)) for tid in tool_ids]
@@ -1117,26 +1299,27 @@ class AgentService(BaseService):
             if missing:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Tools not found: {', '.join(missing)}")
 
+        # All writes are scoped to this config — editing v11's tools must not
+        # touch v10's rows, and v10's rows must keep their `agent_config_id`.
+        config_id = config.id if config else None
+        scope = [
+            AgentTool.agent_id == agent.id,
+            AgentTool.organization_id == self.org_id,
+            AgentTool.agent_config_id == config_id,
+        ]
+
         # Delete tools not in the new set
         if uuids:
             self.db.query(AgentTool).filter(
-                AgentTool.agent_id == agent.id, AgentTool.organization_id == self.org_id,
-                AgentTool.tool_id.notin_(uuids),
+                *scope, AgentTool.tool_id.notin_(uuids),
             ).delete(synchronize_session=False)
         else:
-            self.db.query(AgentTool).filter(
-                AgentTool.agent_id == agent.id, AgentTool.organization_id == self.org_id,
-            ).delete(synchronize_session=False)
+            self.db.query(AgentTool).filter(*scope).delete(synchronize_session=False)
 
         # Insert missing
         if uuids:
-            existing_rows = (
-                self.db.query(AgentTool.tool_id)
-                .filter(AgentTool.agent_id == agent.id, AgentTool.organization_id == self.org_id)
-                .all()
-            )
+            existing_rows = self.db.query(AgentTool.tool_id).filter(*scope).all()
             existing_set = {r[0] for r in existing_rows}
-            config_id = config.id if config else None
             for tid in uuids:
                 if tid not in existing_set:
                     self.db.add(AgentTool(
@@ -1156,26 +1339,27 @@ class AgentService(BaseService):
             if missing:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"MCP servers not found: {', '.join(missing)}")
 
+        config_id = config.id if config else None
+        scope = [
+            AgentMcpServer.agent_id == agent.id,
+            AgentMcpServer.organization_id == self.org_id,
+            AgentMcpServer.agent_config_id == config_id,
+        ]
+
         # Delete rows not in the new set
         if uuids:
             self.db.query(AgentMcpServer).filter(
-                AgentMcpServer.agent_id == agent.id, AgentMcpServer.organization_id == self.org_id,
-                AgentMcpServer.mcp_server_id.notin_(uuids),
+                *scope, AgentMcpServer.mcp_server_id.notin_(uuids),
             ).delete(synchronize_session=False)
         else:
-            self.db.query(AgentMcpServer).filter(
-                AgentMcpServer.agent_id == agent.id, AgentMcpServer.organization_id == self.org_id,
-            ).delete(synchronize_session=False)
+            self.db.query(AgentMcpServer).filter(*scope).delete(synchronize_session=False)
 
         # Insert any missing links
         if uuids:
             existing_ids = {
                 r[0]
-                for r in self.db.query(AgentMcpServer.mcp_server_id)
-                .filter(AgentMcpServer.agent_id == agent.id, AgentMcpServer.organization_id == self.org_id)
-                .all()
+                for r in self.db.query(AgentMcpServer.mcp_server_id).filter(*scope).all()
             }
-            config_id = config.id if config else None
             for sid in uuids:
                 if sid in existing_ids:
                     continue
@@ -1226,21 +1410,23 @@ class AgentService(BaseService):
                     self.db.flush()
                 kb_ids.append(kb.id)
 
+        config_id = config.id if config else None
+        scope = [
+            AgentKnowledgeBase.agent_id == agent.id,
+            AgentKnowledgeBase.organization_id == self.org_id,
+            AgentKnowledgeBase.agent_config_id == config_id,
+        ]
+
         if kb_ids:
             self.db.query(AgentKnowledgeBase).filter(
-                AgentKnowledgeBase.agent_id == agent.id, AgentKnowledgeBase.organization_id == self.org_id,
-                AgentKnowledgeBase.knowledge_base_id.notin_(kb_ids),
+                *scope, AgentKnowledgeBase.knowledge_base_id.notin_(kb_ids),
             ).delete(synchronize_session=False)
         else:
-            self.db.query(AgentKnowledgeBase).filter(
-                AgentKnowledgeBase.agent_id == agent.id, AgentKnowledgeBase.organization_id == self.org_id,
-            ).delete(synchronize_session=False)
+            self.db.query(AgentKnowledgeBase).filter(*scope).delete(synchronize_session=False)
 
         if kb_ids:
             existing_rows = (
-                self.db.query(AgentKnowledgeBase.knowledge_base_id)
-                .filter(AgentKnowledgeBase.agent_id == agent.id, AgentKnowledgeBase.organization_id == self.org_id)
-                .all()
+                self.db.query(AgentKnowledgeBase.knowledge_base_id).filter(*scope).all()
             )
             existing_set = {r[0] for r in existing_rows}
             for kid in kb_ids:
@@ -1248,7 +1434,7 @@ class AgentService(BaseService):
                     self.db.add(AgentKnowledgeBase(
                         agent_id=agent.id,
                         knowledge_base_id=kid,
-                        agent_config_id=config.id,
+                        agent_config_id=config_id,
                         organization_id=self.org_id,
                     ))
 
@@ -1380,11 +1566,21 @@ class AgentService(BaseService):
         else:
             result["config"] = None
 
+        # Attachments are per-version: filter the join tables by the resolved
+        # config's id so previewing v9 shows v9's tools / MCP / KB. When the
+        # agent has no config yet (impossible in practice but defensive), the
+        # filter on `IS NULL` correctly returns an empty list.
+        config_id_for_attachments = config.id if config else None
+
         # Tools
         tool_rows = (
             self.db.query(Tool)
             .join(AgentTool, AgentTool.tool_id == Tool.id)
-            .filter(AgentTool.agent_id == agent.id, AgentTool.organization_id == self.org_id)
+            .filter(
+                AgentTool.agent_id == agent.id,
+                AgentTool.organization_id == self.org_id,
+                AgentTool.agent_config_id == config_id_for_attachments,
+            )
             .all()
         )
         result["tools"] = [{"id": str(t.id), "name": t.name} for t in tool_rows]
@@ -1393,7 +1589,11 @@ class AgentService(BaseService):
         mcp_rows = (
             self.db.query(McpServer)
             .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)
-            .filter(AgentMcpServer.agent_id == agent.id, AgentMcpServer.organization_id == self.org_id)
+            .filter(
+                AgentMcpServer.agent_id == agent.id,
+                AgentMcpServer.organization_id == self.org_id,
+                AgentMcpServer.agent_config_id == config_id_for_attachments,
+            )
             .all()
         )
         result["mcp_servers"] = [{"id": str(ms.id), "name": ms.name} for ms in mcp_rows]
@@ -1403,7 +1603,11 @@ class AgentService(BaseService):
             self.db.query(Upload)
             .join(KnowledgeBase, KnowledgeBase.upload_id == Upload.id)
             .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
-            .filter(AgentKnowledgeBase.agent_id == agent.id, AgentKnowledgeBase.organization_id == self.org_id)
+            .filter(
+                AgentKnowledgeBase.agent_id == agent.id,
+                AgentKnowledgeBase.organization_id == self.org_id,
+                AgentKnowledgeBase.agent_config_id == config_id_for_attachments,
+            )
             .all()
         )
         result["documents"] = [

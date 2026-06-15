@@ -1,50 +1,41 @@
 'use client';
 
-import { ChevronDown, GitBranchPlus, Loader2, Radio, Save } from 'lucide-react';
+import { Loader2, Radio, Save } from 'lucide-react';
 
-import { CustomButton } from '@/components/shared';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+import { CustomButton, CustomTooltip } from '@/components/shared';
 
-export type AgentSaveAction = 'save_in_place' | 'save_as_new_version' | 'make_live';
+export type AgentSaveAction = 'save' | 'publish';
 
 interface AgentSaveActionsProps {
-  /** Mode = 'create' shows a single "Create agent" button. */
+  /** `create` mode shows a single "Create agent" button. `edit` mode shows
+   *  Save + Publish as two distinct top-level buttons. */
   mode: 'create' | 'edit';
-  /** True when the form is on the currently-live version (split button). */
-  viewingLive: boolean;
-  /** Number shown on the in-place save label ("Save to v3"). */
-  liveVersionNumber: number | null;
-  /** Number shown on the "Make v2 live" button when viewing a non-live row. */
-  viewedVersionNumber: number | null;
+  /** True when at least one draft (non-published) version exists. Drives
+   *  whether the Publish toolbar button is enabled — clicking opens a picker
+   *  the user uses to choose which draft to promote. */
+  canPublish: boolean;
   saving: boolean;
-  switchingLive: boolean;
+  publishing: boolean;
   onAction: (action: AgentSaveAction) => void;
 }
 
+const ICON_CLASS = 'size-3.5';
+const SPINNER = <Loader2 className={`${ICON_CLASS} animate-spin`} />;
+
 /**
- * Single source of truth for the editor's primary action area. Renders one of
- * three layouts depending on context:
+ * Primary action area for the agent editor toolbar.
  *
- *  - **create** mode: one big "Create agent" button.
- *  - **edit + viewing live**: split "Save to v{N}" button with a "Save as new
- *    version" item in its dropdown.
- *  - **edit + viewing non-live**: a "Make v{N} live" button + a "Save as new
- *    version" button. In-place save is disabled here because writing the form
- *    to a non-live row would either silently mutate history or silently flip
- *    the live pointer — both surprising.
+ * - **create** mode: one "Create agent" button.
+ * - **edit** mode: two clearly-separated buttons — **Save** (always creates a
+ *   new draft version) and **Publish** (opens the version picker modal; the
+ *   parent renders the modal). Publish is disabled when there are no drafts
+ *   to promote.
  */
 export default function AgentSaveActions({
   mode,
-  viewingLive,
-  liveVersionNumber,
-  viewedVersionNumber,
+  canPublish,
   saving,
-  switchingLive,
+  publishing,
   onAction,
 }: AgentSaveActionsProps) {
   if (mode === 'create') {
@@ -52,10 +43,8 @@ export default function AgentSaveActions({
       <CustomButton
         type="primary"
         size="sm"
-        icon={
-          saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />
-        }
-        onClick={() => onAction('save_in_place')}
+        icon={saving ? SPINNER : <Save className={ICON_CLASS} />}
+        onClick={() => onAction('save')}
         loading={saving}
         className="h-8"
       >
@@ -64,91 +53,65 @@ export default function AgentSaveActions({
     );
   }
 
-  if (!viewingLive) {
-    // Either action mutates the same agent — disable both while one runs so
-    // a user can't fire "Make live" while a new-version save is mid-flight.
-    const busy = saving || switchingLive;
-    return (
-      <div className="flex items-center gap-1.5">
-        <CustomButton
-          type="default"
-          size="sm"
-          icon={
-            switchingLive ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <Radio className="size-3.5" />
-            )
-          }
-          onClick={() => onAction('make_live')}
-          loading={switchingLive}
-          disabled={busy}
-          className="h-8"
-        >
-          {viewedVersionNumber != null ? `Make v${viewedVersionNumber} live` : 'Make this live'}
-        </CustomButton>
-        <CustomButton
-          type="primary"
-          size="sm"
-          icon={
-            saving ? (
-              <Loader2 className="size-3.5 animate-spin" />
-            ) : (
-              <GitBranchPlus className="size-3.5" />
-            )
-          }
-          onClick={() => onAction('save_as_new_version')}
-          loading={saving}
-          disabled={busy}
-          className="h-8"
-        >
-          Save as new version
-        </CustomButton>
-      </div>
-    );
-  }
+  // Disable both while either is in-flight — the form mutates the same agent
+  // and a Save + Publish race would surface confusing intermediate state.
+  const busy = saving || publishing;
+  const publishDisabled = busy || !canPublish;
+  const publishTooltip = !canPublish ? 'No drafts to publish — click Save to create one.' : null;
 
-  // Editing the live version → split Save button.
-  const primaryLabel = liveVersionNumber != null ? `Save to v${liveVersionNumber}` : 'Save changes';
   return (
-    <div className="flex items-stretch">
+    <div className="flex items-center gap-1.5">
       <CustomButton
-        type="primary"
+        type="default"
         size="sm"
-        icon={
-          saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />
-        }
-        onClick={() => onAction('save_in_place')}
+        icon={saving ? SPINNER : <Save className={ICON_CLASS} />}
+        onClick={() => onAction('save')}
         loading={saving}
-        className="h-8 rounded-r-none"
+        disabled={busy}
+        className="h-8"
       >
-        {primaryLabel}
+        Save
       </CustomButton>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <CustomButton
-            type="primary"
-            size="sm"
-            aria-label="More save options"
-            disabled={saving}
-            className="h-8 rounded-l-none border-l border-primary-foreground/20 px-2"
-          >
-            <ChevronDown className="size-3.5" />
-          </CustomButton>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-[200px]">
-          <DropdownMenuItem
-            onSelect={(e) => {
-              e.preventDefault();
-              onAction('save_as_new_version');
-            }}
-            className="gap-2 text-[13px]"
-          >
-            <GitBranchPlus className="size-3.5" />
-            Save as new version
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <PublishButton
+        publishing={publishing}
+        disabled={publishDisabled}
+        tooltip={publishTooltip}
+        onClick={() => onAction('publish')}
+      />
     </div>
+  );
+}
+
+interface PublishButtonProps {
+  publishing: boolean;
+  disabled: boolean;
+  tooltip: string | null;
+  onClick: () => void;
+}
+
+/** Publish button extracted so the tooltip-vs-bare-button branch stays local
+ *  to the one place that needs it. */
+function PublishButton({ publishing, disabled, tooltip, onClick }: PublishButtonProps) {
+  const button = (
+    <CustomButton
+      type="primary"
+      size="sm"
+      icon={publishing ? SPINNER : <Radio className={ICON_CLASS} />}
+      onClick={onClick}
+      loading={publishing}
+      disabled={disabled}
+      className="h-8"
+    >
+      Publish
+    </CustomButton>
+  );
+
+  // Radix tooltips don't surface for disabled buttons because pointer events
+  // are off — wrap in a span so the trigger still receives hover.
+  if (!tooltip) return button;
+  return (
+    <CustomTooltip content={tooltip}>
+      <span className="inline-flex">{button}</span>
+    </CustomTooltip>
   );
 }

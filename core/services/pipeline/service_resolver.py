@@ -308,6 +308,10 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
         return None, None
 
     agent_id = agent.id if hasattr(agent, "id") else agent
+    # Attachments are per-version: the runtime always wants the published
+    # config's set, never the union across versions (which was the implicit
+    # behaviour when these rows were keyed by `agent_id` alone).
+    config_id = config.id
     org = org_id or getattr(config, "organization_id", None) or getattr(agent, "organization_id", None)
     ids = _config_service_ids(config)
     provider_ids, model_ids, voice_uuid = ids["provider_ids"], ids["model_ids"], ids["voice_uuid"]
@@ -327,7 +331,11 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
     key_cnt_sq = select(func.count(ApiKey.id)).where(*_key_where).scalar_subquery()
     key_max_sq = select(func.max(ApiKey.updated_at)).where(*_key_where).scalar_subquery()
 
-    _tool_where = (AgentTool.agent_id == agent_id, Tool.is_active.is_(True))
+    _tool_where = (
+        AgentTool.agent_id == agent_id,
+        AgentTool.agent_config_id == config_id,
+        Tool.is_active.is_(True),
+    )
     tool_cnt_sq = (
         select(func.count(Tool.id)).select_from(Tool)
         .join(AgentTool, AgentTool.tool_id == Tool.id).where(*_tool_where).scalar_subquery()
@@ -341,7 +349,11 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
         .join(AgentTool, AgentTool.tool_id == Tool.id).where(*_tool_where).scalar_subquery()
     )
 
-    _kb_where = (AgentKnowledgeBase.agent_id == agent_id, Upload.status == "ready")
+    _kb_where = (
+        AgentKnowledgeBase.agent_id == agent_id,
+        AgentKnowledgeBase.agent_config_id == config_id,
+        Upload.status == "ready",
+    )
     kb_cnt_sq = (
         select(func.count(Upload.id)).select_from(Upload)
         .join(KnowledgeBase, KnowledgeBase.upload_id == Upload.id)
@@ -360,7 +372,11 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
         .where(*_kb_where).scalar_subquery()
     )
 
-    _mcp_where = (AgentMcpServer.agent_id == agent_id, McpServer.is_active.is_(True))
+    _mcp_where = (
+        AgentMcpServer.agent_id == agent_id,
+        AgentMcpServer.agent_config_id == config_id,
+        McpServer.is_active.is_(True),
+    )
     mcp_cnt_sq = (
         select(func.count(McpServer.id)).select_from(McpServer)
         .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)

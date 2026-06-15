@@ -399,17 +399,50 @@ class McpServerService(BaseService):
         return {"message": "MCP server deleted successfully"}
 
     def attach_to_agents(self, mcp_server_id, agent_ids: List) -> None:
+        from sqlalchemy import tuple_
+
+        from core.models.agent import Agent
+
         mcp_server = self.get_mcp_server(mcp_server_id)
         # An MCP server backed by an OAuth connection must have all required scopes before it can
         # be wired onto an agent — otherwise tool discovery silently no-ops during a live call.
         self._validate_oauth_scopes(mcp_server.oauth_connection_id)
-        existing = (
-            self.db.query(AgentMcpServer.agent_id)
-            .filter(AgentMcpServer.mcp_server_id == mcp_server_id, AgentMcpServer.agent_id.in_(agent_ids))
+
+        # Per-version attachments: attach to each agent's published config.
+        published_map = {
+            aid: cid
+            for aid, cid in self.db.query(Agent.id, Agent.published_config_id)
+            .filter(Agent.id.in_(agent_ids))
             .all()
-        )
-        existing_ids = {row[0] for row in existing}
-        new_ids = [aid for aid in agent_ids if aid not in existing_ids]
+            if cid is not None
+        }
+
+        # Reject up-front when every requested agent lacks a published version
+        # — otherwise the empty case falls through to the generic "already
+        # attached" error, which misleads the caller.
+        if not published_map:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "None of the specified agents have a published version to attach to."
+                    " Publish each agent first, then retry."
+                ),
+            )
+
+        agent_config_pairs = list(published_map.items())
+        already_attached = {
+            row.agent_id
+            for row in self.db.query(AgentMcpServer.agent_id)
+            .filter(
+                AgentMcpServer.mcp_server_id == mcp_server_id,
+                tuple_(AgentMcpServer.agent_id, AgentMcpServer.agent_config_id).in_(
+                    agent_config_pairs
+                ),
+            )
+            .all()
+        }
+
+        new_ids = [aid for aid in published_map if aid not in already_attached]
         if not new_ids:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -420,15 +453,36 @@ class McpServerService(BaseService):
             self.db.add(AgentMcpServer(
                 agent_id=agent_id,
                 mcp_server_id=mcp_server_id,
+                agent_config_id=published_map[agent_id],
                 created_at=now,
                 updated_at=now,
             ))
         self.db.commit()
 
     def detach_from_agents(self, mcp_server_id, agent_ids: List) -> Dict[str, str]:
+        from core.models.agent import Agent
+
+        # Detach scoped to each agent's published config — historical version
+        # links stay intact for version history.
+        published_ids = [
+            cid
+            for (cid,) in self.db.query(Agent.published_config_id)
+            .filter(Agent.id.in_(agent_ids))
+            .all()
+            if cid is not None
+        ]
+        if not published_ids:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="MCP server is not attached to any of the specified agents",
+            )
         links = (
             self.db.query(AgentMcpServer)
-            .filter(AgentMcpServer.mcp_server_id == mcp_server_id, AgentMcpServer.agent_id.in_(agent_ids))
+            .filter(
+                AgentMcpServer.mcp_server_id == mcp_server_id,
+                AgentMcpServer.agent_id.in_(agent_ids),
+                AgentMcpServer.agent_config_id.in_(published_ids),
+            )
             .all()
         )
         if not links:
@@ -442,11 +496,16 @@ class McpServerService(BaseService):
         return {"message": f"MCP server detached from {len(links)} agent(s) successfully"}
 
     def get_mcp_servers_by_agent(self, agent_id) -> List[Dict[str, Any]]:
+        # Per-version: only return the agent's published-version MCP servers.
+        from core.utils.agent_scope import published_config_subquery
+
+        published_config_sq = published_config_subquery(agent_id)
         rows = (
             self.db.query(McpServer)
             .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)
             .filter(
                 AgentMcpServer.agent_id == agent_id,
+                AgentMcpServer.agent_config_id == published_config_sq,
                 McpServer.is_active == True,
                 McpServer.organization_id == self.org_id,
             )

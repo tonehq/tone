@@ -262,20 +262,55 @@ class ToolService(BaseService):
         return {"message": "Tool deleted successfully"}
 
     def attach_tool_to_agents(self, agent_ids: List, tool_id) -> List[AgentTool]:
+        from sqlalchemy import tuple_
+
+        from core.models.agent import Agent
+
         # Verify tool exists
         tool = self.get_tool(tool_id)
         # A built-in OAuth tool must have all required scopes before it's wired onto an agent,
         # so the agent never silently fails to act on it mid-call.
         self._validate_oauth_scopes(tool.tool_type, tool.oauth_connection_id)
 
-        # Check which are already attached
-        existing = (
-            self.db.query(AgentTool.agent_id)
-            .filter(AgentTool.tool_id == tool_id, AgentTool.agent_id.in_(agent_ids))
+        # Per-version attachments: each row must declare the config it belongs
+        # to. The admin "attach to agents" action targets each agent's
+        # published version (the one serving calls right now).
+        published_map = {
+            aid: cid
+            for aid, cid in self.db.query(Agent.id, Agent.published_config_id)
+            .filter(Agent.id.in_(agent_ids))
             .all()
-        )
-        existing_ids = {row[0] for row in existing}
-        new_ids = [aid for aid in agent_ids if aid not in existing_ids]
+            if cid is not None
+        }
+
+        # Reject up-front when every requested agent lacks a published version
+        # — without this, the empty-published_map case falls through to the
+        # generic "already attached" error, which misleads the caller.
+        if not published_map:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "None of the specified agents have a published version to attach to."
+                    " Publish each agent first, then retry."
+                ),
+            )
+
+        # Already-attached lookup scoped to each agent's published config — an
+        # agent whose published version already has this tool is a skip.
+        agent_config_pairs = list(published_map.items())
+        already_attached = {
+            row.agent_id
+            for row in self.db.query(AgentTool.agent_id)
+            .filter(
+                AgentTool.tool_id == tool_id,
+                tuple_(AgentTool.agent_id, AgentTool.agent_config_id).in_(
+                    agent_config_pairs
+                ),
+            )
+            .all()
+        }
+
+        new_ids = [aid for aid in published_map if aid not in already_attached]
 
         if not new_ids:
             raise HTTPException(
@@ -284,23 +319,45 @@ class ToolService(BaseService):
             )
 
         now = datetime.now(timezone.utc)
-        agent_tools = []
-        for agent_id in new_ids:
-            agent_tool = AgentTool(
-                agent_id=agent_id,
+        agent_tools = [
+            AgentTool(
+                agent_id=aid,
                 tool_id=tool_id,
+                agent_config_id=published_map[aid],
                 created_at=now,
                 updated_at=now,
             )
-            agent_tools.append(agent_tool)
+            for aid in new_ids
+        ]
         self.db.add_all(agent_tools)
         self.db.commit()
         return agent_tools
 
     def detach_tool_from_agents(self, agent_ids: List, tool_id) -> Dict[str, str]:
+        from core.models.agent import Agent
+
+        # Detach only removes the row scoped to each agent's published config —
+        # historical version attachments stay intact so version history doesn't
+        # silently lose tools.
+        published_ids = [
+            cid
+            for (cid,) in self.db.query(Agent.published_config_id)
+            .filter(Agent.id.in_(agent_ids))
+            .all()
+            if cid is not None
+        ]
+        if not published_ids:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Tool is not attached to any of the specified agents",
+            )
         agent_tools = (
             self.db.query(AgentTool)
-            .filter(AgentTool.tool_id == tool_id, AgentTool.agent_id.in_(agent_ids))
+            .filter(
+                AgentTool.tool_id == tool_id,
+                AgentTool.agent_id.in_(agent_ids),
+                AgentTool.agent_config_id.in_(published_ids),
+            )
             .all()
         )
         if not agent_tools:
@@ -314,10 +371,20 @@ class ToolService(BaseService):
         return {"message": f"Tool detached from {len(agent_tools)} agent(s) successfully"}
 
     def get_tools_by_agent(self, agent_id) -> List[Tool]:
+        # Per-version attachments: only return the agent's published-version
+        # tools so admin views and runtime callers see the same set the live
+        # agent is using.
+        from core.utils.agent_scope import published_config_subquery
+
+        published_config_sq = published_config_subquery(agent_id)
         return (
             self.query(Tool)
             .join(AgentTool, AgentTool.tool_id == Tool.id)
-            .filter(AgentTool.agent_id == agent_id, Tool.is_active == True)
+            .filter(
+                AgentTool.agent_id == agent_id,
+                AgentTool.agent_config_id == published_config_sq,
+                Tool.is_active == True,
+            )
             .all()
         )
 

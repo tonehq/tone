@@ -200,6 +200,26 @@ def build_stt(spec: dict) -> Optional[Any]:
                 prompt=metadata.get("prompt"),
                 temperature=metadata.get("temperature"),
             )
+        if provider_name == "voxtral":
+            # Self-hosted Voxtral via the custom transformers server, which speaks
+            # the same /ws/asr protocol as nemotron — so we reuse NvidiaWebSocketService.
+            from pipecat.services.nvidia.websocket_stt import NvidiaWebSocketService
+            from core.logging import get_trace_id
+            ws_url = "ws://staging-stt-voxtral-service.staging.svc.cluster.local/ws/asr"
+            ws_kwargs = {}
+            if metadata.get("sample_rate") is not None:
+                ws_kwargs["sample_rate"] = metadata["sample_rate"]
+            return NvidiaWebSocketService(url=ws_url, trace_id=get_trace_id(), **ws_kwargs)
+        if provider_name == "gemma":
+            # Self-hosted Gemma 4 E2B ASR via the custom transformers server, which speaks
+            # the same /ws/asr protocol as nemotron — so we reuse NvidiaWebSocketService.
+            from pipecat.services.nvidia.websocket_stt import NvidiaWebSocketService
+            from core.logging import get_trace_id
+            ws_url = "ws://staging-stt-gemma-service.staging.svc.cluster.local/ws/asr"
+            ws_kwargs = {}
+            if metadata.get("sample_rate") is not None:
+                ws_kwargs["sample_rate"] = metadata["sample_rate"]
+            return NvidiaWebSocketService(url=ws_url, trace_id=get_trace_id(), **ws_kwargs)
         if provider_name == "groq":
             from pipecat.services.groq.stt import GroqSTTService
             return GroqSTTService(
