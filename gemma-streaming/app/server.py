@@ -1,29 +1,28 @@
 """
-Tone STT — Mistral Voxtral-Mini-4B-Realtime via transformers (offline, VAD-segmented).
+Tone STT — Google Gemma 4 E2B-it (native ASR) via transformers, offline + VAD-segmented.
 
-Research finding: the high-level chunk-streaming path (generate with an input_features
-generator) does NOT work reliably at transformers 5.12 / mistral_common 1.11.3 — it needs
-exact left/right padding (the model prompt is BOS + 32 left-pad + 6 delay = 39 tokens) and
-true token-streaming requires low-level forward_one decoding. The correct working path is
-OFFLINE transcription (is_streaming=False) of the full audio, which the processor pads
-internally. For a live call we segment by server-side energy VAD and transcribe per
-utterance, emitting a `final` per turn.
+Gemma 4 E2B-it is multimodal with native speech recognition, open (ungated, no HF token),
+and runs in BF16 within ~3-4 GB of GPU via MatFormer/PLE offload — so it fits the 8 GB box
+WITHOUT quantization (unlike Voxtral, whose 8-bit quant produced blank output). The model
+transcribes a <=30s audio segment from a chat-template prompt; we segment a live call by
+server-side energy VAD and transcribe per utterance, emitting a `final` per turn.
 
 Same wire protocol as the nemotron server so Tone's nvidia_websocket client works unchanged:
   GET  /health    -> {status, model, cuda}
-  GET  /selftest  -> offline-transcribe a known clip (sanity check)
+  GET  /selftest  -> transcribe a known clip (sanity check)
   WS   /ws/asr    -> 16kHz mono PCM16 frames; server emits {type: final, text, ms} per utterance
 """
 
 import asyncio
 import contextvars
 import logging
+import tempfile
 import time
 
 import numpy as np
 import torch
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from transformers import VoxtralRealtimeForConditionalGeneration, VoxtralRealtimeProcessor
+from transformers import AutoModelForMultimodalLM, AutoProcessor
 
 _trace_ctx: contextvars.ContextVar = contextvars.ContextVar("trace_id", default="none")
 
@@ -44,19 +43,19 @@ for _name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
     _lg.propagate = False
 log = logging.getLogger("stt")
 
-MODEL_NAME = "mistralai/Voxtral-Mini-4B-Realtime-2602"
+MODEL_NAME = "google/gemma-4-E2B-it"
 TARGET_SR = 16000
-DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
-QUANTIZE = "none"
-COMPUTE_DTYPE = torch.bfloat16
 MAX_NEW_TOKENS = 256
+PROMPT = ("Transcribe the following speech segment in English into English text. "
+          "Only output the transcription, with no extra words and no newlines.")
 
 # energy-VAD segmentation
 SPEECH_RMS = 0.012
 SILENCE_HANG_MS = 600
 MIN_SPEECH_MS = 300
+MAX_UTT_S = 28  # Gemma caps audio at 30s — flush before that
 
-app = FastAPI(title="Tone STT — Voxtral (offline, VAD-segmented)")
+app = FastAPI(title="Tone STT — Gemma 4 E2B (offline, VAD-segmented)")
 _model = None
 _processor = None
 
@@ -65,48 +64,42 @@ def _load_model():
     global _model, _processor
     if _model is not None:
         return _model
-    log.info("transformers VoxtralRealtime (offline) | torch %s | cuda=%s | model=%s | quant=%s",
-             torch.__version__, torch.cuda.is_available(), MODEL_NAME, QUANTIZE)
-    _processor = VoxtralRealtimeProcessor.from_pretrained(MODEL_NAME)
-    load_kwargs = {}
-    if QUANTIZE in ("8bit", "int8"):
-        from transformers import BitsAndBytesConfig
-        load_kwargs["device_map"] = DEVICE
-        load_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
-    elif QUANTIZE in ("4bit", "int4"):
-        from transformers import BitsAndBytesConfig
-        load_kwargs["device_map"] = DEVICE
-        load_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.bfloat16)
-    else:
-        # BF16 doesn't fit 8GB — let accelerate offload the overflow to CPU RAM so we can
-        # test whether BF16 transcribes (isolating quant vs. the generate call).
-        load_kwargs["device_map"] = "auto"
-        load_kwargs["torch_dtype"] = COMPUTE_DTYPE
-        load_kwargs["low_cpu_mem_usage"] = True
-    _model = VoxtralRealtimeForConditionalGeneration.from_pretrained(MODEL_NAME, **load_kwargs)
+    log.info("transformers Gemma ASR | torch %s | cuda=%s | model=%s",
+             torch.__version__, torch.cuda.is_available(), MODEL_NAME)
+    _processor = AutoProcessor.from_pretrained(MODEL_NAME)
+    _model = AutoModelForMultimodalLM.from_pretrained(MODEL_NAME, dtype=torch.bfloat16, device_map="auto")
     _model.eval()
-    log.info("Model ready on %s (quant=%s, compute_dtype=%s)", DEVICE, QUANTIZE, COMPUTE_DTYPE)
+    log.info("Model ready (bf16, device_map=auto)")
     return _model
 
 
-def _transcribe_offline(audio_f32: np.ndarray) -> str:
-    """Full-clip offline transcription (is_streaming=False -> processor pads internally)."""
-    inputs = _processor(
-        np.ascontiguousarray(audio_f32, dtype=np.float32),
-        is_streaming=False,
-        is_first_audio_chunk=True,
-        return_tensors="pt",
-    )
-    inputs.to(_model.device, dtype=COMPUTE_DTYPE)
-    with torch.no_grad():
-        gen = _model.generate(
-            input_ids=inputs.input_ids,
-            input_features=inputs.input_features,
-            num_delay_tokens=inputs.num_delay_tokens,
-            max_new_tokens=MAX_NEW_TOKENS,
-        )
-    text = _processor.batch_decode(gen[:, inputs.input_ids.shape[1]:], skip_special_tokens=True)
-    return (text[0] if text else "").strip()
+def _transcribe(audio_f32: np.ndarray) -> str:
+    """Transcribe a <=30s 16kHz mono float32 segment via the chat-template audio path."""
+    import soundfile as sf
+
+    with tempfile.NamedTemporaryFile(suffix=".wav") as f:
+        sf.write(f.name, np.ascontiguousarray(audio_f32, dtype=np.float32), TARGET_SR)
+        messages = [{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": PROMPT},
+                {"type": "audio", "audio": f.name},
+            ],
+        }]
+        inputs = _processor.apply_chat_template(
+            messages, tokenize=True, return_dict=True, return_tensors="pt", add_generation_prompt=True,
+        ).to(_model.device)
+        input_len = inputs["input_ids"].shape[-1]
+        with torch.no_grad():
+            out = _model.generate(**inputs, max_new_tokens=MAX_NEW_TOKENS, do_sample=False)
+        text = _processor.decode(out[0][input_len:], skip_special_tokens=True)
+    try:
+        parsed = _processor.parse_response(text)
+        if isinstance(parsed, str):
+            text = parsed
+    except Exception:  # noqa: BLE001
+        pass
+    return text.strip()
 
 
 def _pcm16_to_float(buf: bytes) -> np.ndarray:
@@ -125,10 +118,11 @@ def health():
 
 @app.get("/selftest")
 def selftest():
-    """Offline-transcribe a known clean clip (MLK) to verify the model produces text."""
+    """Transcribe a known clean clip (MLK) to verify the model produces text."""
     import io
     import urllib.request
 
+    import librosa
     import soundfile as sf
 
     _load_model()
@@ -137,8 +131,10 @@ def selftest():
     audio, sr = sf.read(io.BytesIO(raw), dtype="float32")
     if audio.ndim > 1:
         audio = audio.mean(axis=1)
+    if sr != TARGET_SR:
+        audio = librosa.resample(audio, orig_sr=sr, target_sr=TARGET_SR)
     d0 = time.monotonic()
-    text = _transcribe_offline(audio)
+    text = _transcribe(audio)
     return {"transcript": text, "len": len(text), "ms": round((time.monotonic() - d0) * 1000)}
 
 
@@ -168,8 +164,8 @@ async def ws_asr(ws: WebSocket):
         seg = bytearray(); in_speech = False; sil_ms = 0.0; speech_ms = 0.0
         d0 = time.monotonic()
         try:
-            text = await loop.run_in_executor(None, _transcribe_offline, audio)
-        except Exception as exc:  # noqa: BLE001
+            text = await loop.run_in_executor(None, _transcribe, audio)
+        except Exception:  # noqa: BLE001
             log.exception("ws/asr %s transcription failed", client)
             return
         log.info("ws/asr %s final (%s, %.1fs audio): %r (%dms)", client, reason,
@@ -206,7 +202,9 @@ async def ws_asr(ws: WebSocket):
                 sil_ms += dur_ms
                 if sil_ms >= SILENCE_HANG_MS:
                     await _flush("silence")
+            if len(seg) >= MAX_UTT_S * TARGET_SR * 2:  # hard cap (Gemma 30s limit)
+                await _flush("maxlen")
     except WebSocketDisconnect:
         log.info("ws/asr %s disconnected", client)
-    except Exception as exc:  # noqa: BLE001
+    except Exception:  # noqa: BLE001
         log.exception("ws/asr %s failed", client)
