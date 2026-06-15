@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import { GripVertical, Search } from 'lucide-react';
 
 import { cn } from '@/utils/cn';
 import { NODE_CATEGORIES, type NodeTypeMeta } from '@/components/workflows/nodeRegistry';
@@ -30,15 +31,19 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAdd }) => {
   };
 
   return (
-    <aside className="flex h-full w-72 shrink-0 flex-col border-l border-border bg-card/80 backdrop-blur">
-      <div className="border-b border-border p-3">
+    <aside className="flex h-full w-72 shrink-0 flex-col border-l border-border bg-card/60 backdrop-blur">
+      <div className="border-b border-border px-4 py-3.5">
         <div className="text-sm font-semibold text-foreground">Add node</div>
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search nodes…"
-          className="mt-2 w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground focus:ring-2"
-        />
+        <p className="mt-0.5 text-xs text-muted-foreground">Drag onto the canvas or click to add</p>
+        <div className="relative mt-3">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search nodes…"
+            className="w-full rounded-lg border border-border bg-background py-2 pl-8 pr-2.5 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground focus:ring-2"
+          />
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -57,17 +62,17 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAdd }) => {
                     draggable
                     onDragStart={(e) => onDragStart(e, meta.type)}
                     onClick={() => onAdd(meta.type)}
-                    className="flex w-full cursor-grab items-center gap-2.5 rounded-lg border border-transparent px-2 py-2 text-left transition-colors hover:bg-accent active:scale-[.99] active:cursor-grabbing"
+                    className="group flex w-full cursor-grab items-center gap-3 rounded-xl border border-border bg-card px-2.5 py-2 text-left shadow-sm transition-all hover:-translate-y-px hover:border-primary/30 hover:shadow-md active:scale-[.99] active:cursor-grabbing"
                   >
                     <span
                       className={cn(
-                        'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md',
+                        'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
                         meta.accent.chip,
                       )}
                     >
-                      <Icon className="h-4 w-4" strokeWidth={2} />
+                      <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
                     </span>
-                    <span className="min-w-0">
+                    <span className="min-w-0 flex-1">
                       <span className="block text-sm font-medium text-foreground">
                         {meta.label}
                       </span>
@@ -75,6 +80,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAdd }) => {
                         {meta.description}
                       </span>
                     </span>
+                    <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/40" />
                   </button>
                 );
               })}

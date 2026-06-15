@@ -21,11 +21,10 @@ import {
   type EdgeChange,
   type NodeChange,
 } from '@xyflow/react';
-import { FileDown, Settings2 } from 'lucide-react';
-
 import AppLoader from '@/components/shared/AppLoader';
 import CustomButton from '@/components/shared/CustomButton';
 import CustomDrawer from '@/components/shared/CustomDrawer';
+import TextAreaField from '@/components/shared/TextAreaField';
 import { showToast } from '@/utils/toast';
 import { handleApiError } from '@/utils/helpers';
 import {
@@ -300,6 +299,10 @@ function BuilderInner({ workflowId }: Props) {
         onBack={() => router.push('/workflows')}
         onSave={handleSave}
         onPublish={handlePublish}
+        onOpenGlobalPrompt={() => setGlobalOpen(true)}
+        onExport={() =>
+          window.open(`/api/v1/workflow/export_vapi?workflow_id=${workflowId}`, '_blank')
+        }
         onFocusNode={focusNode}
       />
 
@@ -341,34 +344,10 @@ function BuilderInner({ workflowId }: Props) {
           </ReactFlow>
 
           {/* interaction hint */}
-          <div className="pointer-events-none absolute left-1/2 top-4 z-10 -translate-x-1/2">
-            <span className="rounded-full border border-border bg-card/80 px-3 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur">
+          <div className="pointer-events-none absolute bottom-5 left-1/2 z-10 -translate-x-1/2">
+            <span className="rounded-full border border-border bg-card/70 px-3 py-1 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
               Drag to move · double-click to edit · drag a handle to connect
             </span>
-          </div>
-
-          {/* bottom-left utility bar */}
-          <div className="pointer-events-none absolute bottom-4 left-4 z-10 flex gap-2">
-            <CustomButton
-              type="default"
-              size="sm"
-              icon={<Settings2 className="h-4 w-4" />}
-              onClick={() => setGlobalOpen(true)}
-              className="pointer-events-auto !bg-card/90 !backdrop-blur"
-            >
-              Global prompt
-            </CustomButton>
-            <CustomButton
-              type="text"
-              size="sm"
-              icon={<FileDown className="h-4 w-4" />}
-              onClick={() =>
-                window.open(`/api/v1/workflow/export_vapi?workflow_id=${workflowId}`, '_blank')
-              }
-              className="pointer-events-auto !bg-card/90 !backdrop-blur"
-            >
-              Export
-            </CustomButton>
           </div>
         </div>
 
@@ -402,8 +381,9 @@ function BuilderInner({ workflowId }: Props) {
           </div>
         }
       >
-        <textarea
-          className="min-h-[200px] w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 text-sm outline-none ring-primary/40 focus:ring-2"
+        <TextAreaField
+          name="global-prompt"
+          rows={9}
           placeholder="e.g. Be calm, warm, and concise. Always read details back to confirm."
           value={globalPrompt}
           onChange={(e) => {
