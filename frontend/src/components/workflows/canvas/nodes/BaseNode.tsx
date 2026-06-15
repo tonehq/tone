@@ -17,6 +17,8 @@ export interface BaseNodeProps {
   errorMessages?: string[];
   isStart?: boolean;
   isGlobal?: boolean;
+  /** extracted-variable names, rendered as chips under the summary */
+  variables?: string[];
   /** bottom source handles; defaults to a single unlabeled handle */
   sourceHandles?: { id?: string; label?: string }[];
 }
@@ -33,6 +35,7 @@ const BaseNode: React.FC<BaseNodeProps> = ({
   errorMessages = [],
   isStart,
   isGlobal,
+  variables,
   sourceHandles,
 }) => {
   const Icon = meta.icon;
@@ -96,12 +99,31 @@ const BaseNode: React.FC<BaseNodeProps> = ({
 
       <div
         className={cn(
-          'px-4 pb-3.5 text-[13px] leading-relaxed line-clamp-2',
+          'px-4 text-[13px] leading-relaxed line-clamp-2',
+          variables && variables.length ? 'pb-2' : 'pb-3.5',
           summary ? 'text-muted-foreground' : 'italic text-muted-foreground/55',
         )}
       >
         {summary || 'No content yet'}
       </div>
+
+      {variables && variables.length > 0 && (
+        <div className="flex flex-wrap gap-1 px-4 pb-3.5">
+          {variables.slice(0, 4).map((v) => (
+            <span
+              key={v}
+              className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground ring-1 ring-inset ring-border"
+            >
+              {`{{${v}}}`}
+            </span>
+          ))}
+          {variables.length > 4 && (
+            <span className="rounded-md px-1 py-0.5 text-[10px] text-muted-foreground">
+              +{variables.length - 4}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* source handle(s) */}
       {handles.map((h, i) => {

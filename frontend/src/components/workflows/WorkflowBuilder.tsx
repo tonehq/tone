@@ -43,7 +43,7 @@ import type {
 } from '@/types/workflow';
 import { createNode, makeEdge, toCleanGraph, validateGraph } from '@/utils/workflowGraphUtils';
 import { nodeTypes } from '@/components/workflows/canvas/nodes';
-import { edgeTypes } from '@/components/workflows/canvas/edges/ConditionEdge';
+import { edgeTypes, EdgeActionsContext } from '@/components/workflows/canvas/edges/ConditionEdge';
 import NodePalette from '@/components/workflows/palette/NodePalette';
 import NodeConfigDrawer from '@/components/workflows/config/NodeConfigDrawer';
 import WorkflowToolbar from '@/components/workflows/WorkflowToolbar';
@@ -225,6 +225,26 @@ function BuilderInner({ workflowId }: Props) {
     [setNodes, setEdges],
   );
 
+  const deleteEdge = useCallback(
+    (id: string) => {
+      setEdges((eds) => eds.filter((e) => e.id !== id));
+      setSelectedEdgeId((cur) => (cur === id ? null : cur));
+      setDirty(true);
+    },
+    [setEdges],
+  );
+
+  const edgeActions = useMemo(
+    () => ({
+      onEdit: (id: string) => {
+        setSelectedEdgeId(id);
+        setSelectedNodeId(null);
+      },
+      onDelete: deleteEdge,
+    }),
+    [deleteEdge],
+  );
+
   // ── save / publish ──
   const buildGraph = useCallback(
     () => toCleanGraph(getNodes() as WorkflowNode[], edges, globalPrompt, artifactPlanRef.current),
@@ -340,42 +360,44 @@ function BuilderInner({ workflowId }: Props) {
           onDrop={onDrop}
           onDragOver={onDragOver}
         >
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={handleNodesChange}
-            onEdgesChange={handleEdgesChange}
-            onConnect={onConnect}
-            nodeTypes={nodeTypes}
-            edgeTypes={edgeTypes}
-            defaultEdgeOptions={defaultEdgeOptions}
-            colorMode={(resolvedTheme as 'light' | 'dark') ?? 'light'}
-            nodesDraggable
-            nodeDragThreshold={1}
-            onNodeDoubleClick={(_, n) => {
-              setSelectedNodeId(n.id);
-              setSelectedEdgeId(null);
-            }}
-            onEdgeDoubleClick={(_, e) => {
-              setSelectedEdgeId(e.id);
-              setSelectedNodeId(null);
-            }}
-            onPaneClick={() => {
-              setSelectedNodeId(null);
-              setSelectedEdgeId(null);
-            }}
-            proOptions={{ hideAttribution: true }}
-            onInit={positionInitialView}
-            minZoom={0.2}
-          >
-            <Background variant={BackgroundVariant.Dots} gap={22} size={1.4} />
-            <Controls className="!shadow-md" showInteractive={false} />
-          </ReactFlow>
+          <EdgeActionsContext.Provider value={edgeActions}>
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={handleNodesChange}
+              onEdgesChange={handleEdgesChange}
+              onConnect={onConnect}
+              nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
+              defaultEdgeOptions={defaultEdgeOptions}
+              colorMode={(resolvedTheme as 'light' | 'dark') ?? 'light'}
+              nodesDraggable
+              nodeDragThreshold={1}
+              onNodeDoubleClick={(_, n) => {
+                setSelectedNodeId(n.id);
+                setSelectedEdgeId(null);
+              }}
+              onEdgeClick={(_, e) => {
+                setSelectedEdgeId(e.id);
+                setSelectedNodeId(null);
+              }}
+              onPaneClick={() => {
+                setSelectedNodeId(null);
+                setSelectedEdgeId(null);
+              }}
+              proOptions={{ hideAttribution: true }}
+              onInit={positionInitialView}
+              minZoom={0.2}
+            >
+              <Background variant={BackgroundVariant.Dots} gap={22} size={1.4} />
+              <Controls className="!shadow-md" showInteractive={false} />
+            </ReactFlow>
+          </EdgeActionsContext.Provider>
 
           {/* interaction hint */}
           <div className="pointer-events-none absolute bottom-5 left-1/2 z-10 -translate-x-1/2">
             <span className="rounded-full border border-border bg-card/70 px-3 py-1 text-[11px] text-muted-foreground shadow-sm backdrop-blur">
-              Drag to move · double-click to edit · drag a handle to connect
+              Drag to move · double-click a node to edit · click an edge to set its condition
             </span>
           </div>
         </div>

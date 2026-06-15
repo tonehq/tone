@@ -20,12 +20,15 @@ const firstMsg = (d: D) => str((d.messagePlan as D | undefined)?.firstMessage);
 function ConversationNode({ id, data, selected }: NodeProps) {
   const d = data as D;
   const issues = useNodeIssues(id);
-  const summary = str(d.prompt) || firstMsg(d);
+  const summary = firstMsg(d) || str(d.prompt);
+  const output = ((d.variableExtractionPlan as D | undefined)?.output as D[] | undefined) ?? [];
+  const variables = output.map((o) => str(o.title)).filter(Boolean);
   return (
     <BaseNode
       meta={NODE_REGISTRY.conversation}
       title={str(d.name) || id}
       summary={summary}
+      variables={variables}
       selected={selected}
       isStart={Boolean(d.isStart)}
       isGlobal={Boolean(d.isGlobal)}
