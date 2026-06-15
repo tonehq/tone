@@ -373,6 +373,8 @@ function BuilderInner({ workflowId }: Props) {
               colorMode={(resolvedTheme as 'light' | 'dark') ?? 'light'}
               nodesDraggable
               nodeDragThreshold={1}
+              connectionRadius={48}
+              isValidConnection={(c) => c.source !== c.target}
               onNodeDoubleClick={(_, n) => {
                 setSelectedNodeId(n.id);
                 setSelectedEdgeId(null);

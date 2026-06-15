@@ -24,7 +24,7 @@ export interface BaseNodeProps {
 }
 
 const HANDLE_CLS =
-  '!h-3.5 !w-3.5 !rounded-full !border-2 !border-card !bg-muted-foreground/55 !shadow-sm transition-all hover:!bg-primary hover:!scale-110';
+  '!h-4 !w-4 !rounded-full !border-2 !border-card !bg-muted-foreground/60 !shadow-sm transition-all hover:!bg-primary hover:!scale-125';
 
 const BaseNode: React.FC<BaseNodeProps> = ({
   meta,
