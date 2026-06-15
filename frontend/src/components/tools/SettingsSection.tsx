@@ -1,5 +1,6 @@
 'use client';
 
+import CustomButton from '@/components/shared/CustomButton';
 import { cn } from '@/utils/cn';
 import { ChevronDown } from 'lucide-react';
 
@@ -26,10 +27,11 @@ export default function SettingsSection({
 }: SettingsSectionProps) {
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-background shadow-sm transition-shadow hover:shadow-md">
-      <button
-        type="button"
+      <CustomButton
+        type="text"
+        fullWidth
         onClick={onToggle}
-        className="flex w-full items-center gap-3.5 px-5 py-4 text-left transition-colors hover:bg-muted/30"
+        className="!h-auto flex !justify-start items-center gap-3.5 px-5 py-4 text-left transition-colors hover:bg-muted/30"
       >
         <div
           className={cn(
@@ -51,7 +53,7 @@ export default function SettingsSection({
         >
           <ChevronDown size={15} className="text-muted-foreground" />
         </div>
-      </button>
+      </CustomButton>
       <div
         className={cn(
           'grid transition-all duration-200 ease-in-out',

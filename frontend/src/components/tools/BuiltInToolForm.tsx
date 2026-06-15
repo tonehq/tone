@@ -187,10 +187,10 @@ export default function BuiltInToolForm({
               {watchedName || 'Untitled Tool'}
             </h1>
             {toolRecord?.uuid && (
-              <button
-                type="button"
+              <CustomButton
+                type="text"
                 onClick={handleCopyUuid}
-                className="group mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+                className="group mt-0.5 flex !h-auto items-center gap-1 font-normal text-[11px] text-muted-foreground transition-colors hover:text-foreground"
                 aria-label="Copy UUID"
               >
                 <span className="font-mono">{toolRecord.uuid.slice(0, 13)}...</span>
@@ -202,7 +202,7 @@ export default function BuiltInToolForm({
                     className="opacity-0 transition-opacity group-hover:opacity-100"
                   />
                 )}
-              </button>
+              </CustomButton>
             )}
           </div>
         </div>

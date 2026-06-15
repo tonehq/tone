@@ -4,6 +4,7 @@ import { motion, type Variants } from 'framer-motion';
 import { ChevronRight, KeyRound, Layers, Pencil, Trash2 } from 'lucide-react';
 import type React from 'react';
 
+import CustomButton from '@/components/shared/CustomButton';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import type { ProviderUsage } from '@/types/service';
@@ -81,24 +82,22 @@ export default function ServiceCard({ usage, onClick, onEdit, onDelete }: Servic
 
           {/* hover actions — anchored top-right, no layout shift */}
           <div className="absolute right-3 top-3 flex items-center gap-0.5 rounded-md bg-card/95 p-0.5 opacity-0 shadow-sm ring-1 ring-border/60 backdrop-blur transition-opacity group-hover:opacity-100">
-            <button
-              type="button"
+            <CustomButton
+              type="text"
               onClick={handleEdit}
               aria-label="Edit service"
               title="Edit"
-              className="inline-flex size-7 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Pencil className="size-3.5" />
-            </button>
-            <button
-              type="button"
+              className="!h-auto inline-flex size-7 cursor-pointer items-center justify-center rounded p-0 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              icon={<Pencil className="size-3.5" />}
+            />
+            <CustomButton
+              type="text"
               onClick={handleDelete}
               aria-label="Delete service"
               title="Delete"
-              className="inline-flex size-7 cursor-pointer items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Trash2 className="size-3.5" />
-            </button>
+              className="!h-auto inline-flex size-7 cursor-pointer items-center justify-center rounded p-0 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              icon={<Trash2 className="size-3.5" />}
+            />
           </div>
         </div>
 

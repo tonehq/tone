@@ -21,6 +21,9 @@ from core.models.agent_knowledge_base import AgentKnowledgeBase
 from core.models.agent_mcp_server import AgentMcpServer
 from core.models.agent_tool import AgentTool
 
+# Workflows (org-level, reusable node-based pathways)
+from core.models.workflow import Workflow, WorkflowVersion
+
 # Identity
 from core.models.user import User
 from core.models.email_request import EmailRequest
