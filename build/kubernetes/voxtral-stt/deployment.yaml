@@ -21,13 +21,22 @@ spec:
         gpu-tier: "16g"
       containers:
         - name: voxtral
-          image: pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel
+          image: vllm/vllm-openai:latest
           workingDir: /app
           command: ["bash", "-lc"]
           args:
             - |
               set -e
-              pip install --no-cache-dir -c /app/constraints.txt -r /app/requirements.txt
+              pip install --no-cache-dir websockets fastapi 'uvicorn[standard]' 'mistral-common[soundfile]' soundfile librosa
+              python3 -c "from huggingface_hub import snapshot_download; snapshot_download('mistralai/Voxtral-Mini-4B-Realtime-2602')"
+              find /cache/hf -name tekken.json -exec sed -i 's/"transcription_delay_ms": *[0-9]\+/"transcription_delay_ms": 80/g' {} +
+              echo "transcription_delay_ms now:"; find /cache/hf -name tekken.json -exec grep -o '"transcription_delay_ms": *[0-9]*' {} +
+              HF_HUB_OFFLINE=1 VLLM_DISABLE_COMPILE_CACHE=1 vllm serve mistralai/Voxtral-Mini-4B-Realtime-2602 \
+                --tokenizer-mode mistral --config-format mistral --load-format mistral \
+                --trust-remote-code \
+                --compilation-config '{"cudagraph_mode":"PIECEWISE"}' \
+                --max-model-len 3072 --max-num-batched-tokens 3072 --max-num-seqs 1 \
+                --gpu-memory-utilization 0.88 --host 127.0.0.1 --port 8091 &
               exec uvicorn server:app --host 0.0.0.0 --port 8000
           env:
             - name: HF_HOME
@@ -57,12 +66,6 @@ spec:
               port: http
             periodSeconds: 10
             failureThreshold: 3
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: http
-            periodSeconds: 20
-            failureThreshold: 3
       volumes:
         - name: app
           configMap:
@@ -72,4 +75,4 @@ spec:
         - name: dshm
           emptyDir:
             medium: Memory
-            sizeLimit: 2Gi
+            sizeLimit: 4Gi
