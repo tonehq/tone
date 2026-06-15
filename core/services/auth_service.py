@@ -15,11 +15,10 @@ Tokens stored in EmailRequest are hashed (sha256) so the raw token is
 never persisted — it is only sent over the wire to the user.
 """
 
-import hashlib
 import logging
 import secrets
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import timedelta
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from fastapi import HTTPException, status
@@ -34,6 +33,9 @@ from core.models.member import Member
 from core.models.organization import Organization
 from core.models.user import User
 from core.services.base import BaseService
+from core.services.session_service import SessionService
+from core.utils.auth_helpers import coerce_uuid, hash_token, utcnow
+from core.utils.device import DeviceContext
 from core.utils.security import hash_password, verify_password
 
 logger = logging.getLogger(__name__)
@@ -41,29 +43,17 @@ logger = logging.getLogger(__name__)
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
-
-def _now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def _hash_token(raw: str) -> str:
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+# Shared with SessionService via core.utils.auth_helpers. The legacy
+# names below are kept as module-level aliases because EE imports them
+# (``from core.services.auth_service import _user_uuid``).
+_now = utcnow
+_hash_token = hash_token
+_user_uuid = coerce_uuid
 
 
 def _slugify(value: str) -> str:
     slug = "".join(ch.lower() if ch.isalnum() else "-" for ch in value).strip("-")
     return slug[:50] or "org"
-
-
-def _user_uuid(user_id: Union[str, uuid.UUID, None]) -> Optional[uuid.UUID]:
-    if user_id is None:
-        return None
-    if isinstance(user_id, uuid.UUID):
-        return user_id
-    try:
-        return uuid.UUID(str(user_id))
-    except (ValueError, TypeError):
-        return None
 
 
 class AuthService(BaseService):
@@ -98,12 +88,12 @@ class AuthService(BaseService):
             return member
         return self.db.query(Member).filter(Member.user_id == uid).first()
 
-    def _build_auth_tokens(
+    def _resolve_member_org_role(
         self,
         user: User,
         organization: Optional[Organization] = None,
-        email_verification_token: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ) -> Tuple[Optional[Organization], Optional[str], Optional[str]]:
+        """Return ``(org_obj, org_id_str, role)`` for a token payload."""
         member = self._membership_for(user.id)
         org_obj = organization
         if not org_obj and member:
@@ -116,14 +106,17 @@ class AuthService(BaseService):
             str(user.organization_id) if user.organization_id else None
         )
         role = member.role if member else user.role
+        return org_obj, org_id, role
 
-        access_token = jwt_manager.create_access_token(
-            user_id=str(user.id), email=user.email, org_id=org_id, role=role
-        )
-        refresh_token = jwt_manager.create_refresh_token(
-            user_id=str(user.id), email=user.email, org_id=org_id
-        )
-
+    def _token_response(
+        self,
+        user: User,
+        org_obj: Optional[Organization],
+        role: Optional[str],
+        access_token: str,
+        refresh_token: str,
+        email_verification_token: Optional[str] = None,
+    ) -> Dict[str, Any]:
         user_payload = user.to_dict()
         if role:
             user_payload["role"] = role
@@ -139,6 +132,52 @@ class AuthService(BaseService):
         if email_verification_token:
             payload["email_verification_token"] = email_verification_token
         return payload
+
+    def _build_auth_tokens(
+        self,
+        user: User,
+        organization: Optional[Organization] = None,
+        email_verification_token: Optional[str] = None,
+        device: Optional[DeviceContext] = None,
+    ) -> Dict[str, Any]:
+        """Mint a fresh access+refresh pair AND record a new session row.
+
+        Used for login / signup / accept-invite. The refresh-token flow has
+        its own path (see ``refresh_tokens``) so it can rotate without
+        creating a new session row.
+        """
+        org_obj, org_id, role = self._resolve_member_org_role(user, organization)
+
+        session_id = uuid.uuid4()
+        family = uuid.uuid4()
+        access_token = jwt_manager.create_access_token(
+            user_id=str(user.id), email=user.email, org_id=org_id, role=role,
+        )
+        refresh_token = jwt_manager.create_refresh_token(
+            user_id=str(user.id),
+            email=user.email,
+            session_id=session_id,
+            family=family,
+            org_id=org_id,
+        )
+        SessionService(self.db).create_session(
+            user_id=user.id,
+            organization_id=org_obj.id if org_obj else user.organization_id,
+            refresh_token=refresh_token,
+            expires_at=_now() + jwt_manager.refresh_token_ttl(),
+            device=device,
+            session_id=session_id,
+            family=family,
+        )
+        # Every caller commits *before* invoking this method (to persist the
+        # user / membership / last_login_at update). The session row above
+        # is added after those commits, so we commit again here — otherwise
+        # ``get_db()`` closes the session and the row is silently dropped.
+        self.db.commit()
+
+        return self._token_response(
+            user, org_obj, role, access_token, refresh_token, email_verification_token,
+        )
 
     def ensure_default_organization(self) -> Organization:
         default_org_id = uuid.UUID(settings.DEFAULT_ORG_ID)
@@ -215,6 +254,7 @@ class AuthService(BaseService):
         first_name: str,
         last_name: str,
         organization_name: Optional[str] = None,
+        device: Optional[DeviceContext] = None,
     ) -> Dict[str, Any]:
         if self._get_user_by_email(email):
             raise HTTPException(
@@ -281,11 +321,18 @@ class AuthService(BaseService):
 
         self.db.commit()
         self.db.refresh(user)
-        return self._build_auth_tokens(user, org, email_verification_token=raw_token)
+        return self._build_auth_tokens(
+            user, org, email_verification_token=raw_token, device=device,
+        )
 
     # ── Login / Refresh / Logout ─────────────────────────────────────
 
-    def login_v2(self, email: str, password: str) -> Dict[str, Any]:
+    def login_v2(
+        self,
+        email: str,
+        password: str,
+        device: Optional[DeviceContext] = None,
+    ) -> Dict[str, Any]:
         user = self._get_user_by_email(email)
         if not user or not user.password_hash or not verify_password(password, user.password_hash):
             raise HTTPException(
@@ -315,34 +362,84 @@ class AuthService(BaseService):
             if member
             else None
         )
-        return self._build_auth_tokens(user, org)
+        return self._build_auth_tokens(user, org, device=device)
 
-    def refresh_tokens(self, refresh_token: str) -> Dict[str, Any]:
+    def refresh_tokens(
+        self,
+        refresh_token: str,
+        device: Optional[DeviceContext] = None,
+    ) -> Dict[str, Any]:
+        """Rotate the refresh token on an existing session.
+
+        The session's ``id`` (== refresh-token ``jti``) and
+        ``refresh_token_family`` are preserved across rotation; only the
+        stored hash and ``last_used_at`` move forward. If the presented
+        token no longer matches the stored hash, the whole family is
+        revoked (``SessionService.rotate_session`` handles that).
+        """
         payload = jwt_manager.decode_refresh_token(refresh_token)
         user_id = _user_uuid(payload.get("user_id"))
-        if not user_id:
+        session_id = _user_uuid(payload.get("jti"))
+        family = _user_uuid(payload.get("family"))
+        if not user_id or not session_id or not family:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token payload",
             )
+
         user = self.db.query(User).filter(User.id == user_id).first()
         if not user or not user.is_active:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not found or inactive",
             )
-        member = self._membership_for(user.id)
-        org = (
-            self.db.query(Organization)
-            .filter(Organization.id == member.organization_id)
-            .first()
-            if member
-            else None
-        )
-        return self._build_auth_tokens(user, org)
 
-    def logout(self) -> Dict[str, str]:
-        # Stateless JWTs — client discards tokens. Future: blacklist refresh.
+        org_obj, org_id, role = self._resolve_member_org_role(user)
+
+        new_access_token = jwt_manager.create_access_token(
+            user_id=str(user.id), email=user.email, org_id=org_id, role=role,
+        )
+        new_refresh_token = jwt_manager.create_refresh_token(
+            user_id=str(user.id),
+            email=user.email,
+            session_id=session_id,
+            family=family,
+            org_id=org_id,
+        )
+
+        rotated = SessionService(self.db).rotate_session(
+            session_id=session_id,
+            presented_refresh_token=refresh_token,
+            new_refresh_token=new_refresh_token,
+            device=device,
+        )
+        if rotated is None:
+            self.db.commit()  # persist any reuse-triggered family revocation
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token is no longer valid. Please log in again.",
+            )
+
+        self.db.commit()
+        return self._token_response(user, org_obj, role, new_access_token, new_refresh_token)
+
+    def logout(
+        self,
+        refresh_token: Optional[str] = None,
+    ) -> Dict[str, str]:
+        """Revoke the session that issued ``refresh_token``.
+
+        Idempotent: if the token is missing, malformed, expired, or its
+        session was already revoked, we still return ``200`` — the client
+        has already discarded the tokens locally and the user is logged
+        out from their perspective. We never reveal *why* logout was a
+        no-op (avoid leaking session-existence to a stolen token).
+        """
+        if refresh_token:
+            SessionService(self.db).revoke_session_by_refresh_token(
+                refresh_token, reason="user_logout",
+            )
+            self.db.commit()
         return {"message": "Logged out successfully"}
 
     # ── Email verification ───────────────────────────────────────────
@@ -422,6 +519,7 @@ class AuthService(BaseService):
                 status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
             )
         user.password_hash = hash_password(new_password)
+        SessionService(self.db).revoke_all_for_user(user.id, reason="password_reset")
         self.db.commit()
         return {"message": "Password reset successfully"}
 
@@ -442,6 +540,7 @@ class AuthService(BaseService):
                 status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
             )
         user.password_hash = hash_password(new_password)
+        SessionService(self.db).revoke_all_for_user(user.id, reason="password_change")
         self.db.commit()
         return {"message": "Password changed successfully"}
 
@@ -560,6 +659,7 @@ class AuthService(BaseService):
         first_name: Optional[str] = None,
         last_name: Optional[str] = None,
         current_user_id: Optional[Union[str, uuid.UUID]] = None,
+        device: Optional[DeviceContext] = None,
     ) -> Dict[str, Any]:
         invite = self.db.query(Invite).filter(Invite.token == token).first()
         if not invite or not invite.is_valid:
@@ -609,7 +709,7 @@ class AuthService(BaseService):
 
             if current_uid == target_user.id:
                 org = self.db.query(Organization).filter(Organization.id == org_id).first()
-                return self._build_auth_tokens(target_user, org)
+                return self._build_auth_tokens(target_user, org, device=device)
             return {
                 "message": "You have been added to the organization. Please sign in to continue.",
                 "account_exists": True,
@@ -661,7 +761,7 @@ class AuthService(BaseService):
         self.db.refresh(user)
 
         org = self.db.query(Organization).filter(Organization.id == org_id).first()
-        return self._build_auth_tokens(user, org)
+        return self._build_auth_tokens(user, org, device=device)
 
     def cancel_invitation(self, invite_id: Union[str, uuid.UUID]) -> Dict[str, str]:
         uid = _user_uuid(invite_id)

@@ -3,13 +3,19 @@
 Source: ee/api/v1/services.py
 Integration tests — real DB, real endpoints, no mocks.
 
-SKIPPED: The /api/v1/services/ endpoint has been removed and replaced by /api/v1/accounts/.
+The legacy ServiceConfig endpoints (/upsert, /list, /get, /default, /delete)
+have been removed and replaced by /api/v1/accounts/. Tests for those endpoints
+are class-level skipped below. The ModelProviderService-backed endpoints
+further down (/facets, /filter-values, /providers/{id}/keys, /models, /tts/*)
+are the current live surface and are covered.
 """
 
 import pytest
 import uuid
 
-pytestmark = pytest.mark.skip(reason="services endpoint removed, replaced by accounts")
+_OBSOLETE = pytest.mark.skip(
+    reason="legacy ServiceConfig endpoints removed, replaced by accounts",
+)
 
 
 # ─── Helpers ───
@@ -51,6 +57,7 @@ def _create_service(client, service_type="llm", is_default=False, **extra):
 
 # ─── POST /api/v1/services/upsert ───
 
+@_OBSOLETE
 class TestUpsertService:
     """Tests for POST /api/v1/services/upsert"""
 
@@ -167,6 +174,7 @@ class TestUpsertService:
 
 # ─── POST /api/v1/services/list ───
 
+@_OBSOLETE
 class TestGetAllServices:
     """Tests for POST /api/v1/services/list"""
 
@@ -210,6 +218,7 @@ class TestGetAllServices:
 
 # ─── GET /api/v1/services/get ───
 
+@_OBSOLETE
 class TestGetService:
     """Tests for GET /api/v1/services/get"""
 
@@ -238,6 +247,7 @@ class TestGetService:
 
 # ─── GET /api/v1/services/default ───
 
+@_OBSOLETE
 class TestGetDefaultService:
     """Tests for GET /api/v1/services/default"""
 
@@ -266,6 +276,7 @@ class TestGetDefaultService:
 
 # ─── DELETE /api/v1/services/delete ───
 
+@_OBSOLETE
 class TestDeleteService:
     """Tests for DELETE /api/v1/services/delete
 
@@ -301,3 +312,404 @@ class TestDeleteService:
     def test_delete_service_unauthenticated(self, client_unauthenticated):
         response = client_unauthenticated.delete("/api/v1/services/delete?service_id=1")
         assert response.status_code in (401, 403)
+
+
+# ===========================================================================
+# Endpoints backed by ModelProviderService (Model Providers page)
+# ===========================================================================
+#
+# Integration coverage for the new Model Providers page endpoints in
+# ``ee/api/v1/services.py``. The handlers delegate to ``ModelProviderService``;
+# these tests confirm the wiring (auth, validation, path/query parameters,
+# response shape) against the real DB.
+
+
+import uuid as _uuid
+
+# A UUID that almost certainly does not match any provider/model row — used
+# wherever we want to confirm 404/empty handling without seeding new rows.
+_MISSING_UUID = "00000000-0000-0000-0000-000000000000"
+
+
+def _random_uuid() -> str:
+    return str(_uuid.uuid4())
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/services/facets
+# ---------------------------------------------------------------------------
+
+class TestGetServiceFacets:
+    """Tests for POST /api/v1/services/facets"""
+
+    def test_facets_no_filters(self, client_as_member):
+        resp = client_as_member.post("/api/v1/services/facets", json={})
+        assert resp.status_code == 200
+        assert isinstance(resp.json(), dict)
+
+    def test_facets_with_filters(self, client_as_member):
+        resp = client_as_member.post(
+            "/api/v1/services/facets",
+            json={"filters": [{"field": "service_type", "operator": "eq", "value": "llm"}]},
+        )
+        assert resp.status_code == 200
+
+    def test_facets_invalid_filter_shape(self, client_as_member):
+        resp = client_as_member.post(
+            "/api/v1/services/facets",
+            json={"filters": [{"value": "llm"}]},
+        )
+        assert resp.status_code == 422
+
+    def test_facets_as_admin(self, client_as_admin):
+        resp = client_as_admin.post("/api/v1/services/facets", json={})
+        assert resp.status_code == 200
+
+    def test_facets_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.post("/api/v1/services/facets", json={})
+        assert resp.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/services/filter-values
+# ---------------------------------------------------------------------------
+
+class TestGetServiceFilterValues:
+    """Tests for GET /api/v1/services/filter-values"""
+
+    def test_filter_values_service_type(self, client_as_member):
+        resp = client_as_member.get(
+            "/api/v1/services/filter-values", params={"column_name": "service_type"},
+        )
+        assert resp.status_code == 200
+
+    def test_filter_values_missing_column_name(self, client_as_member):
+        resp = client_as_member.get("/api/v1/services/filter-values")
+        assert resp.status_code == 422
+
+    def test_filter_values_unknown_column(self, client_as_member):
+        resp = client_as_member.get(
+            "/api/v1/services/filter-values",
+            params={"column_name": "definitely_not_a_real_column"},
+        )
+        # Whitelisted helper must either reject or return empty — never 500.
+        assert resp.status_code in (200, 400)
+
+    def test_filter_values_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.get(
+            "/api/v1/services/filter-values", params={"column_name": "service_type"},
+        )
+        assert resp.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/services/providers/{provider_id}/keys
+# ---------------------------------------------------------------------------
+
+class TestListProviderKeys:
+    """Tests for POST /api/v1/services/providers/{provider_id}/keys"""
+
+    def test_list_provider_keys_default_body(self, client_as_member):
+        resp = client_as_member.post(
+            f"/api/v1/services/providers/{_MISSING_UUID}/keys",
+        )
+        # Service may return an empty payload or 404 for unknown provider.
+        assert resp.status_code in (200, 404, 400)
+
+    def test_list_provider_keys_with_body(self, client_as_member):
+        resp = client_as_member.post(
+            f"/api/v1/services/providers/{_MISSING_UUID}/keys",
+            json={"search": "primary"},
+        )
+        assert resp.status_code in (200, 404, 400)
+
+    def test_list_provider_keys_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.post(
+            f"/api/v1/services/providers/{_MISSING_UUID}/keys", json={},
+        )
+        assert resp.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/services/providers/{provider_id}/keys/filter-values
+# ---------------------------------------------------------------------------
+
+class TestGetProviderKeyFilterValues:
+    """Tests for GET /api/v1/services/providers/{provider_id}/keys/filter-values"""
+
+    def test_success_minimal(self, client_as_member):
+        resp = client_as_member.get(
+            f"/api/v1/services/providers/{_MISSING_UUID}/keys/filter-values",
+            params={"column_name": "name"},
+        )
+        assert resp.status_code in (200, 404, 400)
+
+    def test_success_with_service_type(self, client_as_member):
+        resp = client_as_member.get(
+            f"/api/v1/services/providers/{_MISSING_UUID}/keys/filter-values",
+            params={"column_name": "name", "service_type": "llm"},
+        )
+        assert resp.status_code in (200, 404, 400)
+
+    def test_missing_column_name(self, client_as_member):
+        resp = client_as_member.get(
+            f"/api/v1/services/providers/{_MISSING_UUID}/keys/filter-values",
+        )
+        assert resp.status_code == 422
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.get(
+            f"/api/v1/services/providers/{_MISSING_UUID}/keys/filter-values",
+            params={"column_name": "name"},
+        )
+        assert resp.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/services/providers/{provider_id}/models
+# ---------------------------------------------------------------------------
+
+class TestListProviderModels:
+    """Tests for POST /api/v1/services/providers/{provider_id}/models"""
+
+    def test_list_provider_models_default(self, client_as_member):
+        resp = client_as_member.post(
+            f"/api/v1/services/providers/{_MISSING_UUID}/models",
+        )
+        assert resp.status_code in (200, 404, 400)
+
+    def test_list_provider_models_with_body(self, client_as_member):
+        resp = client_as_member.post(
+            f"/api/v1/services/providers/{_MISSING_UUID}/models",
+            json={"search": "gpt"},
+        )
+        assert resp.status_code in (200, 404, 400)
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.post(
+            f"/api/v1/services/providers/{_MISSING_UUID}/models", json={},
+        )
+        assert resp.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/services/providers/{provider_id}/models/filter-values
+# ---------------------------------------------------------------------------
+
+class TestGetProviderModelFilterValues:
+    """Tests for GET /api/v1/services/providers/{provider_id}/models/filter-values"""
+
+    def test_success_minimal(self, client_as_member):
+        resp = client_as_member.get(
+            f"/api/v1/services/providers/{_MISSING_UUID}/models/filter-values",
+            params={"column_name": "name"},
+        )
+        assert resp.status_code in (200, 404, 400)
+
+    def test_success_with_service_type(self, client_as_member):
+        resp = client_as_member.get(
+            f"/api/v1/services/providers/{_MISSING_UUID}/models/filter-values",
+            params={"column_name": "name", "service_type": "llm"},
+        )
+        assert resp.status_code in (200, 404, 400)
+
+    def test_missing_column_name(self, client_as_member):
+        resp = client_as_member.get(
+            f"/api/v1/services/providers/{_MISSING_UUID}/models/filter-values",
+        )
+        assert resp.status_code == 422
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.get(
+            f"/api/v1/services/providers/{_MISSING_UUID}/models/filter-values",
+            params={"column_name": "name"},
+        )
+        assert resp.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/services/providers/{provider_id}/models/create  (admin-gated)
+# ---------------------------------------------------------------------------
+
+class TestCreateProviderModel:
+    """Tests for POST /api/v1/services/providers/{provider_id}/models/create"""
+
+    def test_member_cannot_create_admin_endpoint(self, client_as_member):
+        """Writes to the global models catalog are admin-gated so a single
+        org member can't rename/delete a row other orgs depend on."""
+        resp = client_as_member.post(
+            f"/api/v1/services/providers/{_MISSING_UUID}/models/create",
+            json={"name": _random_uuid()},
+        )
+        # Either 403 (auth) or 404/400 (unknown provider) — never 201 for a member.
+        assert resp.status_code != 201
+
+    def test_create_with_unknown_provider_as_admin(self, client_as_admin):
+        resp = client_as_admin.post(
+            f"/api/v1/services/providers/{_MISSING_UUID}/models/create",
+            json={"name": _random_uuid()},
+        )
+        assert resp.status_code in (201, 400, 404)
+
+    def test_missing_body_as_admin(self, client_as_admin):
+        resp = client_as_admin.post(
+            f"/api/v1/services/providers/{_MISSING_UUID}/models/create",
+        )
+        assert resp.status_code == 422
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.post(
+            f"/api/v1/services/providers/{_MISSING_UUID}/models/create",
+            json={"name": "x"},
+        )
+        assert resp.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# PATCH /api/v1/services/providers/{provider_id}/models/{model_id}
+# ---------------------------------------------------------------------------
+
+class TestUpdateProviderModel:
+    """Tests for PATCH /api/v1/services/providers/{provider_id}/models/{model_id}"""
+
+    def test_member_cannot_update(self, client_as_member):
+        resp = client_as_member.patch(
+            f"/api/v1/services/providers/{_MISSING_UUID}/models/{_MISSING_UUID}",
+            json={"name": "x"},
+        )
+        assert resp.status_code != 200
+
+    def test_update_nonexistent_as_admin(self, client_as_admin):
+        resp = client_as_admin.patch(
+            f"/api/v1/services/providers/{_MISSING_UUID}/models/{_MISSING_UUID}",
+            json={"name": "x"},
+        )
+        assert resp.status_code in (400, 404)
+
+    def test_missing_body(self, client_as_admin):
+        resp = client_as_admin.patch(
+            f"/api/v1/services/providers/{_MISSING_UUID}/models/{_MISSING_UUID}",
+        )
+        assert resp.status_code == 422
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.patch(
+            f"/api/v1/services/providers/{_MISSING_UUID}/models/{_MISSING_UUID}",
+            json={"name": "x"},
+        )
+        assert resp.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# DELETE /api/v1/services/providers/{provider_id}/models/{model_id}
+# ---------------------------------------------------------------------------
+
+class TestDeleteProviderModel:
+    """Tests for DELETE /api/v1/services/providers/{provider_id}/models/{model_id}"""
+
+    def test_member_cannot_delete(self, client_as_member):
+        resp = client_as_member.delete(
+            f"/api/v1/services/providers/{_MISSING_UUID}/models/{_MISSING_UUID}",
+        )
+        assert resp.status_code != 200
+
+    def test_delete_nonexistent_as_admin(self, client_as_admin):
+        resp = client_as_admin.delete(
+            f"/api/v1/services/providers/{_MISSING_UUID}/models/{_MISSING_UUID}",
+        )
+        assert resp.status_code in (400, 404)
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.delete(
+            f"/api/v1/services/providers/{_MISSING_UUID}/models/{_MISSING_UUID}",
+        )
+        assert resp.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/services/tts/languages
+# ---------------------------------------------------------------------------
+
+class TestListTtsLanguages:
+    """Tests for GET /api/v1/services/tts/languages"""
+
+    def test_list_tts_languages_success(self, client_as_member):
+        resp = client_as_member.get("/api/v1/services/tts/languages")
+        assert resp.status_code == 200
+        assert isinstance(resp.json(), list)
+
+    def test_as_admin(self, client_as_admin):
+        resp = client_as_admin.get("/api/v1/services/tts/languages")
+        assert resp.status_code == 200
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.get("/api/v1/services/tts/languages")
+        assert resp.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/services/tts/providers
+# ---------------------------------------------------------------------------
+
+class TestListTtsProviders:
+    """Tests for GET /api/v1/services/tts/providers"""
+
+    def test_list_tts_providers_with_language(self, client_as_member):
+        resp = client_as_member.get(
+            "/api/v1/services/tts/providers", params={"language": "English"},
+        )
+        assert resp.status_code == 200
+        assert isinstance(resp.json(), list)
+
+    def test_list_tts_providers_unknown_language(self, client_as_member):
+        """An unknown language should yield an empty list, not an error."""
+        resp = client_as_member.get(
+            "/api/v1/services/tts/providers", params={"language": "Klingon"},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_missing_language(self, client_as_member):
+        resp = client_as_member.get("/api/v1/services/tts/providers")
+        assert resp.status_code == 422
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.get(
+            "/api/v1/services/tts/providers", params={"language": "English"},
+        )
+        assert resp.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/services/tts/voices
+# ---------------------------------------------------------------------------
+
+class TestListTtsVoices:
+    """Tests for GET /api/v1/services/tts/voices"""
+
+    def test_list_tts_voices_minimal(self, client_as_member):
+        resp = client_as_member.get(
+            "/api/v1/services/tts/voices",
+            params={"provider_id": _MISSING_UUID, "language": "English"},
+        )
+        # Unknown provider should return empty (not 500).
+        assert resp.status_code in (200, 400, 404)
+
+    def test_missing_provider_id(self, client_as_member):
+        resp = client_as_member.get(
+            "/api/v1/services/tts/voices", params={"language": "English"},
+        )
+        assert resp.status_code == 422
+
+    def test_missing_language(self, client_as_member):
+        resp = client_as_member.get(
+            "/api/v1/services/tts/voices", params={"provider_id": _MISSING_UUID},
+        )
+        assert resp.status_code == 422
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.get(
+            "/api/v1/services/tts/voices",
+            params={"provider_id": _MISSING_UUID, "language": "English"},
+        )
+        assert resp.status_code in (401, 403)

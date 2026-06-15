@@ -8,6 +8,13 @@ import pytest
 from unittest.mock import patch, MagicMock, ANY
 from fastapi import HTTPException
 
+from core.internal.capabilities import is_ee_enabled
+
+# main.py mounts the EE agents router under ``/api/v1/agent`` whenever the
+# license check passes (or is skipped). Helpers/services patched at the wrong
+# import site silently no-op, so resolve the active module first.
+_AGENTS_MODULE = "ee.api.v1.agents" if is_ee_enabled() else "core.api.v1.agents"
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -305,3 +312,277 @@ class TestDuplicateAgent:
             json={"agent_id": 1, "name": "Copy"},
         )
         assert resp.status_code in (500, 422, 400)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/agent/list — faceted list with filters/sort/pagination
+# ---------------------------------------------------------------------------
+
+class TestListAgents:
+    """Tests for POST /api/v1/agent/list"""
+
+    @patch(f"{_AGENTS_MODULE}.list_agents_for_org")
+    def test_success_empty_body_uses_defaults(self, mock_list, client_as_member):
+        mock_list.return_value = {"items": [], "total": 0, "page": 1, "page_size": 20}
+        resp = client_as_member.post("/api/v1/agent/list", json={})
+        assert resp.status_code == 200
+        assert resp.json() == {"items": [], "total": 0, "page": 1, "page_size": 20}
+        # The route should forward the empty body to the shared list helper.
+        args, _ = mock_list.call_args
+        assert args[2] == {}
+
+    @patch(f"{_AGENTS_MODULE}.list_agents_for_org")
+    def test_success_with_search_and_filters(self, mock_list, client_as_member, sample_agent):
+        mock_list.return_value = {
+            "items": [sample_agent], "total": 1, "page": 1, "page_size": 20,
+        }
+        body = {
+            "page": 1,
+            "page_size": 20,
+            "search": "sales",
+            "is_active": True,
+            "agent_type": "inbound",
+            "filters": [{"field": "agent_type", "operator": "eq", "value": "inbound"}],
+            "sort_by": "name",
+            "sort_order": "asc",
+        }
+        resp = client_as_member.post("/api/v1/agent/list", json=body)
+        assert resp.status_code == 200
+        assert resp.json()["items"][0]["name"] == "Sales Agent"
+        args, _ = mock_list.call_args
+        assert args[2] == body
+
+    @patch(f"{_AGENTS_MODULE}.list_agents_for_org")
+    def test_no_body_defaults_to_empty_dict(self, mock_list, client_as_member):
+        """The route declares ``Body(default={})`` so omitting the body still works."""
+        mock_list.return_value = {"items": [], "total": 0, "page": 1, "page_size": 20}
+        resp = client_as_member.post("/api/v1/agent/list")
+        assert resp.status_code == 200
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.post("/api/v1/agent/list", json={})
+        assert resp.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/agent/facets — per-value facet counts
+# ---------------------------------------------------------------------------
+
+class TestAgentFacets:
+    """Tests for POST /api/v1/agent/facets"""
+
+    @patch(f"{_AGENTS_MODULE}.agent_facets_for_org")
+    def test_success_no_filters(self, mock_facets, client_as_member):
+        mock_facets.return_value = {
+            "agent_type": {"inbound": 4, "outbound": 1},
+            "status": {"active": 3, "inactive": 2},
+        }
+        resp = client_as_member.post("/api/v1/agent/facets", json={})
+        assert resp.status_code == 200
+        assert resp.json()["agent_type"]["inbound"] == 4
+        args, _ = mock_facets.call_args
+        # The helper is called with filters=None when the body has no filters.
+        assert args[2] is None
+
+    @patch(f"{_AGENTS_MODULE}.agent_facets_for_org")
+    def test_success_with_filters(self, mock_facets, client_as_member):
+        mock_facets.return_value = {"agent_type": {"inbound": 1}}
+        resp = client_as_member.post(
+            "/api/v1/agent/facets",
+            json={"filters": [{"field": "status", "operator": "eq", "value": "active"}]},
+        )
+        assert resp.status_code == 200
+        args, _ = mock_facets.call_args
+        assert args[2] == [{"field": "status", "operator": "eq", "value": "active"}]
+
+    def test_invalid_filter_shape(self, client_as_member):
+        """Filter rows missing field/operator must fail Pydantic validation."""
+        resp = client_as_member.post(
+            "/api/v1/agent/facets",
+            json={"filters": [{"value": "active"}]},
+        )
+        assert resp.status_code == 422
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.post("/api/v1/agent/facets", json={})
+        assert resp.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/agent/filter-values — distinct values for autocomplete
+# ---------------------------------------------------------------------------
+
+class TestAgentFilterValues:
+    """Tests for GET /api/v1/agent/filter-values"""
+
+    @patch(f"{_AGENTS_MODULE}.agent_filter_values_for_org")
+    def test_success(self, mock_values, client_as_member):
+        mock_values.return_value = {"values": ["Sales Agent", "Support Agent"]}
+        resp = client_as_member.get(
+            "/api/v1/agent/filter-values", params={"column_name": "name"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["values"] == ["Sales Agent", "Support Agent"]
+        args, _ = mock_values.call_args
+        assert args[2] == "name"
+
+    def test_missing_column_name(self, client_as_member):
+        resp = client_as_member.get("/api/v1/agent/filter-values")
+        assert resp.status_code == 422
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.get(
+            "/api/v1/agent/filter-values", params={"column_name": "name"},
+        )
+        assert resp.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/agent/generate_prompt — AI prompt generation
+# ---------------------------------------------------------------------------
+
+class TestGeneratePrompt:
+    """Tests for POST /api/v1/agent/generate_prompt"""
+
+    @patch(f"{_AGENTS_MODULE}._ai_service")
+    def test_success(self, mock_ai_service, client_as_member):
+        svc = MagicMock()
+        svc.generate_system_prompt.return_value = "You are a helpful agent."
+        mock_ai_service.return_value = svc
+
+        resp = client_as_member.post(
+            "/api/v1/agent/generate_prompt",
+            json={
+                "agent_name": "Sales",
+                "agent_description": "Handles sales",
+                "agent_type": "inbound",
+                "instruction": "Be friendly",
+            },
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == {"text": "You are a helpful agent."}
+        svc.generate_system_prompt.assert_called_once_with(
+            agent_name="Sales",
+            agent_description="Handles sales",
+            agent_type="inbound",
+            instruction="Be friendly",
+        )
+
+    @patch(f"{_AGENTS_MODULE}._ai_service")
+    def test_success_with_empty_body(self, mock_ai_service, client_as_member):
+        """All four body fields are optional — missing ones must be coerced to ''."""
+        svc = MagicMock()
+        svc.generate_system_prompt.return_value = "Generic prompt."
+        mock_ai_service.return_value = svc
+
+        resp = client_as_member.post("/api/v1/agent/generate_prompt", json={})
+        assert resp.status_code == 200
+        svc.generate_system_prompt.assert_called_once_with(
+            agent_name="", agent_description="", agent_type="", instruction="",
+        )
+
+    def test_no_openai_key_configured(self, client_as_member):
+        """When no OpenAI key is configured, ``_ai_service`` raises 400."""
+        with patch(
+            "core.services.ai_generation_service.resolve_openai_api_key",
+            return_value=None,
+        ):
+            resp = client_as_member.post("/api/v1/agent/generate_prompt", json={})
+        assert resp.status_code == 400
+        assert "OpenAI" in resp.json()["detail"]
+
+    @patch(f"{_AGENTS_MODULE}._ai_service")
+    def test_prompt_truncated_error_returns_400(self, mock_ai_service, client_as_member):
+        """``PromptTruncatedError`` from the AI service is translated to 400."""
+        from core.services.ai_generation_service import PromptTruncatedError
+
+        svc = MagicMock()
+        svc.generate_system_prompt.side_effect = PromptTruncatedError("Output was truncated")
+        mock_ai_service.return_value = svc
+
+        resp = client_as_member.post("/api/v1/agent/generate_prompt", json={})
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Output was truncated"
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.post("/api/v1/agent/generate_prompt", json={})
+        assert resp.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/agent/improve_prompt — AI prompt improvement
+# ---------------------------------------------------------------------------
+
+class TestImprovePrompt:
+    """Tests for POST /api/v1/agent/improve_prompt"""
+
+    @patch(f"{_AGENTS_MODULE}._ai_service")
+    def test_success(self, mock_ai_service, client_as_member):
+        svc = MagicMock()
+        svc.improve_system_prompt.return_value = "Polished version."
+        mock_ai_service.return_value = svc
+
+        resp = client_as_member.post(
+            "/api/v1/agent/improve_prompt",
+            json={
+                "text": "Raw draft of the prompt",
+                "agent_name": "Sales",
+                "agent_description": "Handles sales",
+                "agent_type": "inbound",
+            },
+        )
+
+        assert resp.status_code == 200
+        assert resp.json() == {"text": "Polished version."}
+        svc.improve_system_prompt.assert_called_once_with(
+            text="Raw draft of the prompt",
+            agent_name="Sales",
+            agent_description="Handles sales",
+            agent_type="inbound",
+        )
+
+    def test_missing_text(self, client_as_member):
+        resp = client_as_member.post("/api/v1/agent/improve_prompt", json={})
+        assert resp.status_code == 422
+
+    def test_empty_text(self, client_as_member):
+        """``text`` has ``min_length=1`` — empty string must fail validation."""
+        resp = client_as_member.post(
+            "/api/v1/agent/improve_prompt", json={"text": ""},
+        )
+        assert resp.status_code == 422
+
+    @patch(f"{_AGENTS_MODULE}._ai_service")
+    def test_optional_fields_default_to_empty_string(self, mock_ai_service, client_as_member):
+        svc = MagicMock()
+        svc.improve_system_prompt.return_value = "ok"
+        mock_ai_service.return_value = svc
+
+        resp = client_as_member.post(
+            "/api/v1/agent/improve_prompt", json={"text": "Draft"},
+        )
+        assert resp.status_code == 200
+        svc.improve_system_prompt.assert_called_once_with(
+            text="Draft", agent_name="", agent_description="", agent_type="",
+        )
+
+    @patch(f"{_AGENTS_MODULE}._ai_service")
+    def test_prompt_truncated_error_returns_400(self, mock_ai_service, client_as_member):
+        from core.services.ai_generation_service import PromptTruncatedError
+
+        svc = MagicMock()
+        svc.improve_system_prompt.side_effect = PromptTruncatedError("Truncated")
+        mock_ai_service.return_value = svc
+
+        resp = client_as_member.post(
+            "/api/v1/agent/improve_prompt", json={"text": "Draft"},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Truncated"
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.post(
+            "/api/v1/agent/improve_prompt", json={"text": "Draft"},
+        )
+        assert resp.status_code in (401, 403)

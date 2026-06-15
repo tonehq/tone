@@ -627,3 +627,115 @@ class TestSwitchOrganization:
             json={},
         )
         assert resp.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/auth/refresh  (session-aware rotation)
+# ---------------------------------------------------------------------------
+
+
+class TestRefresh:
+    """Tests for POST /api/v1/auth/refresh — refresh-token rotation."""
+
+    @patch("ee.api.v1.auth.EEAuthService")
+    def test_refresh_success(self, mock_service_cls, public_client):
+        mock_service_cls.return_value.refresh_tokens.return_value = {
+            "access_token": "new-access",
+            "refresh_token": "new-refresh",
+            "token_type": "bearer",
+            "expires_in": 3600,
+            "user": {"id": "u-1", "email": "user@example.com"},
+            "organization": None,
+            "role": "developer",
+        }
+        resp = public_client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": "old-refresh"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["access_token"] == "new-access"
+        assert data["refresh_token"] == "new-refresh"
+        # First positional arg must be the refresh token; device is keyword.
+        args, kwargs = mock_service_cls.return_value.refresh_tokens.call_args
+        assert args[0] == "old-refresh"
+        assert "device" in kwargs
+
+    def test_refresh_missing_refresh_token(self, public_client):
+        resp = public_client.post("/api/v1/auth/refresh", json={})
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "refresh_token is required"
+
+    @patch("ee.api.v1.auth.EEAuthService")
+    def test_refresh_invalid_token(self, mock_service_cls, public_client):
+        mock_service_cls.return_value.refresh_tokens.side_effect = HTTPException(
+            status_code=401,
+            detail="Refresh token is no longer valid. Please log in again.",
+        )
+        resp = public_client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": "stale-or-reused"},
+        )
+        assert resp.status_code == 401
+
+    @patch("ee.api.v1.auth.EEAuthService")
+    def test_refresh_missing_session_reference(self, mock_service_cls, public_client):
+        """A pre-session-table token (no jti) is rejected so the user
+        is forced to log in again."""
+        mock_service_cls.return_value.refresh_tokens.side_effect = HTTPException(
+            status_code=401,
+            detail="Refresh token is missing a session reference. Please log in again.",
+        )
+        resp = public_client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": "legacy-no-jti"},
+        )
+        assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/auth/logout  (session-aware revoke)
+# ---------------------------------------------------------------------------
+
+
+class TestLogout:
+    """Tests for POST /api/v1/auth/logout — revokes the session row tied
+    to the supplied refresh token. Always 200 (idempotent)."""
+
+    @patch("ee.api.v1.auth.EEAuthService")
+    def test_logout_with_refresh_token(self, mock_service_cls, public_client):
+        mock_service_cls.return_value.logout.return_value = {
+            "message": "Logged out successfully",
+        }
+        resp = public_client.post(
+            "/api/v1/auth/logout", json={"refresh_token": "rt-xyz"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["message"] == "Logged out successfully"
+        _, kwargs = mock_service_cls.return_value.logout.call_args
+        assert kwargs.get("refresh_token") == "rt-xyz"
+
+    @patch("ee.api.v1.auth.EEAuthService")
+    def test_logout_without_refresh_token_is_idempotent(
+        self, mock_service_cls, public_client,
+    ):
+        """Empty body must still 200 — the client has already discarded
+        its tokens locally, so logout from its perspective is done."""
+        mock_service_cls.return_value.logout.return_value = {
+            "message": "Logged out successfully",
+        }
+        resp = public_client.post("/api/v1/auth/logout", json={})
+        assert resp.status_code == 200
+        _, kwargs = mock_service_cls.return_value.logout.call_args
+        assert kwargs.get("refresh_token") is None
+
+    @patch("ee.api.v1.auth.EEAuthService")
+    def test_logout_with_unknown_refresh_token_still_succeeds(
+        self, mock_service_cls, public_client,
+    ):
+        """A token that doesn't match any active session must not 404 —
+        we don't reveal session existence to (possibly stolen) tokens."""
+        mock_service_cls.return_value.logout.return_value = {
+            "message": "Logged out successfully",
+        }
+        resp = public_client.post(
+            "/api/v1/auth/logout", json={"refresh_token": "no-such-token"},
+        )
+        assert resp.status_code == 200

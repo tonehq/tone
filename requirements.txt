@@ -290,9 +290,12 @@ typing-inspection==0.4.2
 typing_extensions==4.15.0
 tzdata==2023.3
 tzlocal==5.0.1
+ua-parser==1.0.2
+ua-parser-builtins==202606
 ujson==5.11.0
 uritemplate==4.2.0
 urllib3==1.26.13
+user-agents==2.2.0
 uuid_utils==0.14.1
 uvicorn==0.40.0
 uvloop==0.22.1

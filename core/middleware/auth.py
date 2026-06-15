@@ -1,3 +1,4 @@
+from datetime import timedelta
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, Dict, Any, Union
@@ -50,6 +51,9 @@ class JWTManager:
     def access_token_expire_seconds(self) -> int:
         return self.access_token_expire_hours * 3600
 
+    def refresh_token_ttl(self) -> timedelta:
+        return timedelta(days=self.refresh_token_expire_days)
+
     def create_access_token(
         self,
         user_id: Union[str, UUID],
@@ -75,6 +79,8 @@ class JWTManager:
         self,
         user_id: Union[str, UUID],
         email: str,
+        session_id: Union[str, UUID],
+        family: Union[str, UUID],
         org_id: Optional[Union[str, UUID]] = None,
     ) -> str:
         current_time = int(time.time())
@@ -83,6 +89,8 @@ class JWTManager:
             "email": email,
             "org_id": str(org_id) if org_id else None,
             "type": "refresh",
+            "jti": str(session_id),
+            "family": str(family),
             "iat": current_time,
             "exp": current_time + (self.refresh_token_expire_days * 86400),
         }
@@ -100,6 +108,14 @@ class JWTManager:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Refresh token expired",
+                )
+            # Refresh tokens must carry a session reference (jti). Tokens
+            # minted before sessions existed do not — they are rejected so
+            # the user re-logs in and gets a tracked session.
+            if not payload.get("jti"):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Refresh token is missing a session reference. Please log in again.",
                 )
             return payload
         except jwt.ExpiredSignatureError:
