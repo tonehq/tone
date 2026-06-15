@@ -46,14 +46,25 @@ log = logging.getLogger("stt")
 MODEL_NAME = "google/gemma-4-E2B-it"
 TARGET_SR = 16000
 MAX_NEW_TOKENS = 256
-PROMPT = ("Transcribe the following speech segment in English into English text. "
-          "Only output the transcription, with no extra words and no newlines.")
+DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
+# On the 16GB GPU ($344 plan), BF16 (~10GB) fits FULLY on-GPU with no CPU offload and no
+# quant -> fast AND correct. (On the old 8GB box: bf16 needed offload=slow, 8bit OOM'd,
+# 4bit was fast but garbled — all moot with 16GB.)
+QUANTIZE = "none"
+PROMPT = ("You are a speech-to-text transcriber for an English-language phone call. "
+          "Transcribe the audio verbatim into English text only. Do NOT translate and do NOT "
+          "output any other language or script. If the audio is silent, noise, or unintelligible, "
+          "output nothing at all. Output only the transcription, no extra words, no newlines.")
 
 # energy-VAD segmentation
 SPEECH_RMS = 0.012
 SILENCE_HANG_MS = 600
 MIN_SPEECH_MS = 300
 MAX_UTT_S = 28  # Gemma caps audio at 30s — flush before that
+# pipecat sends VAD-gated audio: utterances arrive as bursts with no audio in
+# between (not silence frames). The primary end-of-utterance signal is a GAP —
+# no audio frame for this long while a segment is buffered.
+SILENCE_GAP_S = 0.6
 
 app = FastAPI(title="Tone STT — Gemma 4 E2B (offline, VAD-segmented)")
 _model = None
@@ -67,9 +78,22 @@ def _load_model():
     log.info("transformers Gemma ASR | torch %s | cuda=%s | model=%s",
              torch.__version__, torch.cuda.is_available(), MODEL_NAME)
     _processor = AutoProcessor.from_pretrained(MODEL_NAME)
-    _model = AutoModelForMultimodalLM.from_pretrained(MODEL_NAME, dtype=torch.bfloat16, device_map="auto")
+    if QUANTIZE in ("8bit", "int8"):
+        from transformers import BitsAndBytesConfig
+        bnb = BitsAndBytesConfig(load_in_8bit=True)
+        _model = AutoModelForMultimodalLM.from_pretrained(MODEL_NAME, quantization_config=bnb, device_map=DEVICE)
+    elif QUANTIZE in ("4bit", "int4"):
+        from transformers import BitsAndBytesConfig
+        bnb = BitsAndBytesConfig(
+            load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16,
+        )
+        _model = AutoModelForMultimodalLM.from_pretrained(MODEL_NAME, quantization_config=bnb, device_map=DEVICE)
+    else:
+        # device_map=DEVICE (not "auto") forces the WHOLE model onto the GPU — on 16GB it
+        # fits, so nothing offloads to CPU and inference stays fast.
+        _model = AutoModelForMultimodalLM.from_pretrained(MODEL_NAME, dtype=torch.bfloat16, device_map=DEVICE)
     _model.eval()
-    log.info("Model ready (bf16, device_map=auto)")
+    log.info("Model ready (quant=%s)", QUANTIZE)
     return _model
 
 
@@ -77,8 +101,15 @@ def _transcribe(audio_f32: np.ndarray) -> str:
     """Transcribe a <=30s 16kHz mono float32 segment via the chat-template audio path."""
     import soundfile as sf
 
+    audio_f32 = np.ascontiguousarray(audio_f32, dtype=np.float32)
+    # Telephony audio is often quiet -> low SNR -> hallucination. Boost toward a
+    # consistent RMS level (capped so near-silence isn't amplified into noise).
+    rms = float(np.sqrt(np.mean(audio_f32 ** 2))) if audio_f32.size else 0.0
+    if rms > 1e-4:
+        audio_f32 = np.clip(audio_f32 * min(0.1 / rms, 8.0), -1.0, 1.0)
+
     with tempfile.NamedTemporaryFile(suffix=".wav") as f:
-        sf.write(f.name, np.ascontiguousarray(audio_f32, dtype=np.float32), TARGET_SR)
+        sf.write(f.name, audio_f32, TARGET_SR)
         messages = [{
             "role": "user",
             "content": [
@@ -178,7 +209,12 @@ async def ws_asr(ws: WebSocket):
 
     try:
         while True:
-            msg = await ws.receive()
+            try:
+                msg = await asyncio.wait_for(ws.receive(), timeout=SILENCE_GAP_S)
+            except asyncio.TimeoutError:
+                # gap in incoming audio after speech => end of utterance
+                await _flush("gap")
+                continue
             if msg.get("type") == "websocket.disconnect":
                 await _flush("disconnect")
                 break
