@@ -60,13 +60,14 @@ const WorkflowToolbar: React.FC<Props> = ({
     <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-card/80 px-3 backdrop-blur">
       {/* left: back + title + status */}
       <div className="flex min-w-0 items-center gap-2">
-        <button
-          onClick={onBack}
+        <CustomButton
+          type="text"
+          size="icon-sm"
           aria-label="Back to workflows"
-          className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
+          onClick={onBack}
+          icon={<ChevronLeft className="h-4 w-4" />}
+          className="text-muted-foreground"
+        />
         <div className="h-6 w-px bg-border" />
         <div className="min-w-0 pl-1">
           <div className="flex items-center gap-2">
@@ -100,21 +101,25 @@ const WorkflowToolbar: React.FC<Props> = ({
           align="end"
           width="w-80"
           trigger={
-            <button
+            <CustomButton
+              type="text"
+              size="sm"
+              icon={
+                valid ? (
+                  <CircleCheck className="h-3.5 w-3.5" />
+                ) : (
+                  <CircleAlert className="h-3.5 w-3.5" />
+                )
+              }
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset transition-colors',
+                '!h-auto rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset',
                 valid
                   ? 'bg-emerald-500/10 text-emerald-600 ring-emerald-500/20 hover:bg-emerald-500/15 dark:text-emerald-300'
                   : 'bg-amber-500/10 text-amber-600 ring-amber-500/25 hover:bg-amber-500/15 dark:text-amber-300',
               )}
             >
-              {valid ? (
-                <CircleCheck className="h-3.5 w-3.5" />
-              ) : (
-                <CircleAlert className="h-3.5 w-3.5" />
-              )}
               {valid ? 'Valid' : `${issues.length} issue${issues.length > 1 ? 's' : ''}`}
-            </button>
+            </CustomButton>
           }
         >
           <div aria-live="polite" className="max-h-72 overflow-y-auto">
@@ -127,14 +132,16 @@ const WorkflowToolbar: React.FC<Props> = ({
               <ul className="flex flex-col gap-0.5">
                 {issues.map((iss, i) => (
                   <li key={i}>
-                    <button
+                    <CustomButton
+                      type="text"
+                      fullWidth
                       onClick={() => {
                         if (iss.node_name && onFocusNode) onFocusNode(iss.node_name);
                         setIssuesOpen(false);
                       }}
-                      className="flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
+                      className="!h-auto !items-start !justify-start gap-2 rounded-md px-2 py-1.5 text-left text-sm font-normal"
+                      icon={<CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />}
                     >
-                      <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
                       <span>
                         {iss.node_name && (
                           <span className="font-mono text-xs text-muted-foreground">
@@ -143,7 +150,7 @@ const WorkflowToolbar: React.FC<Props> = ({
                         )}
                         <span className="text-foreground">{iss.message}</span>
                       </span>
-                    </button>
+                    </CustomButton>
                   </li>
                 ))}
               </ul>
@@ -159,35 +166,40 @@ const WorkflowToolbar: React.FC<Props> = ({
           align="end"
           width="w-52"
           trigger={
-            <button
+            <CustomButton
+              type="text"
+              size="icon-sm"
               aria-label="More options"
-              className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </button>
+              icon={<MoreHorizontal className="h-4 w-4" />}
+              className="text-muted-foreground"
+            />
           }
         >
           <div className="flex flex-col">
-            <button
+            <CustomButton
+              type="text"
+              fullWidth
               onClick={() => {
                 onOpenGlobalPrompt();
                 setMoreOpen(false);
               }}
-              className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm text-foreground hover:bg-accent"
+              className="!justify-start gap-2.5 rounded-md px-2 py-1.5 text-left text-sm font-normal"
+              icon={<Sparkles className="h-4 w-4 text-muted-foreground" />}
             >
-              <Sparkles className="h-4 w-4 text-muted-foreground" />
               Global prompt
-            </button>
-            <button
+            </CustomButton>
+            <CustomButton
+              type="text"
+              fullWidth
               onClick={() => {
                 onExport();
                 setMoreOpen(false);
               }}
-              className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm text-foreground hover:bg-accent"
+              className="!justify-start gap-2.5 rounded-md px-2 py-1.5 text-left text-sm font-normal"
+              icon={<FileDown className="h-4 w-4 text-muted-foreground" />}
             >
-              <FileDown className="h-4 w-4 text-muted-foreground" />
               Export Vapi JSON
-            </button>
+            </CustomButton>
           </div>
         </CustomPopover>
 

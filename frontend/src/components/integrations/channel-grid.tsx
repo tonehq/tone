@@ -6,6 +6,7 @@ import {
   fetchChannelsAtom,
   upsertChannelAtom,
 } from '@/atoms/IntegrationAtom';
+import CustomButton from '@/components/shared/CustomButton';
 import type { Channel, ChannelUpsertPayload } from '@/types/integration';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
@@ -95,17 +96,18 @@ export default function ChannelGrid({
   };
 
   const addRow = (
-    <button
-      type="button"
+    <CustomButton
+      type="text"
+      fullWidth
       onClick={() => openAdd(null)}
       className={cn(
-        'group flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-foreground/15 bg-transparent px-4 py-3 text-xs font-medium text-muted-foreground transition-all',
+        '!h-auto group flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-foreground/15 bg-transparent px-4 py-3 text-xs font-medium text-muted-foreground transition-all',
         'hover:border-foreground/30 hover:bg-background hover:text-foreground hover:shadow-sm',
       )}
     >
       <Plus className="size-3.5 transition-transform group-hover:scale-110" />
       Add channel
-    </button>
+    </CustomButton>
   );
 
   const body = (() => {

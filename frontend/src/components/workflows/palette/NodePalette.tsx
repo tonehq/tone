@@ -4,6 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { GripVertical, Search } from 'lucide-react';
 
 import { cn } from '@/utils/cn';
+import CustomButton from '@/components/shared/CustomButton';
 import { NODE_CATEGORIES, type NodeTypeMeta } from '@/components/workflows/nodeRegistry';
 import type { WorkflowNodeType } from '@/types/workflow';
 
@@ -56,13 +57,14 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAdd }) => {
               {group.items.map((meta: NodeTypeMeta) => {
                 const Icon = meta.icon;
                 return (
-                  <button
+                  <CustomButton
                     key={meta.type}
-                    type="button"
+                    type="text"
+                    fullWidth
                     draggable
-                    onDragStart={(e) => onDragStart(e, meta.type)}
+                    onDragStart={(e: React.DragEvent) => onDragStart(e, meta.type)}
                     onClick={() => onAdd(meta.type)}
-                    className="group flex w-full cursor-grab items-center gap-3 rounded-xl border border-border bg-card px-2.5 py-2 text-left shadow-sm transition-all hover:-translate-y-px hover:border-primary/30 hover:shadow-md active:scale-[.99] active:cursor-grabbing"
+                    className="group !h-auto cursor-grab !justify-start gap-3 rounded-xl border border-border bg-card px-2.5 py-2 text-left shadow-sm transition-all hover:-translate-y-px hover:border-primary/30 hover:bg-card hover:shadow-md active:scale-[.99] active:cursor-grabbing"
                   >
                     <span
                       className={cn(
@@ -81,7 +83,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAdd }) => {
                       </span>
                     </span>
                     <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/40" />
-                  </button>
+                  </CustomButton>
                 );
               })}
             </div>

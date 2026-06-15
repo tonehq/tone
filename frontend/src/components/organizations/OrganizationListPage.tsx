@@ -316,13 +316,13 @@ const OrganizationListPage: React.FC = () => {
           <p className="text-sm text-foreground">
             No organizations matching &ldquo;{searchQuery}&rdquo;
           </p>
-          <button
-            type="button"
+          <CustomButton
+            type="link"
             onClick={() => setSearchQuery('')}
-            className="mt-3 text-[13px] font-medium text-primary hover:underline"
+            className="!h-auto p-0 mt-3 text-[13px] font-medium text-primary hover:underline"
           >
             Clear search
-          </button>
+          </CustomButton>
         </div>
       )}
 

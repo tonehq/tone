@@ -1,6 +1,7 @@
 'use client';
 
 import { disconnectOAuthAtom, fetchOAuthAtom, oauthAtom } from '@/atoms/OAuthAtom';
+import CustomButton from '@/components/shared/CustomButton';
 import { discoverMcpOAuth, getOAuthAuthorizeUrl } from '@/services/oauthService';
 import type { OAuthConnection } from '@/types/oauth';
 import { cn } from '@/utils/cn';
@@ -98,17 +99,18 @@ export default function OAuthConnectionGrid({
   }
 
   const addRow = onConnectAnother ? (
-    <button
-      type="button"
+    <CustomButton
+      type="text"
+      fullWidth
       onClick={onConnectAnother}
       className={cn(
-        'group flex w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-foreground/15 bg-transparent px-4 py-3 text-xs font-medium text-muted-foreground transition-all',
+        '!h-auto group flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-foreground/15 bg-transparent px-4 py-3 text-xs font-medium text-muted-foreground transition-all',
         'hover:border-foreground/30 hover:bg-background hover:text-foreground hover:shadow-sm',
       )}
     >
       <ArrowUp className="size-3.5 transition-transform group-hover:-translate-y-0.5" />
       Connect another service
-    </button>
+    </CustomButton>
   ) : null;
 
   // Hide in-flight MCP discovery handshakes (pending) — they aren't usable connections yet.

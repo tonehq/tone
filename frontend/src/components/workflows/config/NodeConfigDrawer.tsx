@@ -218,14 +218,14 @@ const NodeConfigDrawer: React.FC<Props> = ({
                           placeholder="What to capture (description)"
                         />
                       </div>
-                      <button
-                        type="button"
+                      <CustomButton
+                        type="text"
+                        size="icon-sm"
                         aria-label="Remove variable"
                         onClick={() => setVars(vars.filter((_, j) => j !== i))}
-                        className="mt-1 shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                        className="mt-1 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        icon={<Trash2 className="h-4 w-4" />}
+                      />
                     </div>
                   </Card>
                 ))}
