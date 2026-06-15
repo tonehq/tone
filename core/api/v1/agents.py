@@ -63,6 +63,9 @@ class AgentConfigRequest(BaseModel):
     voice_settings: Optional[Dict[str, Any]] = None
     stt_settings: Optional[Dict[str, Any]] = None
     conversation_settings: Optional[Dict[str, Any]] = None
+    # Workflow assignment: mode = "prompt" | "workflow"; workflow_id = assigned org workflow.
+    mode: Optional[str] = None
+    workflow_id: Optional[str] = None
 
 
 class PhoneNumberAttachment(BaseModel):

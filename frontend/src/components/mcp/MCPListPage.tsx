@@ -144,13 +144,13 @@ export default function MCPListPage() {
               <Search className="size-5 text-muted-foreground" />
             </div>
             <p className="text-sm text-foreground">No MCP servers match your filters</p>
-            <button
-              type="button"
+            <CustomButton
+              type="link"
               onClick={fl.clearAll}
-              className="mt-3 text-[13px] font-medium text-primary hover:underline"
+              className="!h-auto p-0 mt-3 text-[13px] font-medium text-primary hover:underline"
             >
               Clear filters
-            </button>
+            </CustomButton>
           </div>
         )}
 

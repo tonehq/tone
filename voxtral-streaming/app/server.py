@@ -1,36 +1,29 @@
 """
-Tone STT — Mistral Voxtral-Mini-4B-Realtime via transformers (TRUE streaming, no vLLM).
+Tone STT — Mistral Voxtral-Mini-4B-Realtime via transformers (offline, VAD-segmented).
 
-Uses the native VoxtralRealtime streaming API (transformers >= 5.2.0): audio is fed
-chunk-by-chunk into the causal encoder and transcription tokens are emitted as audio
-arrives — NOT the Whisper-style buffered re-decode. Reference: HF voxtral_realtime docs.
+Research finding: the high-level chunk-streaming path (generate with an input_features
+generator) does NOT work reliably at transformers 5.12 / mistral_common 1.11.3 — it needs
+exact left/right padding (the model prompt is BOS + 32 left-pad + 6 delay = 39 tokens) and
+true token-streaming requires low-level forward_one decoding. The correct working path is
+OFFLINE transcription (is_streaming=False) of the full audio, which the processor pads
+internally. For a live call we segment by server-side energy VAD and transcribe per
+utterance, emitting a `final` per turn.
 
-Exposes the SAME wire protocol as the nemotron STT server so Tone's nvidia_websocket
-client works unchanged:
-  GET  /health   -> {status, model, cuda}
-  WS   /ws/asr   -> client sends 16kHz mono PCM16-LE frames then text "eof";
-                    server emits {type: partial|final, text, ms} (+ ttf on first partial)
-
-NOTE: the VoxtralRealtime streaming API is marked experimental by HF; validate the
-processor attribute names against the installed transformers version.
+Same wire protocol as the nemotron server so Tone's nvidia_websocket client works unchanged:
+  GET  /health    -> {status, model, cuda}
+  GET  /selftest  -> offline-transcribe a known clip (sanity check)
+  WS   /ws/asr    -> 16kHz mono PCM16 frames; server emits {type: final, text, ms} per utterance
 """
 
 import asyncio
 import contextvars
 import logging
-import os
-import queue
-import threading
 import time
 
 import numpy as np
 import torch
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from transformers import (
-    TextIteratorStreamer,
-    VoxtralRealtimeForConditionalGeneration,
-    VoxtralRealtimeProcessor,
-)
+from transformers import VoxtralRealtimeForConditionalGeneration, VoxtralRealtimeProcessor
 
 _trace_ctx: contextvars.ContextVar = contextvars.ContextVar("trace_id", default="none")
 
@@ -54,47 +47,66 @@ log = logging.getLogger("stt")
 MODEL_NAME = "mistralai/Voxtral-Mini-4B-Realtime-2602"
 TARGET_SR = 16000
 DEVICE = "cuda:0" if torch.cuda.is_available() else "cpu"
-QUANTIZE = "8bit"   # "" = bf16 (needs 16GB GPU); "8bit" ~4.4GB fits 8GB; "4bit" ~2.5GB
-COMPUTE_DTYPE = torch.float16 if QUANTIZE in ("8bit", "int8") else torch.bfloat16
+QUANTIZE = "none"
+COMPUTE_DTYPE = torch.bfloat16
+MAX_NEW_TOKENS = 256
 
-app = FastAPI(title="Tone STT — Voxtral Realtime (transformers streaming)")
+# energy-VAD segmentation
+SPEECH_RMS = 0.012
+SILENCE_HANG_MS = 600
+MIN_SPEECH_MS = 300
+
+app = FastAPI(title="Tone STT — Voxtral (offline, VAD-segmented)")
 _model = None
 _processor = None
-_DONE = object()
 
 
 def _load_model():
     global _model, _processor
     if _model is not None:
         return _model
-    log.info("transformers VoxtralRealtime | torch %s | cuda=%s | model=%s",
-             torch.__version__, torch.cuda.is_available(), MODEL_NAME)
+    log.info("transformers VoxtralRealtime (offline) | torch %s | cuda=%s | model=%s | quant=%s",
+             torch.__version__, torch.cuda.is_available(), MODEL_NAME, QUANTIZE)
     _processor = VoxtralRealtimeProcessor.from_pretrained(MODEL_NAME)
-    load_kwargs = {"device_map": DEVICE}
+    load_kwargs = {}
     if QUANTIZE in ("8bit", "int8"):
         from transformers import BitsAndBytesConfig
+        load_kwargs["device_map"] = DEVICE
         load_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_8bit=True)
     elif QUANTIZE in ("4bit", "int4"):
         from transformers import BitsAndBytesConfig
+        load_kwargs["device_map"] = DEVICE
         load_kwargs["quantization_config"] = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_compute_dtype=torch.bfloat16)
     else:
+        # BF16 doesn't fit 8GB — let accelerate offload the overflow to CPU RAM so we can
+        # test whether BF16 transcribes (isolating quant vs. the generate call).
+        load_kwargs["device_map"] = "auto"
         load_kwargs["torch_dtype"] = COMPUTE_DTYPE
+        load_kwargs["low_cpu_mem_usage"] = True
     _model = VoxtralRealtimeForConditionalGeneration.from_pretrained(MODEL_NAME, **load_kwargs)
     _model.eval()
-    log.info("Model ready on %s (quantize=%s, compute_dtype=%s)", DEVICE, QUANTIZE or "none", COMPUTE_DTYPE)
+    log.info("Model ready on %s (quant=%s, compute_dtype=%s)", DEVICE, QUANTIZE, COMPUTE_DTYPE)
     return _model
 
 
-def _proc(audio_f32: np.ndarray, first: bool):
-    """Run the processor for one audio chunk -> input tensors on device."""
-    out = _processor(
+def _transcribe_offline(audio_f32: np.ndarray) -> str:
+    """Full-clip offline transcription (is_streaming=False -> processor pads internally)."""
+    inputs = _processor(
         np.ascontiguousarray(audio_f32, dtype=np.float32),
-        is_streaming=True,
-        is_first_audio_chunk=first,
+        is_streaming=False,
+        is_first_audio_chunk=True,
         return_tensors="pt",
     )
-    out.to(_model.device, dtype=COMPUTE_DTYPE)
-    return out
+    inputs.to(_model.device, dtype=COMPUTE_DTYPE)
+    with torch.no_grad():
+        gen = _model.generate(
+            input_ids=inputs.input_ids,
+            input_features=inputs.input_features,
+            num_delay_tokens=inputs.num_delay_tokens,
+            max_new_tokens=MAX_NEW_TOKENS,
+        )
+    text = _processor.batch_decode(gen[:, inputs.input_ids.shape[1]:], skip_special_tokens=True)
+    return (text[0] if text else "").strip()
 
 
 def _pcm16_to_float(buf: bytes) -> np.ndarray:
@@ -108,18 +120,32 @@ def _warmup():
 
 @app.get("/health")
 def health():
-    return {
-        "status": "ok" if _model is not None else "loading",
-        "model": MODEL_NAME,
-        "cuda": torch.cuda.is_available(),
-    }
+    return {"status": "ok" if _model is not None else "loading", "model": MODEL_NAME, "cuda": torch.cuda.is_available()}
+
+
+@app.get("/selftest")
+def selftest():
+    """Offline-transcribe a known clean clip (MLK) to verify the model produces text."""
+    import io
+    import urllib.request
+
+    import soundfile as sf
+
+    _load_model()
+    raw = urllib.request.urlopen(
+        "https://huggingface.co/datasets/Narsil/asr_dummy/resolve/main/mlk.flac", timeout=30).read()
+    audio, sr = sf.read(io.BytesIO(raw), dtype="float32")
+    if audio.ndim > 1:
+        audio = audio.mean(axis=1)
+    d0 = time.monotonic()
+    text = _transcribe_offline(audio)
+    return {"transcript": text, "len": len(text), "ms": round((time.monotonic() - d0) * 1000)}
 
 
 @app.websocket("/ws/asr")
 async def ws_asr(ws: WebSocket):
-    """TRUE streaming. Client streams 16kHz mono PCM16-LE frames then text 'eof'.
-    Audio is sliced into the model's native chunks and fed to the causal encoder as
-    it arrives; transcription tokens are streamed out as {type: partial|final, ...}."""
+    """Client streams 16kHz mono PCM16 frames. Server detects utterance boundaries via
+    energy VAD and emits {type: final, text, ms} per utterance (offline transcription)."""
     await ws.accept()
     _trace_ctx.set(ws.query_params.get("trace_id", "none"))
     client = f"{ws.client.host}:{ws.client.port}" if ws.client else "?"
@@ -127,100 +153,60 @@ async def ws_asr(ws: WebSocket):
     _load_model()
     loop = asyncio.get_running_loop()
 
-    feat_q: "queue.Queue" = queue.Queue()      # input_features tensors -> generate thread
-    streamer = TextIteratorStreamer(_processor.tokenizer, skip_special_tokens=True,
-                                    clean_up_tokenization_spaces=True)
+    seg = bytearray()
+    in_speech = False
+    sil_ms = 0.0
+    speech_ms = 0.0
+    t0 = time.monotonic()
 
-    # native chunk geometry (from the processor)
-    hop = _processor.feature_extractor.hop_length
-    win = _processor.feature_extractor.win_length
-    N_FIRST = _processor.num_samples_first_audio_chunk
-    STEP = _processor.num_samples_per_audio_chunk
-
-    state = {"started": False, "mel_idx": 0, "start_idx": 0, "full": "", "t0": time.monotonic(), "first_emit": True}
-
-    def _feat_generator():
-        while True:
-            item = feat_q.get()
-            if item is _DONE:
-                return
-            yield item
-
-    async def _send_loop():
-        it = iter(streamer)
-        while True:
-            chunk = await loop.run_in_executor(None, lambda: next(it, _DONE))
-            if chunk is _DONE:
-                break
-            state["full"] += chunk
-            try:
-                await ws.send_json({"type": "partial", "text": state["full"],
-                                    "ms": round((time.monotonic() - state["t0"]) * 1000),
-                                    "ttf": state["first_emit"]})
-                state["first_emit"] = False
-            except Exception:  # noqa: BLE001
-                return
-        log.info("ws/asr %s final: %r", client, state["full"])
+    async def _flush(reason):
+        nonlocal seg, in_speech, sil_ms, speech_ms
+        if speech_ms < MIN_SPEECH_MS or not seg:
+            seg = bytearray(); in_speech = False; sil_ms = 0.0; speech_ms = 0.0
+            return
+        audio = _pcm16_to_float(bytes(seg))
+        seg = bytearray(); in_speech = False; sil_ms = 0.0; speech_ms = 0.0
+        d0 = time.monotonic()
         try:
-            await ws.send_json({"type": "final", "text": state["full"],
-                                "ms": round((time.monotonic() - state["t0"]) * 1000)})
-            await ws.close()
-        except Exception:  # noqa: BLE001
-            pass
+            text = await loop.run_in_executor(None, _transcribe_offline, audio)
+        except Exception as exc:  # noqa: BLE001
+            log.exception("ws/asr %s transcription failed", client)
+            return
+        log.info("ws/asr %s final (%s, %.1fs audio): %r (%dms)", client, reason,
+                 len(audio) / TARGET_SR, text, round((time.monotonic() - d0) * 1000))
+        if text:
+            try:
+                await ws.send_json({"type": "final", "text": text, "ms": round((time.monotonic() - t0) * 1000)})
+            except Exception:  # noqa: BLE001
+                pass
 
-    raw = bytearray()
-    send_task = None
     try:
         while True:
             msg = await ws.receive()
             if msg.get("type") == "websocket.disconnect":
-                log.info("ws/asr %s disconnected", client)
+                await _flush("disconnect")
                 break
             data = msg.get("bytes")
             if data is None:
                 if msg.get("text") == "eof":
-                    feat_q.put(_DONE)
+                    await _flush("eof")
                     break
                 continue
-            raw.extend(data)
-            audio = _pcm16_to_float(bytes(raw))
-
-            if not state["started"]:
-                if audio.shape[0] < N_FIRST:
-                    continue
-                first = await loop.run_in_executor(None, _proc, audio[:N_FIRST], True)
-                feat_q.put(first.input_features)
-                kwargs = {
-                    "input_ids": first.input_ids,
-                    "input_features": _feat_generator(),
-                    "num_delay_tokens": first.num_delay_tokens,
-                    "streamer": streamer,
-                }
-                threading.Thread(target=_model.generate, kwargs=kwargs, daemon=True).start()
-                send_task = asyncio.create_task(_send_loop())
-                state["started"] = True
-                state["mel_idx"] = _processor.num_mel_frames_first_audio_chunk
-                state["start_idx"] = state["mel_idx"] * hop - win // 2
-                log.info("ws/asr %s streaming started", client)
-            else:
-                while state["start_idx"] + STEP <= audio.shape[0]:
-                    s = state["start_idx"]
-                    feats = await loop.run_in_executor(None, _proc, audio[s:s + STEP], False)
-                    feat_q.put(feats.input_features)
-                    state["mel_idx"] += _processor.audio_length_per_tok
-                    state["start_idx"] = state["mel_idx"] * hop - win // 2
+            seg.extend(data)
+            frame = _pcm16_to_float(data)
+            if frame.size == 0:
+                continue
+            dur_ms = frame.size / TARGET_SR * 1000.0
+            rms = float(np.sqrt(np.mean(frame ** 2)))
+            if rms >= SPEECH_RMS:
+                in_speech = True
+                sil_ms = 0.0
+                speech_ms += dur_ms
+            elif in_speech:
+                sil_ms += dur_ms
+                if sil_ms >= SILENCE_HANG_MS:
+                    await _flush("silence")
     except WebSocketDisconnect:
-        log.info("ws/asr %s disconnected (WebSocketDisconnect)", client)
+        log.info("ws/asr %s disconnected", client)
     except Exception as exc:  # noqa: BLE001
         log.exception("ws/asr %s failed", client)
-        try:
-            await ws.send_json({"type": "error", "detail": str(exc)})
-        except Exception:  # noqa: BLE001
-            pass
-    finally:
-        feat_q.put(_DONE)
-        if send_task is not None:
-            try:
-                await asyncio.wait_for(send_task, timeout=30)
-            except Exception:  # noqa: BLE001
-                pass

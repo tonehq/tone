@@ -847,12 +847,12 @@ interface TabButtonProps {
 
 function TabButton({ active, onClick, icon, label, count, muted }: TabButtonProps) {
   return (
-    <button
-      type="button"
+    <CustomButton
+      type="text"
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'relative -mb-px inline-flex cursor-pointer items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors',
+        '!h-auto !rounded-none relative -mb-px inline-flex cursor-pointer items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors',
         active
           ? muted
             ? 'border-foreground/60 text-foreground'
@@ -873,6 +873,6 @@ function TabButton({ active, onClick, icon, label, count, muted }: TabButtonProp
           {count}
         </Badge>
       )}
-    </button>
+    </CustomButton>
   );
 }
