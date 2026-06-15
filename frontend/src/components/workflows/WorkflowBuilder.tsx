@@ -42,7 +42,7 @@ import type {
   WorkflowNodeType,
 } from '@/types/workflow';
 import { createNode, makeEdge, toCleanGraph, validateGraph } from '@/utils/workflowGraphUtils';
-import { nodeTypes } from '@/components/workflows/canvas/nodes';
+import { nodeTypes, NodeActionsContext } from '@/components/workflows/canvas/nodes';
 import { edgeTypes, EdgeActionsContext } from '@/components/workflows/canvas/edges/ConditionEdge';
 import NodePalette from '@/components/workflows/palette/NodePalette';
 import NodeConfigDrawer from '@/components/workflows/config/NodeConfigDrawer';
@@ -245,6 +245,8 @@ function BuilderInner({ workflowId }: Props) {
     [deleteEdge],
   );
 
+  const nodeActions = useMemo(() => ({ onDelete: deleteNode }), [deleteNode]);
+
   // ── save / publish ──
   const buildGraph = useCallback(
     () => toCleanGraph(getNodes() as WorkflowNode[], edges, globalPrompt, artifactPlanRef.current),
@@ -360,41 +362,43 @@ function BuilderInner({ workflowId }: Props) {
           onDrop={onDrop}
           onDragOver={onDragOver}
         >
-          <EdgeActionsContext.Provider value={edgeActions}>
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              onNodesChange={handleNodesChange}
-              onEdgesChange={handleEdgesChange}
-              onConnect={onConnect}
-              nodeTypes={nodeTypes}
-              edgeTypes={edgeTypes}
-              defaultEdgeOptions={defaultEdgeOptions}
-              colorMode={(resolvedTheme as 'light' | 'dark') ?? 'light'}
-              nodesDraggable
-              nodeDragThreshold={1}
-              connectionRadius={48}
-              isValidConnection={(c) => c.source !== c.target}
-              onNodeDoubleClick={(_, n) => {
-                setSelectedNodeId(n.id);
-                setSelectedEdgeId(null);
-              }}
-              onEdgeClick={(_, e) => {
-                setSelectedEdgeId(e.id);
-                setSelectedNodeId(null);
-              }}
-              onPaneClick={() => {
-                setSelectedNodeId(null);
-                setSelectedEdgeId(null);
-              }}
-              proOptions={{ hideAttribution: true }}
-              onInit={positionInitialView}
-              minZoom={0.2}
-            >
-              <Background variant={BackgroundVariant.Dots} gap={22} size={1.4} />
-              <Controls className="!shadow-md" showInteractive={false} />
-            </ReactFlow>
-          </EdgeActionsContext.Provider>
+          <NodeActionsContext.Provider value={nodeActions}>
+            <EdgeActionsContext.Provider value={edgeActions}>
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={handleNodesChange}
+                onEdgesChange={handleEdgesChange}
+                onConnect={onConnect}
+                nodeTypes={nodeTypes}
+                edgeTypes={edgeTypes}
+                defaultEdgeOptions={defaultEdgeOptions}
+                colorMode={(resolvedTheme as 'light' | 'dark') ?? 'light'}
+                nodesDraggable
+                nodeDragThreshold={1}
+                connectionRadius={48}
+                isValidConnection={(c) => c.source !== c.target}
+                onNodeDoubleClick={(_, n) => {
+                  setSelectedNodeId(n.id);
+                  setSelectedEdgeId(null);
+                }}
+                onEdgeClick={(_, e) => {
+                  setSelectedEdgeId(e.id);
+                  setSelectedNodeId(null);
+                }}
+                onPaneClick={() => {
+                  setSelectedNodeId(null);
+                  setSelectedEdgeId(null);
+                }}
+                proOptions={{ hideAttribution: true }}
+                onInit={positionInitialView}
+                minZoom={0.2}
+              >
+                <Background variant={BackgroundVariant.Dots} gap={22} size={1.4} />
+                <Controls className="!shadow-md" showInteractive={false} />
+              </ReactFlow>
+            </EdgeActionsContext.Provider>
+          </NodeActionsContext.Provider>
 
           {/* interaction hint */}
           <div className="pointer-events-none absolute bottom-5 left-1/2 z-10 -translate-x-1/2">
