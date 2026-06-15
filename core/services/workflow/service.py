@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 
 from core.models.agent_config import AgentConfig
 from core.models.workflow import Workflow, WorkflowVersion
@@ -108,22 +109,34 @@ class WorkflowService(BaseService):
     ) -> Dict[str, Any]:
         if not user_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="user_id is required")
-        if not name or not name.strip():
+        name = name.strip()
+        if not name:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Workflow name is required")
+
+        # Friendly duplicate-name check (the DB unique constraint is the backstop below).
+        existing = (
+            self.query(Workflow)
+            .filter(Workflow.name == name, Workflow.deleted_at.is_(None))
+            .first()
+        )
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f'A workflow named "{name}" already exists. Choose a different name.',
+            )
 
         graph = graph or wf_schema.empty_graph()
         errors = wf_schema.validate_graph(graph)
 
         wf = Workflow(
             organization_id=self.org_id,
-            name=name.strip(),
+            name=name,
             description=description,
             status="draft",
             latest_version=0,
             created_by_user_id=user_id,
         )
         self.db.add(wf)
-        self.db.flush()  # assign wf.id
 
         draft = WorkflowVersion(
             organization_id=self.org_id,
@@ -137,8 +150,18 @@ class WorkflowService(BaseService):
             validation_errors=errors,
             created_by_user_id=user_id,
         )
-        self.db.add(draft)
-        self.db.flush()
+
+        try:
+            self.db.flush()  # assign wf.id
+            draft.workflow_id = wf.id
+            self.db.add(draft)
+            self.db.flush()
+        except IntegrityError:
+            self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f'A workflow named "{name}" already exists. Choose a different name.',
+            )
         wf.draft_version_id = draft.id
         self.db.commit()
         return self.detail(wf)
