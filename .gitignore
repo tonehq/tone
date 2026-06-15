@@ -155,3 +155,4 @@ Thumbs.db
 docs/
 /scripts
 files/
+.claude/skills/code-review

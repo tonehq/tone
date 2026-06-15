@@ -2,10 +2,11 @@ from typing import Any, Dict, Optional
 from uuid import UUID
 
 from fastapi import (APIRouter, Body, Depends, Header, HTTPException, Query,
-                     status)
+                     Request, status)
 from sqlalchemy.orm import Session
 
 from core.database.session import get_db
+from core.utils.device import extract_device_context
 from ee.middleware.auth import (
     EEJWTClaims,
     get_ee_jwt_claims,
@@ -17,7 +18,11 @@ router = APIRouter()
 
 
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
-def signup(user_data: Dict[str, Any] = Body(...), db: Session = Depends(get_db)):
+def signup(
+    request: Request,
+    user_data: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db),
+):
     email = user_data.get("email")
     password = user_data.get("password")
     first_name = user_data.get("first_name") or (user_data.get("profile") or {}).get("first_name")
@@ -31,6 +36,8 @@ def signup(user_data: Dict[str, Any] = Body(...), db: Session = Depends(get_db))
             detail="Email and password are required",
         )
 
+    device = extract_device_context(request)
+
     # Prefer the v2 shape when first/last name are supplied (new auth UI).
     if first_name and last_name:
         return EEAuthService(db).signup_v2(
@@ -39,6 +46,7 @@ def signup(user_data: Dict[str, Any] = Body(...), db: Session = Depends(get_db))
             first_name=first_name,
             last_name=last_name,
             organization_name=organization_name,
+            device=device,
         )
 
     profile = user_data.get("profile") or {}
@@ -92,7 +100,11 @@ def verify_user_email(
 
 
 @router.post("/login")
-def login(login_data: Dict[str, str] = Body(...), db: Session = Depends(get_db)):
+def login(
+    request: Request,
+    login_data: Dict[str, str] = Body(...),
+    db: Session = Depends(get_db),
+):
     email = login_data.get("email")
     password = login_data.get("password")
 
@@ -102,23 +114,27 @@ def login(login_data: Dict[str, str] = Body(...), db: Session = Depends(get_db))
             detail="Email and password are required",
         )
 
-    return EEAuthService(db).login_v2(email, password)
+    return EEAuthService(db).login_v2(email, password, device=extract_device_context(request))
 
 
 @router.post("/refresh")
-def refresh(body: Dict[str, str] = Body(...), db: Session = Depends(get_db)):
+def refresh(
+    request: Request,
+    body: Dict[str, str] = Body(...),
+    db: Session = Depends(get_db),
+):
     refresh_token = body.get("refresh_token")
     if not refresh_token:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="refresh_token is required",
         )
-    return EEAuthService(db).refresh_tokens(refresh_token)
+    return EEAuthService(db).refresh_tokens(refresh_token, device=extract_device_context(request))
 
 
 @router.post("/logout")
-def logout(_: Dict[str, Any] = Body(default={})):
-    return {"message": "Logged out"}
+def logout(body: Dict[str, Any] = Body(default={}), db: Session = Depends(get_db)):
+    return EEAuthService(db).logout(refresh_token=body.get("refresh_token"))
 
 
 @router.post("/verify-email")
@@ -184,6 +200,7 @@ def validate_invitation(token: str = Query(...), db: Session = Depends(get_db)):
 
 @router.post("/accept-invitation")
 def accept_invitation(
+    request: Request,
     body: Dict[str, Any] = Body(...),
     db: Session = Depends(get_db),
     claims: Optional[EEJWTClaims] = Depends(get_optional_ee_jwt_claims),
@@ -199,6 +216,7 @@ def accept_invitation(
         first_name=body.get("first_name"),
         last_name=body.get("last_name"),
         current_user_id=claims.user_id if claims else None,
+        device=extract_device_context(request),
     )
 
 

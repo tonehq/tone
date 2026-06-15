@@ -19,7 +19,7 @@ from core.internal.capabilities import init_capabilities, is_ee_enabled, get_cap
 from core.api.v1 import (
     auth, users, organizations, agent_configs, channels, oauth,
     knowledge_base, agents, mcp_servers, services, tools, dashboard,
-    call_logs, call_metrics, workflows,
+    call_logs, call_metrics, sessions, workflows
 )
 import core.models
 
@@ -91,6 +91,7 @@ if ee_enabled:
     from ee.api.v1 import call_metrics as ee_call_metrics
 
     api_v1.include_router(ee_auth.router, prefix="/auth", tags=["auth"])
+    api_v1.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
     api_v1.include_router(ee_users.router, prefix="/user", tags=["users"])
     api_v1.include_router(ee_organizations.router, prefix="/organization", tags=["organization"])
     api_v1.include_router(ee_agent_configs.router, prefix="/agent_config", tags=["agent_config"])
@@ -108,6 +109,7 @@ if ee_enabled:
     print("EE edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
 else:
     api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
+    api_v1.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
     api_v1.include_router(users.router, prefix="/user", tags=["users"])
     api_v1.include_router(organizations.router, prefix="/organization", tags=["organization"])
     api_v1.include_router(agent_configs.router, prefix="/agent_config", tags=["agent_config"])

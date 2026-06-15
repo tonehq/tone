@@ -7,8 +7,9 @@ import { AvatarBadge } from '@/components/layout/AvatarBadge';
 import { ThemeToggleRow } from '@/components/layout/ThemeToggleRow';
 import { CustomButton } from '@/components/shared';
 import { Popover, PopoverContent, PopoverTrigger, Separator } from '@/components/ui/primitives';
+import { authApi } from '@/lib/api/auth';
 import { getInitials } from '@/lib/utils';
-import { useAuthStore } from '@/stores/auth';
+import { useAuthStore, REFRESH_TOKEN } from '@/stores/auth';
 
 // Shared account menu used by BOTH the main app sidebar and the settings rail.
 // The two only differ in the extra links shown above the theme toggle (the app
@@ -23,9 +24,21 @@ export function AccountMenu({
   const router = useRouter();
   const { user, clearAuth } = useAuthStore();
 
-  const handleLogout = () => {
-    clearAuth();
-    router.replace('/login');
+  const handleLogout = async () => {
+    // Capture the refresh token BEFORE wiping storage so we can hand it
+    // to the backend, which uses it to revoke the matching session row.
+    const refreshToken = typeof window !== 'undefined' ? localStorage.getItem(REFRESH_TOKEN) : null;
+    try {
+      if (refreshToken) {
+        await authApi.logout({ refresh_token: refreshToken });
+      }
+    } catch (error) {
+      // Logout is best-effort on the server; we still log the user out locally.
+      console.error('Logout error:', error);
+    } finally {
+      clearAuth();
+      router.replace('/login');
+    }
   };
 
   return (
