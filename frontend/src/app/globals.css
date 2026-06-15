@@ -282,6 +282,13 @@
   background: transparent;
   box-shadow: none;
 }
+/* no default selection outline on the node wrapper — selection is shown inside the card */
+.workflow-canvas .react-flow__node.selected,
+.workflow-canvas .react-flow__node:focus,
+.workflow-canvas .react-flow__node:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
 .workflow-canvas .react-flow__edge.selected .react-flow__edge-path {
   animation: wf-dashdraw 0.5s linear infinite;
 }

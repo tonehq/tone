@@ -44,11 +44,9 @@ const BaseNode: React.FC<BaseNodeProps> = ({
   return (
     <div
       className={cn(
-        'group relative w-[268px] cursor-grab overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow active:cursor-grabbing',
+        'group relative w-[268px] cursor-grab overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-shadow active:cursor-grabbing',
         'hover:shadow-lg',
-        selected
-          ? 'border-primary shadow-md ring-1 ring-primary/40'
-          : 'border-border hover:border-primary/30',
+        selected ? 'shadow-md' : 'hover:border-primary/30',
       )}
     >
       {/* top accent strip */}
