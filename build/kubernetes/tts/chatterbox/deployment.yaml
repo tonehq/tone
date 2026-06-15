@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staging-tts-chatterbox-deployment
+  namespace: staging
+  labels:
+    app: staging-tts-chatterbox
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: staging-tts-chatterbox
+  template:
+    metadata:
+      labels:
+        app: staging-tts-chatterbox
+    spec:
+      nodeSelector:
+        gpu-tier: "a40"
+      containers:
+        - name: chatterbox
+          image: pytorch/pytorch:2.6.0-cuda12.4-cudnn9-devel
+          workingDir: /app
+          command: ["bash", "-lc"]
+          args:
+            - |
+              set -e
+              pip install --no-cache-dir -r /app/requirements.txt
+              exec uvicorn server:app --host 0.0.0.0 --port 8000
+          env:
+            - name: HF_HOME
+              value: /cache/hf
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: app
+              mountPath: /app
+            - name: cache
+              mountPath: /cache
+            - name: dshm
+              mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 180
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+      volumes:
+        - name: app
+          configMap:
+            name: chatterbox-app
+        - name: cache
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
