@@ -3,6 +3,8 @@
 import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import CustomButton from '@/components/shared/CustomButton';
+
 interface OrganizationCardMenuProps {
   orgId: string;
   role: string;
@@ -27,42 +29,46 @@ const OrganizationCardMenu: React.FC<OrganizationCardMenuProps> = ({
 
   return (
     <div className="relative">
-      <button
+      <CustomButton
+        type="text"
         onClick={(e) => {
           e.stopPropagation();
           setOpen((prev) => !prev);
         }}
-        className="flex size-8 cursor-pointer items-center justify-center rounded-lg text-muted-foreground opacity-0 transition-all hover:bg-muted hover:text-foreground group-hover:opacity-100"
+        className="!h-auto size-8 rounded-lg p-0 text-muted-foreground opacity-0 transition-all hover:bg-muted hover:text-foreground group-hover:opacity-100"
         aria-label={`Actions for organization ${orgId}`}
-      >
-        <MoreHorizontal className="size-4" />
-      </button>
+        icon={<MoreHorizontal className="size-4" />}
+      />
 
       {open && (
         <div className="absolute right-0 z-10 mt-1 w-40 overflow-hidden rounded-lg border border-border bg-popover shadow-lg">
-          <button
+          <CustomButton
+            type="text"
+            fullWidth
             onClick={(e) => {
               e.stopPropagation();
               setOpen(false);
               onEdit();
             }}
-            className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-muted"
+            className="!h-auto !justify-start gap-2 rounded-none px-3 py-2 text-left text-sm font-normal text-foreground transition-colors hover:bg-muted"
+            icon={<Pencil className="size-3.5" />}
           >
-            <Pencil className="size-3.5" />
             Edit
-          </button>
+          </CustomButton>
           {role === 'owner' && (
-            <button
+            <CustomButton
+              type="text"
+              fullWidth
               onClick={(e) => {
                 e.stopPropagation();
                 setOpen(false);
                 onDelete();
               }}
-              className="flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-sm text-destructive transition-colors hover:bg-destructive/10"
+              className="!h-auto !justify-start gap-2 rounded-none px-3 py-2 text-left text-sm font-normal text-destructive transition-colors hover:bg-destructive/10 hover:text-destructive"
+              icon={<Trash2 className="size-3.5" />}
             >
-              <Trash2 className="size-3.5" />
               Delete
-            </button>
+            </CustomButton>
           )}
         </div>
       )}

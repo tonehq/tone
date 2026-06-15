@@ -246,3 +246,59 @@
 .ProseMirror p {
   margin: 0.25em 0;
 }
+
+/* ── Workflow canvas (React Flow) theming ─────────────────────────────────── */
+.workflow-canvas {
+  /* subtle radial depth so the canvas isn't flat */
+  background:
+    radial-gradient(125% 125% at 50% 0%, transparent 40%, hsl(var(--muted) / 0.35));
+}
+.workflow-canvas .react-flow {
+  --xy-background-pattern-dots-color-default: hsl(var(--border));
+  --xy-node-background-color-default: hsl(var(--card));
+  --xy-node-border-default: 1px solid hsl(var(--border));
+  --xy-node-boxshadow-default: none;
+  --xy-edge-stroke-default: hsl(var(--muted-foreground) / 0.45);
+  --xy-attribution-background-color-default: transparent;
+}
+.workflow-canvas .react-flow__controls,
+.workflow-canvas .react-flow__minimap {
+  background-color: hsl(var(--card) / 0.85);
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  box-shadow: 0 1px 2px hsl(var(--foreground) / 0.06);
+  overflow: hidden;
+}
+.workflow-canvas .react-flow__controls-button {
+  background: hsl(var(--card));
+  border-bottom: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+}
+.workflow-canvas .react-flow__controls-button:hover {
+  background: hsl(var(--accent));
+}
+.workflow-canvas .react-flow__node {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+/* no default selection outline on the node wrapper — selection is shown inside the card */
+.workflow-canvas .react-flow__node.selected,
+.workflow-canvas .react-flow__node:focus,
+.workflow-canvas .react-flow__node:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.workflow-canvas .react-flow__edge.selected .react-flow__edge-path {
+  animation: wf-dashdraw 0.5s linear infinite;
+}
+@keyframes wf-dashdraw {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workflow-canvas .react-flow__edge.selected .react-flow__edge-path {
+    animation: none;
+  }
+}

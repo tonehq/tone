@@ -195,13 +195,13 @@ const EditDocument: React.FC<EditDocumentProps> = ({ document, onSaved }) => {
             <span className="text-xs font-normal text-muted-foreground">(optional)</span>
           </label>
           {replacementFile && (
-            <button
-              type="button"
+            <CustomButton
+              type="text"
               onClick={() => setReplacementFile(null)}
-              className="text-xs text-muted-foreground hover:text-foreground"
+              className="!h-auto text-xs font-normal text-muted-foreground hover:text-foreground"
             >
               Clear
-            </button>
+            </CustomButton>
           )}
         </div>
 
