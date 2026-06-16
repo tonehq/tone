@@ -315,7 +315,7 @@ def build_stt(spec: dict) -> Optional[Any]:
             )
         if provider_name == "elevenlabs":
             from pipecat.services.elevenlabs.stt import ElevenLabsRealtimeSTTService
-            return ElevenLabsRealtimeSTTService(api_key=api_key, model=model or "scribe_v2_realtime", params=build_input_params(ElevenLabsRealtimeSTTService, metadata), **_url_kwargs(metadata))
+            return ElevenLabsRealtimeSTTService(api_key=api_key, model=model or "scribe_v1_experimental", params=build_input_params(ElevenLabsRealtimeSTTService, metadata), **_url_kwargs(metadata))
         if provider_name == "gladia":
             from pipecat.services.gladia.stt import GladiaSTTService
             return GladiaSTTService(
