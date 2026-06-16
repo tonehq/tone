@@ -1,10 +1,11 @@
 'use client';
 
 import { useAtom } from 'jotai';
+import { isEqual } from 'lodash';
 import { ArrowLeft, Phone, Sparkles, Trash2 } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FormProvider, useForm } from 'react-hook-form';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FormProvider, useForm, useWatch } from 'react-hook-form';
 
 import {
   createAgentAtom,
@@ -94,7 +95,21 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     ? `/agents/edit/${agentType}/${agentId}`
     : `/agents/create/${agentType}`;
 
-  const isDirty = methods.formState.isDirty;
+  // The form's "saved" snapshot. Used as the source of truth for dirty
+  // detection (deep-compared against current values) because RHF's own
+  // `formState.isDirty` can spuriously flip on load — child components like
+  // the TipTap prompt editor re-sync internal state via a useEffect and can
+  // round-trip the loaded text through ProseMirror's schema, leaving RHF's
+  // deep-equality off by a whitespace-level diff even when the user has not
+  // typed anything. Comparing against the loaded snapshot sidesteps that.
+  const loadedBaselineRef = useRef<AgentFormState>(defaultFormState(agentType));
+
+  const watchedValues = useWatch({ control: methods.control });
+
+  const isDirty = useMemo(
+    () => !isEqual(methods.getValues(), loadedBaselineRef.current),
+    [watchedValues, methods],
+  );
   const { promptOpen, guardedAction, confirmLeave, cancelLeave } = useUnsavedChangesGuard(isDirty, {
     // Switching sections stays under the editor base path and keeps the same
     // persisted form — so it should never trigger the unsaved-changes prompt.
@@ -131,7 +146,9 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   const applyDetail = useCallback(
     (d: AgentDetail) => {
       setDetail(d);
-      methods.reset(agentDetailToFormState(d));
+      const formState = agentDetailToFormState(d);
+      loadedBaselineRef.current = formState;
+      methods.reset(formState);
       setTimeout(() => methods.reset(methods.getValues()), 0);
     },
     [methods],
@@ -206,7 +223,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     // In edit mode, no edits → no new draft. Without this guard, spam-clicking
     // Save would pile up identical empty drafts in the version history. The
     // create flow always proceeds because the agent itself doesn't exist yet.
-    if (isEditMode && agentId && !methods.formState.isDirty) {
+    if (isEditMode && agentId && isEqual(methods.getValues(), loadedBaselineRef.current)) {
       showToast.success('No changes', 'Nothing to save.');
       return;
     }
@@ -364,7 +381,9 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
         // isDirty true even though the user changed nothing — surfacing
         // as a spurious "discard changes?" prompt on the next navigation
         // or version pick.
-        methods.reset({ ...methods.getValues(), is_active: active });
+        const nextValues = { ...methods.getValues(), is_active: active };
+        loadedBaselineRef.current = { ...loadedBaselineRef.current, is_active: active };
+        methods.reset(nextValues);
         showToast.success(active ? 'Agent activated' : 'Agent deactivated');
       } catch (err) {
         handleApiError(err);
