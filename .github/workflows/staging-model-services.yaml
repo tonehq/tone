@@ -20,6 +20,7 @@ on:
           - gemma
           - voxtral
           - nemotron
+          - granite
           - qwen
           - chatterbox
 
@@ -33,6 +34,7 @@ jobs:
       gemma: ${{ steps.f.outputs.gemma }}
       voxtral: ${{ steps.f.outputs.voxtral }}
       nemotron: ${{ steps.f.outputs.nemotron }}
+      granite: ${{ steps.f.outputs.granite }}
       qwen: ${{ steps.f.outputs.qwen }}
       chatterbox: ${{ steps.f.outputs.chatterbox }}
     steps:
@@ -47,7 +49,7 @@ jobs:
           fi
           CHANGED=$(git diff --name-only "$BEFORE" "${{ github.sha }}")
           echo "changed files:"; echo "$CHANGED"
-          for m in gemma voxtral nemotron; do
+          for m in gemma voxtral nemotron granite; do
             if echo "$CHANGED" | grep -qE "^(build/kubernetes/stt/$m/|models/stt/$m/)"; then
               echo "$m=true" >> "$GITHUB_OUTPUT"; else echo "$m=false" >> "$GITHUB_OUTPUT"; fi
           done
@@ -81,6 +83,12 @@ jobs:
             configmap: stt-nemotron-app
             app_dir: models/stt/nemotron
             manifest_dir: build/kubernetes/stt/nemotron
+          - model: granite
+            changed: ${{ needs.detect.outputs.granite }}
+            deployment: staging-stt-granite-deployment
+            configmap: granite-app
+            app_dir: models/stt/granite
+            manifest_dir: build/kubernetes/stt/granite
           - model: qwen
             changed: ${{ needs.detect.outputs.qwen }}
             deployment: staging-tts-qwen-deployment
