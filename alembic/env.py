@@ -29,6 +29,7 @@ from core.models.agent_knowledge_base import AgentKnowledgeBase
 from core.models.agent_mcp_server import AgentMcpServer
 from core.models.agent_tool import AgentTool
 from core.models.user import User
+from core.models.user_session import UserSession
 from core.models.email_request import EmailRequest
 from core.models.invite import Invite
 from core.models.member import Member

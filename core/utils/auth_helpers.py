@@ -5,12 +5,24 @@ between editions and between the API/service layers — see review feedback
 on duplicated ``_coerce_uuid`` / ``_org_id`` / ``_svc`` helpers.
 """
 
+import hashlib
+from datetime import datetime, timezone
 from typing import Optional, Union
 from uuid import UUID
 
 from fastapi import HTTPException, status
 
 from core.config import settings
+
+
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def hash_token(raw: str) -> str:
+    """SHA-256 hex digest of an opaque token (refresh token, email-request
+    token). Never stores or returns the raw token."""
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def coerce_uuid(value: Union[str, UUID, None]) -> Optional[UUID]:

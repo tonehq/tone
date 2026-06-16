@@ -26,9 +26,16 @@ from fastapi.security import HTTPAuthorizationCredentials
 from core.middleware.auth import JWTClaims
 
 
-def make_claims(user_id=1, org_id="550e8400-e29b-41d4-a716-446655440000", role="member", email="test@example.com"):
+def make_claims(
+    user_id="44444444-4444-4444-4444-444444444444",
+    org_id="550e8400-e29b-41d4-a716-446655440000",
+    role="member",
+    email="test@example.com",
+):
     now = int(time.time())
-    return JWTClaims(user_id=user_id, org_id=org_id, role=role, email=email, iat=now, exp=now + 3600)
+    return JWTClaims(
+        user_id=str(user_id), org_id=org_id, role=role, email=email, iat=now, exp=now + 3600,
+    )
 
 
 def _fake_security():
