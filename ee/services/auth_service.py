@@ -99,7 +99,12 @@ class EEAuthService(AuthService):
 
     # ── Switch current tenant + return a fresh access token ─────────
 
-    def switch_organization(self, user_id: Union[str, UUID], org_id: Union[str, UUID]) -> Dict[str, Any]:
+    def switch_organization(
+        self,
+        user_id: Union[str, UUID],
+        org_id: Union[str, UUID],
+        session_id: Optional[Union[str, UUID]] = None,
+    ) -> Dict[str, Any]:
         uid = _user_uuid(user_id)
         oid = _user_uuid(org_id)
         member = (
@@ -121,8 +126,16 @@ class EEAuthService(AuthService):
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Organization or user not found",
             )
+        # Preserve the caller's session_id so the new access token stays
+        # tied to the same ``user_sessions`` row — otherwise the session
+        # check on subsequent requests would not find a match and the
+        # user would be logged out on org switch.
         access_token = jwt_manager.create_access_token(
-            user_id=str(user.id), email=user.email, org_id=str(org.id), role=member.role
+            user_id=str(user.id),
+            email=user.email,
+            org_id=str(org.id),
+            role=member.role,
+            session_id=session_id,
         )
         return {
             "access_token": access_token,

@@ -3,7 +3,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
 from uuid import UUID
 
-from core.middleware.auth import JWTClaims, jwt_manager, security
+from core.database.session import get_db
+from core.middleware.auth import JWTClaims, _enforce_active_session, jwt_manager, security
 from core.context import set_tenant_context
 
 
@@ -18,21 +19,28 @@ EEJWTClaims = JWTClaims
 ee_jwt_manager = jwt_manager
 
 
-def get_ee_jwt_claims(credentials: HTTPAuthorizationCredentials = Depends(security)) -> JWTClaims:
+def get_ee_jwt_claims(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db=Depends(get_db),
+) -> JWTClaims:
     claims = jwt_manager.verify_token(credentials)
     print(f"[get_ee_jwt_claims] org_id from JWT: {claims.org_id}")
     if claims.org_id:
         print(f"[get_ee_jwt_claims] Setting tenant context with org_id: {claims.org_id}")
         set_tenant_context(org_id=claims.org_id, user_id=claims.user_id, role=claims.role)
+    _enforce_active_session(claims, db)
     return claims
 
 
 def get_optional_ee_jwt_claims(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
+    db=Depends(get_db),
 ) -> Optional[JWTClaims]:
     if not credentials:
         return None
-    return jwt_manager.verify_token(credentials)
+    claims = jwt_manager.verify_token(credentials)
+    _enforce_active_session(claims, db)
+    return claims
 
 
 def get_ee_current_user(
