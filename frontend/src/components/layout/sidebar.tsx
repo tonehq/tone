@@ -40,7 +40,7 @@ const NAV_SECTIONS: SidebarNavGroup[] = [
     heading: 'Build',
     items: [
       { label: 'Agents', href: '/agents', icon: Bot },
-      { label: 'Workflows', href: '/workflows', icon: Workflow },
+      // { label: 'Workflows', href: '/workflows', icon: Workflow },
       { label: 'Tools', href: '/tools', icon: Wrench },
       { label: 'MCP', href: '/mcp', icon: Boxes },
       { label: 'Knowledge Base', href: '/knowledge-base', icon: BookOpen },

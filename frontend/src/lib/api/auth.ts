@@ -1,6 +1,12 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 
-import type { AcceptInviteFormData, LoginFormData, SignupFormData } from '@/schemas/auth';
+import type {
+  AcceptInviteFormData,
+  LoginFormData,
+  RequestSignInCodeFormData,
+  SignupFormData,
+  VerifySignInCodePayload,
+} from '@/schemas/auth';
 import type { AuthLoginResponse, InvitationValidation, Organization, User } from '@/types/auth';
 import axios from '@/utils/axios';
 
@@ -52,6 +58,14 @@ export const authApi = {
     const { data } = await axios.get<Organization | null>('/organization/me');
     return data;
   },
+  requestSignInCode: async (payload: RequestSignInCodeFormData): Promise<{ message: string }> => {
+    const { data } = await axios.post<{ message: string }>('/auth/signin-code/request', payload);
+    return data;
+  },
+  verifySignInCode: async (payload: VerifySignInCodePayload): Promise<AuthLoginResponse> => {
+    const { data } = await axios.post<AuthLoginResponse>('/auth/signin-code/verify', payload);
+    return data;
+  },
   forgotPassword: async (email: string) => {
     const { data } = await axios.post('/auth/forgot-password', { email });
     return data;
@@ -94,6 +108,14 @@ export function useLogin() {
 
 export function useSignup() {
   return useMutation({ mutationFn: authApi.signup });
+}
+
+export function useRequestSignInCode() {
+  return useMutation({ mutationFn: authApi.requestSignInCode });
+}
+
+export function useVerifySignInCode() {
+  return useMutation({ mutationFn: authApi.verifySignInCode });
 }
 
 export function useForgotPassword() {

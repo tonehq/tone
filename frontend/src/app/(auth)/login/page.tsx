@@ -127,7 +127,12 @@ function LoginPageInner() {
           </Button>
         </motion.div>
       </Form>
-      <motion.p className="mt-6 text-center text-sm text-muted-foreground" variants={fadeUp}>
+      <motion.p className="mt-4 text-center text-sm text-muted-foreground" variants={fadeUp}>
+        <Link href="/sign-in-with-code" className="font-medium text-primary hover:underline">
+          Sign in with a code instead
+        </Link>
+      </motion.p>
+      <motion.p className="mt-2 text-center text-sm text-muted-foreground" variants={fadeUp}>
         Don&apos;t have an account?{' '}
         <Link href="/signup" className="font-medium text-primary hover:underline">
           Sign up

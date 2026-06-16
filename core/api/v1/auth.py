@@ -72,6 +72,34 @@ def login(
     return AuthService(db).login_v2(email, password, device=extract_device_context(request))
 
 
+@router.post("/signin-code/request")
+def request_signin_code(body: Dict[str, str] = Body(...), db: Session = Depends(get_db)):
+    email = body.get("email")
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="email is required"
+        )
+    return AuthService(db).request_signin_code(email)
+
+
+@router.post("/signin-code/verify")
+def verify_signin_code(
+    request: Request,
+    body: Dict[str, str] = Body(...),
+    db: Session = Depends(get_db),
+):
+    email = body.get("email")
+    code = body.get("code")
+    if not email or not code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="email and code are required",
+        )
+    return AuthService(db).verify_signin_code(
+        email, code, device=extract_device_context(request),
+    )
+
+
 @router.post("/refresh")
 def refresh(
     request: Request,
