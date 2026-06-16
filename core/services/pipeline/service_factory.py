@@ -220,6 +220,16 @@ def build_stt(spec: dict) -> Optional[Any]:
             if metadata.get("sample_rate") is not None:
                 ws_kwargs["sample_rate"] = metadata["sample_rate"]
             return NvidiaWebSocketService(url=ws_url, trace_id=get_trace_id(), **ws_kwargs)
+        if provider_name == "granite":
+            from core.services.pipeline.granite_stt_service import GraniteWebSocketSTTService
+            from core.logging import get_trace_id
+            ws_url = "ws://staging-stt-granite-service.staging.svc.cluster.local/ws/asr"
+            granite_kwargs = {}
+            if metadata.get("sample_rate") is not None:
+                granite_kwargs["sample_rate"] = metadata["sample_rate"]
+            if model:
+                granite_kwargs["model"] = model
+            return GraniteWebSocketSTTService(url=ws_url, trace_id=get_trace_id(), **granite_kwargs)
         if provider_name == "groq":
             from pipecat.services.groq.stt import GroqSTTService
             return GroqSTTService(
