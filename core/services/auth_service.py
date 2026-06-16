@@ -151,7 +151,11 @@ class AuthService(BaseService):
         session_id = uuid.uuid4()
         family = uuid.uuid4()
         access_token = jwt_manager.create_access_token(
-            user_id=str(user.id), email=user.email, org_id=org_id, role=role,
+            user_id=str(user.id),
+            email=user.email,
+            org_id=org_id,
+            role=role,
+            session_id=session_id,
         )
         refresh_token = jwt_manager.create_refresh_token(
             user_id=str(user.id),
@@ -397,7 +401,11 @@ class AuthService(BaseService):
         org_obj, org_id, role = self._resolve_member_org_role(user)
 
         new_access_token = jwt_manager.create_access_token(
-            user_id=str(user.id), email=user.email, org_id=org_id, role=role,
+            user_id=str(user.id),
+            email=user.email,
+            org_id=org_id,
+            role=role,
+            session_id=session_id,
         )
         new_refresh_token = jwt_manager.create_refresh_token(
             user_id=str(user.id),

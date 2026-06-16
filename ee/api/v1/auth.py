@@ -249,4 +249,6 @@ def switch_organization(
             detail="Organization ID is required"
         )
 
-    return EEAuthService(db).switch_organization(claims.user_id, UUID(org_id))
+    return EEAuthService(db).switch_organization(
+        claims.user_id, UUID(org_id), session_id=claims.jti,
+    )
