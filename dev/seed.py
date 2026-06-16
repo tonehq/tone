@@ -160,6 +160,30 @@ def _resolve_display_name(code: str) -> str:
     return LANGUAGE_DISPLAY_MAP.get(code, code)
 
 
+def _resolve_voice_models(voice_spec, mp, kind, model_name_to_obj):
+    """Return list of Model objects this voice should be linked to.
+
+    Reads `model_names` (list) when present — one DB row per model. Falls back
+    to legacy `model_name` (string) or the first matching model so older seed
+    entries still work.
+    """
+    names = voice_spec.get("model_names")
+    if isinstance(names, list) and names:
+        models = [model_name_to_obj.get((mp.id, n)) for n in names]
+        return [m for m in models if m is not None and m.kind == kind]
+
+    name = voice_spec.get("model_name")
+    if name:
+        m = model_name_to_obj.get((mp.id, name))
+        if m and m.kind == kind:
+            return [m]
+
+    for key, obj in model_name_to_obj.items():
+        if key[0] == mp.id and obj.kind == kind:
+            return [obj]
+    return []
+
+
 def _slugify(text):
     """Convert text to a URL-friendly slug."""
     text = text.lower().strip()
@@ -426,48 +450,40 @@ def seed_from_configs(db, org_name, email, password):
         mp = provider_map[i]
         kind = config["provider_type"]
         voices_spec = config.get("voices") or []
-        seen_voice_ids = set()
+        seen_pairs = set()  # (model_id, voice_id) — same voice may link to multiple models
 
         for voice_spec in voices_spec:
             voice_id = voice_spec.get("voice_id")
-            if not voice_id or voice_id in seen_voice_ids:
-                continue
-            seen_voice_ids.add(voice_id)
-
-            # Find the model this voice belongs to
-            voice_model_name = voice_spec.get("model_name")
-            model_obj = None
-            if voice_model_name:
-                model_obj = model_name_to_obj.get((mp.id, voice_model_name))
-
-            # If no specific model, try first model of this provider with matching kind
-            if not model_obj:
-                for key, obj in model_name_to_obj.items():
-                    if key[0] == mp.id and obj.kind == kind:
-                        model_obj = obj
-                        break
-
-            if not model_obj:
-                continue  # skip voice if no model found
-
-            # Skip if voice already exists in DB
-            if (model_obj.id, voice_id) in existing_voices:
-                stats["model_voices_skipped"] += 1
+            if not voice_id:
                 continue
 
-            mv = ModelVoice(
-                model_id=model_obj.id,
-                voice_id=voice_spec.get("voice_id"),
-                accent=voice_spec.get("accent"),
-                name=voice_spec.get("name"),
-                gender=voice_spec.get("gender"),
-                description=(voice_spec.get("description") or "")[:200] or None,
-                language_list=voice_spec.get("language_list"),
-                sample_url=voice_spec.get("sample_url"),
-                is_active=True,
-            )
-            db.add(mv)
-            stats["model_voices_created"] += 1
+            models = _resolve_voice_models(voice_spec, mp, kind, model_name_to_obj)
+            if not models:
+                continue
+
+            for model_obj in models:
+                pair = (model_obj.id, voice_id)
+                if pair in seen_pairs:
+                    continue
+                seen_pairs.add(pair)
+
+                if pair in existing_voices:
+                    stats["model_voices_skipped"] += 1
+                    continue
+
+                mv = ModelVoice(
+                    model_id=model_obj.id,
+                    voice_id=voice_id,
+                    accent=voice_spec.get("accent"),
+                    name=voice_spec.get("name"),
+                    gender=voice_spec.get("gender"),
+                    description=(voice_spec.get("description") or "")[:200] or None,
+                    language_list=voice_spec.get("language_list"),
+                    sample_url=voice_spec.get("sample_url"),
+                    is_active=True,
+                )
+                db.add(mv)
+                stats["model_voices_created"] += 1
 
     db.flush()
 
@@ -488,16 +504,49 @@ def seed_from_configs(db, org_name, email, password):
         # Extract languages from voices
         for voice_spec in config.get("voices") or []:
             lang_list = voice_spec.get("language_list") or []
-            voice_model_name = voice_spec.get("model_name")
-            model_obj = None
-            if voice_model_name:
-                model_obj = model_name_to_obj.get((mp.id, voice_model_name))
-            if not model_obj:
-                for key, obj in model_name_to_obj.items():
-                    if key[0] == mp.id and obj.kind == kind:
-                        model_obj = obj
-                        break
-            if not model_obj:
+            if not lang_list:
+                continue
+
+            models = _resolve_voice_models(voice_spec, mp, kind, model_name_to_obj)
+            if not models:
+                continue
+
+            for model_obj in models:
+                for lang in lang_list:
+                    key = (model_obj.id, lang)
+                    if key in seen_model_languages:
+                        continue
+                    seen_model_languages.add(key)
+
+                    if key in existing_languages:
+                        stats["model_languages_skipped"] += 1
+                        continue
+
+                    ml = ModelLanguage(
+                        model_id=model_obj.id,
+                        name=lang,
+                        display_name=_resolve_display_name(lang),
+                        is_active=True,
+                    )
+                    db.add(ml)
+                    stats["model_languages_created"] += 1
+
+    # --- Phase 4b: STT models carry their own `language_list` on the model
+    # spec (no voices). Mirror the voice path above but iterate model_spec.
+    for i, config in enumerate(all_providers):
+        if i not in provider_map:
+            continue
+        if config.get("provider_type") != "stt":
+            continue
+        mp = provider_map[i]
+
+        for model_spec in config.get("models") or []:
+            lang_list = model_spec.get("language_list") or []
+            if not lang_list:
+                continue
+            model_name = model_spec.get("name") or "default"
+            model_obj = model_name_to_obj.get((mp.id, model_name))
+            if model_obj is None:
                 continue
 
             for lang in lang_list:
@@ -506,7 +555,6 @@ def seed_from_configs(db, org_name, email, password):
                     continue
                 seen_model_languages.add(key)
 
-                # Skip if language already exists in DB
                 if key in existing_languages:
                     stats["model_languages_skipped"] += 1
                     continue
