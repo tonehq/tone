@@ -100,6 +100,82 @@ class MailService:
             logger.error(f"An error occurred while sending email: {e}")
             return None
 
+    def send_signin_code_email(self, to: str, code: str, username: str = "User"):
+        """Email a one-time numeric sign-in code.
+
+        ``code`` should already be a fixed-length numeric string
+        (zero-padded). The template renders it in a monospaced, spaced-out
+        block so it's easy to read or copy on a phone.
+        """
+        try:
+            html_template = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            </head>
+            <body style="margin: 0; padding: 0; background-color: #f9fafb; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; padding: 40px 20px;">
+                    <tr>
+                        <td align="center">
+                            <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; border: 1px solid #e5e7eb; overflow: hidden;">
+                                <tr>
+                                    <td style="padding: 40px 40px 20px 40px;">
+                                        <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #111827;">Tone</h1>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td align="center" style="padding: 20px 40px 10px 40px;">
+                                        <h2 style="margin: 0; font-size: 24px; font-weight: 700; color: #111827;">Hi! {username}</h2>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td align="center" style="padding: 0 40px 10px 40px;">
+                                        <h3 style="margin: 0; font-size: 20px; font-weight: 600; color: #111827;">Your sign-in code</h3>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td align="center" style="padding: 0 40px 24px 40px;">
+                                        <p style="margin: 0; font-size: 14px; color: #6b7280; line-height: 1.6; max-width: 400px;">
+                                            Enter this code in the browser to finish signing in. It expires in 10 minutes and can only be used once.
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td align="center" style="padding: 0 40px 32px 40px;">
+                                        <div style="display: inline-block; background-color: #f3f4f6; border: 1px solid #e5e7eb; border-radius: 10px; padding: 18px 28px; font-family: 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 32px; font-weight: 700; color: #111827; letter-spacing: 8px;">
+                                            {code}
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td align="center" style="padding: 0 40px 40px 40px;">
+                                        <p style="margin: 0; font-size: 12px; color: #9ca3af;">
+                                            If you didn't request this code, you can safely ignore this email.
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+                </table>
+            </body>
+            </html>
+            """
+            params = {
+                "from": "no-reply@updates.suryaweb.app",
+                "to": [to],
+                "subject": "Your Tone sign-in code",
+                "html": html_template,
+            }
+            result = resend.Emails.send(params)
+            return result
+
+        except Exception as e:
+            logger.error(f"An error occurred while sending email: {e}")
+            return None
+
     def send_invite_email(self, to: str, invite_url: str, inviter_name: str = "Your team"):
         try:
             html_template = f"""

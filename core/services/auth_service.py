@@ -210,6 +210,7 @@ class AuthService(BaseService):
         purpose: str,
         ttl: timedelta,
         template_context: Optional[Dict[str, Any]] = None,
+        raw_token: Optional[str] = None,
     ) -> Tuple[EmailRequest, str]:
         # Invalidate any prior pending requests of same purpose for this email.
         self.db.query(EmailRequest).filter(
@@ -218,7 +219,10 @@ class AuthService(BaseService):
             EmailRequest.delivery_status == "pending",
         ).update({"delivery_status": "expired"}, synchronize_session=False)
 
-        raw_token = secrets.token_urlsafe(32)
+        # Most callers want the default 32-byte URL-safe token; short
+        # human-typed codes (e.g. signin codes) pass their own.
+        if raw_token is None:
+            raw_token = secrets.token_urlsafe(32)
         req = EmailRequest(
             organization_id=user.organization_id,
             to_email=user.email,
@@ -248,6 +252,60 @@ class AuthService(BaseService):
         if req:
             req.delivery_status = "consumed"
         return req
+
+    def _consume_token_for_email(
+        self,
+        raw_token: str,
+        purpose: str,
+        email: str,
+    ) -> Optional[EmailRequest]:
+        """Variant of ``_consume_token`` scoped to an email.
+
+        Used for short, low-entropy tokens like 6-digit sign-in codes where
+        two users could plausibly hold the same value at once. Looking up
+        by ``(token_hash, to_email)`` removes the cross-user collision risk.
+        """
+        token_hash = _hash_token(raw_token)
+        req = (
+            self.db.query(EmailRequest)
+            .filter(
+                EmailRequest.token_hash == token_hash,
+                EmailRequest.purpose == purpose,
+                EmailRequest.to_email == email,
+                EmailRequest.delivery_status.in_(["pending", "sent"]),
+                EmailRequest.expires_at > _now(),
+            )
+            .first()
+        )
+        if req:
+            req.delivery_status = "consumed"
+        return req
+
+    # ── Login finalisation (shared by password + code login) ─────────
+
+    def _finalize_login(
+        self,
+        user: User,
+        device: Optional[DeviceContext] = None,
+    ) -> Dict[str, Any]:
+        """Update ``last_login_at`` and mint a token pair for ``user``.
+
+        Shared by password login and code-based login so both flows behave
+        identically once the user has been authenticated.
+        """
+        user.last_login_at = _now()
+        self.db.commit()
+        self.db.refresh(user)
+
+        member = self._membership_for(user.id)
+        org = (
+            self.db.query(Organization)
+            .filter(Organization.id == member.organization_id)
+            .first()
+            if member
+            else None
+        )
+        return self._build_auth_tokens(user, org, device=device)
 
     # ── Signup ────────────────────────────────────────────────────────
 
@@ -354,19 +412,90 @@ class AuthService(BaseService):
                 detail="Please verify your email before logging in",
             )
 
-        user.last_login_at = _now()
-        self.db.commit()
-        self.db.refresh(user)
+        return self._finalize_login(user, device=device)
 
-        member = self._membership_for(user.id)
-        org = (
-            self.db.query(Organization)
-            .filter(Organization.id == member.organization_id)
-            .first()
-            if member
-            else None
+    # ── Sign-in with email code (passwordless) ───────────────────────
+
+    SIGNIN_CODE_PURPOSE = "signin_code"
+    SIGNIN_CODE_TTL = timedelta(minutes=10)
+    SIGNIN_CODE_LENGTH = 6
+
+    @classmethod
+    def _generate_signin_code(cls) -> str:
+        """Cryptographically random numeric code, zero-padded."""
+        upper = 10 ** cls.SIGNIN_CODE_LENGTH
+        return f"{secrets.randbelow(upper):0{cls.SIGNIN_CODE_LENGTH}d}"
+
+    def request_signin_code(self, email: str) -> Dict[str, str]:
+        """Issue a one-time sign-in code to ``email``.
+
+        Returns the same generic payload regardless of whether the email
+        exists, the account is inactive, or the account is unverified —
+        callers must not be able to enumerate users via this endpoint.
+        """
+        generic_response = {
+            "message": "If the email exists, a sign-in code has been sent",
+        }
+
+        user = self._get_user_by_email(email)
+        if not user or not user.is_active or not user.is_verified:
+            return generic_response
+
+        code = self._generate_signin_code()
+        self._store_token(
+            user,
+            purpose=self.SIGNIN_CODE_PURPOSE,
+            ttl=self.SIGNIN_CODE_TTL,
+            raw_token=code,
         )
-        return self._build_auth_tokens(user, org, device=device)
+
+        try:
+            from core.services.email_service import MailService
+            display_name = user.first_name or user.email.split("@")[0]
+            MailService().send_signin_code_email(user.email, code, display_name)
+        except Exception:
+            logger.exception("Failed to send sign-in code email to %s", email)
+
+        self.db.commit()
+        return generic_response
+
+    def verify_signin_code(
+        self,
+        email: str,
+        code: str,
+        device: Optional[DeviceContext] = None,
+    ) -> Dict[str, Any]:
+        if not email or not code:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="email and code are required",
+            )
+        # Normalise: codes are digits-only of fixed length; whitespace and
+        # accidental separators (e.g. "123 456", "123-456") shouldn't fail.
+        normalised = "".join(ch for ch in code if ch.isdigit())
+        if len(normalised) != self.SIGNIN_CODE_LENGTH:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired sign-in code",
+            )
+
+        req = self._consume_token_for_email(
+            normalised, self.SIGNIN_CODE_PURPOSE, email,
+        )
+        if not req or not req.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired sign-in code",
+            )
+
+        user = self.db.query(User).filter(User.id == req.user_id).first()
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Account is deactivated",
+            )
+
+        return self._finalize_login(user, device=device)
 
     def refresh_tokens(
         self,

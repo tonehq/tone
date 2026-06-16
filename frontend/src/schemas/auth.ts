@@ -51,6 +51,30 @@ export const resetPasswordSchema = z
 
 export type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
 
+export const SIGNIN_CODE_LENGTH = 6;
+
+export const requestSignInCodeSchema = z.object({
+  email: z.string().min(1, 'Email is required').email('Please enter a valid email'),
+});
+
+export type RequestSignInCodeFormData = z.infer<typeof requestSignInCodeSchema>;
+
+export const verifySignInCodeSchema = z.object({
+  code: z
+    .string()
+    .min(1, 'Code is required')
+    .regex(
+      new RegExp(`^\\d{${SIGNIN_CODE_LENGTH}}$`),
+      `Enter the ${SIGNIN_CODE_LENGTH}-digit code`,
+    ),
+});
+
+export type VerifySignInCodeFormData = z.infer<typeof verifySignInCodeSchema>;
+
+export interface VerifySignInCodePayload extends VerifySignInCodeFormData {
+  email: string;
+}
+
 export const acceptInviteSchema = z
   .object({
     first_name: z.string().min(1, 'First name is required'),
