@@ -1,11 +1,9 @@
 """
-Tone TTS — Resemble AI Chatterbox via the chatterbox-tts package.
+Tone TTS — Resemble AI Chatterbox via the chatterbox-streaming package (generate_stream).
 
-Chatterbox (~500M) fits an 8GB GPU. This server loads ChatterboxTTS and exposes the same
-/ws/tts protocol as the Qwen server (nemotron-style), so Tone's QwenWebSocketTTSService-style
-client works. Text is split into sentences and synthesized one at a time, streaming each
-sentence's PCM so the bot starts speaking after the FIRST sentence (lower TTFB than
-generating the whole utterance first).
+STREAMING: emits audio chunks AS they are generated (first chunk after ~chunk_size speech
+tokens, not the whole sentence) — this is the low-latency path (the plain generate() was
+full-utterance ~1.8s). Same /ws/tts protocol as the Qwen server so Tone works unchanged.
 
   GET /health  -> {status, model, sample_rate, cuda}
   WS  /ws/tts  -> {text, ...} in; {type:start,sample_rate} + PCM16 chunks + {type:end,ms} out
@@ -14,7 +12,6 @@ import asyncio
 import contextvars
 import json
 import logging
-import re
 import time
 
 import numpy as np
@@ -44,8 +41,9 @@ log = logging.getLogger("tts")
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 DEFAULT_EXAGGERATION = 0.5
 DEFAULT_CFG = 0.5
+CHUNK_SIZE = 25  # speech tokens per streamed chunk — smaller = lower TTFB (default fork value is 50)
 
-app = FastAPI(title="Tone TTS — Chatterbox")
+app = FastAPI(title="Tone TTS — Chatterbox (streaming)")
 _model = None
 _sr = 24000
 
@@ -54,32 +52,41 @@ def _load_model():
     global _model, _sr
     if _model is not None:
         return _model
-    log.info("loading Chatterbox | torch %s | cuda=%s | device=%s", torch.__version__, torch.cuda.is_available(), DEVICE)
+    log.info("loading Chatterbox (streaming) | torch %s | cuda=%s | device=%s",
+             torch.__version__, torch.cuda.is_available(), DEVICE)
     from chatterbox.tts import ChatterboxTTS
     _model = ChatterboxTTS.from_pretrained(device=DEVICE)
     _sr = int(_model.sr)
-    log.info("Chatterbox ready (sample_rate=%d)", _sr)
+    log.info("Chatterbox ready (sample_rate=%d, chunk_size=%d)", _sr, CHUNK_SIZE)
     return _model
 
 
-def _synth_pcm(text: str) -> bytes:
-    with torch.no_grad():
-        wav = _model.generate(text, exaggeration=DEFAULT_EXAGGERATION, cfg_weight=DEFAULT_CFG)
-    arr = wav.squeeze().detach().cpu().numpy().astype(np.float32)
+def _chunk_to_pcm(audio_chunk) -> bytes:
+    arr = audio_chunk.squeeze().detach().cpu().numpy().astype(np.float32)
     return (np.clip(arr, -1.0, 1.0) * 32767.0).astype("<i2").tobytes()
 
 
-def _sentences(text: str):
-    parts = re.split(r"(?<=[.!?])\s+", text.strip())
-    return [p.strip() for p in parts if p.strip()] or [text.strip()]
+def _stream_into(text: str, loop, q: asyncio.Queue):
+    """Run generate_stream in a worker thread; push PCM chunks to the asyncio queue."""
+    try:
+        for audio_chunk, _metrics in _model.generate_stream(
+            text, chunk_size=CHUNK_SIZE, exaggeration=DEFAULT_EXAGGERATION, cfg_weight=DEFAULT_CFG,
+        ):
+            loop.call_soon_threadsafe(q.put_nowait, _chunk_to_pcm(audio_chunk))
+    except Exception as exc:  # noqa: BLE001
+        loop.call_soon_threadsafe(q.put_nowait, ("__err__", str(exc)))
+    finally:
+        loop.call_soon_threadsafe(q.put_nowait, None)
 
 
 @app.on_event("startup")
 def _warmup():
     _load_model()
     try:
-        _synth_pcm("Hello, warming up.")
-        log.info("warmup synth done")
+        for _ in _model.generate_stream("Hello, warming up.", chunk_size=CHUNK_SIZE,
+                                        exaggeration=DEFAULT_EXAGGERATION, cfg_weight=DEFAULT_CFG):
+            pass
+        log.info("warmup stream done")
     except Exception:  # noqa: BLE001
         log.exception("warmup failed")
 
@@ -87,7 +94,7 @@ def _warmup():
 @app.get("/health")
 def health():
     return JSONResponse(
-        {"status": "ok" if _model is not None else "loading", "model": "chatterbox",
+        {"status": "ok" if _model is not None else "loading", "model": "chatterbox-streaming",
          "sample_rate": _sr, "cuda": torch.cuda.is_available()},
         status_code=200 if _model is not None else 503,
     )
@@ -118,26 +125,33 @@ async def ws_tts(ws: WebSocket):
             if not text:
                 await ws.send_json({"type": "error", "detail": "empty text"})
                 continue
+
             t0 = time.monotonic()
             first_ms = 0
             n = 0
+            q: asyncio.Queue = asyncio.Queue()
+            fut = loop.run_in_executor(None, _stream_into, text, loop, q)
             try:
-                for sent in _sentences(text):
-                    pcm = await loop.run_in_executor(None, _synth_pcm, sent)
+                while True:
+                    item = await q.get()
+                    if item is None:
+                        break
+                    if isinstance(item, tuple) and item and item[0] == "__err__":
+                        log.error("ws/tts %s synth failed: %s", client, item[1])
+                        await ws.send_json({"type": "error", "detail": item[1]})
+                        break
                     if n == 0:
                         first_ms = round((time.monotonic() - t0) * 1000)
                         await ws.send_json({"type": "start", "sample_rate": _sr})
                     n += 1
-                    await ws.send_bytes(pcm)
+                    await ws.send_bytes(item)
             except WebSocketDisconnect:
                 raise
-            except Exception as exc:  # noqa: BLE001
-                log.exception("ws/tts %s synth failed", client)
-                await ws.send_json({"type": "error", "detail": str(exc)})
-                continue
+            finally:
+                await fut
             total_ms = round((time.monotonic() - t0) * 1000)
             await ws.send_json({"type": "end", "ms": total_ms})
-            log.info("ws/tts %s %r -> %d sentence(s) @ %dHz (first %dms, total %dms)",
+            log.info("ws/tts %s %r -> %d chunk(s) @ %dHz (first %dms, total %dms)",
                      client, text[:60], n, _sr, first_ms, total_ms)
     except WebSocketDisconnect:
         log.info("ws/tts %s disconnected", client)
