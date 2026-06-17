@@ -220,6 +220,16 @@ def build_stt(spec: dict) -> Optional[Any]:
             if metadata.get("sample_rate") is not None:
                 ws_kwargs["sample_rate"] = metadata["sample_rate"]
             return NvidiaWebSocketService(url=ws_url, trace_id=get_trace_id(), **ws_kwargs)
+        if provider_name == "parakeet":
+            from core.services.pipeline.parakeet_stt_service import ParakeetSTTService
+            from core.logging import get_trace_id
+            parakeet_url = "http://staging-stt-parakeet-service.staging.svc.cluster.local/asr"
+            parakeet_kwargs = {}
+            if metadata.get("sample_rate") is not None:
+                parakeet_kwargs["sample_rate"] = metadata["sample_rate"]
+            if model:
+                parakeet_kwargs["model"] = model
+            return ParakeetSTTService(url=parakeet_url, trace_id=get_trace_id(), **parakeet_kwargs)
         if provider_name == "granite":
             from core.services.pipeline.granite_stt_service import GraniteWebSocketSTTService
             from core.logging import get_trace_id

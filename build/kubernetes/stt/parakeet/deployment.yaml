@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staging-stt-parakeet-deployment
+  namespace: staging
+  labels:
+    app: staging-stt-parakeet
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: staging-stt-parakeet
+  template:
+    metadata:
+      labels:
+        app: staging-stt-parakeet
+    spec:
+      containers:
+        - name: parakeet
+          image: pytorch/pytorch:2.6.0-cuda12.4-cudnn9-runtime
+          workingDir: /app
+          command: ["bash", "-lc"]
+          args:
+            - |
+              set -e
+              pip install --no-cache-dir -c /app/constraints.txt -r /app/requirements.txt
+              exec uvicorn server:app --host 0.0.0.0 --port 8000
+          env:
+            - name: HF_HOME
+              value: /cache/hf
+            - name: NEMO_CACHE_DIR
+              value: /cache/nemo
+            - name: STT_MODEL
+              value: "nvidia/parakeet-tdt-0.6b-v2"
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: app
+              mountPath: /app
+            - name: cache
+              mountPath: /cache
+            - name: dshm
+              mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 180
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+      volumes:
+        - name: app
+          configMap:
+            name: parakeet-app
+        - name: cache
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
