@@ -66,6 +66,13 @@ def _load_model():
     return _model
 
 
+def _decode_text(hyps) -> str:
+    if isinstance(hyps, tuple):
+        hyps = hyps[0]
+    h = hyps[0] if isinstance(hyps, (list, tuple)) else hyps
+    return (h.text if hasattr(h, "text") else h) or ""
+
+
 def _transcribe_wav(wav_bytes: bytes) -> str:
     audio, sr = sf.read(io.BytesIO(wav_bytes), dtype="float32")
     if audio.ndim > 1:
@@ -74,13 +81,14 @@ def _transcribe_wav(wav_bytes: bytes) -> str:
         import librosa
         audio = librosa.resample(audio, orig_sr=sr, target_sr=TARGET_SR)
     audio = np.ascontiguousarray(audio, dtype=np.float32)
-    with tempfile.NamedTemporaryFile(suffix=".wav") as f:
-        sf.write(f.name, audio, TARGET_SR)
-        with torch.no_grad():
-            out = _model.transcribe([f.name], verbose=False)
-    h = out[0] if out else ""
-    text = h.text if hasattr(h, "text") else h
-    return (text or "").strip()
+    device = next(_model.parameters()).device
+    sig = torch.from_numpy(audio).to(device=device).unsqueeze(0)
+    ln = torch.tensor([sig.shape[1]], device=device, dtype=torch.long)
+    with torch.no_grad():
+        feat, flen = _model.preprocessor(input_signal=sig, length=ln)
+        enc, enc_len = _model.encoder(audio_signal=feat, length=flen)
+        hyps = _model.decoding.rnnt_decoder_predictions_tensor(enc, enc_len, return_hypotheses=False)
+    return _decode_text(hyps).strip()
 
 
 @app.on_event("startup")
