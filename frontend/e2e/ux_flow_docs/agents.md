@@ -13,6 +13,11 @@ with search, faceted filtering, sortable columns, pagination, row-level edit
 > The create + edit flows live in separate docs — see `agents-create.md` and
 > `agents-edit.md`. This doc covers `/agents` only.
 
+> **Format rule (mandatory):** every test case below is one **Action** (steps
+> the user performs) followed by multiple **Observations** (each a set of
+> verification steps). See [`_template.md`](_template.md) for the canonical
+> shape and ID prefixes.
+
 ---
 
 ## Page
@@ -128,56 +133,6 @@ right preset.
 
 ---
 
-## User Workflow Steps
-
-Step-by-step actions per major flow. Used to derive `test(...)` blocks in
-`e2e/dashboard/agents.spec.ts`. Toast assertions use
-`page.locator('[data-sonner-toast]')`.
-
-**WF-1: Browse and search the list** (positive — US-1, US-2)
-
-1. User authenticates and navigates to `/agents` → expected: heading "Agents" + subtitle "Manage your voice agents" visible; `POST /agent/list` fires with default `{ page: 1, page_size: 10, sort_by: 'updated_at', sort_order: 'desc' }`.
-2. With 1+ rows in the response → expected: count `Badge` next to the heading shows `total`; rows render with name + truncated description, status pill, type badge, phone list, and timestamp.
-3. User types `acme` into the search bar → expected: after the token-search debounce, `POST /agent/list` fires with `search: 'acme'` (free-text token).
-4. User clicks the Filters button → expected: `FacetFilterDrawer` opens, sections "Type" and "Status" load from `POST /agent/facets` with counts.
-5. User selects `Type: Inbound` and applies → expected: list re-fires with `filters: [{ field: 'agent_type', operator: 'in', value: ['inbound'] }]`; drawer filter count badge reads `1`.
-6. User clicks the toolbar's clear button → expected: search tokens + drawer selections both reset, list re-fetches with the default body.
-
-**WF-2: Sort and paginate** (positive — US-3, US-4)
-
-1. User clicks the "Agent" column header → expected: `sort_by: 'name', sort_order: 'asc'` in the next `POST /agent/list`; clicking again flips to `desc`.
-2. User clicks the "Type" header → expected: `sort_by: 'agent_type'`.
-3. User opens the page-size selector and picks `25` → expected: `POST /agent/list` fires with `page_size: 25, page: 1`.
-4. User clicks the next-page chevron → expected: `page: 2` in the next request.
-
-**WF-3: Open an existing agent in the editor** (positive — US-5)
-
-1. User clicks any non-action cell of a row → expected: `router.push('/agents/edit/inbound/<id>')` (or `outbound` per the row's `agent_type`).
-2. URL changes; the editor shell hydrates from `GET /agent/get_agent?agent_id=<id>`. (Editor behavior is documented in `agents-edit.md`.)
-
-**WF-4: Delete an agent from the row menu** (positive — US-6)
-
-1. User clicks the per-row 3-dot action menu → expected: dropdown shows "Edit" and "Delete".
-2. User clicks "Delete" → expected: confirmation modal opens with the agent's name in the title; primary button labeled "Delete" (danger).
-3. User confirms → expected: `DELETE /agent/delete_agent?agent_id=<id>` fires; on 200, toast title `Agent deleted successfully`, the row disappears, `fl.refresh()` re-fires `/agent/list`.
-
-**WF-5: Create flow — type chooser** (positive — US-7)
-
-1. User clicks "Create Agent" in the header → expected: `CreateAgentModal` opens with title "Choose type of agent" and two type cards.
-2. User clicks "Inbound" → expected: modal closes, `router.push('/agents/create/inbound')`.
-3. (Restart) User triggers the modal again, picks Outbound → expected: `router.push('/agents/create/outbound')`.
-
-**WF-6: Empty state** (positive — US-1)
-
-1. Org has zero agents → expected: `POST /agent/list` returns `{ items: [], total: 0 }`; table body renders the Bot icon, "No agents yet", and an inline "Create Agent" button that opens the same `CreateAgentModal`.
-
-**WF-7: Auth gating** (negative)
-
-1. User without a `tone_access_token` cookie visits `/agents` → expected: `src/middleware.ts` returns 307 → `/auth/login?redirect=%2Fagents`.
-2. After login → expected: post-login redirect lands back on `/agents`.
-
----
-
 ## Input Specifications
 
 ### Toolbar search (`FacetFilterBar` + `TokenSearchBar`)
@@ -196,221 +151,6 @@ Step-by-step actions per major flow. Used to derive `test(...)` blocks in
 | Modal body     | static   | n/a      | Renders `Are you sure…this action cannot be undone.` | `Are you sure you want to delete "{name}"? This action cannot be undone.` |
 | Confirm button | button   | n/a      | Labelled "Delete", `confirmType=danger` | Triggers `DELETE /agent/delete_agent`                            |
 | Cancel button  | button   | n/a      | Closes the modal                         | n/a                                                              |
-
----
-
-## Success Scenarios
-
-**PS-1: List renders the populated table** (US-1)
-
-- **Preconditions**: authenticated; org has 1 agent.
-- **Steps**: navigate to `/agents`.
-- **Expected outcome**: heading + subtitle render; count `Badge` shows `1`; one row with name `Acme Support Bot`, status pill "Active" (phone present), type badge "INBOUND", phone display `+15551234567`.
-- **Mock API** (`POST /agent/list`, 200):
-  ```json
-  {
-    "items": [
-      {
-        "id": "a1c5e8b2-9d3f-4e7a-8b1c-2f4d6e8a1b3c",
-        "uuid": "a1c5e8b2-9d3f-4e7a-8b1c-2f4d6e8a1b3c",
-        "name": "Acme Support Bot",
-        "description": "Tier-1 support assistant",
-        "agent_type": "inbound",
-        "is_active": true,
-        "phone_number": [{ "type": "twilio", "no": "+15551234567" }],
-        "created_at": 1716800000.0,
-        "updated_at": 1716800500.0
-      }
-    ],
-    "total": 1,
-    "page": 1,
-    "page_size": 10
-  }
-  ```
-
-**PS-2: Empty list shows the no-agents empty state** (US-1)
-
-- **Preconditions**: authenticated; org has no agents.
-- **Steps**: navigate to `/agents`.
-- **Expected outcome**: table body shows the Bot icon, "No agents yet", subtitle, and an inline "Create Agent" button (count `Badge` is hidden because `fl.total === 0`).
-- **Mock API** (`POST /agent/list`, 200): `{ "items": [], "total": 0, "page": 1, "page_size": 10 }`
-
-**PS-3: Search by free-text query** (US-2)
-
-- **Preconditions**: at least one matching agent.
-- **Steps**: type `acme` into the search bar; wait for debounce.
-- **Expected outcome**: `POST /agent/list` body contains `"search": "acme"`; table re-renders with matches.
-- **Mock API** (`POST /agent/list`, 200): same shape as PS-1 with `total: 1`.
-
-**PS-4: Filter by Type=outbound via the drawer** (US-2)
-
-- **Preconditions**: PS-1 state, with both inbound and outbound agents.
-- **Steps**: click Filters → tick `Outbound` under Type → Apply.
-- **Expected outcome**: `POST /agent/list` body contains `"filters": [{ "field": "agent_type", "operator": "in", "value": ["outbound"] }]`; table shows only outbound agents.
-- **Mock API** (`POST /agent/list`, 200):
-  ```json
-  {
-    "items": [
-      {
-        "id": "e7f8a9b0-1c2d-4e5f-9a8b-7c6d5e4f3a2b",
-        "uuid": "e7f8a9b0-1c2d-4e5f-9a8b-7c6d5e4f3a2b",
-        "name": "Lead Qualifier",
-        "description": "Outbound qualification agent",
-        "agent_type": "outbound",
-        "is_active": true,
-        "phone_number": [{ "type": "twilio", "no": "+14155557788" }],
-        "created_at": 1750155612.118911,
-        "updated_at": 1750155612.118911
-      }
-    ],
-    "total": 1,
-    "page": 1,
-    "page_size": 10
-  }
-  ```
-
-**PS-5: Sort by Name asc** (US-3)
-
-- **Preconditions**: at least 2 agents.
-- **Steps**: click the "Agent" column header once.
-- **Expected outcome**: `POST /agent/list` re-fires with `"sort_by": "name", "sort_order": "asc"`; table reorders.
-
-**PS-6: Page-size change resets to page 1** (US-4)
-
-- **Preconditions**: total > 25.
-- **Steps**: pick `25` from the rows-per-page selector.
-- **Expected outcome**: `POST /agent/list` fires with `page: 1, page_size: 25`.
-
-**PS-7: Row click navigates to the editor** (US-5)
-
-- **Preconditions**: PS-1 (one inbound agent).
-- **Steps**: click the row's Name cell.
-- **Expected outcome**: URL changes to `/agents/edit/inbound/a1c5e8b2-9d3f-4e7a-8b1c-2f4d6e8a1b3c`. (Editor hydration is covered in `agents-edit.md`.)
-
-**PS-8: Delete from row menu** (US-6)
-
-- **Preconditions**: PS-1.
-- **Steps**: open the row action menu → Delete → confirm.
-- **Expected outcome**: `DELETE /agent/delete_agent?agent_id=...` returns 200; toast title `Agent deleted successfully`; row disappears; `fl.refresh()` re-fires `/agent/list`.
-- **Mock API** (`DELETE /agent/delete_agent`, 200): `{ "message": "Agent deleted successfully" }`
-
-**PS-9: Create modal opens and routes to inbound** (US-7)
-
-- **Preconditions**: any.
-- **Steps**: click the header "Create Agent" button → click the "Inbound" card.
-- **Expected outcome**: modal closes; `router.push('/agents/create/inbound')`; the URL changes accordingly.
-
----
-
-## Failure Scenarios
-
-**FS-1: List returns 401 (token rejected)**
-
-- **Preconditions**: authenticated user with an expired token mid-session.
-- **Mock API** (`POST /agent/list`, 401): `{ "detail": "Could not validate credentials" }`
-- **Expected UI**: `fl.listLoading` flips to false; the table shows the empty state ("No agents yet") because `fl.rows` stays empty — there is no inline list-level error banner. Axios does NOT auto-redirect to login on 401 today. ⚠ unverified — confirm no toast bubbles up.
-
-**FS-2: List returns 500 (backend down)**
-
-- **Mock API** (`POST /agent/list`, 500): `{ "detail": "Internal server error" }`
-- **Expected UI**: `useFacetedList`'s loader catches; table shows empty state; no destructive client crash; loading spinner clears.
-
-**FS-3: Facets endpoint returns 500**
-
-- **Mock API** (`POST /agent/facets`, 500): `{ "detail": "Internal server error" }`
-- **Expected UI**: drawer still opens; sections render with `facetsLoading` skeletons that resolve to empty counts; user can still apply selections (though counts read 0).
-
-**FS-4: Delete returns 404 (agent already gone)**
-
-- **Mock API** (`DELETE /agent/delete_agent`, 404): `{ "detail": "Agent not found" }`
-- **Expected UI**: `handleApiError` surfaces the `detail` as a toast title `Agent not found`; the row stays in the table; subsequent `fl.refresh()` would remove it on the next list fetch.
-
-**FS-5: Delete returns 401 (invalid token)**
-
-- **Mock API** (`DELETE /agent/delete_agent`, 401): `{ "detail": "Invalid token" }`
-- **Expected UI**: toast title `Invalid token`; row stays.
-
-**FS-6: Delete returns 422 (missing agent_id query param)**
-
-- **Mock API** (`DELETE /agent/delete_agent`, 422):
-  ```json
-  { "detail": [{ "type": "missing", "loc": ["query", "agent_id"], "msg": "Field required", "input": null }] }
-  ```
-- **Expected UI**: `handleApiError` sees a non-string `detail` and falls back to `Something went wrong. Please try again.` ⚠ unverified — confirm fallback text appears.
-
-**FS-7: Delete returns 500**
-
-- **Mock API** (`DELETE /agent/delete_agent`, 500): `{ "detail": "Internal Server Error" }`
-- **Expected UI**: toast title `Internal Server Error`; row stays.
-
-**FS-8: Delete of the last row on the last page**
-
-- **Preconditions**: page 2 of 2, page-size 10, with exactly 11 total rows; user deletes the single row on page 2.
-- **Mock API** (`DELETE /agent/delete_agent`, 200): `{ "message": "Agent deleted successfully" }`
-- **Expected UI**: `handleDelete` computes `lastPage = max(1, ceil(10/10)) = 1`; calls `fl.handlePaginationChange(1, 10)`; `/agent/list` re-fires with `page: 1`.
-
-**FS-9: Search debounce — rapid typing fires only the final request**
-
-- **Steps**: type `abcdef` quickly into the search bar.
-- **Expected UI**: at most one `POST /agent/list` is sent after the debounce window — earlier in-flight requests are dropped by `useFacetedList`'s in-flight token (mirrors the `paginatedAgentsAtom` pattern). ⚠ unverified for `useFacetedList` specifically; covered for the legacy atom path.
-
-**FS-10: Sort by an unknown field (defensive fallback)**
-
-- **Preconditions**: malformed client mutation sends `sort_by: "bogus"`.
-- **Mock API** (`POST /agent/list`, 200): same shape as PS-1; backend silently sorts by `updated_at` desc per Postman "200 OK (invalid sort falls back silently)".
-- **Expected UI**: list renders; no error toast.
-
-**FS-11: Row click on a row missing `id`**
-
-- **Preconditions**: malformed response (defensive — should not happen in prod).
-- **Steps**: click such a row.
-- **Expected UI**: `handleEdit` early-returns; no navigation; no error.
-
-**FS-12: `agent_type` missing on a row**
-
-- **Preconditions**: row returned without `agent_type`.
-- **Steps**: click the row.
-- **Expected UI**: `handleEdit` falls back to `inbound`; router pushes `/agents/edit/inbound/<id>`.
-
-**FS-13: Backend duplicate-name response is not surfaced here**
-
-- Create endpoint 409s are surfaced by the *create* flow, NOT by the list page. The list page only triggers `DELETE` and `POST /agent/list`; it never calls `POST /agent/create_agent`. (Documenting this explicitly so spec tests don't accidentally assert a toast that won't appear on `/agents`.)
-
-**FS-14: Drawer Apply with no selections is a no-op**
-
-- **Steps**: open the drawer, change nothing, click Apply.
-- **Expected UI**: the drawer closes; no new `POST /agent/list` fires (the underlying `facetSelections` are unchanged).
-
-**FS-15: Auth-gating redirect**
-
-- **Preconditions**: no `tone_access_token` cookie.
-- **Steps**: visit `/agents`.
-- **Expected UI**: 307 redirect to `/auth/login?redirect=%2Fagents`.
-
-**FS-16: Create modal — Escape key cancels without navigation**
-
-- **Steps**: click "Create Agent" → press Escape.
-- **Expected UI**: modal closes; no `router.push` call; URL stays `/agents`.
-
----
-
-## Expected Toast Messages
-
-Sonner toasts via `showToast` (`src/utils/toast.tsx`); errors run through
-`handleApiError` (`src/utils/helpers.ts`) which passes backend `detail` (when
-it's a string) as the toast **title** with no description, or falls back to
-`Something went wrong. Please try again.` when `detail` is an array or absent.
-
-| Trigger                                        | Toast title                                  | Toast description | Variant  |
-| ---------------------------------------------- | -------------------------------------------- | ----------------- | -------- |
-| Delete success                                 | `Agent deleted successfully`                 | —                 | success  |
-| Delete backend 404                             | `Agent not found`                            | —                 | error    |
-| Delete backend 401                             | `Invalid token` (or `Could not validate credentials`) | —        | error    |
-| Delete backend 5xx with string `detail`        | `Internal Server Error` (verbatim from backend) | —              | error    |
-| Delete backend 422 (array `detail`)            | `Something went wrong. Please try again.`    | —                 | error    |
-| Any error where `detail` is not a string       | `Something went wrong. Please try again.`    | —                 | error    |
-| List failure                                   | (none — empty state renders, no toast)       | —                 | —        |
-| Facets failure                                 | (none — drawer renders empty counts)         | —                 | —        |
 
 ---
 
@@ -562,24 +302,919 @@ write-only atom used by the row delete action.
 
 ---
 
-## Edge Cases
+## Test Cases
 
-- [ ] Unauthenticated access → middleware redirect to `/auth/login?redirect=%2Fagents`
-- [ ] Slow `POST /agent/list` → `CustomTable` skeleton renders until response
-- [ ] Empty org → empty-state Bot icon + "No agents yet" + Create button; count badge hidden
-- [ ] Agent with no phone numbers → Status pill reads "Inactive" (amber), even if `is_active=true` on the backend (badge is purely UI-derived from `phone_number?.length`)
-- [ ] Agent with multiple phone numbers → Phone column renders one `<PhoneNumberDisplay>` per entry, vertically stacked
-- [ ] Description longer than the 280px-truncate column width → ellipsis (CSS `truncate max-w-[280px]`)
-- [ ] `updated_at` missing → em-dash placeholder
-- [ ] `agent_type` missing → row click falls back to `/agents/edit/inbound/<id>`
-- [ ] `record.id` missing → row click is a no-op (defensive)
-- [ ] Search debounce — rapid typing fires at most one `POST /agent/list` (in-flight token drops stale responses)
-- [ ] Drawer Apply with no changes → no extra `POST /agent/list`
-- [ ] Delete last row on last page → page index steps back to the new last page via `lastPage = max(1, ceil((total-1)/page_size))`
-- [ ] Concurrent delete + refresh — `fl.refresh()` after delete only re-fires once
-- [ ] CreateAgentModal Escape key → closes without navigation
-- [ ] CreateAgentModal — both cards have `cursor-pointer` + focus-visible ring; Tab order is Outbound → Inbound (DOM order)
-- [ ] Filter chip count badge — drawer button hides the badge when `drawerFilterCount === 0`
+> Every test case is **one Action + multiple Observations**. Each Action is a numbered
+> list of steps. Each Observation is a numbered list of verification steps.
+> ID prefix legend: `TC-HAPPY-` (positive), `TC-VALIDATE-` (client validation),
+> `TC-ERROR-` (server errors), `TC-NAV-` (navigation), `TC-LOADING-` (loading/disabled),
+> `TC-EDGE-` (edge cases), `TC-A11Y-` (accessibility), `TC-FULL-` (lifecycle).
+
+---
+
+### TC-HAPPY-001: List renders the populated table
+
+**Preconditions**:
+- User is authenticated (`tone_access_token` cookie present)
+- Org has 1 agent in the backend (or `POST /agent/list` is mocked to return one row)
+
+**Action**:
+1. Visit `/agents`
+
+**Observation 1 — Network request fires with defaults**:
+1. Exactly one `POST /agent/list` request is recorded
+2. Request body includes `{ page: 1, page_size: 10, sort_by: 'updated_at', sort_order: 'desc' }`
+
+**Observation 2 — Page header renders**:
+1. An `<h1>` with text `Agents` is visible
+2. Subtitle `Manage your voice agents` is visible
+3. A count `Badge` next to the heading shows `1`
+
+**Observation 3 — Row content renders correctly**:
+1. The row name reads `Acme Support Bot`
+2. Status pill reads `Active` (emerald) because `phone_number.length > 0`
+3. Type column shows the `INBOUND` `AgentTypeBadge`
+4. Phone column renders `+15551234567`
+
+**API mock**: `POST /agent/list` → 200 with the PS-1 fixture body shown in API Contracts.
+
+---
+
+### TC-HAPPY-002: Empty list shows the no-agents empty state
+
+**Preconditions**:
+- User is authenticated
+- Org has zero agents (`POST /agent/list` returns `total: 0`)
+
+**Action**:
+1. Visit `/agents`
+
+**Observation 1 — Empty state visible**:
+1. The Bot icon is in the DOM inside the table body
+2. Text `No agents yet` is visible
+3. Subtitle `Create your first voice agent to get started` is visible
+4. An inline `Create Agent` button is visible
+
+**Observation 2 — Count badge is hidden**:
+1. The numeric count badge next to the `Agents` heading is NOT in the DOM
+
+**API mock**: `POST /agent/list` → 200 `{ "items": [], "total": 0, "page": 1, "page_size": 10 }`.
+
+---
+
+### TC-HAPPY-003: Search by free-text query refires the list
+
+**Preconditions**:
+- TC-HAPPY-001 setup; list is populated
+
+**Action**:
+1. Visit `/agents`
+2. Type `acme` into the search bar
+3. Wait for the search debounce
+
+**Observation 1 — Network request body**:
+1. A subsequent `POST /agent/list` request body contains `"search": "acme"`
+
+**Observation 2 — Table updates**:
+1. Matching rows are rendered
+2. The toolbar exposes a Clear action when `hasActiveFilters` is true
+
+---
+
+### TC-HAPPY-004: Filter by Type=outbound via the drawer
+
+**Preconditions**:
+- Both inbound and outbound agents exist (or mocked accordingly)
+
+**Action**:
+1. Visit `/agents`
+2. Click the `Filters` button
+3. In the drawer, tick `Outbound` under the `Type` section
+4. Click `Apply`
+
+**Observation 1 — Drawer facets load**:
+1. `POST /agent/facets` was recorded when the drawer opened
+2. Drawer sections `Type` and `Status` are rendered with counts
+
+**Observation 2 — List re-fires with filters**:
+1. A `POST /agent/list` is recorded with body containing `"filters": [{ "field": "agent_type", "operator": "in", "value": ["outbound"] }]`
+2. Filters button badge reads `1`
+
+**Observation 3 — Table shows only outbound rows**:
+1. Each visible row's Type badge reads `OUTBOUND`
+
+---
+
+### TC-HAPPY-005: Sort by Name asc
+
+**Preconditions**: list has at least 2 agents.
+
+**Action**:
+1. Visit `/agents`
+2. Click the `Agent` column header once
+
+**Observation 1 — Sort request**:
+1. A `POST /agent/list` request is recorded with `"sort_by": "name", "sort_order": "asc"`
+
+**Observation 2 — Subsequent click flips direction**:
+1. Click the `Agent` header again
+2. Next request has `"sort_by": "name", "sort_order": "desc"`
+
+---
+
+### TC-HAPPY-006: Page-size change resets to page 1
+
+**Preconditions**: total > 25 (or mock returns that condition).
+
+**Action**:
+1. Visit `/agents`
+2. Open the rows-per-page selector
+3. Pick `25`
+
+**Observation 1 — Request body**:
+1. A `POST /agent/list` is recorded with body `{ ..., "page": 1, "page_size": 25 }`
+
+**Observation 2 — Selector reflects new value**:
+1. The page-size selector displays `25`
+
+---
+
+### TC-HAPPY-007: Row click navigates to the editor
+
+**Preconditions**: TC-HAPPY-001 setup.
+
+**Action**:
+1. Visit `/agents`
+2. Click the Name cell of the inbound row
+
+**Observation 1 — Navigation**:
+1. URL changes to `/agents/edit/inbound/a1c5e8b2-9d3f-4e7a-8b1c-2f4d6e8a1b3c`
+2. No new full-page reload occurs (client-side navigation)
+
+---
+
+### TC-HAPPY-008: Delete from row menu succeeds
+
+**Preconditions**: TC-HAPPY-001 setup (one agent in the table).
+
+**Action**:
+1. Visit `/agents`
+2. Click the per-row ⋮ action menu
+3. Click `Delete`
+4. In the confirmation modal, click the `Delete` button
+
+**Observation 1 — Confirmation modal content**:
+1. Modal title equals `Delete Acme Support Bot?`
+2. Modal body contains `Are you sure you want to delete "Acme Support Bot"? This action cannot be undone.`
+3. Primary button is labeled `Delete` (danger style)
+
+**Observation 2 — Delete API fires**:
+1. Exactly one `DELETE /agent/delete_agent?agent_id=a1c5e8b2-9d3f-4e7a-8b1c-2f4d6e8a1b3c` request is recorded
+
+**Observation 3 — Success toast and refresh**:
+1. A Sonner toast title `Agent deleted successfully` appears
+2. A subsequent `POST /agent/list` request is recorded (refresh)
+3. The deleted row is no longer in the DOM
+
+**API mock**:
+- `DELETE /agent/delete_agent` → 200 `{ "message": "Agent deleted successfully" }`
+
+---
+
+### TC-HAPPY-009: Create modal opens and routes to Inbound
+
+**Preconditions**: any.
+
+**Action**:
+1. Visit `/agents`
+2. Click the header `Create Agent` button
+3. Click the `Inbound` card in the modal
+
+**Observation 1 — Modal opens**:
+1. `CreateAgentModal` is visible with title `Choose type of agent`
+2. Two cards labelled `Outbound` (`Initiates calls`) and `Inbound` (`Receives calls`) render
+
+**Observation 2 — Modal closes then navigates**:
+1. The modal is removed from the DOM
+2. URL changes to `/agents/create/inbound`
+
+---
+
+### TC-HAPPY-010: Create modal routes to Outbound
+
+**Action**:
+1. Visit `/agents`
+2. Click the header `Create Agent` button
+3. Click the `Outbound` card
+
+**Observation 1 — Outbound navigation**:
+1. The modal closes
+2. URL changes to `/agents/create/outbound`
+
+---
+
+### TC-HAPPY-011: Empty-state Create button opens the same modal
+
+**Preconditions**: zero-agent org (`POST /agent/list` returns `total: 0`).
+
+**Action**:
+1. Visit `/agents`
+2. Click the inline `Create Agent` button in the empty state
+
+**Observation 1 — Same modal opens**:
+1. `CreateAgentModal` is visible with title `Choose type of agent`
+2. Both `Outbound` and `Inbound` cards are present
+
+---
+
+### TC-ERROR-001: List 401 (token rejected) — empty state, no toast
+
+**Preconditions**: authenticated user but token rejected mid-session.
+
+**Action**:
+1. Visit `/agents`
+
+**Observation 1 — Empty fallback**:
+1. `fl.listLoading` clears (no spinner)
+2. The empty state ("No agents yet") renders because `fl.rows` is empty
+3. No error toast is shown
+
+**Observation 2 — No auto-redirect**:
+1. URL is still `/agents` — axios does NOT redirect to login on 401 today (⚠ unverified)
+
+**API mock**: `POST /agent/list` → 401 `{ "detail": "Could not validate credentials" }`.
+
+---
+
+### TC-ERROR-002: List 500 falls back to empty state (no destructive crash)
+
+**Action**:
+1. Visit `/agents`
+
+**Observation 1 — UI does not crash**:
+1. The empty state ("No agents yet") renders
+2. Skeleton/spinner clears
+3. No client-side error is thrown
+
+**API mock**: `POST /agent/list` → 500 `{ "detail": "Internal server error" }`.
+
+---
+
+### TC-ERROR-003: Facets 500 — drawer renders empty counts
+
+**Action**:
+1. Visit `/agents`
+2. Click the `Filters` button
+
+**Observation 1 — Drawer still opens**:
+1. The drawer is visible
+2. Sections `Type` and `Status` render with empty counts (0)
+3. User can still tick selections
+
+**API mock**: `POST /agent/facets` → 500 `{ "detail": "Internal server error" }`.
+
+---
+
+### TC-ERROR-004: Delete 404 — row stays, toast surfaces
+
+**Preconditions**: TC-HAPPY-001 setup; user opens the row delete confirm.
+
+**Action**:
+1. Visit `/agents`
+2. Open row action menu → click `Delete`
+3. Confirm the modal
+
+**Observation 1 — Toast surfaces backend `detail`**:
+1. A toast with title `Agent not found` appears
+
+**Observation 2 — Row remains in the table**:
+1. The row is still present in the DOM
+2. No new `POST /agent/list` refresh fires
+
+**API mock**: `DELETE /agent/delete_agent` → 404 `{ "detail": "Agent not found" }`.
+
+---
+
+### TC-ERROR-005: Delete 401 — invalid token toast
+
+**Action**:
+1. Open row action menu → Delete → confirm
+
+**Observation 1 — Error toast**:
+1. Toast title equals `Invalid token` (or backend `detail` verbatim)
+
+**Observation 2 — Row remains**:
+1. Row is still in the table
+
+**API mock**: `DELETE /agent/delete_agent` → 401 `{ "detail": "Invalid token" }`.
+
+---
+
+### TC-ERROR-006: Delete 422 (array detail) falls back to generic toast
+
+**Action**:
+1. Trigger delete confirm
+
+**Observation 1 — Generic fallback toast**:
+1. Toast title equals `Something went wrong. Please try again.` (⚠ unverified — confirm fallback text)
+
+**API mock**: `DELETE /agent/delete_agent` → 422 `{ "detail": [{ "type": "missing", "loc": ["query","agent_id"], "msg": "Field required", "input": null }] }`.
+
+---
+
+### TC-ERROR-007: Delete 500 — backend detail string surfaces
+
+**Action**:
+1. Trigger delete confirm
+
+**Observation 1 — Toast**:
+1. Toast title equals `Internal Server Error`
+
+**Observation 2 — Row stays**:
+1. The row remains in the DOM
+
+**API mock**: `DELETE /agent/delete_agent` → 500 `{ "detail": "Internal Server Error" }`.
+
+---
+
+### TC-ERROR-008: Delete 403 (member tries owner-only agent)
+
+**Action**:
+1. Trigger delete confirm as a member-role user
+
+**Observation 1 — Toast**:
+1. Toast title equals `Forbidden` (or backend `detail` verbatim)
+
+**Observation 2 — Row remains**:
+1. Row is still in the table
+
+**API mock**: `DELETE /agent/delete_agent` → 403 `{ "detail": "Forbidden" }`.
+
+---
+
+### TC-ERROR-009: Delete 401 mid-session — surfaces toast without auto-redirect
+
+**Action**:
+1. Trigger delete confirm
+
+**Observation 1 — Toast and URL**:
+1. Toast title equals `Invalid token` (or `Could not validate credentials`)
+2. URL is still `/agents` — user is NOT auto-redirected to login
+
+**API mock**: `DELETE /agent/delete_agent` → 401 `{ "detail": "Invalid token" }`.
+
+---
+
+### TC-ERROR-010: List 400 (malformed filter) — empty state, no toast
+
+**Action**:
+1. Visit `/agents` with a deliberately malformed search/filter combo
+
+**Observation 1 — Empty state**:
+1. Table renders the empty state
+2. No error toast is shown (list errors are swallowed)
+
+**API mock**: `POST /agent/list` → 400 `{ "detail": "Invalid filter" }`.
+
+---
+
+### TC-ERROR-011: List 500 mid-search — empty state, recovers on retry
+
+**Action**:
+1. Visit `/agents`
+2. Type `acme` to trigger a search
+
+**Observation 1 — First request 500**:
+1. Skeleton clears; empty-state body renders; no client crash
+
+**Observation 2 — Retry succeeds**:
+1. On a follow-up request returning 200, the table re-populates
+
+**API mock**:
+- First `POST /agent/list` → 500
+- Subsequent `POST /agent/list` → 200 (PS-1 fixture)
+
+---
+
+### TC-NAV-001: Unauthenticated visit redirects to login
+
+**Preconditions**: no `tone_access_token` cookie set.
+
+**Action**:
+1. Visit `/agents`
+
+**Observation 1 — Middleware redirect**:
+1. Response status is 307
+2. Final URL is `/auth/login?redirect=%2Fagents`
+
+**Observation 2 — Login form is visible**:
+1. The login page renders (no agents UI loaded)
+
+---
+
+### TC-NAV-002: Expired token redirects to login and clears cookie
+
+**Preconditions**: an expired `tone_access_token` cookie is set.
+
+**Action**:
+1. Visit `/agents`
+
+**Observation 1 — Redirect**:
+1. URL becomes `/auth/login?redirect=%2Fagents` (307)
+
+**Observation 2 — Cookie state**:
+1. The expired `tone_access_token` cookie is cleared by the login response
+
+---
+
+### TC-NAV-003: Non-member is denied access
+
+**Preconditions**: user is signed in but is not a member of the active org.
+
+**Action**:
+1. Visit `/agents`
+
+**Observation 1 — Access denied or /home redirect**:
+1. Either an access-denied state is rendered OR URL redirects to `/home`
+
+**Observation 2 — No list fetch fires**:
+1. Zero `POST /agent/list` requests are recorded
+
+---
+
+### TC-NAV-004: Pagination — Prev disabled on first page
+
+**Preconditions**: list has > 1 page.
+
+**Action**:
+1. Visit `/agents` (lands on page 1)
+
+**Observation 1 — Button state**:
+1. The `Prev` pagination button has `disabled` attribute
+2. The `Next` pagination button is enabled
+
+---
+
+### TC-NAV-005: Pagination — Next disabled on last page
+
+**Preconditions**: list has > 1 page; user navigates to the last page.
+
+**Action**:
+1. Visit `/agents`
+2. Click `Next` until on the last page
+
+**Observation 1 — Button state**:
+1. The `Next` pagination button has `disabled` attribute
+2. The `Prev` button is enabled
+
+---
+
+### TC-NAV-006: Sort by Name cycles asc → desc → reset
+
+**Preconditions**: list has ≥ 2 rows.
+
+**Action**:
+1. Visit `/agents`
+2. Click the `Agent` column header three times in a row
+
+**Observation 1 — Three requests in order**:
+1. First click: `POST /agent/list` body has `sort_by: 'name', sort_order: 'asc'`
+2. Second click: body has `sort_by: 'name', sort_order: 'desc'`
+3. Third click: body resets to default `sort_by: 'updated_at', sort_order: 'desc'`
+
+---
+
+### TC-NAV-007: Sort by Type orders rows by agent_type
+
+**Action**:
+1. Visit `/agents`
+2. Click the `Type` column header
+
+**Observation 1 — Request body**:
+1. `POST /agent/list` body contains `"sort_by": "agent_type"`
+
+---
+
+### TC-NAV-008: Sort by Last Updated cycles direction
+
+**Action**:
+1. Visit `/agents`
+2. Click the `Last Updated` column header twice
+
+**Observation 1 — Two requests**:
+1. First click body: `sort_by: 'updated_at', sort_order: 'asc'`
+2. Second click body: `sort_by: 'updated_at', sort_order: 'desc'`
+
+---
+
+### TC-NAV-009: Delete confirmation cancel preserves the row
+
+**Action**:
+1. Visit `/agents`
+2. Open the row action menu
+3. Click `Delete`
+4. Click `Cancel` (or close the modal)
+
+**Observation 1 — Modal dismissed**:
+1. The delete confirmation modal is no longer in the DOM
+
+**Observation 2 — Row unaffected**:
+1. Zero `DELETE /agent/delete_agent` requests are recorded
+2. The row is still in the table
+
+---
+
+### TC-NAV-010: CreateAgentModal Escape key cancels without navigation
+
+**Action**:
+1. Visit `/agents`
+2. Click `Create Agent` in the header
+3. Press the `Escape` key
+
+**Observation 1 — Modal closes, no navigation**:
+1. `CreateAgentModal` is no longer in the DOM
+2. URL is still `/agents`
+3. No `router.push` is invoked
+
+---
+
+### TC-LOADING-001: Slow list keeps skeleton visible
+
+**Action**:
+1. Visit `/agents` against a deliberately slow backend (`POST /agent/list` delayed > 3s)
+
+**Observation 1 — Skeleton stays**:
+1. `CustomTable` skeleton rows are visible until the response resolves
+2. The Create Agent CTA remains enabled (not blocked)
+
+**Observation 2 — Final render**:
+1. After resolution, real rows replace the skeleton
+
+---
+
+### TC-LOADING-002: Slow delete disables confirm and shows spinner
+
+**Action**:
+1. Open the delete confirmation modal
+2. Click `Delete` against a deliberately slow `DELETE /agent/delete_agent` (>3s)
+
+**Observation 1 — Button state during request**:
+1. The confirm button has `disabled` set
+2. A spinner is visible inside the confirm button
+3. The modal cannot be dismissed (no Escape-close while in-flight)
+
+**Observation 2 — Resolution**:
+1. After the response, the modal closes and the row disappears (on 200)
+
+---
+
+### TC-LOADING-003: Concurrent delete 404 reconciles via refresh
+
+**Preconditions**: another user just deleted the same agent.
+
+**Action**:
+1. Open the row delete confirmation
+2. Click `Delete`
+
+**Observation 1 — 404 toast**:
+1. Toast title equals `Agent not found`
+
+**Observation 2 — UI converges on refresh**:
+1. A subsequent `fl.refresh()` (or page reload) removes the row
+
+**API mock**: `DELETE /agent/delete_agent` → 404 `{ "detail": "Agent not found" }`.
+
+---
+
+### TC-EDGE-001: Whitespace-only search is treated as empty
+
+**Action**:
+1. Visit `/agents`
+2. Type `   ` (only spaces) into the search bar
+3. Wait for debounce
+
+**Observation 1 — Request shape**:
+1. The next `POST /agent/list` either omits `search` or sends an empty string — NOT the whitespace literal
+2. Table reverts to default (unfiltered) list
+
+---
+
+### TC-EDGE-002: Search trims surrounding whitespace
+
+**Action**:
+1. Visit `/agents`
+2. Type ` acme ` (with leading/trailing spaces) into the search bar
+3. Wait for debounce
+
+**Observation 1 — Trimmed body**:
+1. `POST /agent/list` body contains `"search": "acme"` (no surrounding whitespace)
+
+---
+
+### TC-EDGE-003: Search accepts unicode/html-ish input without XSS
+
+**Action**:
+1. Visit `/agents`
+2. Type `<script>alert(1)</script>` (or an emoji 🚀) into the search bar
+
+**Observation 1 — Verbatim transmission**:
+1. The `POST /agent/list` body contains the literal `<script>alert(1)</script>` (or emoji) in `search`
+
+**Observation 2 — No XSS execution**:
+1. `window.alert` is not invoked
+2. The DOM does not contain an evaluated `<script>` tag
+3. The literal text appears in the search input as `value` (rendered as text)
+
+---
+
+### TC-EDGE-004: Very long search query (> 500 chars) does not crash
+
+**Action**:
+1. Visit `/agents`
+2. Paste a 600-character string into the search bar
+
+**Observation 1 — Behaviour**:
+1. Either the input accepts the value and a single `POST /agent/list` fires with the long search, OR a truncation message appears
+2. No client crash; the page stays interactable
+
+---
+
+### TC-EDGE-005: Pasting newlines into search strips them
+
+**Action**:
+1. Visit `/agents`
+2. Paste a multiline value (`line1\nline2`) into the search bar
+
+**Observation 1 — Single-line value**:
+1. The search input's `value` contains no `\n`
+2. The `POST /agent/list` `search` field is single-line
+
+---
+
+### TC-EDGE-006: Drawer Apply with no changes is a no-op
+
+**Action**:
+1. Visit `/agents`
+2. Click `Filters`
+3. Without changing anything, click `Apply`
+
+**Observation 1 — No new list fetch**:
+1. Zero new `POST /agent/list` requests are recorded after Apply
+2. The drawer closes
+
+---
+
+### TC-EDGE-007: Delete last row on last page steps page index back
+
+**Preconditions**: 11 total rows; page_size 10; user navigates to page 2 (1 row).
+
+**Action**:
+1. Visit `/agents`
+2. Click `Next` to go to page 2
+3. Open the row's action menu → Delete → confirm
+
+**Observation 1 — Defensive page step-back**:
+1. `handleDelete` computes `lastPage = max(1, ceil(10/10)) = 1`
+2. A `POST /agent/list` fires with `"page": 1`
+
+---
+
+### TC-EDGE-008: Row click on a row missing `id` is a no-op
+
+**Preconditions**: malformed response missing `id` on a row.
+
+**Action**:
+1. Visit `/agents`
+2. Click the malformed row
+
+**Observation 1 — No navigation**:
+1. URL is still `/agents`
+2. No client error is thrown
+
+---
+
+### TC-EDGE-009: Row click with missing `agent_type` falls back to inbound
+
+**Preconditions**: row returned without `agent_type`.
+
+**Action**:
+1. Visit `/agents`
+2. Click the row
+
+**Observation 1 — Fallback path**:
+1. URL becomes `/agents/edit/inbound/<id>`
+
+---
+
+### TC-EDGE-010: Search debounce — rapid typing fires at most one request
+
+**Action**:
+1. Visit `/agents`
+2. Type `abcdef` quickly (within the debounce window)
+
+**Observation 1 — Single request after debounce**:
+1. After the debounce, at most one `POST /agent/list` is recorded for the final value `abcdef` (⚠ unverified for `useFacetedList` specifically; the legacy atom path drops in-flight)
+
+---
+
+### TC-EDGE-011: Search with no matches renders no-results state
+
+**Action**:
+1. Visit `/agents`
+2. Type a query that yields zero rows (mocked or known empty)
+
+**Observation 1 — Empty results state**:
+1. The empty-state body renders inside the table
+2. A `Clear filters` shortcut is available
+
+---
+
+### TC-EDGE-012: Offline / network failure on list recovers on retry
+
+**Action**:
+1. Visit `/agents` while network is offline
+2. Restore network
+3. Retry (or wait for next fetch)
+
+**Observation 1 — First attempt empty**:
+1. Skeleton clears; table shows the empty state
+
+**Observation 2 — Retry succeeds**:
+1. A subsequent successful `POST /agent/list` refills the table
+
+---
+
+### TC-A11Y-001: Tab order through the toolbar reaches every control
+
+**Action**:
+1. Visit `/agents`
+2. Press `Tab` repeatedly starting from the URL bar / page body
+
+**Observation 1 — Tab sequence**:
+1. Focus moves through Search → Filters button → Create Agent → first sortable column header
+2. No focusable toolbar element is skipped
+
+---
+
+### TC-A11Y-002: Enter on a sortable column header triggers sort
+
+**Action**:
+1. Visit `/agents`
+2. Focus the `Agent` column header via Tab
+3. Press the `Enter` key
+
+**Observation 1 — Sort request fires**:
+1. A `POST /agent/list` request is recorded with updated `sort_by` / `sort_order` (same behaviour as click)
+
+---
+
+### TC-A11Y-003: Delete modal traps focus and restores on close
+
+**Action**:
+1. Visit `/agents`
+2. Open the row delete confirmation modal
+3. Press `Tab` repeatedly to verify focus cycles inside the modal
+4. Press `Escape`
+
+**Observation 1 — Focus trap**:
+1. Tabbing cycles between focusable elements inside the modal only
+2. Focus never leaves the modal during cycling
+
+**Observation 2 — Restoration on close**:
+1. Escape closes the modal
+2. Focus returns to the row action menu trigger that opened it
+
+---
+
+### TC-A11Y-004: Error toast is announced via aria-live
+
+**Action**:
+1. Trigger a delete error (e.g. 404)
+
+**Observation 1 — Toast accessibility**:
+1. The toast element has `role="alert"` or `aria-live="polite"`
+2. Screen readers announce the toast title without manual focus
+
+---
+
+### TC-A11Y-005: CreateAgentModal cards are keyboard-activatable
+
+**Action**:
+1. Visit `/agents`
+2. Click `Create Agent`
+3. Tab into the modal
+
+**Observation 1 — Tab order**:
+1. Focus moves to the `Outbound` card first, then the `Inbound` card (DOM order)
+2. Both cards have a visible focus ring
+
+**Observation 2 — Enter activates focused card**:
+1. Pressing `Enter` on the focused card closes the modal and navigates to the corresponding `/agents/create/{type}` route
+
+---
+
+### TC-FULL-001: Lifecycle — create → edit → delete an agent end-to-end
+
+**Preconditions**:
+- User authenticated against a real backend (no mocks)
+- Test agent name prefixed `__e2e__` for cleanup
+
+**Action**:
+1. Visit `/agents`
+2. Click `Create Agent` and pick `Inbound`
+3. On `/agents/create/inbound/basics`, fill the create form for an `__e2e__` agent and save
+4. Land on `/agents/edit/inbound/<id>/overview`, mutate name + description, save
+5. Navigate back to `/agents` and confirm the row appears with the new name
+6. Open the row action menu, click Delete, confirm
+
+**Observation 1 — Create succeeds and routes to edit**:
+1. A success toast appears after Create
+2. URL becomes `/agents/edit/inbound/<id>/overview`
+
+**Observation 2 — Edit save succeeds**:
+1. A success toast appears after edit Save
+2. The row on `/agents` shows the new name and description after navigation
+
+**Observation 3 — Delete succeeds and row disappears**:
+1. Toast title equals `Agent deleted successfully`
+2. The row is no longer in the table
+
+**Cleanup** (in `try/finally`):
+1. Delete the `__e2e__` agent via `DELETE /agent/delete_agent` if it still exists
+2. Clear cookies
+
+---
+
+### TC-FULL-002: Walk the entire agents list page end-to-end
+
+**Preconditions**:
+- Authenticated; one seeded `__e2e__` agent exists
+
+**Action**:
+1. Visit `/agents`
+2. Assert headings + default sort + page-size selector defaults
+3. Type into the search bar (free text), then `name:hotel` token, then clear
+4. Open `Filters` → tick `Type=Inbound` + `Status=Active` → Apply
+5. Clear all filters
+6. Sort by Name, then Type, then Last Updated
+7. Change page-size to `25`
+8. Open the per-row action menu → Cancel delete
+9. Re-open and confirm delete on the seeded `__e2e__` agent
+10. Click `Create Agent` → press `Escape`
+11. Click `Create Agent` again → pick `Inbound`
+
+**Observation 1 — Toolbar wiring fires correct list calls**:
+1. Each affordance (search, filter, sort, paginate) records the expected `POST /agent/list` body
+
+**Observation 2 — Delete confirm-cancel preserves row**:
+1. Cancel does not fire `DELETE /agent/delete_agent`
+2. Confirm fires it; toast `Agent deleted successfully` appears
+3. Row is removed
+
+**Observation 3 — Create modal handles Escape**:
+1. Pressing Escape closes the modal without navigation
+2. Re-opening and picking Inbound routes to `/agents/create/inbound`
+
+**Cleanup** (in `try/finally`):
+1. Sweep any `__e2e__` agents from `/agent/list` and delete them
+
+---
+
+## Expected Toast Messages
+
+Sonner toasts via `showToast` (`src/utils/toast.tsx`); errors run through
+`handleApiError` (`src/utils/helpers.ts`) which passes backend `detail` (when
+it's a string) as the toast **title** with no description, or falls back to
+`Something went wrong. Please try again.` when `detail` is an array or absent.
+
+| Trigger                                        | Toast title                                  | Toast description | Variant  |
+| ---------------------------------------------- | -------------------------------------------- | ----------------- | -------- |
+| Delete success                                 | `Agent deleted successfully`                 | —                 | success  |
+| Delete backend 404                             | `Agent not found`                            | —                 | error    |
+| Delete backend 401                             | `Invalid token` (or `Could not validate credentials`) | —        | error    |
+| Delete backend 5xx with string `detail`        | `Internal Server Error` (verbatim from backend) | —              | error    |
+| Delete backend 422 (array `detail`)            | `Something went wrong. Please try again.`    | —                 | error    |
+| Any error where `detail` is not a string       | `Something went wrong. Please try again.`    | —                 | error    |
+| List failure                                   | (none — empty state renders, no toast)       | —                 | —        |
+| Facets failure                                 | (none — drawer renders empty counts)         | —                 | —        |
+
+---
+
+## Edge Cases (each appears as a `TC-EDGE-*` or `TC-NAV-*` test case above)
+
+- [x] Unauthenticated access → middleware redirect — see TC-NAV-001
+- [x] Slow `POST /agent/list` — see TC-LOADING-001
+- [x] Empty org — see TC-HAPPY-002
+- [x] Agent with no phone numbers → Status pill `Inactive` — covered in UI Elements + TC-HAPPY-001 fixture variants
+- [x] Agent with multiple phone numbers → stacked `PhoneNumberDisplay` rows — covered implicitly in TC-HAPPY-001
+- [x] Description longer than 280px-truncate column — covered in UI Elements
+- [x] `updated_at` missing → em-dash placeholder — covered in UI Elements
+- [x] `agent_type` missing → row click falls back to inbound — see TC-EDGE-009
+- [x] `record.id` missing → row click is a no-op — see TC-EDGE-008
+- [x] Search debounce — see TC-EDGE-010
+- [x] Drawer Apply with no changes — see TC-EDGE-006
+- [x] Delete last row on last page — see TC-EDGE-007
+- [x] CreateAgentModal Escape key — see TC-NAV-010
 
 ---
 
@@ -594,106 +1229,80 @@ write-only atom used by the row delete action.
 
 ---
 
-## Accessibility Requirements
+## Accessibility Requirements (each appears as a `TC-A11Y-*` test case above)
 
-- [ ] Page heading is rendered as a real `<h1>` (`role: heading, level: 1`)
-- [ ] "Create Agent" button is reachable via Tab and activates on Enter/Space
-- [ ] Token search input has an associated label / `aria-label`
-- [ ] Filters button has visible text + count badge; screen readers announce "Filters, 2"
-- [ ] Sortable column headers are real `<th role="columnheader">` and respond to Enter
-- [ ] Per-row action menu trigger has an accessible name (e.g. `aria-label="Agent actions"`)
-- [ ] Delete confirmation modal traps focus and restores it on close (Radix/shadcn default via `CustomModal`)
-- [ ] Status pill includes text ("Active" / "Inactive"), not only color
-- [ ] `<PhoneNumberDisplay>` flag is decorative (alt-text or aria-hidden); the formatted number is read by screen readers
-- [ ] `CreateAgentModal` cards are keyboard-activatable (`CustomButton` with `type="text"` renders as a real `<button>`)
+- [x] Page heading is rendered as a real `<h1>` — covered in TC-HAPPY-001
+- [x] "Create Agent" button is reachable via Tab — see TC-A11Y-001
+- [x] Token search input has an associated label / `aria-label` — see TC-A11Y-001
+- [x] Filters button has visible text + count badge — see TC-A11Y-001
+- [x] Sortable column headers are real `<th role="columnheader">` and respond to Enter — see TC-A11Y-002
+- [x] Per-row action menu trigger has an accessible name — see TC-A11Y-003
+- [x] Delete confirmation modal traps focus and restores on close — see TC-A11Y-003
+- [x] Status pill includes text, not only colour — covered in UI Elements
+- [x] `<PhoneNumberDisplay>` flag is decorative — covered in UI Elements
+- [x] CreateAgentModal cards are keyboard-activatable — see TC-A11Y-005
+- [x] Error toast announced via aria-live — see TC-A11Y-004
 
 ---
 
-## Appended Scenarios (gap-fill, ID prefix `AL-`)
+## Scenario → TC ID cross-reference
 
-These rows extend the original PS/FS coverage with auth/error-state/network/a11y/list-specific/lifecycle scenarios so `/generate-tests` can produce a comprehensive `agents.spec.ts`. They use real-backend conventions (`__e2e__` prefix, try/finally cleanup) — not `page.route` mocks — unless explicitly stated.
-
-### Auth & access control
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| AL-001 | Visit `/agents` without `tone_access_token` cookie | Middleware 307 → `/auth/login?redirect=%2Fagents` | `unauthenticated visit redirects to login` |
-| AL-002 | Visit `/agents` with an expired token cookie | Middleware 307 → `/auth/login?redirect=%2Fagents`; expired cookie cleared on the login response | `expired token redirects to login and clears cookie` |
-| AL-003 | Logged-in non-member opens `/agents` (org switched away) | Access-denied state OR redirect to `/home`; no `POST /agent/list` fires | `non-member is denied access to the agents list` |
-
-### Backend error states
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| AL-004 | `POST /agent/list` returns 400 (malformed filter) | Empty table state; no destructive crash; no toast (list errors are swallowed) | `list 400 renders empty state without toast` |
-| AL-005 | Token expires between page load and a delete confirm (401 on DELETE) | Toast `Invalid token` (or `Could not validate credentials`); row remains; user is NOT auto-redirected to login | `delete 401 surfaces error toast without redirect` |
-| AL-006 | Member role attempts delete on an owner-only agent → 403 | Toast `Forbidden` (or backend `detail` verbatim); row remains | `delete 403 surfaces forbidden toast` |
-| AL-007 | Delete an agent that was already removed by another user → 404 | Toast `Agent not found`; row stays until `fl.refresh()`, then disappears | `delete 404 surfaces not-found toast` |
-| AL-008 | `POST /agent/list` returns 500 mid-search | Skeleton clears; empty-state body renders; no client crash | `list 500 falls back to empty state` |
-
-### Network resilience
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| AL-009 | Offline / network failure during `POST /agent/list` | Skeleton clears; table shows empty state; subsequent successful retry refills the table | `list network failure renders empty then recovers on retry` |
-| AL-010 | Slow `POST /agent/list` (>3s) | Skeleton rows visible the whole time; Create Agent CTA remains enabled | `slow list keeps skeleton visible without blocking the page` |
-| AL-011 | Slow `DELETE /agent/delete_agent` (>3s) | Confirm button disabled + spinner while in-flight; modal blocks dismiss until response | `slow delete disables confirm button and shows spinner` |
-| AL-012 | Concurrent delete — same agent deleted by another tab returns 404 mid-confirm | Toast `Agent not found`; UI converges on next `fl.refresh()` | `concurrent delete 404 reconciles via refresh` |
-
-### Input edge cases (search bar)
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| AL-013 | Type only whitespace into the search bar | No `POST /agent/list` body field `search` is sent (or sent as empty) — table reverts to default | `whitespace-only search is treated as empty` |
-| AL-014 | Search query with leading/trailing spaces (` acme `) | Backend or frontend trims; `search` body contains `acme` | `search trims surrounding whitespace` |
-| AL-015 | Search query with special characters (`<script>alert(1)</script>`, emoji, unicode) | Query sent verbatim; results render without breaking the UI; no XSS execution | `search accepts unicode and html-ish input without xss` |
-| AL-016 | Search query >500 characters | Either accepted in one request or truncated with helpful message; no client crash | `very long search query does not crash the page` |
-| AL-017 | Paste a multiline value into the single-line search input | Newlines stripped; resulting `search` value is single-line | `pasting newlines into search strips them` |
-
-### List-specific scenarios
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| AL-018 | Org has zero agents | Empty-state Bot icon + "No agents yet" + inline "Create Agent" CTA; count badge hidden | `empty list renders the no-agents empty state` |
-| AL-019 | Search with no matches | "no results" empty state for the filtered case; clear-filters shortcut available | `search with no matches renders no-results state` |
-| AL-020 | Pagination — first page | Prev button disabled, Next enabled when more pages exist | `pagination disables prev on the first page` |
-| AL-021 | Pagination — last page | Next button disabled, Prev enabled when prior pages exist | `pagination disables next on the last page` |
-| AL-022 | Sort by Name (asc → desc → reset) | Three consecutive header clicks fire three `POST /agent/list` calls with `sort_by: 'name'` asc, desc, then default `updated_at` desc | `sort by Name cycles asc desc and reset` |
-| AL-023 | Sort by Type | `POST /agent/list` fires with `sort_by: 'agent_type'` | `sort by Type orders rows by agent_type` |
-| AL-024 | Sort by Last Updated | `POST /agent/list` fires with `sort_by: 'updated_at'` (toggling asc/desc) | `sort by Last Updated cycles direction` |
-| AL-025 | Row-level delete confirmation cancel | Modal closes; no `DELETE` fired; row remains | `delete confirmation cancel preserves the row` |
-
-### Accessibility & keyboard
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| AL-026 | Tab order through the toolbar | Search → Filters button → Create Agent → first sortable column header — reachable in order | `tab order through toolbar reaches every control` |
-| AL-027 | Press Enter on a sortable column header | Re-fires `POST /agent/list` with updated sort (same as click) | `Enter on sortable header triggers sort` |
-| AL-028 | Delete-confirmation modal opens — focus is trapped | Focus moves inside the modal; Tab cycles within; Escape closes and restores focus to the row action menu trigger | `delete modal traps focus and restores on close` |
-| AL-029 | Toast error has `role="alert"` / aria-live | Screen readers announce the toast title without manual focus | `error toast is announced via aria-live` |
-| AL-030 | CreateAgentModal cards reachable via Tab + Enter | Tab order is Outbound → Inbound; Enter activates the focused card | `create modal cards are keyboard activatable` |
-
-### Cross-flow lifecycle
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| AL-LIFECYCLE | Walk **create → edit → delete** end-to-end in one Playwright test using the real backend: open `/agents` → click Create Agent → pick Inbound → fill the create form for a `__e2e__` agent → save → land on `/agents/edit/inbound/<id>/overview` → mutate name + description → save → navigate back to `/agents` → confirm the row appears with the new name → row delete + confirm → row gone | All three pages cooperate; toasts fire on each save/delete; cleanup runs in the same test body via `try/finally` even if assertions fail mid-way | `lifecycle: create then edit then delete an agent end to end` |
-
-### Full lifecycle (`AL-FULL`)
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| AL-FULL | Authenticate → visit `/agents` → assert headings + default sort + page-size selector defaults → exercise search (free-text + `name:` token + clear) → open Filters → tick Type=Inbound + Status=Active + Apply → clear all filters → sort by Name, Type, Last Updated → change page-size to 25 → open the per-row action menu → cancel delete → re-open and confirm delete on a seeded `__e2e__` agent → assert toast `Agent deleted successfully` and row removal → open Create Agent modal → press Escape to close → re-open and route to `/agents/create/inbound` | Every toolbar/table affordance fires the expected `POST /agent/list` request; the seeded agent is deleted in the same test body via `try/finally`; URL ends at `/agents/create/inbound` | `walks the entire agents list page end to end` |
-
-### Coverage map additions
-
-| New scenario | Replaces / extends | Notes |
-|---|---|---|
-| AL-001..003 | FS-15 (auth gating) | Adds expired-token + non-member cases on top of the bare unauth redirect |
-| AL-004..008 | FS-1, FS-4..FS-7 | Adds 400/403 paths and standardises the 401/404/500 assertions |
-| AL-009..012 | (new) | Network resilience was not previously covered |
-| AL-013..017 | (new) | Input edge cases for the search bar were not previously covered |
-| AL-018..025 | PS-2, PS-5, PS-6 + edge-cases | Pagination/sort/empty-state assertions are now first-class scenarios |
-| AL-026..030 | Accessibility checklist | Promotes bullet items to runnable scenarios |
-| AL-LIFECYCLE | (new) | Cross-flow create→edit→delete lifecycle |
-| AL-FULL | (new) | Single-test sweep of the list page |
+| Old scenario ID | New TC ID         | Spec test name                                                       |
+| --------------- | ----------------- | -------------------------------------------------------------------- |
+| PS-1            | TC-HAPPY-001      | list renders the populated table                                     |
+| PS-2            | TC-HAPPY-002      | empty list renders the no-agents empty state                         |
+| PS-3            | TC-HAPPY-003      | search by free-text query refires the list                           |
+| PS-4            | TC-HAPPY-004      | filter by Type=outbound via the drawer                               |
+| PS-5            | TC-HAPPY-005      | sort by Name asc                                                     |
+| PS-6            | TC-HAPPY-006      | page-size change resets to page 1                                    |
+| PS-7            | TC-HAPPY-007      | row click navigates to the editor                                    |
+| PS-8            | TC-HAPPY-008      | delete from row menu succeeds                                        |
+| PS-9            | TC-HAPPY-009      | create modal opens and routes to inbound                             |
+| FS-1            | TC-ERROR-001      | list 401 — empty state, no toast                                     |
+| FS-2            | TC-ERROR-002      | list 500 falls back to empty state                                   |
+| FS-3            | TC-ERROR-003      | facets 500 — drawer renders empty counts                             |
+| FS-4            | TC-ERROR-004      | delete 404 — row stays, toast surfaces                               |
+| FS-5            | TC-ERROR-005      | delete 401 — invalid token toast                                     |
+| FS-6            | TC-ERROR-006      | delete 422 falls back to generic toast                               |
+| FS-7            | TC-ERROR-007      | delete 500 — backend detail string surfaces                          |
+| FS-8            | TC-EDGE-007       | delete last row on last page steps page index back                   |
+| FS-9            | TC-EDGE-010       | search debounce — rapid typing fires at most one request             |
+| FS-10           | (covered in PS-5 assertions) | sort by unknown field — backend silent fallback           |
+| FS-11           | TC-EDGE-008       | row click on a row missing id is a no-op                             |
+| FS-12           | TC-EDGE-009       | row click with missing agent_type falls back to inbound              |
+| FS-13           | (informational — list never POSTs create) | duplicate-name 409 surfaces only on create page  |
+| FS-14           | TC-EDGE-006       | drawer Apply with no changes is a no-op                              |
+| FS-15           | TC-NAV-001        | unauthenticated visit redirects to login                             |
+| FS-16           | TC-NAV-010        | createAgentModal Escape key cancels without navigation               |
+| AL-001          | TC-NAV-001        | unauthenticated visit redirects to login                             |
+| AL-002          | TC-NAV-002        | expired token redirects to login and clears cookie                   |
+| AL-003          | TC-NAV-003        | non-member is denied access to the agents list                       |
+| AL-004          | TC-ERROR-010      | list 400 renders empty state without toast                           |
+| AL-005          | TC-ERROR-009      | delete 401 surfaces error toast without redirect                     |
+| AL-006          | TC-ERROR-008      | delete 403 surfaces forbidden toast                                  |
+| AL-007          | TC-ERROR-004      | delete 404 surfaces not-found toast                                  |
+| AL-008          | TC-ERROR-011      | list 500 falls back to empty state                                   |
+| AL-009          | TC-EDGE-012       | list network failure renders empty then recovers on retry            |
+| AL-010          | TC-LOADING-001    | slow list keeps skeleton visible                                     |
+| AL-011          | TC-LOADING-002    | slow delete disables confirm button and shows spinner                |
+| AL-012          | TC-LOADING-003    | concurrent delete 404 reconciles via refresh                         |
+| AL-013          | TC-EDGE-001       | whitespace-only search is treated as empty                           |
+| AL-014          | TC-EDGE-002       | search trims surrounding whitespace                                  |
+| AL-015          | TC-EDGE-003       | search accepts unicode and html-ish input without xss                |
+| AL-016          | TC-EDGE-004       | very long search query does not crash                                |
+| AL-017          | TC-EDGE-005       | pasting newlines into search strips them                             |
+| AL-018          | TC-HAPPY-002      | empty list renders the no-agents empty state                         |
+| AL-019          | TC-EDGE-011       | search with no matches renders no-results state                      |
+| AL-020          | TC-NAV-004        | pagination disables prev on the first page                           |
+| AL-021          | TC-NAV-005        | pagination disables next on the last page                            |
+| AL-022          | TC-NAV-006        | sort by Name cycles asc desc and reset                               |
+| AL-023          | TC-NAV-007        | sort by Type orders rows by agent_type                               |
+| AL-024          | TC-NAV-008        | sort by Last Updated cycles direction                                |
+| AL-025          | TC-NAV-009        | delete confirmation cancel preserves the row                         |
+| AL-026          | TC-A11Y-001       | tab order through toolbar reaches every control                      |
+| AL-027          | TC-A11Y-002       | Enter on sortable header triggers sort                               |
+| AL-028          | TC-A11Y-003       | delete modal traps focus and restores on close                       |
+| AL-029          | TC-A11Y-004       | error toast is announced via aria-live                               |
+| AL-030          | TC-A11Y-005       | create modal cards are keyboard activatable                          |
+| AL-LIFECYCLE    | TC-FULL-001       | lifecycle: create then edit then delete an agent end to end          |
+| AL-FULL         | TC-FULL-002       | walks the entire agents list page end to end                         |

@@ -10,6 +10,10 @@ The user enters their email; the backend always responds with a generic 200
 ("If the email exists, you will receive a password reset link") so existence
 is not leaked; the page swaps to a "Check your email" confirmation panel.
 
+> **Format rule (mandatory):** every test case below is one **Action** (steps the
+> user performs) followed by multiple **Observations** (each a set of verification
+> steps). See [`_template.md`](_template.md) for the canonical shape and ID prefixes.
+
 ---
 
 ## Page
@@ -66,50 +70,19 @@ is not leaked; the page swaps to a "Check your email" confirmation panel.
 
 ---
 
-## User Workflow Steps
+## UI Elements
 
-**WF-1: Successful reset request → confirmation panel** (positive)
-
-1. User navigates to `/forgot-password` → expected: form renders with single Email input
-2. User types `owner@acme.com` → expected: helperText absent
-3. User clicks **Send Reset Link** → expected: button enters loading; `POST /auth/forgot-password` fires with `{ email }`
-4. Response is 200 with `{"message": "If the email exists, you will receive a password reset link"}` → expected: success toast "Reset link sent if the email exists" (3 s)
-5. `mutation.isSuccess` becomes true → expected: form is replaced by the confirmation panel — heading "Check your email", body "We've sent a password reset link to **owner@acme.com**", outline "Back to login" button with left-arrow icon
-
-**WF-2: Unknown email (same UX)** (positive — backend hides existence)
-
-1. User submits `does-not-exist@nowhere.io` → expected: backend still returns 200 generic message
-2. Same toast + confirmation panel as WF-1; the email rendered in bold is the typed value (`does-not-exist@nowhere.io`)
-
-**WF-3: Client-side validation gates submit** (negative)
-
-1. User leaves Email blank and clicks Send Reset Link → expected: RHF prevents `POST /auth/forgot-password`; helperText "Email is required"
-2. User types `not-an-email` → expected: helperText "Please enter a valid email"
-3. User fixes the email → submission proceeds
-
-**WF-4: Backend 400 missing email** (negative)
-
-1. (Unreachable under healthy Zod) — direct API caller submits empty body
-2. Backend returns 400 `{"detail": "email is required"}`
-3. Note: `onSubmit` does NOT wrap the mutation in try/catch (see `forgot-password/page.tsx` lines 24–27); the unhandled rejection bubbles to TanStack Query's `isError` state. The success toast does NOT fire. ⚠ no error toast is fired by this page today; the user sees no feedback on failure beyond a button reset
-
-**WF-5: Back-to-login from the form** (positive)
-
-1. User clicks the "Back to login" inline link below the form → expected: navigation to `/login`
-
-**WF-6: Back-to-login from the confirmation panel** (positive)
-
-1. User reaches the confirmation panel (WF-1)
-2. User clicks the outline "Back to login" button → expected: navigation to `/login`
-
-**WF-7: Already-authenticated visit** (edge)
-
-1. User has `access_token` in localStorage and visits `/forgot-password` → expected: page still renders the form (no automatic redirect today). Submitting is allowed but pointless. ⚠ unverified guard
-
-**WF-8: Resubmit after success** (edge)
-
-1. User reaches the confirmation panel (WF-1) → expected: there is no "Send another link" button
-2. To resubmit, the user must navigate away (e.g. Back to login → /forgot-password) and refill the form — `mutation.isSuccess` does not auto-reset
+| Element                       | Type            | Content / Label                                                 | Behavior                                              |
+| ----------------------------- | --------------- | --------------------------------------------------------------- | ----------------------------------------------------- |
+| Heading                       | h2              | "Reset password"                                                | Static                                                |
+| Subtitle                      | p               | "Enter your email and we'll send you a reset link"              | Static                                                |
+| Email input                   | TextInput       | label "Email", `type="email"`                                   | Required, Zod-validated                               |
+| Send Reset Link button        | Button          | "Send Reset Link" → "Loading..."                                | `type="submit"`; disabled while `mutation.isPending`  |
+| Back to login (inline link)   | Link            | "Back to login" + `ArrowLeft` icon                              | Navigates to `/login`                                 |
+| MailCheck icon                | lucide icon     | `MailCheck`                                                     | Renders only in the success panel                     |
+| Confirmation heading          | h2              | "Check your email"                                              | Renders only after `mutation.isSuccess === true`      |
+| Confirmation body             | p               | "We've sent a password reset link to **<email>**"               | `<strong>` wraps the submitted email                  |
+| Back to login (outline button)| Button (outline)| "Back to login" + `ArrowLeft` icon                              | Navigates to `/login`                                 |
 
 ---
 
@@ -126,214 +99,6 @@ Source: `src/schemas/auth.ts` (`forgotPasswordSchema`).
 - "Send Reset Link" is **never disabled** by `formState.isValid`; invalid submit surfaces inline helperText instead
 - While `mutation.isPending === true`, the shadcn `<Button>` renders "Loading..." and sets `disabled`
 - Once `mutation.isSuccess === true`, the entire form unmounts and the confirmation panel renders — there is no way back to the form on this page without navigating away
-
----
-
-## Success Scenarios
-
-**PS-1: Known email → success toast + confirmation panel**
-
-- **Preconditions**: not authenticated; valid email.
-- **Steps**: type `owner@acme.com` → click Send Reset Link.
-- **Expected outcome**: success toast "Reset link sent if the email exists"; form replaced by confirmation panel; the bold email reads `owner@acme.com`.
-- **Mock API** (`POST /auth/forgot-password`, 200):
-  ```json
-  { "message": "If the email exists, you will receive a password reset link" }
-  ```
-
-**PS-2: Unknown email → identical UX**
-
-- **Preconditions**: not authenticated.
-- **Steps**: type `does-not-exist@nowhere.io` → submit.
-- **Expected outcome**: same toast + panel; bold email reads `does-not-exist@nowhere.io`.
-- **Mock API**: same as PS-1.
-
-**PS-3: Loading state visible during slow request**
-
-- **Preconditions**: backend deliberately slow (300 ms).
-- **Steps**: submit valid form.
-- **Expected outcome**: button shows "Loading..." with `disabled`; user cannot double-submit.
-
-**PS-4: Navigation to /login via inline link**
-
-- **Steps**: click "Back to login" below the form.
-- **Expected outcome**: client-side navigation to `/login`; no network calls.
-
-**PS-5: Navigation to /login via confirmation-panel button**
-
-- **Preconditions**: PS-1 reached.
-- **Steps**: click outline "Back to login" button.
-- **Expected outcome**: navigation to `/login`.
-
-**PS-6: Mixed-case email is preserved**
-
-- **Preconditions**: PS-1 with email `Mixed.Case+Tag@Example.COM`.
-- **Expected outcome**: panel renders `Mixed.Case+Tag@Example.COM` verbatim.
-
----
-
-## Failure Scenarios
-
-**FS-1: Empty Email**
-
-- **Mock API**: not called.
-- **Expected UI**: helperText "Email is required"; no toast.
-
-**FS-2: Malformed Email**
-
-- **Steps**: type `not-an-email`.
-- **Mock API**: not called.
-- **Expected UI**: helperText "Please enter a valid email".
-
-**FS-3: Email missing the `@` symbol**
-
-- **Steps**: type `userexample.com`.
-- **Expected UI**: helperText "Please enter a valid email".
-
-**FS-4: Email with double `@`**
-
-- **Steps**: type `a@@b.com`.
-- **Expected UI**: helperText "Please enter a valid email" (Zod's `email()` rejects).
-
-**FS-5: 400 backend rejection (missing email)**
-
-- **Mock API** (`POST /auth/forgot-password`, 400): `{ "detail": "email is required" }`
-- **Expected UI**: ⚠ `onSubmit` does NOT call `handleApiError` (no try/catch — see Workflow WF-4); no toast is shown. The success toast also does NOT fire because the mutation rejected. Button re-enables; form remains. **This is a known gap — confirm whether the next iteration adds a catch block.**
-
-**FS-6: 422 Validation error**
-
-- **Mock API** (`POST /auth/forgot-password`, 422):
-  ```json
-  { "detail": [{ "loc": ["body"], "msg": "field required", "type": "value_error.missing" }] }
-  ```
-- **Expected UI**: same as FS-5 — no toast surfaced today; `mutation.isError` becomes true.
-
-**FS-7: 500 Internal Server Error**
-
-- **Mock API** (`POST /auth/forgot-password`, 500): `{ "detail": "Internal Server Error" }`
-- **Expected UI**: same as FS-5 — no error toast; button re-enables.
-
-**FS-8: Network failure / no response**
-
-- **Mock API**: route aborted.
-- **Expected UI**: same as FS-5 — no toast; `mutation.isError` true.
-
-**FS-9: Double-submit guard**
-
-- **Steps**: click Send Reset Link twice in rapid succession against a slow backend.
-- **Expected UI**: second click is a no-op (button disabled while `mutation.isPending`); exactly one `POST /auth/forgot-password` is recorded.
-
-**FS-10: Backend 200 but response body is malformed JSON**
-
-- **Mock API** (`POST /auth/forgot-password`, 200, body `not-json`).
-- **Expected UI**: axios rejects parsing; mutation falls into the error branch — no toast surfaced today (see FS-5 gap).
-
-**FS-11: Submit while offline**
-
-- **Steps**: disable network; submit.
-- **Expected UI**: button enters loading; mutation eventually rejects with a network error; no toast surfaced today.
-
-**FS-12: Whitespace-only email**
-
-- **Steps**: type `   ` (3 spaces).
-- **Expected UI**: helperText "Please enter a valid email" (`min(1)` passes but `.email()` rejects).
-
-**FS-13: Authenticated visit to `/forgot-password` redirects to `/home`**
-
-- **Preconditions**: localStorage has valid `access_token` and the user lands on `/forgot-password`.
-- **Expected UI**: client-side guard redirects to `/home`; the form is never rendered. ⚠ Document current behaviour exactly — today the form renders. Update when the guard ships.
-
-**FS-14: Slow API (>3s) keeps Send Reset Link in loading state**
-
-- **Mock API** (`POST /auth/forgot-password`, 200 but delayed ~3500 ms): success after delay.
-- **Expected UI**: button text remains "Loading..." with `disabled` for the full duration; clicking again is a no-op; confirmation panel appears only after the response resolves.
-
-**FS-15: Email with XSS / special chars**
-
-- **Steps**: type `<script>alert(1)</script>@x.com`; submit.
-- **Expected UI**: Zod's `.email()` rejects → helperText "Please enter a valid email"; no `POST /auth/forgot-password` fires; the literal text renders as plain value in the input (no DOM injection).
-
-**FS-16: Email with emoji / unicode**
-
-- **Steps**: type `🔥user@example.com`; submit.
-- **Expected UI**: Zod's `.email()` accepts only ASCII local parts; depending on Zod version this may pass or fail. Document the observed helperText behaviour.
-
-**FS-17: Very long email (>500 chars)**
-
-- **Steps**: type a 600-char local-part email; submit.
-- **Expected UI**: input accepts; Zod's `.email()` likely rejects the malformed length; if accepted, `POST /auth/forgot-password` returns the same generic 200 (no leak).
-
-**FS-18: Paste with newlines into Email input**
-
-- **Steps**: paste `user@acme.com\nextra` into Email.
-- **Expected UI**: single-line `type="email"` input strips the newline; Zod validates the residual value.
-
-**FS-19: Tab order through the form**
-
-- **Steps**: focus Email → press Tab repeatedly.
-- **Expected UI**: focus moves Email → Send Reset Link → "Back to login" inline link.
-
-**FS-20: Submit via Enter key in Email**
-
-- **Steps**: fill valid Email, press Enter while focus is on Email.
-- **Expected UI**: form submits exactly as a click on Send Reset Link would.
-
-**FS-21: Helper-text errors are announced via aria-live**
-
-- **Steps**: submit with empty Email.
-- **Expected UI**: helperText element renders with `role="alert"` (or `aria-live`) so screen readers announce "Email is required" without focus change.
-
-**FS-22: Browser back from confirmation panel returns to the editable form**
-
-- **Preconditions**: WF-1 completed; user is on the confirmation panel.
-- **Steps**: press browser Back.
-- **Expected UI**: URL unchanged (the swap is in-component, not a route push); pressing Back exits `/forgot-password` to the previous page.
-
-### Full lifecycle (`*-FULL`)
-
-**FP-FULL: End-to-end forgot-password lifecycle in a single test**
-
-- **Preconditions**: A test user `__e2e__fp_<uuid>@example.com` is provisioned via the backend API in the test body (NOT mocked).
-- **Steps in one Playwright test body**:
-  1. Visit `/forgot-password` without auth → expect form with single Email input.
-  2. Click Send Reset Link with empty Email → expect helperText "Email is required".
-  3. Type `not-an-email` → submit → expect helperText "Please enter a valid email".
-  4. Click "Back to login" inline link → expect URL `/login`.
-  5. Navigate back to `/forgot-password`.
-  6. Type the provisioned email → submit → expect success toast "Reset link sent if the email exists"; expect confirmation panel with the email in `<strong>`.
-  7. Click outline "Back to login" button → expect URL `/login`.
-  8. Navigate to `/forgot-password` again and submit a deliberately-unknown email `nobody+__e2e__@example.com` → expect identical success toast + confirmation panel (no existence leak).
-- **Cleanup (in `finally`)**: Delete the provisioned user via the backend admin API.
-- **Naming**: `FP-FULL — forgot-password full lifecycle`.
-
----
-
-## Expected Toast Messages
-
-Toasts use Sonner via `showToast` from `@/lib/toast`. The page **does not** call `handleApiError` on failure today — only the success path triggers a toast.
-
-| Trigger                                       | Toast title                                  | Toast description | Variant |
-| --------------------------------------------- | -------------------------------------------- | ----------------- | ------- |
-| Successful reset request (any 2xx)            | `Reset link sent if the email exists`        | —                 | success |
-| Backend error (4xx / 5xx / network)           | (none — no error toast wired up today)       | —                 | —       |
-
-If a future iteration wraps `mutation.mutateAsync` in try/catch + `handleApiError`, error toasts will surface the backend `detail` string verbatim (same convention as the rest of the auth flow).
-
----
-
-## UI Elements
-
-| Element                       | Type            | Content / Label                                                 | Behavior                                              |
-| ----------------------------- | --------------- | --------------------------------------------------------------- | ----------------------------------------------------- |
-| Heading                       | h2              | "Reset password"                                                | Static                                                |
-| Subtitle                      | p               | "Enter your email and we'll send you a reset link"              | Static                                                |
-| Email input                   | TextInput       | label "Email", `type="email"`                                   | Required, Zod-validated                               |
-| Send Reset Link button        | Button          | "Send Reset Link" → "Loading..."                                | `type="submit"`; disabled while `mutation.isPending`  |
-| Back to login (inline link)   | Link            | "Back to login" + `ArrowLeft` icon                              | Navigates to `/login`                                 |
-| MailCheck icon                | lucide icon     | `MailCheck`                                                     | Renders only in the success panel                     |
-| Confirmation heading          | h2              | "Check your email"                                              | Renders only after `mutation.isSuccess === true`      |
-| Confirmation body             | p               | "We've sent a password reset link to **<email>**"               | `<strong>` wraps the submitted email                  |
-| Back to login (outline button)| Button (outline)| "Back to login" + `ArrowLeft` icon                              | Navigates to `/login`                                 |
 
 ---
 
@@ -386,19 +151,525 @@ Request body:
 
 ---
 
-## Edge Cases
+## Test Cases
 
-- [ ] Token already set in localStorage when visiting `/forgot-password` — no client-side redirect today; submitting is allowed
-- [ ] Unknown email — backend returns the same 200 generic body, frontend behaves identically; confirms the no-existence-leak design
-- [ ] Backend error path (4xx/5xx/network) — **no toast is shown today** because `onSubmit` lacks a try/catch (see FS-5..FS-11); `mutation.isError` flips silently
-- [ ] Confirmation panel renders the typed email verbatim — case and whitespace are preserved (no trim)
-- [ ] Double-submit — disabled button prevents a second `POST`
-- [ ] Resubmit after success — no in-page reset; user must navigate away and back
-- [ ] Browser back from the confirmation panel — Next.js history pop returns to the form, but RHF state is unmounted, values are gone ⚠ unverified
-- [ ] Email field with whitespace-only input — Zod's `.email()` rejects with "Please enter a valid email"
+> Every test case is **one Action + multiple Observations**. Each Action is a numbered
+> list of steps. Each Observation is a numbered list of verification steps.
+> ID prefix legend: `TC-HAPPY-` (positive), `TC-VALIDATE-` (client validation),
+> `TC-ERROR-` (server errors), `TC-NAV-` (navigation), `TC-LOADING-` (loading/disabled),
+> `TC-EDGE-` (edge cases), `TC-A11Y-` (accessibility), `TC-FULL-` (lifecycle).
+
+---
+
+### TC-HAPPY-001: Known email request swaps to confirmation panel
+
+**Preconditions**:
+- User is signed out (no `access_token` in localStorage)
+- Email field is blank on mount
+
+**Action**:
+1. Visit `/forgot-password`
+2. Type `owner@acme.com` into the Email input
+3. Click the "Send Reset Link" button
+
+**Observation 1 — Network request**:
+1. Exactly one `POST /auth/forgot-password` request is recorded
+2. Request body equals `{ "email": "owner@acme.com" }`
+3. Request `Content-Type` header is `application/json`
+
+**Observation 2 — Loading state during request**:
+1. The "Send Reset Link" button text changes to "Loading..."
+2. The "Send Reset Link" button has the `disabled` attribute
+
+**Observation 3 — Success toast**:
+1. A Sonner toast appears in `[data-sonner-toast]`
+2. Toast title equals `Reset link sent if the email exists`
+3. Toast variant is `success`
+4. Toast auto-dismisses within ~3s
+
+**Observation 4 — Confirmation panel renders**:
+1. The Email input is no longer in the DOM
+2. A heading with text `Check your email` is visible
+3. The submitted email `owner@acme.com` is rendered inside a `<strong>` element
+4. The `MailCheck` icon is visible above the heading
+5. An outline button labelled `Back to login` (with `ArrowLeft` icon) is in the DOM
+
+**API mock**: `POST /auth/forgot-password` → 200 `{ "message": "If the email exists, you will receive a password reset link" }`.
+
+**Cleanup**: Clear cookies and localStorage in `afterEach`.
+
+---
+
+### TC-HAPPY-002: Unknown email yields identical success UX (no existence leak)
+
+**Action**:
+1. Visit `/forgot-password`
+2. Type `does-not-exist@nowhere.io` into the Email input
+3. Click "Send Reset Link"
+
+**Observation 1 — Network call fires**:
+1. Exactly one `POST /auth/forgot-password` request is recorded with body `{ "email": "does-not-exist@nowhere.io" }`
+
+**Observation 2 — Same toast as known-email path**:
+1. Toast title equals `Reset link sent if the email exists`
+
+**Observation 3 — Same confirmation panel**:
+1. Heading `Check your email` is visible
+2. The submitted email `does-not-exist@nowhere.io` is rendered inside `<strong>`
+
+**API mock**: `POST /auth/forgot-password` → 200 generic body (same as TC-HAPPY-001).
+
+---
+
+### TC-HAPPY-003: Mixed-case email is preserved verbatim in the panel
+
+**Action**:
+1. Visit `/forgot-password`
+2. Type `Mixed.Case+Tag@Example.COM` into Email
+3. Click "Send Reset Link"
+
+**Observation 1 — Panel renders the typed value without case-normalisation**:
+1. The confirmation panel body contains `<strong>Mixed.Case+Tag@Example.COM</strong>` verbatim
+
+**API mock**: `POST /auth/forgot-password` → 200 success.
+
+---
+
+### TC-VALIDATE-001: Empty Email blocks submit with inline error
+
+**Action**:
+1. Visit `/forgot-password`
+2. Leave Email blank
+3. Click "Send Reset Link"
+
+**Observation 1 — No network call fires**:
+1. Zero `POST /auth/forgot-password` requests are recorded
+
+**Observation 2 — Inline error appears under Email**:
+1. Helper text under the Email input reads exactly `Email is required`
+2. Email input has the error styling
+
+**Observation 3 — No toast and no panel**:
+1. No Sonner toast is shown
+2. The confirmation panel is NOT in the DOM
+3. URL is still `/forgot-password`
+
+---
+
+### TC-VALIDATE-002: Malformed Email blocks submit
+
+**Action**:
+1. Visit `/forgot-password`
+2. Type `not-an-email` into Email
+3. Click "Send Reset Link"
+
+**Observation 1 — No network call**:
+1. Zero `POST /auth/forgot-password` requests are recorded
+
+**Observation 2 — Inline error**:
+1. Helper text under Email reads exactly `Please enter a valid email`
+
+---
+
+### TC-VALIDATE-003: Email missing `@` symbol blocks submit
+
+**Action**:
+1. Visit `/forgot-password`
+2. Type `userexample.com` into Email
+3. Click "Send Reset Link"
+
+**Observation 1 — Inline error**:
+1. Helper text under Email reads exactly `Please enter a valid email`
+
+**Observation 2 — No network call**:
+1. Zero `POST /auth/forgot-password` requests are recorded
+
+---
+
+### TC-VALIDATE-004: Email with double `@` blocks submit
+
+**Action**:
+1. Visit `/forgot-password`
+2. Type `a@@b.com` into Email
+3. Click "Send Reset Link"
+
+**Observation 1 — Inline error**:
+1. Helper text under Email reads exactly `Please enter a valid email`
+
+---
+
+### TC-VALIDATE-005: Whitespace-only email blocks submit
+
+**Action**:
+1. Visit `/forgot-password`
+2. Type `   ` (3 spaces) into Email
+3. Click "Send Reset Link"
+
+**Observation 1 — Inline error**:
+1. Helper text under Email reads exactly `Please enter a valid email`
+
+> Note: `min(1)` passes (length ≥ 1) but `.email()` rejects.
+
+---
+
+### TC-ERROR-001: 400 backend rejection surfaces no toast today (known gap)
+
+**Action**:
+1. Visit `/forgot-password`
+2. Type a valid-format email and submit
+
+**Observation 1 — Network call fires**:
+1. Exactly one `POST /auth/forgot-password` is recorded
+
+**Observation 2 — No toast surfaced**:
+1. No Sonner toast (success OR error) appears
+2. The success toast `Reset link sent if the email exists` is NOT shown
+3. `mutation.isError` becomes true silently
+
+**Observation 3 — Form state**:
+1. Email input still contains the typed value
+2. "Send Reset Link" button re-enables
+3. The confirmation panel is NOT in the DOM
+4. URL is still `/forgot-password`
+
+**API mock**: `POST /auth/forgot-password` → 400 `{ "detail": "email is required" }`.
+
+> ⚠ Known gap — `onSubmit` does NOT call `handleApiError` (no try/catch in `forgot-password/page.tsx` lines 24–27). Confirm whether a future iteration adds a catch block.
+
+---
+
+### TC-ERROR-002: 422 validation error surfaces no toast today
+
+**Action**:
+1. Submit valid-format email
+
+**Observation 1 — No toast surfaced**:
+1. No Sonner toast appears
+2. `mutation.isError` becomes true
+
+**Observation 2 — Form state**:
+1. Email is preserved
+2. Button re-enables
+
+**API mock**: `POST /auth/forgot-password` → 422 `{ "detail": [{ "loc": ["body"], "msg": "field required", "type": "value_error.missing" }] }`.
+
+---
+
+### TC-ERROR-003: 500 Internal Server Error surfaces no toast today
+
+**Action**:
+1. Submit valid-format email
+
+**Observation 1 — No error toast**:
+1. No Sonner toast appears
+
+**Observation 2 — Form state**:
+1. Button re-enables
+
+**API mock**: `POST /auth/forgot-password` → 500 `{ "detail": "Internal Server Error" }`.
+
+---
+
+### TC-ERROR-004: Network failure surfaces no toast today
+
+**Action**:
+1. Submit valid-format email
+
+**Observation 1 — No toast**:
+1. No Sonner toast appears
+2. `mutation.isError` becomes true
+
+**Observation 2 — Form state**:
+1. Email is preserved; button re-enables
+
+**API mock**: route aborted (no response object).
+
+---
+
+### TC-ERROR-005: 200 with malformed JSON body falls into error branch
+
+**Action**:
+1. Submit valid-format email
+
+**Observation 1 — No toast surfaced**:
+1. axios rejects parsing; mutation enters the error branch
+2. No Sonner toast appears (see ERROR gap)
+
+**API mock**: `POST /auth/forgot-password` → 200 with body `not-json`.
+
+---
+
+### TC-NAV-001: Click inline "Back to login" navigates client-side
+
+**Action**:
+1. Visit `/forgot-password`
+2. Click the inline "Back to login" link below the form
+
+**Observation 1 — URL change**:
+1. URL becomes `/login`
+
+**Observation 2 — No network call**:
+1. Zero `POST /auth/forgot-password` requests are recorded
+2. No full page reload occurs (client-side `<Link>`)
+
+---
+
+### TC-NAV-002: Click "Back to login" button from confirmation panel
+
+**Preconditions**: TC-HAPPY-001 just completed; confirmation panel is visible.
+
+**Action**:
+1. Click the outline "Back to login" button inside the confirmation panel
+
+**Observation 1 — URL change**:
+1. URL becomes `/login`
+
+**Observation 2 — No full page reload**:
+1. No full page reload occurs
+
+---
+
+### TC-LOADING-001: Slow API keeps Send Reset Link in loading state
+
+**Action**:
+1. Visit `/forgot-password`
+2. Type a valid email
+3. Click "Send Reset Link" against a deliberately slow backend (3500 ms)
+
+**Observation 1 — Button label**:
+1. Within 100 ms of click, button text becomes `Loading...`
+
+**Observation 2 — Button disabled attribute**:
+1. The button has `disabled` set throughout the 3500 ms window
+2. Clicking the button five more times produces zero additional `POST /auth/forgot-password` requests
+
+**Observation 3 — Confirmation panel after resolution**:
+1. After ~3500 ms the confirmation panel replaces the form
+2. The success toast appears
+
+**API mock**: `POST /auth/forgot-password` → 200 delayed by 3500 ms.
+
+---
+
+### TC-LOADING-002: Double-submit guard records exactly one request
+
+**Action**:
+1. Visit `/forgot-password`
+2. Type a valid email
+3. Click "Send Reset Link" twice in rapid succession (≤ 100 ms apart) against a slow backend
+
+**Observation 1 — Network**:
+1. Exactly one `POST /auth/forgot-password` request is recorded
+
+**Observation 2 — UX**:
+1. The button enters the loading state on the first click
+2. The second click is a no-op (button disabled while `mutation.isPending`)
+
+---
+
+### TC-EDGE-001: Already-authenticated visit still renders the form
+
+**Preconditions**: localStorage has a valid `access_token`.
+
+**Action**:
+1. Visit `/forgot-password`
+
+**Observation 1 — Form renders today**:
+1. The Email input is in the DOM (no automatic redirect today)
+2. The Email input is empty
+
+> ⚠ When the client-side authed-user redirect ships, this observation must change.
+
+---
+
+### TC-EDGE-002: Email with XSS attempt is rejected by Zod
+
+**Action**:
+1. Visit `/forgot-password`
+2. Type `<script>alert(1)</script>@x.com` into Email
+3. Click "Send Reset Link"
+
+**Observation 1 — Zod rejects**:
+1. Helper text under Email reads `Please enter a valid email`
+2. Zero `POST /auth/forgot-password` requests are recorded
+
+**Observation 2 — DOM is safe**:
+1. The literal `<script>` text appears as the input's `value` attribute (rendered as text, not HTML)
+2. `window.alert` was not invoked
+
+---
+
+### TC-EDGE-003: Email with emoji / unicode
+
+**Action**:
+1. Visit `/forgot-password`
+2. Type `🔥user@example.com` into Email
+3. Click "Send Reset Link"
+
+**Observation 1 — Zod behaviour depends on implementation**:
+1. Either helperText `Please enter a valid email` appears OR the request is submitted
+
+> ⚠ Document the observed helperText behaviour — Zod's `.email()` accepts only ASCII local parts in most versions.
+
+---
+
+### TC-EDGE-004: Very long email (>500 chars) does not crash the form
+
+**Action**:
+1. Visit `/forgot-password`
+2. Paste a 600-character local-part email
+3. Click "Send Reset Link"
+
+**Observation 1 — Input accepts the value**:
+1. Email input value length equals 600 (or more, with the domain)
+
+**Observation 2 — Either Zod rejects or backend returns generic 200**:
+1. If Zod rejects, helperText `Please enter a valid email` appears and no network call is fired
+2. If accepted, `POST /auth/forgot-password` returns the same generic 200 (no leak)
+
+---
+
+### TC-EDGE-005: Paste with newlines into Email strips the newline
+
+**Action**:
+1. Visit `/forgot-password`
+2. Paste `user@acme.com\nextra` into the Email input
+
+**Observation 1 — Single-line input strips newline**:
+1. The Email input value contains no newline character
+2. Zod validates the residual value
+
+---
+
+### TC-EDGE-006: Submit via Enter key in Email
+
+**Action**:
+1. Visit `/forgot-password`
+2. Type a valid email
+3. Focus the Email input and press `Enter`
+
+**Observation 1 — Form submits**:
+1. Exactly one `POST /auth/forgot-password` request is recorded
+2. Body equals `{ "email": "..." }` with the typed value
+
+---
+
+### TC-EDGE-007: Browser back from confirmation panel exits the page
+
+**Preconditions**: TC-HAPPY-001 completed; user is on the confirmation panel.
+
+**Action**:
+1. Press the browser Back button
+
+**Observation 1 — URL navigates away**:
+1. URL leaves `/forgot-password` to the previous page (the in-component swap did not push history)
+
+---
+
+### TC-EDGE-008: Resubmit after success requires navigating away
+
+**Preconditions**: TC-HAPPY-001 completed; confirmation panel is visible.
+
+**Action**:
+1. Inspect the confirmation panel
+
+**Observation 1 — No in-page "Send another link" affordance**:
+1. There is no button to re-submit from the confirmation panel
+2. `mutation.isSuccess` does not auto-reset
+
+> Note: To resubmit, the user must navigate to `/login` → `/forgot-password` and refill the form.
+
+---
+
+### TC-A11Y-001: Tab order through the form
+
+**Action**:
+1. Visit `/forgot-password`
+2. Focus the Email input
+3. Press `Tab` repeatedly until focus exits the form
+
+**Observation 1 — Tab order matches design**:
+1. Focus moves in the order: Email → Send Reset Link → "Back to login" inline link
+2. No focusable element is skipped
+3. No focusable element is reached twice
+
+---
+
+### TC-A11Y-002: Validation errors are announced to screen readers
+
+**Action**:
+1. Visit `/forgot-password`
+2. Click "Send Reset Link" with the Email field empty
+
+**Observation 1 — Email error is announceable**:
+1. Helper text under Email is rendered inside an element with `role="alert"` (or `aria-live="polite"`)
+2. The error text is exactly `Email is required`
+
+---
+
+### TC-A11Y-003: Loading button announces state via text, not just a spinner
+
+**Action**:
+1. Submit a valid email against a slow backend
+
+**Observation 1 — Button text changes**:
+1. The button's accessible name changes from `Send Reset Link` to `Loading...`
+2. The button's `disabled` attribute is set (screen reader announces "disabled")
+
+---
+
+### TC-FULL-001: End-to-end forgot-password lifecycle in one test
+
+**Preconditions**: A test user `__e2e__fp_<uuid>@example.com` is provisioned via the backend API (NOT mocked).
+
+**Action**:
+1. Visit `/forgot-password` without auth
+2. Click "Send Reset Link" with the Email field empty
+3. Type `not-an-email` and submit
+4. Click "Back to login" inline link
+5. Navigate back to `/forgot-password`
+6. Type the provisioned email and submit
+7. Click outline "Back to login" button
+8. Navigate to `/forgot-password` again and submit `nobody+__e2e__@example.com`
+
+**Observation 1 — Step 2 yields required-field error**:
+1. Helper text `Email is required` is visible
+
+**Observation 2 — Step 3 yields format error**:
+1. Helper text under Email becomes `Please enter a valid email`
+
+**Observation 3 — Step 4 navigates to /login**:
+1. URL becomes `/login`
+
+**Observation 4 — Step 6 succeeds**:
+1. Toast title equals `Reset link sent if the email exists`
+2. Confirmation panel renders with the email inside `<strong>`
+
+**Observation 5 — Step 7 navigates to /login**:
+1. URL becomes `/login`
+
+**Observation 6 — Step 8 unknown email yields identical UX**:
+1. Toast title equals `Reset link sent if the email exists`
+2. Confirmation panel renders with the unknown email inside `<strong>`
+
+**Cleanup** (in `finally`):
+1. Delete the provisioned user via the backend admin API
+
+---
+
+## Edge Cases (each appears as a `TC-EDGE-*` or `TC-ERROR-*` test case above)
+
+- [x] Token already set in localStorage when visiting `/forgot-password` — see TC-EDGE-001
+- [x] Unknown email — see TC-HAPPY-002
+- [x] Backend error path (4xx/5xx/network) — no toast surfaced today — see TC-ERROR-001..TC-ERROR-005
+- [x] Confirmation panel renders the typed email verbatim — see TC-HAPPY-003
+- [x] Double-submit — see TC-LOADING-002
+- [x] Resubmit after success — see TC-EDGE-008
+- [x] Browser back from confirmation panel — see TC-EDGE-007
+- [x] Whitespace-only email — see TC-VALIDATE-005
+- [x] Enter key in the Email input — see TC-EDGE-006
+- [x] Slow backend — see TC-LOADING-001
 - [ ] Suspense — none on this page (no `useSearchParams`); no fallback flash
-- [ ] Enter key in the Email input submits the form (RHF default)
-- [ ] Slow backend — the loading state holds the user for up to N seconds; no timeout configured client-side
 - [ ] Repeated rapid submissions of valid emails — each completes the mutation and re-shows the toast; backend rate limiting is the only guard ⚠ unverified
 - [ ] Backend reset-link expiry is handled on the `/reset-password` page, not here
 
@@ -416,14 +687,27 @@ Request body:
 
 ---
 
-## Accessibility Requirements
+## Accessibility Requirements (each appears as a `TC-A11Y-*` test case above)
 
-- [ ] Tab order: Email → Send Reset Link → "Back to login" inline link
+- [x] Tab order: Email → Send Reset Link → "Back to login" inline link — see TC-A11Y-001
+- [x] Validation errors render as `helperText` with `aria-live`/`role="alert"` — see TC-A11Y-002
+- [x] Submit button announces loading state with "Loading..." text — see TC-A11Y-003
 - [ ] Email input uses the shared `TextInput` (renders an associated `<label>`) and the required indicator
-- [ ] Validation errors render as `helperText` under the input — not as a toast (avoids screen-reader churn for inline validation)
-- [ ] Submit button announces its loading state with "Loading..." text rather than only a spinner
 - [ ] Toast container has `aria-live="polite"` (Sonner default); success toasts default to 3000 ms
 - [ ] Confirmation panel preserves heading hierarchy (layout `<h1>` → page `<h2>` "Check your email")
 - [ ] The "Back to login" links use real anchors (Next.js `<Link>`) and have a primary text color with hover underline
 - [ ] `MailCheck` and `ArrowLeft` icons are decorative; surrounding text carries the meaning
 - [ ] Focus remains on the page (no modal/dialog); after the form swaps to the confirmation panel, focus does not auto-move to the new heading ⚠ unverified — a future iteration may want to focus the heading or the Back-to-login button for keyboard users
+
+---
+
+## Expected Toast Messages
+
+Toasts use Sonner via `showToast` from `@/lib/toast`. The page **does not** call `handleApiError` on failure today — only the success path triggers a toast.
+
+| Trigger                                       | Toast title                                  | Toast description | Variant |
+| --------------------------------------------- | -------------------------------------------- | ----------------- | ------- |
+| Successful reset request (any 2xx)            | `Reset link sent if the email exists`        | —                 | success |
+| Backend error (4xx / 5xx / network)           | (none — no error toast wired up today)       | —                 | —       |
+
+If a future iteration wraps `mutation.mutateAsync` in try/catch + `handleApiError`, error toasts will surface the backend `detail` string verbatim (same convention as the rest of the auth flow).

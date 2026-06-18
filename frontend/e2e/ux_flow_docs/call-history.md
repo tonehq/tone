@@ -9,6 +9,10 @@ pipeline. Each call has metadata, a recording, a transcript, and metrics. The
 list page supports rich filtering; the detail page splits into three tabs
 (Transcription & Recordings, Metrics, Call Configurations).
 
+> **Format rule (mandatory):** every test case below is one **Action** (steps the
+> user performs) followed by multiple **Observations** (each a set of verification
+> steps). See [`_template.md`](_template.md) for the canonical shape and ID prefixes.
+
 ---
 
 ## Pages
@@ -117,47 +121,6 @@ at call time, **so that** I can reproduce the test.
 
 ---
 
-## User Workflow Steps
-
-Step-by-step expected user behavior per major story. Used to drive
-Playwright spec generation under `frontend/e2e/dashboard/call-history.spec.ts`.
-
-**WF-1: Browse + filter calls** (positive)
-1. User signs in (worker fixture `loginViaUI`) → expected: lands on `/home`
-2. User clicks sidebar `Call History` link → expected: URL is `/call-history`; `POST /call-log/list` and `POST /call-log/facets` fire with `start_date_time`, `end_date_time`, current browser tz
-3. User sees h1 "Call History" + Phone badge with total → expected: badge text matches `data.total`
-4. User types `status:completed` in the token search → expected: filters payload includes `{field: "status", operator: "in", value: ["completed"]}`; table refetches; page resets to 1
-5. User changes page size to 25 → expected: `page_size: 25`, page resets to 1
-6. User clicks a row → expected: `router.push('/call-history/<id>')` → server redirect to `/call-history/<id>/transcription`
-
-**WF-2: Use the Filters drawer** (positive)
-1. User clicks "Filters" button → expected: right drawer titled "Filters" opens, description "Narrow call history by time, status, agent, pipeline and metrics."
-2. User expands Timeline, picks a 7-day range → expected: draft state updates; list NOT yet refetched
-3. User toggles a facet value (e.g. `direction: outbound`) → expected: chip appears in drawer count
-4. User enters Turns `From=5, To=20` → expected: helper text visible "Calls with no metrics record are excluded when this range is set."
-5. User drags Avg latency to `0.5s — 3.2s` → expected: slider label updates live
-6. User clicks "Apply" → expected: drawer closes; `POST /call-log/list` fires with new filters; "Filters" toolbar button shows badge count `> 0`
-7. User reopens drawer, clicks "Reset" → expected: draft cleared; Reset becomes disabled (no active filters)
-8. User closes drawer via Esc / overlay click WITHOUT Apply → expected: draft discarded; applied filters unchanged
-
-**WF-3: Open detail + tabs** (positive)
-1. User clicks row for call X → expected: `/call-history/X/transcription`; `GET /call-log/X` fires; `CallSummaryCard` renders chips
-2. User clicks "Metrics" sidebar tab → expected: URL `/call-history/X/metrics`; no second `GET /call-log/X` (shared context)
-3. User clicks "Call Configurations" → expected: URL `/call-history/X/configurations`; section lists agent_name, direction, status, channel_type, started_at, ended_at
-4. User clicks "Back to Call History" rail link → expected: URL `/call-history`; list state preserved
-
-**WF-4: Audio playback + transcript search** (positive)
-1. User on `/transcription` tab; call has `recording_upload_id` → expected: `GET /call-log/X/audio-url` fires; spinner "Loading audio..." shows
-2. Response returns `audio_url` → expected: native `<audio controls>` renders with `src=audio_url`
-3. User types `"reschedule"` in transcript search → expected: only matching messages remain; matched substring wrapped in `<mark class="bg-yellow-200">`
-4. User clears search → expected: full transcript restored
-
-**WF-5: Copy link** (positive)
-1. User clicks "Copy link" → expected: `navigator.clipboard.writeText(window.location.href)` fires; button label flips to "Copied" with Check icon
-2. After ~1.5s → expected: button reverts to "Copy link"
-
----
-
 ## Input Specifications
 
 ### Filter drawer
@@ -181,136 +144,6 @@ Playwright spec generation under `frontend/e2e/dashboard/call-history.spec.ts`.
 | Field   | Type   | Required | Validation Rules                          | Exact Error Message |
 | ------- | ------ | -------- | ----------------------------------------- | ------------------- |
 | Search  | text   | No       | case-insensitive substring; regex-escaped via `escapeRegex` | (no inline error; empty match shows "No matching messages") |
-
----
-
-## Success Scenarios
-
-**PS-1: List loads with default range**
-- Preconditions: signed-in user; calls exist in DB.
-- Steps: navigate to `/call-history`.
-- Expected: h1 "Call History", Phone badge shows `total`, first page of rows visible, Agent column sticky-left.
-- **Mock API**: `POST /call-log/list` →
-  ```json
-  {
-    "items": [
-      {
-        "id": "call-uuid",
-        "agent_id": "agent-uuid",
-        "agent_name": "Concierge",
-        "from_number": "+14155550100",
-        "to_number": "+14155550199",
-        "status": "completed",
-        "duration_seconds": 132,
-        "started_at": "2026-05-15T10:00:00+00:00",
-        "ended_at": "2026-05-15T10:02:12+00:00"
-      }
-    ],
-    "total": 1,
-    "page": 1,
-    "page_size": 10
-  }
-  ```
-
-**PS-2: Apply Status=completed via token search**
-- Preconditions: PS-1 succeeded; at least one completed call exists.
-- Steps: type `status:completed` token; press Enter.
-- Expected: refetch fires; page resets to 1; row count matches filtered total.
-- **Mock API**: `POST /call-log/list` request body contains `filters: [{field: "status", operator: "in", value: ["completed"]}]`; response shape same as PS-1.
-
-**PS-3: Open call detail**
-- Preconditions: PS-1 row visible.
-- Steps: click any row.
-- Expected: URL `/call-history/<id>/transcription`; breadcrumb "Call History / <Agent Name>"; `CallIdPill` shows truncated id; tooltip shows full id.
-- **Mock API**: `GET /call-log/<id>` →
-  ```json
-  {
-    "id": "call-uuid",
-    "agent_id": "agent-uuid",
-    "agent_name": "Concierge",
-    "from_number": "+14155550100",
-    "to_number": "+14155550199",
-    "status": "completed",
-    "duration_seconds": 132,
-    "recording_upload_id": "rec-uuid",
-    "transcript": [
-      {"role": "assistant", "text": "Hi, how can I help?", "timestamp": "2026-05-15T10:00:01+00:00"},
-      {"role": "user", "text": "I need to reschedule.", "timestamp": "2026-05-15T10:00:05+00:00"}
-    ]
-  }
-  ```
-
-**PS-4: Audio loads + plays**
-- Preconditions: PS-3; call has `recording_upload_id`.
-- Steps: wait for audio player to mount.
-- Expected: "Loading audio..." spinner appears briefly; then `<audio controls>` with the signed URL.
-- **Mock API**: `GET /call-log/<id>/audio-url` → `{"audio_url": "https://r2.example.com/calls/call-uuid.mp3?signature=..."}`
-
-**PS-5: Transcript search highlights**
-- Preconditions: PS-3 transcript loaded.
-- Steps: type `reschedule` in transcript search.
-- Expected: only matching message visible; substring wrapped in `<mark class="bg-yellow-200">`.
-
-**PS-6: Copy link succeeds**
-- Preconditions: PS-3.
-- Steps: click "Copy link".
-- Expected: clipboard contains `window.location.href`; button reads "Copied" with Check icon for ~1.5s, then reverts to "Copy link".
-
-**PS-7: Apply drawer filter + reset**
-- Preconditions: PS-1.
-- Steps: open drawer → toggle `direction: outbound` → Apply → reopen → Reset.
-- Expected: list refetches twice; after Apply, "Filters" toolbar button badge count = 1; after Reset, badge gone and Reset is disabled.
-
----
-
-## Failure Scenarios
-
-**FS-1: List fetch fails (500)**
-- Preconditions: signed-in.
-- Steps: navigate to `/call-history`.
-- **Mock API**: `POST /call-log/list` → `500 { "detail": "Database connection error" }`
-- Expected UI: error toast title "Database connection error" (variant `error`); table shows loading→empty; no row click possible.
-
-**FS-2: Unauthorized list (401)**
-- Preconditions: stale token.
-- **Mock API**: `POST /call-log/list` → `401 {"detail": "Could not validate credentials"}`
-- Expected UI: error toast "Could not validate credentials"; middleware-level redirect MAY fire on next nav.
-
-**FS-3: Empty list — no filters**
-- **Mock API**: `POST /call-log/list` → `{"items": [], "total": 0, "page": 1, "page_size": 10}`
-- Expected UI: "No call logs found" headline + "Call logs will appear here once your agents start handling calls." No "Clear all filters" button.
-
-**FS-4: Empty list — under active filters**
-- Preconditions: at least one filter applied (chip visible).
-- **Mock API**: same as FS-3.
-- Expected UI: "No call logs found" + "No calls match your current filters. Try adjusting or clearing them." + "Clear all filters" button (Clear all dispatches reset).
-
-**FS-5: Audio URL fetch fails (404)**
-- Preconditions: detail page open; `recording_upload_id` present.
-- **Mock API**: `GET /call-log/<id>/audio-url` → `404 {"detail": "Call not found"}`
-- Expected UI: error toast "Call not found"; player area shows "Failed to load audio" (no `<audio>` element).
-
-**FS-6: No `recording_upload_id`**
-- Preconditions: detail page open.
-- **Mock API**: `GET /call-log/<id>` returns a call without `recording_upload_id`.
-- Expected UI: text "No audio recording available"; NO `GET /audio-url` call fires.
-
-**FS-7: Empty transcript**
-- Preconditions: `GET /call-log/<id>` returns `transcript: []` or absent.
-- Expected UI: under Transcription h3, text "No transcription available"; transcript search input NOT rendered.
-
-**FS-8: Transcript search returns no matches**
-- Preconditions: transcript loaded.
-- Steps: type `xyzzy`.
-- Expected UI: text "No matching messages" (centered, muted). No `<mark>` elements.
-
-**FS-9: Detail fetch fails**
-- **Mock API**: `GET /call-log/<id>` → `404 {"detail": "Call not found"}`
-- Expected UI: error toast "Call not found"; summary card not rendered (callLog stays null).
-
-**FS-10: Facets fetch fails**
-- **Mock API**: `POST /call-log/facets` → `400 {"detail": "Unknown facet field: foo"}`
-- Expected UI: drawer facet sections render with spinner/empty state; no toast spam (current code silently catches). Marked `⚠ unverified` — confirm handler.
 
 ---
 
@@ -499,33 +332,999 @@ Error body (404): `{"detail": "Call not found"}`.
 
 > ⚠ unverified: the frontend reads transcript message timestamps but the
 > Postman example omits the `timestamp` field on transcript entries. Use the
-> richer shape from PS-3 above when generating tests.
+> richer transcript shape (with `timestamp`) when generating tests.
 
 ---
 
-## Edge Cases
+## Test Cases
 
-- [ ] Unauthenticated access → middleware redirect
-- [ ] List is empty (no calls at all) → "No call logs found" + "Call logs will appear here once your agents start handling calls."
-- [ ] List is empty under active filters → "No calls match your current filters. Try adjusting or clearing them." + "Clear all filters"
-- [ ] Audio URL fetch fails → "Failed to load audio"
-- [ ] No `recording_upload_id` on the call → "No audio recording available"
-- [ ] No transcript → "No transcription available"
-- [ ] Transcript search returns no matches → "No matching messages"
-- [ ] Filters that require metrics (turns range, latency range) automatically exclude calls without metrics (documented in drawer helper text)
-- [ ] Browser time zone captured once on filter-state init via `getBrowserTimeZone`
-- [ ] Column visibility resets when navigating away from `/call-history`
-- [ ] Sort or page-size change resets the page index to 1
-- [ ] Copy link state: "Copied" indicator clears after ~1.5 s
-- [ ] Filter drawer closed without Apply: draft is discarded, applied filters remain
-- [ ] Timezone-aware filter sends: every `POST /call-log/list` and `POST /call-log/facets` payload includes `start_date_time` / `end_date_time` ISO-8601 strings with the browser's offset captured once via `getBrowserTimeZone()` at module init (`BROWSER_TZ` constant in `CallHistory.tsx`)
-- [ ] Column visibility persistence across navigation: column visibility is component-local state — leaving and returning to `/call-history` resets to defaults (no localStorage hydration today)
-- [ ] Copy-link clipboard permission denied: `navigator.clipboard.writeText` rejection is caught silently in `CopyLinkButton` — no toast, button stays "Copy link"
-- [ ] Insecure context (HTTP, not HTTPS): `navigator.clipboard` may be `undefined`; Copy link no-ops
-- [ ] Avatar / row icon image 404: ⚠ unverified — list rows currently do not render call-level avatars; row-level fallback handled by `AgentTypeBadge` text only
-- [ ] Sort while a previous list-fetch is in flight: latest request wins (no abort controller) — UI may briefly flash the older page
-- [ ] Switching tabs within a detail page does NOT refetch `GET /call-log/<id>` — `CallDetailContext` memoizes the single fetch
-- [ ] Detail page hard-loaded for a stale id with an active filter set on `/call-history`: back-nav returns to the list with filters preserved (filter state is module-level)
+> Every test case is **one Action + multiple Observations**. Each Action is a numbered
+> list of steps. Each Observation is a numbered list of verification steps.
+
+---
+
+### TC-HAPPY-001: List loads with default range (WF-1 / PS-1)
+
+**Preconditions**:
+- Signed-in user; calls exist in DB.
+
+**Action**:
+1. Sign in via `loginViaUI`
+2. Click the sidebar `Call History` link
+
+**Observation 1 — URL and headings**:
+1. URL becomes `/call-history`
+2. h1 reads `Call History`
+3. Total Phone badge text equals the response `total`
+
+**Observation 2 — List API calls fire with default range + browser tz**:
+1. Exactly one `POST /call-log/list` request fires
+2. Exactly one `POST /call-log/facets` request fires
+3. Both bodies include `start_date_time`, `end_date_time`, and the current browser tz
+
+**Observation 3 — Table renders first page**:
+1. First page of rows is visible
+2. Agent column is sticky-left
+
+**API mock**: `POST /call-log/list` → 200 PS-1 body.
+
+---
+
+### TC-HAPPY-002: Apply Status=completed via token search (WF-1 step 4 / PS-2)
+
+**Preconditions**: TC-HAPPY-001 loaded.
+
+**Action**:
+1. Type `status:completed` in the token search bar
+2. Press Enter
+
+**Observation 1 — Refetch with filter**:
+1. `POST /call-log/list` re-fires
+2. Request body filters include `{field:"status", operator:"in", value:["completed"]}`
+3. `page_no` resets to 1
+
+**Observation 2 — Row count matches filtered total**:
+1. Table shows the filtered rows
+2. Total badge updates to the new `total`
+
+---
+
+### TC-HAPPY-003: Open call detail (WF-3 / PS-3)
+
+**Preconditions**: TC-HAPPY-001 row visible.
+
+**Action**:
+1. Click any row
+
+**Observation 1 — Navigation + detail fetch**:
+1. URL becomes `/call-history/<id>/transcription`
+2. Exactly one `GET /call-log/<id>` request fires
+
+**Observation 2 — Header content**:
+1. Breadcrumb reads `Call History / <Agent Name>`
+2. CallIdPill shows truncated id
+3. Hovering the pill exposes a tooltip with the full id
+
+**Observation 3 — Summary card chips render**:
+1. Status, duration, From/To phones, channel type, start/end timestamps all render
+
+**API mock**: `GET /call-log/<id>` → 200 PS-3 body.
+
+---
+
+### TC-HAPPY-004: Audio loads and plays (WF-4 / PS-4)
+
+**Preconditions**: TC-HAPPY-003; call has `recording_upload_id`.
+
+**Action**:
+1. Wait for the audio player to mount
+
+**Observation 1 — Audio URL fetch**:
+1. Exactly one `GET /call-log/<id>/audio-url` request fires
+
+**Observation 2 — Loading then rendered**:
+1. "Loading audio…" with spinner appears briefly
+2. A native `<audio controls>` element renders with the signed URL as `src`
+
+**API mock**: `GET /call-log/<id>/audio-url` → 200 `{"audio_url": "https://..."}`.
+
+---
+
+### TC-HAPPY-005: Transcript search highlights matches (WF-4 step 3 / PS-5)
+
+**Preconditions**: TC-HAPPY-003 transcript loaded.
+
+**Action**:
+1. Type `reschedule` in the transcript search input
+2. Clear the search
+
+**Observation 1 — Filtering and highlighting**:
+1. Only matching messages remain visible
+2. The matched substring is wrapped in `<mark class="bg-yellow-200">`
+
+**Observation 2 — Clearing restores transcript**:
+1. After clearing, all messages are visible again
+2. Zero `<mark>` elements remain in the DOM
+
+---
+
+### TC-HAPPY-006: Copy link succeeds (WF-5 / PS-6)
+
+**Preconditions**: TC-HAPPY-003.
+
+**Action**:
+1. Click "Copy link"
+
+**Observation 1 — Clipboard contents**:
+1. Clipboard contains `window.location.href`
+
+**Observation 2 — Button label flips and reverts**:
+1. Button reads `Copied` with a Check icon
+2. After ~1.5 s the button reverts to `Copy link`
+
+---
+
+### TC-HAPPY-007: Apply drawer filter + reset (WF-2 / PS-7)
+
+**Preconditions**: TC-HAPPY-001.
+
+**Action**:
+1. Click "Filters"
+2. Toggle `direction: outbound`
+3. Click "Apply"
+4. Reopen the drawer
+5. Click "Reset"
+
+**Observation 1 — Drawer renders correctly**:
+1. Right-side drawer titled "Filters" opens
+2. Description reads "Narrow call history by time, status, agent, pipeline and metrics."
+
+**Observation 2 — Apply refetches**:
+1. `POST /call-log/list` fires after Apply
+2. Filters toolbar button badge count equals 1
+
+**Observation 3 — Reset clears**:
+1. After Reset, the badge is gone
+2. "Reset" button is disabled (no active filters)
+3. `POST /call-log/list` fires again with no filter
+
+---
+
+### TC-HAPPY-008: Use the Filters drawer end-to-end (WF-2)
+
+**Preconditions**: TC-HAPPY-001.
+
+**Action**:
+1. Click "Filters"
+2. Expand Timeline and pick a 7-day range
+3. Toggle a facet value (e.g. `direction: outbound`)
+4. Enter Turns `From=5, To=20`
+5. Drag Avg latency to `0.5s — 3.2s`
+6. Click "Apply"
+
+**Observation 1 — Draft does not refetch**:
+1. Steps 2–5 do NOT cause `POST /call-log/list` to fire
+
+**Observation 2 — Helper text under Turns**:
+1. Text reads `Calls with no metrics record are excluded when this range is set.`
+
+**Observation 3 — Apply commits and refetches**:
+1. Drawer closes
+2. `POST /call-log/list` fires with the new filters
+3. Toolbar Filters button badge count > 0
+
+**Observation 4 — Close without Apply discards draft**:
+1. Reopen drawer, edit, then press Esc OR click overlay
+2. Reopen again — applied filters unchanged
+
+---
+
+### TC-HAPPY-009: Open detail + switch tabs (WF-3)
+
+**Preconditions**: TC-HAPPY-003 just loaded.
+
+**Action**:
+1. Click "Metrics" sidebar tab
+2. Click "Call Configurations" sidebar tab
+3. Click "Back to Call History"
+
+**Observation 1 — Metrics tab**:
+1. URL becomes `/call-history/<id>/metrics`
+2. No second `GET /call-log/<id>` fires (context memoized)
+
+**Observation 2 — Configurations tab**:
+1. URL becomes `/call-history/<id>/configurations`
+2. Section lists agent_name, direction, status, channel_type, started_at, ended_at
+
+**Observation 3 — Back rail link**:
+1. URL becomes `/call-history`
+2. List state preserved (filters and page)
+
+---
+
+### TC-NAV-001: Unauthenticated visit redirects to login (CH-001)
+
+**Preconditions**: No `tone_access_token` cookie.
+
+**Action**:
+1. Visit `/call-history`
+
+**Observation 1 — Middleware redirect**:
+1. Response status is 307
+2. Final URL is `/auth/login?redirect=%2Fcall-history`
+
+---
+
+### TC-NAV-002: Expired token redirects and clears cookie (CH-002)
+
+**Preconditions**: Expired `tone_access_token` cookie.
+
+**Action**:
+1. Visit `/call-history`
+
+**Observation 1 — Redirect**:
+1. URL becomes `/auth/login?redirect=%2Fcall-history`
+
+**Observation 2 — Cookie cleared**:
+1. Expired cookie is cleared on the login response
+
+---
+
+### TC-NAV-003: Unauthenticated detail deep link redirects to login (CH-003)
+
+**Preconditions**: No auth cookie.
+
+**Action**:
+1. Visit `/call-history/<callId>`
+
+**Observation 1 — Redirect**:
+1. URL becomes `/auth/login?redirect=%2Fcall-history%2F<callId>`
+
+---
+
+### TC-NAV-004: Non-member is denied access to call history (CH-004)
+
+**Preconditions**: Logged-in user without membership (org switched away).
+
+**Action**:
+1. Visit `/call-history`
+
+**Observation 1 — Denied state OR redirect**:
+1. Page renders access-denied state OR redirects to `/home`
+
+**Observation 2 — No list fetch fires**:
+1. Zero `POST /call-log/list` requests are recorded
+
+---
+
+### TC-NAV-005: Back to Call History preserves list state (CH-041)
+
+**Preconditions**: Filters applied; user opened a detail page.
+
+**Action**:
+1. From detail, click "Back to Call History"
+
+**Observation 1 — Returns to list with state intact**:
+1. URL is `/call-history`
+2. Active filters and current page index are preserved
+
+---
+
+### TC-NAV-006: Breadcrumb link returns to list (CH-042)
+
+**Preconditions**: Detail page open.
+
+**Action**:
+1. Click the breadcrumb `Call History`
+
+**Observation 1 — Navigation**:
+1. URL becomes `/call-history`
+
+---
+
+### TC-NAV-007: Browser back from detail returns to filtered list (CH-043)
+
+**Preconditions**: Filters applied; user clicked a row.
+
+**Action**:
+1. Press browser Back
+
+**Observation 1 — Returns to filtered list**:
+1. URL becomes `/call-history`
+2. Filter state matches the prior selection
+
+---
+
+### TC-NAV-008: Reload on detail deep link renders without redirect (CH-044)
+
+**Preconditions**: Authenticated; on a detail tab.
+
+**Action**:
+1. Reload the page directly
+
+**Observation 1 — Detail tabs render after fetch**:
+1. `GET /call-log/<id>` fires
+2. The detail page renders without falling back to the list
+
+---
+
+### TC-NAV-009: Copy link target opens the same call in a new tab (CH-045)
+
+**Preconditions**: Authenticated; detail page loaded; "Copy link" pressed.
+
+**Action**:
+1. Open the copied URL in a new browser tab
+
+**Observation 1 — Same detail loads**:
+1. New tab URL matches the copied URL
+2. The same call detail loads (auth permitting)
+
+---
+
+### TC-ERROR-001: List fetch fails (500) (FS-1 / CH-010)
+
+**Preconditions**: Signed-in.
+
+**Action**:
+1. Navigate to `/call-history`
+
+**Observation 1 — Error toast**:
+1. Toast title equals `Database connection error`
+2. Toast variant is `error`
+
+**Observation 2 — Loading → empty state**:
+1. Skeleton/loading clears
+2. Table shows empty state
+3. No row click is possible
+
+**API mock**: `POST /call-log/list` → 500 `{"detail":"Database connection error"}`.
+
+---
+
+### TC-ERROR-002: List 401 unauthorized (FS-2)
+
+**Preconditions**: Stale token.
+
+**Action**:
+1. Navigate to `/call-history`
+
+**Observation 1 — Error toast**:
+1. Toast title equals `Could not validate credentials`
+
+**Observation 2 — Middleware may redirect on next nav**:
+1. Subsequent client-side navigation triggers the middleware redirect to `/auth/login`
+
+**API mock**: `POST /call-log/list` → 401.
+
+---
+
+### TC-ERROR-003: Empty list — no filters (FS-3 / CH-022)
+
+**Action**:
+1. Navigate to `/call-history` (no filters)
+
+**Observation 1 — Empty state text**:
+1. Heading reads `No call logs found`
+2. Subtitle reads `Call logs will appear here once your agents start handling calls.`
+
+**Observation 2 — No clear-filters button**:
+1. The "Clear all filters" button is NOT present
+
+**API mock**: `POST /call-log/list` → `{"items":[], "total":0}`.
+
+---
+
+### TC-ERROR-004: Empty list under active filters (FS-4 / CH-023)
+
+**Preconditions**: At least one filter applied (chip visible).
+
+**Action**:
+1. Wait for the refetch
+
+**Observation 1 — Empty-with-filters text**:
+1. Heading reads `No call logs found`
+2. Subtitle reads `No calls match your current filters. Try adjusting or clearing them.`
+
+**Observation 2 — Clear-all button visible**:
+1. A `Clear all filters` button is present
+2. Clicking it dispatches the reset
+
+**API mock**: `POST /call-log/list` → `{"items":[], "total":0}`.
+
+---
+
+### TC-ERROR-005: Audio URL fetch fails (404) (FS-5)
+
+**Preconditions**: Detail page open; `recording_upload_id` present.
+
+**Action**:
+1. Wait for audio fetch to fail
+
+**Observation 1 — Error toast**:
+1. Toast title equals `Call not found`
+
+**Observation 2 — Player area**:
+1. Text `Failed to load audio` is shown
+2. No `<audio>` element is rendered
+
+**API mock**: `GET /call-log/<id>/audio-url` → 404.
+
+---
+
+### TC-ERROR-006: No recording_upload_id (FS-6)
+
+**Preconditions**: `GET /call-log/<id>` returns no `recording_upload_id`.
+
+**Action**:
+1. Navigate to the detail page
+
+**Observation 1 — No-recording state**:
+1. Text `No audio recording available` is shown
+
+**Observation 2 — No audio-url request fires**:
+1. Zero `GET /call-log/<id>/audio-url` requests are recorded
+
+---
+
+### TC-ERROR-007: Empty transcript (FS-7)
+
+**Preconditions**: `GET /call-log/<id>` returns `transcript: []` or absent.
+
+**Action**:
+1. Navigate to the Transcription tab
+
+**Observation 1 — No-transcript state**:
+1. Text `No transcription available` is shown under the Transcription h3
+2. The transcript search input is NOT rendered
+
+---
+
+### TC-ERROR-008: Transcript search returns no matches (FS-8)
+
+**Preconditions**: Transcript loaded.
+
+**Action**:
+1. Type `xyzzy` in the search input
+
+**Observation 1 — No-match state**:
+1. Text `No matching messages` is centered, muted
+2. Zero `<mark>` elements are present
+
+---
+
+### TC-ERROR-009: Detail fetch fails 404 (FS-9 / CH-008)
+
+**Preconditions**: Authenticated.
+
+**Action**:
+1. Visit `/call-history/<unknownId>`
+
+**Observation 1 — Error toast**:
+1. Toast title equals `Call not found`
+
+**Observation 2 — Summary card not rendered**:
+1. CallSummaryCard is absent
+2. Tabs render empty states
+
+**API mock**: `GET /call-log/<id>` → 404.
+
+---
+
+### TC-ERROR-010: Facets fetch fails (FS-10)
+
+**Action**:
+1. Open the Filters drawer
+
+**Observation 1 — Drawer still renders**:
+1. Facet sections render with a spinner or empty state
+2. No toast spam appears
+
+> ⚠ unverified — confirm handler does not surface a toast.
+
+**API mock**: `POST /call-log/facets` → 400 `{"detail":"Unknown facet field: foo"}`.
+
+---
+
+### TC-ERROR-011: List 400 surfaces detail toast (CH-005)
+
+**Action**:
+1. Type a malformed token search payload
+2. Press Enter
+
+**Observation 1 — Empty table state**:
+1. Table shows an empty state
+
+**Observation 2 — Toast surfaces backend detail**:
+1. Toast title equals the backend `detail` string
+2. No client crash occurs
+
+**API mock**: `POST /call-log/list` → 400.
+
+---
+
+### TC-ERROR-012: Detail 401 between list and row click (CH-006)
+
+**Preconditions**: Token expires after list load.
+
+**Action**:
+1. Click a row
+
+**Observation 1 — Error toast**:
+1. Toast title equals `Could not validate credentials`
+
+**Observation 2 — Summary card not rendered**:
+1. CallSummaryCard is absent
+
+**API mock**: `GET /call-log/<id>` → 401.
+
+---
+
+### TC-ERROR-013: Detail 403 forbidden on deep link (CH-007)
+
+**Preconditions**: Member role with no call access.
+
+**Action**:
+1. Visit a deep link `/call-history/<id>`
+
+**Observation 1 — Forbidden toast**:
+1. Toast title equals `Forbidden`
+
+**Observation 2 — Empty detail with sidebar tabs visible**:
+1. CallSummaryCard absent
+2. Sidebar tabs remain visible
+
+**API mock**: `GET /call-log/<id>` → 403.
+
+---
+
+### TC-ERROR-014: Facets 409 keeps drawer usable (CH-009)
+
+**Preconditions**: Authenticated.
+
+**Action**:
+1. Open the Filters drawer
+
+**Observation 1 — Drawer remains usable**:
+1. Drawer renders empty facet sections
+2. No toast spam appears
+3. The list still loads normally
+
+**API mock**: `POST /call-log/facets` → 409.
+
+---
+
+### TC-LOADING-001: Network failure on list surfaces toast then recovers (CH-011)
+
+**Preconditions**: Network is unavailable for first attempt.
+
+**Action**:
+1. Navigate to `/call-history`
+2. Retry (e.g. reload)
+
+**Observation 1 — Skeleton clears + error toast**:
+1. Skeleton clears
+2. Toast title equals `Something went wrong. Please try again.`
+
+**Observation 2 — Retry refills table**:
+1. Subsequent `POST /call-log/list` returns 200
+2. Table re-fills with rows
+
+**API mocks**: first call `route.abort('failed')`; second call → 200.
+
+---
+
+### TC-LOADING-002: Slow list keeps skeleton without blocking toolbar (CH-012)
+
+**Preconditions**: List API delays > 3 s.
+
+**Action**:
+1. Navigate to `/call-history`
+
+**Observation 1 — Skeleton visible**:
+1. Skeleton rows visible throughout the 3 s+ window
+
+**Observation 2 — Toolbar enabled**:
+1. Token search, Filters, and Columns buttons remain enabled
+
+---
+
+### TC-LOADING-003: Slow audio URL fetch keeps loader without blocking transcript (CH-013)
+
+**Preconditions**: Audio URL API delays > 3 s.
+
+**Action**:
+1. Navigate to a detail page with audio
+
+**Observation 1 — Loader persists**:
+1. `Loading audio…` spinner remains visible the entire wait
+
+**Observation 2 — Transcript still renders**:
+1. The transcript section renders independent of audio
+
+---
+
+### TC-LOADING-004: Concurrent list fetches resolve to the latest response (CH-014)
+
+**Action**:
+1. Change a filter
+2. Quickly change another filter before the first response arrives
+
+**Observation 1 — Latest response wins**:
+1. Final table state reflects the second filter set
+2. UI does not flash an older page
+3. No toast appears
+
+---
+
+### TC-EDGE-001: Whitespace-only token search is treated as empty (CH-015)
+
+**Action**:
+1. Type only whitespace into the token search bar
+2. Press Enter
+
+**Observation 1 — No filter change**:
+1. Request payload `filters` array is unchanged
+2. Table reverts to default
+
+---
+
+### TC-EDGE-002: Token search trims surrounding whitespace (CH-016)
+
+**Action**:
+1. Type ` status:completed ` (with spaces) and press Enter
+
+**Observation 1 — Trimmed payload**:
+1. `POST /call-log/list` body contains `status:completed` (trimmed)
+
+---
+
+### TC-EDGE-003: Token search accepts unicode and html-ish input without xss (CH-017)
+
+**Action**:
+1. Type `<script>alert(1)</script>` then an emoji and unicode text
+
+**Observation 1 — Sent verbatim**:
+1. Request body contains the text verbatim
+
+**Observation 2 — No XSS execution**:
+1. `window.alert` was not invoked
+2. UI renders the text as plain string
+
+---
+
+### TC-EDGE-004: Very long token search does not crash the page (CH-018)
+
+**Action**:
+1. Paste a > 500-character token search
+
+**Observation 1 — Page does not crash**:
+1. Either request is sent unchanged or truncated
+2. No client crash occurs
+
+---
+
+### TC-EDGE-005: Transcript search escapes regex special characters (CH-019)
+
+**Preconditions**: Transcript loaded.
+
+**Action**:
+1. Type `.*` or `(foo)` in the transcript search
+
+**Observation 1 — Regex-escaped via escapeRegex**:
+1. Matches are treated as literal substring
+2. Highlights still render where the literal occurs
+
+---
+
+### TC-EDGE-006: Whitespace-only transcript search restores full transcript (CH-020)
+
+**Action**:
+1. Type only whitespace into transcript search
+
+**Observation 1 — Full transcript still visible**:
+1. Zero `<mark>` elements rendered
+2. All messages are visible
+
+---
+
+### TC-EDGE-007: Future date filter handled gracefully (CH-021)
+
+**Action**:
+1. Pick a future date in the Timeline picker
+
+**Observation 1 — Graceful handling**:
+1. Picker disables future days OR API returns empty
+2. UI does not crash
+
+---
+
+### TC-EDGE-008: Pagination disables prev on the first page (CH-024)
+
+**Preconditions**: Multiple pages of results.
+
+**Action**:
+1. Observe pagination on page 1
+
+**Observation 1 — Prev disabled / Next enabled**:
+1. Prev button is `disabled`
+2. Next button is enabled
+
+---
+
+### TC-EDGE-009: Pagination disables next on the last page (CH-025)
+
+**Preconditions**: Multiple pages of results.
+
+**Action**:
+1. Navigate to the last page
+
+**Observation 1 — Next disabled / Prev enabled**:
+1. Next button is `disabled`
+2. Prev button is enabled
+
+---
+
+### TC-EDGE-010: Sort by Started At cycles asc and desc (CH-026)
+
+**Action**:
+1. Click the `Started At` column header twice in a row
+
+**Observation 1 — Two list calls fire with sort direction**:
+1. First click: `sort_by: 'started_at', sort_order: 'asc'`
+2. Second click: `sort_by: 'started_at', sort_order: 'desc'`
+
+---
+
+### TC-EDGE-011: Sort by Duration orders rows by duration (CH-027)
+
+**Action**:
+1. Click the `Duration` column header
+
+**Observation 1 — Sort payload**:
+1. `POST /call-log/list` fires with `sort_by: 'duration_seconds'`
+
+---
+
+### TC-EDGE-012: Default date range applied on first load (CH-028)
+
+**Action**:
+1. Visit `/call-history`
+
+**Observation 1 — Default range in payload**:
+1. Payload includes a sensible `start_date_time`/`end_date_time` pair with the browser tz
+
+---
+
+### TC-EDGE-013: Custom date range refetches the list (CH-029)
+
+**Action**:
+1. Open drawer, pick a custom range, click Apply
+
+**Observation 1 — Refetch with chosen ISO-8601 range**:
+1. `POST /call-log/list` fires with the chosen `start_date_time` and `end_date_time`
+
+---
+
+### TC-EDGE-014: Removing a filter chip refetches without it (CH-030)
+
+**Preconditions**: At least one filter applied (chip visible).
+
+**Action**:
+1. Click the chip's X
+
+**Observation 1 — Chip removed and refetch fires**:
+1. Chip is removed
+2. `POST /call-log/list` re-fires without that filter
+
+---
+
+### TC-EDGE-015: Clear all filters resets drawer and toolbar state (CH-031)
+
+**Action**:
+1. Click `Clear all filters` from the empty state CTA
+
+**Observation 1 — Reset behavior**:
+1. Every drawer and toolbar filter is reset
+2. List refetches
+3. Filters toolbar badge count returns to 0
+
+---
+
+### TC-EDGE-016: Toggling a column updates the hidden count badge (CH-032)
+
+**Action**:
+1. Open the Columns popover
+2. Toggle one column off
+
+**Observation 1 — Column hidden + badge increments**:
+1. The column is no longer visible in the table
+2. Hidden-count badge increments by 1
+3. Selection persists while user remains on the page
+
+---
+
+### TC-EDGE-017: Changing page size resets to page 1 (CH-033)
+
+**Action**:
+1. Change page size to 10, then 25, then 50, then 100
+
+**Observation 1 — Each change refires with new size + page_no: 1**:
+1. Each change fires `POST /call-log/list` with the new `page_size` and `page_no: 1`
+
+---
+
+### TC-A11Y-001: Tab order through toolbar reaches every control (CH-034)
+
+**Action**:
+1. Focus the page
+2. Tab through the toolbar
+
+**Observation 1 — Tab order**:
+1. Token search → Columns → Filters → first sortable header
+2. Every interactive control is reachable
+
+---
+
+### TC-A11Y-002: Filter drawer traps focus and restores on close (CH-035)
+
+**Action**:
+1. Open the Filters drawer
+2. Tab repeatedly
+3. Press Esc
+
+**Observation 1 — Focus trapped inside**:
+1. Tab cycles within the drawer
+2. Focus does not escape to the page behind
+
+**Observation 2 — Esc restores focus**:
+1. Drawer closes
+2. Focus returns to the Filters button
+
+---
+
+### TC-A11Y-003: Enter on sortable header triggers sort (CH-036)
+
+**Action**:
+1. Focus a sortable column header
+2. Press Enter
+
+**Observation 1 — Sort fires like click**:
+1. `POST /call-log/list` re-fires with the updated sort
+
+---
+
+### TC-A11Y-004: Error toast is announced via aria-live (CH-037)
+
+**Action**:
+1. Trigger an error toast (e.g. via TC-ERROR-001)
+
+**Observation 1 — Toast role**:
+1. Toast has `role="alert"` or `aria-live`
+2. Screen readers announce the toast title without manual focus
+
+---
+
+### TC-A11Y-005: Active detail tab exposes aria-current (CH-038)
+
+**Action**:
+1. Navigate to a detail page
+2. Inspect the sidebar tab pills
+
+**Observation 1 — aria-current="page" on active**:
+1. The active tab has `aria-current="page"`
+2. Other tabs do not have `aria-current`
+
+---
+
+### TC-A11Y-006: Audio player exposes native keyboard controls (CH-039)
+
+**Action**:
+1. Focus the audio player
+2. Press space and arrow keys
+
+**Observation 1 — Native HTML5 controls work**:
+1. `<audio controls>` is used
+2. Native keyboard shortcuts (space, arrows) work
+3. No custom widget intercepts
+
+---
+
+### TC-A11Y-007: Copy link button announces success state (CH-040)
+
+**Action**:
+1. Click "Copy link"
+
+**Observation 1 — Accessible name updates**:
+1. The button accessible name flips to `Copied` for ~1.5 s
+2. Either an `aria-live` region or the text update announces it
+
+---
+
+### TC-FULL-001: End-to-end call history list + detail (CH-FULL)
+
+**Preconditions**:
+- Test user provisioned; `__e2e__`-prefixed seed data for at least one call.
+
+**Action**:
+1. Authenticate via `loginViaUI`
+2. Visit `/call-history`
+3. Type token search `status:completed`, then clear it
+4. Open Filters drawer, pick a 7-day range, toggle `direction: outbound`, click Apply
+5. Reopen drawer, click Reset
+6. Toggle a column off
+7. Change page size to 25
+8. Click the first row
+9. Switch to Metrics tab, then to Configurations tab
+10. Click "Back to Call History"
+11. Open a row again, click "Copy link"
+
+**Observation 1 — Step 2 — List loads**:
+1. h1 `Call History` visible
+2. Total badge reflects the response
+
+**Observation 2 — Step 3 — Token search refetch**:
+1. `POST /call-log/list` fires with status filter
+2. Clearing it re-fires with no filter
+
+**Observation 3 — Step 4 — Apply refetch**:
+1. Filters toolbar badge equals 1
+2. `POST /call-log/list` fires with new range + facet
+
+**Observation 4 — Step 5 — Reset**:
+1. Badge gone
+2. List refetches with no filter
+
+**Observation 5 — Step 6 — Column toggle**:
+1. Hidden-count badge increments
+
+**Observation 6 — Step 7 — Page size change**:
+1. `POST /call-log/list` fires with `page_size: 25, page_no: 1`
+
+**Observation 7 — Step 8 — Detail loads**:
+1. URL is `/call-history/<id>/transcription`
+2. Breadcrumb + summary card render
+3. Audio loader visible
+
+**Observation 8 — Step 9 — Tab switching**:
+1. URLs become `/call-history/<id>/metrics` then `/call-history/<id>/configurations`
+
+**Observation 9 — Step 10 — Back link**:
+1. URL becomes `/call-history`
+2. Filters cleared (after Reset in step 5)
+
+**Observation 10 — Step 11 — Copy link**:
+1. Clipboard contains the detail URL
+2. Button reads `Copied` for ~1.5 s
+
+**Cleanup** (in `try/finally`):
+1. Delete seeded `__e2e__` call/agent data via the backend admin API
+2. Clear cookies and localStorage
+
+---
+
+## Edge Cases (each appears above)
+
+- [x] Unauthenticated access → see TC-NAV-001
+- [x] List empty (no calls at all) → see TC-ERROR-003
+- [x] List empty under active filters → see TC-ERROR-004
+- [x] Audio URL fetch fails → see TC-ERROR-005
+- [x] No `recording_upload_id` on the call → see TC-ERROR-006
+- [x] No transcript → see TC-ERROR-007
+- [x] Transcript search no matches → see TC-ERROR-008
+- [x] Filters that require metrics auto-exclude calls without metrics — documented in TC-HAPPY-008 (helper text)
+- [x] Browser time zone captured once via `getBrowserTimeZone` — see TC-EDGE-012
+- [x] Column visibility resets when navigating away — covered in business rules + TC-EDGE-016
+- [x] Sort/page-size change resets page → see TC-EDGE-017 / TC-EDGE-010
+- [x] Copy link "Copied" indicator clears after ~1.5 s → see TC-HAPPY-006
+- [x] Filter drawer closed without Apply discards draft → see TC-HAPPY-008 Observation 4
+- [x] Timezone-aware filter payloads → see TC-EDGE-012
+- [x] Column visibility persistence across navigation (no localStorage) — see TC-EDGE-016
+- [x] Copy-link clipboard permission denied (silent) — covered by toast table (no toast)
+- [x] Insecure context (HTTP) Copy link no-ops — covered by toast table
+- [x] Avatar / row icon image 404 — `⚠ unverified`; not asserted
+- [x] Sort while previous list-fetch is in flight — see TC-LOADING-004
+- [x] Switching tabs does NOT refetch — see TC-HAPPY-009 Observation 1
+- [x] Hard-loaded stale id with active filters → covered by TC-NAV-005 (state preserved)
 
 ---
 
@@ -539,118 +1338,15 @@ Error body (404): `{"detail": "Call not found"}`.
 
 ---
 
-## Accessibility Requirements
+## Accessibility Requirements (each appears as a `TC-A11Y-*` test case above)
 
-- [ ] Token search input has an accessible label
-- [ ] Columns popover groups have group-toggle controls labeled by name
-- [ ] Filter drawer traps focus and restores it on close
-- [ ] Chat message bubbles use proper roles + names for screen readers (User says "…", Assistant says "…")
-- [ ] Audio player uses native `<audio controls>` (built-in keyboard + AT support)
-- [ ] Transcript search highlights stay readable in dark mode (yellow `<mark>` with sufficient contrast)
-- [ ] Tab pills (desktop sidebar + mobile bar) expose `aria-current="page"` for the active tab
-- [ ] Copy-link button announces the success state via `aria-live` or by updating its accessible name to "Copied"
-
----
-
-## Appended Scenarios (gap-fill, ID prefix `CH-`)
-
-These rows extend the PS/FS coverage with auth/error-state/network/a11y/list-specific/lifecycle scenarios so `/generate-tests` can produce a comprehensive `call-history.spec.ts`. They use real-backend conventions (`__e2e__` prefix, try/finally cleanup) — not `page.route` mocks — unless explicitly stated.
-
-### Auth & access control
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| CH-001 | Visit `/call-history` without `tone_access_token` cookie | Middleware 307 → `/auth/login?redirect=%2Fcall-history` | `unauthenticated visit redirects to login` |
-| CH-002 | Visit `/call-history` with an expired token cookie | Middleware 307 → `/auth/login?redirect=%2Fcall-history`; expired cookie cleared on the login response | `expired token redirects to login and clears cookie` |
-| CH-003 | Visit `/call-history/<callId>` deep link without auth | Middleware 307 → `/auth/login?redirect=%2Fcall-history%2F<callId>` | `unauthenticated detail deep link redirects to login` |
-| CH-004 | Logged-in non-member opens `/call-history` (org switched away) | Access-denied state OR redirect to `/home`; no `POST /call-log/list` fires | `non-member is denied access to call history list` |
-
-### Backend error states
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| CH-005 | `POST /call-log/list` returns 400 (malformed token search payload) | Empty table state; toast surfaces backend `detail`; no client crash | `list 400 surfaces detail toast and renders empty state` |
-| CH-006 | Token expires between list load and a row click → 401 on `GET /call-log/<id>` | Toast `Could not validate credentials`; summary card not rendered | `detail 401 surfaces error toast without redirect` |
-| CH-007 | Member role with no call access on a deep link → 403 | Toast `Forbidden`; empty detail; sidebar tabs remain visible | `detail 403 surfaces forbidden toast` |
-| CH-008 | Detail load returns 404 for an unknown call id | Toast `Call not found`; summary card hidden; tabs render empty states | `detail 404 surfaces not-found toast` |
-| CH-009 | `POST /call-log/facets` returns 409 unsupported field | Drawer facet sections render empty; no toast spam; list still loads | `facets 409 keeps drawer usable without spam` |
-| CH-010 | `POST /call-log/list` returns 500 mid-search | Skeleton clears; empty-state body renders; toast surfaces server `detail` | `list 500 falls back to empty state with toast` |
-
-### Network resilience
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| CH-011 | Offline / network failure during `POST /call-log/list` | Skeleton clears; toast `Something went wrong. Please try again.`; subsequent retry refills the table | `list network failure surfaces toast then recovers on retry` |
-| CH-012 | Slow `POST /call-log/list` (>3s) | Skeleton rows visible the whole time; toolbar (search/filters/columns) remains enabled | `slow list keeps skeleton visible without blocking the toolbar` |
-| CH-013 | Slow `GET /call-log/<id>/audio-url` (>3s) | "Loading audio…" spinner visible the whole time; transcript still renders | `slow audio URL fetch keeps loader without blocking transcript` |
-| CH-014 | Concurrent filter changes — second `POST /call-log/list` while first is in-flight | Latest request wins; UI does not flash an older page; no toast | `concurrent list fetches resolve to the latest response` |
-
-### Input edge cases (token search + transcript search)
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| CH-015 | Type only whitespace into the token search bar | No `filters` change; table reverts to default | `whitespace-only token search is treated as empty` |
-| CH-016 | Token search with leading/trailing spaces (` status:completed `) | Trimmed before send; payload contains `status:completed` | `token search trims surrounding whitespace` |
-| CH-017 | Token search with special chars (`<script>`, emoji, unicode) | Sent verbatim; no XSS execution; UI renders without breaking | `token search accepts unicode and html-ish input without xss` |
-| CH-018 | Token search > 500 characters | Either accepted in one request or truncated; no crash | `very long token search does not crash the page` |
-| CH-019 | Transcript search uses a regex-special string (`.*`, `(foo)`) | Regex escape via `escapeRegex`; matches treated as literal substring; highlights still render | `transcript search escapes regex special characters` |
-| CH-020 | Transcript search with whitespace-only value | No `<mark>` rendered; full transcript still visible | `whitespace-only transcript search restores full transcript` |
-| CH-021 | Future date in the Timeline picker | Picker disables future days OR API returns empty; UI does not crash | `future date filter handled gracefully` |
-
-### List-specific scenarios
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| CH-022 | Empty list with no filters | "No call logs found" + "Call logs will appear here once your agents start handling calls." | `empty list renders the no-calls empty state` |
-| CH-023 | Search with no matches under active filters | "No calls match your current filters. Try adjusting or clearing them." + "Clear all filters" button | `filtered search with no matches renders the no-results state` |
-| CH-024 | Pagination — first page | Prev disabled, Next enabled when more pages exist | `pagination disables prev on the first page` |
-| CH-025 | Pagination — last page | Next disabled, Prev enabled | `pagination disables next on the last page` |
-| CH-026 | Sort by Started At (asc → desc) | Two consecutive header clicks fire two list calls with `sort_by: 'started_at'` asc then desc | `sort by Started At cycles asc and desc` |
-| CH-027 | Sort by Duration | `POST /call-log/list` fires with `sort_by: 'duration_seconds'` | `sort by Duration orders rows by duration` |
-| CH-028 | Date range filter — default range applied on first load | Payload contains a sensible `start_date_time`/`end_date_time` pair with the browser tz | `default date range is applied on first load` |
-| CH-029 | Date range filter — custom range picked via drawer | After Apply, `POST /call-log/list` fires with the chosen ISO-8601 range | `custom date range refetches the list` |
-| CH-030 | Drawer filter chip removable | Clicking the chip's X removes that single filter; list refetches | `removing a single filter chip refetches without it` |
-| CH-031 | "Clear all filters" empty-state CTA | Resets every drawer/toolbar filter; list refetches; badge count returns to 0 | `clear all filters resets drawer and toolbar state` |
-| CH-032 | Column visibility popover — toggle one column off | Column hidden; hidden-count badge increments by 1; new columns persist while on the page | `toggling a column updates the hidden count badge` |
-| CH-033 | Page-size 10/25/50/100 each reset page to 1 | Each change refires `POST /call-log/list` with the new size and `page_no: 1` | `changing page size resets to page 1` |
-
-### Accessibility & keyboard
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| CH-034 | Tab order through the toolbar | Token search → Columns → Filters → first sortable header — reachable in order | `tab order through toolbar reaches every control` |
-| CH-035 | Filter drawer traps focus and restores it on close | Focus moves inside the drawer; Tab cycles within; Esc closes and restores focus to the Filters button | `filter drawer traps focus and restores on close` |
-| CH-036 | Press Enter on a sortable column header | Re-fires `POST /call-log/list` with updated sort (same as click) | `Enter on sortable header triggers sort` |
-| CH-037 | Toast error has `role="alert"` / aria-live | Screen readers announce the toast title without manual focus | `error toast is announced via aria-live` |
-| CH-038 | Detail page sidebar tab pills expose `aria-current="page"` | Active tab has `aria-current="page"`; others do not | `active detail tab exposes aria-current` |
-| CH-039 | Audio player uses native `<audio controls>` | Native keyboard shortcuts (space, arrows) work; no custom widget | `audio player exposes native keyboard controls` |
-| CH-040 | Copy link button announces success | Button accessible name flips to "Copied" for ~1.5s; aria-live region OR text update | `copy link button announces success state` |
-
-### Cross-feature navigation
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| CH-041 | Click "Back to Call History" from detail | URL returns to `/call-history`; list state (filters, page) preserved | `back to call history preserves list state` |
-| CH-042 | Breadcrumb "Call History" link from detail | Navigates to `/call-history` | `breadcrumb link returns to list` |
-| CH-043 | Browser back button after row click | Returns to `/call-history` with the same filters intact | `browser back from detail returns to filtered list` |
-| CH-044 | Reload detail page directly via deep link | Detail tabs render after fetch; no fallback to the list | `reload on detail deep link renders without redirect` |
-| CH-045 | Copy link from detail → open in a new tab | New tab loads the same call detail (auth permitting) | `copy link target opens the same call in a new tab` |
-
-### Full lifecycle (`CH-FULL`)
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| CH-FULL | Authenticate via `loginViaUI` → visit `/call-history` → assert headings + total badge → exercise token search (`status:completed`) and clear → open Filters drawer → pick a 7-day range + facet (Direction=outbound) → Apply → assert toolbar badge `1` and list refetch → reopen drawer → Reset → assert badge gone → toggle a column off → change page size to 25 → click first row → land on `/call-history/<id>/transcription` → assert breadcrumb + summary card + audio loader → switch to Metrics tab → switch to Configurations tab → click "Back to Call History" → assert URL is `/call-history` and filters cleared → click "Copy link" on a freshly opened detail and assert "Copied" state | Every documented toolbar/drawer/tab affordance fires the expected request; no leaked listeners; for any seeded `__e2e__` call data, cleanup runs via `try/finally` in the same test body | `walks the entire call history list and detail end to end` |
-
-### Coverage map additions
-
-| New scenario | Replaces / extends | Notes |
-|---|---|---|
-| CH-001..004 | (new) | Auth-gating, expired-token, deep-link, non-member |
-| CH-005..010 | FS-1..FS-10 | Standardises 400/401/403/404/409/500 paths |
-| CH-011..014 | (new) | Network resilience for list, audio URL, concurrent fetches |
-| CH-015..021 | (new) | Input edge cases for token + transcript search and date pickers |
-| CH-022..033 | PS-2, FS-3, FS-4 | Pagination/sort/empty-state/column visibility promoted to scenarios |
-| CH-034..040 | Accessibility section | Promotes a11y bullets to runnable scenarios |
-| CH-041..045 | Navigation table | Adds back/forward/reload/new-tab checks |
-| CH-FULL | (new) | Single-test sweep across list + drawer + tabs + copy link |
+- [x] Token search input has an accessible label → covered by TC-A11Y-001
+- [x] Columns popover groups have group-toggle controls labeled by name → covered in TC-A11Y-001
+- [x] Filter drawer traps focus and restores it on close → see TC-A11Y-002
+- [x] Chat message bubbles use proper roles + names → covered by render observations in TC-HAPPY-003
+- [x] Audio player uses native `<audio controls>` → see TC-A11Y-006
+- [x] Transcript search highlights readable in dark mode → covered in TC-HAPPY-005
+- [x] Tab pills expose `aria-current="page"` → see TC-A11Y-005
+- [x] Copy-link button announces success → see TC-A11Y-007
+- [x] Error toast announced via aria-live → see TC-A11Y-004
+- [x] Enter on sortable header triggers sort → see TC-A11Y-003

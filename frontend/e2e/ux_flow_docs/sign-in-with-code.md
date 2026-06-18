@@ -16,6 +16,10 @@ Sign-in-with-code is a **two-step** flow:
 
 The verify step also exposes a **resend** action with a 60-second cooldown.
 
+> **Format rule (mandatory):** every test case below is one **Action** (steps the
+> user performs) followed by multiple **Observations** (each a set of verification
+> steps). See [`_template.md`](_template.md) for the canonical shape and ID prefixes.
+
 ---
 
 ## Page
@@ -128,75 +132,6 @@ directly, **so that** I can sign in without a password.
 
 ---
 
-## User Workflow Steps
-
-**WF-1: Request → verify → home** (positive, happy path)
-
-1. User opens `/sign-in-with-code` → expected: `RequestStep` renders with empty
-   email field, "Send code" button enabled (RHF defaults `isValid` to allow
-   submit; Zod errors render only after blur/submit)
-2. User types `owner@acme.com` → blurs → expected: no visible error (Zod passes)
-3. User clicks "Send code" → expected: button shows loading state;
-   `POST /auth/signin-code/request { "email": "owner@acme.com" }` fires
-4. 200 response → expected: success toast `"If the email exists, a code has been sent"`,
-   `setEmail('owner@acme.com')` advances inner state, `VerifyStep` mounts
-5. `VerifyStep` renders heading "Enter your code" with email in `<strong>` tag;
-   `resendIn` initialises to 60 and starts ticking down
-6. User types `123456` into the code field → `onValueChange` keeps only digits → RHF value `code: "123456"`
-7. User clicks "Verify and sign in" → expected: button shows loading state;
-   `POST /auth/signin-code/verify { "email": "owner@acme.com", "code": "123456" }` fires
-8. 200 response with `access_token` → `setLoginResponse(data)` writes localStorage;
-   toast `"Welcome back!"`; `router.push('/home')` (or `next` if safe)
-
-**WF-2: Request step blocked by Zod** (negative)
-
-1. User opens `/sign-in-with-code` → `RequestStep` renders
-2. User submits with empty email → expected: `TextInput` shows `helperText`
-   `"Email is required"`; no API call
-3. User types `not-an-email` → submits → expected: helperText
-   `"Please enter a valid email"`; no API call
-
-**WF-3: Verify step blocked by Zod** (negative)
-
-1. User in `VerifyStep` types `12345` (5 digits) → submits
-2. Expected: `helperText` reads `"Enter the 6-digit code"`; no API call
-
-**WF-4: Resend after cooldown** (positive)
-
-1. After WF-1 step 5, user waits 60 seconds → resend link text flips from
-   `"Resend in 1s"` to `"Resend code"`, becomes enabled
-2. User clicks resend → `POST /auth/signin-code/request` re-fires; toast
-   `"A new code has been sent"`; `code` field is cleared; cooldown restarts at 60
-
-**WF-5: Use a different email** (positive)
-
-1. After WF-1 step 5, user clicks "Use a different email" → `email` resets to `''`;
-   inner state re-renders `RequestStep` with a fresh form
-2. The previous `VerifyStep` is unmounted (resend timer is cleaned up via
-   `clearTimeout` in the `useEffect` cleanup)
-
-**WF-6: Open code mailto link with `next` query param** (positive)
-
-1. User opens `/sign-in-with-code?next=/agents/abc` → request step renders as normal
-2. After successful verify, expected: `safeNext = '/agents/abc'`; `router.push('/agents/abc')`
-
-**WF-7: Malicious `next` query param** (negative — security guard)
-
-1. User opens `/sign-in-with-code?next=https://evil.com` → request + verify run normally
-2. On verify success: `nextPath = 'https://evil.com'`; `safeNext = '/home'` because
-   `'https://evil.com'.startsWith('/')` is false
-3. `router.push('/home')` — protocol-relative URL `?next=//evil.com` also fails the
-   `startsWith('/')` check is true for `//evil.com`, but `router.push('//evil.com')`
-   in Next.js stays in-app. ⚠ unverified — confirm Next.js treats `//foo` as a
-   same-origin path or external; if external, the guard is insufficient.
-
-**WF-8: Auth gating** (positive — public page)
-
-1. User without `tone_access_token` opens `/sign-in-with-code` → page renders;
-   no redirect
-
----
-
 ## Input Specifications
 
 Source: `src/schemas/auth.ts` (Zod `requestSignInCodeSchema`,
@@ -219,324 +154,6 @@ Source: `src/schemas/auth.ts` (Zod `requestSignInCodeSchema`,
 - "Send code" button is **disabled with spinner** while `requestCode.isPending`.
 - "Verify and sign in" button is **disabled with spinner** while `verifyCode.isPending`.
 - Resend `Button` is **disabled** when `resendIn > 0 || requestCode.isPending`.
-
----
-
-## Success Scenarios
-
-**PS-1: Request code succeeds**
-
-- **Preconditions**: User opens `/sign-in-with-code`.
-- **Steps**: type `owner@acme.com` → click "Send code".
-- **Expected outcome**: success toast `"If the email exists, a code has been sent"`
-  (Sonner default 3 s); `VerifyStep` renders with the email shown in the subtitle.
-- **Mock API** (`POST /auth/signin-code/request`, 200):
-  ```json
-  { "message": "Sign-in code sent" }
-  ```
-
-**PS-2: Verify code succeeds → redirect to `/home`**
-
-- **Preconditions**: PS-1 completed; no `?next` param.
-- **Steps**: type `123456` → click "Verify and sign in".
-- **Expected outcome**: `setLoginResponse(data)` writes localStorage
-  (`tone_access_token`, `org_tenant_id`, `login_data`); toast `"Welcome back!"`;
-  `router.push('/home')`.
-- **Mock API** (`POST /auth/signin-code/verify`, 200):
-  ```json
-  {
-    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEifQ.signature",
-    "refresh_token": "eyJhbGciOiJIUzI1NiJ9.refresh.signature",
-    "token_type": "bearer",
-    "expires_in": 86400,
-    "user": {
-      "id": "8c7a8b50-9d0a-4d63-9b3c-1a2b3c4d5e6f",
-      "email": "owner@acme.com",
-      "first_name": "Ann",
-      "last_name": "Acme",
-      "role": "owner",
-      "is_verified": true
-    },
-    "organization": {
-      "id": "f4d22a9c-1b6e-4f8c-9d2e-7e3b8a1f2c11",
-      "name": "Acme"
-    }
-  }
-  ```
-
-**PS-3: Verify code succeeds with safe `next`**
-
-- **Preconditions**: Open `/sign-in-with-code?next=/agents/abc`; PS-1 completed.
-- **Steps**: type `123456` → click "Verify and sign in".
-- **Expected outcome**: toast `"Welcome back!"`; `router.push('/agents/abc')`.
-- **Mock API**: as PS-2.
-
-**PS-4: Resend after cooldown succeeds**
-
-- **Preconditions**: PS-1 completed; user waits 60 s (or test fast-forwards
-  the timer).
-- **Steps**: click "Resend code".
-- **Expected outcome**: code field cleared; toast `"A new code has been sent"`;
-  cooldown resets to 60 s.
-- **Mock API** (`POST /auth/signin-code/request`, 200): as PS-1.
-
-**PS-5: Use a different email**
-
-- **Preconditions**: PS-1 completed (in `VerifyStep`).
-- **Steps**: click "Use a different email".
-- **Expected outcome**: inner state re-renders `RequestStep` with blank form;
-  no API call.
-
-**PS-6: Sign-in-with-password link**
-
-- **Preconditions**: User on `RequestStep`.
-- **Steps**: click "Sign in with password instead".
-- **Expected outcome**: `router.push('/login')`; the `Link` component is a
-  Next.js `<Link href="/login">`.
-
----
-
-## Failure Scenarios
-
-**FS-1: Empty email blocks submit**
-
-- **Preconditions**: `RequestStep`.
-- **Steps**: leave email empty → click "Send code".
-- **Mock API**: not called (Zod blocks submit).
-- **Expected UI**: `TextInput` shows `helperText` = `"Email is required"`.
-
-**FS-2: Invalid email format**
-
-- **Steps**: type `not-an-email` → click "Send code".
-- **Expected UI**: `helperText` = `"Please enter a valid email"`; no API call.
-
-**FS-3: Request backend 400 — `email is required`**
-
-- **Preconditions**: Somehow the body lacks `email` (manual fetch / dev tools).
-- **Mock API** (`POST /auth/signin-code/request`, 400):
-  ```json
-  { "detail": "email is required" }
-  ```
-- **Expected UI**: `handleApiError(err)` → toast title `"email is required"`;
-  inner state stays on `RequestStep` (no advance).
-
-**FS-4: Request backend 429 (rate limit)**
-
-- **Mock API** (`POST /auth/signin-code/request`, 429):
-  ```json
-  { "detail": "Too many requests. Try again later." }
-  ```
-- **Expected UI**: toast title `"Too many requests. Try again later."`;
-  stays on `RequestStep`.
-
-**FS-5: Verify code Zod — empty**
-
-- **Steps**: in `VerifyStep`, leave code empty → click "Verify and sign in".
-- **Expected UI**: `helperText` = `"Code is required"`; no API call.
-
-**FS-6: Verify code Zod — wrong length**
-
-- **Steps**: type `12345` (5 digits) → submit.
-- **Expected UI**: `helperText` = `"Enter the 6-digit code"`; no API call.
-
-**FS-7: Verify code Zod — non-numeric**
-
-- **Steps**: paste `abcdef` → `onValueChange` strips alphas; field ends up
-  empty → submit.
-- **Expected UI**: `helperText` = `"Code is required"`; no API call.
-
-**FS-8: Verify backend 401 — invalid/expired code**
-
-- **Mock API** (`POST /auth/signin-code/verify`, 401):
-  ```json
-  { "detail": "Invalid or expired code" }
-  ```
-- **Expected UI**: `handleApiError(err)` → toast title `"Invalid or expired code"`;
-  user remains on `VerifyStep`; code field retains the typed value (no auto-clear).
-
-**FS-9: Verify backend 400 — wrong code**
-
-- **Mock API** (`POST /auth/signin-code/verify`, 400):
-  ```json
-  { "detail": "Invalid code" }
-  ```
-- **Expected UI**: toast title `"Invalid code"`; stays on `VerifyStep`.
-
-**FS-10: Verify backend 422 — `detail` is array**
-
-- **Mock API** (`POST /auth/signin-code/verify`, 422):
-  ```json
-  {
-    "detail": [
-      {
-        "type": "missing",
-        "loc": ["body", "code"],
-        "msg": "Field required",
-        "input": {}
-      }
-    ]
-  }
-  ```
-- **Expected UI**: `handleApiError` only stringifies `detail` when it is a string;
-  for array `detail` it falls back to `"Something went wrong. Please try again."`
-  in the toast.
-
-**FS-11: Verify backend 500**
-
-- **Mock API** (`POST /auth/signin-code/verify`, 500):
-  ```json
-  { "detail": "Internal Server Error" }
-  ```
-- **Expected UI**: toast title `"Internal Server Error"`; stays on `VerifyStep`.
-
-**FS-12: Resend during cooldown is a no-op**
-
-- **Preconditions**: `VerifyStep`, `resendIn = 30`.
-- **Steps**: click resend link.
-- **Mock API**: not called (`Button` is `disabled` + handler early-returns).
-- **Expected UI**: no toast, no API call; label still reads `"Resend in 30s"`.
-
-**FS-13: Resend backend error**
-
-- **Preconditions**: `resendIn === 0`.
-- **Mock API** (`POST /auth/signin-code/request`, 429):
-  ```json
-  { "detail": "Too many requests. Try again later." }
-  ```
-- **Expected UI**: toast title `"Too many requests. Try again later."`;
-  `resendIn` is **not** reset (the `setResendIn(RESEND_COOLDOWN_SECONDS)` call
-  is inside the `try` block, after the await — only runs on success).
-- **Gotcha**: on error, the link remains enabled and the user can spam-click.
-  ⚠ unverified — confirm whether the button stays enabled after the request
-  resolves.
-
-**FS-14: Verify with stale email after editing localStorage**
-
-- **Preconditions**: `VerifyStep` for `owner@acme.com`. Someone manually edits
-  localStorage to swap the active org.
-- **Steps**: submit valid code.
-- **Expected UI**: backend ties code to original email → succeeds; auth store
-  is overwritten by the response → no leak from the manual edit.
-
-**FS-15: Network error (offline) on request**
-
-- **Mock API**: aborted; no response.
-- **Expected UI**: `handleApiError(err)` → toast title falls back to
-  `"Something went wrong. Please try again."`; stays on `RequestStep`.
-
-**FS-16: Authenticated visit to `/sign-in-with-code` keeps form rendered**
-
-- **Preconditions**: localStorage has valid `access_token` (different user).
-- **Expected UI**: page renders `RequestStep` form normally — no auto-redirect to `/home`. Submitting a fresh email + code still hydrates the auth store with the response, overwriting the previous session. Document this as the current behaviour.
-
-**FS-17: Slow API (>3s) on request keeps Send code in loading state**
-
-- **Mock API** (`POST /auth/signin-code/request`, 200 but delayed ~3500 ms): success after delay.
-- **Expected UI**: button stays disabled with spinner for the full duration; clicking again is a no-op; `VerifyStep` mounts only after the response resolves.
-
-**FS-18: Slow API (>3s) on verify keeps Verify and sign in in loading state**
-
-- **Mock API** (`POST /auth/signin-code/verify`, 200 but delayed ~3500 ms): success after delay.
-- **Expected UI**: button stays disabled with spinner; redirect only fires after the response.
-
-**FS-19: Network failure on verify preserves code value**
-
-- **Mock API**: route aborted.
-- **Expected UI**: toast "Something went wrong. Please try again."; code field still contains the typed 6 digits; button re-enables.
-
-**FS-20: Email with XSS / special chars**
-
-- **Steps**: type `<script>alert(1)</script>@x.com` in the request step.
-- **Expected UI**: Zod's `.email()` rejects → helperText "Please enter a valid email"; no API call; literal text renders as plain value in the input.
-
-**FS-21: Email with emoji on `RequestStep`**
-
-- **Steps**: type `user+🔥@example.com`.
-- **Expected UI**: Zod's `.email()` likely accepts the ASCII portion — document observed behaviour. If accepted, request fires and `VerifyStep` mounts with the email rendered verbatim in `<strong>`.
-
-**FS-22: Code with whitespace via paste**
-
-- **Steps**: paste `1 2 3 4 5 6` into the code field.
-- **Expected UI**: `onValueChange` strips non-digits via `digitsOnly` → field value `123456`; Zod passes; submit allowed.
-
-**FS-23: Code paste with newlines**
-
-- **Steps**: paste `123\n456` into the code field.
-- **Expected UI**: `digitsOnly` strips the newline → field value `123456`; Zod passes.
-
-**FS-24: Very long pasted code (>6 digits)**
-
-- **Steps**: paste `123456789012`.
-- **Expected UI**: `digitsOnly` slices to 6 → field value `123456`; Zod passes.
-
-**FS-25: Tab order through `RequestStep`**
-
-- **Steps**: focus the page → press Tab repeatedly.
-- **Expected UI**: focus moves Email → Send code → "Sign in with password instead" link.
-
-**FS-26: Tab order through `VerifyStep`**
-
-- **Steps**: focus the page → press Tab repeatedly.
-- **Expected UI**: focus moves Code → Verify and sign in → Use a different email → Resend.
-
-**FS-27: Submit via Enter key in code field**
-
-- **Steps**: type a valid 6-digit code, press Enter while focus is on the code input.
-- **Expected UI**: form submits exactly as clicking Verify and sign in would.
-
-**FS-28: Helper-text errors are announced via aria-live**
-
-- **Steps**: in `VerifyStep`, submit with `12345` (5 digits).
-- **Expected UI**: helperText "Enter the 6-digit code" renders with `role="alert"` (or `aria-live`) so screen readers announce the error.
-
-**FS-29: Browser back from `VerifyStep` to `RequestStep`**
-
-- **Preconditions**: WF-1 step 5 reached.
-- **Steps**: press browser Back.
-- **Expected UI**: URL was not pushed when advancing from request → verify (the swap is in-component); pressing Back exits `/sign-in-with-code` to the previous page.
-
-**FS-30: Protocol-relative `?next=//evil.com` is treated as in-app path**
-
-- **Preconditions**: URL has `?next=//evil.com`; complete request + verify successfully.
-- **Expected UI**: `safeNext = '//evil.com'` (passes `startsWith('/')`); `router.push('//evil.com')` — verify whether Next.js treats this as a same-origin path. ⚠ Known potential open-redirect risk — document the actual observed redirect destination and fail the test if the user lands off-origin.
-
-### Full lifecycle (`*-FULL`)
-
-**SC-FULL: End-to-end sign-in-with-code lifecycle in a single test**
-
-- **Preconditions**: A test user `__e2e__sc_<uuid>@example.com` is provisioned and verified via the backend API. A sign-in code is fetched after `POST /auth/signin-code/request` (via a test-only admin endpoint or by reading the dev mailbox / DB).
-- **Steps in one Playwright test body**:
-  1. Visit `/sign-in-with-code` without auth → expect `RequestStep` rendered.
-  2. Submit with empty email → expect helperText "Email is required".
-  3. Submit `not-an-email` → expect helperText "Please enter a valid email".
-  4. Click "Sign in with password instead" → expect URL `/login`.
-  5. Navigate back to `/sign-in-with-code`.
-  6. Submit the provisioned email → expect success toast "If the email exists, a code has been sent" and `VerifyStep` rendered with the email in `<strong>`.
-  7. Submit code `12345` → expect helperText "Enter the 6-digit code".
-  8. Submit a wrong 6-digit code → expect toast "Invalid or expired code"; stay on `VerifyStep`; code field retains value.
-  9. Click "Use a different email" → expect `RequestStep` re-rendered blank.
-  10. Re-submit the same email → fetch a new code → submit the new code → expect toast "Welcome back!" and URL `/home`; verify localStorage has `tone_access_token`.
-  11. Sign out (clear localStorage) and visit `/sign-in-with-code?next=/agents` → repeat request + verify successfully → expect redirect to `/agents` (not `/home`).
-  12. Sign out and visit `/sign-in-with-code?next=https://evil.com` → repeat request + verify → expect redirect to `/home` (open-redirect guard).
-- **Cleanup (in `finally`)**: Delete the provisioned user via the backend admin API.
-- **Naming**: `SC-FULL — sign-in-with-code full lifecycle`.
-
----
-
-## Expected Toast Messages
-
-Toasts use Sonner via `showToast` (`src/lib/toast.ts`). All errors are routed
-through `handleApiError(err)` which uses `response.data.detail` as the toast
-title when it is a string, otherwise falls back to
-`"Something went wrong. Please try again."`.
-
-| Trigger                                                | Toast title                                       | Toast description | Variant |
-| ------------------------------------------------------ | ------------------------------------------------- | ----------------- | ------- |
-| Request code 200                                       | `If the email exists, a code has been sent`       | —                 | success |
-| Verify code 200                                        | `Welcome back!`                                   | —                 | success |
-| Resend after cooldown 200                              | `A new code has been sent`                        | —                 | success |
-| Any backend 4xx/5xx with string `detail`               | backend `detail` (e.g. `Invalid or expired code`) | —                 | error   |
-| Any backend error with non-string `detail`             | `Something went wrong. Please try again.`         | —                 | error   |
 
 ---
 
@@ -658,37 +275,868 @@ response), plus updates the in-memory `authAtom`-equivalent zustand slice.
 
 ---
 
-## Edge Cases
+## Test Cases
 
-- [ ] User refreshes the page mid-flow (after step 1) → inner `email` state is
-      reset (React-only), user is back to `RequestStep`; no error
-- [ ] User opens a second tab and verifies first → the original tab's verify call
-      returns 401 `"Invalid or expired code"` on submit
-- [ ] User pastes a code with spaces (`"123 456"`) → `onValueChange` strips spaces,
-      RHF stores `"123456"`, Zod passes
-- [ ] User pastes a 7-character code → `digitsOnly` slices to 6; only first 6 are kept
-- [ ] User uses iOS auto-fill `one-time-code` → `autoComplete` triggers OS suggestion
-      bar; on tap, the input is filled with the OTP
-- [ ] User clicks "Send code" while a previous request is in flight → `requestCode.isPending`
-      keeps the button disabled, preventing double submit
-- [ ] User clicks "Verify and sign in" while a previous verify is in flight →
-      same `isPending` guard
-- [ ] `next` param is an open redirect attempt (`https://evil.com`) → `safeNext`
-      defaults to `/home`
-- [ ] `next` param is a protocol-relative URL (`//evil.com`) → `startsWith('/')`
-      is `true`, so `router.push('//evil.com')` runs. ⚠ unverified — Next.js
-      may treat this as an in-app path, but it is a known open-redirect risk
-- [ ] `next` param contains a query string (`/agents?org=foo`) → passes through
-      unchanged
-- [ ] User leaves the tab on `VerifyStep` for 11 minutes → backend invalidates
-      the code; the next submit returns 401 `"Invalid or expired code"`
-- [ ] Resend timer continues to tick even when the tab is backgrounded (JS timer
-      keeps running unless throttled by the browser) — the user sees correct
-      remaining time on focus
-- [ ] User opens dev tools and edits the `code` input to `"12345"` (5 chars)
-      → Zod blocks submission with `"Enter the 6-digit code"`
-- [ ] Toast spam: clicking "Send code" twice quickly → second click is debounced
-      by `requestCode.isPending`; only one request is sent
+> Every test case is **one Action + multiple Observations**. Each Action is a numbered
+> list of steps. Each Observation is a numbered list of verification steps.
+> ID prefix legend: `TC-HAPPY-` (positive), `TC-VALIDATE-` (client validation),
+> `TC-ERROR-` (server errors), `TC-NAV-` (navigation), `TC-LOADING-` (loading/disabled),
+> `TC-EDGE-` (edge cases), `TC-A11Y-` (accessibility), `TC-FULL-` (lifecycle).
+
+---
+
+### TC-HAPPY-001: Request → verify → land on /home
+
+**Preconditions**:
+- User is signed out (no `tone_access_token` in localStorage)
+- Valid backend account `owner@acme.com`
+
+**Action**:
+1. Visit `/sign-in-with-code`
+2. Type `owner@acme.com` into the Email input
+3. Click "Send code"
+4. Type `123456` into the 6-digit code input
+5. Click "Verify and sign in"
+
+**Observation 1 — Request step network call**:
+1. Exactly one `POST /auth/signin-code/request` request is recorded
+2. Request body equals `{ "email": "owner@acme.com" }`
+
+**Observation 2 — Step advances to VerifyStep**:
+1. Heading text changes to `Enter your code`
+2. Subtitle contains `owner@acme.com` rendered in `<strong>`
+3. Resend link reads `Resend in 60s` and is disabled
+
+**Observation 3 — Generic success toast on request**:
+1. Toast title equals `If the email exists, a code has been sent`
+
+**Observation 4 — Verify step network call**:
+1. Exactly one `POST /auth/signin-code/verify` request is recorded
+2. Request body equals `{ "email": "owner@acme.com", "code": "123456" }`
+
+**Observation 5 — Local storage hydration on 200**:
+1. `localStorage.tone_access_token` equals the response `access_token`
+2. `localStorage.org_tenant_id` equals the response `organization.id`
+3. `localStorage.login_data` is valid JSON containing `user.id`
+
+**Observation 6 — Redirect + welcome toast**:
+1. URL becomes `/home` within 1s
+2. Toast title equals `Welcome back!`
+
+**API mocks**:
+- `POST /auth/signin-code/request` → 200 `{ "message": "Sign-in code sent" }`
+- `POST /auth/signin-code/verify` → 200 with the AuthLoginResponse example above
+
+**Cleanup**: Clear localStorage and cookies in the `afterEach` hook.
+
+---
+
+### TC-HAPPY-002: `?next=/agents/abc` redirects to /agents/abc on success
+
+**Preconditions**:
+- User is signed out
+- Valid backend account
+
+**Action**:
+1. Visit `/sign-in-with-code?next=/agents/abc`
+2. Submit a valid email
+3. Submit `123456` as the code
+
+**Observation 1 — Redirect honours `next`**:
+1. URL becomes `/agents/abc` (NOT `/home`) within 1s
+
+**Observation 2 — Welcome toast still appears**:
+1. Toast title equals `Welcome back!`
+
+**API mocks**: same as TC-HAPPY-001.
+
+---
+
+### TC-HAPPY-003: Resend after cooldown succeeds
+
+**Preconditions**:
+- TC-HAPPY-001 step 3 just completed; user is on `VerifyStep`
+- Test fast-forwards (or waits) 60 seconds until `resendIn === 0`
+
+**Action**:
+1. Click the "Resend code" link
+
+**Observation 1 — Network request**:
+1. Exactly one new `POST /auth/signin-code/request` request is recorded
+2. Request body equals `{ "email": "owner@acme.com" }`
+
+**Observation 2 — UI resets**:
+1. Code field is cleared (value is `""`)
+2. Resend link returns to `Resend in 60s` and is disabled
+
+**Observation 3 — Success toast**:
+1. Toast title equals `A new code has been sent`
+
+**API mock**: `POST /auth/signin-code/request` → 200.
+
+---
+
+### TC-HAPPY-004: "Use a different email" returns to RequestStep blank
+
+**Preconditions**:
+- TC-HAPPY-001 step 3 just completed; user is on `VerifyStep`
+
+**Action**:
+1. Click the "Use a different email" link-button
+
+**Observation 1 — Step reverts**:
+1. Heading text changes back to `Sign in with a code`
+2. Email input is rendered and empty
+
+**Observation 2 — No API call**:
+1. Zero additional `POST /auth/signin-code/request` requests are recorded
+
+**Observation 3 — Resend timer cleaned up**:
+1. No setState-on-unmounted warnings appear (`clearTimeout` runs in cleanup)
+
+---
+
+### TC-NAV-001: Click "Sign in with password instead" navigates to /login
+
+**Action**:
+1. Visit `/sign-in-with-code`
+2. Click the "Sign in with password instead" link
+
+**Observation 1 — URL change**:
+1. URL becomes `/login`
+
+**Observation 2 — No reload**:
+1. No full page reload occurs (Next.js `<Link>`)
+
+---
+
+### TC-VALIDATE-001: Empty email blocks submit on RequestStep
+
+**Action**:
+1. Visit `/sign-in-with-code`
+2. Leave email empty
+3. Click "Send code"
+
+**Observation 1 — No network call**:
+1. Zero `POST /auth/signin-code/request` requests are recorded
+
+**Observation 2 — Inline error**:
+1. Helper text under Email reads exactly `Email is required`
+
+**Observation 3 — Step did not advance**:
+1. Heading remains `Sign in with a code`
+
+---
+
+### TC-VALIDATE-002: Malformed email blocks submit
+
+**Action**:
+1. Visit `/sign-in-with-code`
+2. Type `not-an-email` into Email
+3. Click "Send code"
+
+**Observation 1 — No network call**:
+1. Zero `POST /auth/signin-code/request` requests are recorded
+
+**Observation 2 — Inline error**:
+1. Helper text under Email reads exactly `Please enter a valid email`
+
+---
+
+### TC-VALIDATE-003: Empty code blocks submit on VerifyStep
+
+**Preconditions**:
+- User is on `VerifyStep` (TC-HAPPY-001 steps 1-3 ran)
+
+**Action**:
+1. Leave code empty
+2. Click "Verify and sign in"
+
+**Observation 1 — No network call**:
+1. Zero `POST /auth/signin-code/verify` requests are recorded
+
+**Observation 2 — Inline error**:
+1. Helper text under code reads exactly `Code is required`
+
+---
+
+### TC-VALIDATE-004: Wrong-length code (5 digits) blocks submit
+
+**Preconditions**:
+- User is on `VerifyStep`
+
+**Action**:
+1. Type `12345` into the code input
+2. Click "Verify and sign in"
+
+**Observation 1 — No network call**:
+1. Zero `POST /auth/signin-code/verify` requests are recorded
+
+**Observation 2 — Inline error**:
+1. Helper text under code reads exactly `Enter the 6-digit code`
+
+---
+
+### TC-VALIDATE-005: Non-numeric paste leaves the field empty
+
+**Preconditions**:
+- User is on `VerifyStep`
+
+**Action**:
+1. Paste `abcdef` into the code input
+2. Click "Verify and sign in"
+
+**Observation 1 — onValueChange strips alphas**:
+1. The code input value is `""`
+
+**Observation 2 — Empty-code error**:
+1. Helper text under code reads exactly `Code is required`
+2. Zero `POST /auth/signin-code/verify` requests are recorded
+
+---
+
+### TC-ERROR-001: Request 400 "email is required" surfaces toast
+
+**Preconditions**:
+- Somehow the body lacks `email` (manual fetch / dev tools)
+
+**Action**:
+1. Submit a valid email on RequestStep
+
+**Observation 1 — Error toast via handleApiError**:
+1. Toast title equals `email is required`
+
+**Observation 2 — Step does not advance**:
+1. Heading remains `Sign in with a code`
+
+**API mock**: `POST /auth/signin-code/request` → 400 `{ "detail": "email is required" }`.
+
+---
+
+### TC-ERROR-002: Request 429 rate-limit surfaces toast
+
+**Action**:
+1. Submit a valid email
+
+**Observation 1 — Error toast**:
+1. Toast title equals `Too many requests. Try again later.`
+
+**Observation 2 — Stay on RequestStep**:
+1. Heading remains `Sign in with a code`
+
+**API mock**: `POST /auth/signin-code/request` → 429 `{ "detail": "Too many requests. Try again later." }`.
+
+---
+
+### TC-ERROR-003: Verify 401 invalid/expired code shows toast and keeps value
+
+**Preconditions**:
+- User is on `VerifyStep`
+
+**Action**:
+1. Type `999999` as the code
+2. Click "Verify and sign in"
+
+**Observation 1 — Error toast**:
+1. Toast title equals `Invalid or expired code`
+
+**Observation 2 — Code field retains value**:
+1. The code input value is still `999999` (no auto-clear)
+
+**Observation 3 — Stay on VerifyStep**:
+1. Heading remains `Enter your code`
+
+**API mock**: `POST /auth/signin-code/verify` → 401 `{ "detail": "Invalid or expired code" }`.
+
+---
+
+### TC-ERROR-004: Verify 400 wrong code shows toast
+
+**Preconditions**:
+- User is on `VerifyStep`
+
+**Action**:
+1. Submit `123456`
+
+**Observation 1 — Error toast**:
+1. Toast title equals `Invalid code`
+
+**Observation 2 — Stay on VerifyStep**:
+1. Heading remains `Enter your code`
+
+**API mock**: `POST /auth/signin-code/verify` → 400 `{ "detail": "Invalid code" }`.
+
+---
+
+### TC-ERROR-005: Verify 422 with array `detail` falls back to generic toast
+
+**Preconditions**:
+- User is on `VerifyStep`
+
+**Action**:
+1. Submit `123456`
+
+**Observation 1 — Generic fallback toast**:
+1. Toast title equals `Something went wrong. Please try again.`
+
+**API mock**: `POST /auth/signin-code/verify` → 422 `{ "detail": [{ "type": "missing", "loc": ["body", "code"], "msg": "Field required", "input": {} }] }`.
+
+---
+
+### TC-ERROR-006: Verify 500 surfaces verbatim string
+
+**Preconditions**:
+- User is on `VerifyStep`
+
+**Action**:
+1. Submit `123456`
+
+**Observation 1 — Error toast**:
+1. Toast title equals `Internal Server Error`
+
+**Observation 2 — Stay on VerifyStep**:
+1. Heading remains `Enter your code`
+
+**API mock**: `POST /auth/signin-code/verify` → 500 `{ "detail": "Internal Server Error" }`.
+
+---
+
+### TC-ERROR-007: Resend during cooldown is a no-op
+
+**Preconditions**:
+- User is on `VerifyStep`; `resendIn = 30`
+
+**Action**:
+1. Click the resend link
+
+**Observation 1 — No network call**:
+1. Zero new `POST /auth/signin-code/request` requests are recorded
+2. The `Button` is `disabled` and handler early-returns
+
+**Observation 2 — Label unchanged**:
+1. Resend link still reads `Resend in 30s`
+
+---
+
+### TC-ERROR-008: Resend backend error leaves cooldown unchanged
+
+**Preconditions**:
+- User is on `VerifyStep`; `resendIn === 0`
+
+**Action**:
+1. Click "Resend code"
+
+**Observation 1 — Error toast**:
+1. Toast title equals `Too many requests. Try again later.`
+
+**Observation 2 — `resendIn` is NOT reset**:
+1. The `setResendIn(RESEND_COOLDOWN_SECONDS)` call is inside the `try` block (only runs on success)
+2. The link remains enabled and the user can spam-click
+
+> ⚠ unverified — confirm whether the button stays enabled after the request resolves.
+
+**API mock**: `POST /auth/signin-code/request` → 429 `{ "detail": "Too many requests. Try again later." }`.
+
+---
+
+### TC-ERROR-009: Network failure on request falls back to generic toast
+
+**Action**:
+1. Submit a valid email with the route aborted
+
+**Observation 1 — Generic fallback toast**:
+1. Toast title equals `Something went wrong. Please try again.`
+
+**Observation 2 — Stay on RequestStep**:
+1. Heading remains `Sign in with a code`
+
+**API mock**: `POST /auth/signin-code/request` route aborted.
+
+---
+
+### TC-EDGE-001: Verify with stale email after editing localStorage
+
+**Preconditions**:
+- User is on `VerifyStep` for `owner@acme.com`
+- Someone manually edits localStorage to swap the active org
+
+**Action**:
+1. Submit a valid code
+
+**Observation 1 — Auth store is overwritten by response**:
+1. `localStorage.login_data` is overwritten with the verify response
+2. No leak from the manual edit
+
+**API mock**: `POST /auth/signin-code/verify` → 200.
+
+---
+
+### TC-EDGE-002: Authenticated visit keeps the form rendered
+
+**Preconditions**:
+- localStorage has a valid `tone_access_token` (different user)
+
+**Action**:
+1. Visit `/sign-in-with-code`
+
+**Observation 1 — Page renders RequestStep normally**:
+1. Email input is in the DOM
+2. No auto-redirect to `/home`
+
+**Observation 2 — Subsequent verify overwrites session**:
+1. Submitting a fresh email + code hydrates the auth store with the new response, overwriting the previous session
+
+> Document this as the current behaviour.
+
+---
+
+### TC-LOADING-001: Slow API on request keeps Send code in loading state
+
+**Action**:
+1. Visit `/sign-in-with-code`
+2. Submit a valid email with a backend delayed ~3500 ms
+
+**Observation 1 — Button label and disabled state**:
+1. Within 100 ms of click, the "Send code" button shows the loading spinner and is `disabled`
+2. The disabled state persists throughout the 3500 ms window
+
+**Observation 2 — Double-click is a no-op**:
+1. Clicking again during loading produces zero additional `POST /auth/signin-code/request` requests
+
+**Observation 3 — Step advances after resolution**:
+1. After ~3500 ms `VerifyStep` mounts
+2. Toast `If the email exists, a code has been sent` appears
+
+**API mock**: `POST /auth/signin-code/request` → 200 delayed by 3500 ms.
+
+---
+
+### TC-LOADING-002: Slow API on verify keeps Verify and sign in in loading state
+
+**Preconditions**:
+- User is on `VerifyStep`
+
+**Action**:
+1. Submit `123456` with a backend delayed ~3500 ms
+
+**Observation 1 — Button disabled with spinner**:
+1. "Verify and sign in" shows the spinner and is `disabled` for the full 3500 ms
+
+**Observation 2 — Double-click is a no-op**:
+1. Clicking again produces zero additional `POST /auth/signin-code/verify` requests
+
+**Observation 3 — Redirect after resolution**:
+1. URL becomes `/home` only after the response resolves
+
+**API mock**: `POST /auth/signin-code/verify` → 200 delayed by 3500 ms.
+
+---
+
+### TC-EDGE-003: Network failure on verify preserves code value
+
+**Preconditions**:
+- User is on `VerifyStep`; code field contains `123456`
+
+**Action**:
+1. Click "Verify and sign in" with the route aborted
+
+**Observation 1 — Generic toast**:
+1. Toast title equals `Something went wrong. Please try again.`
+
+**Observation 2 — Code field preserved**:
+1. The code input still contains `123456`
+2. The "Verify and sign in" button re-enables
+
+**API mock**: `POST /auth/signin-code/verify` route aborted.
+
+---
+
+### TC-EDGE-004: XSS attempt in email is rejected by Zod
+
+**Action**:
+1. Visit `/sign-in-with-code`
+2. Type `<script>alert(1)</script>@x.com` into Email
+3. Click "Send code"
+
+**Observation 1 — Zod rejects**:
+1. Helper text under Email reads `Please enter a valid email`
+2. Zero `POST /auth/signin-code/request` requests are recorded
+
+**Observation 2 — DOM is safe**:
+1. The literal `<script>` text appears as the input's `value` attribute (rendered as text)
+2. `window.alert` was not invoked
+
+---
+
+### TC-EDGE-005: Email containing emoji is documented behaviour
+
+**Action**:
+1. Visit `/sign-in-with-code`
+2. Type `user+🔥@example.com` into Email
+3. Click "Send code"
+
+**Observation 1 — Behaviour depends on Zod**:
+1. If Zod's `.email()` accepts the ASCII portion, the request fires and `VerifyStep` mounts with the email rendered verbatim in `<strong>`
+2. If rejected, helper text `Please enter a valid email` appears
+
+> Document observed behaviour against the current Zod version.
+
+---
+
+### TC-EDGE-006: Pasting spaces into the code field strips to digits
+
+**Preconditions**:
+- User is on `VerifyStep`
+
+**Action**:
+1. Paste `1 2 3 4 5 6` into the code input
+
+**Observation 1 — onValueChange strips non-digits**:
+1. The code input value is exactly `123456`
+
+**Observation 2 — Zod passes on submit**:
+1. Clicking "Verify and sign in" fires exactly one `POST /auth/signin-code/verify`
+
+---
+
+### TC-EDGE-007: Pasting newlines into the code field strips them
+
+**Preconditions**:
+- User is on `VerifyStep`
+
+**Action**:
+1. Paste `123\n456` into the code input
+
+**Observation 1 — Newline stripped**:
+1. The code input value is exactly `123456`
+
+---
+
+### TC-EDGE-008: Pasting >6 digits clamps to first 6
+
+**Preconditions**:
+- User is on `VerifyStep`
+
+**Action**:
+1. Paste `123456789012` into the code input
+
+**Observation 1 — Sliced to 6**:
+1. The code input value is exactly `123456`
+
+---
+
+### TC-EDGE-009: Submit via Enter key in code field
+
+**Preconditions**:
+- User is on `VerifyStep`; code field contains `123456`
+
+**Action**:
+1. Focus the code input
+2. Press the `Enter` key
+
+**Observation 1 — Form submits**:
+1. Exactly one `POST /auth/signin-code/verify` request is recorded
+2. Request body equals `{ "email": "owner@acme.com", "code": "123456" }`
+
+**API mock**: `POST /auth/signin-code/verify` → 200.
+
+---
+
+### TC-EDGE-010: Edited code in dev tools to 5 chars still blocked by Zod
+
+**Preconditions**:
+- User is on `VerifyStep`
+
+**Action**:
+1. Use dev tools to set the code input value to `12345`
+2. Click "Verify and sign in"
+
+**Observation 1 — Zod blocks submission**:
+1. Helper text under code reads `Enter the 6-digit code`
+2. Zero `POST /auth/signin-code/verify` requests are recorded
+
+---
+
+### TC-EDGE-011: Code expires after 11 minutes — submit returns 401
+
+**Preconditions**:
+- User leaves the tab on `VerifyStep` for 11 minutes
+
+**Action**:
+1. Submit any 6-digit code
+
+**Observation 1 — Backend rejects**:
+1. Toast title equals `Invalid or expired code`
+2. Code field retains value
+
+**API mock**: `POST /auth/signin-code/verify` → 401 `{ "detail": "Invalid or expired code" }`.
+
+---
+
+### TC-EDGE-012: Resend timer continues ticking while tab is backgrounded
+
+**Preconditions**:
+- User is on `VerifyStep`; `resendIn = 60`
+
+**Action**:
+1. Background the tab for 30 seconds
+2. Foreground the tab
+
+**Observation 1 — Remaining time reflects elapsed seconds**:
+1. Resend label reads `Resend in 30s` (or near) — JS timer keeps running unless browser throttles
+
+---
+
+### TC-EDGE-013: User opens a second tab and verifies first
+
+**Preconditions**:
+- User opens `/sign-in-with-code` in tab A; advances to `VerifyStep`
+- User opens the same flow in tab B, verifies successfully
+
+**Action**:
+1. Submit the code in tab A
+
+**Observation 1 — Backend rejects in tab A**:
+1. Toast title equals `Invalid or expired code`
+
+**API mock** (tab A): `POST /auth/signin-code/verify` → 401.
+
+---
+
+### TC-EDGE-014: Refreshing mid-flow resets to RequestStep
+
+**Preconditions**:
+- User is on `VerifyStep`
+
+**Action**:
+1. Press browser Refresh
+
+**Observation 1 — RequestStep re-renders**:
+1. Heading reads `Sign in with a code`
+2. Email input is empty (React-only state reset)
+
+**Observation 2 — No errors fire**:
+1. No console errors during the reset
+
+---
+
+### TC-NAV-002: Browser back from VerifyStep exits the page
+
+**Preconditions**:
+- WF-1 step 5 reached (i.e. `VerifyStep` rendered)
+
+**Action**:
+1. Press the browser Back button
+
+**Observation 1 — Back exits the page**:
+1. URL is no longer `/sign-in-with-code` (the step swap did NOT push history)
+
+---
+
+### TC-NAV-003: Open-redirect guard blocks `?next=https://evil.com`
+
+**Action**:
+1. Visit `/sign-in-with-code?next=https://evil.com`
+2. Submit a valid email and code
+
+**Observation 1 — Redirect falls back to /home**:
+1. `safeNext = '/home'` because `'https://evil.com'.startsWith('/')` is false
+2. URL becomes `/home` (NOT `https://evil.com`)
+3. No navigation event targets an external origin
+
+**API mocks**: as TC-HAPPY-001.
+
+---
+
+### TC-NAV-004: Protocol-relative `?next=//evil.com` — known risk
+
+**Action**:
+1. Visit `/sign-in-with-code?next=//evil.com`
+2. Submit a valid email and code
+
+**Observation 1 — startsWith('/') is true**:
+1. `safeNext = '//evil.com'` (passes the guard)
+2. `router.push('//evil.com')` runs
+
+**Observation 2 — Verify actual destination**:
+1. Verify whether Next.js treats `//evil.com` as a same-origin path or an external URL
+
+> ⚠ Known potential open-redirect risk — document the actual observed redirect destination and fail the test if the user lands off-origin.
+
+**API mocks**: as TC-HAPPY-001.
+
+---
+
+### TC-A11Y-001: Tab order through RequestStep
+
+**Action**:
+1. Visit `/sign-in-with-code`
+2. Focus the Email input
+3. Press Tab repeatedly
+
+**Observation 1 — Tab order**:
+1. Focus moves Email → Send code → "Sign in with password instead" link
+2. No focusable element is skipped or reached twice
+
+---
+
+### TC-A11Y-002: Tab order through VerifyStep
+
+**Preconditions**:
+- User is on `VerifyStep`
+
+**Action**:
+1. Focus the code input
+2. Press Tab repeatedly
+
+**Observation 1 — Tab order**:
+1. Focus moves Code → Verify and sign in → Use a different email → Resend
+
+---
+
+### TC-A11Y-003: Numeric keypad and one-time-code autofill on code input
+
+**Action**:
+1. Open `/sign-in-with-code` on a mobile browser (or inspect the input attributes)
+2. Focus the code input
+
+**Observation 1 — Mobile keyboard hints**:
+1. The code input has `inputMode="numeric"` and `autoComplete="one-time-code"`
+2. On iOS / Android, the numeric keypad appears and OS-level OTP autofill suggestion is offered
+
+---
+
+### TC-A11Y-004: Helper-text errors announced via aria-live
+
+**Preconditions**:
+- User is on `VerifyStep`
+
+**Action**:
+1. Submit `12345` (5 digits)
+
+**Observation 1 — Code error is announceable**:
+1. Helper text under the code input is rendered inside an element with `role="alert"` (or `aria-live="polite"`)
+2. The error text is exactly `Enter the 6-digit code`
+
+---
+
+### TC-A11Y-005: Resend Button uses real disabled, not just CSS
+
+**Preconditions**:
+- User is on `VerifyStep`; `resendIn = 60`
+
+**Action**:
+1. Inspect the resend `Button`
+
+**Observation 1 — Real disabled attribute**:
+1. The resend `Button` has the `disabled` HTML attribute (so SR users hear "dimmed/unavailable")
+
+---
+
+### TC-A11Y-006: Loading button announces via spinner + visible text
+
+**Action**:
+1. Submit a valid email with a slow backend
+
+**Observation 1 — Loading state**:
+1. The "Send code" button shows the spinner + remains visible
+2. The button has `disabled` set
+
+> ⚠ Consider adding `aria-busy` while `isPending` so SR explicitly announces the wait.
+
+---
+
+### TC-A11Y-007: Missing page-level h1 — heading hierarchy gap
+
+**Action**:
+1. Inspect both steps for heading hierarchy
+
+**Observation 1 — Only h2 present**:
+1. Both steps use `<h2>`; there is no `<h1>` on the page
+2. The layout's `Logo` is decorative
+
+> ⚠ Consider a visually-hidden `<h1>` for SR users.
+
+---
+
+### TC-FULL-001: End-to-end sign-in-with-code lifecycle
+
+**Preconditions**:
+- A test user `__e2e__sc_<uuid>@example.com` is provisioned and verified via the backend API
+- A sign-in code is fetched after `POST /auth/signin-code/request` (via a test-only admin endpoint or by reading the dev mailbox / DB)
+
+**Action**:
+1. Visit `/sign-in-with-code` without auth
+2. Submit with empty email
+3. Submit `not-an-email`
+4. Click "Sign in with password instead"
+5. Navigate back to `/sign-in-with-code`
+6. Submit the provisioned email
+7. Submit code `12345`
+8. Submit a wrong 6-digit code
+9. Click "Use a different email"
+10. Re-submit the same email; fetch a new code; submit it
+11. Sign out (clear localStorage); visit `/sign-in-with-code?next=/agents`; repeat request + verify
+12. Sign out; visit `/sign-in-with-code?next=https://evil.com`; repeat request + verify
+
+**Observation 1 — Step 1 renders RequestStep**:
+1. Heading reads `Sign in with a code`
+
+**Observation 2 — Step 2 inline error**:
+1. Helper text `Email is required` visible
+
+**Observation 3 — Step 3 format error**:
+1. Helper text `Please enter a valid email` visible
+
+**Observation 4 — Step 4 navigates to /login**:
+1. URL becomes `/login`
+
+**Observation 5 — Step 6 advances to VerifyStep**:
+1. Toast `If the email exists, a code has been sent` visible
+2. VerifyStep heading with email in `<strong>` rendered
+
+**Observation 6 — Step 7 length error**:
+1. Helper text `Enter the 6-digit code` visible
+
+**Observation 7 — Step 8 wrong code toast**:
+1. Toast title `Invalid or expired code`
+2. Code field retains value
+
+**Observation 8 — Step 9 reverts to RequestStep blank**:
+1. Heading back to `Sign in with a code`; email empty
+
+**Observation 9 — Step 10 lands on /home**:
+1. Toast title `Welcome back!`
+2. URL becomes `/home`
+3. `localStorage.tone_access_token` is set
+
+**Observation 10 — Step 11 lands on /agents**:
+1. URL becomes `/agents`
+
+**Observation 11 — Step 12 open-redirect guard**:
+1. URL becomes `/home` (open-redirect guard rejects external `next`)
+
+**Cleanup** (in `finally`):
+1. Delete the provisioned user via the backend admin API
+
+---
+
+## Edge Cases (each appears as a `TC-EDGE-*` or related test case above)
+
+- [x] User refreshes the page mid-flow — see TC-EDGE-014
+- [x] User opens a second tab and verifies first — see TC-EDGE-013
+- [x] User pastes a code with spaces — see TC-EDGE-006
+- [x] User pastes a 7-character code — see TC-EDGE-008
+- [x] iOS auto-fill `one-time-code` — see TC-A11Y-003
+- [x] Send code double-click while pending — see TC-LOADING-001
+- [x] Verify and sign in double-click while pending — see TC-LOADING-002
+- [x] `next` open-redirect (https://evil.com) — see TC-NAV-003
+- [x] `next` protocol-relative (`//evil.com`) — see TC-NAV-004
+- [x] `next` with query string (`/agents?org=foo`) passes through unchanged — covered by TC-NAV-003 / TC-HAPPY-002 pattern
+- [x] User leaves the tab on `VerifyStep` for 11 minutes — see TC-EDGE-011
+- [x] Resend timer continues ticking while tab is backgrounded — see TC-EDGE-012
+- [x] Dev-tools edited code to 5 chars — see TC-EDGE-010
+- [x] Send code spam-click debounced by `isPending` — see TC-LOADING-001
 
 ---
 
@@ -711,25 +1159,29 @@ response), plus updates the in-memory `authAtom`-equivalent zustand slice.
 
 ---
 
-## Accessibility Requirements
+## Accessibility Requirements (each appears as a `TC-A11Y-*` test case above)
 
-- [ ] Tab navigation reaches every actionable element: email input → "Send code"
-      → "Sign in with password instead" link (request step); code input →
-      "Verify and sign in" → "Use a different email" → "Resend" (verify step)
-- [ ] `TextInput` with `inputMode="numeric"` triggers the numeric keypad on
-      mobile; `autoComplete="one-time-code"` enables OS-level OTP autofill
-- [ ] Code field's `maxLength={6}` is enforced both as an HTML attribute and via
-      the `digitsOnly` `onValueChange` slice
-- [ ] Form errors render as `helperText` under each input via RHF's `fieldState.error.message`
-      — `TextInput` itself does not duplicate error rendering
-- [ ] Buttons announce loading state via the spinner; the visual text remains
-      visible during loading. ⚠ consider adding an `aria-busy` attribute while
-      `isPending` so SR announces the wait
-- [ ] Resend `Button` uses real `disabled` (not just CSS) so SR users hear
-      "dimmed/unavailable" during cooldown
-- [ ] The "Use a different email" link is a real `<Button variant="link">` —
-      keyboard activation triggers `onBack` correctly
-- [ ] Headings are `<h2>` (no `<h1>` on the page; the layout's `Logo` is decorative).
-      ⚠ consider a visually-hidden `<h1>` for SR users
-- [ ] Sonner toasts render in an `aria-live` region so successful/failed states
-      are announced
+- [x] Tab navigation reaches every actionable element (request step) — see TC-A11Y-001
+- [x] Tab navigation reaches every actionable element (verify step) — see TC-A11Y-002
+- [x] `inputMode="numeric"` + `autoComplete="one-time-code"` — see TC-A11Y-003
+- [x] Helper text errors render via RHF `fieldState.error.message` — see TC-A11Y-004
+- [x] Resend `Button` uses real `disabled` — see TC-A11Y-005
+- [x] Loading button announces via spinner — see TC-A11Y-006
+- [x] No `<h1>` on the page — see TC-A11Y-007
+
+---
+
+## Expected Toast Messages
+
+Toasts use Sonner via `showToast` (`src/lib/toast.ts`). All errors are routed
+through `handleApiError(err)` which uses `response.data.detail` as the toast
+title when it is a string, otherwise falls back to
+`"Something went wrong. Please try again."`.
+
+| Trigger                                                | Toast title                                       | Toast description | Variant |
+| ------------------------------------------------------ | ------------------------------------------------- | ----------------- | ------- |
+| Request code 200                                       | `If the email exists, a code has been sent`       | —                 | success |
+| Verify code 200                                        | `Welcome back!`                                   | —                 | success |
+| Resend after cooldown 200                              | `A new code has been sent`                        | —                 | success |
+| Any backend 4xx/5xx with string `detail`               | backend `detail` (e.g. `Invalid or expired code`) | —                 | error   |
+| Any backend error with non-string `detail`             | `Something went wrong. Please try again.`         | —                 | error   |

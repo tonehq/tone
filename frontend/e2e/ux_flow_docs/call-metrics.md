@@ -15,6 +15,10 @@ Metrics tab, it reuses `MetricsContent` from
 For the list view that drives users here, see the Call Metrics analytics
 table (in the Call History area; the `/call-metrics/list` API powers it).
 
+> **Format rule (mandatory):** every test case below is one **Action** (steps the
+> user performs) followed by multiple **Observations** (each a set of verification
+> steps). See [`_template.md`](_template.md) for the canonical shape and ID prefixes.
+
 ---
 
 ## Page
@@ -138,51 +142,6 @@ returns nothing, **so that** I know the call wasn't measured.
 
 ---
 
-## User Workflow Steps
-
-Drives `frontend/e2e/dashboard/call-metrics.spec.ts`.
-
-**WF-1: Deep link a call** (positive)
-1. Authenticated user navigates to `/call-metrics/<callId>` → expected:
-   `GET /call-metrics/<callId>` fires once; `AppLoader` visible.
-2. Response resolves → expected: loader replaced by `MetricsContent`; four
-   stat cards visible; breadcrumb updates to `Call History / <agent_name>`.
-3. Title reads `Metrics — <agent_name>`.
-
-**WF-2: Toggle chart ↔ table** (positive)
-1. Response loaded; `TurnLatencySection` visible → expected: toggle group
-   with `aria-label="Chart or table view"`.
-2. User clicks the `Table view` button → expected: `aria-pressed="true"` on
-   the Table option; the matching `MetricsDataTable` replaces the chart.
-3. User clicks the `Chart view` button → expected: chart returns; no new API
-   call observed.
-
-**WF-3: Back navigation** (positive)
-1. User clicks `ArrowLeft` button → expected: when prior history exists,
-   `router.back()` fires; URL becomes the prior route.
-2. Without prior history (direct deep link in a fresh tab) → expected:
-   `router.push('/call-history')`; URL becomes `/call-history`.
-
-**WF-4: Missing-metrics empty state** (negative)
-1. User navigates to `/call-metrics/<missingId>` → expected:
-   `GET /call-metrics/<missingId>` returns `404`.
-2. `handleApiError` toast title `Metrics not found for this call` shown.
-3. Loader clears; content area shows `No metrics found for this call.`
-   centered text; no stat cards rendered.
-
-**WF-5: Fast navigation aborts request** (positive)
-1. User opens `/call-metrics/A` (request in flight) → before resolution,
-   navigates to `/call-metrics/B` → expected: `A` request aborts cleanly;
-   no toast; `B` request fires and resolves normally.
-
-**WF-6: Auth-less deep link** (negative)
-1. Unauthenticated user pastes `/call-metrics/<callId>` → expected:
-   middleware redirects to `/auth/login?redirect=%2Fcall-metrics%2F<callId>`
-   based on the missing `tone_access_token` cookie (`⚠ unverified` exact
-   middleware match — confirm in `src/middleware.ts`).
-
----
-
 ## Input Specifications
 
 The page itself accepts no user input fields (no forms, no search).
@@ -198,203 +157,6 @@ In-page controls (no validation, client-only state):
 | ------------------ | ------- | ------------------------------------------------- |
 | Chart/Table toggle | Segmented buttons | One per metric sub-section; toggles client view |
 | Back button        | IconButton | History pop with fallback to `/call-history`  |
-
----
-
-## Success Scenarios
-
-**PS-1: Full per-sample payload loads**
-- Preconditions: signed-in user; metrics row exists for the call.
-- Steps: navigate to `/call-metrics/550e8400-call-001`.
-- Expected: loader → four StatCards (Avg Latency `1.2s` ⚠ values depend on
-  sample data, Turns `2`, LLM Tokens `1,070`, TTS Chars `732`); Latency
-  category with `TurnLatencySection` only if `turn_metrics` non-empty,
-  otherwise hidden; Usage category with LLM + TTS sections.
-- **Mock API**: `GET /call-metrics/550e8400-call-001` →
-  ```json
-  {
-    "id": "9c1f0b6e-3a2d-4b8e-91c2-7c8c1c4a8f01",
-    "call_id": "550e8400-call-001",
-    "agent_id": "agent-uuid",
-    "agent_name": "Acme Support Bot",
-    "started_at": "2026-06-08T14:22:10+00:00",
-    "ended_at": "2026-06-08T14:25:55+00:00",
-    "duration_seconds": 225,
-    "avg_ttfb_ms": 312.5,
-    "avg_latency_s": 1.245,
-    "total_tokens": 1840,
-    "total_tts_chars": 1276,
-    "turn_count": 14,
-    "ttfb": [{ "turn": 1, "value": 305.2 }, { "turn": 2, "value": 319.8 }],
-    "processing": [{ "turn": 1, "value": 142.0 }, { "turn": 2, "value": 138.5 }],
-    "llm_usage": [
-      { "turn": 1, "model": "gpt-4o-mini", "prompt_tokens": 412, "completion_tokens": 78, "total_tokens": 490 },
-      { "turn": 2, "model": "gpt-4o-mini", "prompt_tokens": 488, "completion_tokens": 92, "total_tokens": 580 }
-    ],
-    "tts_usage": [
-      { "turn": 1, "model": "eleven_turbo_v2", "characters": 320 },
-      { "turn": 2, "model": "eleven_turbo_v2", "characters": 412 }
-    ],
-    "user_bot_latency": [
-      { "turn": 1, "latency": 1.18 },
-      { "turn": 2, "latency": 1.31 }
-    ],
-    "turns": [
-      { "role": "agent", "text": "Hi, this is Acme. How can I help?" },
-      { "role": "user", "text": "I need to reschedule my appointment." }
-    ]
-  }
-  ```
-
-**PS-2: Loading state renders shared AppLoader**
-- Preconditions: signed-in; API delays the response 1s.
-- Steps: navigate, observe initial frame.
-- Expected: title `Metrics`, breadcrumb second crumb `Loading…`,
-  `AppLoader` visible, no `StatCard` rendered yet.
-- **Mock API**: `GET /call-metrics/<id>` delayed; same 200 body as PS-1.
-
-**PS-3: Toggle to Table view on Turn Latency**
-- Preconditions: PS-1 loaded; `turn_metrics` populated.
-- Steps: click the `Table view` button inside `TurnLatencySection`.
-- Expected: button has `aria-pressed="true"`; `MetricsDataTable` replaces
-  the chart; no extra API call.
-
-**PS-4: Back button — history available vs deep link**
-- Preconditions A: user arrived from `/call-history` — clicking
-  `ArrowLeft` runs `router.back()` and URL reverts to `/call-history`.
-- Preconditions B: fresh tab, deep link — clicking `ArrowLeft` runs
-  `router.push('/call-history')`.
-- Expected: no toast in either branch.
-
-**PS-5: Breadcrumb agent link**
-- Preconditions: PS-1 loaded.
-- Steps: click the `Call History` breadcrumb text.
-- Expected: navigation to `/call-history`; list page loads.
-
-**PS-6: Partial payload — only LLM usage**
-- Preconditions: signed-in; metrics row missing TTS arrays.
-- Steps: navigate.
-- Expected: only `LLMUsageSection` renders inside `Usage`; no `TTSUsageSection`;
-  TTS stat card shows `0` characters; `Latency` category hidden if both
-  `turn_metrics` and `processing` are empty.
-- **Mock API**: as PS-1 but `tts_usage = []`, `processing = []`,
-  `turn_metrics = []`, `turns = []`, `user_bot_latency = []`.
-
----
-
-## Failure Scenarios
-
-**FS-1: 404 — metrics not found**
-- Preconditions: signed-in; call_id has no metrics row.
-- Steps: navigate to `/call-metrics/unknown-id`.
-- **Mock API**: `GET /call-metrics/unknown-id` →
-  `404 { "detail": "Metrics not found for this call" }`
-- Expected UI: error toast `Metrics not found for this call`; loader clears;
-  content shows `No metrics found for this call.`; breadcrumb falls back to
-  `Call History / Detail`; title `Metrics` (no agent suffix).
-
-**FS-2: 401 — token expired**
-- Preconditions: stale `tone_access_token`.
-- **Mock API**: `GET /call-metrics/<id>` →
-  `401 { "detail": "Could not validate credentials" }`
-- Expected UI: error toast `Could not validate credentials`; empty state
-  copy `No metrics found for this call.`; next client-side nav triggers the
-  middleware redirect to `/auth/login` (`⚠ unverified` for this exact
-  route).
-
-**FS-3: 403 — wrong org**
-- Preconditions: signed-in but `tenant_id` header doesn't own the call.
-- **Mock API**: `GET /call-metrics/<id>` →
-  `403 { "detail": "Forbidden" }`
-- Expected UI: error toast `Forbidden`; empty state copy `No metrics found
-  for this call.`.
-
-**FS-4: 500 — backend error**
-- **Mock API**: `GET /call-metrics/<id>` →
-  `500 { "detail": "Database connection error" }`
-- Expected UI: error toast `Database connection error`; empty state copy
-  `No metrics found for this call.`.
-
-**FS-5: Network failure / offline**
-- Preconditions: signed-in; network down.
-- **Mock API**: `route.abort('failed')` for `GET /call-metrics/<id>`.
-- Expected UI: `handleApiError` toast title
-  `Something went wrong. Please try again.`; empty state copy
-  `No metrics found for this call.`.
-
-**FS-6: 200 with all-empty arrays**
-- **Mock API**: `GET /call-metrics/<id>` →
-  ```json
-  {
-    "id": "x", "call_id": "x", "agent_id": null, "agent_name": null,
-    "started_at": null, "ended_at": null, "duration_seconds": null,
-    "avg_ttfb_ms": null, "avg_latency_s": null, "total_tokens": null,
-    "total_tts_chars": null, "turn_count": null,
-    "ttfb": [], "processing": [], "llm_usage": [], "tts_usage": [],
-    "user_bot_latency": [], "turns": []
-  }
-  ```
-- Expected UI: title `Metrics` (no agent name); breadcrumb second crumb
-  `Detail`; stat cards show `Avg Latency: -`, `Turns: 0`, `LLM Tokens: 0`,
-  `TTS Characters: 0`; neither `Latency` nor `Usage` category rendered.
-
-**FS-7: 200 with null arrays (legacy rows)**
-- Preconditions: legacy backend row where arrays come back as `null`.
-- **Mock API**: same as PS-1 but `llm_usage: null`, `tts_usage: null`,
-  `user_bot_latency: null`, `turns: null`, `processing: null`.
-- Expected UI: `MetricsContent` defensive shim coerces each `null` to `[]`;
-  page does NOT crash; stat cards behave as FS-6.
-
-**FS-8: 422 — malformed call_id path param**
-- **Mock API**: `GET /call-metrics/%20` →
-  `422 { "detail": [{ "loc": ["path", "call_id"], "msg": "..." }] }`
-  (`⚠ unverified` — backend uses `str`, so 422 is unlikely; treat as
-  400-class fallback).
-- Expected UI: error toast with the first `detail[].msg` (per
-  `handleApiError`'s array handling); empty state copy.
-
-**FS-9: Rapid re-navigation aborts older request**
-- Steps: open `/call-metrics/A`; before A resolves, click breadcrumb to
-  `/call-history`, then re-navigate to `/call-metrics/B`.
-- Expected UI: A's request `abort`s silently (no toast); B's request fires
-  and renders normally; no double-render flicker.
-
-**FS-10: Render error inside MetricsContent (e.g. divide-by-zero)**
-- Preconditions: malformed `llm_usage[i].total_tokens = undefined`.
-- Expected UI: shim does not coerce `undefined` inside objects; aggregates
-  may render `NaN` (`⚠ unverified` — confirm `MetricsContent` guards).
-  Add a regression check that StatCard `LLM Tokens` never contains the
-  string `NaN`.
-
-**FS-11: Reload with empty pathname segment**
-- Steps: visit `/call-metrics/` (no callId).
-- Expected: route does not match; Next.js renders 404 page; no API call.
-
-**FS-12: handleApiError swallows AbortError**
-- Steps: trigger a navigation away mid-request.
-- Expected: no Sonner toast appears (the `controller.signal.aborted ||
-  cancelled` guard short-circuits before `handleApiError`).
-
----
-
-## Expected Toast Messages
-
-Sourced from `src/utils/toast.tsx` + `src/utils/helpers.ts`.
-
-| Trigger                                   | Toast title (= `detail`)                  | Variant |
-| ----------------------------------------- | ----------------------------------------- | ------- |
-| `GET /call-metrics/<id>` 404              | `Metrics not found for this call`         | error   |
-| `GET /call-metrics/<id>` 401              | `Could not validate credentials`          | error   |
-| `GET /call-metrics/<id>` 403              | `Forbidden`                               | error   |
-| `GET /call-metrics/<id>` 500              | `Database connection error` (server msg)  | error   |
-| `GET /call-metrics/<id>` network fail     | `Something went wrong. Please try again.` | error   |
-| `GET /call-metrics/<id>` 422 (array)      | first `detail[0].msg` value               | error   |
-| `GET /call-metrics/<id>` aborted          | (no toast)                                | —       |
-| Back button click                         | (no toast)                                | —       |
-| Chart/Table toggle                        | (no toast)                                | —       |
-
-Toast assertion target: `page.locator('[data-sonner-toast]').first()` should
-contain the exact `detail` string.
 
 ---
 
@@ -515,29 +277,713 @@ Source: `postman_collection/Tone-API.postman_collection.json` → folder
 
 ---
 
-## Edge Cases
+## Expected Toast Messages
 
-- [ ] Unauthenticated access → middleware redirect (`⚠ unverified` for the
-      `/call-metrics/[callId]` path explicitly)
-- [ ] `agent_name = null` → breadcrumb shows `Detail`; title shows `Metrics`
-- [ ] `user_bot_latency = []` → Avg Latency stat reads `-`
-- [ ] All metric arrays empty → neither `Latency` nor `Usage` category renders
-- [ ] Legacy backend row returns arrays as `null` → defensive `Array.isArray`
-      shim coerces to `[]`; no runtime crash
-- [ ] `turn_metrics` present but no entries have `end_to_end != null` →
-      Turns count falls back to 0 from filter; fallback to `turns.length`
-      only triggers when `turn_metrics.length === 0`
-- [ ] Distinct LLM models concatenated with `, ` in subtitle
-      (`[...new Set(llm_usage.map(u => u.model))].join(', ')`)
-- [ ] Mounting twice quickly (React StrictMode dev) → first effect aborts
-      its controller during cleanup; no toast spam
-- [ ] Toggling between Chart/Table preserves the section's other state
-- [ ] Stat card values use `toLocaleString()` → 1234 → `1,234` in en-US
-- [ ] Page applies the `animate-page` class for the dashboard fade-in animation
-- [ ] No telemetry / analytics event fires beyond the single GET (verify in
-      tests that no extra POSTs to `/analytics/*` happen)
-- [ ] Chart Table toggle is keyboard-operable (Tab + Enter/Space because it
-      wraps `CustomButton`, which renders `<button>`)
+Sourced from `src/utils/toast.tsx` + `src/utils/helpers.ts`.
+
+| Trigger                                   | Toast title (= `detail`)                  | Variant |
+| ----------------------------------------- | ----------------------------------------- | ------- |
+| `GET /call-metrics/<id>` 404              | `Metrics not found for this call`         | error   |
+| `GET /call-metrics/<id>` 401              | `Could not validate credentials`          | error   |
+| `GET /call-metrics/<id>` 403              | `Forbidden`                               | error   |
+| `GET /call-metrics/<id>` 500              | `Database connection error` (server msg)  | error   |
+| `GET /call-metrics/<id>` network fail     | `Something went wrong. Please try again.` | error   |
+| `GET /call-metrics/<id>` 422 (array)      | first `detail[0].msg` value               | error   |
+| `GET /call-metrics/<id>` aborted          | (no toast)                                | —       |
+| Back button click                         | (no toast)                                | —       |
+| Chart/Table toggle                        | (no toast)                                | —       |
+
+Toast assertion target: `page.locator('[data-sonner-toast]').first()` should
+contain the exact `detail` string.
+
+---
+
+## Test Cases
+
+> Every test case is **one Action + multiple Observations**. Each Action is a numbered
+> list of steps. Each Observation is a numbered list of verification steps.
+
+---
+
+### TC-HAPPY-001: Deep link loads full payload with stat cards + categories (WF-1 / PS-1)
+
+**Preconditions**:
+- Signed-in user; metrics row exists for `550e8400-call-001` with full payload as in PS-1.
+
+**Action**:
+1. Navigate to `/call-metrics/550e8400-call-001`
+
+**Observation 1 — Network request**:
+1. Exactly one `GET /call-metrics/550e8400-call-001` request is recorded
+
+**Observation 2 — Loader → content transition**:
+1. While in flight, the `AppLoader` is visible
+2. Breadcrumb second crumb reads `Loading…`
+3. After response, the loader is removed from the DOM
+
+**Observation 3 — Breadcrumb + title**:
+1. Breadcrumb reads `Call History / Acme Support Bot`
+2. Page h1 title reads `Metrics — Acme Support Bot`
+
+**Observation 4 — Four StatCards render**:
+1. StatCard `Avg Latency` shows `1.2s` (computed from `user_bot_latency` mean)
+2. StatCard `Turns` shows `2`
+3. StatCard `LLM Tokens` shows `1,070` (formatted with `toLocaleString`)
+4. StatCard `TTS Characters` shows `732`
+
+**Observation 5 — Categories render**:
+1. `Latency` category section is visible
+2. `Usage` category section is visible
+
+**API mock**: `GET /call-metrics/550e8400-call-001` → 200 with the full PS-1 body.
+
+---
+
+### TC-HAPPY-002: Toggle Chart ↔ Table on Turn Latency does not refetch (WF-2 / PS-3)
+
+**Preconditions**: TC-HAPPY-001 just loaded; `turn_metrics` populated; `TurnLatencySection` visible.
+
+**Action**:
+1. Click the `Table view` button inside `TurnLatencySection`
+2. Click the `Chart view` button
+
+**Observation 1 — Active state flips to Table**:
+1. The Table button has `aria-pressed="true"`
+2. A `MetricsDataTable` replaces the chart
+
+**Observation 2 — Active state flips back to Chart**:
+1. The Chart button has `aria-pressed="true"`
+2. The chart re-appears
+
+**Observation 3 — No extra network calls**:
+1. Zero additional `GET /call-metrics/*` requests fire during the toggling
+
+---
+
+### TC-HAPPY-003: Loading state renders AppLoader before payload arrives (PS-2)
+
+**Preconditions**: Signed-in user; API delays the response 1 s.
+
+**Action**:
+1. Navigate to `/call-metrics/<id>`
+2. Observe the initial frame
+
+**Observation 1 — Title placeholder**:
+1. Page title reads `Metrics` (no agent suffix yet)
+
+**Observation 2 — Breadcrumb loading state**:
+1. Second crumb text reads `Loading…`
+
+**Observation 3 — Loader visible, content suppressed**:
+1. `AppLoader` is visible
+2. Zero `StatCard` elements are in the DOM yet
+
+**API mock**: `GET /call-metrics/<id>` → 200 delayed 1 s with the PS-1 body.
+
+---
+
+### TC-HAPPY-004: Partial payload — only LLM usage section renders (PS-6)
+
+**Preconditions**: Signed-in; metrics row has only `llm_usage` populated; `tts_usage`, `processing`, `turn_metrics`, `turns`, `user_bot_latency` are all empty.
+
+**Action**:
+1. Navigate to the call metrics page
+
+**Observation 1 — Sections respect data presence**:
+1. `LLMUsageSection` renders inside `Usage`
+2. `TTSUsageSection` is NOT rendered
+3. `Latency` category is NOT rendered (both `turn_metrics` and `processing` empty)
+
+**Observation 2 — Stat cards**:
+1. TTS Characters StatCard shows `0`
+2. Avg Latency StatCard shows `-`
+
+**API mock**: `GET /call-metrics/<id>` → 200 with `tts_usage=[]`, `processing=[]`, `turn_metrics=[]`, `turns=[]`, `user_bot_latency=[]`.
+
+---
+
+### TC-NAV-001: Unauthenticated visit redirects to login (CM-001 / WF-6)
+
+**Preconditions**: No `tone_access_token` cookie.
+
+**Action**:
+1. Visit `/call-metrics/<callId>`
+
+**Observation 1 — Middleware redirect**:
+1. Response status is 307
+2. Final URL becomes `/auth/login?redirect=%2Fcall-metrics%2F<callId>`
+
+---
+
+### TC-NAV-002: Expired token redirects and clears cookie (CM-002)
+
+**Preconditions**: Expired `tone_access_token` cookie.
+
+**Action**:
+1. Visit `/call-metrics/<callId>`
+
+**Observation 1 — Redirect**:
+1. URL becomes `/auth/login?redirect=%2Fcall-metrics%2F<callId>`
+
+**Observation 2 — Cookie cleared**:
+1. The expired cookie is no longer set after the login response
+
+---
+
+### TC-NAV-003: Back button pops history when available (WF-3 / PS-4 / CM-029)
+
+**Preconditions**: User arrived at `/call-metrics/<id>` from `/call-history`; loaded.
+
+**Action**:
+1. Click the Back button (`aria-label="Back to call metrics"`)
+
+**Observation 1 — router.back() invoked**:
+1. URL reverts to `/call-history`
+
+**Observation 2 — No toast**:
+1. No Sonner toast appears
+
+---
+
+### TC-NAV-004: Back button falls back to /call-history on a fresh deep-link tab (CM-030)
+
+**Preconditions**: Fresh tab; deep-linked directly to `/call-metrics/<id>`; `window.history.length <= 1`.
+
+**Action**:
+1. Click the Back button
+
+**Observation 1 — router.push fallback**:
+1. URL becomes `/call-history`
+
+---
+
+### TC-NAV-005: Breadcrumb `Call History` link returns to list (PS-5 / CM-031)
+
+**Preconditions**: TC-HAPPY-001 loaded.
+
+**Action**:
+1. Click the `Call History` breadcrumb text
+
+**Observation 1 — Navigation**:
+1. URL becomes `/call-history`
+2. The list page loads
+
+---
+
+### TC-NAV-006: Browser back leaves call-metrics with chart state ephemeral (CM-032)
+
+**Preconditions**: TC-HAPPY-001 loaded; user has toggled Chart/Table on at least one section.
+
+**Action**:
+1. Press browser Back
+2. Press browser Forward to return to `/call-metrics/<id>`
+
+**Observation 1 — Returns to prior page**:
+1. URL reverts to the prior page
+
+**Observation 2 — Toggle state is ephemeral**:
+1. After Forward, toggle state is reset to default (client-only state, not restored)
+
+---
+
+### TC-NAV-007: Reload re-fetches and renders metrics (CM-033)
+
+**Preconditions**: TC-HAPPY-001 loaded.
+
+**Action**:
+1. Reload the page
+
+**Observation 1 — Re-fires GET**:
+1. Exactly one new `GET /call-metrics/<id>` request fires after reload
+2. The page renders the same UI as TC-HAPPY-001
+
+---
+
+### TC-ERROR-001: 404 surfaces not-found toast and empty state (WF-4 / FS-1 / CM-007)
+
+**Preconditions**: Signed-in; `<missingId>` has no metrics row.
+
+**Action**:
+1. Navigate to `/call-metrics/<missingId>`
+
+**Observation 1 — Error toast**:
+1. Toast title equals `Metrics not found for this call`
+2. Toast variant is `error`
+
+**Observation 2 — Empty state**:
+1. Loader clears
+2. Content area shows `No metrics found for this call.` centered
+3. Zero StatCards render
+
+**Observation 3 — Breadcrumb + title fallback**:
+1. Breadcrumb falls back to `Call History / Detail`
+2. Page title reads `Metrics` (no agent suffix)
+
+**API mock**: `GET /call-metrics/<missingId>` → 404 `{"detail": "Metrics not found for this call"}`.
+
+---
+
+### TC-ERROR-002: 401 surfaces credentials toast (FS-2 / CM-005)
+
+**Preconditions**: Stale `tone_access_token`.
+
+**Action**:
+1. Navigate to the page
+
+**Observation 1 — Error toast**:
+1. Toast title equals `Could not validate credentials`
+
+**Observation 2 — Empty state**:
+1. Content shows `No metrics found for this call.`
+
+**API mock**: `GET /call-metrics/<id>` → 401 `{"detail": "Could not validate credentials"}`.
+
+---
+
+### TC-ERROR-003: 403 surfaces forbidden toast (FS-3 / CM-003 / CM-006)
+
+**Preconditions**: Signed-in but `tenant_id` header doesn't own the call.
+
+**Action**:
+1. Navigate to the page
+
+**Observation 1 — Forbidden toast**:
+1. Toast title equals `Forbidden`
+
+**Observation 2 — Empty state**:
+1. Content shows `No metrics found for this call.`
+
+**API mock**: `GET /call-metrics/<id>` → 403 `{"detail": "Forbidden"}`.
+
+---
+
+### TC-ERROR-004: 500 surfaces server error toast (FS-4 / CM-009)
+
+**Action**:
+1. Navigate to the page
+
+**Observation 1 — Error toast**:
+1. Toast title equals `Database connection error`
+
+**Observation 2 — Empty state**:
+1. Content shows `No metrics found for this call.`
+
+**API mock**: `GET /call-metrics/<id>` → 500 `{"detail": "Database connection error"}`.
+
+---
+
+### TC-ERROR-005: 400 surfaces detail toast (CM-004)
+
+**Action**:
+1. Navigate to a page where the API returns 400 for the path param
+
+**Observation 1 — Toast surfaces backend detail**:
+1. Toast title equals the backend `detail` string
+
+**Observation 2 — Empty state**:
+1. Content shows `No metrics found for this call.`
+
+**API mock**: `GET /call-metrics/<id>` → 400 `{"detail": "<backend message>"}`.
+
+---
+
+### TC-ERROR-006: 409 conflict surfaces toast (CM-008)
+
+**Preconditions**: Legacy callId already migrated.
+
+**Action**:
+1. Navigate to the page
+
+**Observation 1 — Conflict toast**:
+1. Toast title equals the backend `detail` string
+
+**Observation 2 — Empty state**:
+1. Content shows `No metrics found for this call.`
+
+**API mock**: `GET /call-metrics/<id>` → 409 `{"detail": "Conflict"}`.
+
+---
+
+### TC-ERROR-007: 422 with array detail surfaces first msg (FS-8)
+
+**Preconditions**: Path param coerces to whitespace `%20`.
+
+**Action**:
+1. Navigate to `/call-metrics/%20`
+
+**Observation 1 — Toast surfaces first detail msg**:
+1. Toast title equals the value of `detail[0].msg` via `handleApiError`'s array handling
+
+**Observation 2 — Empty state**:
+1. Content shows `No metrics found for this call.`
+
+**API mock**: `GET /call-metrics/%20` → 422 `{"detail": [{"loc":["path","call_id"],"msg":"..."}]}`.
+
+---
+
+### TC-ERROR-008: Network failure shows generic fallback toast then recovers on retry (FS-5 / CM-010)
+
+**Preconditions**: Network unavailable for first request only.
+
+**Action**:
+1. Navigate to the page (first request fails)
+2. Click a refresh affordance OR reload
+
+**Observation 1 — Generic fallback toast**:
+1. Toast title equals `Something went wrong. Please try again.`
+
+**Observation 2 — Empty state**:
+1. Content shows `No metrics found for this call.`
+
+**Observation 3 — Retry resolves normally**:
+1. Second `GET /call-metrics/<id>` returns 200
+2. StatCards and categories now render
+
+**API mocks**: first call `route.abort('failed')`; second call → 200 with PS-1 body.
+
+---
+
+### TC-LOADING-001: Slow metrics fetch keeps loader without spam (CM-011)
+
+**Preconditions**: API delays response > 3 s.
+
+**Action**:
+1. Navigate to the page
+
+**Observation 1 — Loader visible throughout**:
+1. `AppLoader` is visible the entire 3 s+ window
+
+**Observation 2 — Breadcrumb stays in loading state**:
+1. Second crumb reads `Loading…` for the duration
+
+**Observation 3 — No toast spam**:
+1. Zero Sonner toasts appear during the wait
+
+---
+
+### TC-LOADING-002: Rapid navigation aborts older requests cleanly (WF-5 / FS-9 / FS-12 / CM-012)
+
+**Preconditions**: Signed-in.
+
+**Action**:
+1. Open `/call-metrics/A` (request in flight)
+2. Before A resolves, navigate to `/call-metrics/B`
+3. Navigate back to `/call-metrics/A`
+
+**Observation 1 — A's first request aborts cleanly**:
+1. The first A request is cancelled (`controller.abort()`)
+2. No Sonner toast appears for the aborted request
+
+**Observation 2 — B request resolves**:
+1. B's GET fires and renders normally
+
+**Observation 3 — Second A request resolves last and renders**:
+1. The newest A request resolves and renders into the page
+2. No double-render flicker
+
+---
+
+### TC-EDGE-001: All-empty payload renders zeroed stat cards (FS-6 / CM-017)
+
+**Preconditions**: API returns 200 with all arrays empty and scalars `null`.
+
+**Action**:
+1. Navigate to the page
+
+**Observation 1 — Title + breadcrumb fallback**:
+1. Title reads `Metrics`
+2. Breadcrumb second crumb reads `Detail`
+
+**Observation 2 — Stat cards show neutral defaults**:
+1. Avg Latency = `-`
+2. Turns = `0`
+3. LLM Tokens = `0`
+4. TTS Characters = `0`
+
+**Observation 3 — Categories hidden**:
+1. Neither `Latency` nor `Usage` category renders
+
+**API mock**: `GET /call-metrics/<id>` → 200 with empty arrays and null scalars.
+
+---
+
+### TC-EDGE-002: Null array payload coerces without crash (FS-7 / CM-018)
+
+**Preconditions**: Legacy backend returns arrays as `null`.
+
+**Action**:
+1. Navigate to the page
+
+**Observation 1 — Defensive shim**:
+1. `MetricsContent` coerces each `null` to `[]`
+2. The page does NOT crash
+
+**Observation 2 — Stat cards behave like all-empty payload**:
+1. Avg Latency `-`, Turns `0`, LLM Tokens `0`, TTS Chars `0`
+
+**API mock**: 200 with `llm_usage:null, tts_usage:null, user_bot_latency:null, turns:null, processing:null`.
+
+---
+
+### TC-EDGE-003: Null agent_name falls back to Detail / Metrics labels (CM-019)
+
+**Preconditions**: 200 response with `agent_name: null`.
+
+**Action**:
+1. Navigate to the page
+
+**Observation 1 — Title fallback**:
+1. Page title reads `Metrics` (no agent suffix)
+
+**Observation 2 — Breadcrumb fallback**:
+1. Breadcrumb shows `Call History / Detail`
+
+---
+
+### TC-EDGE-004: Stat cards never render NaN (CM-021 / FS-10)
+
+**Preconditions**: Payload has `llm_usage[i].total_tokens = undefined`.
+
+**Action**:
+1. Navigate to the page
+
+**Observation 1 — No NaN in StatCards**:
+1. LLM Tokens StatCard text contains only digits + commas, never the substring `NaN`
+2. TTS Characters StatCard text contains only digits + commas, never `NaN`
+
+> ⚠ unverified — confirm `MetricsContent` guards against undefined.
+
+---
+
+### TC-EDGE-005: Whitespace-only callId surfaces validation error (CM-013)
+
+**Action**:
+1. Visit `/call-metrics/%20`
+
+**Observation 1 — Error toast**:
+1. Toast title equals the backend's first `detail.msg` value
+
+**Observation 2 — Empty state**:
+1. Content shows `No metrics found for this call.`
+
+**API mock**: `GET /call-metrics/%20` → 422 or 404 with `detail`.
+
+---
+
+### TC-EDGE-006: Special-character callId is rejected without xss (CM-014)
+
+**Action**:
+1. Visit `/call-metrics/<callId-with-html-and-emoji>`
+
+**Observation 1 — Backend returns 404**:
+1. Toast title equals `Metrics not found for this call`
+
+**Observation 2 — No XSS execution**:
+1. No script from the path is executed
+2. The callId is rendered as text (if anywhere)
+
+---
+
+### TC-EDGE-007: Very long callId does not crash the page (CM-015)
+
+**Action**:
+1. Visit `/call-metrics/<callId longer than 500 chars>`
+
+**Observation 1 — Page does not crash**:
+1. Either the API returns 404 (toast `Metrics not found for this call`) or 414
+2. The empty state still renders
+
+---
+
+### TC-EDGE-008: Rapid chart-table toggling does not refetch (CM-016)
+
+**Preconditions**: TC-HAPPY-001 loaded.
+
+**Action**:
+1. Click Chart/Table toggle 10 times rapidly
+
+**Observation 1 — Deterministic view**:
+1. View flips deterministically; final state matches the last click
+
+**Observation 2 — No extra API calls**:
+1. Zero additional `GET /call-metrics/*` requests fire
+2. No visual flicker between toggles
+
+---
+
+### TC-EDGE-009: Empty pathname segment renders Next.js 404 (FS-11)
+
+**Action**:
+1. Visit `/call-metrics/` (no callId)
+
+**Observation 1 — Route does not match**:
+1. Next.js renders the 404 page
+2. Zero `GET /call-metrics/*` requests fire
+
+---
+
+### TC-EDGE-010: handleApiError swallows AbortError (FS-12)
+
+**Preconditions**: Signed-in.
+
+**Action**:
+1. Navigate to `/call-metrics/<id>`
+2. Before the request resolves, navigate away
+
+**Observation 1 — No toast for abort**:
+1. Zero Sonner toasts appear
+2. `controller.signal.aborted || cancelled` guard short-circuits before `handleApiError`
+
+---
+
+### TC-A11Y-001: Tab order through metrics page reaches every control (CM-022)
+
+**Preconditions**: TC-HAPPY-001 loaded.
+
+**Action**:
+1. Focus the Back button
+2. Press Tab repeatedly through the page
+
+**Observation 1 — Tab order**:
+1. Order is: Back button → breadcrumb link → first ChartTableToggle (Chart button → Table button) → next section toggles
+2. Every interactive control is reachable
+
+---
+
+### TC-A11Y-002: Keyboard activates the Back button (CM-023)
+
+**Preconditions**: Back button is focused.
+
+**Action**:
+1. Press Enter (or Space)
+
+**Observation 1 — Same as click**:
+1. `useGoBack('/call-history')` fires
+2. URL changes the same way as a mouse click
+
+---
+
+### TC-A11Y-003: Chart-Table toggle is keyboard and screen-reader accessible (CM-024)
+
+**Preconditions**: TC-HAPPY-001 loaded.
+
+**Action**:
+1. Inspect a `ChartTableToggle` element
+
+**Observation 1 — Role and label**:
+1. Container has `role="group"`
+2. Container has `aria-label="Chart or table view"`
+
+**Observation 2 — Per-button state**:
+1. The active button has `aria-pressed="true"`
+2. The inactive button has `aria-pressed="false"`
+
+---
+
+### TC-A11Y-004: Enter on focused toggle button flips view (CM-025)
+
+**Preconditions**: Toggle button is focused.
+
+**Action**:
+1. Press Enter
+
+**Observation 1 — View flips**:
+1. The active toggle flips to the focused option
+2. `aria-pressed` updates accordingly
+
+**Observation 2 — No extra fetch**:
+1. Zero new `GET /call-metrics/*` requests fire
+
+---
+
+### TC-A11Y-005: Error toast is announced via aria-live (CM-026)
+
+**Preconditions**: API returns 500.
+
+**Action**:
+1. Navigate to the page
+
+**Observation 1 — Toast role**:
+1. The toast container has `role="alert"` or `aria-live`
+2. Screen readers announce the toast title without manual focus
+
+---
+
+### TC-A11Y-006: Breadcrumb is a labeled nav landmark (CM-027)
+
+**Action**:
+1. Inspect the breadcrumb element
+
+**Observation 1 — Nav role + label**:
+1. Element is `<nav aria-label="Breadcrumb">`
+2. Screen readers expose it as a breadcrumb landmark
+
+---
+
+### TC-A11Y-007: Loader announces busy state to screen readers (CM-028)
+
+**Action**:
+1. Navigate to the page while the request is in flight
+
+**Observation 1 — Busy attribute**:
+1. The `AppLoader` exposes either `role="status"` or `aria-busy="true"`
+
+> ⚠ unverified — confirm `AppLoader` implementation.
+
+---
+
+### TC-FULL-001: End-to-end per-call metrics lifecycle (CM-FULL)
+
+**Preconditions**:
+- A real call seeded via `__e2e__` agent + Call History flow; metrics ingested.
+
+**Action**:
+1. Drive a real call via the Call History flow (`__e2e__` seeded data)
+2. Wait for metrics ingestion
+3. Deep-link to `/call-metrics/<callId>`
+4. Toggle every section between Chart and Table view
+5. Click the Back button
+6. From a fresh tab, deep-link the page again
+7. Click the breadcrumb `Call History`
+
+**Observation 1 — Step 3 — Loader → content**:
+1. `AppLoader` is visible briefly
+2. Breadcrumb + four stat cards + Latency/Usage categories render
+
+**Observation 2 — Step 4 — All toggles work**:
+1. Each section's `aria-pressed` flips correctly between Chart and Table
+
+**Observation 3 — Step 5 — Back button restores list**:
+1. URL becomes `/call-history`
+
+**Observation 4 — Step 6 — Fresh tab deep link**:
+1. URL is the deep link
+2. The page loads with the same UI
+
+**Observation 5 — Step 7 — Breadcrumb returns to list**:
+1. URL becomes `/call-history`
+
+**Cleanup** (in `try/finally` in the same test body):
+1. Delete the seeded call/agent via the backend admin API
+2. Clear cookies and localStorage
+
+---
+
+## Edge Cases (each appears as a `TC-EDGE-*` / `TC-LOADING-*` / `TC-NAV-*` / `TC-ERROR-*` test case above)
+
+- [x] Unauthenticated access → see TC-NAV-001 (and `⚠ unverified` middleware note)
+- [x] `agent_name = null` → see TC-EDGE-003
+- [x] `user_bot_latency = []` → Avg Latency `-` covered in TC-EDGE-001
+- [x] All metric arrays empty → see TC-EDGE-001
+- [x] Legacy backend returns arrays as `null` → see TC-EDGE-002
+- [x] `turn_metrics` present but none have `end_to_end != null` → covered by Turns logic in TC-HAPPY-001
+- [x] Distinct LLM models concatenated in subtitle → covered in TC-HAPPY-001
+- [x] React StrictMode double mount → covered by abort behavior in TC-LOADING-002 / TC-EDGE-010
+- [x] Chart/Table preserves other section state → see TC-EDGE-008
+- [x] Stat card values use `toLocaleString()` (en-US) → covered in TC-HAPPY-001
+- [x] `animate-page` class applied → covered by render observations
+- [x] No telemetry beyond the single GET → covered by network observations across happy/error cases
+- [x] Chart Table toggle is keyboard-operable → see TC-A11Y-003 / TC-A11Y-004
 
 ---
 
@@ -561,114 +1007,15 @@ Source: `postman_collection/Tone-API.postman_collection.json` → folder
 
 ---
 
-## Accessibility Requirements
+## Accessibility Requirements (each appears as a `TC-A11Y-*` test case above)
 
-- [ ] Breadcrumb nav uses `<nav aria-label="Breadcrumb">`
-- [ ] Back button uses `aria-label="Back to call metrics"`
-- [ ] Chart/Table toggle uses `role="group"` + `aria-label="Chart or table view"`
-- [ ] Each toggle option exposes `aria-pressed` for the active state and an
-      `aria-label` describing the view (`Chart view`, `Table view`)
-- [ ] AppLoader announces a busy state (`⚠ unverified` — confirm component
-      uses `role="status"` or `aria-busy`)
-- [ ] Stat cards use semantic structure (label text + value text); icon-only
-      visuals are decorative
-- [ ] Section headings (`Latency`, `Usage`) appear as `<h2>` or styled
-      equivalents and are keyboard-focusable via Tab order
-- [ ] Empty state copy `No metrics found for this call.` is centered, muted,
-      and announced by screen readers as plain body text (no live region —
-      acceptable since the page transitions from loader → static empty)
-- [ ] Color is not the sole indicator of meaning for stat cards — labels
-      always render alongside the colored icon background
-
----
-
-## Appended Scenarios (gap-fill, ID prefix `CM-`)
-
-These rows extend the PS/FS coverage with auth/error-state/network/a11y/list-specific/lifecycle scenarios so `/generate-tests` can produce a comprehensive `call-metrics.spec.ts`. They use real-backend conventions (`__e2e__` prefix, try/finally cleanup) — not `page.route` mocks — unless explicitly stated.
-
-### Auth & access control
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| CM-001 | Visit `/call-metrics/<callId>` without `tone_access_token` cookie | Middleware 307 → `/auth/login?redirect=%2Fcall-metrics%2F<callId>` | `unauthenticated visit redirects to login` |
-| CM-002 | Visit `/call-metrics/<callId>` with an expired token | Middleware 307 → `/auth/login?redirect=%2Fcall-metrics%2F<callId>`; expired cookie cleared | `expired token redirects to login and clears cookie` |
-| CM-003 | Logged-in non-member opens deep link to a call from another org | API 403 / 404; toast `Forbidden` or `Metrics not found for this call`; empty state rendered | `non-member is denied access to a foreign call deep link` |
-
-### Backend error states
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| CM-004 | `GET /call-metrics/<id>` 400 (malformed callId path param) | Toast surfaces backend `detail`; empty state `No metrics found for this call.` | `metrics 400 surfaces detail toast and renders empty state` |
-| CM-005 | Token expires after page load and before a future request fires | Toast `Could not validate credentials`; empty state | `mid-flow 401 surfaces error toast and keeps empty state` |
-| CM-006 | 403 forbidden role (call belongs to a different org) | Toast `Forbidden`; empty state | `metrics 403 surfaces forbidden toast` |
-| CM-007 | 404 — unknown callId | Toast `Metrics not found for this call`; empty state; breadcrumb falls back to `Detail` | `metrics 404 surfaces not-found toast` |
-| CM-008 | 409 conflict (legacy callId already migrated) | Toast surfaces backend `detail`; empty state | `metrics 409 surfaces conflict toast` |
-| CM-009 | 500 server error | Toast `Database connection error`; empty state | `metrics 500 surfaces server error toast` |
-
-### Network resilience
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| CM-010 | Offline / network failure | Toast `Something went wrong. Please try again.`; empty state; subsequent retry resolves normally | `network failure surfaces toast then recovers on retry` |
-| CM-011 | Slow `GET /call-metrics/<id>` (>3s) | `AppLoader` visible the whole time; breadcrumb second crumb reads `Loading…`; no toast | `slow metrics fetch keeps loader without spam` |
-| CM-012 | Rapid navigation A → B → A while requests are in flight | A's first request aborts cleanly (no toast); B's resolves; second A's resolves last and renders | `rapid navigation aborts older requests cleanly` |
-
-### Input edge cases (URL param)
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| CM-013 | callId with leading/trailing whitespace via URL encoding (`%20`) | Trimmed by the backend; 422 or 404 returned; toast surfaces detail | `whitespace-only callId surfaces validation error` |
-| CM-014 | callId with HTML-injection / unicode chars | Sent verbatim; backend returns 404; toast `Metrics not found for this call`; no XSS execution | `special-character callId is rejected without xss` |
-| CM-015 | callId longer than 500 chars | Either accepted (404) or backend 414; no client crash | `very long callId does not crash the page` |
-| CM-016 | Chart/Table toggle clicked rapidly | View flips deterministically; no extra API call observed; no flicker | `rapid chart-table toggling does not refetch` |
-
-### Backend payload edge cases
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| CM-017 | Payload arrays all empty (200) | Stat cards show `-` / `0` / `0` / `0`; neither Latency nor Usage category renders | `all-empty payload renders zeroed stat cards` |
-| CM-018 | Payload arrays are `null` (legacy rows) | Defensive shim coerces `null → []`; no crash; same UI as CM-017 | `null array payload coerces without crash` |
-| CM-019 | `agent_name = null` after load | Title reads `Metrics`; breadcrumb shows `Detail` | `null agent_name falls back to default labels` |
-| CM-020 | Partial payload — only LLM usage present | LLMUsageSection renders; TTSUsageSection hidden; TTS stat card shows `0` | `partial payload renders only available sections` |
-| CM-021 | StatCard never renders `NaN` (regression) | After any payload, LLM Tokens / TTS Chars contain only digits + commas | `stat cards never render NaN for any payload` |
-
-### Accessibility & keyboard
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| CM-022 | Tab order across the page | Back button → breadcrumb link → first ChartTableToggle → next toggle — reachable in order | `tab order through metrics page reaches every control` |
-| CM-023 | Press Enter / Space on the Back button | Triggers `useGoBack('/call-history')` just like a click | `keyboard activates the back button` |
-| CM-024 | ChartTableToggle exposes `role="group"` + `aria-label="Chart or table view"` | Both buttons render with `aria-pressed` reflecting the active view | `chart-table toggle is keyboard and screen-reader accessible` |
-| CM-025 | Press Enter on a focused toggle button | Active toggle flips; `aria-pressed` updates; no extra fetch | `Enter on toggle button flips view` |
-| CM-026 | Toast error has `role="alert"` / aria-live | Screen readers announce the toast title without manual focus | `error toast is announced via aria-live` |
-| CM-027 | Breadcrumb nav uses `<nav aria-label="Breadcrumb">` | Landmark exposed; screen readers announce breadcrumb structure | `breadcrumb is a labeled nav landmark` |
-| CM-028 | AppLoader exposes a busy state | Either `role="status"` or `aria-busy="true"` while loading | `loader announces busy state to screen readers` |
-
-### Cross-feature navigation
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| CM-029 | Back button when history exists | Pops history via `router.back()`; lands on the previous route | `back button pops history when available` |
-| CM-030 | Back button on a fresh deep-link tab | `router.push('/call-history')`; URL changes to the list | `back button falls back to call history when no history` |
-| CM-031 | Breadcrumb `Call History` link click | Navigates to `/call-history` | `breadcrumb link returns to list` |
-| CM-032 | Browser back after toggling Chart/Table | Returns to the prior page; toggle state not restored (client-only state) | `browser back leaves call-metrics with chart state ephemeral` |
-| CM-033 | Reload the metrics page | Re-fires `GET /call-metrics/<id>`; same UI re-renders | `reload re-fetches and renders metrics` |
-
-### Full lifecycle (`CM-FULL`)
-
-| ID | Scenario | Expected | Spec test name |
-|---|---|---|---|
-| CM-FULL | Drive a real call via the Call History flow (`__e2e__` seeded data) → wait for metrics ingestion → deep-link `/call-metrics/<callId>` → assert `AppLoader` then breadcrumb + four stat cards + Latency/Usage categories → toggle every section between Chart and Table view, asserting `aria-pressed` flips → click Back button → assert URL is `/call-history` → revisit via breadcrumb back from another tab → cleanup: delete the seeded call/agent via API in the same `try/finally` block | All sections render; toggles are keyboard accessible; back button + breadcrumb both restore the list; seeded data cleaned up in the same test body | `walks the entire per-call metrics flow end to end` |
-
-### Coverage map additions
-
-| New scenario | Replaces / extends | Notes |
-|---|---|---|
-| CM-001..003 | WF-6 (auth-less deep link) | Adds expired-token + non-member cases |
-| CM-004..009 | FS-1..FS-4 | Standardises 400/401/403/404/409/500 paths |
-| CM-010..012 | FS-5, FS-9 | Network resilience + rapid navigation explicit |
-| CM-013..016 | (new) | Input edge cases for the URL param + rapid toggles |
-| CM-017..021 | FS-6, FS-7, FS-10 | Promotes payload-shape edge cases to scenarios |
-| CM-022..028 | Accessibility section | Promotes a11y bullets to scenarios |
-| CM-029..033 | Navigation table | Adds reload + browser back/forward checks |
-| CM-FULL | (new) | Single-test sweep that drives a real call and verifies metrics |
+- [x] Breadcrumb nav uses `<nav aria-label="Breadcrumb">` → see TC-A11Y-006
+- [x] Back button uses `aria-label="Back to call metrics"` → see TC-A11Y-002
+- [x] Chart/Table toggle uses `role="group"` + `aria-label="Chart or table view"` → see TC-A11Y-003
+- [x] Each toggle option exposes `aria-pressed` → see TC-A11Y-003 / TC-A11Y-004
+- [x] AppLoader announces busy state → see TC-A11Y-007 (`⚠ unverified`)
+- [x] Stat cards use semantic structure → covered by render observations
+- [x] Section headings render as `<h2>` or styled equivalents → covered in TC-HAPPY-001
+- [x] Empty state copy → covered in TC-ERROR-001..004
+- [x] Color is not the sole indicator of meaning → covered by StatCard rendering
+- [x] Error toast announced via aria-live → see TC-A11Y-005

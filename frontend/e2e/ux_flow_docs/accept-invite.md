@@ -24,6 +24,10 @@ On accept, calls `POST /auth/accept-invitation` and routes the user based on
 whether the response contains an `access_token` (auto-login) or a
 `requires_login: true` flag (must sign in to consume).
 
+> **Format rule (mandatory):** every test case below is one **Action** (steps the
+> user performs) followed by multiple **Observations** (each a set of verification
+> steps). See [`_template.md`](_template.md) for the canonical shape and ID prefixes.
+
 ---
 
 ## Page
@@ -134,89 +138,6 @@ without being redirected to login, **so that** I can sign up via the invite.
 
 ---
 
-## User Workflow Steps
-
-**WF-1: New user signup via invite** (positive)
-
-1. User clicks `https://app.tone.com/accept-invite?token=raw-invite-token` from email
-2. Page mounts, Suspense fallback flashes; `useValidateInvitation(token, true)` fires
-   `GET /auth/validate-invitation?token=raw-invite-token`
-3. While pending → `<AppLoader label="Validating invitation..." />` rendered
-4. 200 with `{ valid: true, account_exists: false, email, role, organization_name, ... }`
-   → user is not signed in (`useAuthStore().user === null`) → form variant renders
-5. User fills first name, last name, password, confirm password → clicks
-   "Create account & join"
-6. Zod validates (passwords match, all required) → `POST /auth/accept-invitation`
-   with `{ token, password, first_name, last_name }`
-7. 200 with `access_token` → `setAccepted(true)`, `cancelQueries(['invitation', token])`,
-   `invalidateQueries` for non-invitation keys, `setLoginResponse(data)`,
-   toast `"Joined!" / "You're now a member of Acme."`, `router.push('/home')`
-
-**WF-2: Existing account accepts (anonymous)** (positive)
-
-1. User opens link → validation returns `{ valid: true, account_exists: true, email, organization_name, role, ... }`
-2. Two-button card renders → user clicks "Accept invitation"
-3. `POST /auth/accept-invitation { token }` (no password / name)
-4. 200 with `{ requires_login: true, account_exists: true, email, message }`
-   (no `access_token`) → toast `"Added to workspace" / "Please sign in to access Acme."`,
-   `router.push('/login')`
-
-**WF-3: Signed-in user one-click accepts** (positive)
-
-1. User has localStorage `login_data` + `tone_access_token` for a different org →
-   opens invite link
-2. `useAuthStore().user` is truthy → "Accept invitation" one-button card renders
-3. User clicks Accept → `POST /auth/accept-invitation { token }`
-4. 200 with `access_token` → `setLoginResponse(data)` (replaces in-store user
-   with the new org context if backend returns it), toast `"Joined!"`,
-   `router.push('/home')`
-
-**WF-4: Missing token** (negative)
-
-1. User opens `/accept-invite` (no `?token`, no `?code`) → invalid card renders
-   immediately; `useValidateInvitation` early-returns (`enabled: !!token && !accepted`)
-2. No API call is made
-3. User clicks "Go to login" → `router.push('/login')`
-
-**WF-5: Expired token** (negative)
-
-1. User opens `/accept-invite?token=expired-xyz` → AppLoader shows briefly
-2. `GET /auth/validate-invitation` returns 400 `{ "detail": "Invalid or expired invitation" }`
-3. Invalid card renders with that detail; "Go to login" button visible
-
-**WF-6: Form validation blocks submit** (negative)
-
-1. New user variant rendered → user clicks "Create account & join" with
-   empty fields → Zod blocks submit, helperText errors appear inline; no API call
-2. User types short password (`abc`) → Zod error `"Password must be at least 8 characters"`
-3. User types mismatched confirm → Zod error `"Passwords do not match"` on
-   `confirm_password` field (path-specific refinement)
-
-**WF-7: Legacy `?code=` alias** (positive)
-
-1. User opens `/accept-invite?code=raw-invite-token` (older email) → same as WF-1
-   step 1, because `token = searchParams.get('token') || searchParams.get('code') || ''`
-2. Validation + accept use `token`; emails containing both query names get
-   `?token` precedence
-
-**WF-8: Post-accept refetch guard** (positive)
-
-1. After WF-1 step 7 → `setAccepted(true)` was already set; `useValidateInvitation`
-   sees `enabled = !!token && !accepted = false` → no refetch
-2. `queryClient.cancelQueries` aborts any pending validation request
-3. `invalidateQueries` for non-invitation keys (predicate `q.queryKey?.[0] !== 'invitation'`)
-   refreshes `me` and `my-org`
-
-**WF-9: Signed-in user clicks "Sign in first"** (negative — irrelevant flow)
-
-1. The "Sign in first" button only renders when `account_exists: true` AND user
-   is signed out. Signed-in users do not see it
-2. Clicking it navigates to `/login?next=%2Faccept-invite%3Ftoken%3Draw-invite-token`
-3. After login, the redirect logic in `/login` lands the user back on
-   `/accept-invite?token=...` and the one-click-accept card now renders (US-3 path)
-
----
-
 ## Input Specifications
 
 Source: `src/schemas/auth.ts` (Zod `acceptInviteSchema`). Form only renders
@@ -241,370 +162,6 @@ in the "new user" variant (no signed-in user, no existing account).
 - "Create account & join" / "Accept invitation" are **disabled + spinner**
   while `acceptInvitation.isPending`.
 - Form submit is blocked client-side by Zod (`zodResolver(acceptInviteSchema)`).
-
----
-
-## Success Scenarios
-
-**PS-1: New user signs up via invite → auto-login → `/home`**
-
-- **Preconditions**: Signed-out browser; valid token for a new email.
-- **Steps**: open `/accept-invite?token=raw-invite-token`; fill first/last/password
-  twice; click "Create account & join".
-- **Expected outcome**: form submits; `POST /auth/accept-invitation` returns 200
-  with `access_token`; toast title `"Joined!"` + description
-  `"You're now a member of Acme."`; `router.push('/home')`.
-- **Mock APIs**:
-  - `GET /auth/validate-invitation?token=raw-invite-token`, 200:
-    ```json
-    {
-      "valid": true,
-      "email": "invitee@acme.com",
-      "role": "developer",
-      "organization_id": "f4d22a9c-1b6e-4f8c-9d2e-7e3b8a1f2c11",
-      "organization_name": "Acme",
-      "account_exists": false
-    }
-    ```
-  - `POST /auth/accept-invitation`, 200:
-    ```json
-    {
-      "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyLTEifQ.signature",
-      "refresh_token": "eyJhbGciOiJIUzI1NiJ9.refresh.signature",
-      "token_type": "bearer",
-      "user": {
-        "id": "8c7a8b50-9d0a-4d63-9b3c-1a2b3c4d5e6f",
-        "email": "invitee@acme.com",
-        "first_name": "Lin",
-        "last_name": "Mo",
-        "role": "developer",
-        "is_verified": true
-      },
-      "organization": {
-        "id": "f4d22a9c-1b6e-4f8c-9d2e-7e3b8a1f2c11",
-        "name": "Acme"
-      }
-    }
-    ```
-
-**PS-2: Existing-account anonymous accept → `/login`**
-
-- **Preconditions**: Signed-out browser; invite for an email that already has a
-  Tone account.
-- **Steps**: open `/accept-invite?token=...`; click "Accept invitation".
-- **Expected outcome**: `POST /auth/accept-invitation { token }`; response has
-  `requires_login: true` (no `access_token`); toast title
-  `"Added to workspace"` + description
-  `"Please sign in to access Acme."`; `router.push('/login')`.
-- **Mock APIs**:
-  - `GET /auth/validate-invitation`, 200: `account_exists: true` shape (as
-    above with `account_exists` flipped).
-  - `POST /auth/accept-invitation`, 200:
-    ```json
-    {
-      "message": "You have been added to the organization. Please sign in to continue.",
-      "account_exists": true,
-      "email": "invitee@acme.com",
-      "requires_login": true
-    }
-    ```
-
-**PS-3: Signed-in user one-click accepts**
-
-- **Preconditions**: `useAuthStore().user` truthy (e.g. seeded localStorage with
-  a valid `login_data`); valid token for the same email.
-- **Steps**: open `/accept-invite?token=...`; click "Accept invitation".
-- **Expected outcome**: same toast / redirect as PS-1 (`/home`).
-- **Mock APIs**: same as PS-1.
-
-**PS-4: Legacy `?code=` query name**
-
-- **Preconditions**: signed-out; old email with `?code=` alias.
-- **Steps**: open `/accept-invite?code=raw-invite-token`.
-- **Expected outcome**: validation uses `code` value as `token`; rest of flow
-  identical to PS-1.
-- **Mock APIs**: identical to PS-1, just the URL query name differs.
-
-**PS-5: Email lock**
-
-- **Preconditions**: PS-1 prereqs.
-- **Steps**: confirm the email `TextInput` reads `invitee@acme.com` and is
-  `disabled` (cannot be edited).
-- **Expected outcome**: HTML attribute `disabled` present on input.
-
-**PS-6: Refresh-query guard prevents post-accept 400**
-
-- **Preconditions**: PS-1 success path.
-- **Steps**: complete signup → after redirect, manually navigate back to
-  `/accept-invite?token=raw-invite-token`.
-- **Expected outcome**: `accepted` is `true` only within the in-memory React
-  component (does not persist across navigations); on re-mount the page will
-  re-call validate-invitation and (because the token is now consumed) get a 400
-  → invalid card renders. This is acceptable UX.
-
----
-
-## Failure Scenarios
-
-**FS-1: Missing both `?token` and `?code`**
-
-- **Preconditions**: User opens `/accept-invite`.
-- **Steps**: navigate.
-- **Mock API**: not called (`enabled: !!token && !accepted` is false; `token === ''`).
-- **Expected UI**: invalid `CustomCard` with `XCircle` icon, title
-  `"Invalid invitation"`, description `"No invitation token provided."`,
-  "Go to login" button.
-
-**FS-2: Empty `?token=`**
-
-- **Steps**: open `/accept-invite?token=`.
-- **Expected UI**: same as FS-1 — `token = ''` is falsy.
-
-**FS-3: Validation 400 — invalid token**
-
-- **Mock API** (`GET /auth/validate-invitation`, 400):
-  ```json
-  { "detail": "Invalid or expired invitation" }
-  ```
-- **Expected UI**: invalid card with description `"Invalid or expired invitation"`
-  (from `error.response.data.detail`); "Go to login" button.
-
-**FS-4: Validation 200 but `valid: false`**
-
-- **Mock API** (`GET /auth/validate-invitation`, 200):
-  ```json
-  { "valid": false, "email": "", "role": "", "organization_id": "", "organization_name": "", "account_exists": false }
-  ```
-- **Expected UI**: page enters the `!invitation?.valid` branch → invalid card
-  with fallback description `"This invitation is invalid or has expired."`.
-
-**FS-5: Validation 5xx (network)**
-
-- **Mock API** (`GET /auth/validate-invitation`, 500): `{}`
-- **Expected UI**: invalid card with fallback description (because `detail`
-  is missing).
-
-**FS-6: Form Zod — empty first name**
-
-- **Steps**: in new-user form, leave first name blank → submit.
-- **Expected UI**: helperText `"First name is required"` under first_name;
-  no API call.
-
-**FS-7: Form Zod — short password**
-
-- **Steps**: type `abc` (3 chars).
-- **Expected UI**: helperText `"Password must be at least 8 characters"`; no API call.
-
-**FS-8: Form Zod — passwords mismatch**
-
-- **Steps**: password `abcd1234`, confirm `abcd9999` → submit.
-- **Expected UI**: helperText `"Passwords do not match"` under `confirm_password`
-  (path-specific refinement); no API call.
-
-**FS-9: Form Zod — empty confirm**
-
-- **Steps**: password filled, confirm empty → submit.
-- **Expected UI**: helperText `"Please confirm your password"` under
-  `confirm_password`; no API call.
-
-**FS-10: Accept backend 400 — token missing**
-
-- **Mock API** (`POST /auth/accept-invitation`, 400):
-  ```json
-  { "detail": "token is required" }
-  ```
-- **Expected UI**: `handleApiError(err)` → toast title `"token is required"`;
-  card stays in form mode; submit button re-enables.
-
-**FS-11: Accept backend 400 — already accepted**
-
-- **Mock API** (`POST /auth/accept-invitation`, 400):
-  ```json
-  { "detail": "Invitation already accepted" }
-  ```
-- **Expected UI**: toast title `"Invitation already accepted"`; card stays;
-  submit re-enables. ⚠ unverified — actual backend message may differ; this
-  is the most likely shape.
-
-**FS-12: Accept backend 401 — unauthorised existing-user accept**
-
-- **Preconditions**: Existing-account two-button card.
-- **Mock API** (`POST /auth/accept-invitation`, 401):
-  ```json
-  { "detail": "Could not validate credentials" }
-  ```
-- **Expected UI**: toast title `"Could not validate credentials"`; card stays.
-
-**FS-13: Accept backend 5xx**
-
-- **Mock API** (`POST /auth/accept-invitation`, 500):
-  ```json
-  { "detail": "Internal Server Error" }
-  ```
-- **Expected UI**: toast title `"Internal Server Error"`; card stays; submit re-enables.
-
-**FS-14: Accept backend 422 — non-string `detail`**
-
-- **Mock API** (`POST /auth/accept-invitation`, 422):
-  ```json
-  {
-    "detail": [
-      {
-        "type": "value_error",
-        "loc": ["body", "password"],
-        "msg": "String should have at least 8 characters",
-        "input": "abc"
-      }
-    ]
-  }
-  ```
-- **Expected UI**: `handleApiError` parses `detail.errors` if present; for an
-  array shape it falls back to `"Something went wrong. Please try again."`.
-
-**FS-15: User edits localStorage to fake login during invite flow**
-
-- **Preconditions**: User opens valid `?token=...` URL but pre-seeds localStorage
-  with garbage `login_data`.
-- **Expected UI**: zustand bootstrap may set `user` to a partial object → page
-  renders the "signed-in" one-click card with `{user.email}` showing the fake
-  value; on Accept the backend rejects with 401 → toast.
-
-**FS-16: Tab closed mid-accept**
-
-- **Preconditions**: PS-1 step 6 in flight.
-- **Expected UI**: no AbortController is wired into the mutation; the request
-  may still complete server-side; UI is unmounted so no state writes attempted.
-
-**FS-17: Slow API (>3s) on validate keeps loader visible**
-
-- **Mock API** (`GET /auth/validate-invitation`, 200 but delayed ~3500 ms): success after delay.
-- **Expected UI**: `AppLoader` with label "Validating invitation..." stays visible for the full duration; the appropriate card (new-user / existing-account / signed-in) renders only after the response resolves.
-
-**FS-18: Slow API (>3s) on accept keeps button in loading state**
-
-- **Mock API** (`POST /auth/accept-invitation`, 200 but delayed ~3500 ms): success after delay.
-- **Expected UI**: button stays disabled with spinner; toast + redirect happen only after the response.
-
-**FS-19: Network failure on validate**
-
-- **Mock API**: `GET /auth/validate-invitation` aborted.
-- **Expected UI**: invalid card with fallback description "This invitation is invalid or has expired."; React Query `retry: false` prevents re-fires.
-
-**FS-20: Network failure on accept preserves form data**
-
-- **Mock API**: `POST /auth/accept-invitation` aborted.
-- **Expected UI**: toast "Something went wrong. Please try again."; all four form inputs still contain typed values; button re-enables.
-
-**FS-21: First name with XSS / unicode**
-
-- **Steps**: in new-user form, type `<script>alert(1)</script>` into First name; fill remaining fields; submit.
-- **Mock API** (`POST /auth/accept-invitation`, 200): success.
-- **Expected UI**: payload sends the literal string; React escapes it when rendering anywhere; no DOM injection.
-
-**FS-22: First / last name with emoji**
-
-- **Steps**: type `Lin 🎉` / `Mo 💎`; submit.
-- **Expected UI**: payload includes emoji verbatim; success path runs normally.
-
-**FS-23: Very long first name (>500 chars)**
-
-- **Steps**: type a 600-char First name; submit.
-- **Expected UI**: input accepts (no maxLength); backend may reject — surface its `detail`.
-
-**FS-24: Paste with newlines into a single-line input**
-
-- **Steps**: paste `Lin\nMo` into First name.
-- **Expected UI**: single-line input strips the newline at paste time.
-
-**FS-25: Whitespace-only First name**
-
-- **Steps**: type `   ` (3 spaces); submit.
-- **Expected UI**: ⚠ today Zod `min(1)` passes; payload is sent. Document the gap.
-
-**FS-26: Trailing whitespace in password is preserved (no trim)**
-
-- **Steps**: type `validPass1   ` (3 trailing spaces) in both password fields; submit.
-- **Expected UI**: payload sends the value verbatim (no trim); backend accepts; subsequent login must use the same value.
-
-**FS-27: Authenticated visit with mismatched email**
-
-- **Preconditions**: localStorage `login_data` is for `other@example.com`; invite is for `invitee@acme.com`.
-- **Expected UI**: signed-in one-click card renders showing "You're signed in as other@example.com. Accept this invite to join as developer."; clicking Accept may succeed or 400 depending on backend policy. Document the observed outcome.
-
-**FS-28: Tab order through new-user form**
-
-- **Steps**: focus the page → press Tab repeatedly.
-- **Expected UI**: focus moves Email (disabled, skipped or focusable but inert) → First name → Last name → Password → password Eye toggle → Confirm password → Confirm password Eye toggle → "Create account & join" → "Sign in" link.
-
-**FS-29: Submit via Enter key in Confirm password**
-
-- **Steps**: fill all required fields validly, focus Confirm password, press Enter.
-- **Expected UI**: form submits exactly as clicking Create account & join would.
-
-**FS-30: Helper-text errors are announced via aria-live**
-
-- **Steps**: submit with mismatched passwords.
-- **Expected UI**: helperText "Passwords do not match" under Confirm password renders with `role="alert"` (or `aria-live`) so screen readers announce it.
-
-**FS-31: Browser back from `/home` after accept**
-
-- **Preconditions**: PS-1 completed; user is on `/home`.
-- **Steps**: press browser Back.
-- **Expected UI**: history returns to `/accept-invite?token=...`; on re-mount the page validates the now-consumed token → renders the invalid card (acceptable UX).
-
-**FS-32: `?token=` URL with whitespace**
-
-- **Preconditions**: URL is `/accept-invite?token=%20valid%20`.
-- **Expected UI**: `searchParams.get('token')` returns the value verbatim; validation likely 400 → invalid card.
-
-**FS-33: Conflict (409) on accept — already a member**
-
-- **Mock API** (`POST /auth/accept-invitation`, 409): `{ "detail": "User is already a member of this organization" }`
-- **Expected UI**: toast title "User is already a member of this organization"; card stays; submit re-enables.
-
-### Full lifecycle (`*-FULL`)
-
-**AI-FULL: End-to-end accept-invite lifecycle in a single test**
-
-- **Preconditions**:
-  - An admin user `__e2e__ai_admin_<uuid>@example.com` with an organization is provisioned via the backend API.
-  - An invite for a new email `__e2e__ai_invitee_<uuid>@example.com` is created via the backend Members API; the raw invitation token is captured from the response (or via a test-only admin endpoint).
-- **Steps in one Playwright test body**:
-  1. Visit `/accept-invite` (no token) → expect invalid card "Invalid invitation" / "No invitation token provided." with a "Go to login" button; no `GET /auth/validate-invitation` request.
-  2. Click "Go to login" → expect URL `/login`.
-  3. Navigate to `/accept-invite?token=clearly-bad-token` → expect AppLoader briefly; then invalid card with the backend `detail`.
-  4. Navigate to `/accept-invite?token=<valid>` (new-user variant) → expect new-user signup card with email locked.
-  5. Submit empty fields → expect inline helperText on First name, Last name, Password.
-  6. Submit `abc` password → expect "Password must be at least 8 characters".
-  7. Submit mismatched passwords → expect "Passwords do not match" on Confirm.
-  8. Submit valid form → expect toast title "Joined!" with description "You're now a member of `<org_name>`."; expect URL `/home`; verify localStorage has `tone_access_token`.
-  9. Verify the user is actually a member of the org by hitting a backend list-members API.
-  10. Navigate back to `/accept-invite?token=<valid>` (consumed) → expect invalid card (backend rejects the consumed token).
-  11. Click the legacy alias `?code=<another-valid-token>` (create a second invite first) → expect validation succeeds (alias works).
-  12. Sign out, then visit `/accept-invite?token=<valid-for-existing-email>` (use the just-created user's email for a new org) → expect two-button card "Accept invitation" / "Sign in first".
-  13. Click Accept → expect toast "Added to workspace" / "Please sign in to access `<org_name>`." → expect URL `/login`.
-- **Cleanup (in `finally`)**: Delete the provisioned admin user, invitee user, both orgs, and any pending invitations via the backend admin API.
-- **Naming**: `AI-FULL — accept-invite full lifecycle`.
-
----
-
-## Expected Toast Messages
-
-Toasts use Sonner via `showToast` (`src/lib/toast.ts`). Errors are routed
-through `handleApiError(err)` which uses `response.data.detail` as the toast
-title when it is a string; falls back to `"Something went wrong. Please try again."`.
-
-Two of the success toasts include both a title **and** description (Sonner
-renders the description as a smaller sub-line).
-
-| Trigger                                                           | Toast title          | Toast description                                              | Variant |
-| ----------------------------------------------------------------- | -------------------- | -------------------------------------------------------------- | ------- |
-| Accept 200 with `access_token` (auto-login) and `invitation` set  | `Joined!`            | `You're now a member of {invitation.organization_name}.`       | success |
-| Accept 200 with `access_token` and `invitation` missing           | `Joined!`            | `You joined the workspace.`                                    | success |
-| Accept 200 without `access_token` (existing user) and `invitation` set | `Added to workspace` | `Please sign in to access {invitation.organization_name}.`     | success |
-| Accept 200 without `access_token` and `invitation` missing        | `Added to workspace` | `Please sign in to continue.`                                  | success |
-| Any 4xx/5xx with string `detail`                                  | backend `detail`     | —                                                              | error   |
-| Any error with non-string `detail`                                | `Something went wrong. Please try again.` | —                                         | error   |
 
 ---
 
@@ -755,36 +312,1176 @@ routes to `/home`. Otherwise routes to `/login`.
 
 ---
 
-## Edge Cases
+## Test Cases
 
-- [ ] Both `?token=` and `?code=` present in the URL → `token` wins (`searchParams.get('token') || searchParams.get('code')`)
-- [ ] Token URL-encoded special chars (`+`, `=`, `/`) → `searchParams.get` returns
-      decoded value; axios sends decoded body
-- [ ] Very long token (e.g. 256+ chars) → not truncated client-side; backend may
-      reject if its column has a max length
-- [ ] Validation 4xx → invalid card; React Query has `retry: false` so no
-      hammering the backend
-- [ ] React Query post-accept refetch guard: `setAccepted(true)` flips
-      `useValidateInvitation`'s `enabled` to false **before**
-      `queryClient.invalidateQueries`, preventing a 400 refetch on a now-consumed token
-- [ ] `invalidateQueries({ predicate: q => q.queryKey?.[0] !== 'invitation' })`
-      refreshes `me`, `my-org`, etc. while leaving the consumed invitation query alone
-- [ ] User refreshes the page after successful accept → `accepted` local state
-      is reset; validation re-fires; backend returns 400 (consumed) → invalid card.
-      Acceptable UX since the user is already redirected on first success
-- [ ] User opens two tabs to the same invite link → first wins; second hits 400
-      on accept → toast error
-- [ ] Logged-in user with a DIFFERENT email than the invite → page still renders
-      the signed-in one-click card; backend may 400 on accept ("email mismatch")
-      → toast error. ⚠ unverified — confirm backend behaviour
-- [ ] User opens link while connection is offline → validation throws; page
-      enters the `error` branch with fallback description
-- [ ] Password input fields render an Eye toggle (via `TextInput` shared
-      component) — the toggle does not trigger form submit (`tabIndex={-1}`)
-- [ ] Submit button is double-click safe: `acceptInvitation.isPending` disables
-      it until the mutation settles
-- [ ] Form leaves dirty state when user clicks "Sign in" link → RHF state is
-      discarded on unmount; no confirm-leave guard
+> Every test case is **one Action + multiple Observations**. Each Action is a numbered
+> list of steps. Each Observation is a numbered list of verification steps.
+> ID prefix legend: `TC-HAPPY-` (positive), `TC-VALIDATE-` (client validation),
+> `TC-ERROR-` (server errors), `TC-NAV-` (navigation), `TC-LOADING-` (loading/disabled),
+> `TC-EDGE-` (edge cases), `TC-A11Y-` (accessibility), `TC-FULL-` (lifecycle).
+
+---
+
+### TC-HAPPY-001: New user signs up via invite and lands on /home
+
+**Preconditions**:
+- Signed-out browser (no `tone_access_token` in localStorage)
+- Valid token for a new email `invitee@acme.com`
+
+**Action**:
+1. Visit `/accept-invite?token=raw-invite-token`
+2. Fill `Lin` into First name and `Mo` into Last name
+3. Fill `setupPass789` into Password and Confirm password
+4. Click "Create account & join"
+
+**Observation 1 — Validation network request**:
+1. Exactly one `GET /auth/validate-invitation?token=raw-invite-token` request is recorded
+
+**Observation 2 — Loading state before validation resolves**:
+1. `<AppLoader label="Validating invitation..." />` is visible while pending
+
+**Observation 3 — New-user signup card renders**:
+1. `CustomCard` with `CheckCircle` icon is visible
+2. Title equals `Join Acme`
+3. Description equals `You've been invited to join as a developer. Create your account below.`
+4. Email field is pre-filled with `invitee@acme.com` and is `disabled`
+
+**Observation 4 — Accept network request**:
+1. Exactly one `POST /auth/accept-invitation` request is recorded
+2. Request body equals `{ "token": "raw-invite-token", "password": "setupPass789", "first_name": "Lin", "last_name": "Mo" }`
+
+**Observation 5 — Local storage hydration**:
+1. `localStorage.tone_access_token` equals the response `access_token`
+2. `localStorage.login_data` is valid JSON containing the response `user.id`
+
+**Observation 6 — React Query guard**:
+1. `accepted` state flips to `true` BEFORE `cancelQueries` / `invalidateQueries`
+2. `queryClient.cancelQueries` is called for `['invitation', token]`
+3. `invalidateQueries` is called with a predicate excluding the `invitation` key (so `me` / `my-org` refetch)
+
+**Observation 7 — Toast + redirect**:
+1. Toast title equals `Joined!`
+2. Toast description equals `You're now a member of Acme.`
+3. URL becomes `/home` within 1s
+
+**API mocks**:
+- `GET /auth/validate-invitation?token=raw-invite-token` → 200 (new-user payload)
+- `POST /auth/accept-invitation` → 200 (auto-login payload)
+
+**Cleanup**: Clear localStorage and cookies in the `afterEach` hook.
+
+---
+
+### TC-HAPPY-002: Existing-account anonymous accept lands on /login
+
+**Preconditions**:
+- Signed-out browser
+- Invite token for an email that already has a Tone account
+
+**Action**:
+1. Visit `/accept-invite?token=raw-invite-token`
+2. Click "Accept invitation"
+
+**Observation 1 — Two-button card renders**:
+1. `CustomCard` with `LogIn` icon is visible
+2. Title equals `Join Acme`
+3. Description equals `lin@acme.com already has a Tone account. Accept to add it to Acme, then sign in.`
+4. Both buttons are visible: primary "Accept invitation" and outline "Sign in first"
+
+**Observation 2 — Network request on Accept**:
+1. Exactly one `POST /auth/accept-invitation` request is recorded
+2. Request body equals `{ "token": "raw-invite-token" }` (no password / name fields)
+
+**Observation 3 — Toast + redirect**:
+1. Toast title equals `Added to workspace`
+2. Toast description equals `Please sign in to access Acme.`
+3. URL becomes `/login` within 1s
+
+**API mocks**:
+- `GET /auth/validate-invitation` → 200 (existing-user payload)
+- `POST /auth/accept-invitation` → 200 `{ "message": "...", "account_exists": true, "email": "invitee@acme.com", "requires_login": true }`
+
+---
+
+### TC-HAPPY-003: Signed-in user one-click accepts and lands on /home
+
+**Preconditions**:
+- `useAuthStore().user` is truthy (localStorage has valid `login_data` for `current@example.com`)
+- Valid token
+
+**Action**:
+1. Visit `/accept-invite?token=raw-invite-token`
+2. Click "Accept invitation"
+
+**Observation 1 — Signed-in one-click card renders**:
+1. `CustomCard` with `Building2` icon is visible
+2. Title equals `Join Acme`
+3. Description equals `You're signed in as current@example.com. Accept this invite to join as developer.`
+4. A single primary "Accept invitation" button is rendered (no "Sign in first")
+
+**Observation 2 — Network request**:
+1. Exactly one `POST /auth/accept-invitation` request is recorded
+2. Request body equals `{ "token": "raw-invite-token" }`
+
+**Observation 3 — Toast + redirect**:
+1. Toast title equals `Joined!`
+2. Toast description equals `You're now a member of Acme.`
+3. URL becomes `/home` within 1s
+
+**API mocks**:
+- `GET /auth/validate-invitation` → 200 (new-user payload or existing — page only cares about validity)
+- `POST /auth/accept-invitation` → 200 with `access_token`
+
+---
+
+### TC-HAPPY-004: Legacy `?code=` alias works identically
+
+**Preconditions**:
+- Signed-out browser
+- Old email with `?code=` alias
+
+**Action**:
+1. Visit `/accept-invite?code=raw-invite-token`
+2. Fill the new-user form and submit
+
+**Observation 1 — Validation uses code value as token**:
+1. `GET /auth/validate-invitation?token=raw-invite-token` is recorded (page extracts `code` and uses it as `token`)
+
+**Observation 2 — Rest of flow matches TC-HAPPY-001**:
+1. Success card renders; Accept fires; toast `Joined!`; redirect to `/home`
+
+**API mocks**: identical to TC-HAPPY-001, just the URL query name differs.
+
+---
+
+### TC-HAPPY-005: Email field is locked
+
+**Preconditions**:
+- TC-HAPPY-001 prereqs; new-user signup card rendered
+
+**Action**:
+1. Inspect the Email `TextInput`
+2. Attempt to type into the Email field
+
+**Observation 1 — Email value pre-filled**:
+1. Email input value equals `invitee@acme.com`
+
+**Observation 2 — HTML disabled attribute set**:
+1. The Email `<input>` has the `disabled` attribute present
+
+**Observation 3 — Typing has no effect**:
+1. Attempting to type does not change the input value
+
+---
+
+### TC-HAPPY-006: Token precedence — `?token` wins over `?code`
+
+**Preconditions**:
+- URL contains both `?token=primary` and `?code=secondary`
+
+**Action**:
+1. Visit `/accept-invite?token=primary&code=secondary`
+
+**Observation 1 — Token wins**:
+1. `GET /auth/validate-invitation?token=primary` is recorded (NOT `secondary`)
+
+**API mock**: `GET /auth/validate-invitation?token=primary` → 200.
+
+---
+
+### TC-NAV-001: Click "Go to login" from invalid card navigates to /login
+
+**Preconditions**:
+- Invalid card rendered (e.g. via TC-VALIDATE-001)
+
+**Action**:
+1. Click the "Go to login" button
+
+**Observation 1 — URL change**:
+1. URL becomes `/login`
+
+---
+
+### TC-NAV-002: Click "Sign in first" links to /login with encoded next
+
+**Preconditions**:
+- TC-HAPPY-002 prereqs; existing-account two-button card rendered
+
+**Action**:
+1. Click "Sign in first"
+
+**Observation 1 — URL change with encoded next**:
+1. URL becomes `/login?next=%2Faccept-invite%3Ftoken%3Draw-invite-token`
+
+**Observation 2 — After-login flow lands back on invite**:
+1. Following login redirects user back to `/accept-invite?token=raw-invite-token` (via login's `next` handler)
+2. The signed-in one-click card now renders (US-3 path)
+
+---
+
+### TC-NAV-003: Click "Sign in" beneath the new-user form navigates with next
+
+**Preconditions**:
+- TC-HAPPY-001 prereqs; new-user signup card rendered
+
+**Action**:
+1. Click the "Sign in" link below the form
+
+**Observation 1 — URL change with encoded next**:
+1. URL becomes `/login?next=%2Faccept-invite%3Ftoken%3Draw-invite-token`
+
+**Observation 2 — RHF state discarded on unmount**:
+1. No confirm-leave guard fires (form state is dropped silently)
+
+---
+
+### TC-VALIDATE-001: Missing both `?token` and `?code` shows invalid card with no API call
+
+**Action**:
+1. Visit `/accept-invite`
+
+**Observation 1 — No network call**:
+1. Zero `GET /auth/validate-invitation` requests are recorded
+2. `enabled: !!token && !accepted` is false (`token === ''`)
+
+**Observation 2 — Invalid card rendered**:
+1. `XCircle` icon is visible
+2. Title equals `Invalid invitation`
+3. Description equals `No invitation token provided.`
+4. A "Go to login" `<Button>` is rendered inside a `<Link href="/login">`
+
+---
+
+### TC-VALIDATE-002: Empty `?token=` shows the same invalid card
+
+**Action**:
+1. Visit `/accept-invite?token=`
+
+**Observation 1 — No API call**:
+1. Zero `GET /auth/validate-invitation` requests are recorded
+
+**Observation 2 — Same invalid card**:
+1. `XCircle`, `Invalid invitation`, `No invitation token provided.`, "Go to login" button
+
+---
+
+### TC-VALIDATE-003: Empty first name blocks submit
+
+**Preconditions**:
+- TC-HAPPY-001 prereqs; new-user form rendered
+
+**Action**:
+1. Leave First name blank; fill the remaining fields validly
+2. Click "Create account & join"
+
+**Observation 1 — No network call**:
+1. Zero `POST /auth/accept-invitation` requests are recorded
+
+**Observation 2 — Inline error**:
+1. Helper text under First name reads exactly `First name is required`
+
+---
+
+### TC-VALIDATE-004: Empty last name blocks submit
+
+**Preconditions**:
+- New-user form rendered
+
+**Action**:
+1. Leave Last name blank; fill the remaining fields validly
+2. Click "Create account & join"
+
+**Observation 1 — No network call**:
+1. Zero `POST /auth/accept-invitation` requests are recorded
+
+**Observation 2 — Inline error**:
+1. Helper text under Last name reads exactly `Last name is required`
+
+---
+
+### TC-VALIDATE-005: Short password (<8 chars) blocks submit
+
+**Preconditions**:
+- New-user form rendered
+
+**Action**:
+1. Type `abc` (3 chars) into Password and Confirm password
+2. Click "Create account & join"
+
+**Observation 1 — No network call**:
+1. Zero `POST /auth/accept-invitation` requests are recorded
+
+**Observation 2 — Inline error**:
+1. Helper text under Password reads exactly `Password must be at least 8 characters`
+
+---
+
+### TC-VALIDATE-006: Passwords mismatch blocks submit
+
+**Preconditions**:
+- New-user form rendered
+
+**Action**:
+1. Fill Password with `abcd1234`
+2. Fill Confirm password with `abcd9999`
+3. Click "Create account & join"
+
+**Observation 1 — No network call**:
+1. Zero `POST /auth/accept-invitation` requests are recorded
+
+**Observation 2 — Inline error on Confirm**:
+1. Helper text under Confirm password reads exactly `Passwords do not match`
+2. The error appears on the `confirm_password` field (Zod path refinement)
+
+---
+
+### TC-VALIDATE-007: Empty confirm password blocks submit
+
+**Preconditions**:
+- New-user form rendered
+
+**Action**:
+1. Fill Password validly
+2. Leave Confirm password blank
+3. Click "Create account & join"
+
+**Observation 1 — No network call**:
+1. Zero `POST /auth/accept-invitation` requests are recorded
+
+**Observation 2 — Inline error**:
+1. Helper text under Confirm password reads exactly `Please confirm your password`
+
+---
+
+### TC-ERROR-001: Validation 400 invalid/expired token shows backend `detail`
+
+**Action**:
+1. Visit `/accept-invite?token=expired-xyz`
+
+**Observation 1 — Network call**:
+1. Exactly one `GET /auth/validate-invitation?token=expired-xyz` request is recorded
+
+**Observation 2 — Invalid card with backend detail**:
+1. `XCircle` icon visible
+2. Title equals `Invalid invitation`
+3. Description equals `Invalid or expired invitation` (from `error.response.data.detail`)
+4. "Go to login" button rendered
+
+**API mock**: `GET /auth/validate-invitation` → 400 `{ "detail": "Invalid or expired invitation" }`.
+
+---
+
+### TC-ERROR-002: Validation 200 with `valid: false` shows fallback description
+
+**Action**:
+1. Visit `/accept-invite?token=any`
+
+**Observation 1 — Page enters !invitation?.valid branch**:
+1. Invalid card renders
+2. Description equals `This invitation is invalid or has expired.` (fallback)
+
+**API mock**: `GET /auth/validate-invitation` → 200 `{ "valid": false, "email": "", "role": "", "organization_id": "", "organization_name": "", "account_exists": false }`.
+
+---
+
+### TC-ERROR-003: Validation 5xx with missing `detail` falls back
+
+**Action**:
+1. Visit `/accept-invite?token=any`
+
+**Observation 1 — Invalid card with fallback description**:
+1. Description equals `This invitation is invalid or has expired.` (because `detail` is missing)
+
+**API mock**: `GET /auth/validate-invitation` → 500 `{}`.
+
+---
+
+### TC-ERROR-004: Accept 400 "token is required" surfaces toast
+
+**Preconditions**:
+- New-user form rendered
+
+**Action**:
+1. Fill the form validly
+2. Click "Create account & join"
+
+**Observation 1 — Error toast via handleApiError**:
+1. Toast title equals `token is required`
+
+**Observation 2 — Card stays in form mode**:
+1. New-user form is still visible
+2. The submit button re-enables
+
+**API mock**: `POST /auth/accept-invitation` → 400 `{ "detail": "token is required" }`.
+
+---
+
+### TC-ERROR-005: Accept 400 "Invitation already accepted" surfaces toast
+
+**Preconditions**:
+- New-user form rendered
+
+**Action**:
+1. Fill the form validly
+2. Click "Create account & join"
+
+**Observation 1 — Error toast**:
+1. Toast title equals `Invitation already accepted`
+
+**Observation 2 — Card stays; submit re-enables**:
+1. New-user form is still visible
+
+> ⚠ unverified — actual backend message may differ; this is the most likely shape.
+
+**API mock**: `POST /auth/accept-invitation` → 400 `{ "detail": "Invitation already accepted" }`.
+
+---
+
+### TC-ERROR-006: Accept 401 "Could not validate credentials" surfaces toast
+
+**Preconditions**:
+- Existing-account two-button card rendered
+
+**Action**:
+1. Click "Accept invitation"
+
+**Observation 1 — Error toast**:
+1. Toast title equals `Could not validate credentials`
+
+**Observation 2 — Card stays visible**:
+1. Two-button card is still in the DOM
+
+**API mock**: `POST /auth/accept-invitation` → 401 `{ "detail": "Could not validate credentials" }`.
+
+---
+
+### TC-ERROR-007: Accept 5xx surfaces verbatim string
+
+**Preconditions**:
+- New-user form rendered
+
+**Action**:
+1. Fill the form validly and submit
+
+**Observation 1 — Error toast**:
+1. Toast title equals `Internal Server Error`
+
+**Observation 2 — Card stays; submit re-enables**:
+1. Form still visible; button re-enabled
+
+**API mock**: `POST /auth/accept-invitation` → 500 `{ "detail": "Internal Server Error" }`.
+
+---
+
+### TC-ERROR-008: Accept 422 with array `detail` falls back to generic toast
+
+**Preconditions**:
+- New-user form rendered
+
+**Action**:
+1. Submit a valid form
+
+**Observation 1 — Generic fallback toast**:
+1. Toast title equals `Something went wrong. Please try again.`
+
+**API mock**: `POST /auth/accept-invitation` → 422 `{ "detail": [{ "type": "value_error", "loc": ["body", "password"], "msg": "String should have at least 8 characters", "input": "abc" }] }`.
+
+---
+
+### TC-ERROR-009: Accept 409 "already a member" surfaces toast
+
+**Preconditions**:
+- Signed-in or existing-account card rendered
+
+**Action**:
+1. Click "Accept invitation"
+
+**Observation 1 — Error toast**:
+1. Toast title equals `User is already a member of this organization`
+
+**Observation 2 — Card stays; submit re-enables**:
+1. Card still visible
+
+**API mock**: `POST /auth/accept-invitation` → 409 `{ "detail": "User is already a member of this organization" }`.
+
+---
+
+### TC-ERROR-010: Network failure on validate shows fallback invalid card
+
+**Action**:
+1. Visit `/accept-invite?token=any` with the validate route aborted
+
+**Observation 1 — Invalid card with fallback description**:
+1. Description equals `This invitation is invalid or has expired.`
+
+**Observation 2 — React Query retry disabled**:
+1. Only one validation attempt is recorded (no retry — `retry: false`)
+
+**API mock**: `GET /auth/validate-invitation` route aborted.
+
+---
+
+### TC-ERROR-011: Network failure on accept preserves form data
+
+**Preconditions**:
+- New-user form rendered; all four fields filled
+
+**Action**:
+1. Click "Create account & join" with the accept route aborted
+
+**Observation 1 — Generic toast**:
+1. Toast title equals `Something went wrong. Please try again.`
+
+**Observation 2 — Form values preserved**:
+1. First name, Last name, Password, Confirm password still contain typed values
+
+**Observation 3 — Button re-enables**:
+1. The "Create account & join" button is no longer disabled and no longer shows the spinner
+
+**API mock**: `POST /auth/accept-invitation` route aborted.
+
+---
+
+### TC-LOADING-001: Slow validate API keeps AppLoader visible
+
+**Action**:
+1. Visit `/accept-invite?token=any` with the validate response delayed ~3500 ms
+
+**Observation 1 — AppLoader visible throughout**:
+1. `<AppLoader label="Validating invitation..." />` is visible for the full 3500 ms
+
+**Observation 2 — Card mounts only after resolution**:
+1. The appropriate card (new-user / existing-account / signed-in) renders only after the response
+
+**API mock**: `GET /auth/validate-invitation` → 200 delayed by 3500 ms.
+
+---
+
+### TC-LOADING-002: Slow accept API keeps button in loading state
+
+**Preconditions**:
+- New-user form rendered
+
+**Action**:
+1. Fill the form validly
+2. Click "Create account & join" with the accept response delayed ~3500 ms
+
+**Observation 1 — Button disabled with spinner**:
+1. "Create account & join" shows the spinner and is `disabled` for the full duration
+
+**Observation 2 — Double-click is a no-op**:
+1. Clicking again produces zero additional `POST /auth/accept-invitation` requests
+
+**Observation 3 — Toast + redirect only after resolution**:
+1. Toast `Joined!` appears only after the response resolves
+2. URL becomes `/home` only after the response resolves
+
+**API mock**: `POST /auth/accept-invitation` → 200 delayed by 3500 ms.
+
+---
+
+### TC-EDGE-001: User edits localStorage to fake login during invite flow
+
+**Preconditions**:
+- Valid `?token=...` URL
+- localStorage pre-seeded with garbage `login_data`
+
+**Action**:
+1. Visit `/accept-invite?token=raw-invite-token`
+2. Click "Accept invitation" on the signed-in one-click card
+
+**Observation 1 — Page renders signed-in card with fake email**:
+1. Title `Join Acme` with description showing the fake user's email
+
+**Observation 2 — Backend rejects on Accept**:
+1. Toast surfaces backend `detail` (e.g. `Could not validate credentials`)
+
+**API mocks**:
+- `GET /auth/validate-invitation` → 200
+- `POST /auth/accept-invitation` → 401
+
+---
+
+### TC-EDGE-002: Tab closed mid-accept
+
+**Preconditions**:
+- TC-HAPPY-001 step 4 in flight (mutation pending)
+
+**Action**:
+1. Close the tab before response resolves
+
+**Observation 1 — No client-side abort**:
+1. No `AbortController` is wired into the mutation; the backend may still process
+2. No client-visible behaviour to assert (browser-level)
+
+---
+
+### TC-EDGE-003: Token with URL-encoded special chars (`+`, `=`, `/`)
+
+**Preconditions**:
+- URL is `/accept-invite?token=abc%2Bdef%3D%3D` (encodes `+` and `==`)
+
+**Action**:
+1. Visit the encoded URL
+
+**Observation 1 — Validate request uses decoded value**:
+1. `GET /auth/validate-invitation?token=abc+def==` is recorded
+
+**Observation 2 — Card renders normally**:
+1. Whatever card the validation result implies renders (e.g. new-user form)
+
+**API mock**: `GET /auth/validate-invitation` → 200 (new-user payload).
+
+---
+
+### TC-EDGE-004: Very long token (>256 chars)
+
+**Action**:
+1. Visit `/accept-invite?token=<256-char-string>`
+
+**Observation 1 — No client-side truncation**:
+1. `GET /auth/validate-invitation?token=<full-string>` is recorded with the full token
+
+**Observation 2 — Backend may reject**:
+1. If backend has a max-length column, validation 400 → invalid card; otherwise normal flow
+
+---
+
+### TC-EDGE-005: First name with XSS is sent verbatim and rendered safely
+
+**Preconditions**:
+- New-user form rendered
+
+**Action**:
+1. Type `<script>alert(1)</script>` into First name
+2. Fill remaining fields validly
+3. Click "Create account & join"
+
+**Observation 1 — Payload sends the literal string**:
+1. `POST /auth/accept-invitation` body has `first_name` exactly `<script>alert(1)</script>`
+
+**Observation 2 — DOM is safe**:
+1. React escapes the value wherever rendered
+2. `window.alert` was not invoked
+
+**API mock**: `POST /auth/accept-invitation` → 200.
+
+---
+
+### TC-EDGE-006: First / last name with emoji
+
+**Preconditions**:
+- New-user form rendered
+
+**Action**:
+1. Type `Lin 🎉` into First name and `Mo 💎` into Last name
+2. Fill remaining fields validly and submit
+
+**Observation 1 — Payload includes emoji verbatim**:
+1. `POST /auth/accept-invitation` body has `first_name: "Lin 🎉"` and `last_name: "Mo 💎"`
+
+**Observation 2 — Success path runs normally**:
+1. Toast `Joined!`, URL `/home`
+
+**API mock**: `POST /auth/accept-invitation` → 200.
+
+---
+
+### TC-EDGE-007: Very long first name (>500 chars)
+
+**Preconditions**:
+- New-user form rendered
+
+**Action**:
+1. Paste a 600-char string into First name
+2. Fill remaining fields validly and submit
+
+**Observation 1 — Input accepts the full value**:
+1. First name input value length equals 600 (no client-side maxLength)
+
+**Observation 2 — Backend may reject**:
+1. If backend has a max length, surface its `detail` in a toast
+
+---
+
+### TC-EDGE-008: Paste with newlines into single-line input
+
+**Preconditions**:
+- New-user form rendered
+
+**Action**:
+1. Paste `Lin\nMo` into First name
+
+**Observation 1 — Single-line input strips newline**:
+1. First name input value is `LinMo` (the browser strips newlines at paste time)
+
+---
+
+### TC-EDGE-009: Whitespace-only First name passes Zod min(1)
+
+**Preconditions**:
+- New-user form rendered
+
+**Action**:
+1. Type `   ` (3 spaces) into First name
+2. Fill remaining fields and submit
+
+**Observation 1 — Zod passes**:
+1. `POST /auth/accept-invitation` is recorded; body `first_name` is `"   "`
+
+> ⚠ Today Zod `min(1)` passes; payload is sent. Document the gap.
+
+**API mock**: `POST /auth/accept-invitation` → 200.
+
+---
+
+### TC-EDGE-010: Trailing whitespace in password is preserved (no trim)
+
+**Preconditions**:
+- New-user form rendered
+
+**Action**:
+1. Type `validPass1   ` (3 trailing spaces) in both Password and Confirm password
+2. Submit
+
+**Observation 1 — Payload sends verbatim**:
+1. `POST /auth/accept-invitation` body `password` equals `"validPass1   "` (no trim)
+
+**Observation 2 — Subsequent login must use the same value**:
+1. Documented: the user must reuse the literal value (including whitespace) for future logins
+
+**API mock**: `POST /auth/accept-invitation` → 200.
+
+---
+
+### TC-EDGE-011: Authenticated visit with mismatched email
+
+**Preconditions**:
+- localStorage `login_data` is for `other@example.com`
+- Invite is for `invitee@acme.com`
+
+**Action**:
+1. Visit `/accept-invite?token=raw-invite-token`
+2. Click "Accept invitation"
+
+**Observation 1 — Signed-in one-click card renders with current email**:
+1. Description reads `You're signed in as other@example.com. Accept this invite to join as developer.`
+
+**Observation 2 — Accept result varies**:
+1. Backend may succeed or 400 depending on email-mismatch policy
+2. If 400, toast surfaces the `detail`
+
+> Document the observed outcome.
+
+---
+
+### TC-EDGE-012: Post-accept refetch guard — no refetch after accepted
+
+**Preconditions**:
+- TC-HAPPY-001 just succeeded; `accepted` state is `true`
+
+**Action**:
+1. Inspect the React Query call log immediately after the mutation resolves
+
+**Observation 1 — `useValidateInvitation` is disabled**:
+1. `enabled = !!token && !accepted = false`
+2. No new `GET /auth/validate-invitation` request fires
+
+**Observation 2 — `cancelQueries` aborts pending validation**:
+1. Any in-flight validation is cancelled
+2. `invalidateQueries` for non-invitation keys (predicate `q.queryKey?.[0] !== 'invitation'`) refreshes `me`, `my-org`
+
+---
+
+### TC-EDGE-013: Refresh after successful accept shows invalid card
+
+**Preconditions**:
+- TC-HAPPY-001 succeeded; `accepted` state was set in-memory only
+
+**Action**:
+1. Reload the page (URL still `/accept-invite?token=raw-invite-token`)
+
+**Observation 1 — `accepted` resets**:
+1. The in-memory `accepted = true` does NOT persist across navigations
+
+**Observation 2 — Backend rejects consumed token**:
+1. `GET /auth/validate-invitation` returns 400 → invalid card with backend `detail`
+
+> Acceptable UX since the user is already redirected on first success.
+
+**API mock**: `GET /auth/validate-invitation` → 400 `{ "detail": "Invalid or expired invitation" }`.
+
+---
+
+### TC-EDGE-014: Two tabs to the same invite link
+
+**Preconditions**:
+- Tab A and Tab B both opened to `/accept-invite?token=raw-invite-token`
+- Tab A submits Accept first
+
+**Action**:
+1. Submit Accept in Tab B after Tab A's mutation resolves
+
+**Observation 1 — Tab A succeeds**:
+1. Tab A receives 200; toast `Joined!`; URL `/home`
+
+**Observation 2 — Tab B fails**:
+1. Tab B receives 400 on accept (consumed token); toast with backend `detail`
+
+**API mocks**:
+- Tab A: `POST /auth/accept-invitation` → 200
+- Tab B: `POST /auth/accept-invitation` → 400
+
+---
+
+### TC-EDGE-015: Offline / connection-down on validate
+
+**Action**:
+1. Visit `/accept-invite?token=raw-invite-token` while offline
+
+**Observation 1 — Page enters error branch**:
+1. Invalid card renders with fallback description `This invitation is invalid or has expired.`
+
+**API mock**: `GET /auth/validate-invitation` aborted.
+
+---
+
+### TC-EDGE-016: Password input Eye toggle does not submit the form
+
+**Preconditions**:
+- New-user form rendered
+
+**Action**:
+1. Click the Eye icon inside the Password field
+
+**Observation 1 — Form not submitted**:
+1. Zero `POST /auth/accept-invitation` requests are recorded
+2. The Eye toggle has `tabIndex={-1}` and does not act as a submit trigger
+
+**Observation 2 — Password visibility toggles**:
+1. The Password input's `type` switches between `password` and `text`
+
+---
+
+### TC-EDGE-017: Submit button is double-click safe
+
+**Preconditions**:
+- New-user form rendered; all fields filled
+
+**Action**:
+1. Click "Create account & join" twice in rapid succession (≤100 ms apart)
+
+**Observation 1 — Single network request**:
+1. Exactly one `POST /auth/accept-invitation` request is recorded
+
+**Observation 2 — Button enters loading state**:
+1. The button shows the spinner on first click
+2. Second click is a no-op (`acceptInvitation.isPending` disables it)
+
+**API mock**: `POST /auth/accept-invitation` → 200.
+
+---
+
+### TC-EDGE-018: Form leaves dirty state without confirm-leave guard
+
+**Preconditions**:
+- New-user form rendered with partial input
+
+**Action**:
+1. Click the "Sign in" link beneath the form
+
+**Observation 1 — Navigation succeeds without confirmation**:
+1. URL becomes `/login?next=...`
+2. No confirm-leave dialog appears
+3. RHF state is discarded on unmount
+
+---
+
+### TC-EDGE-019: `?token=` with whitespace fails validation
+
+**Preconditions**:
+- URL is `/accept-invite?token=%20valid%20`
+
+**Action**:
+1. Visit the URL
+
+**Observation 1 — Validate with verbatim value**:
+1. `GET /auth/validate-invitation?token= valid ` is recorded (`searchParams.get` returns the value verbatim)
+
+**Observation 2 — Invalid card**:
+1. Backend 400 → invalid card renders
+
+**API mock**: `GET /auth/validate-invitation` → 400.
+
+---
+
+### TC-EDGE-020: Submit via Enter key in Confirm password
+
+**Preconditions**:
+- New-user form rendered; all four fields filled validly
+
+**Action**:
+1. Focus Confirm password
+2. Press the `Enter` key
+
+**Observation 1 — Form submits**:
+1. Exactly one `POST /auth/accept-invitation` request is recorded
+2. Request body matches the typed values
+
+**API mock**: `POST /auth/accept-invitation` → 200.
+
+---
+
+### TC-NAV-004: Browser back from /home after accept
+
+**Preconditions**:
+- TC-HAPPY-001 succeeded; user is on `/home`
+
+**Action**:
+1. Press the browser Back button
+
+**Observation 1 — URL returns to /accept-invite**:
+1. URL becomes `/accept-invite?token=raw-invite-token`
+
+**Observation 2 — Re-validation rejects consumed token**:
+1. `GET /auth/validate-invitation` fires and returns 400
+2. Invalid card renders
+
+> Acceptable UX.
+
+**API mock** (on re-mount): `GET /auth/validate-invitation` → 400 `{ "detail": "Invalid or expired invitation" }`.
+
+---
+
+### TC-A11Y-001: AppLoader exposes role=status with label
+
+**Action**:
+1. Visit `/accept-invite?token=any` with a slow validate response
+2. Inspect the loader DOM node
+
+**Observation 1 — Loading announced**:
+1. The `AppLoader` root has `role="status"`
+2. The loader exposes `aria-label="Loading"` (or the `label` prop value `Validating invitation...`)
+
+---
+
+### TC-A11Y-002: CustomCard exposes CardTitle and description for SR
+
+**Action**:
+1. Trigger any of the cards (new-user / existing-account / signed-in / invalid)
+2. Inspect the DOM hierarchy
+
+**Observation 1 — Semantic title element**:
+1. `<CardTitle>` (rendered as `<h3>` by shadcn) is present with the card title text
+
+**Observation 2 — Description paragraph**:
+1. A `<p>` (or equivalent) element renders the card description
+
+---
+
+### TC-A11Y-003: All buttons are real `<button>` and keyboard reachable
+
+**Action**:
+1. Render any card variant
+2. Tab through the page
+
+**Observation 1 — Real button elements**:
+1. Accept / Cancel / Sign in / Go to login are all real `<button>` elements
+
+**Observation 2 — Tab reaches every actionable element**:
+1. Tab order reaches every button + link visible on the card
+
+---
+
+### TC-A11Y-004: Email field disabled state announced
+
+**Preconditions**:
+- New-user form rendered
+
+**Action**:
+1. Inspect the Email `<input>`
+
+**Observation 1 — disabled attribute set**:
+1. The Email `<input>` has `disabled` (SR users hear "edit text, dimmed")
+
+---
+
+### TC-A11Y-005: Helper-text errors render via RHF and announce via aria-live
+
+**Preconditions**:
+- New-user form rendered
+
+**Action**:
+1. Click "Create account & join" with mismatched passwords
+
+**Observation 1 — Inline error renders**:
+1. Helper text under Confirm password is `Passwords do not match`
+
+**Observation 2 — aria-live region**:
+1. The helper text is rendered inside an element with `role="alert"` (or `aria-live="polite"`)
+
+---
+
+### TC-A11Y-006: Toast surface is an aria-live region
+
+**Action**:
+1. Trigger any toast (e.g. accept success or error)
+2. Inspect the Sonner toast container
+
+**Observation 1 — Live region attributes**:
+1. Sonner's toast container has `aria-live="polite"` (or `assertive`)
+2. SR users hear the success / error message after Accept resolves
+
+---
+
+### TC-A11Y-007: Color is not the only differentiator between card variants
+
+**Action**:
+1. Render each card variant
+2. Inspect the icon + title text combinations
+
+**Observation 1 — Icon + title pairs**:
+1. Invalid card uses red `XCircle` + title `Invalid invitation`
+2. New-user card uses green `CheckCircle` + title `Join {organization_name}`
+3. Signed-in card uses `Building2` + title `Join {organization_name}`
+4. Existing-account card uses `LogIn` + title `Join {organization_name}`
+
+---
+
+### TC-A11Y-008: Missing page-level h1 — heading hierarchy gap
+
+**Action**:
+1. Inspect the rendered page for headings
+
+**Observation 1 — Only CardTitle (h3) is present**:
+1. Headings are `<CardTitle>` rendered as `<h3>` by shadcn
+2. No page-level `<h1>` exists
+
+> ⚠ Consider a page-level `<h1>` for SR users.
+
+---
+
+### TC-A11Y-009: Focus management after validation resolves
+
+**Action**:
+1. Visit `/accept-invite?token=raw-invite-token`
+2. Wait for validation to resolve and a card to render
+3. Inspect `document.activeElement`
+
+**Observation 1 — Focus stays on body**:
+1. `document.activeElement` is `<body>` after the card swaps in (no auto-focus on primary action)
+
+> ⚠ Consider moving focus to the card's primary action so keyboard users don't tab from the top. ⚠ unverified — confirm whether `CustomCard` has any focus management.
+
+---
+
+### TC-A11Y-010: Tab order through the new-user form
+
+**Preconditions**:
+- New-user form rendered
+
+**Action**:
+1. Focus the page and press Tab repeatedly
+
+**Observation 1 — Tab order matches design**:
+1. Focus moves Email (disabled, skipped or focusable but inert) → First name → Last name → Password → password Eye toggle → Confirm password → Confirm password Eye toggle → "Create account & join" → "Sign in" link
+2. No focusable element is reached twice
+
+---
+
+### TC-FULL-001: End-to-end accept-invite lifecycle
+
+**Preconditions**:
+- An admin user `__e2e__ai_admin_<uuid>@example.com` with an organization is provisioned via the backend API
+- An invite for a new email `__e2e__ai_invitee_<uuid>@example.com` is created via the backend Members API; the raw invitation token is captured (or via a test-only admin endpoint)
+
+**Action**:
+1. Visit `/accept-invite` (no token)
+2. Click "Go to login"
+3. Navigate to `/accept-invite?token=clearly-bad-token`
+4. Navigate to `/accept-invite?token=<valid>` (new-user variant)
+5. Submit empty fields
+6. Submit with `abc` password
+7. Submit with mismatched passwords
+8. Submit the valid form
+9. Verify the user is a member of the org by hitting a backend list-members API
+10. Navigate back to `/accept-invite?token=<valid>` (consumed)
+11. Click the legacy alias `?code=<another-valid-token>` (create a second invite first)
+12. Sign out, then visit `/accept-invite?token=<valid-for-existing-email>`
+13. Click "Accept invitation"
+
+**Observation 1 — Step 1 shows invalid card**:
+1. Invalid card `Invalid invitation` / `No invitation token provided.` with a "Go to login" button
+2. Zero `GET /auth/validate-invitation` requests recorded
+
+**Observation 2 — Step 2 navigates to /login**:
+1. URL becomes `/login`
+
+**Observation 3 — Step 3 shows invalid card with backend detail**:
+1. AppLoader briefly visible
+2. Invalid card with backend `detail`
+
+**Observation 4 — Step 4 shows new-user signup card**:
+1. New-user form with email locked to invitee email
+
+**Observation 5 — Step 5 yields three inline errors**:
+1. Helper text under First name, Last name, Password all visible
+
+**Observation 6 — Step 6 yields short-password error**:
+1. Helper text `Password must be at least 8 characters` visible
+
+**Observation 7 — Step 7 yields mismatch error**:
+1. Helper text `Passwords do not match` on Confirm password
+
+**Observation 8 — Step 8 succeeds and lands on /home**:
+1. Toast title `Joined!`, description `You're now a member of <org_name>.`
+2. URL becomes `/home`
+3. `localStorage.tone_access_token` is set
+
+**Observation 9 — Step 9 confirms backend membership**:
+1. The list-members API confirms the user is now a member of the org
+
+**Observation 10 — Step 10 shows invalid card on consumed token**:
+1. Invalid card renders (backend rejects the consumed token)
+
+**Observation 11 — Step 11 legacy `?code=` alias works**:
+1. Validation succeeds; appropriate card renders
+
+**Observation 12 — Step 12 shows two-button card**:
+1. Existing-account card `Accept invitation` / `Sign in first` rendered
+
+**Observation 13 — Step 13 lands on /login**:
+1. Toast title `Added to workspace`, description `Please sign in to access <org_name>.`
+2. URL becomes `/login`
+
+**Cleanup** (in `finally`):
+1. Delete the provisioned admin user, invitee user, both orgs, and any pending invitations via the backend admin API
+
+---
+
+## Edge Cases (each appears as a `TC-EDGE-*` or related test case above)
+
+- [x] Both `?token=` and `?code=` present in URL — see TC-HAPPY-006
+- [x] Token URL-encoded special chars — see TC-EDGE-003
+- [x] Very long token (>256 chars) — see TC-EDGE-004
+- [x] Validation 4xx → invalid card, no retry — see TC-ERROR-001 / TC-ERROR-010
+- [x] React Query post-accept refetch guard — see TC-EDGE-012
+- [x] `invalidateQueries` predicate skips invitation key — see TC-EDGE-012
+- [x] Refresh after success → re-validation rejects — see TC-EDGE-013
+- [x] Two tabs to the same invite link — see TC-EDGE-014
+- [x] Logged-in user with a different email — see TC-EDGE-011
+- [x] Offline connection on validate — see TC-EDGE-015
+- [x] Password Eye toggle does not submit (`tabIndex={-1}`) — see TC-EDGE-016
+- [x] Submit button is double-click safe — see TC-EDGE-017
+- [x] Form leaves dirty state with no confirm-leave guard — see TC-EDGE-018
+- [x] Whitespace `?token=` — see TC-EDGE-019
+- [x] Submit via Enter — see TC-EDGE-020
+- [x] XSS in first name — see TC-EDGE-005
+- [x] Emoji in name fields — see TC-EDGE-006
+- [x] Very long name (>500 chars) — see TC-EDGE-007
+- [x] Paste with newlines into single-line input — see TC-EDGE-008
+- [x] Whitespace-only first name — see TC-EDGE-009
+- [x] Trailing whitespace in password preserved — see TC-EDGE-010
 
 ---
 
@@ -810,25 +1507,35 @@ routes to `/home`. Otherwise routes to `/login`.
 
 ---
 
-## Accessibility Requirements
+## Accessibility Requirements (each appears as a `TC-A11Y-*` test case above)
 
-- [ ] `AppLoader` exposes `role="status"` and an `aria-label` (or `label` prop)
-- [ ] `CustomCard` exposes `<CardTitle>` (semantic heading) and a description
-      paragraph for the title + summary
-- [ ] All `Button`s are real `<button>` elements; keyboard tab navigation reaches
-      Accept / Cancel / Sign in / Go to login
-- [ ] Email field is `disabled` — SR users hear "edit text, dimmed" which
-      conveys read-only state
-- [ ] Form errors render as `helperText` under each input via RHF
-      `fieldState.error.message` — `TextInput` does not duplicate error rendering
-- [ ] The Sonner toast surface is an `aria-live="polite"` region; SR users hear
-      the success/error message after Accept resolves
-- [ ] Color is not the only differentiator: invalid card uses red XCircle + title
-      "Invalid invitation"; valid cards use green CheckCircle / Building2 / LogIn
-      with descriptive titles
-- [ ] Headings are `<CardTitle>` (rendered as `<h3>` by shadcn's `CardTitle`).
-      ⚠ consider a page-level `<h1>` for SR users
-- [ ] Focus management: after the validation resolves and the card swaps in,
-      focus stays on `<body>`; consider moving focus to the card's primary action
-      so keyboard users don't need to tab from the top. ⚠ unverified — confirm
-      whether `CustomCard` has any focus management
+- [x] `AppLoader` exposes `role="status"` and label — see TC-A11Y-001
+- [x] `CustomCard` exposes `CardTitle` (h3) + description — see TC-A11Y-002
+- [x] All buttons real `<button>` and keyboard reachable — see TC-A11Y-003
+- [x] Email field `disabled` is announced — see TC-A11Y-004
+- [x] Form errors render via RHF `fieldState.error.message` with aria-live — see TC-A11Y-005
+- [x] Sonner toast surface is `aria-live="polite"` — see TC-A11Y-006
+- [x] Color is not the only differentiator — see TC-A11Y-007
+- [x] No page-level `<h1>` (gap) — see TC-A11Y-008
+- [x] No focus management after card swap (gap) — see TC-A11Y-009
+- [x] Tab order through new-user form — see TC-A11Y-010
+
+---
+
+## Expected Toast Messages
+
+Toasts use Sonner via `showToast` (`src/lib/toast.ts`). Errors are routed
+through `handleApiError(err)` which uses `response.data.detail` as the toast
+title when it is a string; falls back to `"Something went wrong. Please try again."`.
+
+Two of the success toasts include both a title **and** description (Sonner
+renders the description as a smaller sub-line).
+
+| Trigger                                                           | Toast title          | Toast description                                              | Variant |
+| ----------------------------------------------------------------- | -------------------- | -------------------------------------------------------------- | ------- |
+| Accept 200 with `access_token` (auto-login) and `invitation` set  | `Joined!`            | `You're now a member of {invitation.organization_name}.`       | success |
+| Accept 200 with `access_token` and `invitation` missing           | `Joined!`            | `You joined the workspace.`                                    | success |
+| Accept 200 without `access_token` (existing user) and `invitation` set | `Added to workspace` | `Please sign in to access {invitation.organization_name}.`     | success |
+| Accept 200 without `access_token` and `invitation` missing        | `Added to workspace` | `Please sign in to continue.`                                  | success |
+| Any 4xx/5xx with string `detail`                                  | backend `detail`     | —                                                              | error   |
+| Any error with non-string `detail`                                | `Something went wrong. Please try again.` | —                                         | error   |
