@@ -1,7 +1,7 @@
 /**
  * Organizations e2e flow against the real backend.
  *
- * Scenarios OL-/OC-/OE-/OS-/OD-/OG- from frontend/e2e/docs/organizations.md.
+ * Scenarios OL-/OC-/OE-/OS-/OD-/OG- from frontend/e2e/ux_flow_docs/organizations.md.
  *
  * Strategy:
  * - Real login via the shared worker fixture.

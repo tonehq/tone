@@ -1,7 +1,7 @@
 /**
  * Agent edit flow against the real backend.
  *
- * Scenarios AE-001 … AE-022 from frontend/e2e/docs/agents-edit.md.
+ * Scenarios AE-001 … AE-022 from frontend/e2e/ux_flow_docs/agents-edit.md.
  *
  * Strategy:
  * - Real login via shared worker fixture.

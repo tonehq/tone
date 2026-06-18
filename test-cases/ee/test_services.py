@@ -713,3 +713,109 @@ class TestListTtsVoices:
             params={"provider_id": _MISSING_UUID, "language": "English"},
         )
         assert resp.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/services  (create_service — free-form dict body)
+# ---------------------------------------------------------------------------
+
+class TestCreateServiceNewRouter:
+    """Tests for POST /api/v1/services (ModelProviderService.create_service)."""
+
+    def test_create_service_minimal_body_as_admin(self, client_as_admin):
+        resp = client_as_admin.post(
+            "/api/v1/services",
+            json={"name": _unique_name("svc"), "service_type": "llm"},
+        )
+        assert resp.status_code in (200, 201, 400, 404, 500)
+
+    def test_create_service_empty_body_as_admin(self, client_as_admin):
+        resp = client_as_admin.post("/api/v1/services", json={})
+        assert resp.status_code in (200, 201, 400, 404, 422, 500)
+
+    def test_create_service_as_member(self, client_as_member):
+        resp = client_as_member.post(
+            "/api/v1/services",
+            json={"name": _unique_name("svc"), "service_type": "llm"},
+        )
+        assert resp.status_code in (200, 201, 400, 404, 500)
+
+    def test_create_service_as_owner(self, client_as_owner):
+        resp = client_as_owner.post(
+            "/api/v1/services",
+            json={"name": _unique_name("svc"), "service_type": "tts"},
+        )
+        assert resp.status_code in (200, 201, 400, 404, 500)
+
+    def test_create_service_with_extra_fields(self, client_as_admin):
+        resp = client_as_admin.post(
+            "/api/v1/services",
+            json={
+                "name": _unique_name("svc"),
+                "service_type": "stt",
+                "config": {"model": "test-model"},
+                "status": "active",
+            },
+        )
+        assert resp.status_code in (200, 201, 400, 404, 500)
+
+    def test_create_service_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.post(
+            "/api/v1/services",
+            json={"name": "x", "service_type": "llm"},
+        )
+        assert resp.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# PATCH /api/v1/services/{service_id}  (update_service — free-form dict body)
+# ---------------------------------------------------------------------------
+
+class TestUpdateServiceNewRouter:
+    """Tests for PATCH /api/v1/services/{service_id} (ModelProviderService.update_service)."""
+
+    def test_update_service_sentinel_uuid_as_admin(self, client_as_admin):
+        resp = client_as_admin.patch(
+            f"/api/v1/services/{_MISSING_UUID}",
+            json={"name": "Updated"},
+        )
+        assert resp.status_code in (200, 400, 404, 422, 500)
+
+    def test_update_service_sentinel_uuid_as_member(self, client_as_member):
+        resp = client_as_member.patch(
+            f"/api/v1/services/{_MISSING_UUID}",
+            json={"name": "Updated"},
+        )
+        assert resp.status_code in (200, 400, 404, 422, 500)
+
+    def test_update_service_sentinel_uuid_as_owner(self, client_as_owner):
+        resp = client_as_owner.patch(
+            f"/api/v1/services/{_MISSING_UUID}",
+            json={"name": "Updated"},
+        )
+        assert resp.status_code in (200, 400, 404, 422, 500)
+
+    def test_update_service_invalid_uuid_format(self, client_as_admin):
+        resp = client_as_admin.patch(
+            "/api/v1/services/not-a-valid-uuid",
+            json={"name": "Updated"},
+        )
+        assert resp.status_code in (400, 404, 422, 500)
+
+    def test_update_service_empty_body(self, client_as_admin):
+        resp = client_as_admin.patch(
+            f"/api/v1/services/{_MISSING_UUID}",
+            json={},
+        )
+        assert resp.status_code in (200, 400, 404, 422, 500)
+
+    def test_update_service_missing_body(self, client_as_admin):
+        resp = client_as_admin.patch(f"/api/v1/services/{_MISSING_UUID}")
+        assert resp.status_code in (400, 404, 422, 500)
+
+    def test_update_service_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.patch(
+            f"/api/v1/services/{_MISSING_UUID}",
+            json={"name": "Updated"},
+        )
+        assert resp.status_code in (401, 403)

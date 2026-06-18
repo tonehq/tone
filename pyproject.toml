@@ -25,6 +25,8 @@ exclude = ["frontend*", "pipecatfork*"]
 pythonpath = ["."]
 import_mode = "importlib"
 addopts = "-n auto"
+testpaths = ["test-cases"]
+norecursedirs = ["dev", "scripts", "venv", "pipecat", "pipecatfork", "frontend", "node_modules", ".git"]
 
 # Pipeline tests need serial execution (async pipelines don't work with xdist).
 # Run them with:  pytest test-cases/pipeline/ -v -s -o "addopts="

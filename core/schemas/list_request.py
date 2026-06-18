@@ -56,6 +56,29 @@ def _field_value(row: Any, key: str) -> Any:
     return getattr(row, key, None)
 
 
+def _matches_filter(row_val: Any, filter_val: Any) -> bool:
+    # Empty filter value means "no filter" — used by the frontend to send
+    # sentinels like "" or None when the user selects "All".
+    if filter_val is None or filter_val == "":
+        return True
+    # Lists/tuples/sets → membership test (e.g. role in ["admin","owner"]).
+    if isinstance(filter_val, (list, tuple, set)):
+        return any(_matches_filter(row_val, v) for v in filter_val)
+    if row_val is None:
+        return False
+    # Case-insensitive string equality keeps "Admin" / "admin" interchangeable.
+    if isinstance(filter_val, str) and isinstance(row_val, str):
+        return row_val.lower() == filter_val.lower()
+    return row_val == filter_val
+
+
+def _matches_filters(row: Any, filters: Dict[str, Any]) -> bool:
+    for key, value in filters.items():
+        if not _matches_filter(_field_value(row, key), value):
+            return False
+    return True
+
+
 def _matches_search(row: Any, query: str, searchable_fields: Optional[List[str]]) -> bool:
     q = query.lower()
     if searchable_fields:
@@ -86,6 +109,9 @@ def apply_list_request(
     every value on each row.
     """
     filtered = list(rows)
+
+    if req.filters:
+        filtered = [r for r in filtered if _matches_filters(r, req.filters)]
 
     if req.search:
         filtered = [r for r in filtered if _matches_search(r, req.search, searchable_fields)]
