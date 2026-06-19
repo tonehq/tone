@@ -46,7 +46,7 @@ For **create, read, update, and delete** flows (e.g. agents, settings, any resou
 
 **When to keep mocking**: Use `page.route()` only for **negative or edge-case** scenarios (e.g. loading state with delay, error response 4xx/5xx, empty list, or tests that assert payload shape without persisting). For the main happy-path CRUD flows, omit mocks so the real backend and DB are used.
 
-**Prerequisites**: Running backend and DB; `NEXT_PUBLIC_BACKEND_URL` (or equivalent) set. Document this in the feature doc (e.g. `e2e/docs/agents.md`).
+**Prerequisites**: Running backend and DB; `NEXT_PUBLIC_BACKEND_URL` (or equivalent) set. Document this in the feature doc (e.g. `e2e/ux_flow_docs/agents.md`).
 
 ---
 

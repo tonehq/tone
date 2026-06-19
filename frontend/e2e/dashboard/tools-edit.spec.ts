@@ -1,7 +1,7 @@
 /**
  * Tools edit flow against the real backend.
  *
- * Scenarios TE-001 … TE-FULL from frontend/e2e/docs/tools-edit.md.
+ * Scenarios TE-001 … TE-FULL from frontend/e2e/ux_flow_docs/tools-edit.md.
  *
  * Strategy:
  * - Real login via shared worker fixture.
