@@ -1,7 +1,7 @@
 name: generate-feature-docs
 description: >
   Generates feature documentation for a Next.js page by analyzing component source,
-  service imports, Jotai atoms, and navigation paths. Output placed in e2e/docs/<page-name>.md
+  service imports, Jotai atoms, and navigation paths. Output placed in e2e/ux_flow_docs/<page-name>.md
   and consumed by /generate-tests for comprehensive test coverage.
 
 license: proprietary

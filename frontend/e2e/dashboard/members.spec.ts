@@ -1,7 +1,7 @@
 /**
  * Members + Invitations e2e flow against the real backend.
  *
- * Scenarios ML-/MI-/MR-/MD-/INV-/MM- from frontend/e2e/docs/members.md.
+ * Scenarios ML-/MI-/MR-/MD-/INV-/MM- from frontend/e2e/ux_flow_docs/members.md.
  *
  * Strategy:
  * - Real login via the shared worker fixture (logs in as the org owner).

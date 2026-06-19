@@ -33,8 +33,8 @@ If `$ARGUMENTS` contains `--docs <path>`:
 Examples:
 
 ```
-/generate-tests home --docs e2e/docs/home.md
-  → TARGET=home, FEATURE_DOCS=e2e/docs/home.md
+/generate-tests home --docs e2e/ux_flow_docs/home.md
+  → TARGET=home, FEATURE_DOCS=e2e/ux_flow_docs/home.md
 
 /generate-tests home
   → TARGET=home, FEATURE_DOCS=<auto-discover>
@@ -55,8 +55,8 @@ Examples:
 If no explicit `--docs` was given, search for a matching feature doc:
 
 ```bash
-# Convention: e2e/docs/<page-name>.md
-find e2e/docs -iname "*<target-name>*.md" 2>/dev/null | head -3
+# Convention: e2e/ux_flow_docs/<page-name>.md
+find e2e/ux_flow_docs -iname "*<target-name>*.md" 2>/dev/null | head -3
 ```
 
 - If a matching doc is found, set `FEATURE_DOCS=<path>` and inform the user:

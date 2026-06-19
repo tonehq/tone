@@ -1,7 +1,7 @@
 /**
  * Agent create — outbound variant against the real backend.
  *
- * Scenarios ACO-001 … ACO-003 from frontend/e2e/docs/agents-create.md.
+ * Scenarios ACO-001 … ACO-003 from frontend/e2e/ux_flow_docs/agents-create.md.
  */
 
 import { expect, type Page } from '@playwright/test';
