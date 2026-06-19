@@ -7,6 +7,7 @@ import React, { useMemo } from 'react';
 
 import { LLMUsageSection } from './LLMUsageSection';
 import { MetricsCategory } from './MetricsCategory';
+import { PerTurnCallsSection } from './PerTurnCallsSection';
 import { ProcessingTimesSection } from './ProcessingTimesSection';
 import { StatCard } from './StatCard';
 import { TTSUsageSection } from './TTSUsageSection';
@@ -87,6 +88,7 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, className }) =
       {hasLatency && (
         <MetricsCategory title="Latency">
           {hasTurnMetrics && <TurnLatencySection turns={turnMetrics} />}
+          {hasTurnMetrics && <PerTurnCallsSection turns={turnMetrics} />}
           {hasProcessing && <ProcessingTimesSection processing={processingList} />}
         </MetricsCategory>
       )}
