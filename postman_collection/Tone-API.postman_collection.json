@@ -22,6 +22,16 @@
       "type": "string"
     },
     {
+      "key": "base_url_local",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "base_url_staging",
+      "value": "https://staging-api.trytone.ai",
+      "type": "string"
+    },
+    {
       "key": "access_token",
       "value": "",
       "type": "string"
