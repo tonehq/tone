@@ -276,7 +276,7 @@ tldextract==3.1.0
 tokenizers==0.22.2
 tomli==2.0.1
 tomlkit==0.11.6
-tone-pipecat==0.0.75.dev9
+tone-pipecat==0.0.76.dev0
 tornado==6.3.3
 tqdm==4.67.3
 transformers==4.57.6
