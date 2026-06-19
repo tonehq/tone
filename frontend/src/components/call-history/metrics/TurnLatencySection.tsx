@@ -6,9 +6,10 @@ import { cn } from '@/utils/cn';
 import { LineChart } from 'lucide-react';
 import { useState } from 'react';
 
-import { AxisBarChart, type ReferenceLine } from './AxisBarChart';
+import { type ReferenceLine } from './AxisBarChart';
 import { MetricsDataTable, type MetricsTableColumn } from './MetricsDataTable';
 import { SectionHeader } from './SectionHeader';
+import { StackedCallsBarChart } from './StackedCallsBarChart';
 import { useChartTableView } from './useChartTableView';
 import { computeMedian, formatMs } from './utils';
 
@@ -31,28 +32,32 @@ const STAT_META: Record<
 const formatSeconds = (v: number) => `${v.toFixed(2)}s`;
 
 /**
- * Treat 0.0 the same as null. Pipecat emits 0.0 only for placeholder cases
- * (e.g. the auto-greeting turn where TTFB wasn't actually measured); a real
+ * Drop placeholder zeros and nulls. Pipecat emits 0.0 only for cases where
+ * TTFB wasn't actually measured (e.g. the auto-greeting turn); a real
  * measurement is always > 0. Skipping 0s keeps the stats honest.
  */
-const sanitize = (v: number | null): number | null => (v == null || v <= 0 ? null : v);
+const cleanSamples = (raw: readonly (number | null)[] | null | undefined): number[] =>
+  (raw ?? []).filter((v): v is number => v != null && v > 0);
 
-/** Per-turn metric series: aligned with `turns` 1:1 (nulls preserved). */
+/** Per-turn metric series: one stack of per-call values per turn. */
 interface MetricSeries {
   key: string;
   title: string;
   subtitle: string;
   format: (v: number) => string;
-  values: (number | null)[];
+  /** Per turn → per call values. Empty array = no measurement for that turn. */
+  stacks: number[][];
 }
 
 /**
  * Turn-aligned latency breakdown.
  *
  * Renders one card per metric (STT TTFB, LLM TTFB, TTS TTFB, end-to-end).
- * All four cards share the same x-axis — the turn number — so they can be
- * read side-by-side without the "55 samples vs 31 samples" mismatch the
- * per-sample TTFB chart suffers from.
+ * The STT / LLM / TTS bars stack one segment per individual service call
+ * inside the turn, so a turn with multiple LLM completions (e.g. a tool-call
+ * follow-up) shows multiple segments instead of just the first. End-to-end
+ * is one value per turn (the wall-clock user→bot gap), so its "stack" is a
+ * single segment per turn.
  */
 export function TurnLatencySection({ turns }: TurnLatencySectionProps) {
   if (turns.length === 0) return null;
@@ -63,17 +68,12 @@ export function TurnLatencySection({ turns }: TurnLatencySectionProps) {
   //   • the pre/inter-turn bucket (turn 0) — system events between turns
   //   • the agent's first greeting — bot spoke first, no preceding user input
   //   • abandoned turns where the bot never started speaking
-  // The result is exactly "N user→bot exchanges" matching the user's mental
-  // model. STT TTFB inside this window may still be null for individual turns
-  // (when turn-stop fired before STT finalized) — those render as empty bars,
-  // but the turn itself remains on the x-axis so every chart stays aligned.
   const sorted = [...turns].sort((a, b) => a.turn - b.turn).filter((t) => t.end_to_end != null);
 
   if (sorted.length === 0) return null;
 
   // Display labels start at 1 for the first real turn (the "Turns" stat card
-  // counts the same set). Pipecat's raw `turn` number is preserved on each
-  // row for traceability if we ever need to cross-reference with logs.
+  // counts the same set).
   const turnLabels = sorted.map((_, i) => String(i + 1));
 
   const series: MetricSeries[] = [
@@ -82,28 +82,28 @@ export function TurnLatencySection({ turns }: TurnLatencySectionProps) {
       title: 'STT TTFB per Turn',
       subtitle: 'Speech-to-text first-text time',
       format: formatMs,
-      values: sorted.map((t) => sanitize(t.stt_ttfb)),
+      stacks: sorted.map((t) => cleanSamples(t.stt_ttfb_all)),
     },
     {
       key: 'llm',
       title: 'LLM TTFB per Turn',
       subtitle: 'First token from the model',
       format: formatMs,
-      values: sorted.map((t) => sanitize(t.llm_ttfb)),
+      stacks: sorted.map((t) => cleanSamples(t.llm_ttfb_all)),
     },
     {
       key: 'tts',
       title: 'TTS TTFB per Turn',
       subtitle: 'First audio chunk from TTS',
       format: formatMs,
-      values: sorted.map((t) => sanitize(t.tts_ttfb)),
+      stacks: sorted.map((t) => cleanSamples(t.tts_ttfb_all)),
     },
     {
       key: 'end_to_end',
       title: 'End-to-End Latency per Turn',
       subtitle: 'User stopped → bot started speaking',
       format: formatSeconds,
-      values: sorted.map((t) => sanitize(t.end_to_end)),
+      stacks: sorted.map((t) => cleanSamples([t.end_to_end])),
     },
   ];
 
@@ -118,7 +118,7 @@ export function TurnLatencySection({ turns }: TurnLatencySectionProps) {
             title={s.title}
             subtitle={s.subtitle}
             format={s.format}
-            values={s.values}
+            stacks={s.stacks}
             turnLabels={turnLabels}
           />
         ))}
@@ -132,7 +132,7 @@ interface TurnMetricCardProps {
   title: string;
   subtitle: string;
   format: (v: number) => string;
-  values: (number | null)[];
+  stacks: number[][];
   turnLabels: string[];
 }
 
@@ -142,16 +142,19 @@ function TurnMetricCard({
   title,
   subtitle,
   format,
-  values,
+  stacks,
   turnLabels,
 }: TurnMetricCardProps) {
-  const present = values.filter((v): v is number => v != null);
-  const sampleCount = present.length;
+  // Stats reflect what the bar visually represents: the per-turn TOTAL
+  // (sum of all per-call values inside the turn). Turns with no measurement
+  // are excluded so a placeholder zero doesn't drag the avg / min down.
+  const turnTotals = stacks.map((s) => s.reduce((acc, v) => acc + v, 0)).filter((v) => v > 0);
+  const sampleCount = turnTotals.length;
 
-  const max = sampleCount > 0 ? Math.max(...present) : 0;
-  const min = sampleCount > 0 ? Math.min(...present) : 0;
-  const median = computeMedian(present);
-  const avg = sampleCount > 0 ? present.reduce((s, v) => s + v, 0) / sampleCount : 0;
+  const max = sampleCount > 0 ? Math.max(...turnTotals) : 0;
+  const min = sampleCount > 0 ? Math.min(...turnTotals) : 0;
+  const median = computeMedian(turnTotals);
+  const avg = sampleCount > 0 ? turnTotals.reduce((s, v) => s + v, 0) / sampleCount : 0;
 
   const stats: Record<StatKey, number> = { avg, median, min, max };
 
@@ -174,23 +177,28 @@ function TurnMetricCard({
       color: STAT_META[key].color,
     }));
 
-  // Chart needs a number per bar — null turns become 0 (no bar visible) but
-  // the x-axis slot is preserved so all four charts stay turn-aligned.
-  const chartValues = values.map((v) => (v == null ? 0 : v));
-
-  const rows = values.map((v, i) => ({
+  const rows = stacks.map((segments, i) => ({
     turn: turnLabels[i],
-    value: v,
+    total: segments.reduce((acc, v) => acc + v, 0),
+    callCount: segments.length,
   }));
 
-  const columns: MetricsTableColumn<{ turn: string; value: number | null }>[] = [
+  const columns: MetricsTableColumn<{ turn: string; total: number; callCount: number }>[] = [
     { key: 'turn', header: 'Turn', align: 'left', width: 'w-16', cell: (row) => row.turn },
     {
-      key: 'value',
+      key: 'calls',
+      header: 'Calls',
+      align: 'right',
+      width: 'w-16',
+      cell: (row) =>
+        row.callCount > 0 ? row.callCount : <span className="text-muted-foreground">—</span>,
+    },
+    {
+      key: 'total',
       header: title.replace(' per Turn', ''),
       align: 'right',
       cell: (row) =>
-        row.value == null ? <span className="text-muted-foreground">—</span> : format(row.value),
+        row.callCount === 0 ? <span className="text-muted-foreground">—</span> : format(row.total),
     },
   ];
 
@@ -203,7 +211,7 @@ function TurnMetricCard({
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">
-            {sampleCount} of {values.length} turn{values.length !== 1 ? 's' : ''}
+            {sampleCount} of {stacks.length} turn{stacks.length !== 1 ? 's' : ''}
           </span>
           {viewToggle}
         </div>
@@ -253,8 +261,8 @@ function TurnMetricCard({
               );
             })}
           </div>
-          <AxisBarChart
-            values={chartValues}
+          <StackedCallsBarChart
+            stacks={stacks}
             formatValue={format}
             xAxisLabel="Turn"
             xLabels={turnLabels}
