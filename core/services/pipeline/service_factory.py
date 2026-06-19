@@ -182,15 +182,18 @@ def build_stt(spec: dict) -> Optional[Any]:
 
     try:
         if provider_name == "deepgram":
-            from deepgram import LiveOptions
-            from pipecat.services.deepgram.stt import DeepgramSTTService
+            from pipecat.services.deepgram.stt import DeepgramSTTService, LiveOptions
             dg_kwargs = {}
             if metadata.get("sample_rate") is not None:
                 dg_kwargs["sample_rate"] = metadata["sample_rate"]
             live_options = None
             if metadata.get("language"):
                 live_options = LiveOptions(language=metadata["language"])
-            return DeepgramSTTService(api_key=api_key, live_options=live_options, **dg_kwargs, **_url_kwargs(metadata))
+            dg_url = _url_kwargs(metadata)
+            _dg_host = (dg_url.get("base_url") or "").split("://")[-1].split("/")[0]
+            if not _dg_host or "." not in _dg_host:
+                dg_url.pop("base_url", None)
+            return DeepgramSTTService(api_key=api_key, live_options=live_options, **dg_kwargs, **dg_url)
         if provider_name == "openai":
             from pipecat.services.openai.stt import OpenAISTTService
             return OpenAISTTService(
@@ -205,7 +208,7 @@ def build_stt(spec: dict) -> Optional[Any]:
             # the same /ws/asr protocol as nemotron — so we reuse NvidiaWebSocketService.
             from pipecat.services.nvidia.websocket_stt import NvidiaWebSocketService
             from core.logging import get_trace_id
-            ws_url = "ws://staging-stt-voxtral-service.staging.svc.cluster.local/ws/asr"
+            ws_url = metadata.get("base_url") or "ws://staging-stt-voxtral-service.staging.svc.cluster.local/ws/asr"
             ws_kwargs = {}
             if metadata.get("sample_rate") is not None:
                 ws_kwargs["sample_rate"] = metadata["sample_rate"]
@@ -215,7 +218,7 @@ def build_stt(spec: dict) -> Optional[Any]:
             # the same /ws/asr protocol as nemotron — so we reuse NvidiaWebSocketService.
             from pipecat.services.nvidia.websocket_stt import NvidiaWebSocketService
             from core.logging import get_trace_id
-            ws_url = "ws://staging-stt-gemma-service.staging.svc.cluster.local/ws/asr"
+            ws_url = metadata.get("base_url") or "ws://staging-stt-gemma-service.staging.svc.cluster.local/ws/asr"
             ws_kwargs = {}
             if metadata.get("sample_rate") is not None:
                 ws_kwargs["sample_rate"] = metadata["sample_rate"]
@@ -223,7 +226,7 @@ def build_stt(spec: dict) -> Optional[Any]:
         if provider_name == "parakeet":
             from core.services.pipeline.parakeet_stt_service import ParakeetSTTService
             from core.logging import get_trace_id
-            parakeet_url = "http://staging-stt-parakeet-service.staging.svc.cluster.local/asr"
+            parakeet_url = metadata.get("base_url") or "http://staging-stt-parakeet-service.staging.svc.cluster.local/asr"
             parakeet_kwargs = {}
             if metadata.get("sample_rate") is not None:
                 parakeet_kwargs["sample_rate"] = metadata["sample_rate"]
@@ -233,7 +236,7 @@ def build_stt(spec: dict) -> Optional[Any]:
         if provider_name == "granite":
             from core.services.pipeline.granite_stt_service import GraniteWebSocketSTTService
             from core.logging import get_trace_id
-            ws_url = "ws://staging-stt-granite-service.staging.svc.cluster.local/ws/asr"
+            ws_url = metadata.get("base_url") or "ws://staging-stt-granite-service.staging.svc.cluster.local/ws/asr"
             granite_kwargs = {}
             if metadata.get("sample_rate") is not None:
                 granite_kwargs["sample_rate"] = metadata["sample_rate"]
@@ -273,7 +276,7 @@ def build_stt(spec: dict) -> Optional[Any]:
         if provider_name == "nvidia_websocket":
             from pipecat.services.nvidia.websocket_stt import NvidiaWebSocketService
             from core.logging import get_trace_id
-            ws_url = "ws://staging-stt-nemotron-service.staging.svc.cluster.local/ws/asr"
+            ws_url = metadata.get("base_url") or "ws://staging-stt-nemotron-service.staging.svc.cluster.local/ws/asr"
             ws_kwargs = {}
             if metadata.get("sample_rate") is not None:
                 ws_kwargs["sample_rate"] = metadata["sample_rate"]
@@ -362,13 +365,13 @@ def build_stt(spec: dict) -> Optional[Any]:
             if metadata.get("temperature") is not None:
                 sn_kwargs["temperature"] = metadata["temperature"]
             return SambaNovaSTTService(api_key=api_key, model=model or "Whisper-Large-v3", **sn_kwargs)
-        logger.warning("Unsupported STT provider: %s", provider_name)
+        logger.warning("Unsupported STT provider: {}", provider_name)
         return None
     except ImportError as e:
-        logger.warning("STT provider %s not available: %s", provider_name, e)
+        logger.warning("STT provider {} not available: {}", provider_name, e)
         return None
     except Exception as e:
-        logger.exception("STT provider %s failed to initialize: %s", provider_name, e)
+        logger.exception("STT provider {} failed to initialize: {}", provider_name, e)
         return None
 
 
