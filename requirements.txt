@@ -193,7 +193,7 @@ prometheus-client==0.17.1
 prompt-toolkit==3.0.39
 propcache==0.4.1
 proto-plus==1.27.0
-protobuf==5.29.5
+protobuf==5.29.6
 psycopg[binary]==3.3.4
 psycopg-pool==3.3.1
 psycopg2-binary==2.9.6
