@@ -99,6 +99,7 @@ class PipecatPipelineBuilder(PipelineBuilder):
 
         from core.processors.call_end_detector import CallEndDetectorProcessor
         from core.processors.metrics_collector import MetricsCollectorProcessor
+        from core.processors.stt_latency_tap import STTLatencyTap
         # Telephony resilience (ported from the call_engines work): keep barge-in
         # robust when Silero VAD gets stuck "speaking" on phone-line noise.
         from core.processors.vad_speaking_timeout import VADSpeakingTimeoutProcessor
@@ -247,12 +248,24 @@ class PipecatPipelineBuilder(PipelineBuilder):
             vad_timeout = VADSpeakingTimeoutProcessor(max_duration_secs=8.0)
             duplicate_filter = DuplicateTranscriptionFilter()
 
+            # STTLatencyTap derives STT TTFB from the wall-clock gap between
+            # UserStoppedSpeaking and the first TranscriptionFrame. It MUST sit
+            # before user_aggregator — the aggregator absorbs TranscriptionFrame
+            # without pushing it downstream, so anything past it never sees the
+            # transcript. The tap emits a synthetic MetricsFrame that flows on
+            # to MetricsCollectorProcessor through the normal MetricsFrame path.
+            stt_latency_tap = STTLatencyTap(
+                stt_processor_name=stt.name,
+                stt_model_name=getattr(stt, "model_name", None),
+            )
+
             pipeline_processors = [
                 transport.input(),
                 rtvi,
                 vad_timeout,
                 stt,
                 duplicate_filter,
+                stt_latency_tap,
                 call_end_detector,
                 user_aggregator,
                 llm,
