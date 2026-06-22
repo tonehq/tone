@@ -46,6 +46,7 @@ from pipecat.frames.frames import (
     Frame,
     MetricsFrame,
     TranscriptionFrame,
+    UserStartedSpeakingFrame,
     UserStoppedSpeakingFrame,
 )
 from pipecat.metrics.metrics import TTFBMetricsData
@@ -80,7 +81,14 @@ class STTLatencyTap(FrameProcessor):
     async def process_frame(self, frame: Frame, direction: FrameDirection):
         await super().process_frame(frame, direction)
 
-        if isinstance(frame, UserStoppedSpeakingFrame):
+        if isinstance(frame, UserStartedSpeakingFrame):
+            # New utterance starting — any unconsumed user-stop from a
+            # previous utterance is stale. Clearing it prevents the next
+            # transcript from being measured against an anchor that's many
+            # seconds (or turns) old, which would inflate the first STT
+            # TTFB of every new turn.
+            self._user_stopped_at = None
+        elif isinstance(frame, UserStoppedSpeakingFrame):
             # One stop arms one TTFB. A second stop without a transcript
             # in between overwrites — we'd rather attribute the next
             # transcript to the most recent stop than to a stale one.
