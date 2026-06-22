@@ -79,7 +79,24 @@ def _build_service_categories(*, stt: Any, llm: Any, tts: Any) -> dict:
 class PipecatPipelineBuilder(PipelineBuilder):
     """Assemble a Pipecat pipeline from `PipelineParams`."""
 
-    async def build(self, transport: Any, agent: Any = None, audio_buffer: Any = None, from_number: str = "", prompt_context: Any = None) -> BuildResult:
+    async def build(
+        self,
+        transport: Any,
+        agent: Any = None,
+        audio_buffer: Any = None,
+        from_number: str = "",
+        prompt_context: Any = None,
+        # Mutable holders owned by the runner so tool handlers (custom / built-in /
+        # document / MCP) can append one entry per invocation. The runner threads
+        # the same list into ``CallLogService.complete_call(tool_calls=...)`` at
+        # call end, which persists each entry as a row in ``tool_executions``.
+        # ``current_turn`` is a dict so handlers see the latest turn number live
+        # (bumped by the runner's ``on_turn_started``); ``tool_dedup`` is the
+        # per-call idempotency cache shared across MCP and built-in handlers.
+        tool_call_entries: Any = None,
+        current_turn: Any = None,
+        tool_dedup: Any = None,
+    ) -> BuildResult:
         params = self.params
         is_s2s = params.is_s2s
 
@@ -119,7 +136,10 @@ class PipecatPipelineBuilder(PipelineBuilder):
         doc_tools = None
         if agent:
             from core.services.document_tool_service import build_document_tool
-            doc_tools = build_document_tool(llm, agent.id, agent.organization_id, params.kb)
+            doc_tools = build_document_tool(
+                llm, agent.id, agent.organization_id, params.kb,
+                tool_call_entries=tool_call_entries, current_turn=current_turn,
+            )
 
         # Custom + built-in tools, rebuilt from the cached tool dicts (no DB query).
         custom_tools_schema = None
@@ -138,10 +158,17 @@ class PipecatPipelineBuilder(PipelineBuilder):
                     # lookup. (The old code routed identically: tool_type != "custom".)
                     if tool.tool_type != "custom":
                         handler = create_built_in_tool_handler(
-                            tool, from_number, org_id=agent.organization_id
+                            tool, from_number, org_id=agent.organization_id,
+                            tool_call_entries=tool_call_entries,
+                            current_turn=current_turn,
+                            tool_dedup=tool_dedup,
                         )
                     else:
-                        handler = create_custom_tool_handler(tool)
+                        handler = create_custom_tool_handler(
+                            tool,
+                            tool_call_entries=tool_call_entries,
+                            current_turn=current_turn,
+                        )
                     # Register under the SAME sanitized name used in the schema so the
                     # model's tool call (e.g. "calender_tool") maps back to this handler.
                     fn_name = sanitize_tool_name(tool.name)
@@ -154,7 +181,12 @@ class PipecatPipelineBuilder(PipelineBuilder):
         if agent:
             try:
                 from core.services.mcp_tool_service import register_mcp_tools
-                mcp_tools_schema = await register_mcp_tools(llm, agent.id)
+                mcp_tools_schema = await register_mcp_tools(
+                    llm, agent.id,
+                    tool_call_entries=tool_call_entries,
+                    current_turn=current_turn,
+                    tool_dedup=tool_dedup,
+                )
             except Exception as e:
                 logger.warning("MCP tools unavailable, disabled: {}", e)
 
