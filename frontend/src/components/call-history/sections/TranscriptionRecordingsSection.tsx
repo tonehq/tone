@@ -76,6 +76,19 @@ const TranscriptionRecordingsSection: React.FC<TranscriptionRecordingsSectionPro
     return callLog.transcript.filter((msg) => msg.text.toLowerCase().includes(lower));
   }, [callLog.transcript, searchTerm]);
 
+  const groupedTranscript = useMemo(() => {
+    const groups: { role: string; text: string; timestamp: string }[] = [];
+    for (const msg of filteredTranscript) {
+      const last = groups[groups.length - 1];
+      if (last && last.role === msg.role) {
+        last.text = `${last.text} ${msg.text}`.trim();
+      } else {
+        groups.push({ role: msg.role, text: msg.text, timestamp: msg.timestamp });
+      }
+    }
+    return groups;
+  }, [filteredTranscript]);
+
   return (
     <div className="flex flex-col">
       {/* Audio Player */}
@@ -115,12 +128,12 @@ const TranscriptionRecordingsSection: React.FC<TranscriptionRecordingsSectionPro
             </div>
 
             <div className="flex flex-col gap-3">
-              {filteredTranscript.length === 0 ? (
+              {groupedTranscript.length === 0 ? (
                 <p className="py-4 text-center text-sm text-muted-foreground">
                   No matching messages
                 </p>
               ) : (
-                filteredTranscript.map((msg, index) => {
+                groupedTranscript.map((msg, index) => {
                   const isUser = msg.role === 'user';
                   const formattedTime = formatTimeOnly(msg.timestamp);
                   return (
