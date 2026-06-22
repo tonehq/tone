@@ -41,5 +41,8 @@ class PipelineBuilder:
         audio_buffer: Any = None,
         from_number: str = "",
         prompt_context: Optional[dict] = None,
+        tool_call_entries: Optional[list] = None,
+        current_turn: Optional[dict] = None,
+        tool_dedup: Optional[dict] = None,
     ) -> BuildResult:
         raise NotImplementedError
