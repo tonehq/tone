@@ -71,9 +71,13 @@ const TranscriptionRecordingsSection: React.FC<TranscriptionRecordingsSectionPro
 
   const filteredTranscript = useMemo(() => {
     if (!callLog.transcript) return [];
-    if (!searchTerm.trim()) return callLog.transcript;
+    // Drop entries with empty/whitespace-only text. The pipeline can emit
+    // empty assistant turns that otherwise break up the user's continuous
+    // speech into separate bubbles in the UI.
+    const nonEmpty = callLog.transcript.filter((msg) => msg.text && msg.text.trim().length > 0);
+    if (!searchTerm.trim()) return nonEmpty;
     const lower = searchTerm.toLowerCase();
-    return callLog.transcript.filter((msg) => msg.text.toLowerCase().includes(lower));
+    return nonEmpty.filter((msg) => msg.text.toLowerCase().includes(lower));
   }, [callLog.transcript, searchTerm]);
 
   const groupedTranscript = useMemo(() => {
