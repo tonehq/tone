@@ -90,11 +90,12 @@ class PipecatPipelineBuilder(PipelineBuilder):
         from pipecat.processors.aggregators.llm_response_universal import (
             LLMContextAggregatorPair, LLMUserAggregatorParams)
         from pipecat.turns.user_turn_strategies import UserTurnStrategies
+        from pipecat.audio.vad.silero import SileroVADAnalyzer
         from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
         from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
         from pipecat.audio.turn.smart_turn.base_smart_turn import SmartTurnParams
         from pipecat.processors.aggregators.llm_text_processor import LLMTextProcessor
-        from pipecat.processors.frameworks.rtvi import (RTVIConfig, RTVIObserver, RTVIProcessor)
+        from pipecat.processors.frameworks.rtvi import (RTVIObserver, RTVIProcessor)
 
         from core.processors.call_end_detector import CallEndDetectorProcessor
         from core.processors.metrics_collector import MetricsCollectorProcessor
@@ -111,7 +112,7 @@ class PipecatPipelineBuilder(PipelineBuilder):
         tts = build_tts(params.tts) if (not is_s2s and params.tts) else None
 
         _t = _time.monotonic()
-        rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
+        rtvi = RTVIProcessor()
 
         # Register document tool from the cached KB data (no DB query; pgvector still
         # searched live at call time inside the handler).
@@ -221,6 +222,7 @@ class PipecatPipelineBuilder(PipelineBuilder):
             context_aggregator = LLMContextAggregatorPair(
                 context,
                 user_params=LLMUserAggregatorParams(
+                    vad_analyzer=SileroVADAnalyzer(),
                     user_turn_strategies=UserTurnStrategies(
                         stop=[
                             # Primary: Smart Turn (the new design's turn detector).
