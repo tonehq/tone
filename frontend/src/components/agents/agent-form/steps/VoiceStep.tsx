@@ -79,7 +79,7 @@ export default function VoiceStep() {
   useEffect(() => {
     let cancelled = false;
     setLoadingStt(true);
-    listProviderCatalog()
+    listProviderCatalog('stt')
       .then((items) => {
         if (cancelled) return;
         setSttProviders(items.filter((p) => p.kinds.includes('stt')));
