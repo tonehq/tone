@@ -79,7 +79,7 @@ const CallSummaryCard: React.FC<CallSummaryCardProps> = ({ callLog }) => {
   return (
     <section
       aria-label="Call summary"
-      className="shrink-0 border-b border-border/60 bg-background px-5 py-3 lg:px-8"
+      className="shrink-0 border-b border-border/60 bg-muted px-5 py-3 lg:px-8"
     >
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-2">
         {/* ── State group ───────────────────────────────────────────── */}

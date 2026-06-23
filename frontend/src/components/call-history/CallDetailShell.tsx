@@ -122,7 +122,7 @@ const CallDetailShell: React.FC<CallDetailShellProps> = ({ callId, children }) =
               the same `max-w-6xl mx-auto` constraint as the summary card and
               body below, so all three regions share the exact same content
               edges on wide displays. */}
-          <header className="shrink-0 border-b border-border/60 px-5 py-4 lg:px-8">
+          <header className="shrink-0 border-b border-border/60 bg-muted px-5 py-4 lg:px-8">
             <div className="mx-auto flex w-full max-w-6xl flex-col gap-1.5">
               <nav
                 aria-label="Breadcrumb"
