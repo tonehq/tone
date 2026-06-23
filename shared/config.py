@@ -88,4 +88,10 @@ class Settings:
         # generation) when an org hasn't configured its own provider key.
         self.OPENAI_API_KEY: str = get_secret("OPENAI_API_KEY", "")
 
+        self.LIVEKIT_URL: str = get_secret("LIVEKIT_URL", "")
+        self.LIVEKIT_API_KEY: str = get_secret("LIVEKIT_API_KEY", "")
+        self.LIVEKIT_API_SECRET: str = get_secret("LIVEKIT_API_SECRET", "")
+        self.DAILY_API_KEY: str = get_secret("DAILY_API_KEY", "")
+        self.WEBRTC_CLIENT_BASE_URL: str = get_secret("WEBRTC_CLIENT_BASE_URL", "")
+
 settings = Settings()

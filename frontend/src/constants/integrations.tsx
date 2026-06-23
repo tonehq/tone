@@ -1,5 +1,5 @@
 import { GoogleIcon } from '@/components/icons/google';
-import { Phone, Sheet } from 'lucide-react';
+import { Phone, Radio, Sheet, Video } from 'lucide-react';
 
 export type ProviderCategory = 'google' | 'productivity' | 'dev_crm';
 
@@ -53,5 +53,32 @@ export const API_KEY_PROVIDERS: ProviderCardConfig[] = [
     iconBg: 'bg-red-50 dark:bg-red-500/10',
     iconBorder: 'border-red-200/50 dark:border-red-500/20 shadow-sm dark:shadow-none',
     accentColor: 'bg-red-500',
+  },
+  {
+    key: 'plivo',
+    name: 'Plivo',
+    description: 'Cloud communications platform for voice calls and phone numbers.',
+    icon: <Phone size={18} className="text-emerald-500" />,
+    iconBg: 'bg-emerald-50 dark:bg-emerald-500/10',
+    iconBorder: 'border-emerald-200/50 dark:border-emerald-500/20 shadow-sm dark:shadow-none',
+    accentColor: 'bg-emerald-500',
+  },
+  {
+    key: 'livekit',
+    name: 'LiveKit',
+    description: 'Real-time WebRTC platform for in-browser voice calls.',
+    icon: <Radio size={18} className="text-blue-500" />,
+    iconBg: 'bg-blue-50 dark:bg-blue-500/10',
+    iconBorder: 'border-blue-200/50 dark:border-blue-500/20 shadow-sm dark:shadow-none',
+    accentColor: 'bg-blue-500',
+  },
+  {
+    key: 'daily',
+    name: 'Daily',
+    description: 'WebRTC API for in-browser voice and video calls.',
+    icon: <Video size={18} className="text-violet-500" />,
+    iconBg: 'bg-violet-50 dark:bg-violet-500/10',
+    iconBorder: 'border-violet-200/50 dark:border-violet-500/20 shadow-sm dark:shadow-none',
+    accentColor: 'bg-violet-500',
   },
 ];

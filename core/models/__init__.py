@@ -16,6 +16,7 @@ from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 
 # Agent Core
 from core.models.agent import Agent
+from core.models.agent_channel import AgentChannel
 from core.models.agent_config import AgentConfig
 from core.models.agent_knowledge_base import AgentKnowledgeBase
 from core.models.agent_mcp_server import AgentMcpServer

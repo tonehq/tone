@@ -19,7 +19,7 @@ from core.internal.capabilities import init_capabilities, is_ee_enabled, get_cap
 from core.api.v1 import (
     auth, users, organizations, agent_configs, channels, oauth,
     knowledge_base, agents, mcp_servers, services, tools, dashboard,
-    call_logs, call_metrics, sessions, workflows
+    call_logs, call_metrics, sessions, workflows, webrtc
 )
 import core.models
 
@@ -106,6 +106,7 @@ if ee_enabled:
     api_v1.include_router(ee_call_logs.router, prefix="/call-log", tags=["call-log"])
     api_v1.include_router(ee_call_metrics.router, prefix="/call-metrics", tags=["call-metrics"])
     api_v1.include_router(workflows.router, prefix="/workflow", tags=["workflow"])
+    api_v1.include_router(webrtc.router, prefix="/webrtc", tags=["webrtc"])
     print("EE edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
 else:
     api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -124,6 +125,7 @@ else:
     api_v1.include_router(call_logs.router, prefix="/call-log", tags=["call-log"])
     api_v1.include_router(call_metrics.router, prefix="/call-metrics", tags=["call-metrics"])
     api_v1.include_router(workflows.router, prefix="/workflow", tags=["workflow"])
+    api_v1.include_router(webrtc.router, prefix="/webrtc", tags=["webrtc"])
     print("Core edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
 
 

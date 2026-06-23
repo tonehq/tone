@@ -321,21 +321,26 @@ class PipecatPipelineRunner(PipelineRunner):
                     except Exception as e:
                         logger.error("Failed to complete call log in on_audio_data: {}", e)
 
-        # Start recording and speak first_message when client connects
-        @transport.event_handler("on_client_connected")
-        async def on_client_connected(transport, client):
+        async def _start_session():
             if audio_buffer:
                 logger.info("Client connected — starting audio recording.")
                 await audio_buffer.start_recording()
             else:
                 logger.info("Client connected.")
             if is_s2s:
-                # S2S: kick off the conversation — context already has the messages
                 logger.info("Kicking off S2S conversation via LLMRunFrame")
                 await task.queue_frames([LLMRunFrame()])
             elif first_message_text:
                 logger.info("Speaking first_message via TTS: {}", first_message_text)
                 await task.queue_frame(TTSSpeakFrame(text=first_message_text))
+
+        async def _end_session(participant):
+            logger.info("Client disconnected: {}", participant)
+            await task.cancel()
+
+        @transport.event_handler("on_client_connected")
+        async def on_client_connected(transport, client):
+            await _start_session()
 
         @rtvi.event_handler("on_client_ready")
         async def on_client_ready(rtvi):
@@ -344,8 +349,17 @@ class PipecatPipelineRunner(PipelineRunner):
 
         @transport.event_handler("on_client_disconnected")
         async def on_client_disconnected(transport, participant):
-            logger.info("Client disconnected: {}", participant)
-            await task.cancel()
+            await _end_session(participant)
+
+        if type(transport).__name__ == "LiveKitTransport":
+
+            @transport.event_handler("on_first_participant_joined")
+            async def on_first_participant_joined(transport, participant_id):
+                await _start_session()
+
+            @transport.event_handler("on_participant_disconnected")
+            async def on_participant_disconnected(transport, participant_id):
+                await _end_session(participant_id)
 
         logger.info("[TIMING] runner setup complete, total: %.3fs — starting runner.run()", _time.monotonic() - _t_comp_start)
         runner = PipecatRunner(handle_sigint=getattr(runner_args, "handle_sigint", False))

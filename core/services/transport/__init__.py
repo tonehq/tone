@@ -17,6 +17,7 @@ To add a new engine: implement the class and register it below — no changes in
 """
 
 from pipecat.runner.types import (DailyRunnerArguments,
+                                  LiveKitRunnerArguments,
                                   SmallWebRTCRunnerArguments,
                                   WebSocketRunnerArguments)
 
@@ -24,6 +25,7 @@ from core.services.transport.base import (CallTransport, TelephonyProvider,
                                           TelephonyTransport)
 from core.services.transport.daily import DailyCallTransport
 from core.services.transport.exotel import ExotelTransport
+from core.services.transport.livekit import LiveKitCallTransport
 from core.services.transport.plivo import PlivoTransport
 from core.services.transport.registry import (build_transport,
                                               get_telephony_provider,
@@ -44,6 +46,7 @@ register_telephony_provider(ExotelTransport())
 register_transport(WebSocketRunnerArguments, TelephonyTransport())
 register_transport(SmallWebRTCRunnerArguments, SmallWebRTCCallTransport())
 register_transport(DailyRunnerArguments, DailyCallTransport())
+register_transport(LiveKitRunnerArguments, LiveKitCallTransport())
 
 __all__ = [
     "CallTransport",
