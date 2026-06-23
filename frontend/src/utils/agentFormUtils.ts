@@ -35,6 +35,7 @@ export const defaultFormState = (agentType: AgentDirection): AgentFormState => (
   mcp_server_ids: [],
   upload_ids: [],
   phone_numbers: [],
+  web_channel_ids: [],
 });
 
 /** Hydrate a form state from the backend's AgentDetail. */
@@ -65,6 +66,7 @@ export function agentDetailToFormState(detail: AgentDetail): AgentFormState {
       channel_id: p.channel_id ?? '',
       label: p.label ?? null,
     })),
+    web_channel_ids: (detail.web_channels ?? []).map((c) => c.channel_id),
   };
 }
 
@@ -111,6 +113,7 @@ export function formStateToCreatePayload(state: AgentFormState): CreateAgentPayl
     mcp_server_ids: state.mcp_server_ids,
     upload_ids: state.upload_ids,
     phone_numbers: state.phone_numbers,
+    web_channel_ids: state.web_channel_ids,
   };
 }
 
@@ -149,6 +152,9 @@ export function formStateToUpdatePayload(
   if (!valuesEqual(next.upload_ids, prev.upload_ids)) payload.upload_ids = next.upload_ids;
   if (!phoneListEqual(next.phone_numbers, prev.phone_numbers)) {
     payload.phone_numbers = next.phone_numbers;
+  }
+  if (!valuesEqual(next.web_channel_ids, prev.web_channel_ids)) {
+    payload.web_channel_ids = next.web_channel_ids;
   }
 
   return payload;

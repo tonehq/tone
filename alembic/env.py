@@ -24,6 +24,7 @@ from core.models.knowledge_base import KnowledgeBase
 from core.models.upload import Upload
 from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 from core.models.agent import Agent
+from core.models.agent_channel import AgentChannel
 from core.models.agent_config import AgentConfig
 from core.models.agent_knowledge_base import AgentKnowledgeBase
 from core.models.agent_mcp_server import AgentMcpServer

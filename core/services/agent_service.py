@@ -2,6 +2,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from typing import Dict, Any, List, Optional, Tuple
+import secrets
 import time
 import uuid as uuid_lib
 from uuid import UUID
@@ -22,9 +23,12 @@ from core.models.model import Model
 from core.services.agent_config_service import AgentConfigService
 from core.services.channel_service import ChannelService
 from core.services.meta_data_schema_validator import MetaDataSchemaValidator
+from core.services.webrtc import share_url, supported_providers
 from core.models.agent_tool import AgentTool
 from core.models.agent_mcp_server import AgentMcpServer
 from core.models.agent_knowledge_base import AgentKnowledgeBase
+from core.models.agent_channel import AgentChannel
+from core.models.channel import Channel
 from core.models.knowledge_base import KnowledgeBase
 from core.models.phone_number import PhoneNumber
 from core.models.tool import Tool
@@ -896,6 +900,7 @@ class AgentService(BaseService):
         mcp_server_ids = data.get("mcp_server_ids")
         upload_ids = data.get("upload_ids")
         phone_numbers = data.get("phone_numbers")
+        web_channel_ids = data.get("web_channel_ids")
 
         config: Optional[AgentConfig] = None
         if config_data is not None:
@@ -932,6 +937,8 @@ class AgentService(BaseService):
             self._sync_knowledge_base(agent, config, upload_ids)
         if phone_numbers is not None:
             self._sync_phone_numbers(agent, phone_numbers)
+        if web_channel_ids is not None:
+            self._sync_agent_channels(agent, web_channel_ids)
 
         return config
 
@@ -1505,6 +1512,50 @@ class AgentService(BaseService):
             if num:
                 cache_delete(f"phone_to_agent:{num.strip()}")
 
+    def _sync_agent_channels(self, agent: Agent, channel_ids: List[str]) -> None:
+        web_types = set(supported_providers())
+        incoming = set()
+        for raw in channel_ids:
+            cid = UUID(str(raw))
+            channel = (
+                self.db.query(Channel)
+                .filter(Channel.id == cid, Channel.organization_id == self.org_id)
+                .first()
+            )
+            if not channel:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Channel not found"
+                )
+            if (channel.channel_type or "").lower() not in web_types:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Channel {channel.name} is not a web-call channel",
+                )
+            incoming.add(cid)
+
+        existing = self.db.query(AgentChannel).filter(
+            AgentChannel.agent_id == agent.id, AgentChannel.organization_id == self.org_id
+        )
+        if incoming:
+            existing.filter(AgentChannel.channel_id.notin_(incoming)).delete(synchronize_session=False)
+        else:
+            existing.delete(synchronize_session=False)
+
+        bound = {
+            cid for (cid,) in self.db.query(AgentChannel.channel_id).filter(
+                AgentChannel.agent_id == agent.id, AgentChannel.organization_id == self.org_id
+            ).all()
+        }
+        for cid in incoming:
+            if cid in bound:
+                continue
+            self.db.add(AgentChannel(
+                agent_id=agent.id,
+                channel_id=cid,
+                slug=secrets.token_urlsafe(12),
+                organization_id=self.org_id,
+            ))
+
     def agent_response(
         self, agent: Agent, config: Optional[AgentConfig] = None
     ) -> Dict[str, Any]:
@@ -1629,6 +1680,24 @@ class AgentService(BaseService):
                 "label": p.label,
             }
             for p in phone_rows
+        ]
+
+        channel_rows = (
+            self.db.query(AgentChannel, Channel)
+            .join(Channel, Channel.id == AgentChannel.channel_id)
+            .filter(AgentChannel.agent_id == agent.id, AgentChannel.organization_id == self.org_id)
+            .all()
+        )
+        result["web_channels"] = [
+            {
+                "id": str(ac.id),
+                "channel_id": str(ac.channel_id),
+                "channel_type": ch.channel_type,
+                "name": ch.name,
+                "slug": ac.slug,
+                "share_url": share_url(ac.slug),
+            }
+            for ac, ch in channel_rows
         ]
 
         # Version history (single query — driving the editor's version selector)
