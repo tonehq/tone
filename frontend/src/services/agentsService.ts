@@ -67,7 +67,7 @@ export const saveAgentAsNewVersion = async (
   agentId: string,
   payload: Pick<
     UpdateAgentPayload,
-    'config' | 'tool_ids' | 'mcp_server_ids' | 'upload_ids' | 'phone_numbers'
+    'config' | 'tool_ids' | 'mcp_server_ids' | 'upload_ids' | 'phone_numbers' | 'web_channel_ids'
   > & { source_config_id?: string | null },
 ): Promise<AgentDetail> => {
   const res = await axiosInstance.post<AgentDetail>('/agent/save_as_new_version', payload, {

@@ -10,6 +10,7 @@ import KnowledgePhoneStep from '@/components/agents/agent-form/steps/KnowledgePh
 import PromptStep from '@/components/agents/agent-form/steps/PromptStep';
 import ToolsMcpStep from '@/components/agents/agent-form/steps/ToolsMcpStep';
 import VoiceStep from '@/components/agents/agent-form/steps/VoiceStep';
+import ChannelsStep from '@/components/agents/agent-form/steps/ChannelsStep';
 
 // Maps a URL section segment to its body. Shared by the edit and create
 // section routes; the editor's form state + chrome live in the layout
@@ -31,7 +32,8 @@ export default function AgentSectionBody({
     section === 'ai' ||
     section === 'voice' ||
     section === 'tools' ||
-    section === 'knowledge';
+    section === 'knowledge' ||
+    section === 'channels';
   // Overview only exists for a saved agent (edit mode).
   const known = isStep || (section === 'overview' && !!agentId);
 
@@ -59,6 +61,8 @@ export default function AgentSectionBody({
       return <ToolsMcpStep />;
     case 'knowledge':
       return <KnowledgePhoneStep agentId={agentId} />;
+    case 'channels':
+      return <ChannelsStep />;
     default:
       return null;
   }

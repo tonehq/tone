@@ -1,9 +1,10 @@
 'use client';
 
-import { BookOpen, Boxes, Phone, Wrench } from 'lucide-react';
+import { BookOpen, Boxes, Check, Copy, Phone, Wrench } from 'lucide-react';
 import { useState } from 'react';
 
 import { useAgentEditor } from '@/components/agents/AgentEditorContext';
+import { CustomButton } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import type { AgentDirection } from '@/types/agent';
@@ -58,6 +59,35 @@ function formatDate(iso: string): string {
   }
 }
 
+function CopyLink({ provider, url }: { provider: string; url: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/30 px-2.5 py-1.5">
+      <Badge
+        variant="secondary"
+        className="h-4 shrink-0 px-1.5 text-[9px] font-medium uppercase tracking-wide"
+      >
+        {provider}
+      </Badge>
+      <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-foreground">{url}</span>
+      <CustomButton
+        type="text"
+        size="sm"
+        icon={copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+        onClick={copy}
+        className="shrink-0"
+      >
+        {copied ? 'Copied' : 'Copy'}
+      </CustomButton>
+    </div>
+  );
+}
+
 export default function AgentOverview() {
   const { detail, setActive } = useAgentEditor();
   const [pending, setPending] = useState(false);
@@ -73,6 +103,7 @@ export default function AgentOverview() {
   const isActive = detail.is_active;
   const language = detail.config?.voice_settings?.language ?? null;
   const phoneNumbers = detail.phone_numbers ?? [];
+  const webChannels = detail.web_channels ?? [];
   const dash = <span className="text-muted-foreground/60">—</span>;
 
   const handleToggle = async (next: boolean) => {
@@ -149,6 +180,17 @@ export default function AgentOverview() {
           )}
         </DetailRow>
         <DetailRow label="Created">{formatDate(detail.created_at)}</DetailRow>
+        {webChannels.length > 0 ? (
+          <div className="sm:col-span-2">
+            <DetailRow label="Web call links">
+              <div className="flex flex-col gap-2">
+                {webChannels.map((c) => (
+                  <CopyLink key={c.id} provider={c.channel_type} url={c.share_url} />
+                ))}
+              </div>
+            </DetailRow>
+          </div>
+        ) : null}
         {detail.description ? (
           <div className="sm:col-span-2">
             <DetailRow label="Description">{detail.description}</DetailRow>

@@ -84,6 +84,7 @@ class CreateAgentRequest(BaseModel):
     mcp_server_ids: Optional[List[str]] = None
     upload_ids: Optional[List[str]] = None
     phone_numbers: Optional[List[PhoneNumberAttachment]] = None
+    web_channel_ids: Optional[List[str]] = None
 
 
 class UpdateAgentRequest(BaseModel):
@@ -96,6 +97,7 @@ class UpdateAgentRequest(BaseModel):
     mcp_server_ids: Optional[List[str]] = None
     upload_ids: Optional[List[str]] = None
     phone_numbers: Optional[List[PhoneNumberAttachment]] = None
+    web_channel_ids: Optional[List[str]] = None
 
 
 class SaveAsNewVersionRequest(BaseModel):
@@ -115,6 +117,7 @@ class SaveAsNewVersionRequest(BaseModel):
     mcp_server_ids: Optional[List[str]] = None
     upload_ids: Optional[List[str]] = None
     phone_numbers: Optional[List[PhoneNumberAttachment]] = None
+    web_channel_ids: Optional[List[str]] = None
     source_config_id: Optional[str] = None
 
 

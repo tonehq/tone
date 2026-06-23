@@ -256,6 +256,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
           mcp_server_ids: full.mcp_server_ids,
           upload_ids: full.upload_ids,
           phone_numbers: full.phone_numbers,
+          web_channel_ids: full.web_channel_ids,
           source_config_id: detail?.config?.id ?? null,
         },
       });
