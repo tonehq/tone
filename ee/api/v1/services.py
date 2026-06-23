@@ -2,6 +2,7 @@
 shared ``ModelProviderService``. The only difference from the core edition is
 the auth dependency."""
 
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, Query, status
@@ -108,10 +109,17 @@ def delete_service(
 
 @router.get("/providers/catalog")
 def list_providers_catalog(
+    service_type: Optional[str] = Query(
+        None,
+        description=(
+            "Optional 'llm' | 'stt' | 'tts'. When set, restricts the catalog to "
+            "providers the current org has an active ApiKey for in that kind."
+        ),
+    ),
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    return _service(claims, db).list_providers_catalog()
+    return _service(claims, db).list_providers_catalog(service_type=service_type)
 
 
 # ─── per-provider drill-down ───────────────────────────────────────────────
