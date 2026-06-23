@@ -87,6 +87,7 @@ def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, cur
                 )
                 entry["result"] = cached
                 entry["status"] = "duplicate_suppressed"
+                entry["status_code"] = 200
                 entry["duration_ms"] = dur
                 if original_cb is not None:
                     await original_cb(cached)
@@ -101,6 +102,7 @@ def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, cur
                     )
                     entry["result"] = result
                     entry["status"] = "success"
+                    entry["status_code"] = 200
                     entry["duration_ms"] = dur
                     if sig is not None and tool_dedup is not None and is_cacheable_result(result):
                         tool_dedup[sig] = result
@@ -122,6 +124,7 @@ def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, cur
                 )
                 entry["status"] = "error"
                 entry["error"] = str(exc)
+                entry["status_code"] = 500
                 entry["duration_ms"] = dur
                 raise
 
