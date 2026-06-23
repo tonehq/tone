@@ -117,6 +117,87 @@ def headers_from_meta(meta_data) -> dict:
     return {}
 
 
+# Substrings (lowercase) that strongly suggest the MCP server couldn't be
+# reached. A match collapses the failure into ``_URL_ERROR_MESSAGE``.
+_URL_ERROR_KEYWORDS: tuple[str, ...] = (
+    "nodename nor servname",
+    "name or service not known",
+    "no such host",
+    "getaddrinfo failed",
+    "invalid url",
+    "connection refused",
+    "connect call failed",
+    "unreachable",
+    "timeout",
+    "timed out",
+)
+
+# Narrow auth-failure substrings. Bare "auth", "token", "api key" were
+# removed because they matched unrelated text ("OAuth flow", "JSON token",
+# etc.) and caused non-auth failures to be mislabeled as auth problems.
+_AUTH_ERROR_KEYWORDS: tuple[str, ...] = (
+    "401",
+    "403",
+    "unauthorized",
+    "forbidden",
+    "authentication failed",
+    "invalid api key",
+    "invalid token",
+)
+
+
+def _flatten_exception(exc: BaseException) -> list[BaseException]:
+    """Recursively unwrap a ``BaseExceptionGroup`` into its leaf exceptions.
+
+    The MCP SDK runs ``connect → initialize → list_tools`` inside an
+    ``asyncio.TaskGroup``, which (Python 3.11+) wraps any failure in a
+    ``BaseExceptionGroup`` whose ``str()`` is
+    ``"unhandled errors in a TaskGroup (N sub-exception)"`` — useless to
+    the user. Flattening exposes the real leaf (e.g. ``ConnectionRefusedError``,
+    ``httpx.HTTPStatusError("401 Unauthorized")``).
+    """
+    if isinstance(exc, BaseExceptionGroup):
+        leaves: list[BaseException] = []
+        for sub in exc.exceptions:
+            leaves.extend(_flatten_exception(sub))
+        return leaves
+    return [exc]
+
+
+_AUTH_ERROR_MESSAGE = "Invalid token or API key. Please check your credentials and try again."
+_URL_ERROR_MESSAGE = "Unable to reach the MCP server. Please check the URL and try again."
+
+
+def format_mcp_connection_error(exc: Exception) -> str:
+    """Build a user-facing ``HTTPException.detail`` for an MCP connection failure.
+
+    Flattens any ``BaseExceptionGroup`` (the MCP SDK uses an
+    ``asyncio.TaskGroup`` internally), then classifies the leaves into the
+    two practical buckets the user can actually fix — bad credentials or
+    bad URL — and returns a short, plain-English message for each. Auth is
+    checked first because httpx renders 401/403 errors with the URL in the
+    text (e.g. "Client error '401 Unauthorized' for url '…'"), which would
+    otherwise trip a URL-only matcher.
+
+    Any leaf that fits neither bucket falls through to a generic message
+    that preserves the raw error so unclassified failures aren't silently
+    lost during debugging.
+    """
+    seen: list[str] = []
+    for leaf in _flatten_exception(exc):
+        text = str(leaf).strip() or leaf.__class__.__name__
+        if text not in seen:
+            seen.append(text)
+    raw = " | ".join(seen) or exc.__class__.__name__
+    lowered = raw.lower()
+
+    if any(keyword in lowered for keyword in _AUTH_ERROR_KEYWORDS):
+        return _AUTH_ERROR_MESSAGE
+    if any(keyword in lowered for keyword in _URL_ERROR_KEYWORDS):
+        return _URL_ERROR_MESSAGE
+    return f"Failed to connect to MCP server: {raw}"
+
+
 class McpServerService(BaseService):
 
     VALID_TRANSPORT_TYPES = {"sse", "streamable_http"}
@@ -571,30 +652,11 @@ class McpServerService(BaseService):
                         result = await session.list_tools()
         except HTTPException:
             raise
-        except Exception as e:
-            error_str = str(e).lower()
-            if any(keyword in error_str for keyword in [
-                "nodename nor servname", "name or service not known",
-                "no such host", "getaddrinfo failed", "invalid url",
-                "url", "connection refused", "connect call failed",
-                "unreachable", "timeout", "timed out",
-            ]):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid server URL. Please check the URL and try again.",
-                )
-            if any(keyword in error_str for keyword in [
-                "401", "403", "unauthorized", "forbidden",
-                "authentication", "auth", "token", "api key",
-            ]):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Authentication failed. Please check your token or API key and try again.",
-                )
+        except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to connect to MCP server: {str(e)}",
-            )
+                detail=format_mcp_connection_error(exc),
+            ) from exc
 
         tools = []
         for tool in result.tools:

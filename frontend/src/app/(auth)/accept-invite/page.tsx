@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { Building2, CheckCircle, LogIn, XCircle } from 'lucide-react';
+import { Building2, CheckCircle, LogIn, LogOut, XCircle } from 'lucide-react';
 
 import { acceptInviteSchema, type AcceptInviteFormData } from '@/schemas/auth';
 import { showToast, handleApiError } from '@/lib/toast';
@@ -21,7 +21,7 @@ function AcceptInviteContent() {
   const searchParams = useSearchParams();
   // `code` is the legacy query name (older invite emails). Accept either.
   const token = searchParams.get('token') || searchParams.get('code') || '';
-  const { user, setLoginResponse } = useAuthStore();
+  const { user, setLoginResponse, clearAuth } = useAuthStore();
   // Stop revalidating once the user has consumed the invite — otherwise the
   // post-accept refresh refetches the now-accepted token and returns 400.
   const [accepted, setAccepted] = useState(false);
@@ -135,6 +135,48 @@ function AcceptInviteContent() {
   }
 
   if (user) {
+    // Backend rejects accept when the logged-in user's email doesn't match
+    // invite.email (403). Catch the mismatch in the UI so the user gets a
+    // clear next step ("log out") instead of clicking Accept and getting a
+    // confusing 403 toast. clearAuth() resets the store and the page falls
+    // through to the account_exists / new-account branch below.
+    const emailMismatch =
+      !!user.email &&
+      !!invitation.email &&
+      user.email.toLowerCase() !== invitation.email.toLowerCase();
+
+    if (emailMismatch) {
+      return (
+        <CustomCard
+          centered
+          icon={
+            <div className="h-12 w-12 rounded-full bg-destructive/10 flex items-center justify-center">
+              <XCircle className="h-6 w-6 text-destructive" />
+            </div>
+          }
+          title="Wrong account"
+          description={`This invitation was sent to ${invitation.email}, but you're signed in as ${user.email}. Log out and sign in with the invited account to accept it.`}
+        >
+          <Button
+            className="w-full"
+            variant="outline"
+            type="button"
+            onClick={() => {
+              clearAuth();
+              // Drop cached me/org queries so anything pre-fetched under the
+              // previous identity is gone before the page re-renders.
+              queryClient.removeQueries({
+                predicate: (q) => q.queryKey?.[0] !== 'invitation',
+              });
+            }}
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Log out
+          </Button>
+        </CustomCard>
+      );
+    }
+
     return (
       <CustomCard
         centered
