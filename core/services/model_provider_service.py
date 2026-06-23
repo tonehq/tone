@@ -684,13 +684,26 @@ class ModelProviderService(BaseService):
 
     # ─── catalog ───────────────────────────────────────────────────────────
 
-    def list_providers_catalog(self) -> list[dict]:
-        providers = (
-            self.db.query(ModelProvider)
-            .filter(ModelProvider.is_active.is_(True))
-            .order_by(ModelProvider.display_name.asc())
-            .all()
-        )
+    def list_providers_catalog(self, service_type: str | None = None) -> list[dict]:
+        # When ``service_type`` is given, narrow to providers the current org has
+        # an active ApiKey for in that kind — the agent-form dropdowns (AiStep
+        # LLM, VoiceStep STT) use this so users can't pick a provider with no
+        # credentials. When omitted, behavior is unchanged: all active providers
+        # with every kind they support, used by the "add API key" drawer and the
+        # provider detail page.
+        service_type = _validate_service_type(service_type, required=False)
+
+        q = self.db.query(ModelProvider).filter(ModelProvider.is_active.is_(True))
+
+        if service_type:
+            configured_provider_ids = self.db.query(distinct(ApiKey.provider_id)).filter(
+                ApiKey.organization_id == self.org_id,
+                ApiKey.service_type == service_type,
+                ApiKey.is_active.is_(True),
+            )
+            q = q.filter(ModelProvider.id.in_(configured_provider_ids))
+
+        providers = q.order_by(ModelProvider.display_name.asc()).all()
         kinds_map = self._provider_kinds_map([p.id for p in providers])
         return [
             {
@@ -698,7 +711,9 @@ class ModelProviderService(BaseService):
                 "slug": p.slug,
                 "display_name": p.display_name,
                 "description": p.description,
-                "kinds": kinds_map.get(str(p.id), []),
+                # When scoped to a single kind, returning only that kind avoids
+                # leaking provider capabilities the caller didn't ask about.
+                "kinds": [service_type] if service_type else kinds_map.get(str(p.id), []),
                 "meta_data_schema": p.meta_data_schema,
             }
             for p in providers
@@ -979,7 +994,16 @@ class ModelProviderService(BaseService):
         ``language`` is a display name (e.g. "English").  For each provider the
         response includes the first matching provider-specific code so the
         frontend can persist it in ``voice_settings.language_code``.
+
+        Scoped to providers the current org has an active TTS ApiKey for —
+        the agent-form TTS dropdown is the only caller, and listing providers
+        the user has no credentials for would let them save an unusable agent.
         """
+        configured_provider_ids = self.db.query(distinct(ApiKey.provider_id)).filter(
+            ApiKey.organization_id == self.org_id,
+            ApiKey.service_type == "tts",
+            ApiKey.is_active.is_(True),
+        )
         rows = (
             self.db.query(
                 ModelProvider,
@@ -993,6 +1017,7 @@ class ModelProviderService(BaseService):
                 ModelProvider.is_active.is_(True),
                 ModelLanguage.is_active.is_(True),
                 ModelLanguage.display_name == language,
+                ModelProvider.id.in_(configured_provider_ids),
             )
             .group_by(ModelProvider.id)
             .order_by(ModelProvider.display_name.asc())

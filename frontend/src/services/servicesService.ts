@@ -68,8 +68,17 @@ export async function deleteProviderServices(
 }
 
 // ─── provider catalog (drawer dropdown) ────────────────────────────────────
-export async function listProviderCatalog(): Promise<ProviderCatalogItem[]> {
-  const { data } = await axios.get<ProviderCatalogItem[]>('/services/providers/catalog');
+// Pass ``serviceType`` from the agent-form dropdowns (AiStep llm, VoiceStep stt)
+// so the backend filters out providers the org has no active ApiKey for.
+// Omit it from flows that need the full catalog — "add API key" drawer and the
+// provider detail page.
+export async function listProviderCatalog(
+  serviceType?: 'llm' | 'stt' | 'tts',
+): Promise<ProviderCatalogItem[]> {
+  const { data } = await axios.get<ProviderCatalogItem[]>(
+    '/services/providers/catalog',
+    serviceType ? { params: { service_type: serviceType } } : undefined,
+  );
   return data;
 }
 
