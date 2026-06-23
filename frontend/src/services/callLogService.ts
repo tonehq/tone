@@ -1,5 +1,18 @@
-import type { CallFacets, CallFacetsParams, CallLogQueryParams, CallLogRow } from '@/types/callLog';
+import type {
+  CallFacets,
+  CallFacetsParams,
+  CallLogQueryParams,
+  CallLogRow,
+  ToolExecution,
+  ToolExecutionStatus,
+  ToolExecutionType,
+} from '@/types/callLog';
 import axiosInstance from '@/utils/axios';
+
+export interface ToolExecutionsQuery {
+  status?: ToolExecutionStatus;
+  type?: ToolExecutionType;
+}
 
 export const getCallLogs = async (params: CallLogQueryParams) => {
   const res = await axiosInstance.post('/call-log/list', params);
@@ -28,4 +41,12 @@ export const getCallLogById = async (callId: string): Promise<CallLogRow> => {
 export const getCallLogAudioUrl = async (callId: string): Promise<string> => {
   const res = await axiosInstance.get(`/call-log/${callId}/audio-url`);
   return res.data.url;
+};
+
+export const getCallToolExecutions = async (
+  callId: string,
+  query?: ToolExecutionsQuery,
+): Promise<ToolExecution[]> => {
+  const res = await axiosInstance.get(`/call-log/${callId}/tool-executions`, { params: query });
+  return res.data;
 };

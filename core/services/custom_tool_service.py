@@ -133,6 +133,7 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
         tool_call_entry = {
             "tool": tool.name,
             "tool_type": tool.tool_type,
+            "tool_id": str(tool.id) if tool.id else None,
             "arguments": arguments,
             "timestamp": int(_time.time()),
             "turn": current_turn["number"] if current_turn else None,
@@ -243,6 +244,7 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
         tool_call_entry = {
             "tool": "send_sms",
             "tool_type": "send_sms",
+            "tool_id": str(tool.id) if tool.id else None,
             "arguments": {"message": message, "to": recipient},
             "timestamp": int(_time.time()),
             "turn": current_turn["number"] if current_turn else None,
@@ -327,6 +329,7 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
         tool_call_entry = {
             "tool": "google_calendar",
             "tool_type": "google_calendar",
+            "tool_id": str(tool.id) if tool.id else None,
             "arguments": {"action": action, **{k: v for k, v in arguments.items() if k != "action"}},
             "timestamp": int(_time.time()),
             "turn": current_turn["number"] if current_turn else None,
