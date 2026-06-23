@@ -16,7 +16,7 @@ export interface CallDetailSection {
 export const CALL_DETAIL_SECTIONS: CallDetailSection[] = [
   { key: 'transcription', label: 'Transcription & Recordings', icon: MessageSquareText },
   { key: 'metrics', label: 'Metrics', icon: BarChart3 },
-  { key: 'tools-mcp', label: 'Tools & MCP', icon: Wrench },
+  { key: 'tools-mcp', label: 'Tool Executions', icon: Wrench },
   { key: 'configurations', label: 'Call Configurations', icon: Settings2 },
 ];
 
