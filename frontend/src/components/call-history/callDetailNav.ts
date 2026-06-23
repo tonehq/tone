@@ -1,4 +1,4 @@
-import { BarChart3, MessageSquareText, Settings2 } from 'lucide-react';
+import { BarChart3, MessageSquareText, Settings2, Wrench } from 'lucide-react';
 
 import type { SidebarNavGroup } from '@/components/layout/SidebarShell';
 
@@ -16,6 +16,7 @@ export interface CallDetailSection {
 export const CALL_DETAIL_SECTIONS: CallDetailSection[] = [
   { key: 'transcription', label: 'Transcription & Recordings', icon: MessageSquareText },
   { key: 'metrics', label: 'Metrics', icon: BarChart3 },
+  { key: 'tools-mcp', label: 'Tool Executions', icon: Wrench },
   { key: 'configurations', label: 'Call Configurations', icon: Settings2 },
 ];
 

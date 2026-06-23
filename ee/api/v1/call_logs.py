@@ -1,3 +1,4 @@
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -6,6 +7,7 @@ from sqlalchemy.orm import Session
 from core.api.v1.call_logs import FacetsRequest, ListCallsRequest
 from core.database.session import get_db
 from core.services.call_service import CallService
+from core.services.tool_execution_service import ToolExecutionService
 from ee.middleware.auth import EEJWTClaims, require_ee_org_member
 
 router = APIRouter()
@@ -71,6 +73,25 @@ def get_audio_url(
     db: Session = Depends(get_db),
 ):
     return _get_service(claims, db).get_audio_url(call_id=call_id)
+
+
+@router.get("/{call_id}/tool-executions")
+def get_call_tool_executions(
+    call_id: str,
+    status: Optional[str] = Query(None, description="Filter by status: success | error"),
+    tool_type: Optional[str] = Query(
+        None,
+        alias="type",
+        description="Filter by tool type: custom | send_sms | google_calendar | read_document | mcp",
+    ),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    return ToolExecutionService(db, org_id=UUID(claims.org_id)).list_for_call(
+        call_id=call_id,
+        status=status,
+        tool_type=tool_type,
+    )
 
 
 @router.get("/{call_id}")

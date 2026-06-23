@@ -105,6 +105,54 @@ export interface CallLogRow {
   metrics: (CallMetrics & { id: string }) | null;
 }
 
+export type ToolExecutionStatus = 'success' | 'error';
+
+export type ToolExecutionType =
+  | 'custom'
+  | 'send_sms'
+  | 'google_calendar'
+  | 'read_document'
+  | 'built_in'
+  | 'mcp';
+
+/** One row from `tool_executions` — one tool/MCP invocation during a call.
+ *  The `tool_*` and `mcp_server_*` fields are joined in at read time from the
+ *  source `tools` / `mcp_servers` tables (LEFT JOIN on FK id). They are
+ *  optional: NULL for code-defined built-ins, pre-FK rows, and rows whose
+ *  source has since been deleted (ON DELETE SET NULL). */
+export interface ToolExecution {
+  id: string;
+  call_id: string | null;
+  agent_id: string | null;
+  tool_name: string;
+  tool_type: ToolExecutionType | string | null;
+  mcp_server_name: string | null;
+  tool_id: string | null;
+  mcp_server_id: string | null;
+  arguments: unknown;
+  result: unknown;
+  status: ToolExecutionStatus | string | null;
+  error_message: string | null;
+  status_code: number | null;
+  duration_ms: number | null;
+  turn_number: number | null;
+  started_at: string | null;
+  meta_data: Record<string, unknown> | null;
+  created_at: string | null;
+  updated_at: string | null;
+  // Joined from `tools`
+  tool_description?: string | null;
+  tool_url?: string | null;
+  tool_method?: string | null;
+  tool_auth_type?: string | null;
+  tool_is_active?: boolean | null;
+  // Joined from `mcp_servers`
+  mcp_server_description?: string | null;
+  mcp_server_url?: string | null;
+  mcp_server_transport?: string | null;
+  mcp_server_is_active?: boolean | null;
+}
+
 export interface CallLogsState {
   callLogs: CallLogRow[];
   total: number;
