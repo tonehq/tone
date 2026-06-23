@@ -190,7 +190,23 @@ class PipecatPipelineBuilder(PipelineBuilder):
             except Exception as e:
                 logger.warning("MCP tools unavailable, disabled: {}", e)
 
-        # Combine doc tools, custom tools, and MCP tools into one ToolsSchema
+        # Built-in end_call tool — always-on for every agent. LLM-driven call
+        # termination; complements the keyword fast-path in CallEndDetectorProcessor.
+        end_call_registered = False
+        if llm and agent:
+            from core.services.pipeline.tools.end_call_tool import (
+                END_CALL_TOOL_NAME, END_CALL_TOOL_SCHEMA, create_end_call_handler,
+            )
+            llm.register_function(
+                END_CALL_TOOL_NAME,
+                create_end_call_handler(
+                    tool_call_entries=tool_call_entries,
+                    current_turn=current_turn,
+                ),
+            )
+            end_call_registered = True
+
+        # Combine doc tools, custom tools, MCP tools, and built-in tools into one ToolsSchema
         all_tool_schemas = []
         if doc_tools:
             all_tool_schemas.extend(doc_tools.standard_tools)
@@ -198,14 +214,17 @@ class PipecatPipelineBuilder(PipelineBuilder):
             all_tool_schemas.extend(custom_tools_schema.standard_tools)
         if mcp_tools_schema:
             all_tool_schemas.extend(mcp_tools_schema.standard_tools)
+        if end_call_registered:
+            all_tool_schemas.append(END_CALL_TOOL_SCHEMA)
 
         doc_count = len(doc_tools.standard_tools) if doc_tools else 0
         custom_count = len(custom_tools_schema.standard_tools) if custom_tools_schema else 0
         mcp_count = len(mcp_tools_schema.standard_tools) if mcp_tools_schema else 0
+        built_in_count = 1 if end_call_registered else 0
         if agent:
             logger.info(
-                "Agent {} tool inventory: {} total (doc={}, custom={}, mcp={})",
-                getattr(agent, "id", None), len(all_tool_schemas), doc_count, custom_count, mcp_count,
+                "Agent {} tool inventory: {} total (doc={}, custom={}, mcp={}, built_in={})",
+                getattr(agent, "id", None), len(all_tool_schemas), doc_count, custom_count, mcp_count, built_in_count,
             )
 
         if all_tool_schemas:
@@ -224,6 +243,9 @@ class PipecatPipelineBuilder(PipelineBuilder):
         # No-op for the date anchor when there's no system message; substitution is
         # skipped when prompt_context is empty.
         messages = params.messages_with_runtime_context(prompt_context)
+        if end_call_registered:
+            from core.services.pipeline.tools.end_call_tool import inject_end_call_instructions
+            messages = inject_end_call_instructions(messages)
 
         if is_s2s:
             # S2S pipeline: audio goes through the LLM directly (no separate STT/TTS).
