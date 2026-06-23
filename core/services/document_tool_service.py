@@ -100,6 +100,7 @@ def create_document_handler(agent_id: int, org_id: Any, api_key: str, upload_ids
             if not results:
                 tool_call_entry["result"] = "No relevant content found"
                 tool_call_entry["chunks_returned"] = 0
+                tool_call_entry["status_code"] = 200
                 tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
                 if tool_call_entries is not None:
                     tool_call_entries.append(tool_call_entry)
@@ -112,6 +113,7 @@ def create_document_handler(agent_id: int, org_id: Any, api_key: str, upload_ids
 
             tool_call_entry["result"] = "success"
             tool_call_entry["chunks_returned"] = len(results)
+            tool_call_entry["status_code"] = 200
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
             if tool_call_entries is not None:
                 tool_call_entries.append(tool_call_entry)
@@ -121,6 +123,7 @@ def create_document_handler(agent_id: int, org_id: Any, api_key: str, upload_ids
         except Exception as e:
             logger.error("read_document failed: {}", e)
             tool_call_entry["result"] = f"error: {str(e)}"
+            tool_call_entry["status_code"] = 500
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
             if tool_call_entries is not None:
                 tool_call_entries.append(tool_call_entry)
