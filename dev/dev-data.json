@@ -20831,7 +20831,7 @@
       "models": [
         {
           "name": "aura-2",
-          "base_url": "wss://api.deepgram.com/v1/speak",
+          "base_url": "https://api.deepgram.com",
           "meta_data": {
             "model": "aura-2"
           },
@@ -20839,7 +20839,7 @@
         },
         {
           "name": "aura",
-          "base_url": "wss://api.deepgram.com/v1/speak",
+          "base_url": "https://api.deepgram.com",
           "meta_data": {
             "model": "aura"
           },
@@ -46649,7 +46649,7 @@
       "models": [
         {
           "name": "bulbul:v3",
-          "base_url": "wss://api.sarvam.ai/text-to-speech/ws",
+          "base_url": "https://api.sarvam.ai",
           "meta_data": {
             "model": "bulbul:v3"
           },
@@ -46691,7 +46691,7 @@
         },
         {
           "name": "bulbul:v2",
-          "base_url": "wss://api.sarvam.ai/text-to-speech/ws",
+          "base_url": "https://api.sarvam.ai",
           "meta_data": {
             "model": "bulbul:v2"
           },
