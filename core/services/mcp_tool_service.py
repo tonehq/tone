@@ -293,6 +293,12 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, current
                 server.name, server.transport_type, len(headers),
             )
             mcp_client = MCPClient(server_params=server_params)
+            # Pipecat's newer MCPClient requires an explicit start() (or `async with`) before
+            # register_tools / tool calls — without it `_ensure_connected` raises
+            # "MCPClient is not connected". We use start() (not `async with`) because the
+            # session must stay open for the entire call: the LLM keeps a reference to
+            # mcp_client._tool_wrapper, which uses the same session at runtime.
+            await asyncio.wait_for(mcp_client.start(), timeout=MCP_REGISTER_TIMEOUT_S)
             # Decorate every handler MCPClient registers so MCP tool calls log their
             # name/arguments/output during the conversation; restore afterwards so only this
             # server's tools are wrapped.
