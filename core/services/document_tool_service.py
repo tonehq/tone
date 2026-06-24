@@ -83,6 +83,7 @@ def create_document_handler(agent_id: int, org_id: Any, api_key: str, upload_ids
         _t_start = _time.monotonic()
         tool_call_entry = {
             "tool": "read_document",
+            "tool_type": "read_document",
             "arguments": {"query": query},
             "timestamp": int(_time.time()),
             "turn": current_turn["number"] if current_turn else None,
