@@ -32,7 +32,9 @@ export interface CallMetricsRow {
   duration_seconds: number | null;
 
   avg_ttfb_ms: number | null;
+  p99_ttfb_ms: number | null;
   avg_latency_s: number | null;
+  p99_latency_s: number | null;
   total_tokens: number | null;
   total_tts_chars: number | null;
   turn_count: number | null;
