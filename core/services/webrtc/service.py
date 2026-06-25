@@ -1,8 +1,6 @@
 import uuid
 from typing import Any, Optional
 
-from shared.config import settings
-
 from core.services.webrtc.dispatcher import BotDispatcher, LocalBotDispatcher
 from core.services.webrtc.registry import build_provider
 from core.services.webrtc.session import WebRTCSession
@@ -34,15 +32,6 @@ class WebRTCSessionService:
             token=guest.token,
             client_url=engine.client_url(guest),
         )
-
-
-def share_base_url() -> str:
-    base = settings.WEBRTC_CLIENT_BASE_URL or settings.APPLICATION_URL or ""
-    return base.rstrip("/")
-
-
-def share_url(slug: str) -> str:
-    return f"{share_base_url()}/call/{slug}"
 
 
 _service: Optional[WebRTCSessionService] = None
