@@ -1,7 +1,8 @@
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+import httpx
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -24,10 +25,27 @@ class StartAgentRequest(BaseModel):
 @router.post("/agent/{agent_id}/start")
 async def start_agent(
     agent_id: UUID,
+    request: Request,
     body: StartAgentRequest = Body(default=StartAgentRequest()),
     db: Session = Depends(get_db),
     claims: JWTClaims = Depends(require_org_member),
 ):
+    worker_url = (settings.CALL_WORKER_INTERNAL_URL or "").rstrip("/")
+    if worker_url and request.headers.get("x-tone-internal") != "1":
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            resp = await client.post(
+                f"{worker_url}/api/v1/webrtc/agent/{agent_id}/start",
+                json=body.model_dump(),
+                headers={
+                    "authorization": request.headers.get("authorization", ""),
+                    "tenant_id": request.headers.get("tenant_id", ""),
+                    "x-tone-internal": "1",
+                },
+            )
+        if resp.status_code >= 400:
+            raise HTTPException(status_code=resp.status_code, detail=resp.json().get("detail"))
+        return resp.json()
+
     org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
     agent = (
         db.query(Agent)

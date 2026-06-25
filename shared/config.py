@@ -93,5 +93,6 @@ class Settings:
         self.LIVEKIT_API_SECRET: str = get_secret("LIVEKIT_API_SECRET", "")
         self.DAILY_API_KEY: str = get_secret("DAILY_API_KEY", "")
         self.WEBRTC_CLIENT_BASE_URL: str = get_secret("WEBRTC_CLIENT_BASE_URL", "")
+        self.CALL_WORKER_INTERNAL_URL: str = get_secret("CALL_WORKER_INTERNAL_URL", "")
 
 settings = Settings()
