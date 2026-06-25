@@ -36,6 +36,20 @@ export function computeMedian(values: number[]): number {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
+// Linear-interpolation percentile (matches numpy's default + the backend
+// _percentile helper). With small N — typical for a single call — p99
+// collapses to max.
+export function computePercentile(values: number[], q: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  if (sorted.length === 1) return sorted[0];
+  const rank = q * (sorted.length - 1);
+  const lo = Math.floor(rank);
+  const hi = Math.min(lo + 1, sorted.length - 1);
+  const frac = rank - lo;
+  return sorted[lo] + (sorted[hi] - sorted[lo]) * frac;
+}
+
 export interface LatencyTone {
   text: string;
   bar: string;

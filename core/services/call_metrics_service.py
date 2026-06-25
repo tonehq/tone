@@ -226,7 +226,11 @@ class CallMetricsService(BaseService):
             "duration_seconds": duration_seconds,
 
             "avg_ttfb_ms": _avg(s.get("value") for s in arrays["ttfb"]),
+            "p99_ttfb_ms": _percentile((s.get("value") for s in arrays["ttfb"]), 0.99),
             "avg_latency_s": _avg(s.get("latency") for s in arrays["user_bot_latency"]),
+            "p99_latency_s": _percentile(
+                (s.get("latency") for s in arrays["user_bot_latency"]), 0.99
+            ),
             "total_tokens": _sum(s.get("total_tokens") for s in arrays["llm_usage"]),
             "total_tts_chars": _sum(s.get("characters") for s in arrays["tts_usage"]),
             "turn_count": len(arrays["turns"]),
@@ -248,3 +252,20 @@ def _avg(values) -> Optional[float]:
 
 def _sum(values) -> int:
     return sum(v for v in values if isinstance(v, (int, float)))
+
+
+def _percentile(values, q: float) -> Optional[float]:
+    # Linear interpolation between adjacent ranks — same convention as numpy's
+    # default. With small N (typical for a single call) p99 collapses to max,
+    # which is the right behavior: the worst observed sample is the worst
+    # 1%-ile estimate we can give.
+    nums = sorted(v for v in values if isinstance(v, (int, float)))
+    if not nums:
+        return None
+    if len(nums) == 1:
+        return round(nums[0], 3)
+    rank = q * (len(nums) - 1)
+    lo = int(rank)
+    hi = min(lo + 1, len(nums) - 1)
+    frac = rank - lo
+    return round(nums[lo] + (nums[hi] - nums[lo]) * frac, 3)
