@@ -18,7 +18,7 @@ class WebRTCProvider(ABC):
         ...
 
     @abstractmethod
-    async def grant(self, room: str, url: str, identity: str) -> RoomGrant:
+    async def grant(self, room: str, url: str, identity: str, owner: bool = False) -> RoomGrant:
         ...
 
     @abstractmethod
