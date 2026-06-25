@@ -691,13 +691,13 @@ def build_tts(spec: dict) -> Optional[Any]:
             logger.debug("[TTS {}] qwen_kwargs: {}", provider_name, qwen_kwargs)
             return QwenWebSocketTTSService(url=ws_url, trace_id=get_trace_id(), **qwen_kwargs)
 
-        logger.warning("Unsupported TTS provider: %s", provider_name)
+        logger.warning("Unsupported TTS provider: {}", provider_name)
         return None
     except ImportError as e:
-        logger.warning("TTS provider %s not available: %s", provider_name, e)
+        logger.warning("TTS provider {} not available (ImportError): {}", provider_name, e)
         _close_unused_session(session)
         return None
     except Exception as e:
-        logger.exception("TTS provider %s failed to initialize: %s", provider_name, e)
+        logger.exception("TTS provider {} failed to initialize: {}", provider_name, e)
         _close_unused_session(session)
         return None

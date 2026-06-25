@@ -1,33 +1,18 @@
 'use client';
 
-import { CustomButton } from '@/components/shared';
 import type { CallMetricsTurnMetric } from '@/types/callLog';
-import { cn } from '@/utils/cn';
 import { LineChart } from 'lucide-react';
-import { useState } from 'react';
 
-import { type ReferenceLine } from './AxisBarChart';
+import { LatencyStatChips, useLatencyStats } from './LatencyStatChips';
 import { MetricsDataTable, type MetricsTableColumn } from './MetricsDataTable';
 import { SectionHeader } from './SectionHeader';
 import { StackedCallsBarChart } from './StackedCallsBarChart';
 import { useChartTableView } from './useChartTableView';
-import { computeMedian, formatMs } from './utils';
+import { formatMs } from './utils';
 
 interface TurnLatencySectionProps {
   turns: CallMetricsTurnMetric[];
 }
-
-type StatKey = 'avg' | 'median' | 'min' | 'max';
-
-const STAT_META: Record<
-  StatKey,
-  { label: string; color: NonNullable<ReferenceLine['color']>; dot: string }
-> = {
-  avg: { label: 'Avg', color: 'violet', dot: 'bg-violet-500' },
-  median: { label: 'Median', color: 'sky', dot: 'bg-sky-500' },
-  min: { label: 'Min', color: 'emerald', dot: 'bg-emerald-500' },
-  max: { label: 'Max', color: 'red', dot: 'bg-red-500' },
-};
 
 const formatSeconds = (v: number) => `${v.toFixed(2)}s`;
 
@@ -149,33 +134,10 @@ function TurnMetricCard({
   // (sum of all per-call values inside the turn). Turns with no measurement
   // are excluded so a placeholder zero doesn't drag the avg / min down.
   const turnTotals = stacks.map((s) => s.reduce((acc, v) => acc + v, 0)).filter((v) => v > 0);
-  const sampleCount = turnTotals.length;
-
-  const max = sampleCount > 0 ? Math.max(...turnTotals) : 0;
-  const min = sampleCount > 0 ? Math.min(...turnTotals) : 0;
-  const median = computeMedian(turnTotals);
-  const avg = sampleCount > 0 ? turnTotals.reduce((s, v) => s + v, 0) / sampleCount : 0;
-
-  const stats: Record<StatKey, number> = { avg, median, min, max };
-
-  const [visible, setVisible] = useState<Set<StatKey>>(() => new Set());
+  const { stats, sampleCount, visible, toggle, buildReferenceLines } = useLatencyStats(turnTotals);
   const { view, toggle: viewToggle } = useChartTableView('chart', `${title} view`);
 
-  const toggle = (key: StatKey) =>
-    setVisible((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-
-  const referenceLines: ReferenceLine[] = (Object.keys(STAT_META) as StatKey[])
-    .filter((key) => visible.has(key))
-    .map((key) => ({
-      value: stats[key],
-      label: `${STAT_META[key].label} ${format(stats[key])}`,
-      color: STAT_META[key].color,
-    }));
+  const referenceLines = buildReferenceLines(format);
 
   const rows = stacks.map((segments, i) => ({
     turn: turnLabels[i],
@@ -219,48 +181,14 @@ function TurnMetricCard({
 
       {view === 'chart' ? (
         <>
-          <div
-            role="group"
-            aria-label={`Toggle reference lines for ${seriesKey}`}
-            className="mb-3 flex flex-wrap gap-1.5"
-          >
-            {(Object.keys(STAT_META) as StatKey[]).map((key) => {
-              const meta = STAT_META[key];
-              const isOn = visible.has(key);
-              return (
-                <CustomButton
-                  key={key}
-                  type="text"
-                  size="sm"
-                  onClick={() => toggle(key)}
-                  aria-pressed={isOn}
-                  disabled={sampleCount === 0}
-                  className={cn(
-                    'h-auto items-start gap-1.5 rounded-md border border-transparent px-2 py-1 transition',
-                    isOn
-                      ? 'bg-muted/40 hover:bg-muted/60'
-                      : 'opacity-50 hover:opacity-100 hover:bg-muted/40',
-                  )}
-                >
-                  <span className="flex flex-col items-start gap-0.5">
-                    <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                      <span
-                        className={cn(
-                          'inline-block size-1.5 rounded-full',
-                          meta.dot,
-                          !isOn && 'opacity-40',
-                        )}
-                      />
-                      {meta.label}
-                    </span>
-                    <span className="text-sm font-semibold text-foreground">
-                      {sampleCount === 0 ? '—' : format(stats[key])}
-                    </span>
-                  </span>
-                </CustomButton>
-              );
-            })}
-          </div>
+          <LatencyStatChips
+            stats={stats}
+            visible={visible}
+            onToggle={toggle}
+            format={format}
+            disabled={sampleCount === 0}
+            ariaLabel={`Toggle reference lines for ${seriesKey}`}
+          />
           <StackedCallsBarChart
             stacks={stacks}
             formatValue={format}

@@ -1,59 +1,23 @@
 'use client';
 
-import { CustomButton } from '@/components/shared';
-import { cn } from '@/utils/cn';
-import { useState } from 'react';
-
-import { AxisBarChart, type ReferenceLine } from './AxisBarChart';
-import { computeMedian } from './utils';
+import { AxisBarChart } from './AxisBarChart';
+import { LatencyStatChips, type StatKey, useLatencyStats } from './LatencyStatChips';
 
 interface LatencyAxisChartProps {
   latencies: number[];
 }
 
-type StatKey = 'avg' | 'median' | 'min' | 'max';
+const DEFAULT_VISIBLE_STATS: readonly StatKey[] = ['avg', 'min'];
 
-const STAT_META: Record<
-  StatKey,
-  { label: string; color: NonNullable<ReferenceLine['color']>; dot: string }
-> = {
-  avg: { label: 'Avg', color: 'violet', dot: 'bg-violet-500' },
-  median: { label: 'Median', color: 'sky', dot: 'bg-sky-500' },
-  min: { label: 'Min', color: 'emerald', dot: 'bg-emerald-500' },
-  max: { label: 'Max', color: 'red', dot: 'bg-red-500' },
-};
-
-const DEFAULT_VISIBLE_STATS: StatKey[] = ['avg', 'min'];
-
-const formatSeconds = (v: number) => `${v.toFixed(2)}s`;
+const formatChipSeconds = (v: number) => `${v.toFixed(3)}s`;
+const formatAxisSeconds = (v: number) => `${v.toFixed(2)}s`;
 
 export function LatencyAxisChart({ latencies }: LatencyAxisChartProps) {
-  const max = Math.max(...latencies, 0);
-  const min = Math.min(...latencies);
-  const median = computeMedian(latencies);
-  const avg = latencies.reduce((s, v) => s + v, 0) / latencies.length;
+  const { stats, sampleCount, visible, toggle, buildReferenceLines } = useLatencyStats(latencies, {
+    defaultVisible: DEFAULT_VISIBLE_STATS,
+  });
 
-  const stats: Record<StatKey, number> = { avg, median, min, max };
-  const [visible, setVisible] = useState<Set<StatKey>>(
-    () => new Set<StatKey>(DEFAULT_VISIBLE_STATS),
-  );
-
-  const toggle = (key: StatKey) => {
-    setVisible((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  const referenceLines: ReferenceLine[] = (Object.keys(STAT_META) as StatKey[])
-    .filter((key) => visible.has(key))
-    .map((key) => ({
-      value: stats[key],
-      label: `${STAT_META[key].label} ${stats[key].toFixed(3)}s`,
-      color: STAT_META[key].color,
-    }));
+  const referenceLines = buildReferenceLines(formatChipSeconds);
 
   return (
     <div className="rounded-lg border border-border p-3">
@@ -63,47 +27,19 @@ export function LatencyAxisChart({ latencies }: LatencyAxisChartProps) {
           {latencies.length} measurement{latencies.length !== 1 ? 's' : ''}
         </span>
       </div>
-      <div role="group" aria-label="Toggle reference lines" className="mb-3 flex flex-wrap gap-1.5">
-        {(Object.keys(STAT_META) as StatKey[]).map((key) => {
-          const meta = STAT_META[key];
-          const isOn = visible.has(key);
-          return (
-            <CustomButton
-              key={key}
-              type="text"
-              size="sm"
-              onClick={() => toggle(key)}
-              aria-pressed={isOn}
-              className={cn(
-                'h-auto items-start gap-1.5 rounded-md border border-transparent px-2 py-1 transition',
-                isOn
-                  ? 'bg-muted/40 hover:bg-muted/60'
-                  : 'opacity-50 hover:opacity-100 hover:bg-muted/40',
-              )}
-            >
-              <span className="flex flex-col items-start gap-0.5">
-                <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <span
-                    className={cn(
-                      'inline-block size-1.5 rounded-full',
-                      meta.dot,
-                      !isOn && 'opacity-40',
-                    )}
-                  />
-                  {meta.label}
-                </span>
-                <span className="text-sm font-semibold text-foreground">
-                  {stats[key].toFixed(3)}s
-                </span>
-              </span>
-            </CustomButton>
-          );
-        })}
-      </div>
+
+      <LatencyStatChips
+        stats={stats}
+        visible={visible}
+        onToggle={toggle}
+        format={formatChipSeconds}
+        disabled={sampleCount === 0}
+        ariaLabel="Toggle reference lines"
+      />
 
       <AxisBarChart
         values={latencies}
-        formatValue={formatSeconds}
+        formatValue={formatAxisSeconds}
         xAxisLabel="Measurement"
         referenceLines={referenceLines}
       />
