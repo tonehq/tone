@@ -1,4 +1,4 @@
-import type { CallMetricsProcessing } from '@/types/callLog';
+import type { CallMetricsProcessing, CallMetricsTurnMetric } from '@/types/callLog';
 
 export const BAR_CHART_MAX_HEIGHT = 50;
 
@@ -53,6 +53,32 @@ export function computePercentile(values: number[], q: number): number {
 export interface LatencyTone {
   text: string;
   bar: string;
+}
+
+/**
+ * True if a turn has at least one real measurement in any pipeline stage.
+ *
+ * The pipecat `turn_metrics` array can include "shell" entries with no useful
+ * data — typically the pre/inter-turn bucket (turn 0) which only carries
+ * system events. Those should be hidden from every per-turn view.
+ *
+ * Everything else is kept, including:
+ *   • the agent's first greeting — has LLM + TTS but no STT, no end_to_end
+ *     (the bot spoke first, so there is no user→bot gap to measure)
+ *   • a final partial / abandoned turn — may only have STT or only end_to_end
+ *
+ * Per-metric cards then show "X of Y turns" where Y is the count below and X
+ * is the number of those turns that actually had a value for that metric.
+ */
+export function turnHasAnyMeasurement(t: CallMetricsTurnMetric): boolean {
+  const hasSample = (arr: readonly (number | null)[] | null | undefined): boolean =>
+    (arr ?? []).some((v) => v != null && v > 0);
+  return (
+    t.end_to_end != null ||
+    hasSample(t.llm_ttfb_all) ||
+    hasSample(t.stt_ttfb_all) ||
+    hasSample(t.tts_ttfb_all)
+  );
 }
 
 // Semantic thresholds for end-to-end user→bot latency (in seconds).
