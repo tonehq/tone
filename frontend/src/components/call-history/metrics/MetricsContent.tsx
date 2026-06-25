@@ -2,7 +2,7 @@
 
 import type { CallMetrics } from '@/types/callLog';
 import { cn } from '@/utils/cn';
-import { BrainCircuit, Gauge, MessageSquare, Mic } from 'lucide-react';
+import { AudioLines, BrainCircuit, Gauge, MessageSquare, Mic } from 'lucide-react';
 import React, { useMemo } from 'react';
 
 import { LLMUsageSection } from './LLMUsageSection';
@@ -10,8 +10,10 @@ import { MetricsCategory } from './MetricsCategory';
 import { PerTurnCallsSection } from './PerTurnCallsSection';
 import { ProcessingTimesSection } from './ProcessingTimesSection';
 import { StatCard } from './StatCard';
+import { STTUsageSection } from './STTUsageSection';
 import { TTSUsageSection } from './TTSUsageSection';
 import { TurnLatencySection } from './TurnLatencySection';
+import { formatAudioMs } from './utils';
 
 interface MetricsContentProps {
   metrics: CallMetrics;
@@ -25,6 +27,7 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, className }) =
   const userBotLatency = Array.isArray(metrics.user_bot_latency) ? metrics.user_bot_latency : [];
   const llmUsage = Array.isArray(metrics.llm_usage) ? metrics.llm_usage : [];
   const ttsUsage = Array.isArray(metrics.tts_usage) ? metrics.tts_usage : [];
+  const sttUsage = Array.isArray(metrics.stt_usage) ? metrics.stt_usage : [];
   const turnsList = Array.isArray(metrics.turns) ? metrics.turns : [];
   const processingList = Array.isArray(metrics.processing) ? metrics.processing : [];
   const turnMetrics = Array.isArray(metrics.turn_metrics) ? metrics.turn_metrics : [];
@@ -36,6 +39,7 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, className }) =
         : null;
     const totalTokens = llmUsage.reduce((sum, u) => sum + u.total_tokens, 0);
     const totalChars = ttsUsage.reduce((sum, u) => sum + u.characters, 0);
+    const totalSttAudioMs = sttUsage.reduce((sum, u) => sum + u.audio_ms, 0);
     // Count real user→bot exchanges when per-turn data is available — drops
     // the greeting (bot spoke first), abandoned turns, and pre/inter-turn
     // buckets. Falls back to the raw pipecat turn count for legacy calls
@@ -44,18 +48,18 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, className }) =
       turnMetrics.length > 0
         ? turnMetrics.filter((t) => t.end_to_end != null).length
         : turnsList.length;
-    return { avgLatency, totalTokens, totalChars, totalTurns };
-  }, [userBotLatency, llmUsage, ttsUsage, turnsList, turnMetrics]);
+    return { avgLatency, totalTokens, totalChars, totalSttAudioMs, totalTurns };
+  }, [userBotLatency, llmUsage, ttsUsage, sttUsage, turnsList, turnMetrics]);
 
   const hasProcessing = processingList.some((p) => p.model && p.value > 0);
   const hasTurnMetrics = turnMetrics.length > 0;
   const hasLatency = hasTurnMetrics || hasProcessing;
-  const hasUsage = llmUsage.length > 0 || ttsUsage.length > 0;
+  const hasUsage = llmUsage.length > 0 || ttsUsage.length > 0 || sttUsage.length > 0;
   const llmModels = [...new Set(llmUsage.map((u) => u.model))].join(', ');
 
   return (
     <div className={cn('flex flex-col gap-8', className)}>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatCard
           icon={Gauge}
           label="Avg Latency"
@@ -83,6 +87,13 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, className }) =
           sub={ttsUsage.length > 0 ? ttsUsage[0].model : undefined}
           color="bg-amber-500"
         />
+        <StatCard
+          icon={AudioLines}
+          label="STT Audio"
+          value={formatAudioMs(overview.totalSttAudioMs)}
+          sub={sttUsage.length > 0 ? (sttUsage[0].model ?? undefined) : undefined}
+          color="bg-cyan-500"
+        />
       </div>
 
       {hasLatency && (
@@ -100,6 +111,9 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, className }) =
           )}
           {ttsUsage.length > 0 && (
             <TTSUsageSection ttsUsage={ttsUsage} totalChars={overview.totalChars} />
+          )}
+          {sttUsage.length > 0 && (
+            <STTUsageSection sttUsage={sttUsage} totalAudioMs={overview.totalSttAudioMs} />
           )}
         </MetricsCategory>
       )}

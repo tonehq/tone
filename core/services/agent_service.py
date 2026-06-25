@@ -778,12 +778,22 @@ class AgentService(BaseService):
         user_id: Optional[UUID],
         *,
         source_config_id: Optional[UUID] = None,
+        from_scratch: bool = False,
     ) -> Tuple[Agent, Optional[AgentConfig]]:
-        """Clone the live config, apply edits, persist as a new **draft** version.
+        """Persist a new **draft** version of the agent's config.
 
-        The new version is NOT promoted to live — ``published_config_id`` stays
-        on the version that was live before. Callers must invoke
-        ``switch_active_version`` (the Publish action) to promote a draft.
+        Two modes:
+
+        * **Clone** (default) — copy fields and tool / MCP / KB attachments
+          from ``source_config_id`` (or the live version when omitted), apply
+          any edits in ``data``, and write as version N+1.
+        * **From scratch** (``from_scratch=True``) — skip source resolution
+          entirely. The new row starts with whatever ``config`` the request
+          carries (or null fields if none) and no attachments. Used by the
+          "Start fresh" path in the create-version dialog.
+
+        The new version is never auto-promoted to live; callers must invoke
+        ``switch_active_version`` (Publish) to make it serve traffic.
 
         Returns the agent along with the newly-created config so the router can
         render ``agent_response`` against the draft — otherwise the response
@@ -799,6 +809,7 @@ class AgentService(BaseService):
                 create_new_version=True,
                 make_live=False,
                 source_config_id=source_config_id,
+                from_scratch=from_scratch,
             )
             self.db.commit()
         except IntegrityError as e:
@@ -814,6 +825,57 @@ class AgentService(BaseService):
 
         self._invalidate_pipeline_cache(agent.id)
         return agent, new_config
+
+    def update_version(
+        self,
+        agent_id: str,
+        data: Dict[str, Any],
+        *,
+        source_config_id: Optional[UUID] = None,
+    ) -> Tuple[Agent, Optional[AgentConfig]]:
+        """Update an existing version in place — no new version row is created.
+
+        Target is ``source_config_id`` (the version the editor was previewing).
+        When omitted, falls back to the live config — i.e. same behaviour as
+        ``update_agent`` minus the top-level agent fields.
+
+        This is the Save endpoint's backend. Versioning lives behind its own
+        "Create version" button (see ``save_as_new_version``), so editing
+        never spawns drafts. ``published_config_id`` is not touched; if the
+        edited row happens to be live, callers serving traffic see the new
+        fields on the next pipeline cache miss.
+        """
+        agent = self.get_agent(agent_id)
+        if source_config_id is not None:
+            target = self.get_version(agent_id, str(source_config_id))
+        else:
+            target = self._resolve_current_config(agent)
+            if target is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Agent has no config to update",
+                )
+
+        try:
+            config_data = data.get("config")
+            if config_data is not None:
+                self._validate_meta_data_schema(config_data)
+                self._apply_config_fields(target, config_data)
+            self._sync_config_attachments(agent, target, data)
+            self.db.commit()
+        except IntegrityError as e:
+            self.db.rollback()
+            detail = _agent_unique_constraint_detail(e)
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from e
+        except HTTPException:
+            self.db.rollback()
+            raise
+        except Exception:
+            self.db.rollback()
+            raise
+
+        self._invalidate_pipeline_cache(agent.id)
+        return agent, target
 
     def switch_active_version(self, agent_id: str, config_id: str) -> Agent:
         """Promote an existing version to live.
@@ -876,6 +938,7 @@ class AgentService(BaseService):
         create_new_version: bool = False,
         make_live: bool = False,
         source_config_id: Optional[UUID] = None,
+        from_scratch: bool = False,
     ) -> Optional[AgentConfig]:
         """Shared logic for syncing config and attachments.
 
@@ -899,8 +962,6 @@ class AgentService(BaseService):
         tool_ids = data.get("tool_ids")
         mcp_server_ids = data.get("mcp_server_ids")
         upload_ids = data.get("upload_ids")
-        phone_numbers = data.get("phone_numbers")
-        web_channel_ids = data.get("web_channel_ids")
 
         config: Optional[AgentConfig] = None
         if config_data is not None:
@@ -911,6 +972,7 @@ class AgentService(BaseService):
                     user_id,
                     make_live=make_live,
                     source_config_id=source_config_id,
+                    from_scratch=from_scratch,
                 )
             else:
                 config = self._upsert_new_config(agent, config_data, user_id)
@@ -922,6 +984,7 @@ class AgentService(BaseService):
                 user_id,
                 make_live=make_live,
                 source_config_id=source_config_id,
+                from_scratch=from_scratch,
             )
 
         if config is None and (
@@ -929,18 +992,40 @@ class AgentService(BaseService):
         ):
             config = self._resolve_current_config(agent)
 
+        self._sync_config_attachments(agent, config, data)
+        return config
+
+    def _sync_config_attachments(
+        self,
+        agent: Agent,
+        config: Optional[AgentConfig],
+        data: Dict[str, Any],
+    ) -> None:
+        """Fan out the optional ``*_ids`` keys in ``data`` to their dedicated
+        ``_sync_*`` helpers.
+
+        Each input is independently optional: ``None`` means "leave that
+        attachment list alone", an empty list means "clear it". Phone numbers
+        and web channels are agent-scoped; the rest are config-scoped.
+
+        Used by both the in-place update path and the new-version path so the
+        attachment-sync fan-out lives in exactly one place.
+        """
+        tool_ids = data.get("tool_ids")
         if tool_ids is not None:
             self._sync_tools(agent, config, tool_ids)
+        mcp_server_ids = data.get("mcp_server_ids")
         if mcp_server_ids is not None:
             self._sync_mcp_servers(agent, config, mcp_server_ids)
+        upload_ids = data.get("upload_ids")
         if upload_ids is not None:
             self._sync_knowledge_base(agent, config, upload_ids)
+        phone_numbers = data.get("phone_numbers")
         if phone_numbers is not None:
             self._sync_phone_numbers(agent, phone_numbers)
+        web_channel_ids = data.get("web_channel_ids")
         if web_channel_ids is not None:
             self._sync_agent_channels(agent, web_channel_ids)
-
-        return config
 
     def get_agent(self, agent_id: str) -> Agent:
         """Fetch a single agent by UUID. Raises 404 if not found."""
@@ -1147,15 +1232,22 @@ class AgentService(BaseService):
         *,
         make_live: bool = False,
         source_config_id: Optional[UUID] = None,
+        from_scratch: bool = False,
     ) -> AgentConfig:
-        """Clone an existing config, apply edits, persist as version N+1.
+        """Persist a new version row (version N+1).
 
-        The clone source is ``source_config_id`` when the caller specifies it
-        (the editor passes the version the user was previewing — so saving
-        while viewing v9 produces a new version mirroring v9), otherwise the
-        currently-published config. Both unsent config fields AND the tool /
-        MCP / knowledge-base attachments are cloned from the source so the
-        new version starts as a faithful snapshot.
+        Two modes:
+
+        * **Clone** (default) — fields and tool / MCP / knowledge-base
+          attachments are copied from the resolved source (explicit
+          ``source_config_id`` wins, otherwise the live config). Saving while
+          previewing v9 produces a new row mirroring v9 before any edits in
+          ``config_data`` are applied. This is the "Copy from version" path
+          in the create-version dialog.
+        * **Fresh** (``from_scratch=True``) — no source is read. The new row
+          starts with whatever ``config_data`` carries (or null fields if
+          empty) and zero attachments. This is the "Start fresh" path.
+          ``source_config_id`` is ignored.
 
         ``make_live`` controls promotion:
 
@@ -1173,7 +1265,7 @@ class AgentService(BaseService):
             )
 
         from datetime import datetime, timezone
-        source = self._resolve_clone_source(agent, source_config_id)
+        source = None if from_scratch else self._resolve_clone_source(agent, source_config_id)
         now = datetime.now(timezone.utc) if make_live else None
         new_config = AgentConfig(
             agent_id=agent.id,

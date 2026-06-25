@@ -1,14 +1,14 @@
 'use client';
 
-import { Loader2, Radio, Save } from 'lucide-react';
+import { GitBranchPlus, Loader2, Radio, Save } from 'lucide-react';
 
 import { CustomButton, CustomTooltip } from '@/components/shared';
 
-export type AgentSaveAction = 'save' | 'publish';
+export type AgentSaveAction = 'save' | 'publish' | 'create-version';
 
 interface AgentSaveActionsProps {
   /** `create` mode shows a single "Create agent" button. `edit` mode shows
-   *  Save + Publish as two distinct top-level buttons. */
+   *  Save + Create version + Publish as three distinct top-level buttons. */
   mode: 'create' | 'edit';
   /** True when at least one draft (non-published) version exists. Drives
    *  whether the Publish toolbar button is enabled — clicking opens a picker
@@ -16,6 +16,9 @@ interface AgentSaveActionsProps {
   canPublish: boolean;
   saving: boolean;
   publishing: boolean;
+  /** True while the create-version dialog is mid-call. Disables every action
+   *  so the form can't be raced against the in-flight write. */
+  creatingVersion: boolean;
   onAction: (action: AgentSaveAction) => void;
 }
 
@@ -26,16 +29,17 @@ const SPINNER = <Loader2 className={`${ICON_CLASS} animate-spin`} />;
  * Primary action area for the agent editor toolbar.
  *
  * - **create** mode: one "Create agent" button.
- * - **edit** mode: two clearly-separated buttons — **Save** (always creates a
- *   new draft version) and **Publish** (opens the version picker modal; the
- *   parent renders the modal). Publish is disabled when there are no drafts
- *   to promote.
+ * - **edit** mode: three buttons — **Save** (mutates the loaded version in
+ *   place), **Create version** (opens a dialog to copy from or start fresh),
+ *   and **Publish** (opens the version picker modal). Publish is disabled
+ *   when there are no drafts to promote.
  */
 export default function AgentSaveActions({
   mode,
   canPublish,
   saving,
   publishing,
+  creatingVersion,
   onAction,
 }: AgentSaveActionsProps) {
   if (mode === 'create') {
@@ -53,11 +57,11 @@ export default function AgentSaveActions({
     );
   }
 
-  // Disable both while either is in-flight — the form mutates the same agent
-  // and a Save + Publish race would surface confusing intermediate state.
-  const busy = saving || publishing;
+  // Disable every action while any of them is in-flight — the form mutates
+  // the same agent and racing them would surface confusing intermediate state.
+  const busy = saving || publishing || creatingVersion;
   const publishDisabled = busy || !canPublish;
-  const publishTooltip = !canPublish ? 'No drafts to publish — click Save to create one.' : null;
+  const publishTooltip = !canPublish ? 'No drafts to publish — create a version first.' : null;
 
   return (
     <div className="flex items-center gap-1.5">
@@ -71,6 +75,17 @@ export default function AgentSaveActions({
         className="h-8"
       >
         Save
+      </CustomButton>
+      <CustomButton
+        type="default"
+        size="sm"
+        icon={creatingVersion ? SPINNER : <GitBranchPlus className={ICON_CLASS} />}
+        onClick={() => onAction('create-version')}
+        loading={creatingVersion}
+        disabled={busy}
+        className="h-8"
+      >
+        Create version
       </CustomButton>
       <PublishButton
         publishing={publishing}
