@@ -11,7 +11,7 @@ import {
   type StackedSeriesMeta,
 } from './StackedTurnLatencyChart';
 import { useChartTableView } from './useChartTableView';
-import { formatMs } from './utils';
+import { formatMs, turnHasAnyMeasurement } from './utils';
 
 interface PerTurnCallsSectionProps {
   turns: CallMetricsTurnMetric[];
@@ -69,15 +69,14 @@ const clean = (raw: readonly (number | null)[] | null | undefined): number[] =>
  */
 function buildRows(turns: CallMetricsTurnMetric[]): PerCallRow[] {
   const out: PerCallRow[] = [];
-  let displayIndex = 0;
   for (const t of turns) {
     const llm = clean(t.llm_ttfb_all);
     const stt = clean(t.stt_ttfb_all);
     const tts = clean(t.tts_ttfb_all);
     const rowCount = Math.max(llm.length, stt.length, tts.length);
     if (rowCount === 0) continue;
-    displayIndex += 1;
-    const turnLabel = String(displayIndex);
+    // Raw pipecat turn number — matches the Tools & MCP Executions table.
+    const turnLabel = String(t.turn);
     const totalLatency =
       llm.reduce((s, v) => s + v, 0) +
       stt.reduce((s, v) => s + v, 0) +
@@ -100,8 +99,8 @@ function buildRows(turns: CallMetricsTurnMetric[]): PerCallRow[] {
 /** Per-turn first-TTFB series for the stacked bar chart. */
 function buildChartData(turns: CallMetricsTurnMetric[]): StackedSeriesDatum[] {
   const sanitize = (v: number | null): number | null => (v == null || v <= 0 ? null : v);
-  return turns.map((t, i) => ({
-    label: String(i + 1),
+  return turns.map((t) => ({
+    label: String(t.turn),
     values: [sanitize(t.llm_ttfb), sanitize(t.stt_ttfb), sanitize(t.tts_ttfb)],
   }));
 }
@@ -124,10 +123,12 @@ export function PerTurnCallsSection({ turns }: PerTurnCallsSectionProps) {
 
   if (turns.length === 0) return null;
 
-  // Same filter as TurnLatencySection's cards above — only real user→bot
-  // exchanges. Drops the auto-greeting, pre/inter-turn bucket, and abandoned
-  // turns so every Latency view on the page shows the same turn set.
-  const sorted = [...turns].sort((a, b) => a.turn - b.turn).filter((t) => t.end_to_end != null);
+  // Same filter as TurnLatencySection's cards above — real turns only
+  // (pipecat counts from 1; turn 0 is an internal pre-turn bucket) AND must
+  // have at least one measurement. Includes greeting and final partial turn.
+  const sorted = [...turns]
+    .sort((a, b) => a.turn - b.turn)
+    .filter((t) => t.turn >= 1 && turnHasAnyMeasurement(t));
   const rows = buildRows(sorted);
   const chartData = buildChartData(sorted);
   if (rows.length === 0 && chartData.length === 0) return null;

@@ -8,7 +8,7 @@ import { MetricsDataTable, type MetricsTableColumn } from './MetricsDataTable';
 import { SectionHeader } from './SectionHeader';
 import { StackedCallsBarChart } from './StackedCallsBarChart';
 import { useChartTableView } from './useChartTableView';
-import { formatMs } from './utils';
+import { formatMs, turnHasAnyMeasurement } from './utils';
 
 interface TurnLatencySectionProps {
   turns: CallMetricsTurnMetric[];
@@ -47,19 +47,21 @@ interface MetricSeries {
 export function TurnLatencySection({ turns }: TurnLatencySectionProps) {
   if (turns.length === 0) return null;
 
-  // Keep only real conversation turns — those with a user→bot transition.
-  // `end_to_end` is the canonical signal: it's only set when both
-  // `user_stopped_at` and `bot_started_at` were captured. This drops:
-  //   • the pre/inter-turn bucket (turn 0) — system events between turns
-  //   • the agent's first greeting — bot spoke first, no preceding user input
-  //   • abandoned turns where the bot never started speaking
-  const sorted = [...turns].sort((a, b) => a.turn - b.turn).filter((t) => t.end_to_end != null);
+  // Keep any real conversational turn (pipecat numbers them starting at 1)
+  // with at least one measurement (LLM / STT / TTS or end_to_end). This
+  // includes the greeting and any final partial turn. Turn 0 is an internal
+  // pre/inter-turn bucket — not a conversational turn — and is always hidden.
+  const sorted = [...turns]
+    .sort((a, b) => a.turn - b.turn)
+    .filter((t) => t.turn >= 1 && turnHasAnyMeasurement(t));
 
   if (sorted.length === 0) return null;
 
-  // Display labels start at 1 for the first real turn (the "Turns" stat card
-  // counts the same set).
-  const turnLabels = sorted.map((_, i) => String(i + 1));
+  // Display labels use the raw pipecat turn number so they line up with the
+  // Tools & MCP Executions table (which also shows the raw turn number). A
+  // gap in the sequence (e.g. 2, 3, 5, 6) is real — it means a filtered turn
+  // sat in between (greeting / abandoned / pre-turn bucket).
+  const turnLabels = sorted.map((t) => String(t.turn));
 
   const series: MetricSeries[] = [
     {
