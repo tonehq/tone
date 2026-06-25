@@ -116,6 +116,7 @@ class PipecatPipelineBuilder(PipelineBuilder):
 
         from core.processors.call_end_detector import CallEndDetectorProcessor
         from core.processors.metrics_collector import MetricsCollectorProcessor
+        from core.processors.stt_audio_usage_tap import STTAudioUsageTap
         from core.processors.stt_latency_tap import STTLatencyTap
         # Telephony resilience (ported from the call_engines work): keep barge-in
         # robust when Silero VAD gets stuck "speaking" on phone-line noise.
@@ -308,15 +309,35 @@ class PipecatPipelineBuilder(PipelineBuilder):
             # without pushing it downstream, so anything past it never sees the
             # transcript. The tap emits a synthetic MetricsFrame that flows on
             # to MetricsCollectorProcessor through the normal MetricsFrame path.
+            # Resolve the STT model name once for both taps. Prefer the
+            # runtime instance's `model_name` (set by services that call
+            # `set_model_name` in their constructor — Deepgram, OpenAI,
+            # Groq, Parakeet, Granite, ...) and fall back to the configured
+            # spec name for services that leave the AIService default of
+            # `""` in place (NvidiaWebSocketService → voxtral / gemma). The
+            # `or None` step normalizes pipecat's empty-string default into
+            # a clean fallthrough.
+            stt_model_name = (
+                (getattr(stt, "model_name", None) or None)
+                or (params.stt.get("model_name") if params.stt else None)
+            )
+
             stt_latency_tap = STTLatencyTap(
                 stt_processor_name=stt.name,
-                stt_model_name=getattr(stt, "model_name", None),
+                stt_model_name=stt_model_name,
             )
+
+            # STTAudioUsageTap derives billable STT audio duration (ms) from
+            # the AudioRawFrames flowing into the STT service. Must sit
+            # immediately BEFORE stt so it counts what the provider is about
+            # to receive (and skips audio the STT service mutes out).
+            stt_audio_usage_tap = STTAudioUsageTap(stt=stt, stt_model_name=stt_model_name)
 
             pipeline_processors = [
                 transport.input(),
                 rtvi,
                 vad_timeout,
+                stt_audio_usage_tap,
                 stt,
                 duplicate_filter,
                 stt_latency_tap,

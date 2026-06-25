@@ -2,15 +2,16 @@ import { atom } from 'jotai';
 
 import {
   createAgent,
+  createAgentVersion,
   deleteAgent,
   deleteAgentVersion,
   getAgent,
   getAllAgents,
   listAgentVersions,
   listAgents,
-  saveAgentAsNewVersion,
   switchActiveAgentVersion,
   updateAgent,
+  updateAgentVersion,
 } from '@/services/agentsService';
 import type {
   AgentDetail,
@@ -114,13 +115,22 @@ export const listAgentVersionsAtom = atom(
   async (_get, _set, agentId: string): Promise<AgentVersionSummary[]> => listAgentVersions(agentId),
 );
 
-export const saveAgentAsNewVersionAtom = atom(
+export const createAgentVersionAtom = atom(
   null,
   async (
     _get,
     _set,
-    args: { agentId: string; values: Parameters<typeof saveAgentAsNewVersion>[1] },
-  ): Promise<AgentDetail> => saveAgentAsNewVersion(args.agentId, args.values),
+    args: { agentId: string; values: Parameters<typeof createAgentVersion>[1] },
+  ): Promise<AgentDetail> => createAgentVersion(args.agentId, args.values),
+);
+
+export const updateAgentVersionAtom = atom(
+  null,
+  async (
+    _get,
+    _set,
+    args: { agentId: string; values: Parameters<typeof updateAgentVersion>[1] },
+  ): Promise<AgentDetail> => updateAgentVersion(args.agentId, args.values),
 );
 
 export const switchActiveAgentVersionAtom = atom(

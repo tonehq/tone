@@ -24,6 +24,12 @@ export interface CallMetricsTTSUsage {
   characters: number;
 }
 
+export interface CallMetricsSTTUsage {
+  model: string | null;
+  processor: string;
+  audio_ms: number;
+}
+
 export interface CallMetricsProcessing {
   model: string | null;
   value: number;
@@ -54,6 +60,7 @@ export interface CallMetricsTurnMetric {
     total_tokens: number;
   } | null;
   tts_characters: number | null;
+  stt_audio_ms: number | null;
 }
 
 export interface CallMetrics {
@@ -61,6 +68,11 @@ export interface CallMetrics {
   turns: CallMetricsTurn[];
   llm_usage: CallMetricsLLMUsage[];
   tts_usage: CallMetricsTTSUsage[];
+  /**
+   * Per-utterance STT audio duration (ms). Optional — rows persisted
+   * before the `stt_usage` column existed will return `null`/missing.
+   */
+  stt_usage?: CallMetricsSTTUsage[] | null;
   processing: CallMetricsProcessing[];
   user_bot_latency: CallMetricsLatency[];
   /**

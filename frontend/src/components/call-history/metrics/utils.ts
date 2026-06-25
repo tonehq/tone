@@ -13,6 +13,27 @@ export function formatMs(seconds: number): string {
   return `${seconds.toFixed(2)}s`;
 }
 
+/**
+ * Format an audio duration (ms) for display. Voice-agent durations span
+ * ~100ms (single utterance) to several minutes (full call), so unit pick:
+ *   - `Xms` for sub-second values (rare; very short utterances)
+ *   - `X.Xs` for sub-minute values (typical per-utterance + short totals)
+ *   - `Xm Ys` for >= 60s (whole-call totals).
+ */
+export function formatAudioMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return '0s';
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  // Round to whole seconds first, then split into m/s. Splitting before
+  // rounding can land on remSec=60 (e.g. 119.5s → floor()→1m + round(59.5)→60s
+  // → "1m 60s") which is malformed.
+  const totalSec = Math.round(seconds);
+  const minutes = Math.floor(totalSec / 60);
+  const remSec = totalSec - minutes * 60;
+  return `${minutes}m ${remSec}s`;
+}
+
 export function extractProcessorName(processor: string): string {
   return processor.replace(/#\d+$/, '');
 }

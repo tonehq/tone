@@ -9,16 +9,20 @@ import { FormProvider, useForm, useWatch } from 'react-hook-form';
 
 import {
   createAgentAtom,
+  createAgentVersionAtom,
   deleteAgentAtom,
   deleteAgentVersionAtom,
   fetchAgentAtom,
-  saveAgentAsNewVersionAtom,
   switchActiveAgentVersionAtom,
   updateAgentAtom,
+  updateAgentVersionAtom,
 } from '@/atoms/AgentsAtom';
 import { AgentEditorProvider } from '@/components/agents/AgentEditorContext';
 import AgentSaveActions, { type AgentSaveAction } from '@/components/agents/AgentSaveActions';
 import AgentVersionSelector from '@/components/agents/AgentVersionSelector';
+import CreateVersionModal, {
+  type CreateVersionSelection,
+} from '@/components/agents/CreateVersionModal';
 import PublishVersionConfirmModal from '@/components/agents/PublishVersionConfirmModal';
 import { AgentFormNavProvider } from '@/components/agents/agent-form/AgentFormNav';
 import { buildAgentNav } from '@/components/agents/agent-form/sectionNav';
@@ -70,7 +74,8 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   const [, createAgent] = useAtom(createAgentAtom);
   const [, updateAgent] = useAtom(updateAgentAtom);
   const [, deleteAgent] = useAtom(deleteAgentAtom);
-  const [, saveAgentAsNewVersion] = useAtom(saveAgentAsNewVersionAtom);
+  const [, updateAgentVersion] = useAtom(updateAgentVersionAtom);
+  const [, createAgentVersion] = useAtom(createAgentVersionAtom);
   const [, switchActiveAgentVersion] = useAtom(switchActiveAgentVersionAtom);
   const [, deleteAgentVersion] = useAtom(deleteAgentVersionAtom);
 
@@ -79,9 +84,11 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   const [loading, setLoading] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [creatingVersion, setCreatingVersion] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [createVersionOpen, setCreateVersionOpen] = useState(false);
   const [detail, setDetail] = useState<AgentDetail | null>(null);
   /** Which version is loaded in the form. Null until the agent has loaded. */
   const [viewedConfigId, setViewedConfigId] = useState<string | null>(null);
@@ -213,16 +220,18 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     [basePath, methods, router],
   );
 
-  // ─── save / delete / publish ────────────────────────────────────────────────
+  // ─── save / delete / publish / create-version ─────────────────────────────
+  /** Save button handler — validates, then either creates the agent (create
+   *  flow) or mutates the loaded version in place (edit flow). Save never
+   *  spawns a new draft; that's the "Create version" button's job. */
   const handleSave = useCallback(async () => {
     const valid = await methods.trigger();
     if (!valid) {
       router.push(`${basePath}/basics`);
       return;
     }
-    // In edit mode, no edits → no new draft. Without this guard, spam-clicking
-    // Save would pile up identical empty drafts in the version history. The
-    // create flow always proceeds because the agent itself doesn't exist yet.
+    // No edits → nothing to write. The create flow always proceeds because
+    // the agent itself doesn't exist yet.
     if (isEditMode && agentId && isEqual(methods.getValues(), loadedBaselineRef.current)) {
       showToast.success('No changes', 'Nothing to save.');
       return;
@@ -230,7 +239,6 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     const values = methods.getValues();
     setSaving(true);
     try {
-      // Create flow — first save creates the agent (which is born already published).
       if (!isEditMode || !agentId) {
         const created = await createAgent(formStateToCreatePayload(values));
         showToast.success('Agent created');
@@ -239,16 +247,11 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
         return;
       }
 
-      // Edit flow — every Save creates a fresh draft version. The published
-      // version that's serving calls is not touched until the user clicks
-      // Publish. We send the full form state (not a diff) so the new draft
-      // reflects exactly what the user sees — see backend
-      // `_create_new_version_config` for how the snapshot is built. We also
-      // declare `source_config_id` so the backend clones tools / MCP / KB
-      // from the version the user was previewing rather than the published
-      // one.
+      // Edit flow — full form state goes to PUT /update_version, scoped to
+      // the version currently loaded in the form (``source_config_id``). The
+      // backend mutates that row in place — see service ``update_version``.
       const full = formStateToCreatePayload(values);
-      const updated = await saveAgentAsNewVersion({
+      const updated = await updateAgentVersion({
         agentId,
         values: {
           config: full.config,
@@ -262,10 +265,8 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
       });
       applyDetail(updated);
       showToast.success(
-        'Draft saved',
-        updated.config?.version != null
-          ? `v${updated.config.version} was saved as a new draft. Select it in the version dropdown to publish.`
-          : undefined,
+        'Changes saved',
+        updated.config?.version != null ? `v${updated.config.version} was updated.` : undefined,
       );
     } catch (err) {
       if (!applyServerValidation(err)) handleApiError(err);
@@ -282,8 +283,47 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     isEditMode,
     methods,
     router,
-    saveAgentAsNewVersion,
+    updateAgentVersion,
   ]);
+
+  /** Create-version modal handler. Spawns a new draft either by cloning a
+   *  picked version (``mode === 'copy'``) or starting fresh (no source).
+   *  After success the editor jumps to the new draft so the user can edit
+   *  it immediately — Save then mutates that draft in place. */
+  const handleCreateVersion = useCallback(
+    async ({ mode: createMode, sourceConfigId }: CreateVersionSelection) => {
+      if (!agentId) return;
+      setCreatingVersion(true);
+      try {
+        const updated = await createAgentVersion({
+          agentId,
+          values: {
+            source_config_id: createMode === 'copy' ? sourceConfigId : null,
+            from_scratch: createMode === 'fresh',
+          },
+        });
+        applyDetail(updated);
+        // Move the chip to the new draft so the version dropdown reflects
+        // what the form is rendering. Without this, the chip would stay
+        // pinned to the previously-loaded version while the form shows the
+        // new draft — a confusing mismatch when the user is about to edit.
+        const newConfigId = updated.config?.id ?? null;
+        if (newConfigId) setViewedConfigId(newConfigId);
+        setCreateVersionOpen(false);
+        showToast.success(
+          'Version created',
+          updated.config?.version != null
+            ? `v${updated.config.version} is now loaded — click Publish when ready.`
+            : undefined,
+        );
+      } catch (err) {
+        handleApiError(err);
+      } finally {
+        setCreatingVersion(false);
+      }
+    },
+    [agentId, applyDetail, createAgentVersion],
+  );
 
   const handleViewVersion = useCallback(
     async (configId: string) => {
@@ -442,6 +482,13 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
         guardedAction(() => setPublishOpen(true));
         return;
       }
+      if (action === 'create-version') {
+        // Creating a version also reloads the form with the new draft, so
+        // any unsaved edits on the currently-loaded version would be lost.
+        // Same guard as Publish.
+        guardedAction(() => setCreateVersionOpen(true));
+        return;
+      }
       void handleSave();
     },
     [guardedAction, handleSave],
@@ -575,6 +622,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
                     canPublish={canPublish}
                     saving={saving}
                     publishing={publishing}
+                    creatingVersion={creatingVersion}
                     onAction={dispatchAction}
                   />
                 </div>
@@ -636,6 +684,19 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
               versions={versions}
               publishedVersionId={publishedVersion?.id ?? null}
               loading={publishing}
+            />
+
+            <CreateVersionModal
+              open={createVersionOpen}
+              // Ignore close requests while the create call is in flight so
+              // the dialog can't be dismissed mid-write.
+              onClose={() => {
+                if (!creatingVersion) setCreateVersionOpen(false);
+              }}
+              onConfirm={handleCreateVersion}
+              versions={versions}
+              publishedVersionId={publishedVersion?.id ?? null}
+              loading={creatingVersion}
             />
           </div>
         </AgentEditorProvider>

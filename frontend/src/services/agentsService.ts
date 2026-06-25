@@ -56,21 +56,45 @@ export const listAgentVersions = async (agentId: string): Promise<AgentVersionSu
   return Array.isArray(res.data) ? res.data : [];
 };
 
-/** Clone an existing config, apply edits, persist as the next version (as a
- *  draft — not auto-promoted). The body mirrors {@link UpdateAgentPayload}
- *  minus the top-level agent attributes (name/description/agent_type/
- *  is_active), plus `source_config_id`: the version whose fields and
- *  tool/MCP/KB attachments should be cloned. The editor sends the version
- *  currently loaded in the form so "save while previewing v9" produces a new
- *  version mirroring v9. Omit to fall back to the published version. */
-export const saveAgentAsNewVersion = async (
+/** Body shared by both the "create new version" and "update version" endpoints —
+ *  same shape minus the top-level agent attributes (name/description/
+ *  agent_type/is_active). Keeping it as one type means the editor builds the
+ *  payload once and routes it to whichever endpoint the user picked. */
+type VersionPayload = Pick<
+  UpdateAgentPayload,
+  'config' | 'tool_ids' | 'mcp_server_ids' | 'upload_ids' | 'phone_numbers' | 'web_channel_ids'
+> & { source_config_id?: string | null };
+
+/** Spawn a new draft version of the agent.
+ *
+ *  - `from_scratch: false` (default) — clone the version identified by
+ *    `source_config_id` (or the live one when omitted). Fields + tool / MCP /
+ *    KB attachments come from the source; any non-null fields in `payload`
+ *    overlay it.
+ *  - `from_scratch: true` — no source is read. The draft starts from the
+ *    payload (or null fields if absent) with no attachments. Used by the
+ *    "Start fresh" option in the create-version dialog.
+ *
+ *  Drafts are never auto-promoted. The user clicks Publish to make a draft
+ *  serve calls. */
+export const createAgentVersion = async (
   agentId: string,
-  payload: Pick<
-    UpdateAgentPayload,
-    'config' | 'tool_ids' | 'mcp_server_ids' | 'upload_ids' | 'phone_numbers' | 'web_channel_ids'
-  > & { source_config_id?: string | null },
+  payload: VersionPayload & { from_scratch?: boolean },
 ): Promise<AgentDetail> => {
   const res = await axiosInstance.post<AgentDetail>('/agent/save_as_new_version', payload, {
+    params: { agent_id: agentId },
+  });
+  return res.data;
+};
+
+/** In-place update of the version identified by `source_config_id` — no new
+ *  row is created. When `source_config_id` is omitted, the live config is
+ *  updated. Used by the Save button so editing doesn't pad version history. */
+export const updateAgentVersion = async (
+  agentId: string,
+  payload: VersionPayload,
+): Promise<AgentDetail> => {
+  const res = await axiosInstance.put<AgentDetail>('/agent/update_version', payload, {
     params: { agent_id: agentId },
   });
   return res.data;

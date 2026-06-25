@@ -33,6 +33,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { getDisplayDurationSeconds } from './callDuration';
 import { getCallStatusLabel, getCallStatusTone } from './callStatus';
+import { formatAudioMs } from './metrics/utils';
 import CallHistoryFilterDrawer, {
   countDrawerFilters,
   createEmptyFilterState,
@@ -87,6 +88,7 @@ const COLUMN_GROUPS: Array<{
       { key: 'avg_latency', label: 'Avg Latency' },
       { key: 'llm_tokens', label: 'LLM Tokens' },
       { key: 'tts_chars', label: 'TTS Chars' },
+      { key: 'stt_audio', label: 'STT Audio' },
       { key: 'turns', label: 'Turns' },
     ],
   },
@@ -103,6 +105,10 @@ function summarizeMetrics(metrics: CallLogRow['metrics']) {
     : null;
   const totalTokens = metrics.llm_usage.reduce((s, u) => s + u.total_tokens, 0);
   const totalChars = metrics.tts_usage.reduce((s, u) => s + u.characters, 0);
+  // Defensive shim — `stt_usage` is null/missing on legacy rows persisted
+  // before the column existed.
+  const sttUsage = Array.isArray(metrics.stt_usage) ? metrics.stt_usage : [];
+  const totalSttAudioMs = sttUsage.reduce((s, u) => s + u.audio_ms, 0);
   // Count real user→bot exchanges when per-turn data is available — matches
   // the Turns stat card on the metrics detail page. Falls back to the raw
   // pipecat turn count for legacy calls without `turn_metrics`.
@@ -111,7 +117,7 @@ function summarizeMetrics(metrics: CallLogRow['metrics']) {
     turnMetrics.length > 0
       ? turnMetrics.filter((t) => t.end_to_end != null).length
       : metrics.turns.length;
-  return { avgLatencyS, totalTokens, totalChars, turnCount };
+  return { avgLatencyS, totalTokens, totalChars, totalSttAudioMs, turnCount };
 }
 
 const CallHistory: React.FC = () => {
@@ -429,6 +435,19 @@ const CallHistory: React.FC = () => {
       render: (_value, record) => {
         const s = summarizeMetrics(record.metrics);
         return <span className="tabular-nums text-sm">{formatCount(s?.totalChars ?? null)}</span>;
+      },
+    },
+    {
+      key: 'stt_audio',
+      title: 'STT Audio',
+      render: (_value, record) => {
+        const s = summarizeMetrics(record.metrics);
+        const ms = s?.totalSttAudioMs;
+        return (
+          <span className="tabular-nums text-sm">
+            {ms == null || ms <= 0 ? '-' : formatAudioMs(ms)}
+          </span>
+        );
       },
     },
     {
