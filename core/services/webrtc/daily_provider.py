@@ -38,8 +38,11 @@ class DailyProvider(WebRTCProvider):
             response.raise_for_status()
             return response.json()["url"]
 
-    async def grant(self, room: str, url: str, identity: str) -> RoomGrant:
-        payload = {"properties": {"room_name": room, "user_name": identity}}
+    async def grant(self, room: str, url: str, identity: str, owner: bool = False) -> RoomGrant:
+        properties = {"room_name": room, "user_name": identity}
+        if owner:
+            properties["is_owner"] = True
+        payload = {"properties": properties}
         async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(f"{self._api_url}/meeting-tokens", json=payload, headers=self._headers())
             response.raise_for_status()

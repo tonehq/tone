@@ -18,7 +18,7 @@ class WebRTCSessionService:
         room = f"agent-{agent.id}-{uuid.uuid4().hex[:12]}"
         url = await engine.create_room(room)
         guest = await engine.grant(room, url, _GUEST_IDENTITY)
-        bot_grant = await engine.grant(room, url, _BOT_IDENTITY)
+        bot_grant = await engine.grant(room, url, _BOT_IDENTITY, owner=True)
         body = {"agent_id": str(agent.id), "transport_type": engine.name}
         await self._dispatcher.dispatch(
             room,

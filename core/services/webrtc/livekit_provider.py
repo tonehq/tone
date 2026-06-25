@@ -32,7 +32,7 @@ class LiveKitProvider(WebRTCProvider):
     async def create_room(self, room: str) -> str:
         return self._url
 
-    async def grant(self, room: str, url: str, identity: str) -> RoomGrant:
+    async def grant(self, room: str, url: str, identity: str, owner: bool = False) -> RoomGrant:
         token = (
             api.AccessToken(self._api_key, self._api_secret)
             .with_identity(identity)
