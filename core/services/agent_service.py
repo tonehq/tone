@@ -23,7 +23,7 @@ from core.models.model import Model
 from core.services.agent_config_service import AgentConfigService
 from core.services.channel_service import ChannelService
 from core.services.meta_data_schema_validator import MetaDataSchemaValidator
-from core.services.webrtc import share_url, supported_providers
+from core.services.webrtc import supported_providers
 from core.models.agent_tool import AgentTool
 from core.models.agent_mcp_server import AgentMcpServer
 from core.models.agent_knowledge_base import AgentKnowledgeBase
@@ -1695,7 +1695,6 @@ class AgentService(BaseService):
                 "channel_type": ch.channel_type,
                 "name": ch.name,
                 "slug": ac.slug,
-                "share_url": share_url(ac.slug),
             }
             for ac, ch in channel_rows
         ]
