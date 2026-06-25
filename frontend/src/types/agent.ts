@@ -122,7 +122,6 @@ export interface AgentWebChannelRef {
   channel_type: string;
   name: string;
   slug: string;
-  share_url: string;
 }
 
 /** Full detail (create/get/update response). */
