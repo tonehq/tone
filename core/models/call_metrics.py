@@ -20,6 +20,7 @@ class CallMetrics(OrgScopedModel):
     processing = Column(JSONB, nullable=True)
     llm_usage = Column(JSONB, nullable=True)
     tts_usage = Column(JSONB, nullable=True)
+    stt_usage = Column(JSONB, nullable=True)
     user_bot_latency = Column(JSONB, nullable=True)
     turns = Column(JSONB, nullable=True)
     turn_metrics = Column(JSONB, nullable=True)

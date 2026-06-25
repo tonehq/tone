@@ -36,6 +36,8 @@ from pipecat.metrics.metrics import (
 )
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 
+from core.processors.stt_audio_usage_tap import STTUsageMetricsData
+
 # Service-role categories used by the per-turn aggregation. The builder
 # supplies a {processor_instance_name -> category} map so the collector can
 # bucket TTFB samples without string-matching service class names.
@@ -64,6 +66,7 @@ class _TurnBuffer:
     processing: List[dict] = field(default_factory=list)
     llm_usage: List[dict] = field(default_factory=list)
     tts_usage: List[dict] = field(default_factory=list)
+    stt_usage: List[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -122,6 +125,11 @@ def _finalize_buffer(
             "prompt_tokens": _sum_field(buffer.llm_usage, "prompt_tokens"),
             "completion_tokens": _sum_field(buffer.llm_usage, "completion_tokens"),
             "total_tokens": _sum_field(buffer.llm_usage, "total_tokens"),
+            "cache_read_input_tokens": _sum_field(buffer.llm_usage, "cache_read_input_tokens"),
+            "cache_creation_input_tokens": _sum_field(
+                buffer.llm_usage, "cache_creation_input_tokens"
+            ),
+            "reasoning_tokens": _sum_field(buffer.llm_usage, "reasoning_tokens"),
         }
 
     return {
@@ -140,6 +148,7 @@ def _finalize_buffer(
         "tts_ttfb_all": [_round_optional(v) for v in tts],
         "llm_usage": llm_summary,
         "tts_characters": _sum_field(buffer.tts_usage, "characters") if buffer.tts_usage else None,
+        "stt_audio_ms": _sum_field(buffer.stt_usage, "audio_ms") if buffer.stt_usage else None,
     }
 
 
@@ -174,6 +183,7 @@ class MetricsCollectorProcessor(FrameProcessor):
         self.processing_metrics: List[dict] = []
         self.llm_usage_metrics: List[dict] = []
         self.tts_usage_metrics: List[dict] = []
+        self.stt_usage_metrics: List[dict] = []
 
         # Per-turn view.
         self._buffers: Dict[int, _TurnBuffer] = {}
@@ -367,6 +377,9 @@ class MetricsCollectorProcessor(FrameProcessor):
                 "prompt_tokens": usage.prompt_tokens,
                 "completion_tokens": usage.completion_tokens,
                 "total_tokens": usage.total_tokens,
+                "cache_read_input_tokens": usage.cache_read_input_tokens,
+                "cache_creation_input_tokens": usage.cache_creation_input_tokens,
+                "reasoning_tokens": usage.reasoning_tokens,
             }
             self.llm_usage_metrics.append(entry)
             self._active_buffer().llm_usage.append(entry)
@@ -380,6 +393,15 @@ class MetricsCollectorProcessor(FrameProcessor):
             self.tts_usage_metrics.append(entry)
             self._active_buffer().tts_usage.append(entry)
 
+        elif isinstance(data, STTUsageMetricsData):
+            entry = {
+                "processor": data.processor,
+                "model": data.model,
+                "audio_ms": data.value,
+            }
+            self.stt_usage_metrics.append(entry)
+            self._active_buffer().stt_usage.append(entry)
+
     # ------------------------------------------------------------------
     # Read-out
     # ------------------------------------------------------------------
@@ -391,6 +413,7 @@ class MetricsCollectorProcessor(FrameProcessor):
             "processing": self.processing_metrics,
             "llm_usage": self.llm_usage_metrics,
             "tts_usage": self.tts_usage_metrics,
+            "stt_usage": self.stt_usage_metrics,
             "turn_metrics": self.get_turn_metrics(),
         }
 

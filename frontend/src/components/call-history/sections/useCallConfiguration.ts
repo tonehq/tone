@@ -67,8 +67,10 @@ function displayable(v: string | null | undefined): string | null {
   return isOpaqueId(v) ? null : v;
 }
 
-/** First non-empty `model` in a metrics array (LLM / TTS usage rows). */
-function firstModel<T extends { model: string | null }>(rows: T[] | undefined): string | null {
+/** First non-empty `model` in a metrics array (LLM / STT / TTS usage rows). */
+function firstModel<T extends { model: string | null }>(
+  rows: T[] | null | undefined,
+): string | null {
   if (!rows?.length) return null;
   return rows.find((r) => r.model)?.model ?? null;
 }
@@ -101,6 +103,7 @@ function resolvePipeline(
   // human-readable, fall back to null so the UI renders an em-dash.
   const llmModel = firstModel(metrics?.llm_usage) ?? displayable(llm.model_id as string | null);
   const ttsModel = firstModel(metrics?.tts_usage) ?? displayable(voice.model_id as string | null);
+  const sttModel = firstModel(metrics?.stt_usage) ?? displayable(stt.model as string | null);
 
   return {
     llm: {
@@ -109,7 +112,7 @@ function resolvePipeline(
     },
     stt: {
       provider: providerName(sources.catalog, stt.provider_id as string | null),
-      model: displayable(stt.model as string | null),
+      model: sttModel,
     },
     tts: {
       provider: providerName(sources.catalog, voice.provider_id),

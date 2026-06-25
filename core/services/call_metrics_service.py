@@ -19,6 +19,7 @@ _METRIC_FIELDS = (
     "processing",
     "llm_usage",
     "tts_usage",
+    "stt_usage",
     "user_bot_latency",
     "turns",
     "turn_metrics",
@@ -233,6 +234,7 @@ class CallMetricsService(BaseService):
             ),
             "total_tokens": _sum(s.get("total_tokens") for s in arrays["llm_usage"]),
             "total_tts_chars": _sum(s.get("characters") for s in arrays["tts_usage"]),
+            "total_stt_audio_ms": _sum(s.get("audio_ms") for s in arrays["stt_usage"]),
             "turn_count": len(arrays["turns"]),
         }
 
