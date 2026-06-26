@@ -16,6 +16,10 @@ export interface CallMetricsLLMUsage {
   total_tokens: number;
   prompt_tokens: number;
   completion_tokens: number;
+  /** Optional — present on rows persisted with cache-aware providers. */
+  cache_read_input_tokens?: number | null;
+  cache_creation_input_tokens?: number | null;
+  reasoning_tokens?: number | null;
 }
 
 export interface CallMetricsTTSUsage {
@@ -61,6 +65,15 @@ export interface CallMetricsTurnMetric {
   } | null;
   tts_characters: number | null;
   stt_audio_ms: number | null;
+  /**
+   * Per-call usage breakdown within the turn — mirrors the `*_ttfb_all`
+   * pattern. Optional: missing on rows persisted before per-call usage was
+   * being collected. Each array has one entry per individual service call
+   * inside the turn.
+   */
+  llm_usage_all?: CallMetricsLLMUsage[] | null;
+  tts_usage_all?: CallMetricsTTSUsage[] | null;
+  stt_usage_all?: CallMetricsSTTUsage[] | null;
 }
 
 export interface CallMetrics {
