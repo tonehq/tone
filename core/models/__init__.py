@@ -44,3 +44,6 @@ from core.models.call import Call
 from core.models.call_metrics import CallMetrics
 from core.models.tool_execution import ToolExecution
 from core.models.webhook import Webhook
+
+# Audit
+from core.models.audit_log import AuditLog

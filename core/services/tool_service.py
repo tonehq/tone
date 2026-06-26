@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 from loguru import logger
 from sqlalchemy import case, or_
 
+from core.services.audit_actions import AgentAuditAction, AuditResourceType
 from core.services.base import BaseService
 from core.models.tool import Tool
 from core.models.agent_tool import AgentTool
@@ -330,6 +331,16 @@ class ToolService(BaseService):
             for aid in new_ids
         ]
         self.db.add_all(agent_tools)
+
+        for at in agent_tools:
+            self.audit.log(
+                AgentAuditAction.TOOL_ATTACHED,
+                agent_id=at.agent_id,
+                agent_config_id=at.agent_config_id,
+                target_resource_type=AuditResourceType.TOOL,
+                target_resource_id=str(tool_id),
+            )
+
         self.db.commit()
         return agent_tools
 
@@ -366,6 +377,13 @@ class ToolService(BaseService):
                 detail="Tool is not attached to any of the specified agents",
             )
         for at in agent_tools:
+            self.audit.log(
+                AgentAuditAction.TOOL_DETACHED,
+                agent_id=at.agent_id,
+                agent_config_id=at.agent_config_id,
+                target_resource_type=AuditResourceType.TOOL,
+                target_resource_id=str(tool_id),
+            )
             self.db.delete(at)
         self.db.commit()
         return {"message": f"Tool detached from {len(agent_tools)} agent(s) successfully"}
