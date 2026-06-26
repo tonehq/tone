@@ -1,9 +1,12 @@
 from sqlalchemy.orm import Session, Query
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from typing import Optional, Union, List, Dict, Any, Type, TypeVar
+from typing import TYPE_CHECKING, Optional, Union, List, Dict, Any, Type, TypeVar
 from uuid import UUID
 
 from core.context import get_current_org_id, get_current_user_id
+
+if TYPE_CHECKING:
+    from core.services.audit_service import AuditService
 
 T = TypeVar('T')
 
@@ -21,6 +24,22 @@ class BaseService:
     @property
     def user_id(self) -> Optional[Union[str, UUID]]:
         return self._user_id or get_current_user_id()
+
+    @property
+    def audit(self) -> "AuditService":
+        """Shared audit-log writer bound to this service's session.
+
+        Lazy so the import stays local and we don't pay the construction
+        cost on services that never log. ``AuditService`` itself extends
+        ``BaseService``; instantiating it here would otherwise recurse,
+        so the writer's own ``audit`` property is never invoked.
+        """
+        writer = getattr(self, "_audit_writer", None)
+        if writer is None:
+            from core.services.audit_service import AuditService
+            writer = AuditService(self.db, user_id=self._user_id, org_id=self._org_id)
+            self._audit_writer = writer
+        return writer
 
     def query(self, model: Type[T]) -> Query:
         q = self.db.query(model)

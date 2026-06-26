@@ -6,6 +6,7 @@ from fastapi import HTTPException, status
 
 from sqlalchemy import case, or_
 
+from core.services.audit_actions import AgentAuditAction, AuditResourceType
 from core.services.base import BaseService
 from core.models.mcp_server import McpServer
 from core.models.agent_mcp_server import AgentMcpServer
@@ -457,6 +458,13 @@ class McpServerService(BaseService):
                 created_at=now,
                 updated_at=now,
             ))
+            self.audit.log(
+                AgentAuditAction.MCP_ATTACHED,
+                agent_id=agent_id,
+                agent_config_id=published_map[agent_id],
+                target_resource_type=AuditResourceType.MCP_SERVER,
+                target_resource_id=str(mcp_server_id),
+            )
         self.db.commit()
 
     def detach_from_agents(self, mcp_server_id, agent_ids: List) -> Dict[str, str]:
@@ -491,6 +499,13 @@ class McpServerService(BaseService):
                 detail="MCP server is not attached to any of the specified agents",
             )
         for link in links:
+            self.audit.log(
+                AgentAuditAction.MCP_DETACHED,
+                agent_id=link.agent_id,
+                agent_config_id=link.agent_config_id,
+                target_resource_type=AuditResourceType.MCP_SERVER,
+                target_resource_id=str(mcp_server_id),
+            )
             self.db.delete(link)
         self.db.commit()
         return {"message": f"MCP server detached from {len(links)} agent(s) successfully"}
