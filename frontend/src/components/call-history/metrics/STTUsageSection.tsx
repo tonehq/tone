@@ -10,7 +10,7 @@ import { SectionHeader } from './SectionHeader';
 import { StackedCallsBarChart } from './StackedCallsBarChart';
 import { buildPerTurnUsageRows, TurnUsageTable } from './TurnUsageCard';
 import { useChartTableView } from './useChartTableView';
-import { extractProcessorName, formatAudioMs } from './utils';
+import { formatAudioMs } from './utils';
 
 interface STTUsageSectionProps {
   sttUsage: CallMetricsSTTUsage[];
@@ -27,13 +27,6 @@ const STT_TABLE_COLUMNS: MetricsTableColumn<CallMetricsSTTUsage>[] = [
     cell: (row) => formatAudioMs(row.audio_ms),
   },
 ];
-
-/** `DeepgramSTTService · nova-2` — keeps the per-call row scannable. */
-function sttCellSubtext(call: CallMetricsSTTUsage): string | undefined {
-  const proc = call.processor ? extractProcessorName(call.processor) : undefined;
-  if (call.model && proc) return `${proc} · ${call.model}`;
-  return call.model ?? proc;
-}
 
 export function STTUsageSection({ sttUsage, totalAudioMs, turns }: STTUsageSectionProps) {
   const avgMs = sttUsage.length > 0 ? totalAudioMs / sttUsage.length : 0;
@@ -68,12 +61,7 @@ export function STTUsageSection({ sttUsage, totalAudioMs, turns }: STTUsageSecti
           xLabels={perTurn.turnLabels}
         />
       ) : (
-        <TurnUsageTable
-          rows={perTurnRows}
-          columnHeader="STT Usage"
-          format={formatAudioMs}
-          cellSubtext={sttCellSubtext}
-        />
+        <TurnUsageTable rows={perTurnRows} columnHeader="STT Usage" format={formatAudioMs} />
       );
     }
     if (view === 'chart') {
