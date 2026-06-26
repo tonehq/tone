@@ -114,20 +114,24 @@ class AuditService(BaseService):
         unit of work continues normally even if the audit row could not
         be written for any reason.
         """
-        # Attach/detach events carry their meaning entirely in the
-        # ``target_resource_id``. Without help, ``changes`` ends up null and
-        # the UI has nothing to render. Auto-derive a minimal before/after
-        # payload from the action suffix so attach rows show ``after={id}``
-        # and detach rows show ``before={id}`` — symmetrical with field
-        # diffs from ``log_field_diff``. Callers can still pass an explicit
-        # before/after to override.
+        # Attach/detach and create/delete events carry their meaning entirely
+        # in the ``target_resource_id``. Without help, ``changes`` ends up
+        # null and the UI has nothing to render. Auto-derive a minimal
+        # before/after payload from the action suffix so the four
+        # life-cycle verbs render symmetrically:
+        #
+        #   .attached / .created  → ``after = {id, type}``  (new state)
+        #   .detached / .deleted  → ``before = {id, type}`` (prior state)
+        #
+        # Callers can still pass an explicit before/after to override (e.g.
+        # ``version.switched`` which needs both sides plus a typed payload).
         if before is None and after is None and target_resource_id is not None:
             resource_payload = {"id": str(target_resource_id)}
             if target_resource_type:
                 resource_payload["type"] = target_resource_type
-            if action.endswith(".attached"):
+            if action.endswith((".attached", ".created")):
                 after = resource_payload
-            elif action.endswith(".detached"):
+            elif action.endswith((".detached", ".deleted")):
                 before = resource_payload
 
         try:
