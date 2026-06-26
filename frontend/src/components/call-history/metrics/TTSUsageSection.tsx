@@ -10,7 +10,6 @@ import { SectionHeader } from './SectionHeader';
 import { StackedCallsBarChart } from './StackedCallsBarChart';
 import { buildPerTurnUsageRows, TurnUsageTable } from './TurnUsageCard';
 import { useChartTableView } from './useChartTableView';
-import { extractProcessorName } from './utils';
 
 interface TTSUsageSectionProps {
   ttsUsage: CallMetricsTTSUsage[];
@@ -29,12 +28,6 @@ const TTS_TABLE_COLUMNS: MetricsTableColumn<CallMetricsTTSUsage>[] = [
 ];
 
 const formatChars = (v: number) => `${Math.round(v).toLocaleString()} chars`;
-
-function ttsCellSubtext(call: CallMetricsTTSUsage): string | undefined {
-  const proc = call.processor ? extractProcessorName(call.processor) : undefined;
-  if (call.model && proc) return `${proc} · ${call.model}`;
-  return call.model ?? proc;
-}
 
 export function TTSUsageSection({ ttsUsage, totalChars, turns }: TTSUsageSectionProps) {
   const { view, toggle } = useChartTableView('chart', 'TTS usage view');
@@ -68,12 +61,7 @@ export function TTSUsageSection({ ttsUsage, totalChars, turns }: TTSUsageSection
           xLabels={perTurn.turnLabels}
         />
       ) : (
-        <TurnUsageTable
-          rows={perTurnRows}
-          columnHeader="TTS Usage"
-          format={formatChars}
-          cellSubtext={ttsCellSubtext}
-        />
+        <TurnUsageTable rows={perTurnRows} columnHeader="TTS Usage" format={formatChars} />
       );
     }
     if (view === 'chart') {

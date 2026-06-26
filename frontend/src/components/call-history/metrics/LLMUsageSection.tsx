@@ -10,7 +10,6 @@ import { SectionHeader } from './SectionHeader';
 import { StackedCallsBarChart } from './StackedCallsBarChart';
 import { buildPerTurnUsageRows, TurnUsageTable } from './TurnUsageCard';
 import { useChartTableView } from './useChartTableView';
-import { extractProcessorName } from './utils';
 
 interface LLMUsageSectionProps {
   llmUsage: CallMetricsLLMUsage[];
@@ -42,12 +41,11 @@ const LLM_TABLE_COLUMNS: MetricsTableColumn<CallMetricsLLMUsage>[] = [
 
 const formatTokens = (v: number) => `${Math.round(v).toLocaleString()} tokens`;
 
-/** Compose a short label like `OpenAILLMService · 800 prompt · 400 completion`
- *  for the cell sub-line. Always returns a non-empty string for valid input. */
+/** Cell sub-line: `753 prompt · 37 completion` — keeps the per-call token
+ *  split visible without surfacing the underlying service/model name (those
+ *  already appear in the call's request log if a deeper dive is needed). */
 function llmCellSubtext(call: CallMetricsLLMUsage): string {
-  const proc = call.processor ? extractProcessorName(call.processor) : undefined;
-  const breakdown = `${call.prompt_tokens.toLocaleString()} prompt · ${call.completion_tokens.toLocaleString()} completion`;
-  return proc ? `${proc} · ${breakdown}` : breakdown;
+  return `${call.prompt_tokens.toLocaleString()} prompt · ${call.completion_tokens.toLocaleString()} completion`;
 }
 
 /** Legacy file-local chart of per-call total tokens — rendered for calls
