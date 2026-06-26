@@ -1,7 +1,7 @@
 /**
  * Agent create — inbound flow against the real backend.
  *
- * Scenarios AC-001 … AC-030 from frontend/e2e/docs/agents-create.md.
+ * Scenarios AC-001 … AC-030 from frontend/e2e/ux_flow_docs/agents-create.md.
  *
  * Strategy:
  * - Real login via the shared worker fixture.

@@ -79,7 +79,24 @@ def _build_service_categories(*, stt: Any, llm: Any, tts: Any) -> dict:
 class PipecatPipelineBuilder(PipelineBuilder):
     """Assemble a Pipecat pipeline from `PipelineParams`."""
 
-    async def build(self, transport: Any, agent: Any = None, audio_buffer: Any = None, from_number: str = "", prompt_context: Any = None) -> BuildResult:
+    async def build(
+        self,
+        transport: Any,
+        agent: Any = None,
+        audio_buffer: Any = None,
+        from_number: str = "",
+        prompt_context: Any = None,
+        # Mutable holders owned by the runner so tool handlers (custom / built-in /
+        # document / MCP) can append one entry per invocation. The runner threads
+        # the same list into ``CallLogService.complete_call(tool_calls=...)`` at
+        # call end, which persists each entry as a row in ``tool_executions``.
+        # ``current_turn`` is a dict so handlers see the latest turn number live
+        # (bumped by the runner's ``on_turn_started``); ``tool_dedup`` is the
+        # per-call idempotency cache shared across MCP and built-in handlers.
+        tool_call_entries: Any = None,
+        current_turn: Any = None,
+        tool_dedup: Any = None,
+    ) -> BuildResult:
         params = self.params
         is_s2s = params.is_s2s
 
@@ -90,14 +107,17 @@ class PipecatPipelineBuilder(PipelineBuilder):
         from pipecat.processors.aggregators.llm_response_universal import (
             LLMContextAggregatorPair, LLMUserAggregatorParams)
         from pipecat.turns.user_turn_strategies import UserTurnStrategies
+        from pipecat.audio.vad.silero import SileroVADAnalyzer
         from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
         from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
         from pipecat.audio.turn.smart_turn.base_smart_turn import SmartTurnParams
         from pipecat.processors.aggregators.llm_text_processor import LLMTextProcessor
-        from pipecat.processors.frameworks.rtvi import (RTVIConfig, RTVIObserver, RTVIProcessor)
+        from pipecat.processors.frameworks.rtvi import (RTVIObserver, RTVIProcessor)
 
         from core.processors.call_end_detector import CallEndDetectorProcessor
         from core.processors.metrics_collector import MetricsCollectorProcessor
+        from core.processors.stt_audio_usage_tap import STTAudioUsageTap
+        from core.processors.stt_latency_tap import STTLatencyTap
         # Telephony resilience (ported from the call_engines work): keep barge-in
         # robust when Silero VAD gets stuck "speaking" on phone-line noise.
         from core.processors.vad_speaking_timeout import VADSpeakingTimeoutProcessor
@@ -110,14 +130,17 @@ class PipecatPipelineBuilder(PipelineBuilder):
         tts = build_tts(params.tts) if (not is_s2s and params.tts) else None
 
         _t = _time.monotonic()
-        rtvi = RTVIProcessor(config=RTVIConfig(config=[]))
+        rtvi = RTVIProcessor()
 
         # Register document tool from the cached KB data (no DB query; pgvector still
         # searched live at call time inside the handler).
         doc_tools = None
         if agent:
             from core.services.document_tool_service import build_document_tool
-            doc_tools = build_document_tool(llm, agent.id, agent.organization_id, params.kb)
+            doc_tools = build_document_tool(
+                llm, agent.id, agent.organization_id, params.kb,
+                tool_call_entries=tool_call_entries, current_turn=current_turn,
+            )
 
         # Custom + built-in tools, rebuilt from the cached tool dicts (no DB query).
         custom_tools_schema = None
@@ -136,10 +159,17 @@ class PipecatPipelineBuilder(PipelineBuilder):
                     # lookup. (The old code routed identically: tool_type != "custom".)
                     if tool.tool_type != "custom":
                         handler = create_built_in_tool_handler(
-                            tool, from_number, org_id=agent.organization_id
+                            tool, from_number, org_id=agent.organization_id,
+                            tool_call_entries=tool_call_entries,
+                            current_turn=current_turn,
+                            tool_dedup=tool_dedup,
                         )
                     else:
-                        handler = create_custom_tool_handler(tool)
+                        handler = create_custom_tool_handler(
+                            tool,
+                            tool_call_entries=tool_call_entries,
+                            current_turn=current_turn,
+                        )
                     # Register under the SAME sanitized name used in the schema so the
                     # model's tool call (e.g. "calender_tool") maps back to this handler.
                     fn_name = sanitize_tool_name(tool.name)
@@ -152,11 +182,32 @@ class PipecatPipelineBuilder(PipelineBuilder):
         if agent:
             try:
                 from core.services.mcp_tool_service import register_mcp_tools
-                mcp_tools_schema = await register_mcp_tools(llm, agent.id)
+                mcp_tools_schema = await register_mcp_tools(
+                    llm, agent.id,
+                    tool_call_entries=tool_call_entries,
+                    current_turn=current_turn,
+                    tool_dedup=tool_dedup,
+                )
             except Exception as e:
                 logger.warning("MCP tools unavailable, disabled: {}", e)
 
-        # Combine doc tools, custom tools, and MCP tools into one ToolsSchema
+        # Built-in end_call tool — always-on for every agent. LLM-driven call
+        # termination; complements the keyword fast-path in CallEndDetectorProcessor.
+        end_call_registered = False
+        if llm and agent:
+            from core.services.pipeline.tools.end_call_tool import (
+                END_CALL_TOOL_NAME, END_CALL_TOOL_SCHEMA, create_end_call_handler,
+            )
+            llm.register_function(
+                END_CALL_TOOL_NAME,
+                create_end_call_handler(
+                    tool_call_entries=tool_call_entries,
+                    current_turn=current_turn,
+                ),
+            )
+            end_call_registered = True
+
+        # Combine doc tools, custom tools, MCP tools, and built-in tools into one ToolsSchema
         all_tool_schemas = []
         if doc_tools:
             all_tool_schemas.extend(doc_tools.standard_tools)
@@ -164,14 +215,17 @@ class PipecatPipelineBuilder(PipelineBuilder):
             all_tool_schemas.extend(custom_tools_schema.standard_tools)
         if mcp_tools_schema:
             all_tool_schemas.extend(mcp_tools_schema.standard_tools)
+        if end_call_registered:
+            all_tool_schemas.append(END_CALL_TOOL_SCHEMA)
 
         doc_count = len(doc_tools.standard_tools) if doc_tools else 0
         custom_count = len(custom_tools_schema.standard_tools) if custom_tools_schema else 0
         mcp_count = len(mcp_tools_schema.standard_tools) if mcp_tools_schema else 0
+        built_in_count = 1 if end_call_registered else 0
         if agent:
             logger.info(
-                "Agent {} tool inventory: {} total (doc={}, custom={}, mcp={})",
-                getattr(agent, "id", None), len(all_tool_schemas), doc_count, custom_count, mcp_count,
+                "Agent {} tool inventory: {} total (doc={}, custom={}, mcp={}, built_in={})",
+                getattr(agent, "id", None), len(all_tool_schemas), doc_count, custom_count, mcp_count, built_in_count,
             )
 
         if all_tool_schemas:
@@ -190,6 +244,9 @@ class PipecatPipelineBuilder(PipelineBuilder):
         # No-op for the date anchor when there's no system message; substitution is
         # skipped when prompt_context is empty.
         messages = params.messages_with_runtime_context(prompt_context)
+        if end_call_registered:
+            from core.services.pipeline.tools.end_call_tool import inject_end_call_instructions
+            messages = inject_end_call_instructions(messages)
 
         if is_s2s:
             # S2S pipeline: audio goes through the LLM directly (no separate STT/TTS).
@@ -220,6 +277,7 @@ class PipecatPipelineBuilder(PipelineBuilder):
             context_aggregator = LLMContextAggregatorPair(
                 context,
                 user_params=LLMUserAggregatorParams(
+                    vad_analyzer=SileroVADAnalyzer(),
                     user_turn_strategies=UserTurnStrategies(
                         stop=[
                             # Primary: Smart Turn (the new design's turn detector).
@@ -245,12 +303,44 @@ class PipecatPipelineBuilder(PipelineBuilder):
             vad_timeout = VADSpeakingTimeoutProcessor(max_duration_secs=8.0)
             duplicate_filter = DuplicateTranscriptionFilter()
 
+            # STTLatencyTap derives STT TTFB from the wall-clock gap between
+            # UserStoppedSpeaking and the first TranscriptionFrame. It MUST sit
+            # before user_aggregator — the aggregator absorbs TranscriptionFrame
+            # without pushing it downstream, so anything past it never sees the
+            # transcript. The tap emits a synthetic MetricsFrame that flows on
+            # to MetricsCollectorProcessor through the normal MetricsFrame path.
+            # Resolve the STT model name once for both taps. Prefer the
+            # runtime instance's `model_name` (set by services that call
+            # `set_model_name` in their constructor — Deepgram, OpenAI,
+            # Groq, Parakeet, Granite, ...) and fall back to the configured
+            # spec name for services that leave the AIService default of
+            # `""` in place (NvidiaWebSocketService → voxtral / gemma). The
+            # `or None` step normalizes pipecat's empty-string default into
+            # a clean fallthrough.
+            stt_model_name = (
+                (getattr(stt, "model_name", None) or None)
+                or (params.stt.get("model_name") if params.stt else None)
+            )
+
+            stt_latency_tap = STTLatencyTap(
+                stt_processor_name=stt.name,
+                stt_model_name=stt_model_name,
+            )
+
+            # STTAudioUsageTap derives billable STT audio duration (ms) from
+            # the AudioRawFrames flowing into the STT service. Must sit
+            # immediately BEFORE stt so it counts what the provider is about
+            # to receive (and skips audio the STT service mutes out).
+            stt_audio_usage_tap = STTAudioUsageTap(stt=stt, stt_model_name=stt_model_name)
+
             pipeline_processors = [
                 transport.input(),
                 rtvi,
                 vad_timeout,
+                stt_audio_usage_tap,
                 stt,
                 duplicate_filter,
+                stt_latency_tap,
                 call_end_detector,
                 user_aggregator,
                 llm,

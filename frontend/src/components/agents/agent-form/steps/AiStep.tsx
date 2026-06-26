@@ -42,7 +42,7 @@ export default function AiStep() {
   useEffect(() => {
     let cancelled = false;
     setLoadingProviders(true);
-    listProviderCatalog()
+    listProviderCatalog('llm')
       .then((items) => {
         if (cancelled) return;
         setProviders(items);

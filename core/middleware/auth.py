@@ -1,3 +1,4 @@
+from datetime import timedelta
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, Dict, Any, Union
@@ -8,6 +9,7 @@ from jose import JWTError, jwt
 
 from core.config import settings
 from core.context import set_tenant_context
+from core.database.session import get_db
 from core.internal.capabilities import is_ee_enabled
 
 
@@ -21,6 +23,10 @@ class JWTClaims(BaseModel):
     exp: int
     iat: int
     type: Optional[str] = "access"
+    # Session id (== ``user_sessions.id``). Present on tokens minted after
+    # the session-tracking change. Used by ``get_jwt_claims`` to verify the
+    # session is still active on every authenticated request.
+    jti: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -50,12 +56,16 @@ class JWTManager:
     def access_token_expire_seconds(self) -> int:
         return self.access_token_expire_hours * 3600
 
+    def refresh_token_ttl(self) -> timedelta:
+        return timedelta(days=self.refresh_token_expire_days)
+
     def create_access_token(
         self,
         user_id: Union[str, UUID],
         email: str,
         org_id: Optional[Union[str, UUID]] = None,
-        role: Optional[str] = None
+        role: Optional[str] = None,
+        session_id: Optional[Union[str, UUID]] = None,
     ) -> str:
         current_time = int(time.time())
         payload = {
@@ -67,6 +77,12 @@ class JWTManager:
             "iat": current_time,
             "exp": current_time + (self.access_token_expire_hours * 3600)
         }
+        # ``jti`` ties the access token to a ``user_sessions`` row so that
+        # ``get_jwt_claims`` can reject requests as soon as the session is
+        # revoked (logout, password change, password reset) — without
+        # waiting for the access token to expire.
+        if session_id is not None:
+            payload["jti"] = str(session_id)
 
         token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
         return token
@@ -75,6 +91,8 @@ class JWTManager:
         self,
         user_id: Union[str, UUID],
         email: str,
+        session_id: Union[str, UUID],
+        family: Union[str, UUID],
         org_id: Optional[Union[str, UUID]] = None,
     ) -> str:
         current_time = int(time.time())
@@ -83,6 +101,8 @@ class JWTManager:
             "email": email,
             "org_id": str(org_id) if org_id else None,
             "type": "refresh",
+            "jti": str(session_id),
+            "family": str(family),
             "iat": current_time,
             "exp": current_time + (self.refresh_token_expire_days * 86400),
         }
@@ -100,6 +120,14 @@ class JWTManager:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="Refresh token expired",
+                )
+            # Refresh tokens must carry a session reference (jti). Tokens
+            # minted before sessions existed do not — they are rejected so
+            # the user re-logs in and gets a tracked session.
+            if not payload.get("jti"):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Refresh token is missing a session reference. Please log in again.",
                 )
             return payload
         except jwt.ExpiredSignatureError:
@@ -145,22 +173,52 @@ class JWTManager:
 jwt_manager = JWTManager()
 
 
-def get_jwt_claims(credentials: HTTPAuthorizationCredentials = Depends(security)) -> JWTClaims:
+def _enforce_active_session(claims: JWTClaims, db) -> None:
+    """Reject the request if the JWT's session has been revoked.
+
+    Imported lazily so this module stays free of service-layer imports
+    at import time (avoids circular imports with ``SessionService`` →
+    ``BaseService`` → models that may import middleware).
+
+    Tokens minted **before** the session-tracking change have no ``jti``
+    — we let them through so currently-logged-in users are not kicked
+    out by deploying this change; they will pick up ``jti`` on their
+    next ``/auth/refresh`` rotation.
+    """
+    if not claims.jti:
+        return
+    from core.services.session_service import SessionService  # local import
+    session = SessionService(db).get_session(claims.jti)
+    if session is None or not session.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session is no longer valid. Please log in again.",
+        )
+
+
+def get_jwt_claims(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db=Depends(get_db),
+) -> JWTClaims:
     claims = jwt_manager.verify_token(credentials)
     if is_ee_enabled() and claims.org_id:
         org_id = claims.org_id
     else:
         org_id = settings.DEFAULT_ORG_ID
     set_tenant_context(org_id=org_id, user_id=claims.user_id, role=claims.role)
+    _enforce_active_session(claims, db)
     return claims
 
 
 def get_optional_jwt_claims(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False))
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
+    db=Depends(get_db),
 ) -> Optional[JWTClaims]:
     if not credentials:
         return None
-    return jwt_manager.verify_token(credentials)
+    claims = jwt_manager.verify_token(credentials)
+    _enforce_active_session(claims, db)
+    return claims
 
 
 def require_org_member(claims: JWTClaims = Depends(get_jwt_claims)) -> JWTClaims:

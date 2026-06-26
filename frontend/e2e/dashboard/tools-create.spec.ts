@@ -1,7 +1,7 @@
 /**
  * Tools create flow against the real backend.
  *
- * Scenarios TC-001 … TC-FULL from frontend/e2e/docs/tools-create.md.
+ * Scenarios TC-001 … TC-FULL from frontend/e2e/ux_flow_docs/tools-create.md.
  *
  * Strategy:
  * - Real login via the shared worker fixture.

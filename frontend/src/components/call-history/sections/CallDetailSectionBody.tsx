@@ -8,6 +8,7 @@ import { CALL_DETAIL_SECTION_KEYS, DEFAULT_CALL_DETAIL_SECTION } from '../callDe
 import { useCallDetail } from '../CallDetailContext';
 import CallConfigurationsSection from './CallConfigurationsSection';
 import MetricsSection from './MetricsSection';
+import ToolsMcpSection from './ToolsMcpSection';
 import TranscriptionRecordingsSection from './TranscriptionRecordingsSection';
 
 interface CallDetailSectionBodyProps {
@@ -44,6 +45,8 @@ const CallDetailSectionBody: React.FC<CallDetailSectionBodyProps> = ({ section, 
       return <TranscriptionRecordingsSection callLog={callLog} />;
     case 'metrics':
       return <MetricsSection callLog={callLog} />;
+    case 'tools-mcp':
+      return <ToolsMcpSection callLog={callLog} />;
     case 'configurations':
       return <CallConfigurationsSection callLog={callLog} />;
     default:

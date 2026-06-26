@@ -4,10 +4,10 @@ on:
   push:
     branches: ["staging"]
     paths:
-      - "build/kubernetes/qwen3-tts/**"
-      - "qwen-tts-streaming/app/**"
-      - "build/kubernetes/nemotron-stt/**"
-      - "nemotron-streaming/app/**"
+      - "build/kubernetes/stt/**"
+      - "build/kubernetes/tts/**"
+      - "models/stt/**"
+      - "models/tts/**"
   workflow_dispatch:
     inputs:
       model:
@@ -17,8 +17,13 @@ on:
         type: choice
         options:
           - all
-          - qwen3-tts
-          - nemotron-stt
+          - gemma
+          - voxtral
+          - nemotron
+          - granite
+          - parakeet
+          - qwen
+          - chatterbox
 
 env:
   NAMESPACE: staging
@@ -27,27 +32,33 @@ jobs:
   detect:
     runs-on: ubuntu-latest
     outputs:
-      qwen3_tts: ${{ steps.filter.outputs.qwen3_tts }}
-      nemotron_stt: ${{ steps.filter.outputs.nemotron_stt }}
+      gemma: ${{ steps.f.outputs.gemma }}
+      voxtral: ${{ steps.f.outputs.voxtral }}
+      nemotron: ${{ steps.f.outputs.nemotron }}
+      granite: ${{ steps.f.outputs.granite }}
+      parakeet: ${{ steps.f.outputs.parakeet }}
+      qwen: ${{ steps.f.outputs.qwen }}
+      chatterbox: ${{ steps.f.outputs.chatterbox }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - id: filter
+      - id: f
         run: |
           BEFORE="${{ github.event.before }}"
           if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BEFORE" 2>/dev/null; then
             BEFORE=$(git rev-parse "${{ github.sha }}~1")
           fi
           CHANGED=$(git diff --name-only "$BEFORE" "${{ github.sha }}")
-          echo "changed files between $BEFORE and ${{ github.sha }}:"
-          echo "$CHANGED"
-          q=false; n=false
-          echo "$CHANGED" | grep -qE '^(build/kubernetes/qwen3-tts/|qwen-tts-streaming/app/)' && q=true || true
-          echo "$CHANGED" | grep -qE '^(build/kubernetes/nemotron-stt/|nemotron-streaming/app/)' && n=true || true
-          echo "qwen3_tts=$q" >> "$GITHUB_OUTPUT"
-          echo "nemotron_stt=$n" >> "$GITHUB_OUTPUT"
-          echo "qwen3_tts=$q nemotron_stt=$n"
+          echo "changed files:"; echo "$CHANGED"
+          for m in gemma voxtral nemotron granite parakeet; do
+            if echo "$CHANGED" | grep -qE "^(build/kubernetes/stt/$m/|models/stt/$m/)"; then
+              echo "$m=true" >> "$GITHUB_OUTPUT"; else echo "$m=false" >> "$GITHUB_OUTPUT"; fi
+          done
+          for m in qwen chatterbox; do
+            if echo "$CHANGED" | grep -qE "^(build/kubernetes/tts/$m/|models/tts/$m/)"; then
+              echo "$m=true" >> "$GITHUB_OUTPUT"; else echo "$m=false" >> "$GITHUB_OUTPUT"; fi
+          done
 
   deploy:
     needs: detect
@@ -56,18 +67,48 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - model: qwen3-tts
-            changed: ${{ needs.detect.outputs.qwen3_tts }}
-            deployment: staging-tts-qwen-deployment
-            configmap: qwen-tts-app
-            app_dir: qwen-tts-streaming/app
-            extra_files: "qwen3_tts_a16.yaml"
-          - model: nemotron-stt
-            changed: ${{ needs.detect.outputs.nemotron_stt }}
+          - model: gemma
+            changed: ${{ needs.detect.outputs.gemma }}
+            deployment: staging-stt-gemma-deployment
+            configmap: gemma-app
+            app_dir: models/stt/gemma
+            manifest_dir: build/kubernetes/stt/gemma
+          - model: voxtral
+            changed: ${{ needs.detect.outputs.voxtral }}
+            deployment: staging-stt-voxtral-deployment
+            configmap: voxtral-app
+            app_dir: models/stt/voxtral
+            manifest_dir: build/kubernetes/stt/voxtral
+          - model: nemotron
+            changed: ${{ needs.detect.outputs.nemotron }}
             deployment: staging-stt-nemotron-deployment
             configmap: stt-nemotron-app
-            app_dir: nemotron-streaming/app
-            extra_files: ""
+            app_dir: models/stt/nemotron
+            manifest_dir: build/kubernetes/stt/nemotron
+          - model: granite
+            changed: ${{ needs.detect.outputs.granite }}
+            deployment: staging-stt-granite-deployment
+            configmap: granite-app
+            app_dir: models/stt/granite
+            manifest_dir: build/kubernetes/stt/granite
+          - model: parakeet
+            changed: ${{ needs.detect.outputs.parakeet }}
+            deployment: staging-stt-parakeet-deployment
+            configmap: parakeet-app
+            app_dir: models/stt/parakeet
+            manifest_dir: build/kubernetes/stt/parakeet
+          - model: qwen
+            changed: ${{ needs.detect.outputs.qwen }}
+            deployment: staging-tts-qwen-deployment
+            configmap: qwen-tts-app
+            app_dir: models/tts/qwen
+            manifest_dir: build/kubernetes/tts/qwen
+          - model: chatterbox
+            changed: ${{ needs.detect.outputs.chatterbox }}
+            deployment: staging-tts-chatterbox-deployment
+            configmap: chatterbox-app
+            app_dir: models/tts/chatterbox
+            manifest_dir: build/kubernetes/tts/chatterbox
     steps:
       - name: Should deploy
         id: gate
@@ -95,11 +136,9 @@ jobs:
       - name: Update app ConfigMap
         if: steps.gate.outputs.run == 'true'
         run: |
-          ARGS="--from-file=server.py=${{ matrix.app_dir }}/server.py"
-          ARGS="$ARGS --from-file=requirements.txt=${{ matrix.app_dir }}/requirements.txt"
-          ARGS="$ARGS --from-file=constraints.txt=${{ matrix.app_dir }}/constraints.txt"
-          for f in ${{ matrix.extra_files }}; do
-            ARGS="$ARGS --from-file=$f=${{ matrix.app_dir }}/$f"
+          ARGS=""
+          for f in "${{ matrix.app_dir }}"/*; do
+            [ -f "$f" ] && ARGS="$ARGS --from-file=$(basename "$f")=$f"
           done
           kubectl -n "$NAMESPACE" create configmap "${{ matrix.configmap }}" $ARGS \
             --dry-run=client -o yaml | kubectl -n "$NAMESPACE" apply -f -
@@ -107,7 +146,7 @@ jobs:
       - name: Apply manifests
         if: steps.gate.outputs.run == 'true'
         run: |
-          kubectl -n "$NAMESPACE" apply -f "build/kubernetes/${{ matrix.model }}/"
+          kubectl -n "$NAMESPACE" apply -f "${{ matrix.manifest_dir }}/"
 
       - name: Restart and wait for rollout
         if: steps.gate.outputs.run == 'true'

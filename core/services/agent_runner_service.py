@@ -62,10 +62,14 @@ class AgentRunnerService(BaseService):
 
     def get_agent_for_call(self, body: dict) -> Optional[Agent]:
         """The agent for a call: a pre-resolved `body['agent']` (subprocess/warm-pool path),
-        else a lookup by the called ('to') number from the parsed telephony call_data.
-        Returns None if neither resolves."""
+        a `body['agent_id']` resolved fresh in this session (web-call links), else a lookup
+        by the called ('to') number from the parsed telephony call_data.
+        Returns None if none resolves."""
         agent = body.get("agent")
         if agent:
             return agent
+        agent_id = body.get("agent_id")
+        if agent_id:
+            return self.db.query(Agent).filter(Agent.id == agent_id).first()
         to_number = (body.get("call_data") or {}).get("to")
         return self.get_agent_by_phone_number(to_number) if to_number else None

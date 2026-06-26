@@ -28,7 +28,7 @@ from core.utils.tool_idempotency import booking_signature, is_cacheable_result
 MCP_REGISTER_TIMEOUT_S = 25.0
 
 
-def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, current_turn=None, tool_dedup=None):
+def _install_mcp_call_logging(llm, server_name: str, server_id=None, tool_call_entries=None, current_turn=None, tool_dedup=None):
     """Wrap ``llm.register_function`` so each MCP tool registered through it logs, at call time,
     its server + tool name, the arguments passed in, and the output returned (plus duration) —
     and, when ``tool_call_entries`` is provided, appends a structured entry so the invocation is
@@ -62,6 +62,7 @@ def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, cur
                 "tool": fn,
                 "tool_type": "mcp",
                 "server": server_name,
+                "mcp_server_id": str(server_id) if server_id else None,
                 "arguments": arguments,
                 "timestamp": int(time.time()),
                 "turn": current_turn["number"] if current_turn else None,
@@ -87,6 +88,7 @@ def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, cur
                 )
                 entry["result"] = cached
                 entry["status"] = "duplicate_suppressed"
+                entry["status_code"] = 200
                 entry["duration_ms"] = dur
                 if original_cb is not None:
                     await original_cb(cached)
@@ -101,6 +103,7 @@ def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, cur
                     )
                     entry["result"] = result
                     entry["status"] = "success"
+                    entry["status_code"] = 200
                     entry["duration_ms"] = dur
                     if sig is not None and tool_dedup is not None and is_cacheable_result(result):
                         tool_dedup[sig] = result
@@ -122,6 +125,7 @@ def _install_mcp_call_logging(llm, server_name: str, tool_call_entries=None, cur
                 )
                 entry["status"] = "error"
                 entry["error"] = str(exc)
+                entry["status_code"] = 500
                 entry["duration_ms"] = dur
                 raise
 
@@ -289,11 +293,18 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, current
                 server.name, server.transport_type, len(headers),
             )
             mcp_client = MCPClient(server_params=server_params)
+            # Pipecat's newer MCPClient requires an explicit start() (or `async with`) before
+            # register_tools / tool calls — without it `_ensure_connected` raises
+            # "MCPClient is not connected". We use start() (not `async with`) because the
+            # session must stay open for the entire call: the LLM keeps a reference to
+            # mcp_client._tool_wrapper, which uses the same session at runtime.
+            await asyncio.wait_for(mcp_client.start(), timeout=MCP_REGISTER_TIMEOUT_S)
             # Decorate every handler MCPClient registers so MCP tool calls log their
             # name/arguments/output during the conversation; restore afterwards so only this
             # server's tools are wrapped.
             restore_logging = _install_mcp_call_logging(
-                llm, server.name, tool_call_entries=tool_call_entries,
+                llm, server.name, server_id=server.id,
+                tool_call_entries=tool_call_entries,
                 current_turn=current_turn, tool_dedup=tool_dedup,
             )
             try:

@@ -73,6 +73,7 @@ export default function AgentOverview() {
   const isActive = detail.is_active;
   const language = detail.config?.voice_settings?.language ?? null;
   const phoneNumbers = detail.phone_numbers ?? [];
+  const webChannels = detail.web_channels ?? [];
   const dash = <span className="text-muted-foreground/60">—</span>;
 
   const handleToggle = async (next: boolean) => {
@@ -149,6 +150,17 @@ export default function AgentOverview() {
           )}
         </DetailRow>
         <DetailRow label="Created">{formatDate(detail.created_at)}</DetailRow>
+        {webChannels.length > 0 ? (
+          <DetailRow label="Web channels">
+            <div className="flex flex-wrap gap-1.5">
+              {webChannels.map((c) => (
+                <Badge key={c.id} variant="secondary" className="capitalize">
+                  {c.channel_type}
+                </Badge>
+              ))}
+            </div>
+          </DetailRow>
+        ) : null}
         {detail.description ? (
           <div className="sm:col-span-2">
             <DetailRow label="Description">{detail.description}</DetailRow>

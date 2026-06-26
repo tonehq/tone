@@ -1,0 +1,119 @@
+"""STT TTFB derivation tap.
+
+Sits upstream of the user-context aggregator to compute STT TTFB ourselves
+and emit it as a synthetic ``MetricsFrame`` that the existing
+``MetricsCollectorProcessor`` can consume.
+
+Why this exists
+---------------
+Pipecat's ``STTService._emit_stt_ttfb_metric`` only fires when the underlying
+STT implementation marks its ``TranscriptionFrame`` with ``finalized=True``.
+Several streaming STTs — Deepgram included — push the final transcript as a
+plain ``TranscriptionFrame`` without that flag, so the upstream metric is
+never emitted for real user utterances (only the 0.0 placeholder at session
+start).
+
+The user context aggregator (``LLMUserContextAggregator._handle_transcription``)
+**absorbs** ``TranscriptionFrame`` without pushing it downstream, so a
+collector positioned at the end of the pipeline (where it must sit to also
+see LLM/TTS metrics and ``UserStoppedSpeakingFrame``) never observes the
+transcript at all. We work around it by tapping the frame *before* the
+aggregator absorbs it.
+
+Pipeline placement
+------------------
+Insert between the STT-related upstream processors (``stt``,
+``duplicate_filter``) and the user context aggregator. The exact slot is::
+
+    stt → duplicate_filter → stt_latency_tap → call_end_detector → user_aggregator → ...
+
+Frame contract
+--------------
+Every frame is passed through unchanged (no consumption). Side effects are
+limited to:
+
+* On ``UserStoppedSpeakingFrame`` → record ``user_stopped_at`` (overwrites
+  any prior unmatched stop; one stop "arms" one TTFB).
+* On the first ``TranscriptionFrame`` after a stop → push a
+  ``MetricsFrame`` carrying a ``TTFBMetricsData`` so the collector's normal
+  STT-handling path catches it.
+"""
+
+import time
+from typing import Optional
+
+from pipecat.frames.frames import (
+    Frame,
+    MetricsFrame,
+    TranscriptionFrame,
+    UserStartedSpeakingFrame,
+    UserStoppedSpeakingFrame,
+)
+from pipecat.metrics.metrics import TTFBMetricsData
+from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
+
+
+class STTLatencyTap(FrameProcessor):
+    """Emits derived STT TTFB ``MetricsFrame``s in-line on the pipeline.
+
+    Args:
+        stt_processor_name: Canonical processor name to label the synthesized
+            ``TTFBMetricsData`` with (e.g. ``"DeepgramSTTService#0"``). Must
+            match the name registered in
+            ``MetricsCollectorProcessor._service_categories`` so the
+            collector classifies the metric as STT.
+        stt_model_name: Optional model name to copy onto the metric for
+            flat-list readability. ``None`` is fine.
+    """
+
+    def __init__(
+        self,
+        *,
+        stt_processor_name: str,
+        stt_model_name: Optional[str] = None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self._stt_processor_name = stt_processor_name
+        self._stt_model_name = stt_model_name
+        self._user_stopped_at: Optional[float] = None
+
+    async def process_frame(self, frame: Frame, direction: FrameDirection):
+        await super().process_frame(frame, direction)
+
+        if isinstance(frame, UserStartedSpeakingFrame):
+            # New utterance starting — any unconsumed user-stop from a
+            # previous utterance is stale. Clearing it prevents the next
+            # transcript from being measured against an anchor that's many
+            # seconds (or turns) old, which would inflate the first STT
+            # TTFB of every new turn.
+            self._user_stopped_at = None
+        elif isinstance(frame, UserStoppedSpeakingFrame):
+            # One stop arms one TTFB. A second stop without a transcript
+            # in between overwrites — we'd rather attribute the next
+            # transcript to the most recent stop than to a stale one.
+            self._user_stopped_at = time.time()
+        elif isinstance(frame, TranscriptionFrame) and self._user_stopped_at is not None:
+            await self._emit_stt_ttfb()
+
+        await self.push_frame(frame, direction)
+
+    async def _emit_stt_ttfb(self) -> None:
+        """Build a ``TTFBMetricsData`` and wrap it in a downstream ``MetricsFrame``.
+
+        The collector at the end of the pipeline picks this up through its
+        normal ``_record_metric_data`` path (TTFBMetricsData → category=STT
+        → FIFO attribution into the right turn).
+        """
+        assert self._user_stopped_at is not None  # checked by caller
+        ttfb = time.time() - self._user_stopped_at
+        # Consume the slot — the next transcript belongs to the next stop.
+        self._user_stopped_at = None
+        if ttfb < 0:
+            return
+        data = TTFBMetricsData(
+            processor=self._stt_processor_name,
+            model=self._stt_model_name,
+            value=ttfb,
+        )
+        await self.push_frame(MetricsFrame(data=[data]), FrameDirection.DOWNSTREAM)

@@ -1,4 +1,4 @@
-import { Bot, Cpu, LayoutGrid, MessageSquare, Phone, Volume2, Wrench } from 'lucide-react';
+import { Book, Bot, Cpu, LayoutGrid, MessageSquare, Radio, Volume2, Wrench } from 'lucide-react';
 
 import type { SidebarNavGroup } from '@/components/layout/SidebarShell';
 
@@ -21,7 +21,8 @@ export const AGENT_SECTIONS: AgentSection[] = [
   { key: 'ai', label: 'AI', icon: Cpu },
   { key: 'voice', label: 'Voice', icon: Volume2 },
   { key: 'tools', label: 'Tools & MCP', icon: Wrench },
-  { key: 'knowledge', label: 'Knowledge & Phone', icon: Phone },
+  { key: 'knowledge', label: 'Knowledge', icon: Book },
+  { key: 'channels', label: 'Channels', icon: Radio },
 ];
 
 export const AGENT_SECTION_KEYS = AGENT_SECTIONS.map((s) => s.key);

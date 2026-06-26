@@ -62,13 +62,13 @@ Use when a page has **no existing spec file** and you need to write one from scr
 Reads the component source, generates tests, writes the `.spec.ts` file, and runs it.
 
 Optionally accepts a **feature doc** (`--docs`) for more comprehensive test coverage.
-If no `--docs` flag is provided, the skill auto-discovers matching docs in `e2e/docs/`.
+If no `--docs` flag is provided, the skill auto-discovers matching docs in `e2e/ux_flow_docs/`.
 
 ```bash
 /generate-tests                  # generate tests for the login page (default)
 /generate-tests login            # generate tests for the login page
 /generate-tests signup           # generate tests for the signup page
-/generate-tests home --docs e2e/docs/home.md  # use feature doc for extra coverage
+/generate-tests home --docs e2e/ux_flow_docs/home.md  # use feature doc for extra coverage
 /generate-tests src/app/auth/login/LoginPage.tsx  # use a full path
 ```
 
@@ -91,7 +91,7 @@ feature doc following the `_template.md` structure.
 The skill lives at `.claude/skills/generate-feature-docs/SKILL.md`.
 Reference docs are at `.claude/skills/generate-feature-docs/references/`.
 
-### Feature docs (`e2e/docs/`)
+### Feature docs (`e2e/ux_flow_docs/`)
 
 Feature docs are markdown files that describe a page's user stories, acceptance
 criteria, edge cases, and business rules. When provided, `/generate-tests` uses them
@@ -102,9 +102,9 @@ or copy `_template.md` and fill in the sections manually.
 
 | File                    | Purpose                                 |
 | ----------------------- | --------------------------------------- |
-| `e2e/docs/_template.md` | Template for creating new feature docs  |
-| `e2e/docs/home.md`      | Feature doc for the home dashboard page |
-| `e2e/docs/agents.md`    | Feature doc for the agents pages (CRUD) |
+| `e2e/ux_flow_docs/_template.md` | Template for creating new feature docs  |
+| `e2e/ux_flow_docs/home.md`      | Feature doc for the home dashboard page |
+| `e2e/ux_flow_docs/agents.md`    | Feature doc for the agents pages (CRUD) |
 
 ### Running tests
 

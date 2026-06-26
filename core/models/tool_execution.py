@@ -23,8 +23,20 @@ class ToolExecution(OrgScopedModel):
     agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="SET NULL"), nullable=True, index=True)
 
     tool_name = Column(String(255), nullable=False)
-    tool_type = Column(String(50), nullable=True)  # custom | send_sms | google_calendar | read_document | mcp
+    tool_type = Column(String(50), nullable=True)  # custom | send_sms | google_calendar | read_document | mcp | built_in
     mcp_server_name = Column(String(255), nullable=True)  # set only for MCP tools
+
+    # Stable FKs back to the source records — set at write time when the
+    # tool / MCP server is a row in the DB. Both nullable: code-defined
+    # built-ins like `end_call` and `read_document` have no `tools` row, and
+    # pre-migration rows have NULL here. ON DELETE SET NULL so a renamed or
+    # deleted tool only nulls the join, never deletes the execution row.
+    tool_id = Column(
+        UUID(as_uuid=True), ForeignKey("tools.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
+    mcp_server_id = Column(
+        UUID(as_uuid=True), ForeignKey("mcp_servers.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
 
     arguments = Column(JSONB, nullable=True)
     result = Column(JSONB, nullable=True)
@@ -47,6 +59,8 @@ class ToolExecution(OrgScopedModel):
             "tool_name": self.tool_name,
             "tool_type": self.tool_type,
             "mcp_server_name": self.mcp_server_name,
+            "tool_id": str(self.tool_id) if self.tool_id else None,
+            "mcp_server_id": str(self.mcp_server_id) if self.mcp_server_id else None,
             "arguments": self.arguments,
             "result": self.result,
             "status": self.status,

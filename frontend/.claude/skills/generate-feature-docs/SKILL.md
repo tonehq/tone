@@ -2,7 +2,7 @@
 name: generate-feature-docs
 description: >
   Generates feature documentation for a Next.js page by analyzing component source,
-  service imports, Jotai atoms, and navigation paths. Output placed in e2e/docs/<page-name>.md
+  service imports, Jotai atoms, and navigation paths. Output placed in e2e/ux_flow_docs/<page-name>.md
   and consumed by /generate-tests for comprehensive test coverage.
 argument-hint: '<page-name> [--routes /path1,/path2]'
 allowed-tools: Bash, Read, Write, Glob, Grep
@@ -73,11 +73,11 @@ Map each `page.tsx` to its route:
 ### 1d. Check for existing feature doc
 
 ```bash
-ls e2e/docs/ 2>/dev/null | grep -i "$TARGET"
+ls e2e/ux_flow_docs/ 2>/dev/null | grep -i "$TARGET"
 ```
 
 - If a feature doc already exists, inform the user:
-  > Found existing feature doc: `e2e/docs/<name>.md` — overwrite? (proceed only with confirmation)
+  > Found existing feature doc: `e2e/ux_flow_docs/<name>.md` — overwrite? (proceed only with confirmation)
 - If no doc exists, continue
 
 ---
@@ -87,15 +87,15 @@ ls e2e/docs/ 2>/dev/null | grep -i "$TARGET"
 Read ALL of these before generating any documentation. Do not skip any.
 
 - `.claude/skills/generate-feature-docs/references/analysis-guide.md` — how to trace imports
-- `e2e/docs/_template.md` — the 8-section template structure
+- `e2e/ux_flow_docs/_template.md` — the 8-section template structure
 - `docs/shared-components.md` — shared component API reference (read this instead of individual component files)
 
 ### 2a. Read existing feature docs for quality calibration
 
 Read **one** existing feature doc to calibrate output quality:
 
-- If `e2e/docs/agents.md` exists, prefer it (complex multi-route example)
-- Otherwise read `e2e/docs/home.md` (simple single-page example)
+- If `e2e/ux_flow_docs/agents.md` exists, prefer it (complex multi-route example)
+- Otherwise read `e2e/ux_flow_docs/home.md` (simple single-page example)
 
 Use the existing doc as a quality benchmark: match its level of detail, formatting style, and completeness.
 
@@ -163,7 +163,7 @@ Document the auth requirement and redirect behavior for the feature doc.
 
 ## Step 5 — Generate feature doc
 
-Using the analysis artifact from Step 3 and the template from `e2e/docs/_template.md`, generate all 8 sections.
+Using the analysis artifact from Step 3 and the template from `e2e/ux_flow_docs/_template.md`, generate all 8 sections.
 
 ### Section 1: Page
 
@@ -265,7 +265,7 @@ List as checkboxes (unchecked). Check for:
 
 ## Step 6 — Write to file
 
-Write the complete feature doc to `e2e/docs/<page-name>.md`.
+Write the complete feature doc to `e2e/ux_flow_docs/<page-name>.md`.
 
 - Use kebab-case for the filename (e.g., `phone-numbers.md`, `forgot-password.md`)
 - Ensure valid markdown syntax
@@ -299,7 +299,7 @@ Present a structured report to the user:
 # Feature Doc Report
 
 **Target**: <page-name>
-**Output**: `e2e/docs/<page-name>.md`
+**Output**: `e2e/ux_flow_docs/<page-name>.md`
 **Routes covered**: <list of routes>
 
 ---
@@ -342,7 +342,7 @@ After presenting the report, ask:
 
 **How would you like to proceed?**
 
-1. Generate tests for this page (`/generate-tests <page-name> --docs e2e/docs/<page-name>.md`)
+1. Generate tests for this page (`/generate-tests <page-name> --docs e2e/ux_flow_docs/<page-name>.md`)
 2. Refine the feature doc (specify which section to improve)
 3. Generate feature doc for another page
 4. Done

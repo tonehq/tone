@@ -1,121 +1,129 @@
-"""Core edition test fixtures."""
+"""Core edition test fixtures — uses REAL database and REAL API endpoints.
+
+No mocks. No patched services. Tests hit the actual DB via TestClient.
+Auth is handled by generating real JWT tokens using JWTManager.
+DB session uses transaction rollback for cleanup after each test.
+"""
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
+from shared.config import settings
 from main import app, api_v1
-from core.middleware.auth import get_jwt_claims, require_org_member, require_admin_or_owner, require_owner, security
 from core.database.session import get_db
+from core.middleware.auth import JWTManager
 
-# EE auth dependencies (loaded when EE is enabled)
-try:
-    from ee.middleware.auth import (
-        get_ee_jwt_claims, require_ee_org_member, require_ee_admin_or_owner,
+
+# Use the same DB as the app (from .env DATABASE_URL)
+engine = create_engine(settings.DATABASE_URL, pool_pre_ping=True)
+TestSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+
+jwt_mgr = JWTManager()
+
+
+def _get_real_org_id():
+    """Fetch a real organization ID from the DB for tests."""
+    from sqlalchemy import text
+    conn = engine.connect()
+    try:
+        row = conn.execute(text("SELECT id FROM organizations LIMIT 1")).fetchone()
+        return str(row[0]) if row else settings.DEFAULT_ORG_ID
+    finally:
+        conn.close()
+
+
+def _get_real_user_id():
+    """Fetch a real user ID from the DB for tests."""
+    from sqlalchemy import text
+    conn = engine.connect()
+    try:
+        row = conn.execute(text("SELECT id FROM users LIMIT 1")).fetchone()
+        return row[0] if row else 1
+    finally:
+        conn.close()
+
+
+ORG_ID = _get_real_org_id()
+REAL_USER_ID = _get_real_user_id()
+
+
+@pytest.fixture
+def db_session():
+    """Per-test real database session with rollback for cleanup."""
+    connection = engine.connect()
+    transaction = connection.begin()
+    session = TestSessionLocal(bind=connection)
+    yield session
+    session.close()
+    transaction.rollback()
+    connection.close()
+
+
+def _make_real_client(db_session, token=None):
+    """Build a TestClient with real DB and optional auth token."""
+    def _get_test_db():
+        yield db_session
+
+    api_v1.dependency_overrides[get_db] = _get_test_db
+    client = TestClient(app)
+    if token:
+        client.headers["Authorization"] = f"Bearer {token}"
+        client.headers["tenant_id"] = ORG_ID
+    return client
+
+
+# Use real user IDs that exist in the database
+MEMBER_USER_ID = REAL_USER_ID
+ADMIN_USER_ID = REAL_USER_ID
+OWNER_USER_ID = REAL_USER_ID
+
+
+@pytest.fixture
+def member_token():
+    return jwt_mgr.create_access_token(
+        user_id=MEMBER_USER_ID, email="member@test.com", org_id=ORG_ID, role="member",
     )
-    _EE_AUTH_AVAILABLE = True
-except ImportError:
-    _EE_AUTH_AVAILABLE = False
-
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
-
-import time
-from unittest.mock import MagicMock
-from fastapi.security import HTTPAuthorizationCredentials
-from core.middleware.auth import JWTClaims
-
-
-def make_claims(user_id=1, org_id="550e8400-e29b-41d4-a716-446655440000", role="member", email="test@example.com"):
-    now = int(time.time())
-    return JWTClaims(user_id=user_id, org_id=org_id, role=role, email=email, iat=now, exp=now + 3600)
-
-
-def _fake_security():
-    return HTTPAuthorizationCredentials(scheme="Bearer", credentials="test-token")
-
-
-def _override_auth(claims):
-    def _override():
-        return claims
-    return _override
 
 
 @pytest.fixture
-def mock_db():
-    db = MagicMock()
-    db.query.return_value = db
-    db.filter.return_value = db
-    db.first.return_value = None
-    db.all.return_value = []
-    db.commit.return_value = None
-    db.refresh.return_value = None
-    db.add.return_value = None
-    db.delete.return_value = None
-    db.count.return_value = 0
-    return db
+def admin_token():
+    return jwt_mgr.create_access_token(
+        user_id=ADMIN_USER_ID, email="admin@test.com", org_id=ORG_ID, role="admin",
+    )
 
 
 @pytest.fixture
-def member_claims():
-    return make_claims(role="member")
+def owner_token():
+    return jwt_mgr.create_access_token(
+        user_id=OWNER_USER_ID, email="owner@test.com", org_id=ORG_ID, role="owner",
+    )
 
 
 @pytest.fixture
-def admin_claims():
-    return make_claims(role="admin")
-
-
-@pytest.fixture
-def owner_claims():
-    return make_claims(role="owner")
-
-
-def _apply_auth_overrides(mock_db, claims):
-    """Override both Core and EE auth dependencies."""
-    api_v1.dependency_overrides[security] = _fake_security
-    api_v1.dependency_overrides[get_db] = lambda: mock_db
-    api_v1.dependency_overrides[get_jwt_claims] = _override_auth(claims)
-    api_v1.dependency_overrides[require_org_member] = _override_auth(claims)
-    api_v1.dependency_overrides[require_admin_or_owner] = _override_auth(claims)
-    api_v1.dependency_overrides[require_owner] = _override_auth(claims)
-    if _EE_AUTH_AVAILABLE:
-        api_v1.dependency_overrides[get_ee_jwt_claims] = _override_auth(claims)
-        api_v1.dependency_overrides[require_ee_org_member] = _override_auth(claims)
-        api_v1.dependency_overrides[require_ee_admin_or_owner] = _override_auth(claims)
-
-
-@pytest.fixture
-def client_as_member(mock_db, member_claims):
-    _apply_auth_overrides(mock_db, member_claims)
-    client = TestClient(app)
+def client_as_member(db_session, member_token):
+    client = _make_real_client(db_session, member_token)
     yield client
     api_v1.dependency_overrides.clear()
 
 
 @pytest.fixture
-def client_as_admin(mock_db, admin_claims):
-    _apply_auth_overrides(mock_db, admin_claims)
-    client = TestClient(app)
+def client_as_admin(db_session, admin_token):
+    client = _make_real_client(db_session, admin_token)
     yield client
     api_v1.dependency_overrides.clear()
 
 
 @pytest.fixture
-def client_as_owner(mock_db, owner_claims):
-    _apply_auth_overrides(mock_db, owner_claims)
-    client = TestClient(app)
+def client_as_owner(db_session, owner_token):
+    client = _make_real_client(db_session, owner_token)
     yield client
     api_v1.dependency_overrides.clear()
 
 
 @pytest.fixture
-def client_unauthenticated(mock_db):
-    api_v1.dependency_overrides[get_db] = lambda: mock_db
-    api_v1.dependency_overrides.pop(get_jwt_claims, None)
-    api_v1.dependency_overrides.pop(require_org_member, None)
-    api_v1.dependency_overrides.pop(require_admin_or_owner, None)
-    api_v1.dependency_overrides.pop(require_owner, None)
-    client = TestClient(app)
+def client_unauthenticated(db_session):
+    client = _make_real_client(db_session, token=None)
     yield client
     api_v1.dependency_overrides.clear()

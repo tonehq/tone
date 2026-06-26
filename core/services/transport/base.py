@@ -14,7 +14,6 @@ how they resolve the caller's from/to numbers — so they are modelled as
 from abc import ABC, abstractmethod
 
 from loguru import logger
-from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import parse_telephony_websocket
 from pipecat.transports.base_transport import BaseTransport
@@ -77,6 +76,8 @@ class TelephonyTransport(CallTransport):
         # missing. Use `is None` so an already-parsed empty call_data still skips parse.
         if call_data is None or transport_type is None:
             transport_type, call_data = await parse_telephony_websocket(runner_args.websocket)
+            if call_data is not None and not isinstance(call_data, dict):
+                call_data = call_data.model_dump(by_alias=True)
 
         provider = get_telephony_provider(transport_type)
 
@@ -109,7 +110,6 @@ class TelephonyTransport(CallTransport):
                 audio_in_enabled=True,
                 audio_out_enabled=True,
                 add_wav_header=False,
-                vad_analyzer=SileroVADAnalyzer(),
                 serializer=serializer,
             ),
         )

@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staging-stt-voxtral-deployment
+  namespace: staging
+  labels:
+    app: staging-stt-voxtral
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: staging-stt-voxtral
+  template:
+    metadata:
+      labels:
+        app: staging-stt-voxtral
+    spec:
+      nodeSelector:
+        gpu-tier: "16g"
+      containers:
+        - name: voxtral
+          image: vllm/vllm-openai:latest
+          workingDir: /app
+          command: ["bash", "-lc"]
+          args:
+            - |
+              set -e
+              pip install --no-cache-dir websockets fastapi 'uvicorn[standard]' 'mistral-common[soundfile]' soundfile librosa
+              python3 -c "from huggingface_hub import snapshot_download; snapshot_download('mistralai/Voxtral-Mini-4B-Realtime-2602')"
+              find /cache/hf -name tekken.json -exec sed -i 's/"transcription_delay_ms": *[0-9]\+/"transcription_delay_ms": 80/g' {} +
+              echo "transcription_delay_ms now:"; find /cache/hf -name tekken.json -exec grep -o '"transcription_delay_ms": *[0-9]*' {} +
+              HF_HUB_OFFLINE=1 VLLM_DISABLE_COMPILE_CACHE=1 vllm serve mistralai/Voxtral-Mini-4B-Realtime-2602 \
+                --tokenizer-mode mistral --config-format mistral --load-format mistral \
+                --trust-remote-code \
+                --compilation-config '{"cudagraph_mode":"PIECEWISE"}' \
+                --max-model-len 3072 --max-num-batched-tokens 3072 --max-num-seqs 1 \
+                --gpu-memory-utilization 0.88 --host 127.0.0.1 --port 8091 &
+              exec uvicorn server:app --host 0.0.0.0 --port 8000
+          env:
+            - name: HF_HOME
+              value: /cache/hf
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: app
+              mountPath: /app
+            - name: cache
+              mountPath: /cache
+            - name: dshm
+              mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 180
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+      volumes:
+        - name: app
+          configMap:
+            name: voxtral-app
+        - name: cache
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 4Gi

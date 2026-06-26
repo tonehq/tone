@@ -12,6 +12,7 @@ from core.api.v1.agents import (
     SaveAsNewVersionRequest,
     SwitchActiveVersionRequest,
     UpdateAgentRequest,
+    UpdateVersionRequest,
     _prompt_errors,
     agent_facets_for_org,
     agent_filter_values_for_org,
@@ -145,9 +146,29 @@ def save_as_new_version(
     # New draft is returned alongside the agent so the response renders the
     # freshly-saved version (see core router for the full rationale).
     agent, new_config = svc.save_as_new_version(
-        agent_id, data, user_id, source_config_id=source_config_uuid
+        agent_id,
+        data,
+        user_id,
+        source_config_id=source_config_uuid,
+        from_scratch=bool(body.from_scratch),
     )
     return svc.agent_response(agent, config=new_config)
+
+
+@router.put("/update_version")
+def update_version(
+    body: UpdateVersionRequest,
+    agent_id: str = Query(..., description="The agent ID owning the version"),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    svc = _get_service(claims, db)
+    data = body.model_dump(exclude_unset=True)
+    source_config_uuid = UUID(body.source_config_id) if body.source_config_id else None
+    agent, config = svc.update_version(
+        agent_id, data, source_config_id=source_config_uuid
+    )
+    return svc.agent_response(agent, config=config)
 
 
 @router.post("/switch_active_version")

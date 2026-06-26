@@ -17,8 +17,9 @@ Pipeline placement: at the very end of the pipeline (after transport.output()).
 """
 
 import time
+from collections import deque
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Deque, Dict, List, Optional
 
 from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
@@ -34,6 +35,8 @@ from pipecat.metrics.metrics import (
     TTSUsageMetricsData,
 )
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
+
+from core.processors.stt_audio_usage_tap import STTUsageMetricsData
 
 # Service-role categories used by the per-turn aggregation. The builder
 # supplies a {processor_instance_name -> category} map so the collector can
@@ -63,6 +66,24 @@ class _TurnBuffer:
     processing: List[dict] = field(default_factory=list)
     llm_usage: List[dict] = field(default_factory=list)
     tts_usage: List[dict] = field(default_factory=list)
+    stt_usage: List[dict] = field(default_factory=list)
+
+
+@dataclass
+class _PendingSTT:
+    """Marker that a turn is waiting for its STT TTFB to arrive.
+
+    STT TTFB metrics are emitted asynchronously by pipecat (the service waits
+    for the final transcript, up to ``stt_ttfb_timeout`` seconds, before
+    pushing the ``MetricsFrame``). By then the pipeline has often advanced
+    into the next turn — so the metric can't be bucketed by the currently
+    active turn without landing in the wrong row. This marker carries the
+    turn number forward in user-stop chronological order so the next
+    STT-TTFB to arrive is attributed back to the turn that produced it.
+    """
+
+    turn_number: int
+    user_stopped_at: float
 
 
 def _round_optional(value: Optional[float], digits: int = 3) -> Optional[float]:
@@ -104,6 +125,11 @@ def _finalize_buffer(
             "prompt_tokens": _sum_field(buffer.llm_usage, "prompt_tokens"),
             "completion_tokens": _sum_field(buffer.llm_usage, "completion_tokens"),
             "total_tokens": _sum_field(buffer.llm_usage, "total_tokens"),
+            "cache_read_input_tokens": _sum_field(buffer.llm_usage, "cache_read_input_tokens"),
+            "cache_creation_input_tokens": _sum_field(
+                buffer.llm_usage, "cache_creation_input_tokens"
+            ),
+            "reasoning_tokens": _sum_field(buffer.llm_usage, "reasoning_tokens"),
         }
 
     return {
@@ -122,6 +148,15 @@ def _finalize_buffer(
         "tts_ttfb_all": [_round_optional(v) for v in tts],
         "llm_usage": llm_summary,
         "tts_characters": _sum_field(buffer.tts_usage, "characters") if buffer.tts_usage else None,
+        "stt_audio_ms": _sum_field(buffer.stt_usage, "audio_ms") if buffer.stt_usage else None,
+        # Per-call usage, mirroring the `*_ttfb_all` pattern. One entry per
+        # individual service call inside the turn (e.g. a turn with two LLM
+        # completions for a tool-call follow-up emits two entries). Lets the
+        # UI render a stacked bar per turn with one segment per call, and a
+        # per-call breakdown table — same shape used for TTFB.
+        "llm_usage_all": [dict(item) for item in buffer.llm_usage],
+        "tts_usage_all": [dict(item) for item in buffer.tts_usage],
+        "stt_usage_all": [dict(item) for item in buffer.stt_usage],
     }
 
 
@@ -156,11 +191,18 @@ class MetricsCollectorProcessor(FrameProcessor):
         self.processing_metrics: List[dict] = []
         self.llm_usage_metrics: List[dict] = []
         self.tts_usage_metrics: List[dict] = []
+        self.stt_usage_metrics: List[dict] = []
 
         # Per-turn view.
         self._buffers: Dict[int, _TurnBuffer] = {}
         self._current_turn: Optional[int] = None
         self._turn_metrics: List[dict] = []
+
+        # FIFO queue of turns awaiting an STT TTFB. Pushed when a
+        # ``UserStoppedSpeakingFrame`` arrives (one entry per turn — only the
+        # first user-stop per turn opens the slot), popped when an STT TTFB
+        # metric arrives. See ``_attribute_stt_ttfb`` for why this is needed.
+        self._pending_stt: Deque[_PendingSTT] = deque()
 
     # ------------------------------------------------------------------
     # Turn-tracking hooks (called by the runner from TurnTrackingObserver)
@@ -240,7 +282,17 @@ class MetricsCollectorProcessor(FrameProcessor):
     def _mark_user_stopped(self) -> None:
         buffer = self._active_buffer()
         if buffer.user_stopped_at is None:
-            buffer.user_stopped_at = time.time()
+            now = time.time()
+            buffer.user_stopped_at = now
+            # Reserve a chronological slot for the STT TTFB this user-stop
+            # will produce. The STT service emits the metric asynchronously
+            # (up to ``stt_ttfb_timeout`` seconds later), often after this
+            # turn has already ended — so we can't rely on the active-turn
+            # bucket. ``_attribute_stt_ttfb`` consumes the queue in FIFO
+            # order so the next STT TTFB lands in this turn's row.
+            self._pending_stt.append(
+                _PendingSTT(turn_number=buffer.turn_number, user_stopped_at=now)
+            )
 
     def _mark_bot_started(self) -> None:
         buffer = self._active_buffer()
@@ -249,6 +301,52 @@ class MetricsCollectorProcessor(FrameProcessor):
         # (e.g. after a tool-call pause) don't change what the user felt.
         if buffer.bot_started_at is None:
             buffer.bot_started_at = time.time()
+
+    def _attribute_stt_ttfb(self, value: float) -> bool:
+        """Route a late-arriving STT TTFB back to the turn that produced it.
+
+        STT TTFB lifecycle: user stops speaking → STT service waits for the
+        final transcript → STT service emits ``TTFBMetricsData``. The wait
+        can be up to ``stt_ttfb_timeout`` seconds (pipecat default 2.0s), by
+        which point the LLM has started, the bot has started speaking, and
+        ``on_turn_ended`` has already fired. The currently-active turn is
+        the *next* turn, not the one the user actually stopped speaking in.
+
+        We resolve this by consuming ``_pending_stt`` in FIFO order — the
+        oldest unresolved user-stop owns the next STT TTFB to arrive. If the
+        target turn is still buffered, append to its TTFB list normally.
+        If it has already been finalized, patch ``stt_ttfb_all`` (and
+        ``stt_ttfb`` if it was the first sample) on the immutable row.
+
+        Returns ``True`` when the metric was attributed, ``False`` when no
+        pending slot exists (in which case the caller falls back to the
+        active-buffer behavior so we don't silently drop the sample).
+        """
+        if not self._pending_stt:
+            return False
+        pending = self._pending_stt.popleft()
+        turn_number = pending.turn_number
+        rounded = _round_optional(value)
+
+        buffer = self._buffers.get(turn_number)
+        if buffer is not None:
+            # Turn still in-flight — append to the buffer; finalization will
+            # pick it up as ``stt_ttfb_all`` (and ``stt_ttfb`` if first).
+            buffer.ttfb[CATEGORY_STT].append(value)
+            return True
+
+        # Turn already finalized — patch the row in place. The lists in
+        # ``_finalize_buffer`` are freshly built per call so mutating them
+        # here is safe (they're not shared with the buffer).
+        for row in self._turn_metrics:
+            if row.get("turn") == turn_number:
+                stt_all = row.get("stt_ttfb_all") or []
+                stt_all.append(rounded)
+                row["stt_ttfb_all"] = stt_all
+                if row.get("stt_ttfb") is None:
+                    row["stt_ttfb"] = rounded
+                return True
+        return False
 
     def _record_metric_data(self, data: MetricsData) -> None:
         if isinstance(data, TTFBMetricsData):
@@ -259,7 +357,15 @@ class MetricsCollectorProcessor(FrameProcessor):
             }
             self.ttfb_metrics.append(entry)
             category = self._category_for(data.processor)
-            if category in _TTFB_CATEGORIES:
+            if category == CATEGORY_STT:
+                # STT TTFB arrives late, after the producing turn has
+                # usually ended. Route by user-stop FIFO instead of by
+                # active buffer; fall back to active buffer only when no
+                # pending slot exists (e.g. the metric arrived before any
+                # UserStoppedSpeaking — pre-turn / greeting case).
+                if not self._attribute_stt_ttfb(data.value):
+                    self._active_buffer().ttfb[CATEGORY_STT].append(data.value)
+            elif category in _TTFB_CATEGORIES:
                 self._active_buffer().ttfb[category].append(data.value)
 
         elif isinstance(data, ProcessingMetricsData):
@@ -279,6 +385,9 @@ class MetricsCollectorProcessor(FrameProcessor):
                 "prompt_tokens": usage.prompt_tokens,
                 "completion_tokens": usage.completion_tokens,
                 "total_tokens": usage.total_tokens,
+                "cache_read_input_tokens": usage.cache_read_input_tokens,
+                "cache_creation_input_tokens": usage.cache_creation_input_tokens,
+                "reasoning_tokens": usage.reasoning_tokens,
             }
             self.llm_usage_metrics.append(entry)
             self._active_buffer().llm_usage.append(entry)
@@ -292,6 +401,15 @@ class MetricsCollectorProcessor(FrameProcessor):
             self.tts_usage_metrics.append(entry)
             self._active_buffer().tts_usage.append(entry)
 
+        elif isinstance(data, STTUsageMetricsData):
+            entry = {
+                "processor": data.processor,
+                "model": data.model,
+                "audio_ms": data.value,
+            }
+            self.stt_usage_metrics.append(entry)
+            self._active_buffer().stt_usage.append(entry)
+
     # ------------------------------------------------------------------
     # Read-out
     # ------------------------------------------------------------------
@@ -303,6 +421,7 @@ class MetricsCollectorProcessor(FrameProcessor):
             "processing": self.processing_metrics,
             "llm_usage": self.llm_usage_metrics,
             "tts_usage": self.tts_usage_metrics,
+            "stt_usage": self.stt_usage_metrics,
             "turn_metrics": self.get_turn_metrics(),
         }
 

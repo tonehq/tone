@@ -1,22 +1,24 @@
 'use client';
 
-import type { CallMetricsLLMUsage } from '@/types/callLog';
+import type { CallMetricsLLMUsage, CallMetricsTurnMetric } from '@/types/callLog';
 import { BrainCircuit } from 'lucide-react';
+import { useMemo } from 'react';
 
-import { BarChart } from './BarChart';
+import { AxisBarChart } from './AxisBarChart';
 import { MetricsDataTable, type MetricsTableColumn } from './MetricsDataTable';
 import { SectionHeader } from './SectionHeader';
+import { StackedCallsBarChart } from './StackedCallsBarChart';
+import { buildPerTurnUsageRows, TurnUsageTable } from './TurnUsageCard';
 import { useChartTableView } from './useChartTableView';
-import { BAR_CHART_MAX_HEIGHT } from './utils';
 
 interface LLMUsageSectionProps {
   llmUsage: CallMetricsLLMUsage[];
   totalTokens: number;
+  turns: CallMetricsTurnMetric[];
 }
 
 const LLM_TABLE_COLUMNS: MetricsTableColumn<CallMetricsLLMUsage>[] = [
   { key: 'idx', header: '#', align: 'left', width: 'w-12', cell: (_row, i) => i + 1 },
-  { key: 'model', header: 'Model', align: 'left', cell: (row) => row.model },
   {
     key: 'prompt',
     header: 'Prompt',
@@ -37,43 +39,71 @@ const LLM_TABLE_COLUMNS: MetricsTableColumn<CallMetricsLLMUsage>[] = [
   },
 ];
 
-/** File-local chart of per-call total tokens. Extracted so the values array
- *  is computed once instead of remapping inline for both `values` and `maxValue`. */
+const formatTokens = (v: number) => `${Math.round(v).toLocaleString()} tokens`;
+
+/** Cell sub-line: `753 prompt · 37 completion` — keeps the per-call token
+ *  split visible without surfacing the underlying service/model name (those
+ *  already appear in the call's request log if a deeper dive is needed). */
+function llmCellSubtext(call: CallMetricsLLMUsage): string {
+  return `${call.prompt_tokens.toLocaleString()} prompt · ${call.completion_tokens.toLocaleString()} completion`;
+}
+
+/** Legacy file-local chart of per-call total tokens — rendered for calls
+ *  recorded before per-call usage was being persisted into `turn_metrics`. */
 function LLMTokensPerCallChart({ llmUsage }: { llmUsage: CallMetricsLLMUsage[] }) {
   const tokenCounts = llmUsage.map((u) => u.total_tokens);
   return (
     <>
       <p className="mb-2 text-xs text-muted-foreground">Tokens per call</p>
-      <BarChart
+      <AxisBarChart
         values={tokenCounts}
-        maxValue={Math.max(...tokenCounts)}
-        maxHeight={BAR_CHART_MAX_HEIGHT}
-        color="bg-emerald-500/60 hover:bg-emerald-500"
-        getTooltip={(v, i) => `Call ${i + 1}: ${v.toLocaleString()} tokens`}
+        formatValue={(v) => v.toLocaleString()}
+        xAxisLabel="Call"
       />
     </>
   );
 }
 
-export function LLMUsageSection({ llmUsage, totalTokens }: LLMUsageSectionProps) {
+export function LLMUsageSection({ llmUsage, totalTokens, turns }: LLMUsageSectionProps) {
   const totalPrompt = llmUsage.reduce((s, u) => s + u.prompt_tokens, 0);
   const totalCompletion = llmUsage.reduce((s, u) => s + u.completion_tokens, 0);
-  const model = [...new Set(llmUsage.map((u) => u.model))].join(', ');
   const hasMultiple = llmUsage.length > 1;
   const { view, toggle } = useChartTableView('chart', 'LLM usage view');
+
+  // Per-turn rows from `turn_metrics.llm_usage_all`. When present, the
+  // chart and table switch to a turn-aligned, stacked-by-call view (one
+  // colored segment per LLM call inside the turn, matching the TTFB chart
+  // style). When absent (legacy rows), fall back to the flat per-call chart.
+  const perTurn = useMemo(() => {
+    const { rows, hasAny } = buildPerTurnUsageRows<CallMetricsLLMUsage>(
+      turns,
+      (t) => t.llm_usage_all,
+      (c) => c.total_tokens,
+    );
+    return {
+      rows,
+      hasAny,
+      // Turns with at least one LLM call vs. total turns rendered — keeps
+      // the header label aligned with the `X of Y turns` shown by the
+      // Latency cards.
+      sampleCount: rows.filter((r) => r.total > 0).length,
+      stacks: rows.map((r) => r.values),
+      turnLabels: rows.map((r) => r.turnLabel),
+    };
+  }, [turns]);
+  const { rows: perTurnRows, hasAny: hasPerTurnUsage } = perTurn;
 
   return (
     <div className="space-y-3">
       <SectionHeader icon={BrainCircuit} title="LLM Usage" />
       <div className="rounded-lg border border-border p-3">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <span className="text-sm font-medium text-foreground">{model}</span>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">
-              {llmUsage.length} call{llmUsage.length !== 1 ? 's' : ''}
-            </span>
-            {hasMultiple && toggle}
-          </div>
+        <div className="mb-2 flex items-center justify-end gap-2">
+          <span className="text-xs text-muted-foreground">
+            {hasPerTurnUsage
+              ? `${perTurn.sampleCount} of ${perTurnRows.length} turn${perTurnRows.length !== 1 ? 's' : ''}`
+              : `${llmUsage.length} call${llmUsage.length !== 1 ? 's' : ''}`}
+          </span>
+          {(hasPerTurnUsage || hasMultiple) && toggle}
         </div>
         <div className="flex gap-4">
           <div className="flex-1">
@@ -111,9 +141,25 @@ export function LLMUsageSection({ llmUsage, totalTokens }: LLMUsageSectionProps)
             Completion
           </span>
         </div>
-        {hasMultiple && (
+        {(hasPerTurnUsage || hasMultiple) && (
           <div className="mt-3 border-t border-border pt-3">
-            {view === 'chart' ? (
+            {hasPerTurnUsage ? (
+              view === 'chart' ? (
+                <StackedCallsBarChart
+                  stacks={perTurn.stacks}
+                  formatValue={formatTokens}
+                  xAxisLabel="Turn"
+                  xLabels={perTurn.turnLabels}
+                />
+              ) : (
+                <TurnUsageTable
+                  rows={perTurnRows}
+                  columnHeader="LLM Usage"
+                  format={formatTokens}
+                  cellSubtext={llmCellSubtext}
+                />
+              )
+            ) : view === 'chart' ? (
               <LLMTokensPerCallChart llmUsage={llmUsage} />
             ) : (
               <MetricsDataTable columns={LLM_TABLE_COLUMNS} rows={llmUsage} />

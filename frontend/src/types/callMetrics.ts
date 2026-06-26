@@ -3,6 +3,7 @@ import type {
   CallMetricsLatency,
   CallMetricsLLMUsage,
   CallMetricsProcessing,
+  CallMetricsSTTUsage,
   CallMetricsTTFB,
   CallMetricsTTSUsage,
   CallMetricsTurn,
@@ -13,6 +14,7 @@ export type {
   CallMetricsLatency,
   CallMetricsLLMUsage,
   CallMetricsProcessing,
+  CallMetricsSTTUsage,
   CallMetricsTTFB,
   CallMetricsTTSUsage,
   CallMetricsTurn,
@@ -32,9 +34,12 @@ export interface CallMetricsRow {
   duration_seconds: number | null;
 
   avg_ttfb_ms: number | null;
+  p99_ttfb_ms: number | null;
   avg_latency_s: number | null;
+  p99_latency_s: number | null;
   total_tokens: number | null;
   total_tts_chars: number | null;
+  total_stt_audio_ms: number | null;
   turn_count: number | null;
 }
 
@@ -47,6 +52,7 @@ export interface CallMetricsDetail extends CallMetricsRow {
   processing: CallMetricsProcessing[];
   llm_usage: CallMetricsLLMUsage[];
   tts_usage: CallMetricsTTSUsage[];
+  stt_usage: CallMetricsSTTUsage[];
   user_bot_latency: CallMetricsLatency[];
   turns: CallMetricsTurn[];
 }

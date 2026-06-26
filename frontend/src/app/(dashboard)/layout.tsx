@@ -15,6 +15,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const hydrate = useAuthStore((s) => s.hydrate);
   const setOrganizations = useAuthStore((s) => s.setOrganizations);
+  const clearAuth = useAuthStore((s) => s.clearAuth);
   const [ready, setReady] = useState(false);
   // Guard against React StrictMode double-invoke firing the org fetch twice in dev.
   const orgFetchStarted = useRef(false);
@@ -47,6 +48,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     })();
     return () => controller.abort();
   }, [hydrate, router, setOrganizations]);
+
+  // Cross-tab logout sync: when another tab clears the access token (logout,
+  // forced revocation), mirror that here so this tab does not stay "logged in"
+  // visually while the session is dead server-side.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === ACCESS_TOKEN && !e.newValue) {
+        clearAuth();
+        router.replace('/login');
+      }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [clearAuth, router]);
 
   if (!ready) return <AppLoader />;
 

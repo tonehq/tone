@@ -3,7 +3,7 @@
  *
  * Scenarios AKL-/AKC-/AKE-/AKD-/AKK- (API Keys tab) and
  * MDL-/MDC-/MDE-/MDD-/MDM- (Models tab) from
- * frontend/e2e/docs/model-providers-detail.md.
+ * frontend/e2e/ux_flow_docs/model-providers-detail.md.
  *
  * Strategy:
  * - Real login via the shared worker fixture.

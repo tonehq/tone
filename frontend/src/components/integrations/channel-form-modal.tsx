@@ -4,23 +4,54 @@ import { AppLoader, CustomModal, SelectInput, TextInput } from '@/components/sha
 import { getChannel } from '@/services/channelService';
 import type { Channel, ChannelUpsertPayload } from '@/types/integration';
 import { handleApiError } from '@/utils/helpers';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { z } from 'zod';
+import { useForm, useWatch } from 'react-hook-form';
 
-// Only providers that use the account_sid + auth_token credential shape
-// rendered by this form. Telnyx / Exotel use different credential schemas
-// and need their own field set before they can be added here.
-const CHANNEL_TYPE_OPTIONS = [{ label: 'Twilio', value: 'twilio' }];
+interface ChannelField {
+  name: string;
+  label: string;
+  type?: string;
+  placeholder?: string;
+}
 
-const channelFormSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  auth_token: z.string().min(1, 'Auth token is required'),
-  account_sid: z.string().min(1, 'Account SID is required'),
-});
+const CHANNEL_FIELDS: Record<string, ChannelField[]> = {
+  twilio: [
+    { name: 'account_sid', label: 'Account SID', placeholder: 'Enter account SID' },
+    { name: 'auth_token', label: 'Auth Token', type: 'password', placeholder: 'Enter auth token' },
+  ],
+  plivo: [
+    { name: 'auth_id', label: 'Auth ID', placeholder: 'Enter auth ID' },
+    { name: 'auth_token', label: 'Auth Token', type: 'password', placeholder: 'Enter auth token' },
+  ],
+  livekit: [
+    { name: 'url', label: 'Server URL', placeholder: 'wss://your-project.livekit.cloud' },
+    { name: 'api_key', label: 'API Key', placeholder: 'Enter API key' },
+    { name: 'api_secret', label: 'API Secret', type: 'password', placeholder: 'Enter API secret' },
+  ],
+  daily: [{ name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Enter API key' }],
+};
 
-type ChannelFormData = z.infer<typeof channelFormSchema>;
+const CHANNEL_TYPE_OPTIONS = [
+  { label: 'Twilio', value: 'twilio' },
+  { label: 'Plivo', value: 'plivo' },
+  { label: 'LiveKit', value: 'livekit' },
+  { label: 'Daily', value: 'daily' },
+];
+
+const ALL_FIELD_NAMES = [
+  'name',
+  'account_sid',
+  'auth_token',
+  'auth_id',
+  'url',
+  'api_key',
+  'api_secret',
+];
+
+type ChannelFormData = Record<string, string>;
+
+const emptyValues = (): ChannelFormData =>
+  ALL_FIELD_NAMES.reduce((acc, key) => ({ ...acc, [key]: '' }), {} as ChannelFormData);
 
 interface ChannelFormModalProps {
   open: boolean;
@@ -38,9 +69,8 @@ export default function ChannelFormModal({
   providerKey,
 }: ChannelFormModalProps) {
   const isEdit = Boolean(editChannel);
-  const { control, handleSubmit, reset, formState } = useForm<ChannelFormData>({
-    resolver: zodResolver(channelFormSchema),
-    defaultValues: { name: '', auth_token: '', account_sid: '' },
+  const { control, handleSubmit, reset } = useForm<ChannelFormData>({
+    defaultValues: emptyValues(),
     mode: 'onChange',
   });
 
@@ -56,46 +86,48 @@ export default function ChannelFormModal({
       getChannel(editChannel.id, true)
         .then((full) => {
           const config = (full.config ?? {}) as Record<string, string>;
-          reset({
-            name: full.name,
-            auth_token: config.auth_token ?? '',
-            account_sid: config.account_sid ?? '',
-          });
+          reset({ ...emptyValues(), name: full.name, ...config });
         })
         .catch((err) => {
           handleApiError(err);
-          reset({ name: editChannel.name, auth_token: '', account_sid: '' });
+          reset({ ...emptyValues(), name: editChannel.name });
         })
         .finally(() => setHydrating(false));
     } else {
-      reset({ name: '', auth_token: '', account_sid: '' });
+      reset(emptyValues());
       setChannelType(providerKey ?? 'twilio');
     }
   }, [open, editChannel, providerKey, reset]);
 
+  const fields = CHANNEL_FIELDS[channelType] ?? [];
+  const values = useWatch({ control });
+  const canSave =
+    (values?.name ?? '').trim().length > 0 &&
+    fields.every((f) => (values?.[f.name] ?? '').trim().length > 0);
+
   const onFormSubmit = async (data: ChannelFormData) => {
     setSaving(true);
     try {
+      const config = fields.reduce(
+        (acc, f) => ({ ...acc, [f.name]: (data[f.name] ?? '').trim() }),
+        {} as Record<string, string>,
+      );
       await onSubmit({
         ...(editChannel ? { id: editChannel.id } : {}),
-        name: data.name.trim(),
+        name: (data.name ?? '').trim(),
         channel_type: channelType,
-        config: {
-          auth_token: data.auth_token.trim(),
-          account_sid: data.account_sid.trim(),
-        },
+        config,
       });
-      reset({ name: '', auth_token: '', account_sid: '' });
+      reset(emptyValues());
       onClose();
     } catch {
-      // Error already surfaced by the caller via handleApiError.
     } finally {
       setSaving(false);
     }
   };
 
   const handleCancel = () => {
-    reset({ name: '', auth_token: '', account_sid: '' });
+    reset(emptyValues());
     onClose();
   };
 
@@ -107,7 +139,7 @@ export default function ChannelFormModal({
       confirmText={saving ? 'Saving...' : 'Save'}
       onConfirm={handleSubmit(onFormSubmit)}
       confirmLoading={saving}
-      confirmDisabled={!formState.isValid || hydrating}
+      confirmDisabled={!canSave || hydrating}
     >
       {hydrating ? (
         <AppLoader className="min-h-[260px]" />
@@ -117,7 +149,8 @@ export default function ChannelFormModal({
             name="name"
             control={control}
             label="Name"
-            placeholder="e.g. Twilio Production"
+            placeholder="e.g. Production"
+            rules={{ required: 'Name is required' }}
             isRequired
             disabled={saving}
           />
@@ -136,23 +169,19 @@ export default function ChannelFormModal({
                   : undefined
             }
           />
-          <TextInput
-            name="auth_token"
-            control={control}
-            label="Auth Token"
-            type="password"
-            placeholder="Enter auth token"
-            isRequired
-            disabled={saving}
-          />
-          <TextInput
-            name="account_sid"
-            control={control}
-            label="Account SID"
-            placeholder="Enter account SID"
-            isRequired
-            disabled={saving}
-          />
+          {fields.map((f) => (
+            <TextInput
+              key={f.name}
+              name={f.name}
+              control={control}
+              label={f.label}
+              type={f.type}
+              placeholder={f.placeholder}
+              rules={{ required: `${f.label} is required` }}
+              isRequired
+              disabled={saving}
+            />
+          ))}
         </div>
       )}
     </CustomModal>

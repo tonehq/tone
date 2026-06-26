@@ -16,12 +16,22 @@ export interface CallMetricsLLMUsage {
   total_tokens: number;
   prompt_tokens: number;
   completion_tokens: number;
+  /** Optional — present on rows persisted with cache-aware providers. */
+  cache_read_input_tokens?: number | null;
+  cache_creation_input_tokens?: number | null;
+  reasoning_tokens?: number | null;
 }
 
 export interface CallMetricsTTSUsage {
   model: string;
   processor: string;
   characters: number;
+}
+
+export interface CallMetricsSTTUsage {
+  model: string | null;
+  processor: string;
+  audio_ms: number;
 }
 
 export interface CallMetricsProcessing {
@@ -54,6 +64,16 @@ export interface CallMetricsTurnMetric {
     total_tokens: number;
   } | null;
   tts_characters: number | null;
+  stt_audio_ms: number | null;
+  /**
+   * Per-call usage breakdown within the turn — mirrors the `*_ttfb_all`
+   * pattern. Optional: missing on rows persisted before per-call usage was
+   * being collected. Each array has one entry per individual service call
+   * inside the turn.
+   */
+  llm_usage_all?: CallMetricsLLMUsage[] | null;
+  tts_usage_all?: CallMetricsTTSUsage[] | null;
+  stt_usage_all?: CallMetricsSTTUsage[] | null;
 }
 
 export interface CallMetrics {
@@ -61,6 +81,11 @@ export interface CallMetrics {
   turns: CallMetricsTurn[];
   llm_usage: CallMetricsLLMUsage[];
   tts_usage: CallMetricsTTSUsage[];
+  /**
+   * Per-utterance STT audio duration (ms). Optional — rows persisted
+   * before the `stt_usage` column existed will return `null`/missing.
+   */
+  stt_usage?: CallMetricsSTTUsage[] | null;
   processing: CallMetricsProcessing[];
   user_bot_latency: CallMetricsLatency[];
   /**
@@ -103,6 +128,54 @@ export interface CallLogRow {
    * the full payload without a second round-trip.
    */
   metrics: (CallMetrics & { id: string }) | null;
+}
+
+export type ToolExecutionStatus = 'success' | 'error';
+
+export type ToolExecutionType =
+  | 'custom'
+  | 'send_sms'
+  | 'google_calendar'
+  | 'read_document'
+  | 'built_in'
+  | 'mcp';
+
+/** One row from `tool_executions` — one tool/MCP invocation during a call.
+ *  The `tool_*` and `mcp_server_*` fields are joined in at read time from the
+ *  source `tools` / `mcp_servers` tables (LEFT JOIN on FK id). They are
+ *  optional: NULL for code-defined built-ins, pre-FK rows, and rows whose
+ *  source has since been deleted (ON DELETE SET NULL). */
+export interface ToolExecution {
+  id: string;
+  call_id: string | null;
+  agent_id: string | null;
+  tool_name: string;
+  tool_type: ToolExecutionType | string | null;
+  mcp_server_name: string | null;
+  tool_id: string | null;
+  mcp_server_id: string | null;
+  arguments: unknown;
+  result: unknown;
+  status: ToolExecutionStatus | string | null;
+  error_message: string | null;
+  status_code: number | null;
+  duration_ms: number | null;
+  turn_number: number | null;
+  started_at: string | null;
+  meta_data: Record<string, unknown> | null;
+  created_at: string | null;
+  updated_at: string | null;
+  // Joined from `tools`
+  tool_description?: string | null;
+  tool_url?: string | null;
+  tool_method?: string | null;
+  tool_auth_type?: string | null;
+  tool_is_active?: boolean | null;
+  // Joined from `mcp_servers`
+  mcp_server_description?: string | null;
+  mcp_server_url?: string | null;
+  mcp_server_transport?: string | null;
+  mcp_server_is_active?: boolean | null;
 }
 
 export interface CallLogsState {

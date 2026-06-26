@@ -84,6 +84,7 @@ export interface CreateAgentPayload {
   mcp_server_ids?: string[];
   upload_ids?: string[];
   phone_numbers?: AgentPhoneNumberInput[];
+  web_channel_ids?: string[];
 }
 
 /** Partial — only present fields are touched. Arrays present (even []) =
@@ -115,6 +116,14 @@ export interface AgentPhoneNumberRef {
   channel_id?: string | null;
 }
 
+export interface AgentWebChannelRef {
+  id: string;
+  channel_id: string;
+  channel_type: string;
+  name: string;
+  slug: string;
+}
+
 /** Full detail (create/get/update response). */
 export interface AgentDetail {
   id: string;
@@ -131,6 +140,7 @@ export interface AgentDetail {
   mcp_servers: AgentMcpServerRef[];
   documents: AgentDocumentRef[];
   phone_numbers: AgentPhoneNumberRef[];
+  web_channels: AgentWebChannelRef[];
   /** Version history, newest first. The row with `is_live: true` is the one
    * `agents.published_config_id` currently points at. */
   versions?: AgentVersionSummary[];
@@ -214,6 +224,7 @@ export interface AgentFormState {
   mcp_server_ids: string[];
   upload_ids: string[];
   phone_numbers: AgentPhoneNumberInput[];
+  web_channel_ids: string[];
 }
 
 export interface CreateAgentModalOption {

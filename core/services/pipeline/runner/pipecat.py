@@ -54,6 +54,15 @@ class PipecatPipelineRunner(PipelineRunner):
         call_log_ready = asyncio.Event()
         transcript_entries: list[dict] = []
         turn_entries: list[dict] = []
+        # Tool-call telemetry: handlers (custom / built-in / document / MCP)
+        # append one entry per invocation. Persisted as ``tool_executions`` rows
+        # by ``CallLogService.complete_call(tool_calls=...)`` at call end.
+        # ``current_turn`` is a dict so handlers see updates via reference
+        # (mutated in ``on_turn_started``); ``tool_dedup`` is the per-call
+        # idempotency cache shared across handlers.
+        tool_call_entries: list[dict] = []
+        current_turn: dict = {"number": 0}
+        tool_dedup: dict = {}
         call_log_updated = {"done": False}
         audio_buffer = None
 
@@ -146,6 +155,9 @@ class PipecatPipelineRunner(PipelineRunner):
             audio_buffer=audio_buffer,
             from_number=from_number,
             prompt_context=prompt_context,
+            tool_call_entries=tool_call_entries,
+            current_turn=current_turn,
+            tool_dedup=tool_dedup,
         )
         task = build.task
         rtvi = build.rtvi
@@ -195,6 +207,9 @@ class PipecatPipelineRunner(PipelineRunner):
         @turn_observer.event_handler("on_turn_started")
         async def on_turn_started(observer, turn_number):
             logger.info("Turn {} started", turn_number)
+            # Keep ``current_turn`` in sync so tool handlers stamp the right
+            # turn on their entries (they hold the dict by reference).
+            current_turn["number"] = turn_number
             metrics_collector.on_turn_started(turn_number)
 
         @turn_observer.event_handler("on_turn_ended")
@@ -292,6 +307,7 @@ class PipecatPipelineRunner(PipelineRunner):
                                 upload_id=upload_id,
                                 transcript=transcript_data,
                                 metrics=collected_metrics,
+                                tool_calls=tool_call_entries or None,
                                 recording_duration_seconds=recording_seconds,
                             )
                         call_log_updated["done"] = True
@@ -305,21 +321,26 @@ class PipecatPipelineRunner(PipelineRunner):
                     except Exception as e:
                         logger.error("Failed to complete call log in on_audio_data: {}", e)
 
-        # Start recording and speak first_message when client connects
-        @transport.event_handler("on_client_connected")
-        async def on_client_connected(transport, client):
+        async def _start_session():
             if audio_buffer:
                 logger.info("Client connected — starting audio recording.")
                 await audio_buffer.start_recording()
             else:
                 logger.info("Client connected.")
             if is_s2s:
-                # S2S: kick off the conversation — context already has the messages
                 logger.info("Kicking off S2S conversation via LLMRunFrame")
                 await task.queue_frames([LLMRunFrame()])
             elif first_message_text:
                 logger.info("Speaking first_message via TTS: {}", first_message_text)
                 await task.queue_frame(TTSSpeakFrame(text=first_message_text))
+
+        async def _end_session(participant):
+            logger.info("Client disconnected: {}", participant)
+            await task.cancel()
+
+        @transport.event_handler("on_client_connected")
+        async def on_client_connected(transport, client):
+            await _start_session()
 
         @rtvi.event_handler("on_client_ready")
         async def on_client_ready(rtvi):
@@ -328,8 +349,17 @@ class PipecatPipelineRunner(PipelineRunner):
 
         @transport.event_handler("on_client_disconnected")
         async def on_client_disconnected(transport, participant):
-            logger.info("Client disconnected: {}", participant)
-            await task.cancel()
+            await _end_session(participant)
+
+        if type(transport).__name__ == "LiveKitTransport":
+
+            @transport.event_handler("on_first_participant_joined")
+            async def on_first_participant_joined(transport, participant_id):
+                await _start_session()
+
+            @transport.event_handler("on_participant_disconnected")
+            async def on_participant_disconnected(transport, participant_id):
+                await _end_session(participant_id)
 
         logger.info("[TIMING] runner setup complete, total: %.3fs — starting runner.run()", _time.monotonic() - _t_comp_start)
         runner = PipecatRunner(handle_sigint=getattr(runner_args, "handle_sigint", False))
@@ -362,6 +392,7 @@ class PipecatPipelineRunner(PipelineRunner):
                             audio_file_path=None,
                             transcript=transcript_data,
                             metrics=collected_metrics,
+                            tool_calls=tool_call_entries or None,
                         )
                     logger.info("Call log completed (fallback): id={}", call_log_id)
                 except Exception as e:

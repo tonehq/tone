@@ -84,6 +84,7 @@ class CreateAgentRequest(BaseModel):
     mcp_server_ids: Optional[List[str]] = None
     upload_ids: Optional[List[str]] = None
     phone_numbers: Optional[List[PhoneNumberAttachment]] = None
+    web_channel_ids: Optional[List[str]] = None
 
 
 class UpdateAgentRequest(BaseModel):
@@ -96,6 +97,7 @@ class UpdateAgentRequest(BaseModel):
     mcp_server_ids: Optional[List[str]] = None
     upload_ids: Optional[List[str]] = None
     phone_numbers: Optional[List[PhoneNumberAttachment]] = None
+    web_channel_ids: Optional[List[str]] = None
 
 
 class SaveAsNewVersionRequest(BaseModel):
@@ -106,15 +108,37 @@ class SaveAsNewVersionRequest(BaseModel):
     snapshot, not an agent rename.
 
     ``source_config_id`` declares which existing version the new draft should
-    clone its fields and tool/MCP/KB attachments from. The editor sends the
-    version currently loaded in the form ("save what I'm looking at"). When
-    omitted, the service falls back to the published version.
+    clone its fields and tool/MCP/KB attachments from. When ``from_scratch``
+    is ``False`` (default), the editor sends the id of the version it wants
+    to copy — omitting it falls back to the published version. When
+    ``from_scratch`` is ``True``, no source is read and the draft is born
+    with whatever ``config`` the request carries (or empty fields if none) —
+    used by the "Start fresh" option in the create-version dialog.
     """
     config: Optional[AgentConfigRequest] = None
     tool_ids: Optional[List[str]] = None
     mcp_server_ids: Optional[List[str]] = None
     upload_ids: Optional[List[str]] = None
     phone_numbers: Optional[List[PhoneNumberAttachment]] = None
+    web_channel_ids: Optional[List[str]] = None
+    source_config_id: Optional[str] = None
+    from_scratch: Optional[bool] = False
+
+
+class UpdateVersionRequest(BaseModel):
+    """Body for ``PUT /agent/update_version``.
+
+    Mirrors {@link SaveAsNewVersionRequest} minus the versioning controls — an
+    in-place update never branches into a new row. ``source_config_id`` picks
+    which version is mutated; when omitted the service falls back to the live
+    one.
+    """
+    config: Optional[AgentConfigRequest] = None
+    tool_ids: Optional[List[str]] = None
+    mcp_server_ids: Optional[List[str]] = None
+    upload_ids: Optional[List[str]] = None
+    phone_numbers: Optional[List[PhoneNumberAttachment]] = None
+    web_channel_ids: Optional[List[str]] = None
     source_config_id: Optional[str] = None
 
 
@@ -344,9 +368,35 @@ def save_as_new_version(
     # freshly-saved version — otherwise the response would still resolve to the
     # currently-live config and the editor would lose the user's edits.
     agent, new_config = svc.save_as_new_version(
-        agent_id, data, user_id, source_config_id=source_config_uuid
+        agent_id,
+        data,
+        user_id,
+        source_config_id=source_config_uuid,
+        from_scratch=bool(body.from_scratch),
     )
     return svc.agent_response(agent, config=new_config)
+
+
+@router.put("/update_version")
+def update_version(
+    body: UpdateVersionRequest,
+    agent_id: str = Query(..., description="The agent ID owning the version"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """In-place update of a specific version row — no new draft is created.
+
+    Targets ``source_config_id`` (the version currently loaded in the editor);
+    falls back to the live version when omitted. This is the endpoint the
+    Save button uses now that versioning lives behind its own button.
+    """
+    svc = _get_service(claims, db)
+    data = body.model_dump(exclude_unset=True)
+    source_config_uuid = UUID(body.source_config_id) if body.source_config_id else None
+    agent, config = svc.update_version(
+        agent_id, data, source_config_id=source_config_uuid
+    )
+    return svc.agent_response(agent, config=config)
 
 
 @router.post("/switch_active_version")

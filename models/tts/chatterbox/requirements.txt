@@ -1,0 +1,3 @@
+chatterbox-streaming
+fastapi
+uvicorn[standard]

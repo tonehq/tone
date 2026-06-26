@@ -1,34 +1,18 @@
 'use client';
 
-import {
-  AlertCircle,
-  Check,
-  FileText,
-  Loader2,
-  Phone,
-  PhoneIncoming,
-  Upload,
-  X,
-} from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AlertCircle, Check, FileText, Loader2, Upload } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import SectionCard, { ACCENTS } from '@/components/agents/agent-form/SectionCard';
-import AssignPhoneNumberModal from '@/components/agents/agent-form/steps/AssignPhoneNumberModal';
 import KnowledgeBaseUploadModal from '@/components/agents/agent-form/steps/KnowledgeBaseUploadModal';
 import { CustomButton, SearchBar } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
-import { listChannels } from '@/services/channelService';
 import { listKnowledgeBase } from '@/services/knowledgeBaseService';
 import type { KnowledgeBaseUpload } from '@/services/knowledgeBaseService';
-import type { AgentFormState, AgentPhoneNumberInput } from '@/types/agent';
-import type { Channel } from '@/types/integration';
+import type { AgentFormState } from '@/types/agent';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
-import { formatPhoneWithDash, getCountryIso2FromPhone } from '@/utils/phoneUtils';
-import * as FlagIcons from 'country-flag-icons/react/3x2';
-
-type FlagKey = keyof typeof FlagIcons;
 
 const PAGE_SIZE = 30;
 
@@ -42,7 +26,6 @@ interface KnowledgePhoneStepProps {
 export default function KnowledgePhoneStep({ agentId }: KnowledgePhoneStepProps) {
   const { control, setValue } = useFormContext<AgentFormState>();
   const uploadIds = useWatch({ control, name: 'upload_ids' }) ?? [];
-  const phoneNumbers = useWatch({ control, name: 'phone_numbers' }) ?? [];
 
   const [uploadOpen, setUploadOpen] = useState(false);
 
@@ -92,51 +75,6 @@ export default function KnowledgePhoneStep({ agentId }: KnowledgePhoneStepProps)
     },
     [uploadIds, setValue, refreshKb],
   );
-
-  // ─── channels + phone numbers ────────────────────────────────────────────
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [channelsLoading, setChannelsLoading] = useState(false);
-  const [assignOpen, setAssignOpen] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setChannelsLoading(true);
-    listChannels()
-      .then((rows) => {
-        if (cancelled) return;
-        setChannels(rows);
-      })
-      .catch((err) => {
-        if (!cancelled) handleApiError(err);
-      })
-      .finally(() => {
-        if (!cancelled) setChannelsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const channelById = useMemo(() => {
-    const map = new Map<string, Channel>();
-    channels.forEach((c) => map.set(c.id, c));
-    return map;
-  }, [channels]);
-
-  const handleAssignedFromModal = useCallback(
-    (rows: AgentPhoneNumberInput[]) => {
-      setValue('phone_numbers', rows, { shouldDirty: true });
-    },
-    [setValue],
-  );
-
-  const removeAssignedNumber = (number: string, channelId: string) => {
-    setValue(
-      'phone_numbers',
-      phoneNumbers.filter((p) => !(p.number === number && p.channel_id === channelId)),
-      { shouldDirty: true },
-    );
-  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -244,132 +182,11 @@ export default function KnowledgePhoneStep({ agentId }: KnowledgePhoneStepProps)
         </div>
       </SectionCard>
 
-      {/* Phone numbers */}
-      <SectionCard
-        icon={<Phone className="size-3.5" strokeWidth={2.25} />}
-        iconClassName={ACCENTS.emerald}
-        title="Phone numbers"
-        description="Numbers that route to this agent."
-        action={
-          phoneNumbers.length > 0 ? (
-            <Badge variant="secondary" className="h-5 px-2 text-[11px] tabular-nums">
-              {phoneNumbers.length} assigned
-            </Badge>
-          ) : null
-        }
-      >
-        {phoneNumbers.length === 0 && (
-          <div className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-6 text-center">
-            <span className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
-              <PhoneIncoming className="size-4" />
-            </span>
-            <p className="text-sm font-medium text-foreground">No phone numbers assigned</p>
-            <p className="text-[11px] text-muted-foreground">
-              Click below to pick from your connected providers.
-            </p>
-          </div>
-        )}
-        {phoneNumbers.length > 0 && (
-          <ul className="grid gap-2 sm:grid-cols-2">
-            {phoneNumbers.map((row) => {
-              const channel = channelById.get(row.channel_id);
-              const iso2 = getCountryIso2FromPhone(row.number);
-              const FlagComponent = iso2
-                ? (FlagIcons[iso2 as FlagKey] as
-                    | React.ComponentType<React.SVGProps<SVGSVGElement>>
-                    | undefined)
-                : undefined;
-              return (
-                <li
-                  key={`${row.channel_id}|${row.number}`}
-                  className={cn(
-                    'group relative flex items-center gap-3 overflow-hidden rounded-xl border border-border/70 bg-card px-3 py-2.5 transition-all',
-                    'hover:border-primary/40 hover:shadow-sm',
-                  )}
-                >
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/8 text-primary ring-1 ring-primary/10">
-                    <Phone className="size-4" strokeWidth={2.25} />
-                  </span>
-                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <span className="flex min-w-0 items-center gap-2">
-                      {FlagComponent ? (
-                        <FlagComponent
-                          className="h-3 w-[18px] shrink-0 rounded-[2px] object-cover shadow-[0_0_0_0.5px_rgba(0,0,0,0.08)]"
-                          aria-label={iso2 ?? undefined}
-                        />
-                      ) : null}
-                      <span className="truncate text-sm font-semibold tabular-nums text-foreground">
-                        {formatPhoneWithDash(row.number)}
-                      </span>
-                    </span>
-                    <span className="flex min-w-0 items-center gap-1.5 truncate text-[11px] text-muted-foreground">
-                      {channel ? (
-                        <>
-                          <span className="truncate font-medium text-foreground/80">
-                            {channel.name}
-                          </span>
-                          <Badge
-                            variant="secondary"
-                            className="h-4 shrink-0 px-1.5 text-[9px] font-medium uppercase tracking-wide"
-                          >
-                            {channel.channel_type}
-                          </Badge>
-                          {row.label && <span className="truncate">· {row.label}</span>}
-                        </>
-                      ) : (
-                        <span>Unknown channel</span>
-                      )}
-                    </span>
-                  </div>
-                  <CustomButton
-                    type="text"
-                    size="icon-xs"
-                    onClick={() => removeAssignedNumber(row.number, row.channel_id)}
-                    aria-label={`Remove ${row.number}`}
-                    className={cn(
-                      'shrink-0 text-muted-foreground transition-all',
-                      'opacity-60 hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100',
-                    )}
-                  >
-                    <X className="size-4" />
-                  </CustomButton>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        <CustomButton
-          type="default"
-          icon={<PhoneIncoming className="size-4" />}
-          onClick={() => setAssignOpen(true)}
-          disabled={channelsLoading || channels.length === 0}
-          className="self-start"
-          title={channels.length === 0 ? 'Connect a channel first under Integrations.' : undefined}
-        >
-          {phoneNumbers.length === 0 ? 'Assign number' : 'Manage numbers'}
-        </CustomButton>
-        {channels.length === 0 && !channelsLoading && (
-          <p className="text-[11px] text-muted-foreground">
-            <Phone className="mr-1 inline size-3" />
-            Connect a phone channel under Integrations to start assigning numbers.
-          </p>
-        )}
-      </SectionCard>
-
       <KnowledgeBaseUploadModal
         open={uploadOpen}
         agentId={agentId}
         onClose={() => setUploadOpen(false)}
         onUploaded={handleUploaded}
-      />
-
-      <AssignPhoneNumberModal
-        open={assignOpen}
-        onClose={() => setAssignOpen(false)}
-        channels={channels}
-        channelsLoading={channelsLoading}
-        currentlyAssigned={phoneNumbers}
-        onAssign={handleAssignedFromModal}
       />
     </div>
   );

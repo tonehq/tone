@@ -2,7 +2,7 @@
  * Model Providers list-page e2e flow against the real backend.
  *
  * Scenarios MPL-/MPC-/MPE-/MPD-/MPP- from
- * frontend/e2e/docs/model-providers.md.
+ * frontend/e2e/ux_flow_docs/model-providers.md.
  *
  * Strategy:
  * - Real login via the shared worker fixture.

@@ -182,15 +182,18 @@ def build_stt(spec: dict) -> Optional[Any]:
 
     try:
         if provider_name == "deepgram":
-            from deepgram import LiveOptions
-            from pipecat.services.deepgram.stt import DeepgramSTTService
+            from pipecat.services.deepgram.stt import DeepgramSTTService, LiveOptions
             dg_kwargs = {}
             if metadata.get("sample_rate") is not None:
                 dg_kwargs["sample_rate"] = metadata["sample_rate"]
             live_options = None
             if metadata.get("language"):
                 live_options = LiveOptions(language=metadata["language"])
-            return DeepgramSTTService(api_key=api_key, live_options=live_options, **dg_kwargs, **_url_kwargs(metadata))
+            dg_url = _url_kwargs(metadata)
+            _dg_host = (dg_url.get("base_url") or "").split("://")[-1].split("/")[0]
+            if not _dg_host or "." not in _dg_host:
+                dg_url.pop("base_url", None)
+            return DeepgramSTTService(api_key=api_key, live_options=live_options, **dg_kwargs, **dg_url)
         if provider_name == "openai":
             from pipecat.services.openai.stt import OpenAISTTService
             return OpenAISTTService(
@@ -205,7 +208,7 @@ def build_stt(spec: dict) -> Optional[Any]:
             # the same /ws/asr protocol as nemotron — so we reuse NvidiaWebSocketService.
             from pipecat.services.nvidia.websocket_stt import NvidiaWebSocketService
             from core.logging import get_trace_id
-            ws_url = "ws://staging-stt-voxtral-service.staging.svc.cluster.local/ws/asr"
+            ws_url = metadata.get("base_url") or "ws://staging-stt-voxtral-service.staging.svc.cluster.local/ws/asr"
             ws_kwargs = {}
             if metadata.get("sample_rate") is not None:
                 ws_kwargs["sample_rate"] = metadata["sample_rate"]
@@ -215,11 +218,31 @@ def build_stt(spec: dict) -> Optional[Any]:
             # the same /ws/asr protocol as nemotron — so we reuse NvidiaWebSocketService.
             from pipecat.services.nvidia.websocket_stt import NvidiaWebSocketService
             from core.logging import get_trace_id
-            ws_url = "ws://staging-stt-gemma-service.staging.svc.cluster.local/ws/asr"
+            ws_url = metadata.get("base_url") or "ws://staging-stt-gemma-service.staging.svc.cluster.local/ws/asr"
             ws_kwargs = {}
             if metadata.get("sample_rate") is not None:
                 ws_kwargs["sample_rate"] = metadata["sample_rate"]
             return NvidiaWebSocketService(url=ws_url, trace_id=get_trace_id(), **ws_kwargs)
+        if provider_name == "parakeet":
+            from core.services.pipeline.parakeet_stt_service import ParakeetSTTService
+            from core.logging import get_trace_id
+            parakeet_url = metadata.get("base_url") or "http://staging-stt-parakeet-service.staging.svc.cluster.local/asr"
+            parakeet_kwargs = {}
+            if metadata.get("sample_rate") is not None:
+                parakeet_kwargs["sample_rate"] = metadata["sample_rate"]
+            if model:
+                parakeet_kwargs["model"] = model
+            return ParakeetSTTService(url=parakeet_url, trace_id=get_trace_id(), **parakeet_kwargs)
+        if provider_name == "granite":
+            from core.services.pipeline.granite_stt_service import GraniteWebSocketSTTService
+            from core.logging import get_trace_id
+            ws_url = metadata.get("base_url") or "ws://staging-stt-granite-service.staging.svc.cluster.local/ws/asr"
+            granite_kwargs = {}
+            if metadata.get("sample_rate") is not None:
+                granite_kwargs["sample_rate"] = metadata["sample_rate"]
+            if model:
+                granite_kwargs["model"] = model
+            return GraniteWebSocketSTTService(url=ws_url, trace_id=get_trace_id(), **granite_kwargs)
         if provider_name == "groq":
             from pipecat.services.groq.stt import GroqSTTService
             return GroqSTTService(
@@ -253,7 +276,7 @@ def build_stt(spec: dict) -> Optional[Any]:
         if provider_name == "nvidia_websocket":
             from pipecat.services.nvidia.websocket_stt import NvidiaWebSocketService
             from core.logging import get_trace_id
-            ws_url = "ws://staging-stt-nemotron-service.staging.svc.cluster.local/ws/asr"
+            ws_url = metadata.get("base_url") or "ws://staging-stt-nemotron-service.staging.svc.cluster.local/ws/asr"
             ws_kwargs = {}
             if metadata.get("sample_rate") is not None:
                 ws_kwargs["sample_rate"] = metadata["sample_rate"]
@@ -315,7 +338,7 @@ def build_stt(spec: dict) -> Optional[Any]:
             )
         if provider_name == "elevenlabs":
             from pipecat.services.elevenlabs.stt import ElevenLabsRealtimeSTTService
-            return ElevenLabsRealtimeSTTService(api_key=api_key, model=model or "scribe_v2_realtime", params=build_input_params(ElevenLabsRealtimeSTTService, metadata), **_url_kwargs(metadata))
+            return ElevenLabsRealtimeSTTService(api_key=api_key, model=model or "scribe_v1_experimental", params=build_input_params(ElevenLabsRealtimeSTTService, metadata), **_url_kwargs(metadata))
         if provider_name == "gladia":
             from pipecat.services.gladia.stt import GladiaSTTService
             return GladiaSTTService(
@@ -342,13 +365,13 @@ def build_stt(spec: dict) -> Optional[Any]:
             if metadata.get("temperature") is not None:
                 sn_kwargs["temperature"] = metadata["temperature"]
             return SambaNovaSTTService(api_key=api_key, model=model or "Whisper-Large-v3", **sn_kwargs)
-        logger.warning("Unsupported STT provider: %s", provider_name)
+        logger.warning("Unsupported STT provider: {}", provider_name)
         return None
     except ImportError as e:
-        logger.warning("STT provider %s not available: %s", provider_name, e)
+        logger.warning("STT provider {} not available: {}", provider_name, e)
         return None
     except Exception as e:
-        logger.exception("STT provider %s failed to initialize: %s", provider_name, e)
+        logger.exception("STT provider {} failed to initialize: {}", provider_name, e)
         return None
 
 
@@ -639,6 +662,21 @@ def build_tts(spec: dict) -> Optional[Any]:
             logger.debug("[TTS {}] voice_kwargs: {}", provider_name, voice_kwargs)
             return ResembleAITTSService(api_key=api_key, **voice_kwargs, **_url_kwargs(metadata, "url"))
 
+        if provider_name == "chatterbox":
+            # Self-hosted Resemble AI Chatterbox — same /ws/tts protocol + 24kHz as Qwen,
+            # so we reuse QwenWebSocketTTSService pointed at the chatterbox service.
+            from core.services.pipeline.qwen_tts_service import QwenWebSocketTTSService
+            from core.logging import get_trace_id
+            ws_url = "ws://staging-tts-chatterbox-service.staging.svc.cluster.local/ws/tts"
+            cb_kwargs = {}
+            if tts_voice_id is not None:
+                cb_kwargs["voice_id"] = tts_voice_id
+            if tts_language is not None:
+                cb_kwargs["language"] = tts_language
+            if metadata.get("sample_rate") is not None:
+                cb_kwargs["sample_rate"] = metadata["sample_rate"]
+            return QwenWebSocketTTSService(url=ws_url, trace_id=get_trace_id(), **cb_kwargs)
+
         if provider_name == "qwen_websocket":
             from core.services.pipeline.qwen_tts_service import QwenWebSocketTTSService
             from core.logging import get_trace_id
@@ -653,13 +691,13 @@ def build_tts(spec: dict) -> Optional[Any]:
             logger.debug("[TTS {}] qwen_kwargs: {}", provider_name, qwen_kwargs)
             return QwenWebSocketTTSService(url=ws_url, trace_id=get_trace_id(), **qwen_kwargs)
 
-        logger.warning("Unsupported TTS provider: %s", provider_name)
+        logger.warning("Unsupported TTS provider: {}", provider_name)
         return None
     except ImportError as e:
-        logger.warning("TTS provider %s not available: %s", provider_name, e)
+        logger.warning("TTS provider {} not available (ImportError): {}", provider_name, e)
         _close_unused_session(session)
         return None
     except Exception as e:
-        logger.exception("TTS provider %s failed to initialize: %s", provider_name, e)
+        logger.exception("TTS provider {} failed to initialize: {}", provider_name, e)
         _close_unused_session(session)
         return None
