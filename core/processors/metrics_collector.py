@@ -149,6 +149,14 @@ def _finalize_buffer(
         "llm_usage": llm_summary,
         "tts_characters": _sum_field(buffer.tts_usage, "characters") if buffer.tts_usage else None,
         "stt_audio_ms": _sum_field(buffer.stt_usage, "audio_ms") if buffer.stt_usage else None,
+        # Per-call usage, mirroring the `*_ttfb_all` pattern. One entry per
+        # individual service call inside the turn (e.g. a turn with two LLM
+        # completions for a tool-call follow-up emits two entries). Lets the
+        # UI render a stacked bar per turn with one segment per call, and a
+        # per-call breakdown table — same shape used for TTFB.
+        "llm_usage_all": [dict(item) for item in buffer.llm_usage],
+        "tts_usage_all": [dict(item) for item in buffer.tts_usage],
+        "stt_usage_all": [dict(item) for item in buffer.stt_usage],
     }
 
 
