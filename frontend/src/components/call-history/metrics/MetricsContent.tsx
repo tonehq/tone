@@ -107,13 +107,25 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, className }) =
       {hasUsage && (
         <MetricsCategory title="Usage">
           {llmUsage.length > 0 && (
-            <LLMUsageSection llmUsage={llmUsage} totalTokens={overview.totalTokens} />
+            <LLMUsageSection
+              llmUsage={llmUsage}
+              totalTokens={overview.totalTokens}
+              turns={turnMetrics}
+            />
           )}
           {ttsUsage.length > 0 && (
-            <TTSUsageSection ttsUsage={ttsUsage} totalChars={overview.totalChars} />
+            <TTSUsageSection
+              ttsUsage={ttsUsage}
+              totalChars={overview.totalChars}
+              turns={turnMetrics}
+            />
           )}
           {sttUsage.length > 0 && (
-            <STTUsageSection sttUsage={sttUsage} totalAudioMs={overview.totalSttAudioMs} />
+            <STTUsageSection
+              sttUsage={sttUsage}
+              totalAudioMs={overview.totalSttAudioMs}
+              turns={turnMetrics}
+            />
           )}
         </MetricsCategory>
       )}

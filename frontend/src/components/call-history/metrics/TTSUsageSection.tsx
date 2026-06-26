@@ -1,22 +1,25 @@
 'use client';
 
-import type { CallMetricsTTSUsage } from '@/types/callLog';
+import type { CallMetricsTTSUsage, CallMetricsTurnMetric } from '@/types/callLog';
 import { Mic } from 'lucide-react';
+import { useMemo } from 'react';
 
-import { BarChart } from './BarChart';
+import { AxisBarChart } from './AxisBarChart';
 import { MetricsDataTable, type MetricsTableColumn } from './MetricsDataTable';
 import { SectionHeader } from './SectionHeader';
+import { StackedCallsBarChart } from './StackedCallsBarChart';
+import { buildPerTurnUsageRows, TurnUsageTable } from './TurnUsageCard';
 import { useChartTableView } from './useChartTableView';
-import { BAR_CHART_MAX_HEIGHT } from './utils';
+import { extractProcessorName } from './utils';
 
 interface TTSUsageSectionProps {
   ttsUsage: CallMetricsTTSUsage[];
   totalChars: number;
+  turns: CallMetricsTurnMetric[];
 }
 
 const TTS_TABLE_COLUMNS: MetricsTableColumn<CallMetricsTTSUsage>[] = [
   { key: 'idx', header: '#', align: 'left', width: 'w-12', cell: (_row, i) => i + 1 },
-  { key: 'model', header: 'Model', align: 'left', cell: (row) => row.model },
   {
     key: 'chars',
     header: 'Characters',
@@ -25,43 +28,88 @@ const TTS_TABLE_COLUMNS: MetricsTableColumn<CallMetricsTTSUsage>[] = [
   },
 ];
 
-export function TTSUsageSection({ ttsUsage, totalChars }: TTSUsageSectionProps) {
-  const displayChunks = ttsUsage.length > 20 ? ttsUsage.slice(0, 20) : ttsUsage;
-  const displayChars = displayChunks.map((u) => u.characters);
-  const maxChars = Math.max(...displayChars);
+const formatChars = (v: number) => `${Math.round(v).toLocaleString()} chars`;
+
+function ttsCellSubtext(call: CallMetricsTTSUsage): string | undefined {
+  const proc = call.processor ? extractProcessorName(call.processor) : undefined;
+  if (call.model && proc) return `${proc} · ${call.model}`;
+  return call.model ?? proc;
+}
+
+export function TTSUsageSection({ ttsUsage, totalChars, turns }: TTSUsageSectionProps) {
   const { view, toggle } = useChartTableView('chart', 'TTS usage view');
+
+  // Per-turn rows from `turn_metrics.tts_usage_all`. When present, the chart
+  // becomes a per-turn stacked bar (one segment per TTS call inside the
+  // turn — typically multiple per turn because TTS splits by sentence).
+  const perTurn = useMemo(() => {
+    const { rows, hasAny } = buildPerTurnUsageRows<CallMetricsTTSUsage>(
+      turns,
+      (t) => t.tts_usage_all,
+      (c) => c.characters,
+    );
+    return {
+      rows,
+      hasAny,
+      sampleCount: rows.filter((r) => r.total > 0).length,
+      stacks: rows.map((r) => r.values),
+      turnLabels: rows.map((r) => r.turnLabel),
+    };
+  }, [turns]);
+  const { rows: perTurnRows, hasAny: hasPerTurnUsage } = perTurn;
+
+  const renderBody = () => {
+    if (hasPerTurnUsage) {
+      return view === 'chart' ? (
+        <StackedCallsBarChart
+          stacks={perTurn.stacks}
+          formatValue={formatChars}
+          xAxisLabel="Turn"
+          xLabels={perTurn.turnLabels}
+        />
+      ) : (
+        <TurnUsageTable
+          rows={perTurnRows}
+          columnHeader="TTS Usage"
+          format={formatChars}
+          cellSubtext={ttsCellSubtext}
+        />
+      );
+    }
+    if (view === 'chart') {
+      const displayChunks = ttsUsage.length > 20 ? ttsUsage.slice(0, 20) : ttsUsage;
+      const displayChars = displayChunks.map((u) => u.characters);
+      return (
+        <>
+          <AxisBarChart
+            values={displayChars}
+            formatValue={(v) => `${v.toLocaleString()}`}
+            xAxisLabel="Chunk"
+          />
+          {ttsUsage.length > 20 && (
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              Showing first 20 of {ttsUsage.length} chunks
+            </p>
+          )}
+        </>
+      );
+    }
+    return <MetricsDataTable columns={TTS_TABLE_COLUMNS} rows={ttsUsage} />;
+  };
 
   return (
     <div className="space-y-3">
       <SectionHeader icon={Mic} title="TTS Usage" />
       <div className="rounded-lg border border-border p-3">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <span className="text-sm font-medium text-foreground">{ttsUsage[0].model}</span>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">
-              {ttsUsage.length} chunk{ttsUsage.length !== 1 ? 's' : ''}
-            </span>
-            {toggle}
-          </div>
+        <div className="mb-2 flex items-center justify-end gap-2">
+          <span className="text-xs text-muted-foreground">
+            {hasPerTurnUsage
+              ? `${perTurn.sampleCount} of ${perTurnRows.length} turn${perTurnRows.length !== 1 ? 's' : ''}`
+              : `${ttsUsage.length} chunk${ttsUsage.length !== 1 ? 's' : ''}`}
+          </span>
+          {toggle}
         </div>
-        {view === 'chart' ? (
-          <>
-            <BarChart
-              values={displayChars}
-              maxValue={maxChars}
-              maxHeight={BAR_CHART_MAX_HEIGHT}
-              color="bg-amber-500/70 hover:bg-amber-500"
-              getTooltip={(v) => `${v} chars`}
-            />
-            {ttsUsage.length > 20 && (
-              <p className="mt-1 text-[10px] text-muted-foreground">
-                Showing first 20 of {ttsUsage.length} chunks
-              </p>
-            )}
-          </>
-        ) : (
-          <MetricsDataTable columns={TTS_TABLE_COLUMNS} rows={ttsUsage} />
-        )}
+        {renderBody()}
         <div className="mt-2 flex gap-4">
           <div>
             <p className="text-xs text-muted-foreground">Total</p>
@@ -72,7 +120,9 @@ export function TTSUsageSection({ ttsUsage, totalChars }: TTSUsageSectionProps) 
           <div>
             <p className="text-xs text-muted-foreground">Avg / chunk</p>
             <p className="text-sm font-semibold text-foreground">
-              {Math.round(totalChars / ttsUsage.length)} chars
+              {ttsUsage.length > 0
+                ? `${Math.round(totalChars / ttsUsage.length).toLocaleString()} chars`
+                : '—'}
             </p>
           </div>
         </div>
