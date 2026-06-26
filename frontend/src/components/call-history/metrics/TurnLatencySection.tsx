@@ -4,9 +4,9 @@ import type { CallMetricsTurnMetric } from '@/types/callLog';
 import { LineChart } from 'lucide-react';
 
 import { LatencyStatChips, useLatencyStats } from './LatencyStatChips';
-import { MetricsDataTable, type MetricsTableColumn } from './MetricsDataTable';
 import { SectionHeader } from './SectionHeader';
 import { StackedCallsBarChart } from './StackedCallsBarChart';
+import { type PerTurnUsageRow, TurnUsageTable } from './TurnUsageCard';
 import { useChartTableView } from './useChartTableView';
 import { formatMs, turnHasAnyMeasurement } from './utils';
 
@@ -141,30 +141,17 @@ function TurnMetricCard({
 
   const referenceLines = buildReferenceLines(format);
 
-  const rows = stacks.map((segments, i) => ({
-    turn: turnLabels[i],
+  // Reshape into the same per-turn / per-call grouped table the Usage cards
+  // use — Turn (rowSpan) | <metric> | Total (rowSpan), with one row per
+  // call inside the turn. `calls` and `values` both carry the raw number;
+  // there's no per-call metadata for TTFB so no cell subtext.
+  const tableRows: PerTurnUsageRow<number>[] = stacks.map((segments, i) => ({
+    turnLabel: turnLabels[i],
+    calls: segments,
+    values: segments,
     total: segments.reduce((acc, v) => acc + v, 0),
-    callCount: segments.length,
   }));
-
-  const columns: MetricsTableColumn<{ turn: string; total: number; callCount: number }>[] = [
-    { key: 'turn', header: 'Turn', align: 'left', width: 'w-16', cell: (row) => row.turn },
-    {
-      key: 'calls',
-      header: 'Calls',
-      align: 'right',
-      width: 'w-16',
-      cell: (row) =>
-        row.callCount > 0 ? row.callCount : <span className="text-muted-foreground">—</span>,
-    },
-    {
-      key: 'total',
-      header: title.replace(' per Turn', ''),
-      align: 'right',
-      cell: (row) =>
-        row.callCount === 0 ? <span className="text-muted-foreground">—</span> : format(row.total),
-    },
-  ];
+  const tableColumnHeader = title.replace(' per Turn', '');
 
   return (
     <div className="rounded-lg border border-border p-3">
@@ -200,7 +187,7 @@ function TurnMetricCard({
           />
         </>
       ) : (
-        <MetricsDataTable columns={columns} rows={rows} />
+        <TurnUsageTable rows={tableRows} columnHeader={tableColumnHeader} format={format} />
       )}
     </div>
   );
