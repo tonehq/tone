@@ -30,6 +30,8 @@ from core.models.agent import Agent
 from core.models.agent_knowledge_base import AgentKnowledgeBase
 from core.models.knowledge_base import KnowledgeBase
 from core.models.upload import Upload
+from core.services.audit_actions import AgentAuditAction, AuditResourceType
+from core.services.audit_service import AuditService
 from core.services.document_processing_service import DocumentProcessingService
 from core.services.ingestion_queue import enqueue_reprocess, enqueue_upload
 from core.services.r2_storage_service import R2StorageService
@@ -277,6 +279,13 @@ def build_knowledge_base_router(
                         knowledge_base_id=knowledge_base.id,
                         agent_config_id=agent_config.id,
                     )
+                )
+                AuditService(db, user_id=user_id, org_id=org_id).log(
+                    AgentAuditAction.KB_ATTACHED,
+                    agent_id=agent_uuid,
+                    agent_config_id=agent_config.id,
+                    target_resource_type=AuditResourceType.KNOWLEDGE_BASE,
+                    target_resource_id=str(upload.id),
                 )
 
             db.commit()

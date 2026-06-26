@@ -32,7 +32,12 @@ import { AppLoader, CustomButton, CustomModal } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { useNavigation } from '@/contexts/navigation';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
-import type { AgentDetail, AgentDirection, AgentFormState } from '@/types/agent';
+import type {
+  AgentDetail,
+  AgentDirection,
+  AgentFormState,
+  UpdateAgentPayload,
+} from '@/types/agent';
 import {
   agentDetailToFormState,
   defaultFormState,
@@ -247,10 +252,33 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
         return;
       }
 
-      // Edit flow — full form state goes to PUT /update_version, scoped to
-      // the version currently loaded in the form (``source_config_id``). The
-      // backend mutates that row in place — see service ``update_version``.
+      // Edit flow — split the save into two endpoints:
+      //   1. Root agent fields (name/description/agent_type/is_active) live
+      //      on the ``agents`` row itself and are NOT part of any version.
+      //      Send their diff through PUT /update_agent.
+      //   2. Everything else (config + attachments) is version-scoped — goes
+      //      through PUT /update_version against ``source_config_id``.
       const full = formStateToCreatePayload(values);
+      const baseline = loadedBaselineRef.current;
+      const rootChanges: UpdateAgentPayload = {};
+      if (values.name.trim() !== baseline.name.trim()) {
+        rootChanges.name = values.name.trim();
+      }
+      const nextDesc = values.description?.trim() ?? '';
+      const prevDesc = baseline.description?.trim() ?? '';
+      if (nextDesc !== prevDesc) {
+        rootChanges.description = nextDesc || null;
+      }
+      if (values.agent_type !== baseline.agent_type) {
+        rootChanges.agent_type = values.agent_type;
+      }
+      if (values.is_active !== baseline.is_active) {
+        rootChanges.is_active = values.is_active;
+      }
+      if (Object.keys(rootChanges).length > 0) {
+        await updateAgent({ id: agentId, values: rootChanges });
+      }
+
       const updated = await updateAgentVersion({
         agentId,
         values: {
@@ -283,6 +311,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     isEditMode,
     methods,
     router,
+    updateAgent,
     updateAgentVersion,
   ]);
 
