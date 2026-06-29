@@ -82,6 +82,12 @@ class Settings:
         self.GOOGLE_CLIENT_ID: str = get_secret("GOOGLE_CLIENT_ID", "")
         self.GOOGLE_CLIENT_SECRET: str = get_secret("GOOGLE_CLIENT_SECRET", "")
 
+        # Pre-registered OAuth clients for MCP servers that don't support Dynamic Client
+        # Registration (RFC 7591). HubSpot's official MCP server (mcp.hubspot.com) requires
+        # creating an "MCP Auth App" in the HubSpot developer portal to obtain these.
+        self.HUBSPOT_MCP_CLIENT_ID: str = get_secret("HUBSPOT_MCP_CLIENT_ID", "")
+        self.HUBSPOT_MCP_CLIENT_SECRET: str = get_secret("HUBSPOT_MCP_CLIENT_SECRET", "")
+
         self.LLAMA_CLOUD_API_KEY: str = get_secret("LLAMA_CLOUD_API_KEY", "")
 
         # Global OpenAI key used as a fallback for AI helper features (e.g. system-prompt
