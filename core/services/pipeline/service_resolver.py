@@ -296,14 +296,18 @@ def _load_workflow_prompt(db: Session, config, org_id=None) -> Tuple[Optional[st
         workflow_first_message,
     )
 
-    wf = db.query(Workflow).filter(Workflow.id == workflow_id).first()
+    # Org-scope the lookup: a workflow may only be resolved for an agent in the SAME org,
+    # so another org's workflow can never drive this call even if the id were referenced.
+    wf_q = db.query(Workflow).filter(Workflow.id == workflow_id)
+    if org_id:
+        wf_q = wf_q.filter(Workflow.organization_id == org_id)
+    wf = wf_q.first()
     if not wf or not wf.published_version_id:
         return None, None
-    ver = (
-        db.query(WorkflowVersion)
-        .filter(WorkflowVersion.id == wf.published_version_id)
-        .first()
-    )
+    ver_q = db.query(WorkflowVersion).filter(WorkflowVersion.id == wf.published_version_id)
+    if org_id:
+        ver_q = ver_q.filter(WorkflowVersion.organization_id == org_id)
+    ver = ver_q.first()
     if not ver or not ver.graph:
         return None, None
     text = serialize_graph_for_llm(ver.graph, _workflow_tool_names(db, ver.graph, org_id))
