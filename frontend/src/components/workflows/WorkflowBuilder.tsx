@@ -105,6 +105,8 @@ function BuilderInner({ workflowId }: Props) {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  // Saved draft differs from the live published snapshot (edits saved but not published).
+  const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
 
@@ -117,6 +119,7 @@ function BuilderInner({ workflowId }: Props) {
         if (!active) return;
         setName(wf.name);
         setWfStatus(wf.status);
+        setHasUnpublishedChanges(wf.has_unpublished_changes);
         setGlobalPrompt(wf.graph.globalPrompt ?? '');
         artifactPlanRef.current = wf.graph.artifactPlan ?? null;
         checksumRef.current = wf.graph_checksum;
@@ -289,6 +292,7 @@ function BuilderInner({ workflowId }: Props) {
         expectedChecksum: checksumRef.current,
       });
       checksumRef.current = detail.graph_checksum;
+      setHasUnpublishedChanges(detail.has_unpublished_changes);
       // Only mark clean if nothing was edited during the in-flight save — otherwise the
       // newest edits would be silently shown as "saved".
       if (JSON.stringify(buildGraph()) === sentJson) setDirty(false);
@@ -311,6 +315,7 @@ function BuilderInner({ workflowId }: Props) {
       const detail = await publish(workflowId);
       checksumRef.current = detail.graph_checksum;
       setWfStatus(detail.status);
+      setHasUnpublishedChanges(detail.has_unpublished_changes);
       if (JSON.stringify(buildGraph()) === sentJson) setDirty(false);
       setLastSavedAt(Date.now());
       showToast.success(
@@ -392,6 +397,7 @@ function BuilderInner({ workflowId }: Props) {
         status={status}
         saving={saving}
         dirty={dirty}
+        hasUnpublishedChanges={hasUnpublishedChanges}
         lastSavedAt={lastSavedAt}
         issues={issues}
         onBack={() => router.push('/workflows')}

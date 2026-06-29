@@ -56,6 +56,8 @@ export interface WorkflowDetail {
   is_valid: boolean;
   validation_errors: ValidationIssue[];
   has_published: boolean;
+  /** Saved draft has diverged from the live published snapshot (edits not yet published). */
+  has_unpublished_changes: boolean;
   created_at: string | null;
   updated_at: string | null;
 }

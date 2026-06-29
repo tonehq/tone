@@ -102,6 +102,11 @@ class WorkflowService(BaseService):
             "is_valid": bool(draft.is_valid) if draft else False,
             "validation_errors": (draft.validation_errors or []) if draft else [],
             "has_published": published is not None,
+            # True when the editable draft has diverged from the live published snapshot —
+            # i.e. there are saved edits that are not live yet (compared by graph checksum).
+            "has_unpublished_changes": bool(
+                published and draft and draft.graph_checksum != published.graph_checksum
+            ),
             "created_at": wf.created_at.isoformat() if wf.created_at else None,
             "updated_at": wf.updated_at.isoformat() if wf.updated_at else None,
         }
