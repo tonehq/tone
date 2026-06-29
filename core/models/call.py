@@ -11,6 +11,11 @@ class Call(OrgScopedModel):
     __tablename__ = "calls"
 
     agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="RESTRICT"), nullable=False)
+    agent_config_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_configs.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     channel_id = Column(UUID(as_uuid=True), ForeignKey("channels.id", ondelete="RESTRICT"), nullable=False)
     direction = Column(String(10), nullable=False)  # inbound | outbound
     from_phone_number_id = Column(UUID(as_uuid=True), ForeignKey("phone_numbers.id", ondelete="SET NULL"), nullable=True)
