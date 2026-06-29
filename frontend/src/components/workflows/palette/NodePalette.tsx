@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { GripVertical, Search } from 'lucide-react';
+import { GripVertical } from 'lucide-react';
 
 import { cn } from '@/utils/cn';
 import CustomButton from '@/components/shared/CustomButton';
+import SearchBar from '@/components/shared/SearchBar';
 import { NODE_CATEGORIES, type NodeTypeMeta } from '@/components/workflows/nodeRegistry';
 import type { WorkflowNodeType } from '@/types/workflow';
 
@@ -36,16 +37,14 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAdd }) => {
       <div className="border-b border-border px-4 py-3.5">
         <div className="text-sm font-semibold text-foreground">Add node</div>
         <p className="mt-0.5 text-xs text-muted-foreground">Drag onto the canvas or click to add</p>
-        <div className="relative mt-3">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search nodes…"
-            aria-label="Search node types"
-            className="w-full rounded-lg border border-border bg-background py-2 pl-8 pr-2.5 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground focus:ring-2"
-          />
-        </div>
+        <SearchBar
+          value={query}
+          onChange={setQuery}
+          debounceMs={0}
+          placeholder="Search nodes…"
+          aria-label="Search node types"
+          containerClassName="mt-3 max-w-none"
+        />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">

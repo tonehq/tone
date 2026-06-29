@@ -50,11 +50,41 @@ def _variables(data: Dict[str, Any]) -> List[str]:
     return names
 
 
-def serialize_graph_for_llm(graph: Dict[str, Any]) -> str:
+def workflow_first_message(graph: Dict[str, Any]) -> str:
+    """Return the START node's first message — the opening line the agent speaks on connect.
+
+    Mirrors the entry-point selection in ``serialize_graph_for_llm`` (first ``isStart``
+    node). Returns "" when the graph has no start node or it defines no first message.
+    """
+    if not isinstance(graph, dict):
+        return ""
+    nodes = graph.get("nodes") or []
+    if not isinstance(nodes, list):
+        return ""
+    start = next(
+        (
+            n for n in nodes
+            if isinstance(n, dict)
+            and isinstance(n.get("data"), dict)
+            and n["data"].get("isStart")
+        ),
+        None,
+    )
+    if start is None:
+        return ""
+    return _first_message(start.get("data") or {})
+
+
+def serialize_graph_for_llm(
+    graph: Dict[str, Any], tool_names: Dict[str, str] | None = None
+) -> str:
     """Flatten a workflow graph into an instruction block for the system prompt.
 
-    Returns an empty string when the graph has no usable nodes.
+    ``tool_names`` maps a tool node's ``toolId`` to the tool's display name so the step
+    instruction can tell the model exactly which (attached) tool to call. Returns an empty
+    string when the graph has no usable nodes.
     """
+    tool_names = tool_names or {}
     if not isinstance(graph, dict):
         return ""
 
@@ -137,8 +167,22 @@ def serialize_graph_for_llm(graph: Dict[str, Any]) -> str:
 
         if ntype == "tool":
             tool = data.get("tool") if isinstance(data.get("tool"), dict) else None
+            tool_id = _s(data.get("toolId"))
+            mcp_id = _s(data.get("mcpServerId"))
             if tool and _s(tool.get("type")):
                 lines.append(f"- Run the built-in '{_s(tool.get('type'))}' action.")
+            elif tool_id and tool_names.get(tool_id):
+                lines.append(
+                    f"- Call the `{tool_names[tool_id]}` tool to complete this step. "
+                    "Only call it at this step (after the guest has confirmed the details) — "
+                    "never earlier in the conversation."
+                )
+            elif mcp_id and tool_names.get(mcp_id):
+                lines.append(
+                    f"- Use the `{tool_names[mcp_id]}` MCP server's tools to complete this step. "
+                    "Only use them at this step (after the guest has confirmed the details) — "
+                    "never earlier in the conversation."
+                )
             else:
                 lines.append("- Run the configured tool/action for this step.")
 

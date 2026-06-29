@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { Plus, Trash2 } from 'lucide-react';
 
@@ -13,6 +13,7 @@ import CheckboxField from '@/components/shared/CheckboxField';
 import SelectInput from '@/components/shared/SelectInput';
 import SearchableSelect from '@/components/shared/SearchableSelect';
 import { fetchToolsAtom, toolsAtom } from '@/atoms/ToolAtom';
+import { fetchMcpServersAtom, mcpServersAtom } from '@/atoms/MCPAtom';
 import { NODE_REGISTRY } from '@/components/workflows/nodeRegistry';
 import type {
   ConditionEdgeData,
@@ -67,12 +68,30 @@ const NodeConfigDrawer: React.FC<Props> = ({
   const { tools, loading: toolsLoading } = useAtomValue(toolsAtom);
   const fetchTools = useSetAtom(fetchToolsAtom);
 
+  const { servers: mcpServers, loading: mcpLoading } = useAtomValue(mcpServersAtom);
+  const fetchMcp = useSetAtom(fetchMcpServersAtom);
+
+  // Tool node "source" (Tool vs MCP) — local so picking MCP switches the picker before an
+  // id is chosen. Re-synced whenever a different node opens.
+  const [toolSource, setToolSource] = useState<'tool' | 'mcp'>('tool');
+  useEffect(() => {
+    if (node?.type === 'tool') {
+      setToolSource((node.data as D)?.mcpServerId ? 'mcp' : 'tool');
+    }
+  }, [node?.id, node?.type]);
+
   const isToolNode = node?.type === 'tool';
   useEffect(() => {
-    if (isToolNode && tools.length === 0 && !toolsLoading) fetchTools();
-  }, [isToolNode, tools.length, toolsLoading, fetchTools]);
+    if (!isToolNode) return;
+    if (tools.length === 0 && !toolsLoading) fetchTools();
+    if (mcpServers.length === 0 && !mcpLoading) fetchMcp();
+  }, [isToolNode, tools.length, toolsLoading, fetchTools, mcpServers.length, mcpLoading, fetchMcp]);
 
   const toolOptions = useMemo(() => tools.map((t) => ({ value: t.id, label: t.name })), [tools]);
+  const mcpOptions = useMemo(
+    () => mcpServers.map((s) => ({ value: s.id, label: s.name })),
+    [mcpServers],
+  );
 
   // ── node editing ──
   const renderNode = () => {
@@ -152,15 +171,54 @@ const NodeConfigDrawer: React.FC<Props> = ({
 
         {/* tool */}
         {type === 'tool' && (
-          <SearchableSelect
-            name="tool"
-            label="Tool"
-            options={toolOptions}
-            value={String(data.toolId ?? '')}
-            onValueChange={(v) => patch({ toolId: v, tool: undefined })}
-            loading={toolsLoading}
-            placeholder="Select a tool (webhook / custom / MCP)"
-          />
+          <div className="flex flex-col gap-3">
+            <SelectInput
+              name="tool-source"
+              label="Action source"
+              options={[
+                { value: 'tool', label: 'Tool (webhook / custom)' },
+                { value: 'mcp', label: 'MCP server' },
+              ]}
+              value={toolSource}
+              onValueChange={(src) => {
+                const next = src === 'mcp' ? 'mcp' : 'tool';
+                setToolSource(next);
+                // Clear the other source's selection so only one is set on the node.
+                patch(
+                  next === 'mcp'
+                    ? { toolId: undefined, tool: undefined }
+                    : { mcpServerId: undefined },
+                );
+              }}
+            />
+
+            {toolSource === 'mcp' ? (
+              <SearchableSelect
+                name="mcp-server"
+                label="MCP server"
+                options={mcpOptions}
+                value={String(data.mcpServerId ?? '')}
+                onValueChange={(v) => patch({ mcpServerId: v, toolId: undefined, tool: undefined })}
+                loading={mcpLoading}
+                placeholder="Select an MCP server"
+              />
+            ) : (
+              <SearchableSelect
+                name="tool"
+                label="Tool"
+                options={toolOptions}
+                value={String(data.toolId ?? '')}
+                onValueChange={(v) => patch({ toolId: v, mcpServerId: undefined, tool: undefined })}
+                loading={toolsLoading}
+                placeholder="Select a tool (webhook / custom)"
+              />
+            )}
+
+            <p className="text-[11px] text-muted-foreground">
+              The chosen tool or MCP server must also be attached to the agent so the model can call
+              it at this step.
+            </p>
+          </div>
         )}
 
         {/* transfer destination */}

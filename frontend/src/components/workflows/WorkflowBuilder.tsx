@@ -508,16 +508,13 @@ function BuilderInner({ workflowId }: Props) {
           <div className="rounded-xl border border-border bg-muted/40 p-3.5">
             <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
               <Layers className="h-3.5 w-3.5 text-primary" />
-              How prompts layer
+              How prompts apply
             </div>
+            <p className="mt-1.5 text-[12px] text-muted-foreground">
+              In workflow mode the workflow drives the call on its own — the agent&apos;s system
+              prompt is not used. Set the call-wide persona and tone here.
+            </p>
             <ol className="mt-2.5 space-y-1.5 text-[12px] text-muted-foreground">
-              <li className="flex items-start gap-2">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/40" />
-                <span>
-                  <span className="font-medium text-foreground/80">Agent persona</span> — identity &
-                  tone, from the agent.
-                </span>
-              </li>
               <li className="flex items-start gap-2">
                 <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
                 <span>

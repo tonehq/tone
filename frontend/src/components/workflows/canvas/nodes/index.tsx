@@ -77,9 +77,11 @@ function ToolNode({ id, data, selected }: NodeProps) {
   const inline = (d.tool as D | undefined)?.type;
   const summary = inline
     ? `Built-in: ${str(inline)}`
-    : str(d.toolId)
-      ? `Tool ${str(d.toolId).slice(0, 8)}…`
-      : '';
+    : str(d.mcpServerId)
+      ? `MCP server ${str(d.mcpServerId).slice(0, 8)}…`
+      : str(d.toolId)
+        ? `Tool ${str(d.toolId).slice(0, 8)}…`
+        : '';
   return (
     <BaseNode
       meta={NODE_REGISTRY.tool}

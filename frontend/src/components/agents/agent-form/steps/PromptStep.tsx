@@ -280,9 +280,9 @@ export default function PromptStep() {
             )}
 
             <div className="rounded-lg border border-border bg-muted/30 p-3 text-[12px] text-muted-foreground">
-              <span className="font-medium text-foreground/80">Note:</span> your system prompt still
-              applies as the agent&apos;s persona — the workflow layers on top to drive turn-by-turn
-              flow.
+              <span className="font-medium text-foreground/80">Note:</span> in workflow mode the
+              workflow drives the call on its own — your Single-prompt system prompt is not used.
+              Put any persona or tone guidance in the workflow&apos;s global prompt instead.
             </div>
           </div>
         </SectionCard>

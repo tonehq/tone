@@ -42,7 +42,7 @@ from core.utils.encryption import decrypt
 # removed in `load_agent_service_config`'s `result` dict). It is folded into every cache
 # version stamp, so a deploy that changes the shape invalidates all persisted entries
 # instead of serving them with a stale shape — there is no TTL to clear them otherwise.
-PAYLOAD_FORMAT_VERSION = "v3"
+PAYLOAD_FORMAT_VERSION = "v4"  # v4: workflow mode uses the workflow prompt alone (no base persona)
 
 
 def _resolve_org_id(org_id):
@@ -277,31 +277,68 @@ def _config_service_ids(config) -> dict:
     }
 
 
-def _load_workflow_prompt(db: Session, config, org_id=None) -> Optional[str]:
+def _load_workflow_prompt(db: Session, config, org_id=None) -> Tuple[Optional[str], Optional[str]]:
     """When the config runs in workflow mode, render the assigned workflow's published
-    graph into an instruction block for the LLM. Returns None outside workflow mode, when
-    no workflow is assigned, or when the assigned workflow has no published version."""
+    graph into an instruction block for the LLM.
+
+    Returns ``(playbook_text, start_first_message)`` — the serialized pathway plus the
+    start node's opening line (the greeting to speak on connect). Both are None outside
+    workflow mode, when no workflow is assigned, or when there is no published version."""
     if getattr(config, "mode", "prompt") != "workflow":
-        return None
+        return None, None
     workflow_id = getattr(config, "workflow_id", None)
     if not workflow_id:
-        return None
+        return None, None
 
     from core.models.workflow import Workflow, WorkflowVersion
-    from core.services.workflow.prompt_serializer import serialize_graph_for_llm
+    from core.services.workflow.prompt_serializer import (
+        serialize_graph_for_llm,
+        workflow_first_message,
+    )
 
     wf = db.query(Workflow).filter(Workflow.id == workflow_id).first()
     if not wf or not wf.published_version_id:
-        return None
+        return None, None
     ver = (
         db.query(WorkflowVersion)
         .filter(WorkflowVersion.id == wf.published_version_id)
         .first()
     )
     if not ver or not ver.graph:
-        return None
-    text = serialize_graph_for_llm(ver.graph)
-    return text or None
+        return None, None
+    text = serialize_graph_for_llm(ver.graph, _workflow_tool_names(db, ver.graph, org_id))
+    greeting = workflow_first_message(ver.graph)
+    return (text or None), (greeting or None)
+
+
+def _workflow_tool_names(db: Session, graph: dict, org_id=None) -> dict:
+    """Map each tool node's ``toolId`` / ``mcpServerId`` → display name so the serialized
+    steps can name the exact (agent-attached) tool or MCP server to use. Org-scoped;
+    returns {} when there are no tool/MCP ids."""
+    nodes = graph.get("nodes") or []
+    tool_ids, mcp_ids = [], []
+    for n in nodes:
+        data = (n or {}).get("data") or {}
+        if data.get("toolId"):
+            tool_ids.append(data["toolId"])
+        if data.get("mcpServerId"):
+            mcp_ids.append(data["mcpServerId"])
+    names: dict = {}
+    if tool_ids:
+        from core.models.tool import Tool
+
+        q = db.query(Tool).filter(Tool.id.in_(tool_ids))
+        if org_id:
+            q = q.filter(Tool.organization_id == org_id)
+        names.update({str(t.id): t.name for t in q.all()})
+    if mcp_ids:
+        from core.models.mcp_server import McpServer
+
+        q = db.query(McpServer).filter(McpServer.id.in_(mcp_ids))
+        if org_id:
+            q = q.filter(McpServer.organization_id == org_id)
+        names.update({str(m.id): m.name for m in q.all()})
+    return names
 
 
 def _compose_system_prompt(base_prompt: Optional[str], workflow_prompt: Optional[str]) -> str:
@@ -525,16 +562,24 @@ def load_agent_service_config(
         return None
 
     # Workflow mode: flatten the assigned workflow's published graph into the system prompt
-    # so the LLM follows the pathway. The persona prompt (if any) stays on top. Guarded so a
-    # bad/missing workflow degrades to prompt mode instead of aborting a live-call resolve.
+    # so the LLM follows the pathway. Guarded so a bad/missing workflow degrades to prompt
+    # mode instead of aborting a live-call resolve.
     try:
-        workflow_prompt = _load_workflow_prompt(db, config, org_id)
+        workflow_prompt, workflow_greeting = _load_workflow_prompt(db, config, org_id)
     except Exception as exc:  # noqa: BLE001 — never let workflow load kill the resolve
         logger.warning("[workflow] failed to load workflow prompt for agent={}: {}", agent_id, exc)
-        workflow_prompt = None
-    system_content = _compose_system_prompt(
-        getattr(config, "system_prompt_template", None), workflow_prompt
-    )
+        workflow_prompt, workflow_greeting = None, None
+    if _in_workflow_mode and workflow_prompt:
+        # Workflow selected and loaded: drive the call ENTIRELY from the workflow playbook.
+        # The agent's base persona prompt is intentionally dropped — keeping it would let its
+        # own greeting/flow/instructions conflict with and override the workflow's steps.
+        system_content = workflow_prompt.strip()
+    else:
+        # Prompt mode, or workflow mode but the workflow failed/empty → fall back to the
+        # base persona prompt (compose handles either part being empty).
+        system_content = _compose_system_prompt(
+            getattr(config, "system_prompt_template", None), workflow_prompt
+        )
     if not system_content:
         return None
 
@@ -546,8 +591,16 @@ def load_agent_service_config(
         llm_spec["metadata"]["system_instruction"] = system_content
 
     messages = [{"role": "system", "content": system_content}]
-    if getattr(config, "first_message", None) and config.first_message.strip():
-        messages.append({"role": "assistant", "content": config.first_message.strip()})
+    # Greeting spoken on connect. In workflow mode the workflow's start step owns the
+    # opening line — use it and ignore config.first_message, falling back to
+    # config.first_message only when the workflow defines no start message.
+    cfg_first = (getattr(config, "first_message", None) or "").strip()
+    if _in_workflow_mode and workflow_prompt:
+        greeting = (workflow_greeting or "").strip() or cfg_first
+    else:
+        greeting = cfg_first
+    if greeting:
+        messages.append({"role": "assistant", "content": greeting})
 
     result = {
         "_cache_version": version,
