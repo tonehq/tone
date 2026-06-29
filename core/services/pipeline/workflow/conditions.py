@@ -88,11 +88,18 @@ def evaluate_logic(expr: str, variables: Dict[str, Any]) -> bool:
     body = _strip_liquid(expr)
     if not body:
         return True  # empty == always
-    # Bare value like "paid" → truthiness of the coerced literal.
+    # Recognized bare boolean literal (true/yes/false/no) → its truthiness.
+    low = body.lower()
+    if low in ("true", "yes"):
+        return True
+    if low in ("false", "no", "null", "nil", "none"):
+        return False
     try:
         tree = ast.parse(body, mode="eval")
     except SyntaxError:
-        return bool(_coerce(body))
+        # Unparseable expression (e.g. natural-language prose on a logic edge) never
+        # matches — fail-closed so a malformed condition can't silently fire every turn.
+        return False
     try:
         return bool(_eval(tree, variables))
     except Exception:

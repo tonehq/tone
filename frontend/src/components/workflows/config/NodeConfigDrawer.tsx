@@ -24,6 +24,14 @@ import type {
 
 type D = Record<string, unknown>;
 
+/** Variable value types the extractor supports. */
+const VAR_TYPE_OPTIONS = [
+  { value: 'string', label: 'Text' },
+  { value: 'number', label: 'Number' },
+  { value: 'boolean', label: 'Yes / No' },
+  { value: 'date', label: 'Date' },
+];
+
 interface Props {
   node: WorkflowNode | null;
   edge: WorkflowEdge | null;
@@ -194,17 +202,28 @@ const NodeConfigDrawer: React.FC<Props> = ({
                   <Card key={i} className="bg-card">
                     <div className="flex items-start gap-2">
                       <div className="flex flex-1 flex-col gap-2">
-                        <TextInput
-                          name={`var-name-${i}`}
-                          value={String(v.title ?? '')}
-                          onChange={(e) =>
-                            setVars(
-                              vars.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)),
-                            )
-                          }
-                          placeholder="variable_name"
-                          className="font-mono"
-                        />
+                        <div className="flex items-center gap-2">
+                          <TextInput
+                            name={`var-name-${i}`}
+                            value={String(v.title ?? '')}
+                            onChange={(e) =>
+                              setVars(
+                                vars.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)),
+                              )
+                            }
+                            placeholder="variable_name"
+                            className="flex-1 font-mono"
+                          />
+                          <SelectInput
+                            name={`var-type-${i}`}
+                            options={VAR_TYPE_OPTIONS}
+                            value={String(v.type ?? 'string')}
+                            onValueChange={(val) =>
+                              setVars(vars.map((x, j) => (j === i ? { ...x, type: val } : x)))
+                            }
+                            className="w-28 shrink-0"
+                          />
+                        </div>
                         <TextInput
                           name={`var-desc-${i}`}
                           value={String(v.description ?? '')}

@@ -3,6 +3,7 @@ import { atom } from 'jotai';
 import {
   createWorkflow,
   deleteWorkflow,
+  exportVapiWorkflow,
   getWorkflow,
   listWorkflows,
   publishWorkflow,
@@ -77,19 +78,23 @@ export const publishWorkflowAtom = atom(
   async (_get, _set, workflowId: string): Promise<WorkflowDetail> => publishWorkflow(workflowId),
 );
 
+export const exportWorkflowAtom = atom(
+  null,
+  async (_get, _set, workflowId: string): Promise<Record<string, unknown>> =>
+    exportVapiWorkflow(workflowId),
+);
+
 // ─── editor UI status (coarse, mirrored from the canvas) ────────────────────
 export interface WorkflowEditorStatus {
   saving: boolean;
   dirty: boolean;
-  issues: ValidationIssue[];
-  selectedNodeId: string | null;
-  lastSavedAt: number | null;
 }
 
 export const workflowEditorStatusAtom = atom<WorkflowEditorStatus>({
   saving: false,
   dirty: false,
-  issues: [],
-  selectedNodeId: null,
-  lastSavedAt: null,
 });
+
+// Validation issues live in their OWN atom so the per-node badges (which subscribe to
+// this) don't re-render on every save/dirty toggle written to the status atom above.
+export const workflowIssuesAtom = atom<ValidationIssue[]>([]);

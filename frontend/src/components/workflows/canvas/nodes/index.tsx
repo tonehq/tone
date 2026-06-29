@@ -4,7 +4,7 @@ import React, { createContext, useContext, useMemo } from 'react';
 import type { NodeProps } from '@xyflow/react';
 import { useAtomValue } from 'jotai';
 
-import { workflowEditorStatusAtom } from '@/atoms/WorkflowAtom';
+import { workflowIssuesAtom } from '@/atoms/WorkflowAtom';
 import { NODE_REGISTRY } from '@/components/workflows/nodeRegistry';
 import BaseNode from './BaseNode';
 
@@ -15,8 +15,8 @@ interface NodeActions {
 export const NodeActionsContext = createContext<NodeActions>({});
 
 function useNodeIssues(id: string) {
-  const status = useAtomValue(workflowEditorStatusAtom);
-  return useMemo(() => status.issues.filter((i) => i.node_name === id), [status.issues, id]);
+  const issues = useAtomValue(workflowIssuesAtom);
+  return useMemo(() => issues.filter((i) => i.node_name === id), [issues, id]);
 }
 
 function useNodeDelete(id: string) {

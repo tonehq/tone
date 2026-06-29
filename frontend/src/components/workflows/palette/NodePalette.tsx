@@ -42,6 +42,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAdd }) => {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search nodes…"
+            aria-label="Search node types"
             className="w-full rounded-lg border border-border bg-background py-2 pl-8 pr-2.5 text-sm outline-none ring-primary/40 placeholder:text-muted-foreground focus:ring-2"
           />
         </div>

@@ -4,6 +4,44 @@ import os
 from core.logging import setup_logging
 setup_logging()
 
+
+def _raise_open_file_limit() -> None:
+    """Raise the process soft file-descriptor limit toward the hard limit.
+
+    A single voice call holds many concurrent FDs (Twilio/Deepgram/Cartesia/Groq
+    websockets, audio recording, plus native libs like cv2/PyAV/aiortc). On macOS
+    the default soft limit is only 256; once exhausted, NEW socket creation fails
+    and `getaddrinfo` returns "[Errno 8] nodename nor servname provided" — which
+    surfaces as STT/TTS reconnect loops mid-call. Linux/k8s defaults are high
+    enough that this only bites local dev, but raising it here is harmless and
+    makes behavior consistent regardless of how the server is launched.
+    """
+    try:
+        import resource
+
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        if soft == resource.RLIM_INFINITY:
+            return
+        hard_cap = 65536 if hard == resource.RLIM_INFINITY else hard
+        # Try progressively smaller targets: some platforms (e.g. macOS) reject
+        # a soft limit above kern.maxfilesperproc, so fall back until one sticks.
+        for target in (hard_cap, 10240, 4096, 1024):
+            if target <= soft or target > hard_cap:
+                continue
+            try:
+                resource.setrlimit(resource.RLIMIT_NOFILE, (target, hard))
+                from loguru import logger
+                logger.info("Raised open-file limit (RLIMIT_NOFILE) {} -> {}", soft, target)
+                return
+            except (ValueError, OSError):
+                continue
+    except Exception as e:  # noqa: BLE001 - best effort; never block startup
+        from loguru import logger
+        logger.warning("Could not raise open-file limit: {}", e)
+
+
+_raise_open_file_limit()
+
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response

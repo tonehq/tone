@@ -206,7 +206,7 @@ const WorkflowToolbar: React.FC<Props> = ({
         <CustomButton type="default" size="sm" loading={saving} onClick={onSave}>
           Save draft
         </CustomButton>
-        <CustomButton type="primary" size="sm" disabled={!valid} onClick={onPublish}>
+        <CustomButton type="primary" size="sm" disabled={!valid || saving} onClick={onPublish}>
           Publish
         </CustomButton>
       </div>

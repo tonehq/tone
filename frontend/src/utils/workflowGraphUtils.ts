@@ -194,9 +194,17 @@ export function validateGraph(nodes: WorkflowNode[], edges: WorkflowEdge[]): Val
 // ── Vapi import/export (client mirror of the backend adapter) ────────────────
 export function fromVapi(vapi: Record<string, unknown>): WorkflowGraph {
   const vNodes = (vapi.nodes as Record<string, unknown>[]) ?? [];
+  const seenNodeIds = new Set<string>();
   const nodes = vNodes.map((vn, idx) => {
     const node = { ...vn };
-    const name = (node.name as string) || (node.id as string) || `node_${idx}`;
+    let name = (node.name as string) || (node.id as string) || `node_${idx}`;
+    // De-dupe ids so two Vapi nodes sharing a name don't collide (mirrors the edge de-dupe).
+    if (seenNodeIds.has(name)) {
+      let i = 1;
+      while (seenNodeIds.has(`${name}#${i}`)) i += 1;
+      name = `${name}#${i}`;
+    }
+    seenNodeIds.add(name);
     const type = (node.type as WorkflowNodeType) ?? 'conversation';
     const metadata = (node.metadata as { position?: { x: number; y: number } }) ?? {};
     const position = metadata.position ?? { x: 0, y: 0 };

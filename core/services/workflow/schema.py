@@ -168,8 +168,27 @@ class WorkflowGraph(BaseModel):
     artifactPlan: Optional[Dict[str, Any]] = None
 
 
+# Hard caps on untrusted graph size — bound parse/checksum/validation/storage cost.
+MAX_NODES = 300
+MAX_EDGES = 1000
+
+
+def graph_size_error(graph: Dict[str, Any]) -> Optional[str]:
+    """Return a human message if the graph exceeds node/edge caps, else None."""
+    if not isinstance(graph, dict):
+        return None
+    nodes = graph.get("nodes")
+    edges = graph.get("edges")
+    if isinstance(nodes, list) and len(nodes) > MAX_NODES:
+        return f"Workflow exceeds the maximum of {MAX_NODES} nodes."
+    if isinstance(edges, list) and len(edges) > MAX_EDGES:
+        return f"Workflow exceeds the maximum of {MAX_EDGES} edges."
+    return None
+
+
 def empty_graph(start_node_name: str = "start") -> Dict[str, Any]:
-    """A minimal valid graph: a single Start conversation node."""
+    """A minimal graph: a single Start conversation node. Not yet *valid* — it has no
+    terminal/outgoing edge, so validate_graph reports DEAD_END/NO_TERMINAL until built out."""
     return {
         "schemaVersion": 1,
         "nodes": [
@@ -201,6 +220,11 @@ def validate_graph(graph: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     if not isinstance(graph, dict):
         return [{"code": "BAD_GRAPH", "node_name": None, "message": "Graph must be an object."}]
+
+    # 0. Size cap — refuse to parse/validate an oversized graph.
+    size_err = graph_size_error(graph)
+    if size_err:
+        return [{"code": "TOO_LARGE", "node_name": None, "message": size_err}]
 
     # 1. Parse against the typed model (per-type config validation).
     try:

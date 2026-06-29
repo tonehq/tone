@@ -1,5 +1,3 @@
-import uuid
-
 from sqlalchemy import (
     Column,
     String,
@@ -15,6 +13,7 @@ from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from core.models.base import OrgScopedModel
+from core.models.enums import WorkflowStatus
 
 
 class Workflow(OrgScopedModel):
@@ -27,13 +26,23 @@ class Workflow(OrgScopedModel):
 
     __tablename__ = "workflows"
     __table_args__ = (
-        UniqueConstraint("organization_id", "name", name="uq_workflows_org_name"),
+        # Partial unique index: names are unique per org among LIVE rows only, so a
+        # soft-deleted workflow's name can be reused.
+        Index(
+            "uq_workflows_org_name",
+            "organization_id",
+            "name",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
         Index("ix_workflows_organization_id", "organization_id"),
     )
 
     name = Column(String(200), nullable=False)
     description = Column(String(500), nullable=True)
-    status = Column(String(16), nullable=False, default="draft")  # draft | published
+    status = Column(
+        String(16), nullable=False, default=WorkflowStatus.DRAFT.value
+    )  # draft | published
 
     published_version_id = Column(
         UUID(as_uuid=True),

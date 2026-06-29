@@ -11,6 +11,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 
 from core.models.agent_config import AgentConfig
+from core.models.enums import WorkflowStatus
 from core.models.workflow import Workflow, WorkflowVersion
 from core.services.base import BaseService
 from core.services.workflow import schema as wf_schema
@@ -28,9 +29,13 @@ def _checksum(graph: Dict[str, Any]) -> str:
 class WorkflowService(BaseService):
     # ── lookups ────────────────────────────────────────────────────────────
     def _get(self, workflow_id: str) -> Workflow:
+        try:
+            wid = UUID(str(workflow_id))
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
         wf = (
             self.query(Workflow)
-            .filter(Workflow.id == UUID(str(workflow_id)), Workflow.deleted_at.is_(None))
+            .filter(Workflow.id == wid, Workflow.deleted_at.is_(None))
             .first()
         )
         if not wf:
@@ -47,9 +52,14 @@ class WorkflowService(BaseService):
         )
 
     def _agents_using(self, workflow_id: UUID) -> int:
+        # Count DISTINCT agents — agent_configs are versioned, so a single agent can have
+        # several config rows referencing the same workflow; without distinct this over-counts
+        # (and could wrongly block delete for a workflow only referenced by a stale version).
         return (
             self.query(AgentConfig)
+            .with_entities(AgentConfig.agent_id)
             .filter(AgentConfig.workflow_id == workflow_id, AgentConfig.deleted_at.is_(None))
+            .distinct()
             .count()
         )
 
@@ -126,13 +136,16 @@ class WorkflowService(BaseService):
             )
 
         graph = graph or wf_schema.empty_graph()
+        size_err = wf_schema.graph_size_error(graph)
+        if size_err:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=size_err)
         errors = wf_schema.validate_graph(graph)
 
         wf = Workflow(
             organization_id=self.org_id,
             name=name,
             description=description,
-            status="draft",
+            status=WorkflowStatus.DRAFT.value,
             latest_version=0,
             created_by_user_id=user_id,
         )
@@ -174,6 +187,9 @@ class WorkflowService(BaseService):
         expected_checksum: Optional[str],
         user_id: Optional[UUID],
     ) -> Dict[str, Any]:
+        size_err = wf_schema.graph_size_error(graph)
+        if size_err:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=size_err)
         wf = self._get(workflow_id)
         draft = self._version(wf.draft_version_id)
         if not draft:
@@ -240,7 +256,7 @@ class WorkflowService(BaseService):
         self.db.add(snapshot)
         self.db.flush()
         wf.published_version_id = snapshot.id
-        wf.status = "published"
+        wf.status = WorkflowStatus.PUBLISHED.value
         self.db.commit()
 
         self._invalidate_assigned_agents(wf.id)

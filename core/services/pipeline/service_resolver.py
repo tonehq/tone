@@ -42,7 +42,7 @@ from core.utils.encryption import decrypt
 # removed in `load_agent_service_config`'s `result` dict). It is folded into every cache
 # version stamp, so a deploy that changes the shape invalidates all persisted entries
 # instead of serving them with a stale shape — there is no TTL to clear them otherwise.
-PAYLOAD_FORMAT_VERSION = "v2"
+PAYLOAD_FORMAT_VERSION = "v3"
 
 
 def _resolve_org_id(org_id):
@@ -277,6 +277,39 @@ def _config_service_ids(config) -> dict:
     }
 
 
+def _load_workflow_prompt(db: Session, config, org_id=None) -> Optional[str]:
+    """When the config runs in workflow mode, render the assigned workflow's published
+    graph into an instruction block for the LLM. Returns None outside workflow mode, when
+    no workflow is assigned, or when the assigned workflow has no published version."""
+    if getattr(config, "mode", "prompt") != "workflow":
+        return None
+    workflow_id = getattr(config, "workflow_id", None)
+    if not workflow_id:
+        return None
+
+    from core.models.workflow import Workflow, WorkflowVersion
+    from core.services.workflow.prompt_serializer import serialize_graph_for_llm
+
+    wf = db.query(Workflow).filter(Workflow.id == workflow_id).first()
+    if not wf or not wf.published_version_id:
+        return None
+    ver = (
+        db.query(WorkflowVersion)
+        .filter(WorkflowVersion.id == wf.published_version_id)
+        .first()
+    )
+    if not ver or not ver.graph:
+        return None
+    text = serialize_graph_for_llm(ver.graph)
+    return text or None
+
+
+def _compose_system_prompt(base_prompt: Optional[str], workflow_prompt: Optional[str]) -> str:
+    """Layer the agent persona prompt above the workflow playbook (either may be empty)."""
+    parts = [p.strip() for p in (base_prompt, workflow_prompt) if p and p.strip()]
+    return "\n\n".join(parts)
+
+
 def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[Optional[str], Optional[Any]]:
     """Return (version_stamp, active_config) for an agent.
 
@@ -393,20 +426,41 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
         .where(*_mcp_where).scalar_subquery()
     )
 
+    # Workflow assignment: the assigned workflow's published-version id + updated_at are
+    # folded into the SAME combined query (as scalar subqueries) so re-assigning or
+    # re-publishing invalidates the cache without a second per-call round-trip. When the
+    # config isn't in workflow mode the id is NULL → the joins yield NULL (no extra cost).
+    from core.models.workflow import Workflow, WorkflowVersion
+
+    mode = getattr(config, "mode", "prompt") or "prompt"
+    workflow_id = getattr(config, "workflow_id", None) if mode == "workflow" else None
+    wf_id_sq = (
+        select(WorkflowVersion.id).select_from(Workflow)
+        .join(WorkflowVersion, WorkflowVersion.id == Workflow.published_version_id)
+        .where(Workflow.id == workflow_id).scalar_subquery()
+    )
+    wf_ts_sq = (
+        select(WorkflowVersion.updated_at).select_from(Workflow)
+        .join(WorkflowVersion, WorkflowVersion.id == Workflow.published_version_id)
+        .where(Workflow.id == workflow_id).scalar_subquery()
+    )
+
     (
         prov_max, model_max, voice_ts, key_count, key_max,
         tool_count, tool_link_max, tool_max, kb_count, kb_link_max, kb_max,
-        mcp_count, mcp_link_max, mcp_max,
+        mcp_count, mcp_link_max, mcp_max, wf_ver_id, wf_ver_ts,
     ) = db.execute(
         select(
             prov_sq, model_sq, voice_sq, key_cnt_sq, key_max_sq,
             tool_cnt_sq, tool_link_sq, tool_max_sq, kb_cnt_sq, kb_link_sq, kb_max_sq,
-            mcp_cnt_sq, mcp_link_sq, mcp_max_sq,
+            mcp_cnt_sq, mcp_link_sq, mcp_max_sq, wf_id_sq, wf_ts_sq,
         )
     ).one()
 
     def _s(ts):
         return ts.isoformat() if ts is not None else "none"
+
+    wf_stamp = f"{wf_ver_id}:{_s(wf_ver_ts)}" if wf_ver_id is not None else "none"
 
     version = "|".join([
         f"fmt:{PAYLOAD_FORMAT_VERSION}",
@@ -418,6 +472,7 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
         f"tools:{tool_count}:{_s(tool_link_max)}:{_s(tool_max)}",
         f"kb:{kb_count}:{_s(kb_link_max)}:{_s(kb_max)}",
         f"mcp:{mcp_count}:{_s(mcp_link_max)}:{_s(mcp_max)}",
+        f"wf:{mode}:{workflow_id}:{wf_stamp}",
     ])
     return version, config
 
@@ -445,7 +500,15 @@ def load_agent_service_config(
     org_id = _resolve_org_id(org_id)
 
     version, config = compute_agent_cache_version(db, agent, org_id=org_id)
-    if config is None or not config.system_prompt_template:
+    if config is None:
+        return None
+    # A runnable agent needs either a system prompt or an assigned workflow (workflow mode
+    # can drive the call with no standalone prompt). Cheap signal check — the workflow graph
+    # itself is only serialized below on a cache miss.
+    _in_workflow_mode = (
+        getattr(config, "mode", "prompt") == "workflow" and getattr(config, "workflow_id", None)
+    )
+    if not config.system_prompt_template and not _in_workflow_mode:
         return None
 
     cache_key = f"agent_pipeline_config:{agent_id}"
@@ -461,7 +524,28 @@ def load_agent_service_config(
     if not is_s2s and (not stt_spec or not tts_spec):
         return None
 
-    messages = [{"role": "system", "content": config.system_prompt_template}]
+    # Workflow mode: flatten the assigned workflow's published graph into the system prompt
+    # so the LLM follows the pathway. The persona prompt (if any) stays on top. Guarded so a
+    # bad/missing workflow degrades to prompt mode instead of aborting a live-call resolve.
+    try:
+        workflow_prompt = _load_workflow_prompt(db, config, org_id)
+    except Exception as exc:  # noqa: BLE001 — never let workflow load kill the resolve
+        logger.warning("[workflow] failed to load workflow prompt for agent={}: {}", agent_id, exc)
+        workflow_prompt = None
+    system_content = _compose_system_prompt(
+        getattr(config, "system_prompt_template", None), workflow_prompt
+    )
+    if not system_content:
+        return None
+
+    # S2S models read the system prompt from the LLM metadata (set in _build_service_specs
+    # from system_prompt_template); override it with the composed content so workflow mode
+    # reaches realtime models too.
+    if is_s2s and isinstance(llm_spec.get("metadata"), dict):
+        llm_spec["metadata"]["system_prompt"] = system_content
+        llm_spec["metadata"]["system_instruction"] = system_content
+
+    messages = [{"role": "system", "content": system_content}]
     if getattr(config, "first_message", None) and config.first_message.strip():
         messages.append({"role": "assistant", "content": config.first_message.strip()})
 

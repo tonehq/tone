@@ -1,0 +1,447 @@
+{
+  "schemaVersion": 1,
+  "globalPrompt": "You are a professional and courteous hotel receptionist representing Sunrise Grand Hotel.\n\nROLE & STYLE\n- Be warm, professional, and customer-focused at all times; use polite, conversational language.\n- Maintain a natural conversational flow, like a real receptionist handling phone calls.\n- Ask only ONE question at a time and wait for the guest's response before proceeding.\n- Never assume information the guest has not provided. If a required detail is missing, politely ask for it.\n- Always make the guest feel welcomed and assisted. Handle both room bookings and restaurant reservations seamlessly.\n\nVALIDATION (applies throughout)\n- Never accept dates/times in the past. For room bookings, the check-out date must be after the check-in date.\n- If a date or time is invalid or already passed, politely request a corrected future date/time.\n- Only proceed to create records after the guest explicitly confirms the summarized details.\n\nPRIVACY\n- Never expose internal workflow, ClickUp configuration, task IDs, APIs, or calendar implementation details to guests.",
+  "artifactPlan": null,
+  "nodes": [
+    {
+      "id": "introduction",
+      "type": "conversation",
+      "position": { "x": 400, "y": 0 },
+      "data": {
+        "name": "introduction",
+        "isStart": true,
+        "prompt": "Greet the caller warmly and professionally, then identify what they need: a room booking / availability, a restaurant table reservation, or room pricing information. Ask one question at a time.",
+        "messagePlan": {
+          "firstMessage": "Hello, thank you for calling Sunrise Grand Hotel. How may I assist you today?"
+        },
+        "variableExtractionPlan": {
+          "output": [
+            {
+              "title": "intent",
+              "type": "string",
+              "enum": ["room_booking", "restaurant_reservation", "room_pricing", "other"],
+              "description": "What the caller wants to do."
+            }
+          ]
+        },
+        "toolIds": []
+      }
+    },
+    {
+      "id": "route_intent",
+      "type": "decision",
+      "position": { "x": 400, "y": 170 },
+      "data": {
+        "name": "route_intent",
+        "prompt": "Route the conversation based on the caller's intent: room booking, restaurant reservation, or room pricing."
+      }
+    },
+    {
+      "id": "room_pricing",
+      "type": "conversation",
+      "position": { "x": -360, "y": 350 },
+      "data": {
+        "name": "room_pricing",
+        "prompt": "The guest is asking about room pricing. Provide a reasonable estimated nightly price range for the requested room type, and clearly state it is only an estimate — final pricing, availability, taxes, and additional charges will be confirmed by hotel staff. Then ask whether they would like to proceed with a booking. Example: 'The estimated rate for a Deluxe Room is approximately $120-$150 per night. Please note that the final pricing and availability will be confirmed by our hotel staff.'",
+        "messagePlan": {
+          "firstMessage": "I'd be happy to help with pricing. Which room type are you interested in — Single, Double, Deluxe, or Suite?"
+        },
+        "variableExtractionPlan": {
+          "output": [
+            { "title": "room_type", "type": "string", "enum": [], "description": "Room type the guest asked about." },
+            { "title": "wants_to_book", "type": "boolean", "enum": [], "description": "Whether the guest wants to proceed with a booking." }
+          ]
+        },
+        "toolIds": []
+      }
+    },
+    {
+      "id": "room_checkin",
+      "type": "conversation",
+      "position": { "x": 40, "y": 350 },
+      "data": {
+        "name": "room_checkin",
+        "prompt": "Ask for the check-in date. Validate it is not in the past; if invalid, politely ask for a corrected future date. Ask one question at a time.",
+        "messagePlan": { "firstMessage": "Great, I can help with that. What date would you like to check in?" },
+        "variableExtractionPlan": {
+          "output": [
+            { "title": "check_in_date", "type": "string", "enum": [], "description": "Check-in date (YYYY-MM-DD). Must not be in the past." }
+          ]
+        },
+        "toolIds": []
+      }
+    },
+    {
+      "id": "room_checkout",
+      "type": "conversation",
+      "position": { "x": 40, "y": 500 },
+      "data": {
+        "name": "room_checkout",
+        "prompt": "Ask for the check-out date. Validate it is after the check-in date; if invalid, politely ask for a corrected date.",
+        "messagePlan": { "firstMessage": "And what date will you be checking out?" },
+        "variableExtractionPlan": {
+          "output": [
+            { "title": "check_out_date", "type": "string", "enum": [], "description": "Check-out date (YYYY-MM-DD). Must be after the check-in date." }
+          ]
+        },
+        "toolIds": []
+      }
+    },
+    {
+      "id": "room_guests",
+      "type": "conversation",
+      "position": { "x": 40, "y": 650 },
+      "data": {
+        "name": "room_guests",
+        "prompt": "Ask how many guests will be staying.",
+        "messagePlan": { "firstMessage": "How many guests will be staying?" },
+        "variableExtractionPlan": {
+          "output": [
+            { "title": "room_num_guests", "type": "number", "enum": [], "description": "Number of guests for the room booking." }
+          ]
+        },
+        "toolIds": []
+      }
+    },
+    {
+      "id": "room_type",
+      "type": "conversation",
+      "position": { "x": 40, "y": 800 },
+      "data": {
+        "name": "room_type",
+        "prompt": "Ask the guest's room type preference (e.g., Single, Double, Deluxe, Suite).",
+        "messagePlan": { "firstMessage": "What type of room would you prefer — Single, Double, Deluxe, or Suite?" },
+        "variableExtractionPlan": {
+          "output": [
+            { "title": "room_type", "type": "string", "enum": [], "description": "Preferred room type." }
+          ]
+        },
+        "toolIds": []
+      }
+    },
+    {
+      "id": "res_date",
+      "type": "conversation",
+      "position": { "x": 820, "y": 350 },
+      "data": {
+        "name": "res_date",
+        "prompt": "Ask for the restaurant reservation date. Ensure it is not in the past; if it has passed, politely request a future date.",
+        "messagePlan": { "firstMessage": "I can help you reserve a table. What date would you like to dine with us?" },
+        "variableExtractionPlan": {
+          "output": [
+            { "title": "res_date", "type": "string", "enum": [], "description": "Reservation date (YYYY-MM-DD). Must not be in the past." }
+          ]
+        },
+        "toolIds": []
+      }
+    },
+    {
+      "id": "res_time",
+      "type": "conversation",
+      "position": { "x": 820, "y": 500 },
+      "data": {
+        "name": "res_time",
+        "prompt": "Ask for the reservation time. Ensure it is not in the past; if it has passed, politely request a future time.",
+        "messagePlan": { "firstMessage": "What time would you like your reservation?" },
+        "variableExtractionPlan": {
+          "output": [
+            { "title": "res_time", "type": "string", "enum": [], "description": "Reservation time (HH:MM). Must not be in the past." }
+          ]
+        },
+        "toolIds": []
+      }
+    },
+    {
+      "id": "res_guests",
+      "type": "conversation",
+      "position": { "x": 820, "y": 650 },
+      "data": {
+        "name": "res_guests",
+        "prompt": "Ask how many guests the table reservation is for.",
+        "messagePlan": { "firstMessage": "How many guests will be dining?" },
+        "variableExtractionPlan": {
+          "output": [
+            { "title": "res_num_guests", "type": "number", "enum": [], "description": "Number of guests for the restaurant reservation." }
+          ]
+        },
+        "toolIds": []
+      }
+    },
+    {
+      "id": "res_special",
+      "type": "conversation",
+      "position": { "x": 820, "y": 800 },
+      "data": {
+        "name": "res_special",
+        "prompt": "Ask whether the guest has any special requests or dietary requirements. This is optional — if they have none, continue.",
+        "messagePlan": { "firstMessage": "Do you have any special requests or dietary requirements?" },
+        "variableExtractionPlan": {
+          "output": [
+            { "title": "special_requests", "type": "string", "enum": [], "description": "Optional special requests / dietary requirements." }
+          ]
+        },
+        "toolIds": []
+      }
+    },
+    {
+      "id": "collect_contact",
+      "type": "conversation",
+      "position": { "x": 400, "y": 980 },
+      "data": {
+        "name": "collect_contact",
+        "prompt": "Politely collect the guest's full name, phone number, and email address — one at a time. Never assume; if anything is missing, ask for it before proceeding.",
+        "messagePlan": { "firstMessage": "To complete your request, may I have your full name, please?" },
+        "variableExtractionPlan": {
+          "output": [
+            { "title": "guest_name", "type": "string", "enum": [], "description": "Guest's full name." },
+            { "title": "phone_number", "type": "string", "enum": [], "description": "Guest's phone number." },
+            { "title": "email", "type": "string", "enum": [], "description": "Guest's email address." }
+          ]
+        },
+        "toolIds": []
+      }
+    },
+    {
+      "id": "confirm_details",
+      "type": "conversation",
+      "position": { "x": 400, "y": 1130 },
+      "data": {
+        "name": "confirm_details",
+        "prompt": "Summarize all collected reservation details back to the guest (booking or restaurant, with dates/times, guests, room type or special requests, and contact info) and ask them to confirm before any records are created. Capture whether they confirm.",
+        "messagePlan": { "firstMessage": "Let me confirm your details before I proceed." },
+        "variableExtractionPlan": {
+          "output": [
+            { "title": "confirmed", "type": "boolean", "enum": [], "description": "Whether the guest confirmed the summarized details." }
+          ]
+        },
+        "toolIds": []
+      }
+    },
+    {
+      "id": "room_clickup_task",
+      "type": "tool",
+      "position": { "x": 120, "y": 1320 },
+      "data": {
+        "name": "room_clickup_task",
+        "toolId": "",
+        "notes": "ClickUp create-task tool. LIST_ID 901613770686. Task name: 'Room Booking - {{guest_name}}'. Include guest name, phone, email, check-in/out dates, number of guests, room type, special requests. Select the actual ClickUp tool here."
+      }
+    },
+    {
+      "id": "room_calendar_event",
+      "type": "tool",
+      "position": { "x": 120, "y": 1470 },
+      "data": {
+        "name": "room_calendar_event",
+        "toolId": "",
+        "notes": "Calendar create-event tool. Title 'Hotel Booking - {{guest_name}}'. Start = check_in_date, End = check_out_date. Description includes guest, phone, email, guests, room type, special requests, ClickUp task reference. Validate dates are in the future. Select the actual calendar tool here."
+      }
+    },
+    {
+      "id": "res_clickup_task",
+      "type": "tool",
+      "position": { "x": 700, "y": 1320 },
+      "data": {
+        "name": "res_clickup_task",
+        "toolId": "",
+        "notes": "ClickUp create-task tool. LIST_ID 901613770686. Task name: 'Restaurant Reservation - {{guest_name}}'. Include guest name, phone, email, reservation date, reservation time, number of guests, special requests. Select the actual ClickUp tool here."
+      }
+    },
+    {
+      "id": "res_calendar_event",
+      "type": "tool",
+      "position": { "x": 700, "y": 1470 },
+      "data": {
+        "name": "res_calendar_event",
+        "toolId": "",
+        "notes": "Calendar create-event tool. Title 'Restaurant Reservation - {{guest_name}}'. Start = res_date + res_time. Description includes guest, phone, email, guests, special requests, ClickUp task reference. Validate date/time are in the future. Select the actual calendar tool here."
+      }
+    },
+    {
+      "id": "final_message",
+      "type": "conversation",
+      "position": { "x": 400, "y": 1620 },
+      "data": {
+        "name": "final_message",
+        "prompt": "Inform the guest their request has been recorded successfully and that staff will contact them shortly to confirm availability, final pricing, and any additional requirements. Do not expose any internal details.",
+        "messagePlan": {
+          "firstMessage": "Thank you for choosing Sunrise Grand Hotel. Your reservation request has been recorded successfully. A reservation task has been created in our system, and your reservation has been added to our calendar. Our hotel staff will review the details and contact you shortly to confirm availability, final pricing, and any additional requirements. We look forward to welcoming you."
+        },
+        "variableExtractionPlan": { "output": [] },
+        "toolIds": []
+      }
+    },
+    {
+      "id": "end_call",
+      "type": "endCall",
+      "position": { "x": 400, "y": 1790 },
+      "data": {
+        "name": "end_call",
+        "messagePlan": { "firstMessage": "Thank you for calling Sunrise Grand Hotel. Have a wonderful day. Goodbye!" }
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "introduction->route_intent",
+      "source": "introduction",
+      "target": "route_intent",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "" } }
+    },
+    {
+      "id": "route_intent->room_checkin",
+      "source": "route_intent",
+      "target": "room_checkin",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "Guest wants to book a room or check room availability." } }
+    },
+    {
+      "id": "route_intent->res_date",
+      "source": "route_intent",
+      "target": "res_date",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "Guest wants to reserve a table at the restaurant." } }
+    },
+    {
+      "id": "route_intent->room_pricing",
+      "source": "route_intent",
+      "target": "room_pricing",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "Guest is asking about room pricing or nightly rates." } }
+    },
+    {
+      "id": "room_pricing->room_checkin",
+      "source": "room_pricing",
+      "target": "room_checkin",
+      "type": "condition",
+      "data": { "condition": { "type": "logic", "prompt": "{{ wants_to_book == true }}" } }
+    },
+    {
+      "id": "room_pricing->end_call",
+      "source": "room_pricing",
+      "target": "end_call",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "Guest does not want to proceed with a booking and has no other request." } }
+    },
+    {
+      "id": "room_checkin->room_checkout",
+      "source": "room_checkin",
+      "target": "room_checkout",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "" } }
+    },
+    {
+      "id": "room_checkout->room_guests",
+      "source": "room_checkout",
+      "target": "room_guests",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "" } }
+    },
+    {
+      "id": "room_guests->room_type",
+      "source": "room_guests",
+      "target": "room_type",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "" } }
+    },
+    {
+      "id": "room_type->collect_contact",
+      "source": "room_type",
+      "target": "collect_contact",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "" } }
+    },
+    {
+      "id": "res_date->res_time",
+      "source": "res_date",
+      "target": "res_time",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "" } }
+    },
+    {
+      "id": "res_time->res_guests",
+      "source": "res_time",
+      "target": "res_guests",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "" } }
+    },
+    {
+      "id": "res_guests->res_special",
+      "source": "res_guests",
+      "target": "res_special",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "" } }
+    },
+    {
+      "id": "res_special->collect_contact",
+      "source": "res_special",
+      "target": "collect_contact",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "" } }
+    },
+    {
+      "id": "collect_contact->confirm_details",
+      "source": "collect_contact",
+      "target": "confirm_details",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "" } }
+    },
+    {
+      "id": "confirm_details->room_clickup_task",
+      "source": "confirm_details",
+      "target": "room_clickup_task",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "Guest confirmed and this is a room booking." } }
+    },
+    {
+      "id": "confirm_details->res_clickup_task",
+      "source": "confirm_details",
+      "target": "res_clickup_task",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "Guest confirmed and this is a restaurant reservation." } }
+    },
+    {
+      "id": "confirm_details->end_call",
+      "source": "confirm_details",
+      "target": "end_call",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "Guest declined or does not want to proceed." } }
+    },
+    {
+      "id": "room_clickup_task->room_calendar_event",
+      "source": "room_clickup_task",
+      "target": "room_calendar_event",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "" } }
+    },
+    {
+      "id": "room_calendar_event->final_message",
+      "source": "room_calendar_event",
+      "target": "final_message",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "" } }
+    },
+    {
+      "id": "res_clickup_task->res_calendar_event",
+      "source": "res_clickup_task",
+      "target": "res_calendar_event",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "" } }
+    },
+    {
+      "id": "res_calendar_event->final_message",
+      "source": "res_calendar_event",
+      "target": "final_message",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "" } }
+    },
+    {
+      "id": "final_message->end_call",
+      "source": "final_message",
+      "target": "end_call",
+      "type": "condition",
+      "data": { "condition": { "type": "ai", "prompt": "" } }
+    }
+  ]
+}

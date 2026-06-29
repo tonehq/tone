@@ -5,73 +5,10 @@ export type WorkflowNodeType = 'conversation' | 'decision' | 'tool' | 'transferC
 
 export type EdgeConditionType = 'ai' | 'logic';
 
-export interface MessagePlan {
-  firstMessage?: string;
-}
-
-export interface ExtractVar {
-  title: string;
-  type: string; // string | number | boolean | date
-  enum: string[];
-  description: string;
-}
-
-export interface VariableExtractionPlan {
-  output: ExtractVar[];
-}
-
-export interface InlineTool {
-  type: string; // endCall | transferCall | sms
-}
-
-// ── per-type node data (discriminated by the node's `type`) ──────────────────
-interface BaseNodeData {
-  name: string;
-  isStart?: boolean;
-  isGlobal?: boolean;
-  condition?: string; // enter-condition (Liquid) for a global node
-}
-
-export interface ConversationData extends BaseNodeData {
-  kind: 'conversation';
-  prompt?: string;
-  messagePlan?: MessagePlan;
-  variableExtractionPlan?: VariableExtractionPlan;
-  toolIds?: string[];
-  maxVisits?: number;
-}
-
-export interface DecisionData extends BaseNodeData {
-  kind: 'decision';
-  prompt?: string;
-}
-
-export interface ToolData extends BaseNodeData {
-  kind: 'tool';
-  toolId?: string;
-  tool?: InlineTool;
-}
-
-export interface TransferCallData extends BaseNodeData {
-  kind: 'transferCall';
-  destination?: Record<string, unknown>;
-  transferPlan?: Record<string, unknown>;
-  messagePlan?: MessagePlan;
-}
-
-export interface EndCallData extends BaseNodeData {
-  kind: 'endCall';
-  messagePlan?: MessagePlan;
-}
-
-// `kind` is a client-only discriminant mirroring the node `type`, kept off the wire.
-export type WorkflowNodeData =
-  | ConversationData
-  | DecisionData
-  | ToolData
-  | TransferCallData
-  | EndCallData;
-
+// Node `data` is intentionally an open record on the wire (React Flow renders it directly
+// and the editor reads fields by key). The authoritative per-type field set lives in the
+// backend schema (`core/services/workflow/schema.py`) and serializer; nodes are kept as a
+// generic record here so the canonical graph round-trips without a transform.
 export type WorkflowNode = Node<Record<string, unknown>, WorkflowNodeType>;
 
 export interface ConditionEdgeData extends Record<string, unknown> {
