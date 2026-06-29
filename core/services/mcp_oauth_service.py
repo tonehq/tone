@@ -40,6 +40,26 @@ _CLIENT_NAME = "Tone Voice Agent"
 _HTTP_TIMEOUT = 15.0
 
 
+def _pre_registered_client(host: str) -> Optional[Tuple[str, Optional[str]]]:
+    """Return (client_id, client_secret) for MCP hosts that don't support Dynamic Client
+    Registration (RFC 7591) and require a pre-registered app instead.
+
+    Hosts not listed here fall through to the DCR path in ``_register_client``.
+    """
+    from shared.config import settings
+
+    registry: Dict[str, Tuple[str, Optional[str]]] = {
+        "mcp.hubspot.com": (
+            settings.HUBSPOT_MCP_CLIENT_ID,
+            settings.HUBSPOT_MCP_CLIENT_SECRET or None,
+        ),
+    }
+    creds = registry.get(host)
+    if creds and creds[0]:
+        return creds
+    return None
+
+
 def _canonical_resource(server_url: str) -> str:
     """Canonical resource URI per RFC 8707 / MCP spec: lowercase scheme+host, no fragment, no
     trailing slash, path kept only if present."""
@@ -211,9 +231,17 @@ class McpOAuthService(BaseService):
 
         resource = _canonical_resource(server_url)
         meta = self._discover_metadata(server_url)
-        client_id, client_secret = self._register_client(meta["registration_endpoint"])
-        verifier, challenge = _pkce_pair()
         host = urlparse(server_url).netloc or "mcp"
+
+        # Providers like HubSpot don't support Dynamic Client Registration — use the
+        # operator-configured client credentials for those hosts instead of calling DCR.
+        pre_registered = _pre_registered_client(host)
+        if pre_registered:
+            client_id, client_secret = pre_registered
+        else:
+            client_id, client_secret = self._register_client(meta["registration_endpoint"])
+
+        verifier, challenge = _pkce_pair()
         provider_slug = f"mcp:{host}"
 
         encrypted_credentials = encrypt_json(

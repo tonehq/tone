@@ -626,8 +626,15 @@ class McpServerService(BaseService):
         """Connect to an MCP server and return its available tools."""
         mcp_server = self.get_mcp_server(mcp_server_id)
         decrypted_auth = decrypt_auth_config(mcp_server.auth_config)
+        extra_headers = {
+            **headers_from_meta(mcp_server.meta_data),
+            **self._resolve_oauth_headers(mcp_server.oauth_connection_id),
+        }
         result = await self.validate_mcp_connection(
-            mcp_server.server_url, mcp_server.transport_type, decrypted_auth
+            mcp_server.server_url,
+            mcp_server.transport_type,
+            decrypted_auth,
+            extra_headers=extra_headers,
         )
         self._sync_mcp_tools(mcp_server, result["tools"])
         return {
