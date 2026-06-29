@@ -57,8 +57,9 @@ from core.internal.capabilities import init_capabilities, is_ee_enabled, get_cap
 from core.api.v1 import (
     auth, users, organizations, agent_configs, channels, oauth,
     knowledge_base, agents, mcp_servers, services, tools, dashboard,
-    call_logs, call_metrics, sessions, workflows, webrtc
+    call_logs, call_metrics, sessions, workflows, webrtc, audit_logs
 )
+from core.middleware.request_context import RequestContextMiddleware
 import core.models
 
 skip_license = settings.SKIP_LICENSE_CHECK
@@ -98,6 +99,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestContextMiddleware)
 
 api_v1 = FastAPI()
 
@@ -108,6 +110,9 @@ api_v1.add_middleware(
     allow_methods=["*"],
     allow_headers=["*", "Authorization", "tenant_id", "Content-Type"],
 )
+# RequestContextMiddleware is registered on the outer ``app`` only — the
+# api_v1 sub-app is mounted under it, so the outer middleware already wraps
+# every /api/v1/* request. Adding it here would double-set the context.
 
 if ee_enabled:
     # EE routers are imported individually because ``ee/api/v1/__init__.py``
@@ -145,6 +150,7 @@ if ee_enabled:
     api_v1.include_router(ee_call_metrics.router, prefix="/call-metrics", tags=["call-metrics"])
     api_v1.include_router(workflows.router, prefix="/workflow", tags=["workflow"])
     api_v1.include_router(webrtc.router, prefix="/webrtc", tags=["webrtc"])
+    api_v1.include_router(audit_logs.router, prefix="/audit-log", tags=["audit-log"])
     print("EE edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
 else:
     api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -164,6 +170,7 @@ else:
     api_v1.include_router(call_metrics.router, prefix="/call-metrics", tags=["call-metrics"])
     api_v1.include_router(workflows.router, prefix="/workflow", tags=["workflow"])
     api_v1.include_router(webrtc.router, prefix="/webrtc", tags=["webrtc"])
+    api_v1.include_router(audit_logs.router, prefix="/audit-log", tags=["audit-log"])
     print("Core edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
 
 

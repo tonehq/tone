@@ -1,7 +1,7 @@
 from decimal import Decimal
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, Iterable, List, Optional, Tuple
 import secrets
 import time
 import uuid as uuid_lib
@@ -10,6 +10,7 @@ import traceback
 
 from fastapi import HTTPException, status
 
+from core.services.audit_actions import AgentAuditAction, AuditResourceType
 from core.services.base import BaseService
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
@@ -687,6 +688,12 @@ class AgentService(BaseService):
             self.db.add(agent)
             self.db.flush()
 
+            self.audit.log(
+                AgentAuditAction.CREATED,
+                agent_id=agent.id,
+                after=self._snapshot(agent, self._AGENT_ROOT_FIELDS),
+            )
+
             self._apply_attachments(agent, data, user_id)
             self.db.commit()
         except IntegrityError as e:
@@ -715,9 +722,19 @@ class AgentService(BaseService):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
 
         try:
-            for field in ("name", "description", "agent_type", "is_active"):
+            root_before = self._snapshot(agent, self._AGENT_ROOT_FIELDS)
+            for field in self._AGENT_ROOT_FIELDS:
                 if field in data:
                     setattr(agent, field, data[field])
+
+            self.audit.log_field_diff(
+                AgentAuditAction.UPDATED,
+                agent_id=agent.id,
+                agent_config_id=agent.published_config_id,
+                before=root_before,
+                after=self._snapshot(agent, self._AGENT_ROOT_FIELDS),
+                fields=self._AGENT_ROOT_FIELDS,
+            )
 
             self._apply_attachments(agent, data, user_id)
             self.db.commit()
@@ -811,6 +828,21 @@ class AgentService(BaseService):
                 source_config_id=source_config_id,
                 from_scratch=from_scratch,
             )
+            if new_config is not None:
+                self.audit.log(
+                    AgentAuditAction.VERSION_CREATED,
+                    agent_id=agent.id,
+                    agent_config_id=new_config.id,
+                    target_resource_type=AuditResourceType.AGENT_CONFIG,
+                    target_resource_id=str(new_config.id),
+                    extra={
+                        "version": new_config.version,
+                        "from_scratch": bool(from_scratch),
+                        "source_config_id": (
+                            str(source_config_id) if source_config_id else None
+                        ),
+                    },
+                )
             self.db.commit()
         except IntegrityError as e:
             self.db.rollback()
@@ -860,7 +892,7 @@ class AgentService(BaseService):
             config_data = data.get("config")
             if config_data is not None:
                 self._validate_meta_data_schema(config_data)
-                self._apply_config_fields(target, config_data)
+                self._apply_config_fields_audited(agent, target, config_data)
             self._sync_config_attachments(agent, target, data)
             self.db.commit()
         except IntegrityError as e:
@@ -890,8 +922,21 @@ class AgentService(BaseService):
             return agent
         try:
             from datetime import datetime, timezone
+            previous_published_id = agent.published_config_id
             agent.published_config_id = cfg.id
             cfg.published_at = datetime.now(timezone.utc)
+            self.audit.log(
+                AgentAuditAction.VERSION_SWITCHED,
+                agent_id=agent.id,
+                agent_config_id=cfg.id,
+                target_resource_type=AuditResourceType.AGENT_CONFIG,
+                target_resource_id=str(cfg.id),
+                before={"published_config_id": (
+                    str(previous_published_id) if previous_published_id else None
+                )},
+                after={"published_config_id": str(cfg.id)},
+                extra={"version": cfg.version},
+            )
             self.db.commit()
         except Exception:
             self.db.rollback()
@@ -911,6 +956,14 @@ class AgentService(BaseService):
             )
         from datetime import datetime, timezone
         cfg.deleted_at = datetime.now(timezone.utc)
+        self.audit.log(
+            AgentAuditAction.VERSION_DELETED,
+            agent_id=agent.id,
+            agent_config_id=cfg.id,
+            target_resource_type=AuditResourceType.AGENT_CONFIG,
+            target_resource_id=str(cfg.id),
+            extra={"version": cfg.version},
+        )
         self.db.commit()
         self._invalidate_pipeline_cache(agent.id)
         return {"message": "Version deleted successfully"}
@@ -1039,6 +1092,15 @@ class AgentService(BaseService):
         """Delete an agent and all related records (UUID-based)."""
         agent = self.get_agent(agent_id)
 
+        # Capture the audit row BEFORE the delete fan-out so the snapshot
+        # holds the agent's identifying fields. The audit row survives the
+        # delete because audit_logs has no FK on agent_id.
+        self.audit.log(
+            AgentAuditAction.DELETED,
+            agent_id=agent.id,
+            before=self._snapshot(agent, self._AGENT_ROOT_FIELDS),
+        )
+
         # Delete phone numbers assigned to this agent (unassigned numbers live on provider only)
         self.db.query(PhoneNumber).filter(
             PhoneNumber.agent_id == agent.id, PhoneNumber.organization_id == self.org_id
@@ -1133,6 +1195,24 @@ class AgentService(BaseService):
     )
     _CONFIG_UUID_FIELDS = frozenset({"language_id", "knowledge_model_id", "workflow_id"})
 
+    # Root agent fields that callers can patch via ``update_agent``.
+    _AGENT_ROOT_FIELDS = ("name", "description", "agent_type", "is_active")
+
+    @staticmethod
+    def _snapshot(obj: Any, fields: Iterable[str]) -> Dict[str, Any]:
+        """Capture a shallow ``{field: value}`` snapshot for diffing.
+
+        UUID-typed fields are normalised to strings so the JSON payload
+        stored in ``audit_logs.changes`` is comparable across runs.
+        """
+        snap: Dict[str, Any] = {}
+        for field in fields:
+            val = getattr(obj, field, None)
+            if isinstance(val, UUID):
+                val = str(val)
+            snap[field] = val
+        return snap
+
     def _apply_config_fields(self, target: AgentConfig, data: Dict[str, Any]) -> None:
         """Copy provided config field values onto an AgentConfig row.
 
@@ -1175,6 +1255,34 @@ class AgentService(BaseService):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Workflow must be published before it can be assigned to an agent",
             )
+
+    def _apply_config_fields_audited(
+        self,
+        agent: Agent,
+        target: AgentConfig,
+        config_data: Dict[str, Any],
+    ) -> None:
+        """Apply ``config_data`` to ``target`` and emit one config-update audit row.
+
+        Centralises the snapshot → mutate → diff sequence used by both the
+        in-place update (``_upsert_new_config``) and the version update
+        (``update_version``). ``log_field_diff`` short-circuits when nothing
+        actually changed, so calling this on a no-op write is free.
+
+        Schema validation (``_validate_meta_data_schema``) is the caller's
+        responsibility because both call sites already invoke it at the
+        right point in their own flow.
+        """
+        before_snap = self._snapshot(target, self._CONFIG_FIELDS)
+        self._apply_config_fields(target, config_data)
+        self.audit.log_field_diff(
+            AgentAuditAction.CONFIG_UPDATED,
+            agent_id=agent.id,
+            agent_config_id=target.id,
+            before=before_snap,
+            after=self._snapshot(target, self._CONFIG_FIELDS),
+            fields=self._CONFIG_FIELDS,
+        )
 
     def _resolve_current_config(self, agent: Agent) -> Optional[AgentConfig]:
         """Return the live AgentConfig: published_config_id first, then latest version."""
@@ -1229,7 +1337,7 @@ class AgentService(BaseService):
         existing = self._resolve_current_config(agent)
 
         if existing:
-            self._apply_config_fields(existing, config_data)
+            self._apply_config_fields_audited(agent, existing, config_data)
             if agent.published_config_id != existing.id:
                 agent.published_config_id = existing.id
             return existing
@@ -1436,6 +1544,12 @@ class AgentService(BaseService):
             AgentTool.agent_config_id == config_id,
         ]
 
+        # Snapshot before the diff so the audit-log sees attach/detach events
+        # against the same scope the writes below operate on.
+        before_ids = {
+            r[0] for r in self.db.query(AgentTool.tool_id).filter(*scope).all()
+        }
+
         # Delete tools not in the new set
         if uuids:
             self.db.query(AgentTool).filter(
@@ -1457,6 +1571,16 @@ class AgentService(BaseService):
                         organization_id=self.org_id,
                     ))
 
+        self.audit.log_attachment_diff(
+            agent_id=agent.id,
+            agent_config_id=config_id,
+            before_ids=before_ids,
+            after_ids=set(uuids),
+            attached_action=AgentAuditAction.TOOL_ATTACHED,
+            detached_action=AgentAuditAction.TOOL_DETACHED,
+            resource_type=AuditResourceType.TOOL,
+        )
+
     def _sync_mcp_servers(self, agent: Agent, config: Optional[AgentConfig], mcp_server_ids: List[str]) -> None:
         uuids = {UUID(str(sid)) for sid in mcp_server_ids}
 
@@ -1473,6 +1597,11 @@ class AgentService(BaseService):
             AgentMcpServer.organization_id == self.org_id,
             AgentMcpServer.agent_config_id == config_id,
         ]
+
+        before_ids = {
+            r[0]
+            for r in self.db.query(AgentMcpServer.mcp_server_id).filter(*scope).all()
+        }
 
         # Delete rows not in the new set
         if uuids:
@@ -1499,6 +1628,16 @@ class AgentService(BaseService):
                     mcp_server_id=sid,
                     organization_id=self.org_id,
                 ))
+
+        self.audit.log_attachment_diff(
+            agent_id=agent.id,
+            agent_config_id=config_id,
+            before_ids=before_ids,
+            after_ids=uuids,
+            attached_action=AgentAuditAction.MCP_ATTACHED,
+            detached_action=AgentAuditAction.MCP_DETACHED,
+            resource_type=AuditResourceType.MCP_SERVER,
+        )
 
     def _sync_knowledge_base(self, agent: Agent, config: Optional[AgentConfig], upload_ids: List[str]) -> None:
         uuids = [UUID(str(uid)) for uid in upload_ids]
@@ -1545,6 +1684,21 @@ class AgentService(BaseService):
             AgentKnowledgeBase.agent_config_id == config_id,
         ]
 
+        # Snapshot before/after as ``upload_id`` (the id the caller passes and
+        # the UI shows) rather than the internal ``knowledge_base_id`` — the
+        # audit row should read meaningfully without joining KB rows.
+        before_upload_ids = {
+            r[0]
+            for r in self.db.query(KnowledgeBase.upload_id)
+            .join(
+                AgentKnowledgeBase,
+                AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id,
+            )
+            .filter(*scope)
+            .all()
+            if r[0] is not None
+        }
+
         if kb_ids:
             self.db.query(AgentKnowledgeBase).filter(
                 *scope, AgentKnowledgeBase.knowledge_base_id.notin_(kb_ids),
@@ -1565,6 +1719,16 @@ class AgentService(BaseService):
                         agent_config_id=config_id,
                         organization_id=self.org_id,
                     ))
+
+        self.audit.log_attachment_diff(
+            agent_id=agent.id,
+            agent_config_id=config_id,
+            before_ids=before_upload_ids,
+            after_ids=uuids,
+            attached_action=AgentAuditAction.KB_ATTACHED,
+            detached_action=AgentAuditAction.KB_DETACHED,
+            resource_type=AuditResourceType.KNOWLEDGE_BASE,
+        )
 
     def _sync_phone_numbers(self, agent: Agent, phone_numbers: List[Dict[str, Any]]) -> None:
         """Sync phone numbers for an agent.
@@ -1633,6 +1797,16 @@ class AgentService(BaseService):
             if num:
                 cache_delete(f"phone_to_agent:{num.strip()}")
 
+        self.audit.log_attachment_diff(
+            agent_id=agent.id,
+            agent_config_id=None,
+            before_ids=prior_numbers,
+            after_ids=incoming_numbers,
+            attached_action=AgentAuditAction.PHONE_ATTACHED,
+            detached_action=AgentAuditAction.PHONE_DETACHED,
+            resource_type=AuditResourceType.PHONE_NUMBER,
+        )
+
     def _sync_agent_channels(self, agent: Agent, channel_ids: List[str]) -> None:
         web_types = set(supported_providers())
         incoming = set()
@@ -1653,6 +1827,12 @@ class AgentService(BaseService):
                     detail=f"Channel {channel.name} is not a web-call channel",
                 )
             incoming.add(cid)
+
+        before_channel_ids = {
+            cid for (cid,) in self.db.query(AgentChannel.channel_id).filter(
+                AgentChannel.agent_id == agent.id, AgentChannel.organization_id == self.org_id
+            ).all()
+        }
 
         existing = self.db.query(AgentChannel).filter(
             AgentChannel.agent_id == agent.id, AgentChannel.organization_id == self.org_id
@@ -1676,6 +1856,16 @@ class AgentService(BaseService):
                 slug=secrets.token_urlsafe(12),
                 organization_id=self.org_id,
             ))
+
+        self.audit.log_attachment_diff(
+            agent_id=agent.id,
+            agent_config_id=None,
+            before_ids=before_channel_ids,
+            after_ids=incoming,
+            attached_action=AgentAuditAction.WEB_CHANNEL_ATTACHED,
+            detached_action=AgentAuditAction.WEB_CHANNEL_DETACHED,
+            resource_type=AuditResourceType.WEB_CHANNEL,
+        )
 
     def agent_response(
         self, agent: Agent, config: Optional[AgentConfig] = None
