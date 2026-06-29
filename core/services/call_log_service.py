@@ -67,6 +67,7 @@ class CallLogService(BaseService):
         trace_id: Optional[str] = None,
         pipeline_config: Optional[dict] = None,
         started_at: Optional[datetime] = None,
+        agent_config_id: Optional[UUID] = None,
     ) -> Call:
         # Deduplicate
         if provider_call_id:
@@ -95,6 +96,7 @@ class CallLogService(BaseService):
         # latency. Fallback keeps the original behaviour for any other caller.
         call = Call(
             agent_id=agent_id,
+            agent_config_id=agent_config_id,
             organization_id=organization_id,
             channel_id=channel_id,
             direction=direction,

@@ -117,6 +117,7 @@ class PipecatPipelineRunner(PipelineRunner):
                     with get_db_context() as db:
                         call_log = CallLogService(db).create_call_log(
                             agent_id=agent.id,
+                            agent_config_id=agent.published_config_id,
                             organization_id=agent.organization_id,
                             provider_call_id=provider_call_id,
                             transport_type=transport_type,
