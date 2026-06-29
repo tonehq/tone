@@ -50,10 +50,7 @@ const WorkflowToolbar: React.FC<Props> = ({
   const [moreOpen, setMoreOpen] = useState(false);
   const valid = issues.length === 0;
 
-  // A published workflow whose draft has moved ahead of (or has unsaved edits beyond) the
-  // live snapshot has changes that aren't live until re-published.
   const pendingPublish = status === 'published' && (hasUnpublishedChanges || dirty);
-  // Re-publishing an unchanged published workflow would only create a duplicate snapshot.
   const nothingToPublish = status === 'published' && !hasUnpublishedChanges && !dirty;
 
   const savedLabel = saving

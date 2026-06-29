@@ -296,8 +296,6 @@ def _load_workflow_prompt(db: Session, config, org_id=None) -> Tuple[Optional[st
         workflow_first_message,
     )
 
-    # Org-scope the lookup: a workflow may only be resolved for an agent in the SAME org,
-    # so another org's workflow can never drive this call even if the id were referenced.
     wf_q = db.query(Workflow).filter(Workflow.id == workflow_id)
     if org_id:
         wf_q = wf_q.filter(Workflow.organization_id == org_id)

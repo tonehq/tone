@@ -105,7 +105,6 @@ function BuilderInner({ workflowId }: Props) {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
-  // Saved draft differs from the live published snapshot (edits saved but not published).
   const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
