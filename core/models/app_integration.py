@@ -1,9 +1,8 @@
-import os
-
 from sqlalchemy import Boolean, Column, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from core.models.base import OrgScopedModel
+from core.utils.env_resolver import resolve_env
 
 
 class AppIntegration(OrgScopedModel):
@@ -57,15 +56,15 @@ class AppIntegration(OrgScopedModel):
         api_key / bearer_token providers need their referenced ``client_id``
         env var; ``client_secret`` is optional for public-client PKCE flows.
 
-        Pure in-memory check (``os.getenv`` lookups, no DB) so it's safe to
-        call inside list loops.
+        Lookups go through :func:`resolve_env`, which checks Tone's
+        Infisical-aware ``settings`` before falling back to ``os.getenv`` —
+        so secrets loaded from Infisical (not present in ``os.environ``)
+        still register as configured.
         """
         if self.auth_type == "none":
             return True
-        cid_key = self.client_id_env_key
-        if not cid_key or not os.getenv(cid_key):
+        if not self.client_id_env_key or not resolve_env(self.client_id_env_key):
             return False
-        secret_key = self.client_secret_env_key
-        if secret_key and not os.getenv(secret_key):
+        if self.client_secret_env_key and not resolve_env(self.client_secret_env_key):
             return False
         return True
