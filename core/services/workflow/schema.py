@@ -71,8 +71,8 @@ class ConversationData(_BaseNodeData):
 
 class ToolData(_BaseNodeData):
     toolId: Optional[str] = None
-    # MCP server whose tools the agent should use at this step (alternative to toolId).
     mcpServerId: Optional[str] = None
+    mcpToolName: Optional[str] = None
     tool: Optional[InlineTool] = None
 
 

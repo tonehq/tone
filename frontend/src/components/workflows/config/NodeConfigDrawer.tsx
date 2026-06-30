@@ -193,30 +193,64 @@ const NodeConfigDrawer: React.FC<Props> = ({
             />
 
             {toolSource === 'mcp' ? (
-              <SearchableSelect
-                name="mcp-server"
-                label="MCP server"
-                options={mcpOptions}
-                value={String(data.mcpServerId ?? '')}
-                onValueChange={(v) => patch({ mcpServerId: v, toolId: undefined, tool: undefined })}
-                loading={mcpLoading}
-                placeholder="Select an MCP server"
-              />
+              <>
+                <SearchableSelect
+                  name="mcp-server"
+                  label="MCP server"
+                  options={mcpOptions}
+                  value={String(data.mcpServerId ?? '')}
+                  onValueChange={(v) =>
+                    patch({ mcpServerId: v, toolId: undefined, tool: undefined })
+                  }
+                  loading={mcpLoading}
+                  placeholder="Select an MCP server"
+                />
+                <TextInput
+                  name="mcp-tool-name"
+                  label="MCP tool to call (optional)"
+                  value={String(data.mcpToolName ?? '')}
+                  onChange={(e) => patch({ mcpToolName: e.target.value || undefined })}
+                  placeholder="e.g. clickup_create_task"
+                  className="font-mono"
+                  helperText="Name the exact tool so the model calls it directly instead of guessing."
+                />
+              </>
             ) : (
               <SearchableSelect
                 name="tool"
                 label="Tool"
                 options={toolOptions}
                 value={String(data.toolId ?? '')}
-                onValueChange={(v) => patch({ toolId: v, mcpServerId: undefined, tool: undefined })}
+                onValueChange={(v) =>
+                  patch({
+                    toolId: v,
+                    mcpServerId: undefined,
+                    mcpToolName: undefined,
+                    tool: undefined,
+                  })
+                }
                 loading={toolsLoading}
                 placeholder="Select a tool (webhook / custom)"
               />
             )}
 
+            <TextAreaField
+              name="tool-notes"
+              label="Step details / instructions"
+              rows={4}
+              autoResize
+              value={String(data.notes ?? '')}
+              onChange={(e) => patch({ notes: e.target.value })}
+              placeholder={
+                'How to call the tool — e.g. list_id, exact field values, what to put in the ' +
+                'description. Use {{variables}} for collected values.'
+              }
+              helperText="Passed to the model as the step's details so it calls the tool with the right arguments."
+            />
+
             <p className="text-[11px] text-muted-foreground">
-              The chosen tool or MCP server must also be attached to the agent so the model can call
-              it at this step.
+              The selected tool / MCP server must also be attached to the agent (Tools &amp; MCP) so
+              the model can call it at this step.
             </p>
           </div>
         )}

@@ -45,14 +45,9 @@ def upgrade() -> None:
         sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('archived_at', sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(['created_by_user_id'], ['users.id']),
+        sa.UniqueConstraint('organization_id', 'name', name='uq_workflows_org_name'),
     )
     op.create_index('ix_workflows_organization_id', 'workflows', ['organization_id'])
-    # Names are unique per org among LIVE rows only — a partial unique index lets a
-    # soft-deleted name be reused (a plain UNIQUE constraint would block reuse forever).
-    op.create_index(
-        'uq_workflows_org_name', 'workflows', ['organization_id', 'name'],
-        unique=True, postgresql_where=sa.text('deleted_at IS NULL'),
-    )
 
     # --- workflow_versions (graph snapshots + draft) ---
     op.create_table(

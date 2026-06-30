@@ -35,7 +35,6 @@ import {
   fetchWorkflowAtom,
   publishWorkflowAtom,
   saveDraftAtom,
-  workflowEditorStatusAtom,
   workflowIssuesAtom,
 } from '@/atoms/WorkflowAtom';
 import type {
@@ -87,7 +86,6 @@ function BuilderInner({ workflowId }: Props) {
   const saveDraft = useSetAtom(saveDraftAtom);
   const publish = useSetAtom(publishWorkflowAtom);
   const exportWorkflow = useSetAtom(exportWorkflowAtom);
-  const setStatus = useSetAtom(workflowEditorStatusAtom);
   const setIssuesAtom = useSetAtom(workflowIssuesAtom);
 
   const [loading, setLoading] = useState(true);
@@ -148,18 +146,11 @@ function BuilderInner({ workflowId }: Props) {
     return () => clearTimeout(t);
   }, [nodes, edges, loading, setIssuesAtom]);
 
-  useEffect(() => {
-    setStatus({ dirty, saving });
-  }, [dirty, saving, setStatus]);
-
-  // Reset the shared editor atoms when leaving the editor so stale issues/status
-  // don't leak into the next workflow opened.
   useEffect(
     () => () => {
       setIssuesAtom([]);
-      setStatus({ dirty: false, saving: false });
     },
-    [setIssuesAtom, setStatus],
+    [setIssuesAtom],
   );
 
   // warn on unload while dirty

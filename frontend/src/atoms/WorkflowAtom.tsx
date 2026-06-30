@@ -84,17 +84,4 @@ export const exportWorkflowAtom = atom(
     exportVapiWorkflow(workflowId),
 );
 
-// ─── editor UI status (coarse, mirrored from the canvas) ────────────────────
-export interface WorkflowEditorStatus {
-  saving: boolean;
-  dirty: boolean;
-}
-
-export const workflowEditorStatusAtom = atom<WorkflowEditorStatus>({
-  saving: false,
-  dirty: false,
-});
-
-// Validation issues live in their OWN atom so the per-node badges (which subscribe to
-// this) don't re-render on every save/dirty toggle written to the status atom above.
 export const workflowIssuesAtom = atom<ValidationIssue[]>([]);

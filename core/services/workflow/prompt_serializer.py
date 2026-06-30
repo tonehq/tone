@@ -178,13 +178,24 @@ def serialize_graph_for_llm(
                     "never earlier in the conversation."
                 )
             elif mcp_id and tool_names.get(mcp_id):
-                lines.append(
-                    f"- Use the `{tool_names[mcp_id]}` MCP server's tools to complete this step. "
-                    "Only use them at this step (after the guest has confirmed the details) — "
-                    "never earlier in the conversation."
-                )
+                mcp_tool = _s(data.get("mcpToolName"))
+                if mcp_tool:
+                    lines.append(
+                        f"- Call the `{mcp_tool}` tool (from the `{tool_names[mcp_id]}` MCP server) "
+                        "to complete this step. Only call it at this step (after the guest has "
+                        "confirmed the details) — never earlier in the conversation."
+                    )
+                else:
+                    lines.append(
+                        f"- Use the `{tool_names[mcp_id]}` MCP server's tools to complete this step. "
+                        "Only use them at this step (after the guest has confirmed the details) — "
+                        "never earlier in the conversation."
+                    )
             else:
                 lines.append("- Run the configured tool/action for this step.")
+            notes = _s(data.get("notes"))
+            if notes:
+                lines.append(f"- Details: {notes}")
 
         if ntype == "transferCall":
             dest = data.get("destination") if isinstance(data.get("destination"), dict) else {}
