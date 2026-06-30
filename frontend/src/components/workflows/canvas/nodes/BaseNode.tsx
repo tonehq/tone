@@ -114,10 +114,11 @@ const BaseNode: React.FC<BaseNodeProps> = ({
 
         <div
           className={cn(
-            'px-4 text-[13px] leading-relaxed line-clamp-2',
+            'truncate px-4 text-[13px] leading-snug',
             variables && variables.length ? 'pb-2' : 'pb-3.5',
             summary ? 'text-muted-foreground' : 'italic text-muted-foreground/55',
           )}
+          title={summary || undefined}
         >
           {summary || 'No content yet'}
         </div>

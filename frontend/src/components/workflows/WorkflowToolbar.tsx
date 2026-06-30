@@ -20,6 +20,7 @@ interface Props {
   status: 'draft' | 'published';
   saving: boolean;
   dirty: boolean;
+  hasUnpublishedChanges: boolean;
   lastSavedAt: number | null;
   issues: ValidationIssue[];
   onBack: () => void;
@@ -35,6 +36,7 @@ const WorkflowToolbar: React.FC<Props> = ({
   status,
   saving,
   dirty,
+  hasUnpublishedChanges,
   lastSavedAt,
   issues,
   onBack,
@@ -48,13 +50,18 @@ const WorkflowToolbar: React.FC<Props> = ({
   const [moreOpen, setMoreOpen] = useState(false);
   const valid = issues.length === 0;
 
+  const pendingPublish = status === 'published' && (hasUnpublishedChanges || dirty);
+  const nothingToPublish = status === 'published' && !hasUnpublishedChanges && !dirty;
+
   const savedLabel = saving
     ? 'Saving…'
     : dirty
       ? 'Unsaved changes'
-      : lastSavedAt
-        ? 'All changes saved'
-        : 'Up to date';
+      : status === 'published' && hasUnpublishedChanges
+        ? 'Saved · not published yet'
+        : lastSavedAt
+          ? 'All changes saved'
+          : 'Up to date';
 
   return (
     <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-card/80 px-3 backdrop-blur">
@@ -88,6 +95,15 @@ const WorkflowToolbar: React.FC<Props> = ({
               />
               {status === 'published' ? 'Published' : 'Draft'}
             </span>
+            {pendingPublish && (
+              <span
+                title="Your edits are saved as a draft but aren't live yet. Publish to update assigned agents."
+                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-600 ring-1 ring-inset ring-amber-500/20 dark:text-amber-300"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                Unpublished changes
+              </span>
+            )}
           </div>
           <div className="font-mono text-[11px] text-muted-foreground">{savedLabel}</div>
         </div>
@@ -206,8 +222,16 @@ const WorkflowToolbar: React.FC<Props> = ({
         <CustomButton type="default" size="sm" loading={saving} onClick={onSave}>
           Save draft
         </CustomButton>
-        <CustomButton type="primary" size="sm" disabled={!valid} onClick={onPublish}>
-          Publish
+        <CustomButton
+          type="primary"
+          size="sm"
+          disabled={!valid || saving || nothingToPublish}
+          onClick={onPublish}
+          title={
+            nothingToPublish ? 'No changes to publish — the live version is up to date.' : undefined
+          }
+        >
+          {pendingPublish ? 'Publish changes' : 'Publish'}
         </CustomButton>
       </div>
     </div>

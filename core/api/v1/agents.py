@@ -1,9 +1,9 @@
 from contextlib import contextmanager
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import and_, case, exists, or_
 from sqlalchemy.orm import Session
 
@@ -64,8 +64,14 @@ class AgentConfigRequest(BaseModel):
     stt_settings: Optional[Dict[str, Any]] = None
     conversation_settings: Optional[Dict[str, Any]] = None
     # Workflow assignment: mode = "prompt" | "workflow"; workflow_id = assigned org workflow.
-    mode: Optional[str] = None
+    mode: Optional[Literal["prompt", "workflow"]] = None
     workflow_id: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _require_workflow_when_workflow_mode(self) -> "AgentConfigRequest":
+        if self.mode == "workflow" and not self.workflow_id:
+            raise ValueError("workflow_id is required when mode is 'workflow'")
+        return self
 
 
 class PhoneNumberAttachment(BaseModel):

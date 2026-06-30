@@ -25,7 +25,7 @@ from core.utils.tool_idempotency import booking_signature, is_cacheable_result
 # Hard ceiling on how long discovering tools from a single MCP server may take at
 # pipeline-build time. A dead or mis-authenticated server must fail fast and
 # visibly rather than silently yielding zero tools (or blocking call setup).
-MCP_REGISTER_TIMEOUT_S = 25.0
+MCP_REGISTER_TIMEOUT_S = 60.0
 
 
 def _install_mcp_call_logging(llm, server_name: str, server_id=None, tool_call_entries=None, current_turn=None, tool_dedup=None):

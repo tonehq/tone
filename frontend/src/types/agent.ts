@@ -38,6 +38,10 @@ export interface AgentConfig {
   /** Optional closing line the agent reads before hanging up. Stored on
    * config; backend's AgentConfig accepts extra keys. */
   end_call_message?: string | null;
+  /** Conversation-flow driver: a single prompt, or an assigned workflow graph. */
+  mode?: 'prompt' | 'workflow' | null;
+  /** When `mode === 'workflow'`, the assigned (published) workflow. */
+  workflow_id?: string | null;
   system_prompt_template?: string | null;
   conversation_history_token_limit?: number | null;
   language_id?: string | null;
@@ -211,6 +215,8 @@ export interface AgentFormState {
   config: {
     first_message: string;
     end_call_message: string;
+    mode: 'prompt' | 'workflow';
+    workflow_id: string | null;
     system_prompt_template: string;
     conversation_history_token_limit: number | null;
     language_id: string | null;

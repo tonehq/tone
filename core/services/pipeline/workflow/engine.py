@@ -25,6 +25,7 @@ Extractor = Callable[[Dict[str, Any], WorkflowCallContext, str], Dict[str, Any]]
 
 _VAR = re.compile(r"\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}")
 _MAX_SETTLE = 25  # guard against router cycles
+_DEFAULT_MAX_VISITS = 10  # per-node re-entry cap (overridable via node data.maxVisits)
 
 
 def substitute(text: Optional[str], variables: Dict[str, Any]) -> str:
@@ -92,6 +93,8 @@ class WorkflowEngine:
         nxt = self._route(cur, user_text)
         if nxt is None:
             return self._directive_for(cur, stay=True)
+        if self._exceeds_visits(nxt):
+            return self._end_directive()
         self._enter(nxt, "edge")
         return self._settle(user_text)
 
@@ -103,12 +106,31 @@ class WorkflowEngine:
         nxt = self._route(cur, user_text)
         if nxt is None:
             return self._directive_for(cur, stay=True)
+        if self._exceeds_visits(nxt):
+            return self._end_directive()
         self._enter(nxt, "edge")
         return self._settle(user_text)
 
     # ── internals ──
     def _enter(self, node_id: str, reason: str) -> None:
         self.ctx.enter(node_id, self.graph.node_type(node_id), reason)
+
+    def _max_visits(self, node_id: str) -> int:
+        raw = (self.graph.node_data(node_id) or {}).get("maxVisits")
+        try:
+            return int(raw) if raw else _DEFAULT_MAX_VISITS
+        except (TypeError, ValueError):
+            return _DEFAULT_MAX_VISITS
+
+    def _exceeds_visits(self, node_id: str) -> bool:
+        """True once a node has been entered as many times as its cap allows — stops
+        infinite re-prompt / cross-turn loops the per-pass _MAX_SETTLE guard can't catch."""
+        return self.ctx.visits(node_id) >= self._max_visits(node_id)
+
+    def _end_directive(self) -> NodeDirective:
+        return NodeDirective(
+            node_id=self.ctx.current_node_id or "", node_type="endCall", end_call=True
+        )
 
     def _check_globals(self) -> Optional[str]:
         for gid in self.graph.global_ids:
@@ -150,6 +172,8 @@ class WorkflowEngine:
                 nxt = self._route(cur, user_text)
                 if nxt is None:
                     return self._directive_for(cur, stay=True)
+                if self._exceeds_visits(nxt):
+                    return self._end_directive()
                 self._enter(nxt, "router")
                 continue
             return self._directive_for(cur)

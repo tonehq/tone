@@ -18,7 +18,10 @@ export const defaultFormState = (agentType: AgentDirection): AgentFormState => (
   config: {
     first_message: '',
     end_call_message: '',
+    mode: 'prompt',
+    workflow_id: null,
     system_prompt_template: '',
+    conversation_history_token_limit: null,
     language_id: null,
     knowledge_model_id: null,
     llm_settings: {},
@@ -50,7 +53,11 @@ export function agentDetailToFormState(detail: AgentDetail): AgentFormState {
     config: {
       first_message: cfg.first_message ?? base.config.first_message,
       end_call_message: cfg.end_call_message ?? base.config.end_call_message,
+      mode: cfg.mode === 'workflow' ? 'workflow' : 'prompt',
+      workflow_id: cfg.workflow_id ?? null,
       system_prompt_template: cfg.system_prompt_template ?? base.config.system_prompt_template,
+      conversation_history_token_limit:
+        cfg.conversation_history_token_limit ?? base.config.conversation_history_token_limit,
       language_id: cfg.language_id ?? null,
       knowledge_model_id: cfg.knowledge_model_id ?? null,
       llm_settings: cfg.llm_settings ?? {},

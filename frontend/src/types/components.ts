@@ -183,6 +183,7 @@ export interface TextAreaFieldBaseProps extends Omit<React.ComponentProps<'texta
   error?: boolean;
   helperText?: string;
   labelClassName?: string;
+  autoResize?: boolean;
 }
 
 export interface FormTextAreaFieldProps

@@ -1224,8 +1224,37 @@ class AgentService(BaseService):
                 continue
             val = data[field]
             if val is not None and field in self._CONFIG_UUID_FIELDS:
-                val = UUID(str(val))
+                try:
+                    val = UUID(str(val))
+                except (ValueError, TypeError):
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Invalid {field}",
+                    )
+            if field == "workflow_id" and val is not None:
+                self._assert_assignable_workflow(val)
             setattr(target, field, val)
+
+    def _assert_assignable_workflow(self, workflow_id: UUID) -> None:
+        """Guard workflow assignment: the workflow must exist, belong to the caller's org
+        (``self.query`` is org-scoped), and have a published version. Prevents assigning
+        another org's workflow (IDOR) or an unpublished draft."""
+        from core.models.workflow import Workflow
+
+        wf = (
+            self.query(Workflow)
+            .filter(Workflow.id == workflow_id, Workflow.deleted_at.is_(None))
+            .first()
+        )
+        if not wf:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found"
+            )
+        if not wf.published_version_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Workflow must be published before it can be assigned to an agent",
+            )
 
     def _apply_config_fields_audited(
         self,

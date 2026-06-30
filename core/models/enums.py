@@ -15,6 +15,7 @@ class WorkflowNodeType(str, enum.Enum):
     TRANSFER_CALL = "transferCall"
     END_CALL = "endCall"
     DECISION = "decision"
+    API_REQUEST = "apiRequest"
 
 
 class EdgeConditionType(str, enum.Enum):
@@ -27,3 +28,9 @@ class AgentConfigMode(str, enum.Enum):
     """Conversation-flow driver for an agent config."""
     PROMPT = "prompt"      # single system-prompt assistant (default / today's behavior)
     WORKFLOW = "workflow"  # the assigned workflow graph drives turn-to-turn flow
+
+
+class WorkflowStatus(str, enum.Enum):
+    """Lifecycle status of a workflow container."""
+    DRAFT = "draft"          # never published
+    PUBLISHED = "published"  # has at least one published version
