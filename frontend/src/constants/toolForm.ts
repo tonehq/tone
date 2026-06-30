@@ -160,4 +160,5 @@ export const AUTH_TYPE_OPTIONS = [
   { value: 'api_key', label: 'API Key' },
   { value: 'bearer', label: 'Bearer Token' },
   { value: 'basic', label: 'Basic Auth' },
+  { value: 'oauth', label: 'OAuth Connection' },
 ];

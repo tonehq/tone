@@ -23,7 +23,10 @@ class CreateToolRequest(BaseModel):
     auth_type: str = "none"
     auth_config: Optional[Dict[str, Any]] = None
     meta_data: Optional[Dict[str, Any]] = None
-    oauth_connection_id: Optional[int] = None
+    oauth_connection_id: Optional[UUID] = None
+    # Catalog row this tool is linked to. Drives the OAuth connection picker
+    # filter on the form — same role as in MCP server creation.
+    app_integration_id: Optional[UUID] = None
     is_active: bool = True
 
 
@@ -36,7 +39,8 @@ class UpdateToolRequest(BaseModel):
     auth_type: Optional[str] = None
     auth_config: Optional[Dict[str, Any]] = None
     meta_data: Optional[Dict[str, Any]] = None
-    oauth_connection_id: Optional[int] = None
+    oauth_connection_id: Optional[UUID] = None
+    app_integration_id: Optional[UUID] = None
     is_active: Optional[bool] = None
 
 

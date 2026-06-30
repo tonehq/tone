@@ -18,6 +18,42 @@ from core.models.agent_tool import AgentTool
 from core.utils.logging import truncate_for_log
 
 
+def _resolve_oauth_bearer(tool: Tool) -> Optional[str]:
+    """Return a valid OAuth access token for ``tool``'s linked connection.
+
+    Opens a short-lived DB session because custom tool handlers run inside the
+    voice pipeline (no request context). ``OAuthService.get_valid_access_token_for_connection``
+    transparently refreshes the token if it's near expiry. Any failure here
+    is logged and swallowed so the call falls through with no Authorization
+    header rather than crashing the agent's turn — the API call may still
+    succeed for endpoints that don't require auth, and if it doesn't, the
+    failure surfaces as a normal HTTP error the LLM can react to.
+    """
+    if not tool.oauth_connection_id:
+        logger.warning(
+            "Custom tool '{}' has auth_type='oauth' but no oauth_connection_id set; "
+            "calling without an Authorization header",
+            tool.name,
+        )
+        return None
+    from core.database.session import get_db_context
+    from core.services.oauth_service import OAuthService
+
+    try:
+        with get_db_context() as db:
+            svc = OAuthService(db, org_id=tool.organization_id)
+            connection = svc.get_connection(tool.oauth_connection_id)
+            return svc.get_valid_access_token_for_connection(connection)
+    except Exception as exc:
+        logger.warning(
+            "Custom tool '{}' OAuth token resolution failed ({}); calling without an "
+            "Authorization header so the request still goes out",
+            tool.name,
+            exc,
+        )
+        return None
+
+
 def get_custom_tools_for_agent(agent_id: int) -> List[Tool]:
     """Fetch all active custom tools linked to an agent's published version."""
     from core.database.session import get_db_context
@@ -205,6 +241,15 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
                 password = auth_config.get("password", "")
                 credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
                 headers["Authorization"] = f"Basic {credentials}"
+            elif tool.auth_type == "oauth":
+                # OAuth-backed custom tools point at the connected account via
+                # ``tool.oauth_connection_id``. We mint a *fresh* bearer token
+                # on every call so an in-flight refresh during a conversation
+                # doesn't leave the agent calling the API with a stale token.
+                # The OAuthService handles refresh + expiry transparently.
+                token = _resolve_oauth_bearer(tool)
+                if token:
+                    headers["Authorization"] = f"Bearer {token}"
 
             extra_headers = getattr(tool, "headers", None)
             if isinstance(extra_headers, dict):
