@@ -29,6 +29,9 @@ export interface OAuthCatalogProvider {
   auth_type: AuthType;
   scopes: string[];
   configured: boolean;
+  /** Admin-supplied brand mark URL. When absent the frontend falls back to
+   *  the static ``PROVIDER_LOGOS`` registry (favicon / bundled asset). */
+  icon_url?: string | null;
 }
 
 export interface OAuthConnection {
