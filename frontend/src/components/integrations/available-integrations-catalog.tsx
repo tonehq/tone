@@ -1,17 +1,19 @@
 'use client';
 
 import ProviderTile from '@/components/integrations/provider-tile';
-import { CustomButton } from '@/components/shared';
+import { ActionMenu, CustomButton } from '@/components/shared';
 import {
   API_KEY_PROVIDERS,
-  OAUTH_PROVIDERS,
   PROVIDER_CATEGORY_LABELS,
   type ProviderCardConfig,
 } from '@/constants/integrations';
+import { deleteAppIntegration } from '@/services/appIntegrationService';
 import { getOAuthAuthorizeUrl } from '@/services/oauthService';
 import type { OAuthCatalogProvider } from '@/types/oauth';
 import { handleApiError } from '@/utils/helpers';
-import { ArrowUpRight, Plus, ShieldCheck } from 'lucide-react';
+import { showToast } from '@/utils/toast';
+import { ArrowUpRight, Pencil, Plus, ShieldCheck } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 
 interface AvailableIntegrationsCatalogProps {
@@ -20,22 +22,32 @@ interface AvailableIntegrationsCatalogProps {
   configuredChannelTypes?: Set<string>;
   /** Backend catalog (configured + scopes). When absent, all OAuth providers render as available. */
   catalog?: OAuthCatalogProvider[];
+  /** Called after a successful delete so the parent can refetch the catalog
+   * and the removed tile disappears. Optional — if omitted, deletion still
+   * works but the grid won't update until the next page load. */
+  onCatalogChanged?: () => void;
 }
-
-const OAUTH_VISUAL_BY_KEY = OAUTH_PROVIDERS.reduce<Record<string, ProviderCardConfig>>(
-  (acc, item) => {
-    acc[item.key] = item;
-    return acc;
-  },
-  {},
-);
 
 // Render order for category groups.
 const CATEGORY_ORDER = ['google', 'productivity', 'dev_crm', 'other'];
 
+// Generic visual fallbacks for OAuth tiles. The DB-backed catalog doesn't
+// carry icon assets, so every tile renders with the same neutral chrome —
+// upgrade to ``icon_url``-driven imagery when admins start providing icons.
+const OAUTH_TILE_DEFAULTS = {
+  iconBg: 'bg-muted',
+  iconBorder: 'border-border/50',
+  accentColor: 'bg-primary',
+} as const;
+
 interface OAuthTile extends ProviderCardConfig {
   configured: boolean;
   scopeCount: number;
+  /** ``app_integrations.id`` — present when the tile was sourced from the
+   * backend catalog. Absent when we fall back to the static visual list. */
+  id?: string;
+  /** Default (seeded) rows are protected from deletion. */
+  isDefault?: boolean;
 }
 
 export default function AvailableIntegrationsCatalog({
@@ -43,7 +55,9 @@ export default function AvailableIntegrationsCatalog({
   connectedSlugs,
   configuredChannelTypes,
   catalog,
+  onCatalogChanged,
 }: AvailableIntegrationsCatalogProps) {
+  const router = useRouter();
   const [pendingProvider, setPendingProvider] = useState<string | null>(null);
 
   const handleConnectOAuth = async (providerKey: string) => {
@@ -57,26 +71,37 @@ export default function AvailableIntegrationsCatalog({
     }
   };
 
-  // Build OAuth tiles from the catalog (source of truth for which providers exist + configured),
-  // falling back to the static visual list when the catalog hasn't loaded yet.
+  const handleEdit = (id: string) => {
+    router.push(`/settings/integrations/edit/${id}`);
+  };
+
+  const handleDelete = async (id: string, displayName: string) => {
+    try {
+      await deleteAppIntegration(id);
+      showToast.success(`${displayName} deleted`);
+      onCatalogChanged?.();
+    } catch (err) {
+      handleApiError(err);
+    }
+  };
+
+  // Build OAuth tiles directly from the DB-backed catalog — the previous
+  // hardcoded fallback list was retired when ``OAUTH_PROVIDERS`` was emptied.
   const oauthGroups = useMemo(() => {
-    const source: OAuthTile[] = catalog?.length
-      ? catalog.map((p) => {
-          const visual = OAUTH_VISUAL_BY_KEY[p.slug];
-          return {
-            key: p.slug,
-            name: visual?.name ?? p.display_name,
-            description: visual?.description ?? p.description,
-            icon: visual?.icon,
-            iconBg: visual?.iconBg ?? 'bg-muted',
-            iconBorder: visual?.iconBorder ?? 'border-border/50',
-            accentColor: visual?.accentColor ?? 'bg-primary',
-            category: (visual?.category ?? p.category) as ProviderCardConfig['category'],
-            configured: p.configured,
-            scopeCount: p.scopes?.length ?? 0,
-          } as OAuthTile;
-        })
-      : OAUTH_PROVIDERS.map((p) => ({ ...p, configured: true, scopeCount: 0 }));
+    const source: OAuthTile[] = (catalog ?? []).map((p) => ({
+      key: p.slug,
+      name: p.display_name,
+      description: p.description,
+      icon: undefined,
+      iconBg: OAUTH_TILE_DEFAULTS.iconBg,
+      iconBorder: OAUTH_TILE_DEFAULTS.iconBorder,
+      accentColor: OAUTH_TILE_DEFAULTS.accentColor,
+      category: p.category as ProviderCardConfig['category'],
+      configured: p.configured,
+      scopeCount: p.scopes?.length ?? 0,
+      id: p.id,
+      isDefault: p.is_default,
+    }));
 
     const grouped = new Map<string, OAuthTile[]>();
     for (const tile of source) {
@@ -108,6 +133,17 @@ export default function AvailableIntegrationsCatalog({
                 description={tile.description}
                 isInUse={connectedSlugs?.has(tile.key) ?? false}
                 dimmed={!tile.configured}
+                actionsSlot={
+                  tile.id ? (
+                    <IntegrationTileActions
+                      id={tile.id}
+                      name={tile.name}
+                      isDefault={!!tile.isDefault}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                    />
+                  ) : null
+                }
                 categoryLabel={
                   <>
                     OAuth
@@ -182,5 +218,55 @@ export default function AvailableIntegrationsCatalog({
         </div>
       </section>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Per-tile actions (admin kebab menu)
+// ─────────────────────────────────────────────────────────────────────
+
+interface IntegrationTileActionsProps {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  onEdit: (id: string) => void;
+  onDelete: (id: string, name: string) => Promise<void>;
+}
+
+/**
+ * Renders the per-tile admin actions on the Available providers grid.
+ *
+ * Default (seeded) rows get an Edit-only icon button — the backend rejects
+ * delete on those rows, so hiding the option is the cleaner UX than letting
+ * the user see a destructive action that 400s. Admin-created rows get the
+ * full :component:`ActionMenu` (Edit + Delete with built-in confirmation).
+ */
+function IntegrationTileActions({
+  id,
+  name,
+  isDefault,
+  onEdit,
+  onDelete,
+}: IntegrationTileActionsProps) {
+  if (isDefault) {
+    return (
+      <CustomButton
+        type="text"
+        size="icon-sm"
+        onClick={() => onEdit(id)}
+        aria-label={`Edit ${name}`}
+        className="text-muted-foreground hover:text-foreground"
+      >
+        <Pencil className="size-3.5" />
+      </CustomButton>
+    );
+  }
+  return (
+    <ActionMenu
+      onEdit={() => onEdit(id)}
+      onDelete={() => onDelete(id, name)}
+      itemName={name}
+      deleteDescription={`This removes "${name}" from your catalog. Existing OAuth connections will be unlinked but kept. This cannot be undone.`}
+    />
   );
 }

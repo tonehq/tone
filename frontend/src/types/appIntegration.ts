@@ -20,10 +20,12 @@ export interface AppIntegration {
   auth_type: AppIntegrationAuthType;
   auth_url: string | null;
   token_url: string | null;
+  userinfo_url: string | null;
   scopes: string[] | null;
   extra_auth_params: Record<string, unknown> | null;
-  client_id_env_key: string | null;
-  client_secret_env_key: string | null;
+  /** True if encrypted credentials are stored. Secrets themselves are never
+   * returned — admins re-enter them to overwrite. */
+  has_credentials: boolean;
   pkce_required: boolean;
   is_enabled: boolean;
   is_default: boolean;
@@ -44,10 +46,13 @@ export interface AppIntegrationCreatePayload {
   icon_url?: string | null;
   auth_url?: string | null;
   token_url?: string | null;
+  userinfo_url?: string | null;
   scopes?: string[] | null;
   extra_auth_params?: Record<string, unknown> | null;
-  client_id_env_key?: string | null;
-  client_secret_env_key?: string | null;
+  /** Plain credential values — written to the encrypted blob on save.
+   * Omit to leave the stored value unchanged. */
+  client_id?: string | null;
+  client_secret?: string | null;
   pkce_required?: boolean;
   is_enabled?: boolean;
   sort_order?: number;
