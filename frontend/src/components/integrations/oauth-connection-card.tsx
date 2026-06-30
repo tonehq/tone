@@ -1,13 +1,15 @@
 'use client';
 
+import { getProviderLogoUrl } from '@/components/service-providers/constants';
 import { CustomButton, ScopeStatus } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { formatRelative } from '@/utils/date';
 import { cn } from '@/utils/cn';
 import { normalizeScopes, shortScopeLabel } from '@/utils/scopes';
 import { motion, type Variants } from 'framer-motion';
-import { Clock, Mail, Plug, Unplug } from 'lucide-react';
+import { Clock, Mail, Unplug } from 'lucide-react';
 
+import IntegrationLogo from './integration-logo';
 import { getOAuthProviderVisual, humanizeSlug } from './providerVisuals';
 import type { OAuthConnection } from '@/types/oauth';
 
@@ -41,6 +43,7 @@ export default function OAuthConnectionCard({
   const visual = getOAuthProviderVisual(connection.provider_slug);
   // Catalog providers use their brand name; custom credentials show their user-given label.
   const displayName = visual?.name ?? connection.label ?? humanizeSlug(connection.provider_slug);
+  const hasLogo = !!getProviderLogoUrl(connection.provider_slug);
   const email = connection.public_metadata?.user_email ?? null;
   const refreshed = formatRelative(connection.updated_at);
   const grantedScopes = normalizeScopes(connection.public_metadata?.scopes);
@@ -71,11 +74,11 @@ export default function OAuthConnectionCard({
         <div
           className={cn(
             'flex size-11 shrink-0 items-center justify-center rounded-xl border shadow-sm',
-            visual?.iconBg ?? 'bg-muted',
+            visual?.iconBg ?? (hasLogo ? 'bg-white' : 'bg-muted'),
             visual?.iconBorder ?? 'border-border/50',
           )}
         >
-          {visual?.icon ?? <Plug className="size-4 text-muted-foreground" />}
+          {visual?.icon ?? <IntegrationLogo slug={connection.provider_slug} name={displayName} />}
         </div>
 
         <div className="min-w-0 flex-1">

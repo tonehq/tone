@@ -97,6 +97,20 @@ export const PROVIDER_LOGOS: Record<string, string> = {
   inworld: FAVICON('inworld.ai'),
   lmnt: FAVICON('lmnt.com'),
   smallest: FAVICON('smallest.ai'),
+
+  // ── OAuth / App integrations ──
+  googlecalendar: FAVICON('calendar.google.com'),
+  googlesheets: FAVICON('sheets.google.com'),
+  googledrive: FAVICON('drive.google.com'),
+  gmail: FAVICON('mail.google.com'),
+  hubspot: FAVICON('hubspot.com'),
+  notion: FAVICON('notion.so'),
+  slack: FAVICON('slack.com'),
+  github: FAVICON('github.com'),
+  linear: FAVICON('linear.app'),
+  jira: FAVICON('atlassian.com'),
+  salesforce: FAVICON('salesforce.com'),
+  zoom: FAVICON('zoom.us'),
 };
 
 export function getProviderLogoUrl(providerName?: string | null): string | null {

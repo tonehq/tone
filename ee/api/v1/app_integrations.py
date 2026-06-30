@@ -18,7 +18,7 @@ from core.api.v1.app_integrations import (
 )
 from core.database.session import get_db
 from core.services.app_integration_service import AppIntegrationService
-from ee.middleware.auth import require_ee_admin_or_owner, require_ee_org_member
+from ee.middleware.auth import require_ee_org_member
 
 
 router = APIRouter()
@@ -33,10 +33,10 @@ def _get_service(claims, db: Session) -> AppIntegrationService:
 @router.post("/create_app_integration", status_code=status.HTTP_201_CREATED)
 def create_app_integration(
     body: CreateAppIntegrationRequest,
-    claims=Depends(require_ee_admin_or_owner),
+    claims=Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    """Add a new integration to the global catalog. Admin/owner only."""
+    """Add a new integration to the global catalog. Any org member may create."""
     svc = _get_service(claims, db)
     integration = svc.create_app_integration(body.model_dump(exclude_unset=True))
     return svc.app_integration_response(integration)
@@ -46,10 +46,10 @@ def create_app_integration(
 def update_app_integration(
     id: UUID = Query(..., description="App integration UUID"),
     body: UpdateAppIntegrationRequest = Body(...),
-    claims=Depends(require_ee_admin_or_owner),
+    claims=Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    """Patch an existing integration. Admin/owner only."""
+    """Patch an existing integration. Any org member may update."""
     svc = _get_service(claims, db)
     integration = svc.update_app_integration(id, body.model_dump(exclude_unset=True))
     return svc.app_integration_response(integration)
@@ -85,9 +85,9 @@ def list_app_integrations(
 @router.delete("/delete_app_integration", status_code=status.HTTP_200_OK)
 def delete_app_integration(
     id: UUID = Query(..., description="App integration UUID"),
-    claims=Depends(require_ee_admin_or_owner),
+    claims=Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    """Hard-delete a non-default integration. Admin/owner only."""
+    """Hard-delete a non-default integration. Any org member may delete."""
     svc = _get_service(claims, db)
     return svc.delete_app_integration(id)

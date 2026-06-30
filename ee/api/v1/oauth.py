@@ -1,6 +1,6 @@
 import time
 import urllib.parse
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from uuid import UUID
 
 import httpx
@@ -9,13 +9,16 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from core.api.v1.oauth import (
-    _create_pending_pkce_row,
+    _decode_pkce_state,
+    _encode_pkce_state,
     _resolve_pkce_state,
 )
+from core.models.oauth_connection import OAuthConnection
 from core.utils.pkce import pkce_pair
 from core.config import settings
 from core.database.session import get_db
 from core.services.oauth_providers import (
+    _row_by_slug,
     get_catalog,
     get_provider_config,
     get_supported_providers,
@@ -207,13 +210,14 @@ def authorize(
         "response_type": "code",
     }
 
-    # PKCE branch — see ``core/api/v1/oauth.py`` for the design notes.
+    # PKCE branch — see ``core/api/v1/oauth.py`` for the design notes. The
+    # verifier + identity ride through the encrypted ``state`` parameter so the
+    # callback can finish the handshake without writing a pending row up front.
     if config.get("use_pkce"):
         org_uuid = UUID(claims.org_id)
         user_uuid = UUID(str(claims.user_id))
         verifier, challenge = pkce_pair()
-        pending = _create_pending_pkce_row(db, org_uuid, user_uuid, provider, verifier)
-        params["state"] = str(pending.id)
+        params["state"] = _encode_pkce_state(verifier, org_uuid, user_uuid, provider)
         params["code_challenge"] = challenge
         params["code_challenge_method"] = "S256"
     else:
@@ -237,23 +241,33 @@ def callback(
     state: str = Query(..., description="State parameter with org_id:user_id:provider"),
     db: Session = Depends(get_db),
 ):
-    # Two ``state`` shapes are accepted:
-    #   1. UUID  → PKCE flow; the row carries verifier + org + user.
-    #   2. ``org_id:user_id:provider`` → legacy non-PKCE flow.
-    # Try (1) first; fall through to (2) if no pending row matches.
-    pending, verifier = _resolve_pkce_state(db, state, provider)
-    if pending:
-        org_id = pending.organization_id
-        user_id = pending.created_by_user_id
+    # Three ``state`` shapes are accepted, in priority order:
+    #   1. Fernet-encrypted JSON  → current PKCE flow; carries verifier + org + user.
+    #      The only shape new authorize requests emit.
+    #   2. UUID                    → legacy PKCE pending row (in-flight handshakes
+    #                                from before the stateless flow shipped).
+    #   3. ``org_id:user_id:provider`` → legacy non-PKCE flow.
+    pending: Optional[OAuthConnection] = None
+    verifier: Optional[str] = None
+    encoded = _decode_pkce_state(state, provider)
+    if encoded:
+        org_id = UUID(encoded["o"])
+        user_id = UUID(encoded["u"])
+        verifier = encoded["v"]
     else:
-        try:
-            org_id_str, user_id_str, state_provider = state.split(":")
-            org_id = UUID(org_id_str)
-            user_id = UUID(user_id_str)
-        except (ValueError, TypeError):
-            raise HTTPException(status_code=400, detail="Invalid state parameter")
-        if state_provider != provider:
-            raise HTTPException(status_code=400, detail="Provider mismatch in state")
+        pending, verifier = _resolve_pkce_state(db, state, provider)
+        if pending:
+            org_id = pending.organization_id
+            user_id = pending.created_by_user_id
+        else:
+            try:
+                org_id_str, user_id_str, state_provider = state.split(":")
+                org_id = UUID(org_id_str)
+                user_id = UUID(user_id_str)
+            except (ValueError, TypeError):
+                raise HTTPException(status_code=400, detail="Invalid state parameter")
+            if state_provider != provider:
+                raise HTTPException(status_code=400, detail="Provider mismatch in state")
 
     config = get_provider_config(db, org_id, provider)
     if not config:
@@ -315,6 +329,23 @@ def callback(
         except Exception:
             pass
 
+    # HubSpot doesn't expose an OIDC-style userinfo endpoint, so the generic
+    # block above can't capture the account email. Use the token-info endpoint
+    # instead — it accepts the access token in the URL path and returns the
+    # account email in the ``user`` field. Without this, every HubSpot
+    # connection shows up in the MCP / tool picker as just "HubSpot" with no
+    # way to tell two accounts apart.
+    if not user_email and provider == "hubspot":
+        try:
+            with httpx.Client() as client:
+                hubspot_info = client.get(
+                    f"https://api.hubapi.com/oauth/v1/access-tokens/{access_token}"
+                )
+                if hubspot_info.status_code == 200:
+                    user_email = hubspot_info.json().get("user")
+        except Exception:
+            pass
+
     svc = OAuthService(db, org_id=org_id)
     token_payload = {
         "access_token": access_token,
@@ -324,7 +355,7 @@ def callback(
         "user_email": user_email,
     }
     if pending:
-        # PKCE flow — promote the pending row in place (or fold into an
+        # Legacy PKCE pending row — promote it in place (or fold into an
         # existing duplicate). Routing through ``complete_pkce_connection``
         # avoids the duplicate-row bug ``create_connection``'s upsert hits
         # when the pending row lacks ``user_email``.
@@ -336,11 +367,16 @@ def callback(
             user_email=user_email,
         )
     else:
-        # Legacy / non-PKCE flow — the row didn't exist yet, so the upsert is
-        # the right tool (matches an existing row by user_email if present).
+        # Stateless PKCE *and* non-PKCE both arrive here — no row exists yet,
+        # so the upsert is the right tool (matches an existing row by
+        # user_email when present, otherwise inserts a new one). Resolve the
+        # catalog row up front so the new connection inherits its
+        # ``app_integration_id`` for the per-integration filter in the picker.
+        integration_row = _row_by_slug(db, org_id, provider)
         connection = svc.create_connection({
             "provider_slug": provider,
             "created_by_user_id": user_id,
+            "app_integration_id": integration_row.id if integration_row else None,
             **token_payload,
         })
 

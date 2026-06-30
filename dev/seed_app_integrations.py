@@ -31,8 +31,12 @@ from sqlalchemy.orm import sessionmaker
 # DATABASE_URL environment variable — never hardcode credentials in source.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-DATABASE_URL = "postgresql://neondb_owner:npg_HPjY5NERS7Uf@ep-crimson-boat-aq6kyekg-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+try:
+    from shared.config import settings
 
+    DATABASE_URL = settings.DATABASE_URL
+except Exception:
+    DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
     raise SystemExit(

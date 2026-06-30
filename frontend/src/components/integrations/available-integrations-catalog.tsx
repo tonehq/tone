@@ -1,6 +1,8 @@
 'use client';
 
+import IntegrationLogo from '@/components/integrations/integration-logo';
 import ProviderTile from '@/components/integrations/provider-tile';
+import { getProviderLogoUrl } from '@/components/service-providers/constants';
 import { ActionMenu, CustomButton } from '@/components/shared';
 import {
   API_KEY_PROVIDERS,
@@ -48,6 +50,9 @@ interface OAuthTile extends ProviderCardConfig {
   id?: string;
   /** Default (seeded) rows are protected from deletion. */
   isDefault?: boolean;
+  /** Admin-supplied logo URL from ``app_integrations.icon_url`` — takes
+   *  precedence over the static frontend registry. */
+  iconUrl?: string | null;
 }
 
 export default function AvailableIntegrationsCatalog({
@@ -88,20 +93,27 @@ export default function AvailableIntegrationsCatalog({
   // Build OAuth tiles directly from the DB-backed catalog — the previous
   // hardcoded fallback list was retired when ``OAUTH_PROVIDERS`` was emptied.
   const oauthGroups = useMemo(() => {
-    const source: OAuthTile[] = (catalog ?? []).map((p) => ({
-      key: p.slug,
-      name: p.display_name,
-      description: p.description,
-      icon: undefined,
-      iconBg: OAUTH_TILE_DEFAULTS.iconBg,
-      iconBorder: OAUTH_TILE_DEFAULTS.iconBorder,
-      accentColor: OAUTH_TILE_DEFAULTS.accentColor,
-      category: p.category as ProviderCardConfig['category'],
-      configured: p.configured,
-      scopeCount: p.scopes?.length ?? 0,
-      id: p.id,
-      isDefault: p.is_default,
-    }));
+    const source: OAuthTile[] = (catalog ?? []).map((p) => {
+      const resolvedLogoUrl = p.icon_url || getProviderLogoUrl(p.slug);
+      return {
+        key: p.slug,
+        name: p.display_name,
+        description: p.description,
+        icon: undefined,
+        // When a real brand mark is available, swap to a white plate so dark
+        // logos render correctly in both light + dark mode (mirrors the
+        // ``ProviderLogo`` styling used elsewhere).
+        iconBg: resolvedLogoUrl ? 'bg-white' : OAUTH_TILE_DEFAULTS.iconBg,
+        iconBorder: OAUTH_TILE_DEFAULTS.iconBorder,
+        accentColor: OAUTH_TILE_DEFAULTS.accentColor,
+        category: p.category as ProviderCardConfig['category'],
+        configured: p.configured,
+        scopeCount: p.scopes?.length ?? 0,
+        id: p.id,
+        isDefault: p.is_default,
+        iconUrl: p.icon_url ?? null,
+      };
+    });
 
     const grouped = new Map<string, OAuthTile[]>();
     for (const tile of source) {
@@ -125,7 +137,14 @@ export default function AvailableIntegrationsCatalog({
             {tiles.map((tile) => (
               <ProviderTile
                 key={`oauth-${tile.key}`}
-                icon={tile.icon}
+                icon={
+                  <IntegrationLogo
+                    slug={tile.key}
+                    iconUrl={tile.iconUrl}
+                    name={tile.name}
+                    imgSize={22}
+                  />
+                }
                 iconBg={tile.iconBg}
                 iconBorder={tile.iconBorder}
                 accentColor={tile.accentColor}
