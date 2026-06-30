@@ -11,8 +11,12 @@ body would never re-run there. The drop-then-create here converges every
 database to the same end state.
 
 Revision ID: b7c3f1a9d2e4
-Revises: a7b9c2e4f8d1
+Revises: a4c8e1f7b2d6
 Create Date: 2026-06-30
+
+Note: re-pointed onto the dev head (a4c8e1f7b2d6) when dev was merged into this
+branch, so the two migration heads collapse into one linear history that applies
+cleanly on top of the current DB revision.
 
 """
 from alembic import op
@@ -21,7 +25,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'b7c3f1a9d2e4'
-down_revision = 'a7b9c2e4f8d1'
+down_revision = 'a4c8e1f7b2d6'
 branch_labels = None
 depends_on = None
 
