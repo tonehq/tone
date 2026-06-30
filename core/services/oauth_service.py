@@ -595,6 +595,56 @@ class OAuthService(BaseService):
     def connection_response(self, connection: OAuthConnection) -> Dict[str, Any]:
         return connection.to_dict()
 
+    def complete_pkce_connection(
+        self,
+        pending: OAuthConnection,
+        token_data: Dict[str, Any],
+        provider: str,
+        user_id,
+        user_email: Optional[str],
+    ) -> OAuthConnection:
+        """Finalise a PKCE catalog OAuth handshake without creating duplicates.
+
+        At authorize time the PKCE flow creates a ``pending`` row to park the
+        verifier + ``app_integration_id``. That row has no ``user_email`` yet,
+        so :meth:`create_connection`'s ``(provider_slug, user_id, user_email)``
+        upsert filter can't find it — calling ``create_connection`` here would
+        therefore insert a *second* row and orphan the pending one (the bug
+        this method exists to prevent).
+
+        Resolution order:
+
+        1. If a pre-existing active row matches the same provider + user +
+           ``user_email``, the user is reconnecting. Update *that* row,
+           inherit ``app_integration_id`` from the pending row if it's
+           missing, and drop the pending scratchpad.
+        2. Otherwise the pending row IS the canonical connection — apply
+           tokens to it in place and clear the ``status="pending"`` marker.
+        """
+        duplicate: Optional[OAuthConnection] = None
+        if user_email:
+            duplicate = (
+                self.query(OAuthConnection)
+                .filter(
+                    OAuthConnection.provider_slug == provider,
+                    OAuthConnection.created_by_user_id == user_id,
+                    OAuthConnection.id != pending.id,
+                    OAuthConnection.public_metadata["user_email"].astext == user_email,
+                )
+                .first()
+            )
+
+        if duplicate:
+            if not duplicate.app_integration_id and pending.app_integration_id:
+                duplicate.app_integration_id = pending.app_integration_id
+            connection = self._apply_tokens(duplicate, token_data)
+            self.db.delete(pending)
+            self.db.commit()
+            return connection
+
+        connection = self._apply_tokens(pending, token_data)
+        return self.clear_pending_status(connection)
+
     def clear_pending_status(self, connection: OAuthConnection) -> OAuthConnection:
         """Drop the ``status='pending'`` marker from a connection's metadata.
 

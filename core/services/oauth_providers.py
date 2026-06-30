@@ -9,8 +9,9 @@ Secrets are resolved lazily from env vars referenced by the row's
 ``client_id_env_key`` / ``client_secret_env_key`` columns, mirroring the
 behaviour of the previous hardcoded catalog.
 
-The previous hardcoded ``OAUTH_PROVIDERS`` dict is preserved as a commented
-snapshot at the bottom of this file for reference; nothing reads it any more.
+All descriptors come from the ``app_integrations`` table — see
+``dev/seed_app_integrations.py`` for the seed shape and
+``core/models/app_integration.py`` for the column model.
 """
 
 from typing import Any, Dict, List, Optional
@@ -18,7 +19,6 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from core.models.app_integration import AppIntegration
-from core.utils.env_resolver import resolve_env
 
 # Grouping labels for the catalog UI. Kept here (constants only) so frontend-
 # adjacent code doesn't have to import a model just to namespace categories.
@@ -55,11 +55,13 @@ def _row_by_slug(db: Session, org_id, slug: str) -> Optional[AppIntegration]:
 def _row_to_config(row: AppIntegration) -> Dict[str, Any]:
     """Project a row into the dict shape OAuth flows expect.
 
-    Secrets (``client_id`` / ``client_secret``) come from env, **not** the DB.
-    Fields that aren't yet modelled as columns (``userinfo_url``,
-    ``scope_delimiter``, ``token_auth``) fall back to sane defaults — they
-    can be promoted to columns later without breaking callers.
+    Secrets (``client_id`` / ``client_secret``) come from the row's
+    encrypted blob — see :meth:`AppIntegration.credentials`. Fields that
+    aren't yet modelled as columns (``userinfo_url``, ``scope_delimiter``,
+    ``token_auth``) fall back to sane defaults; they can be promoted to
+    columns later without breaking callers.
     """
+    creds = row.credentials()
     return {
         "slug": row.slug,
         "display_name": row.display_name,
@@ -68,14 +70,14 @@ def _row_to_config(row: AppIntegration) -> Dict[str, Any]:
         "auth_type": row.auth_type,
         "auth_url": row.auth_url,
         "token_url": row.token_url,
-        "userinfo_url": None,
+        "userinfo_url": row.userinfo_url,
         "scopes": list(row.scopes or []),
         "scope_delimiter": " ",
         "use_pkce": bool(row.pkce_required),
         "token_auth": "body",
         "extra_authorize_params": dict(row.extra_auth_params or {}),
-        "client_id": resolve_env(row.client_id_env_key) or None,
-        "client_secret": resolve_env(row.client_secret_env_key) or None,
+        "client_id": creds.get("client_id"),
+        "client_secret": creds.get("client_secret"),
     }
 
 
@@ -133,6 +135,11 @@ def get_catalog(db: Session, org_id) -> List[Dict[str, Any]]:
     )
     return [
         {
+            # ``id`` + ``is_default`` are surfaced so the integrations grid can
+            # route to the edit page and decide whether the Delete option is
+            # available (default rows are seed-managed and protected).
+            "id": str(r.id),
+            "is_default": bool(r.is_default),
             "slug": r.slug,
             "display_name": r.display_name,
             "description": r.description or "",
@@ -153,42 +160,7 @@ def provider_for_tool_type(tool_type: Optional[str]) -> Optional[str]:
     return TOOL_TYPE_TO_PROVIDER.get(tool_type)
 
 
-# ──────────────────────────────────────────────────────────────────────
-# Hardcoded snapshot (kept for reference only — nothing reads this).
-# Replaced by the DB-backed lookups above, which read the same descriptors
-# from ``app_integrations`` rows seeded by ``dev/seed_app_integrations.py``.
-# ──────────────────────────────────────────────────────────────────────
-# _GOOGLE_USERINFO = "https://www.googleapis.com/oauth2/v2/userinfo"
-#
-# OAUTH_PROVIDERS: Dict[str, Dict[str, Any]] = {
-#     "google_calendar": {
-#         "display_name": "Google Calendar",
-#         "description": "Create events, check availability, and manage schedules from voice calls.",
-#         "category": CATEGORY_GOOGLE,
-#         "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
-#         "token_url": "https://oauth2.googleapis.com/token",
-#         "userinfo_url": _GOOGLE_USERINFO,
-#         "scopes": [
-#             "https://www.googleapis.com/auth/calendar",
-#             "https://www.googleapis.com/auth/userinfo.email",
-#         ],
-#         "extra_authorize_params": {"access_type": "offline", "prompt": "consent"},
-#         "client_id": lambda: settings.GOOGLE_CLIENT_ID,
-#         "client_secret": lambda: settings.GOOGLE_CLIENT_SECRET,
-#     },
-#     "google_sheets": {
-#         "display_name": "Google Sheets",
-#         "description": "Read and write spreadsheet data during conversations.",
-#         "category": CATEGORY_GOOGLE,
-#         "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
-#         "token_url": "https://oauth2.googleapis.com/token",
-#         "userinfo_url": _GOOGLE_USERINFO,
-#         "scopes": [
-#             "https://www.googleapis.com/auth/spreadsheets",
-#             "https://www.googleapis.com/auth/userinfo.email",
-#         ],
-#         "extra_authorize_params": {"access_type": "offline", "prompt": "consent"},
-#         "client_id": lambda: settings.GOOGLE_CLIENT_ID,
-#         "client_secret": lambda: settings.GOOGLE_CLIENT_SECRET,
-#     },
-# }
+# Source of truth for these descriptors now lives in
+# ``dev/seed_app_integrations.py`` (seeded into ``app_integrations``). The
+# previous hardcoded ``OAUTH_PROVIDERS`` dict was removed once the DB-backed
+# lookups above became the only readers.

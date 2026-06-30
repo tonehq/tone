@@ -38,10 +38,14 @@ class _AppIntegrationBase(BaseModel):
     auth_type: Optional[str] = None
     auth_url: Optional[str] = None
     token_url: Optional[str] = None
+    userinfo_url: Optional[str] = None
     scopes: Optional[List[str]] = None
     extra_auth_params: Optional[Dict[str, Any]] = None
-    client_id_env_key: Optional[str] = None
-    client_secret_env_key: Optional[str] = None
+    # Write-only — secrets are persisted encrypted on the row and never
+    # echoed back. Supplying ``None`` (or omitting) leaves the stored value
+    # untouched; supplying a string overwrites that credential.
+    client_id: Optional[str] = None
+    client_secret: Optional[str] = None
     pkce_required: Optional[bool] = None
     is_enabled: Optional[bool] = None
     sort_order: Optional[int] = None

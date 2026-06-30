@@ -1,5 +1,4 @@
-import { GoogleIcon } from '@/components/icons/google';
-import { Phone, Radio, Sheet, Video } from 'lucide-react';
+import { Phone, Radio, Video } from 'lucide-react';
 
 export type ProviderCategory = 'google' | 'productivity' | 'dev_crm';
 
@@ -21,28 +20,14 @@ export interface ProviderCardConfig {
   category?: ProviderCategory;
 }
 
-export const OAUTH_PROVIDERS: ProviderCardConfig[] = [
-  {
-    key: 'google_calendar',
-    name: 'Google Calendar',
-    description: 'Create events, check availability, and manage schedules from voice calls.',
-    icon: <GoogleIcon className="size-5" />,
-    iconBg: 'bg-white dark:bg-white/10',
-    iconBorder: 'border-border/50 shadow-sm dark:shadow-none',
-    accentColor: 'bg-blue-500',
-    category: 'google',
-  },
-  {
-    key: 'google_sheets',
-    name: 'Google Sheets',
-    description: 'Read and write spreadsheet data during conversations.',
-    icon: <Sheet size={20} className="text-emerald-600 dark:text-emerald-400" />,
-    iconBg: 'bg-emerald-50 dark:bg-emerald-500/10',
-    iconBorder: 'border-emerald-200/50 dark:border-emerald-500/20 shadow-sm dark:shadow-none',
-    accentColor: 'bg-emerald-500',
-    category: 'google',
-  },
-];
+/**
+ * OAuth integrations are now driven entirely by the ``app_integrations`` DB
+ * catalog (see ``dev/seed_app_integrations.py``). This list intentionally
+ * stays empty — kept exported only to preserve the ``ProviderCardConfig[]``
+ * shape that older consumers import. New visual configs for OAuth providers
+ * belong in the DB (``icon_url``), not here.
+ */
+export const OAUTH_PROVIDERS: ProviderCardConfig[] = [];
 
 export const API_KEY_PROVIDERS: ProviderCardConfig[] = [
   {

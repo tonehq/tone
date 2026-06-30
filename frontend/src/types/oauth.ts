@@ -16,6 +16,12 @@ export interface OAuthPublicMetadata {
 
 /** A provider entry from the secret-free `/oauth/catalog` endpoint. */
 export interface OAuthCatalogProvider {
+  /** ``app_integrations.id`` — used by the catalog grid to navigate to the
+   * edit page for inline edit/delete actions. */
+  id: string;
+  /** Default (seeded) rows are protected from deletion server-side; the UI
+   * hides the Delete option for them. */
+  is_default: boolean;
   slug: string;
   display_name: string;
   description: string;

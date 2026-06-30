@@ -15,11 +15,19 @@
  * :file:`frontend/src/components/mcp/MCPFormPage.tsx`.
  */
 
-import { CustomButton, SelectInput, TextAreaField, TextInput } from '@/components/shared';
+import {
+  CustomButton,
+  CustomModal,
+  SelectInput,
+  TextAreaField,
+  TextInput,
+} from '@/components/shared';
 import CheckboxField from '@/components/shared/CheckboxField';
+import { BACKEND_URL } from '@/constants';
 import { useGoBack } from '@/hooks/useGoBack';
 import {
   createAppIntegration,
+  deleteAppIntegration,
   getAppIntegration,
   updateAppIntegration,
 } from '@/services/appIntegrationService';
@@ -30,7 +38,18 @@ import type {
 } from '@/types/appIntegration';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
-import { ArrowLeft, KeyRound, Loader2, Save, Settings2, Sparkles } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  Copy,
+  KeyRound,
+  Link2,
+  Loader2,
+  Save,
+  Settings2,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
@@ -44,9 +63,13 @@ interface FormState {
   auth_type: AppIntegrationAuthType;
   auth_url: string;
   token_url: string;
+  userinfo_url: string;
   scopes: string; // comma- or newline-separated; serialized to string[] on submit
-  client_id_env_key: string;
-  client_secret_env_key: string;
+  /** Plain credential value entered by the admin. Posted to the API as a
+   * write-only field; the server never echoes it back. On edit mode the
+   * inputs start empty — leaving them blank preserves the stored value. */
+  client_id: string;
+  client_secret: string;
   pkce_required: boolean;
   is_enabled: boolean;
   sort_order: number;
@@ -68,9 +91,10 @@ const DEFAULT_STATE: FormState = {
   auth_type: 'oauth',
   auth_url: '',
   token_url: '',
+  userinfo_url: '',
   scopes: '',
-  client_id_env_key: '',
-  client_secret_env_key: '',
+  client_id: '',
+  client_secret: '',
   pkce_required: true,
   is_enabled: true,
   sort_order: 100,
@@ -118,6 +142,11 @@ export default function AppIntegrationFormPage({ integrationId }: AppIntegration
 
   const [loading, setLoading] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  // Loaded row metadata — used to gate the Delete button (default rows are
+  // protected by the backend) and to show a friendly name in the confirm modal.
+  const [loadedRow, setLoadedRow] = useState<AppIntegration | null>(null);
 
   const { control, handleSubmit, reset } = useForm<FormState>({
     defaultValues: DEFAULT_STATE,
@@ -133,6 +162,7 @@ export default function AppIntegrationFormPage({ integrationId }: AppIntegration
     getAppIntegration(integrationId)
       .then((row) => {
         if (cancelled) return;
+        setLoadedRow(row);
         reset(formStateFromRow(row));
       })
       .catch((err) => {
@@ -149,6 +179,7 @@ export default function AppIntegrationFormPage({ integrationId }: AppIntegration
   // Conditionally show OAuth-specific fields. ``useWatch`` (vs ``watch()``)
   // keeps the parent render-list stable; only the dependent block re-renders.
   const authType = useWatch({ control, name: 'auth_type' });
+  const watchedSlug = useWatch({ control, name: 'slug' });
   const isOAuth = authType === 'oauth';
 
   const onSave = async (values: FormState) => {
@@ -171,6 +202,30 @@ export default function AppIntegrationFormPage({ integrationId }: AppIntegration
   };
 
   const onBack = useGoBack('/settings/integrations');
+
+  /**
+   * Delete the integration. Backend already rejects ``is_default`` rows with a
+   * clear 400; we additionally hide the button for those, so this only fires
+   * for admin-created rows.
+   */
+  const onDelete = async () => {
+    if (!integrationId) return;
+    setDeleting(true);
+    try {
+      await deleteAppIntegration(integrationId);
+      showToast.success('Integration deleted');
+      router.push('/settings/integrations');
+    } catch (err) {
+      handleApiError(err);
+    } finally {
+      setDeleting(false);
+      setConfirmDeleteOpen(false);
+    }
+  };
+
+  // Default rows are seed-managed (Google, HubSpot, …); the backend protects
+  // them from deletion. Mirror that here so the button doesn't appear at all.
+  const canDelete = isEditMode && !!loadedRow && !loadedRow.is_default;
 
   const headerTitle = useMemo(
     () => (isEditMode ? 'Edit integration' : 'New integration'),
@@ -201,6 +256,18 @@ export default function AppIntegrationFormPage({ integrationId }: AppIntegration
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
+          {canDelete && (
+            <CustomButton
+              type="default"
+              size="sm"
+              onClick={() => setConfirmDeleteOpen(true)}
+              disabled={saving || deleting}
+              icon={<Trash2 size={13} className="text-destructive" />}
+              className="text-destructive"
+            >
+              Delete
+            </CustomButton>
+          )}
           <CustomButton type="default" size="sm" onClick={onBack} disabled={saving}>
             Cancel
           </CustomButton>
@@ -245,6 +312,11 @@ export default function AppIntegrationFormPage({ integrationId }: AppIntegration
                   isRequired
                   disabled={isEditMode /* slug is the public identifier — discourage changes */}
                   className="font-mono"
+                  helperText={
+                    isEditMode
+                      ? "Locked — it's part of the callback URL you registered with the provider."
+                      : 'Used in the callback URL. Choose carefully — cannot be changed later.'
+                  }
                 />
                 <TextInput
                   name="display_name"
@@ -293,6 +365,10 @@ export default function AppIntegrationFormPage({ integrationId }: AppIntegration
 
                 {isOAuth && (
                   <div className="space-y-4 rounded-md border border-border/60 bg-muted/30 p-3.5">
+                    {/* Tone's callback URL — admin must paste this into the
+                        provider's OAuth app so the redirect after login is
+                        allowed. Updates live as the slug field changes. */}
+                    <CallbackUrlField slug={watchedSlug} />
                     <TextInput
                       name="auth_url"
                       control={control}
@@ -304,6 +380,13 @@ export default function AppIntegrationFormPage({ integrationId }: AppIntegration
                       control={control}
                       label="Token URL"
                       placeholder="https://provider.com/oauth/token"
+                    />
+                    <TextInput
+                      name="userinfo_url"
+                      control={control}
+                      label="User info URL"
+                      placeholder="https://provider.com/oauth/userinfo"
+                      helperText="Optional — called after login to capture the connecting user's email."
                     />
                     <TextAreaField
                       name="scopes"
@@ -329,20 +412,24 @@ export default function AppIntegrationFormPage({ integrationId }: AppIntegration
               >
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <TextInput
-                    name="client_id_env_key"
+                    name="client_id"
                     control={control}
-                    label="Client ID env var"
-                    placeholder="HUBSPOT_MCP_CLIENT_ID"
-                    helperText="Name of the env var holding the client_id."
+                    type="password"
+                    label="Client ID"
+                    placeholder={isEditMode ? '••••••••  (leave blank to keep current)' : ''}
+                    helperText="Encrypted at rest. Paste the value from the provider's dev portal."
                     className="font-mono"
+                    autoComplete="off"
                   />
                   <TextInput
-                    name="client_secret_env_key"
+                    name="client_secret"
                     control={control}
-                    label="Client Secret env var"
-                    placeholder="HUBSPOT_MCP_CLIENT_SECRET"
-                    helperText="Optional for public PKCE clients."
+                    type="password"
+                    label="Client Secret"
+                    placeholder={isEditMode ? '••••••••  (leave blank to keep current)' : ''}
+                    helperText="Optional for public PKCE clients. Encrypted at rest."
                     className="font-mono"
+                    autoComplete="off"
                   />
                 </div>
                 <TextAreaField
@@ -369,6 +456,22 @@ export default function AppIntegrationFormPage({ integrationId }: AppIntegration
           )}
         </div>
       </div>
+
+      {/* Delete confirmation — gated above by ``canDelete`` so it never opens
+          for default (seeded) rows the backend would reject anyway. */}
+      <CustomModal
+        open={confirmDeleteOpen}
+        onClose={() => setConfirmDeleteOpen(false)}
+        title={`Delete ${loadedRow?.display_name ?? 'integration'}?`}
+        description={
+          'This removes the integration from the catalog. Existing OAuth connections will be unlinked but kept. This action cannot be undone.'
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        confirmType="primary"
+        confirmLoading={deleting}
+        onConfirm={onDelete}
+      />
     </div>
   );
 }
@@ -376,6 +479,62 @@ export default function AppIntegrationFormPage({ integrationId }: AppIntegration
 // ─────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────
+
+interface CallbackUrlFieldProps {
+  /** Current value of the slug field — used to build the per-integration URL.
+   * Updated reactively via ``useWatch`` so the URL stays in sync with typing. */
+  slug: string;
+}
+
+function CallbackUrlField({ slug }: CallbackUrlFieldProps) {
+  const [copied, setCopied] = useState(false);
+
+  // BACKEND_URL already includes the ``/api/v1`` prefix, so we just append
+  // ``/oauth/{slug}/callback``. Falls back to a placeholder slug when the
+  // admin hasn't typed one yet so the URL shape is still demonstrable.
+  const displaySlug = slug?.trim() || '{slug}';
+  const callbackUrl = `${BACKEND_URL}/oauth/${displaySlug}/callback`;
+  const canCopy = Boolean(slug?.trim());
+
+  const handleCopy = async () => {
+    if (!canCopy) return;
+    try {
+      await navigator.clipboard.writeText(callbackUrl);
+      setCopied(true);
+      showToast.success('Callback URL copied');
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      showToast.error('Could not access the clipboard');
+    }
+  };
+
+  return (
+    <div className="rounded-md border border-violet-200/60 bg-violet-50/40 p-3 dark:border-violet-500/20 dark:bg-violet-500/[0.06]">
+      <div className="flex items-center gap-2">
+        <Link2 size={13} className="text-violet-500" />
+        <p className="text-[12.5px] font-semibold text-foreground">Callback URL</p>
+      </div>
+      <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+        Add this exact URL to your provider&apos;s OAuth app as an allowed redirect URL.
+      </p>
+      <div className="mt-2.5 flex items-stretch gap-1.5">
+        <code className="flex-1 truncate rounded-md border border-border/60 bg-background px-2.5 py-1.5 font-mono text-[11.5px] text-foreground">
+          {callbackUrl}
+        </code>
+        <CustomButton
+          type="default"
+          size="sm"
+          onClick={handleCopy}
+          disabled={!canCopy}
+          icon={copied ? <Check size={12} /> : <Copy size={12} />}
+          aria-label="Copy callback URL"
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </CustomButton>
+      </div>
+    </div>
+  );
+}
 
 interface SectionProps {
   icon: React.ReactNode;
@@ -413,9 +572,12 @@ function formStateFromRow(row: AppIntegration): FormState {
     auth_type: row.auth_type ?? 'oauth',
     auth_url: row.auth_url ?? '',
     token_url: row.token_url ?? '',
+    userinfo_url: row.userinfo_url ?? '',
     scopes: (row.scopes ?? []).join(', '),
-    client_id_env_key: row.client_id_env_key ?? '',
-    client_secret_env_key: row.client_secret_env_key ?? '',
+    // Secrets are never returned by the API — leave the inputs empty so the
+    // admin re-types only what they want to change.
+    client_id: '',
+    client_secret: '',
     pkce_required: row.pkce_required,
     is_enabled: row.is_enabled,
     sort_order: row.sort_order ?? 100,
@@ -462,9 +624,12 @@ function serializePayload(values: FormState): AppIntegrationCreatePayload {
     icon_url: nullable(values.icon_url),
     auth_url: nullable(values.auth_url),
     token_url: nullable(values.token_url),
+    userinfo_url: nullable(values.userinfo_url),
     scopes: scopes.length ? scopes : null,
-    client_id_env_key: nullable(values.client_id_env_key),
-    client_secret_env_key: nullable(values.client_secret_env_key),
+    // Only POST credential fields when the admin actually typed something —
+    // blank means "keep what's stored".
+    client_id: nullable(values.client_id),
+    client_secret: nullable(values.client_secret),
     pkce_required: values.pkce_required,
     is_enabled: values.is_enabled,
     sort_order: Number(values.sort_order) || 100,

@@ -316,20 +316,33 @@ def callback(
             pass
 
     svc = OAuthService(db, org_id=org_id)
-    connection = svc.create_connection({
-        "provider_slug": provider,
+    token_payload = {
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_expiry": token_expiry,
         "scopes": granted_scopes,
         "user_email": user_email,
-        "created_by_user_id": user_id,
-    })
-
-    # PKCE path stamps ``status="pending"`` on the pre-callback row; promote
-    # it to active now that the token exchange has succeeded so the
-    # connection-picker stops filtering this row out.
-    svc.clear_pending_status(connection)
+    }
+    if pending:
+        # PKCE flow — promote the pending row in place (or fold into an
+        # existing duplicate). Routing through ``complete_pkce_connection``
+        # avoids the duplicate-row bug ``create_connection``'s upsert hits
+        # when the pending row lacks ``user_email``.
+        connection = svc.complete_pkce_connection(
+            pending=pending,
+            token_data=token_payload,
+            provider=provider,
+            user_id=user_id,
+            user_email=user_email,
+        )
+    else:
+        # Legacy / non-PKCE flow — the row didn't exist yet, so the upsert is
+        # the right tool (matches an existing row by user_email if present).
+        connection = svc.create_connection({
+            "provider_slug": provider,
+            "created_by_user_id": user_id,
+            **token_payload,
+        })
 
     frontend_url = settings.APPLICATION_URL.rstrip("/")
     return RedirectResponse(

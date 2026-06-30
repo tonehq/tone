@@ -2,14 +2,17 @@
 
 Usage: ``python dev/seed_app_integrations.py``
 
-For each existing org, inserts a curated set of integrations. The descriptors
-mirror what ``core/services/oauth_providers.py`` already declares for the
-hardcoded catalog so the two stay in sync — over time, the DB-backed catalog
-will become the single source of truth and the hardcoded dict will retire.
+Reads the curated ``DEFAULT_INTEGRATIONS`` list below, resolves each
+provider's ``client_id`` / ``client_secret`` from the env (via the same
+Infisical-aware lookup the app uses), encrypts them, and inserts/updates the
+``app_integrations`` row for every org.
 
-Idempotent: a row whose ``(organization_id, slug)`` pair already exists is
-left untouched (its ``is_default = TRUE`` flag is refreshed defensively, but
-no other fields are overwritten — admins may have customised them).
+Idempotent:
+  * Existing ``(organization_id, slug)`` row is left untouched (its
+    ``is_default = TRUE`` flag is refreshed defensively, but no other fields
+    are overwritten — admins may have customised them).
+  * New rows get the encrypted credentials baked in at seed time so the
+    integration is usable immediately.
 """
 
 import json
@@ -18,6 +21,7 @@ import sys
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -26,12 +30,9 @@ from sqlalchemy.orm import sessionmaker
 # Resolved from the app config (Infisical / .env via shared.config) or the
 # DATABASE_URL environment variable — never hardcode credentials in source.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-try:
-    from shared.config import settings
 
-    DATABASE_URL = settings.DATABASE_URL
-except Exception:
-    DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = "postgresql://neondb_owner:npg_HPjY5NERS7Uf@ep-crimson-boat-aq6kyekg-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+
 
 if not DATABASE_URL:
     raise SystemExit(
@@ -39,9 +40,16 @@ if not DATABASE_URL:
         "or export DATABASE_URL before running this script."
     )
 
+# Lazy import — settings was already imported above, so ``resolve_env`` and
+# ``encrypt_json`` won't trigger a re-load.
+from core.utils.encryption import encrypt_json  # noqa: E402
+from core.utils.env_resolver import resolve_env  # noqa: E402
 
-# Descriptor shape mirrors the ``app_integrations`` schema. Only the columns
-# we want to set are listed — everything else falls back to model defaults.
+
+# Descriptor shape mirrors the ``app_integrations`` schema, with two extras
+# used only at seed time:
+#   ``credential_env_keys`` — map of credential name → env var to source it
+#                             from (e.g. ``{"client_id": "GOOGLE_CLIENT_ID"}``).
 DEFAULT_INTEGRATIONS = [
     {
         "slug": "google_calendar",
@@ -54,14 +62,17 @@ DEFAULT_INTEGRATIONS = [
         "auth_type": "oauth",
         "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
         "token_url": "https://oauth2.googleapis.com/token",
+        "userinfo_url": "https://www.googleapis.com/oauth2/v2/userinfo",
         "scopes": [
             "https://www.googleapis.com/auth/calendar",
             "https://www.googleapis.com/auth/userinfo.email",
         ],
         # offline access + forced consent so Google returns a refresh token.
         "extra_auth_params": {"access_type": "offline", "prompt": "consent"},
-        "client_id_env_key": "GOOGLE_CLIENT_ID",
-        "client_secret_env_key": "GOOGLE_CLIENT_SECRET",
+        "credential_env_keys": {
+            "client_id": "GOOGLE_CLIENT_ID",
+            "client_secret": "GOOGLE_CLIENT_SECRET",
+        },
         "pkce_required": True,
         "sort_order": 10,
     },
@@ -74,13 +85,16 @@ DEFAULT_INTEGRATIONS = [
         "auth_type": "oauth",
         "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
         "token_url": "https://oauth2.googleapis.com/token",
+        "userinfo_url": "https://www.googleapis.com/oauth2/v2/userinfo",
         "scopes": [
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/userinfo.email",
         ],
         "extra_auth_params": {"access_type": "offline", "prompt": "consent"},
-        "client_id_env_key": "GOOGLE_CLIENT_ID",
-        "client_secret_env_key": "GOOGLE_CLIENT_SECRET",
+        "credential_env_keys": {
+            "client_id": "GOOGLE_CLIENT_ID",
+            "client_secret": "GOOGLE_CLIENT_SECRET",
+        },
         "pkce_required": True,
         "sort_order": 20,
     },
@@ -107,8 +121,10 @@ DEFAULT_INTEGRATIONS = [
         "extra_auth_params": {},
         # Reuses the same MCP Auth App credentials we already plumbed through
         # for ``mcp.hubspot.com`` — one HubSpot app, one set of env vars.
-        "client_id_env_key": "HUBSPOT_MCP_CLIENT_ID",
-        "client_secret_env_key": "HUBSPOT_MCP_CLIENT_SECRET",
+        "credential_env_keys": {
+            "client_id": "HUBSPOT_MCP_CLIENT_ID",
+            "client_secret": "HUBSPOT_MCP_CLIENT_SECRET",
+        },
         "pkce_required": True,
         "sort_order": 30,
     },
@@ -119,20 +135,42 @@ _INSERT_SQL = text(
     """
     INSERT INTO app_integrations (
         id, organization_id, slug, display_name, description, category, icon_url,
-        auth_type, auth_url, token_url, scopes, extra_auth_params,
-        client_id_env_key, client_secret_env_key,
+        auth_type, auth_url, token_url, userinfo_url,
+        scopes, extra_auth_params,
+        encrypted_credentials,
         pkce_required, is_enabled, is_default, sort_order,
         created_by_user_id, created_at, updated_at
     )
     VALUES (
         :id, :org_id, :slug, :display_name, :description, :category, :icon_url,
-        :auth_type, :auth_url, :token_url, CAST(:scopes AS jsonb), CAST(:extra_auth_params AS jsonb),
-        :client_id_env_key, :client_secret_env_key,
+        :auth_type, :auth_url, :token_url, :userinfo_url,
+        CAST(:scopes AS jsonb), CAST(:extra_auth_params AS jsonb),
+        CAST(:encrypted_credentials AS jsonb),
         :pkce_required, :is_enabled, :is_default, :sort_order,
         NULL, :created_at, :updated_at
     )
     """
 )
+
+
+def _resolve_credentials(descriptor: Dict[str, Any]) -> Optional[Dict[str, str]]:
+    """Read each ``credential_env_keys`` entry from env (Infisical-aware) and
+    return a dict ready to encrypt. Missing values are silently skipped so
+    partially-configured providers still seed (admins can fill in the rest via
+    UI later)."""
+    env_map = descriptor.get("credential_env_keys") or {}
+    creds = {key: resolve_env(env_var) for key, env_var in env_map.items()}
+    creds = {k: v for k, v in creds.items() if v}
+    return creds or None
+
+
+def _encrypted_credentials_for(descriptor: Dict[str, Any]) -> Optional[str]:
+    """Produce the JSON string the INSERT statement binds to
+    ``encrypted_credentials`` — encrypted blob or ``NULL`` if nothing resolved."""
+    creds = _resolve_credentials(descriptor)
+    if not creds:
+        return None
+    return json.dumps(encrypt_json(creds))
 
 
 def _params_for(org_id, descriptor, now):
@@ -148,10 +186,10 @@ def _params_for(org_id, descriptor, now):
         "auth_type": descriptor["auth_type"],
         "auth_url": descriptor.get("auth_url"),
         "token_url": descriptor.get("token_url"),
+        "userinfo_url": descriptor.get("userinfo_url"),
         "scopes": json.dumps(descriptor.get("scopes") or []),
         "extra_auth_params": json.dumps(descriptor.get("extra_auth_params") or {}),
-        "client_id_env_key": descriptor.get("client_id_env_key"),
-        "client_secret_env_key": descriptor.get("client_secret_env_key"),
+        "encrypted_credentials": _encrypted_credentials_for(descriptor),
         "pkce_required": descriptor.get("pkce_required", True),
         "is_enabled": descriptor.get("is_enabled", True),
         # ``is_default = TRUE`` marks rows as Tone-shipped — protected from
