@@ -3,19 +3,40 @@ import axiosInstance from '@/utils/axios';
 
 export interface OAuthListParams {
   provider_slug?: string | null;
+  /** When set, limits results to connections linked to this app_integrations row. */
+  app_integration_id?: string | null;
 }
 
 export const listOAuthConnections = async (
   params: OAuthListParams = {},
 ): Promise<OAuthConnection[]> => {
-  const body = { provider_slug: params.provider_slug ?? null };
+  const body = {
+    provider_slug: params.provider_slug ?? null,
+    app_integration_id: params.app_integration_id ?? null,
+  };
   const { data } = await axiosInstance.post<OAuthConnection[]>('/oauth/list', body);
   return data ?? [];
 };
 
-export const getOAuthConnections = async (provider?: string): Promise<OAuthConnection[]> => {
+export interface GetOAuthConnectionsParams {
+  provider?: string;
+  app_integration_id?: string;
+}
+
+export const getOAuthConnections = async (
+  params: GetOAuthConnectionsParams | string = {},
+): Promise<OAuthConnection[]> => {
+  // Back-compat: callers used to pass a single ``provider`` string.
+  const query =
+    typeof params === 'string'
+      ? { provider: params }
+      : {
+          ...(params.provider ? { provider: params.provider } : {}),
+          ...(params.app_integration_id ? { app_integration_id: params.app_integration_id } : {}),
+        };
+
   const { data } = await axiosInstance.get<OAuthConnection[]>('/oauth/connections', {
-    params: provider ? { provider } : undefined,
+    params: Object.keys(query).length ? query : undefined,
   });
   return data;
 };
@@ -56,10 +77,16 @@ export const discoverMcpOAuth = async (
   serverUrl: string,
   label?: string,
   returnTo?: string,
+  appIntegrationId?: string,
 ): Promise<string> => {
   const { data } = await axiosInstance.post<{ auth_url: string; connection_id: string }>(
     '/oauth/mcp/discover',
-    { server_url: serverUrl, label, return_to: returnTo },
+    {
+      server_url: serverUrl,
+      label,
+      return_to: returnTo,
+      app_integration_id: appIntegrationId ?? null,
+    },
   );
   return data.auth_url;
 };

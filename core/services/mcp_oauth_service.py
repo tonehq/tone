@@ -19,9 +19,6 @@ The in-flight handshake is persisted on a *pending* ``OAuthConnection`` row (pro
 row IS the handshake store, and becomes the live credential once the callback completes.
 """
 
-import base64
-import hashlib
-import secrets
 from typing import Any, Dict, Optional, Tuple
 from urllib.parse import urlencode, urljoin, urlparse
 from uuid import UUID
@@ -34,6 +31,7 @@ from core.models.oauth_connection import OAuthConnection
 from core.services.base import BaseService
 from core.utils.auth_helpers import coerce_uuid
 from core.utils.encryption import decrypt_json, encrypt_json
+from core.utils.pkce import pkce_pair as _pkce_pair
 
 # A client we dynamically register identifies itself with these defaults.
 _CLIENT_NAME = "Tone Voice Agent"
@@ -86,14 +84,6 @@ def _safe_return_path(return_to: Optional[str]) -> Optional[str]:
     if candidate.startswith("/") and not candidate.startswith("//") and "://" not in candidate:
         return candidate
     return None
-
-
-def _pkce_pair() -> Tuple[str, str]:
-    verifier = base64.urlsafe_b64encode(secrets.token_bytes(48)).decode().rstrip("=")
-    challenge = (
-        base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
-    )
-    return verifier, challenge
 
 
 class McpOAuthService(BaseService):
@@ -216,11 +206,16 @@ class McpOAuthService(BaseService):
         created_by_user_id,
         label: Optional[str] = None,
         return_to: Optional[str] = None,
+        app_integration_id: Optional[str] = None,
     ) -> Dict[str, str]:
         """Run discovery + DCR, persist a pending connection, return the authorize URL.
 
         ``return_to`` is an optional in-app path the callback should send the user back to (e.g. the
         MCP form they launched discovery from). Only a safe relative path is honoured.
+
+        ``app_integration_id`` records which catalog entry this connection
+        belongs to, so downstream forms (MCP / Tool create) can filter the
+        connection picker by integration.
         """
         created_by = coerce_uuid(created_by_user_id)
         if not created_by:
@@ -228,6 +223,7 @@ class McpOAuthService(BaseService):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="created_by_user_id (UUID) is required",
             )
+        integration_uuid = coerce_uuid(app_integration_id) if app_integration_id else None
 
         resource = _canonical_resource(server_url)
         meta = self._discover_metadata(server_url)
@@ -276,6 +272,10 @@ class McpOAuthService(BaseService):
             connection.auth_type = "oauth"
             connection.encrypted_credentials = encrypted_credentials
             connection.public_metadata = public_metadata
+            # Only overwrite the integration link when the caller supplied one —
+            # avoids clearing a previously-set value on reconnect.
+            if integration_uuid is not None:
+                connection.app_integration_id = integration_uuid
         else:
             connection = OAuthConnection(
                 organization_id=self.org_id,
@@ -285,6 +285,7 @@ class McpOAuthService(BaseService):
                 encrypted_credentials=encrypted_credentials,
                 public_metadata=public_metadata,
                 created_by_user_id=created_by,
+                app_integration_id=integration_uuid,
             )
             self.db.add(connection)
         self.db.commit()

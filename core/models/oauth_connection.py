@@ -15,6 +15,7 @@ class OAuthConnection(OrgScopedModel):
     encrypted_credentials = Column(JSONB, nullable=True)
     public_metadata = Column(JSONB, nullable=True)
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    app_integration_id = Column(UUID(as_uuid=True), ForeignKey("app_integrations.id", ondelete="SET NULL"), nullable=True)
 
     def to_dict(self) -> Dict[str, Any]:
         """Public response shape. Never includes ``encrypted_credentials``."""
@@ -25,6 +26,7 @@ class OAuthConnection(OrgScopedModel):
             "auth_type": self.auth_type,
             "public_metadata": self.public_metadata or {},
             "created_by_user_id": str(self.created_by_user_id) if self.created_by_user_id else None,
+            "app_integration_id": str(self.app_integration_id) if self.app_integration_id else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
