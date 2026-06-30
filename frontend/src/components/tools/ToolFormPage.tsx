@@ -53,6 +53,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   const [metaData, setMetaData] = useState<Record<string, string>>({});
   const [builtInAuthConfig, setBuiltInAuthConfig] = useState<Record<string, string>>({});
   const [oauthConnectionId, setOauthConnectionId] = useState<string | null>(null);
+  const [appIntegrationId, setAppIntegrationId] = useState<string | null>(null);
   const [toolRecord, setToolRecord] = useState<Tool | null>(null);
 
   const [loading, setLoading] = useState(isEditMode);
@@ -85,6 +86,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
       setMetaData((tool.meta_data ?? {}) as Record<string, string>);
       setBuiltInAuthConfig((tool.auth_config ?? {}) as Record<string, string>);
       setOauthConnectionId(tool.oauth_connection_id ?? null);
+      setAppIntegrationId(tool.app_integration_id ?? null);
       setSaved(true);
     } catch (error) {
       handleApiError(error);
@@ -110,6 +112,10 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
       .finally(() => setLoading(false));
   }, [templateId, isEditMode]);
 
+  // OAuth-backed custom tools resolve credentials from the linked connection
+  // at call time, so they never carry inline ``auth_config`` — return ``null``
+  // for both ``oauth`` and ``none`` to keep stale fields from leaking into
+  // the payload when the user switches auth types.
   const buildAuthConfig = useCallback((): Record<string, string> | null => {
     switch (authType) {
       case 'api_key':
@@ -149,12 +155,18 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
       meta_data: metaData,
       ...(hasAuthConfig ? { auth_config: builtInAuthConfig } : {}),
       oauth_connection_id: oauthConnectionId,
+      app_integration_id: appIntegrationId,
       is_active: true,
     };
     await executeSave(payload);
   };
 
   const handleCustomSave = async (data: CustomToolFormData) => {
+    // OAuth-backed custom tools carry their credential link via
+    // ``oauth_connection_id`` (resolved fresh at call time) instead of
+    // ``auth_config``. Send the picker fields only on the OAuth branch so
+    // switching auth types away from OAuth correctly drops the binding.
+    const isOAuth = authType === 'oauth';
     const payload: ToolUpsertPayload = {
       ...(isEditMode && toolId ? { id: toolId } : {}),
       name: data.name.trim(),
@@ -164,6 +176,8 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
       parameters,
       auth_type: authType,
       auth_config: buildAuthConfig(),
+      oauth_connection_id: isOAuth ? oauthConnectionId : null,
+      app_integration_id: isOAuth ? appIntegrationId : null,
       is_active: isActive,
     };
     await executeSave(payload);
@@ -208,10 +222,12 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
         saving={saving}
         saved={saved}
         oauthConnectionId={oauthConnectionId}
+        appIntegrationId={appIntegrationId}
         onMetaDataChange={setMetaData}
         authConfig={builtInAuthConfig}
         onAuthConfigChange={setBuiltInAuthConfig}
         onOAuthConnectionIdChange={setOauthConnectionId}
+        onAppIntegrationIdChange={setAppIntegrationId}
         onSave={handleBuiltInSave}
         onDelete={isEditMode ? handleDelete : undefined}
         onBack={handleBack}
@@ -233,6 +249,8 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
       authBearerToken={authBearerToken}
       authUsername={authUsername}
       authPassword={authPassword}
+      appIntegrationId={appIntegrationId}
+      oauthConnectionId={oauthConnectionId}
       isActive={isActive}
       isEditMode={isEditMode}
       saving={saving}
@@ -244,6 +262,8 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
       onAuthBearerTokenChange={setAuthBearerToken}
       onAuthUsernameChange={setAuthUsername}
       onAuthPasswordChange={setAuthPassword}
+      onAppIntegrationIdChange={setAppIntegrationId}
+      onOAuthConnectionIdChange={setOauthConnectionId}
       onIsActiveChange={setIsActive}
       onSave={handleCustomSave}
       onBack={handleBack}

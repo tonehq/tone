@@ -1,12 +1,7 @@
 'use client';
 
-import {
-  CustomButton,
-  ScopeStatus,
-  SelectInput,
-  TextAreaField,
-  TextInput,
-} from '@/components/shared';
+import { CustomButton, TextAreaField, TextInput } from '@/components/shared';
+import IntegrationConnectionPicker from '@/components/tools/IntegrationConnectionPicker';
 import SettingsSection from '@/components/tools/SettingsSection';
 import {
   DropdownMenu,
@@ -22,8 +17,6 @@ import {
   TOOL_TYPE_OAUTH_PROVIDER,
 } from '@/constants/toolForm';
 import { type BuiltInToolFormData, builtInToolSchema } from '@/schemas/tool';
-import { getOAuthCatalog, getOAuthConnections } from '@/services/oauthService';
-import type { OAuthCatalogProvider, OAuthConnection } from '@/types/oauth';
 import type { Tool, ToolParametersSchema, ToolType } from '@/types/tool';
 import { cn } from '@/utils/cn';
 import { showToast } from '@/utils/toast';
@@ -39,7 +32,7 @@ import {
   Settings,
   Trash2,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 interface BuiltInToolFormProps {
@@ -54,9 +47,11 @@ interface BuiltInToolFormProps {
   saving: boolean;
   saved: boolean;
   oauthConnectionId: string | null;
+  appIntegrationId: string | null;
   onMetaDataChange: (data: Record<string, string>) => void;
   onAuthConfigChange: (data: Record<string, string>) => void;
   onOAuthConnectionIdChange: (id: string | null) => void;
+  onAppIntegrationIdChange: (id: string | null) => void;
   onSave: (data: BuiltInToolFormData) => void;
   onDelete?: () => void;
   onBack: () => void;
@@ -75,9 +70,11 @@ export default function BuiltInToolForm({
   saving,
   saved,
   oauthConnectionId,
+  appIntegrationId,
   onMetaDataChange,
   onAuthConfigChange,
   onOAuthConnectionIdChange,
+  onAppIntegrationIdChange,
   onSave,
   onDelete,
   onBack,
@@ -90,42 +87,7 @@ export default function BuiltInToolForm({
     meta: true,
   });
 
-  // OAuth connections for this tool type
-  const [connections, setConnections] = useState<OAuthConnection[]>([]);
-  const [connectionsLoading, setConnectionsLoading] = useState(false);
-  const [catalog, setCatalog] = useState<OAuthCatalogProvider[]>([]);
-
   const oauthProvider = TOOL_TYPE_OAUTH_PROVIDER[toolType];
-
-  useEffect(() => {
-    if (!oauthProvider) return;
-    setConnectionsLoading(true);
-    getOAuthConnections(toolType)
-      .then(setConnections)
-      .catch(() => setConnections([]))
-      .finally(() => setConnectionsLoading(false));
-    getOAuthCatalog()
-      .then(setCatalog)
-      .catch(() => setCatalog([]));
-  }, [oauthProvider, toolType]);
-
-  const requiredScopes = useMemo(
-    () => catalog.find((p) => p.slug === oauthProvider)?.scopes ?? [],
-    [catalog, oauthProvider],
-  );
-  const selectedConnection = useMemo(
-    () => connections.find((c) => String(c.id) === String(oauthConnectionId)) ?? null,
-    [connections, oauthConnectionId],
-  );
-
-  const connectionOptions = useMemo(
-    () =>
-      connections.map((c) => ({
-        value: String(c.id),
-        label: c.public_metadata?.user_email ?? c.label ?? `Connection #${c.id}`,
-      })),
-    [connections],
-  );
 
   const { control, handleSubmit, watch, reset } = useForm<BuiltInToolFormData>({
     resolver: zodResolver(builtInToolSchema),
@@ -306,46 +268,26 @@ export default function BuiltInToolForm({
             </div>
           </SettingsSection>
 
-          {/* Google Account Connection (only for OAuth tool types) */}
+          {/* Account Connection (only for OAuth tool types) */}
           {oauthProvider && (
             <SettingsSection
-              title="Google Account"
-              description="Select which connected Google account this tool should use"
+              title="Connected Account"
+              description="Pick the linked integration and which connected account this tool should use"
               icon={LinkIcon}
               iconColor="text-blue-600 dark:text-blue-400"
               iconBg="bg-blue-50 dark:bg-blue-500/10"
               isOpen={openSections.connection}
               onToggle={() => toggleSection('connection')}
             >
-              <SelectInput
-                name="oauth-connection"
-                label="Connected Account"
-                options={connectionOptions}
-                value={oauthConnectionId ? String(oauthConnectionId) : ''}
-                onValueChange={(v) => {
-                  onOAuthConnectionIdChange(v || null);
-                  onDirty();
-                }}
-                loading={connectionsLoading}
-                placeholder="Select a Google account..."
+              <IntegrationConnectionPicker
+                appIntegrationId={appIntegrationId}
+                oauthConnectionId={oauthConnectionId}
+                requiredScopesProviderSlug={oauthProvider}
+                autoDefaultIntegrationSlug={oauthProvider}
+                onAppIntegrationIdChange={onAppIntegrationIdChange}
+                onOAuthConnectionIdChange={onOAuthConnectionIdChange}
+                onDirty={onDirty}
               />
-              {selectedConnection && (
-                <div className="mt-2.5">
-                  <ScopeStatus
-                    granted={selectedConnection.public_metadata?.scopes}
-                    required={requiredScopes}
-                  />
-                </div>
-              )}
-              {connections.length === 0 && !connectionsLoading && (
-                <p className="mt-2 text-[12px] text-muted-foreground">
-                  No Google accounts connected.{' '}
-                  <a href="/settings/integrations" className="text-primary hover:underline">
-                    Connect one in Integrations
-                  </a>
-                  .
-                </p>
-              )}
             </SettingsSection>
           )}
 

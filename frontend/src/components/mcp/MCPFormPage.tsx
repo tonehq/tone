@@ -16,12 +16,10 @@ import CheckboxField from '@/components/shared/CheckboxField';
 import SettingsSection from '@/components/tools/SettingsSection';
 import { Switch } from '@/components/ui/switch';
 import { useGoBack } from '@/hooks/useGoBack';
+import { NO_APP_INTEGRATION, useIntegrationConnections } from '@/hooks/useIntegrationConnections';
 import { getMcpServer } from '@/services/mcpServerService';
-import { listAppIntegrations } from '@/services/appIntegrationService';
-import { discoverMcpOAuth, getOAuthCatalog, getOAuthConnections } from '@/services/oauthService';
-import type { AppIntegration } from '@/types/appIntegration';
+import { discoverMcpOAuth } from '@/services/oauthService';
 import type { MCPServer, MCPServerUpsertPayload } from '@/types/mcp';
-import type { OAuthCatalogProvider, OAuthConnection } from '@/types/oauth';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
@@ -59,10 +57,6 @@ interface HttpHeaderField {
   key: string;
   value: string;
 }
-
-// Radix Select reserves the empty string for "no selection", so we sentinel
-// the unset state instead of using ``""`` in the form value.
-const NO_APP_INTEGRATION = '__none__';
 
 interface MCPFormState {
   name: string;
@@ -207,23 +201,11 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
     name: 'http_headers',
   });
 
-  // OAuth connections available to back this server, plus the catalog (for required scopes)
-  // and the app-integrations list that drives the "Linked integration" picker. The OAuth
-  // connections are refetched whenever the user picks a different integration so the dropdown
-  // only ever shows connections linked to that catalog entry.
-  const [oauthConnections, setOauthConnections] = useState<OAuthConnection[]>([]);
-  const [catalog, setCatalog] = useState<OAuthCatalogProvider[]>([]);
-  const [appIntegrations, setAppIntegrations] = useState<AppIntegration[]>([]);
-
-  useEffect(() => {
-    Promise.all([getOAuthCatalog(), listAppIntegrations({ page_size: 200 })])
-      .then(([providers, integrations]) => {
-        setCatalog(providers);
-        setAppIntegrations(integrations.rows.filter((r) => r.is_enabled));
-      })
-      .catch((error) => handleApiError(error));
-  }, []);
-
+  // Catalog + integrations + OAuth connections are owned by a shared hook so
+  // this form and ``BuiltInToolForm`` stay in lockstep on fetch / filter / race
+  // semantics. The hook fetches catalog + integrations in parallel on mount
+  // and refetches connections server-side filtered whenever the picker below
+  // changes — no client-side filtering, no N+1.
   useEffect(() => {
     // Returning from an Auto-discover OAuth round-trip: restore the stashed form and pre-select the
     // freshly created connection instead of reloading the saved server (which would lose the edits
@@ -277,28 +259,8 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
   const watchedServerUrl = watch('server_url') ?? '';
   const watchedOAuthId = watch('oauth_connection_id') ?? '';
   const watchedAppIntegrationId = watch('app_integration_id') ?? NO_APP_INTEGRATION;
-
-  // Refetch the OAuth-connection list whenever the linked-integration picker
-  // changes. ``NO_APP_INTEGRATION`` shows all connections (no filter); a real
-  // id narrows the list to that catalog entry's connections only. Cancelled
-  // flag suppresses out-of-order responses if the user toggles quickly.
-  useEffect(() => {
-    let cancelled = false;
-    const params =
-      watchedAppIntegrationId && watchedAppIntegrationId !== NO_APP_INTEGRATION
-        ? { app_integration_id: watchedAppIntegrationId }
-        : {};
-    getOAuthConnections(params)
-      .then((connections) => {
-        if (!cancelled) setOauthConnections(connections);
-      })
-      .catch((error) => {
-        if (!cancelled) handleApiError(error);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [watchedAppIntegrationId]);
+  const { appIntegrations, oauthConnections, catalog } =
+    useIntegrationConnections(watchedAppIntegrationId);
   const watchedUseBearer = watch('use_bearer_token');
   const watchedUseApiKey = watch('use_api_key');
 

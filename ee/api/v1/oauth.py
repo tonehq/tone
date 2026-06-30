@@ -24,6 +24,7 @@ from core.services.oauth_providers import (
     get_supported_providers,
 )
 from core.services.oauth_service import OAuthService, normalize_scopes
+from core.services.oauth_userinfo import fetch_user_email
 from core.utils.auth_helpers import require_org_id
 from ee.middleware.auth import EEJWTClaims, require_ee_org_member
 
@@ -315,36 +316,7 @@ def callback(
     # Prefer the scopes the provider actually granted; fall back to requested scopes.
     granted_scopes = normalize_scopes(tokens.get("scope")) or config["scopes"]
 
-    user_email = None
-    userinfo_url = config.get("userinfo_url")
-    if userinfo_url:
-        try:
-            with httpx.Client() as client:
-                userinfo = client.get(
-                    userinfo_url,
-                    headers={"Authorization": f"Bearer {access_token}"},
-                )
-                if userinfo.status_code == 200:
-                    user_email = userinfo.json().get("email")
-        except Exception:
-            pass
-
-    # HubSpot doesn't expose an OIDC-style userinfo endpoint, so the generic
-    # block above can't capture the account email. Use the token-info endpoint
-    # instead — it accepts the access token in the URL path and returns the
-    # account email in the ``user`` field. Without this, every HubSpot
-    # connection shows up in the MCP / tool picker as just "HubSpot" with no
-    # way to tell two accounts apart.
-    if not user_email and provider == "hubspot":
-        try:
-            with httpx.Client() as client:
-                hubspot_info = client.get(
-                    f"https://api.hubapi.com/oauth/v1/access-tokens/{access_token}"
-                )
-                if hubspot_info.status_code == 200:
-                    user_email = hubspot_info.json().get("user")
-        except Exception:
-            pass
+    user_email = fetch_user_email(provider, access_token, config.get("userinfo_url"))
 
     svc = OAuthService(db, org_id=org_id)
     token_payload = {

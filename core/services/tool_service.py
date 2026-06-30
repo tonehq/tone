@@ -114,6 +114,7 @@ class ToolService(BaseService):
             auth_config=encrypt_auth_config(data.get("auth_config")),
             meta_data=data.get("meta_data"),
             oauth_connection_id=data.get("oauth_connection_id"),
+            app_integration_id=data.get("app_integration_id"),
             is_active=data.get("is_active", True),
             organization_id=self.org_id,
             created_at=now,
@@ -148,7 +149,10 @@ class ToolService(BaseService):
             )
         # Built-in tools: only allow updating name, description, meta_data, auth_config, and is_active
         if tool.tool_type != "custom":
-            allowed = {"name", "description", "meta_data", "auth_config", "is_active", "oauth_connection_id"}
+            allowed = {
+                "name", "description", "meta_data", "auth_config", "is_active",
+                "oauth_connection_id", "app_integration_id",
+            }
             data = {k: v for k, v in data.items() if k in allowed}
         if data.get("oauth_connection_id"):
             self._validate_oauth_connection(data["oauth_connection_id"])
@@ -183,7 +187,10 @@ class ToolService(BaseService):
                 )
             # Built-in tools: only allow updating name, description, meta_data, auth_config, and is_active
             if existing.tool_type != "custom":
-                allowed = {"name", "description", "meta_data", "auth_config", "is_active", "oauth_connection_id"}
+                allowed = {
+                    "name", "description", "meta_data", "auth_config", "is_active",
+                    "oauth_connection_id", "app_integration_id",
+                }
                 update_data = {k: v for k, v in data.items() if k in allowed}
             else:
                 update_data = {k: v for k, v in data.items() if k != "id"}
@@ -233,6 +240,7 @@ class ToolService(BaseService):
             auth_config=encrypt_auth_config(data.get("auth_config")),
             meta_data=data.get("meta_data"),
             oauth_connection_id=data.get("oauth_connection_id"),
+            app_integration_id=data.get("app_integration_id"),
             is_active=data.get("is_active", True),
             organization_id=self.org_id,
             created_at=now,
@@ -491,6 +499,7 @@ class ToolService(BaseService):
             "auth_config": decrypt_auth_config(tool.auth_config),
             "meta_data": tool.meta_data,
             "oauth_connection_id": tool.oauth_connection_id,
+            "app_integration_id": tool.app_integration_id,
             "mcp_server_id": tool.mcp_server_id,
             "is_active": tool.is_active,
             "is_template": tool.is_template,

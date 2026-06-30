@@ -2,6 +2,7 @@
 
 import { CustomButton, SelectInput, TextAreaField, TextInput } from '@/components/shared';
 import CheckboxField from '@/components/shared/CheckboxField';
+import IntegrationConnectionPicker from '@/components/tools/IntegrationConnectionPicker';
 import ParameterBuilder from '@/components/tools/ParameterBuilder';
 import { AUTH_TYPE_OPTIONS, METHOD_COLORS, METHOD_OPTIONS } from '@/constants/toolForm';
 import { type CustomToolFormData, customToolSchema } from '@/schemas/tool';
@@ -24,6 +25,12 @@ interface CustomToolFormProps {
   authBearerToken: string;
   authUsername: string;
   authPassword: string;
+  /** Catalog row narrowing the OAuth-connection picker. Only consulted when
+   *  ``authType === 'oauth'``. */
+  appIntegrationId: string | null;
+  /** OAuth connection backing this tool. Only consulted when
+   *  ``authType === 'oauth'``. */
+  oauthConnectionId: string | null;
   isActive: boolean;
   isEditMode: boolean;
   saving: boolean;
@@ -35,6 +42,8 @@ interface CustomToolFormProps {
   onAuthBearerTokenChange: (value: string) => void;
   onAuthUsernameChange: (value: string) => void;
   onAuthPasswordChange: (value: string) => void;
+  onAppIntegrationIdChange: (id: string | null) => void;
+  onOAuthConnectionIdChange: (id: string | null) => void;
   onIsActiveChange: (value: boolean) => void;
   onSave: (data: CustomToolFormData) => void;
   onBack: () => void;
@@ -52,6 +61,8 @@ export default function CustomToolForm({
   authBearerToken,
   authUsername,
   authPassword,
+  appIntegrationId,
+  oauthConnectionId,
   isActive,
   isEditMode,
   saving,
@@ -63,6 +74,8 @@ export default function CustomToolForm({
   onAuthBearerTokenChange,
   onAuthUsernameChange,
   onAuthPasswordChange,
+  onAppIntegrationIdChange,
+  onOAuthConnectionIdChange,
   onIsActiveChange,
   onSave,
   onBack,
@@ -269,6 +282,21 @@ export default function CustomToolForm({
                     value={authPassword}
                     onChange={(e) => onAuthPasswordChange(e.target.value)}
                     className="font-mono text-[13px]"
+                  />
+                </div>
+              )}
+
+              {/* OAuth bridges custom tools onto already-connected accounts
+                  (HubSpot, Slack, etc.) without re-entering credentials. The
+                  runtime resolves a fresh access token from the connection
+                  and injects it as ``Authorization: Bearer <token>``. */}
+              {authType === 'oauth' && (
+                <div className="mt-3 rounded-lg bg-muted/40 p-3">
+                  <IntegrationConnectionPicker
+                    appIntegrationId={appIntegrationId}
+                    oauthConnectionId={oauthConnectionId}
+                    onAppIntegrationIdChange={onAppIntegrationIdChange}
+                    onOAuthConnectionIdChange={onOAuthConnectionIdChange}
                   />
                 </div>
               )}
