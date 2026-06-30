@@ -39,11 +39,17 @@ _ALLOWED_SORT_FIELDS = {"slug", "display_name", "category", "sort_order", "creat
 # up automatically — no risk of create/update drifting out of sync.
 _PERSISTABLE_FIELDS: tuple = (
     "slug", "display_name", "description", "category", "icon_url",
-    "auth_type", "auth_url", "token_url", "scopes", "extra_auth_params",
-    "client_id_env_key", "client_secret_env_key",
+    "auth_type", "auth_url", "token_url", "userinfo_url",
+    "scopes", "extra_auth_params",
     "pkce_required",
     "is_enabled", "sort_order",
 )
+
+# Credential fields the API accepts inline. They are NEVER persisted as plain
+# columns — they're encrypted into ``app_integrations.encrypted_credentials``
+# via :meth:`AppIntegration.set_credentials` and stripped from the payload
+# before the regular field-copy loop runs.
+_CREDENTIAL_FIELDS: tuple = ("client_id", "client_secret")
 
 # Defaults applied on insert when the caller omits a field. Kept separate from
 # the model's column defaults so the API contract is explicit and stable even
@@ -73,10 +79,13 @@ class AppIntegrationService(BaseService):
         Required: ``slug``, ``display_name``, ``auth_type``.
         Optional: every other column. Unknown keys are silently ignored.
         ``is_default`` is reserved for seeds and forced to ``False`` here.
+        Credentials (``client_id`` / ``client_secret``), when supplied, are
+        moved into the encrypted blob before the row is persisted.
         """
         payload = self._validated_payload(data, require_slug=True)
         self._check_duplicate_slug(payload["slug"])
 
+        credentials = _pop_credentials(payload)
         values: Dict[str, Any] = {**_CREATE_DEFAULTS}
         for field in _PERSISTABLE_FIELDS:
             if field in payload:
@@ -92,6 +101,8 @@ class AppIntegrationService(BaseService):
             # already knows the org from the JWT claims, so use that.
             organization_id=self.org_id,
         )
+        if credentials:
+            integration.set_credentials(credentials)
         self.db.add(integration)
         self.db.commit()
         self.db.refresh(integration)
@@ -103,6 +114,8 @@ class AppIntegrationService(BaseService):
         ``slug`` may change but must remain unique. ``is_default`` and
         ``created_by_user_id`` are intentionally excluded from
         :data:`_PERSISTABLE_FIELDS` so they can't be flipped via the API.
+        Credentials, when supplied, are merged into the encrypted blob —
+        omitting a credential field leaves the stored value untouched.
         """
         integration = self.get_app_integration(integration_id)
         payload = self._validated_payload(data, require_slug=False)
@@ -110,9 +123,12 @@ class AppIntegrationService(BaseService):
         if "slug" in payload and payload["slug"] != integration.slug:
             self._check_duplicate_slug(payload["slug"], exclude_id=integration.id)
 
+        credentials = _pop_credentials(payload)
         for field in _PERSISTABLE_FIELDS:
             if field in payload:
                 setattr(integration, field, payload[field])
+        if credentials:
+            integration.set_credentials(credentials)
 
         self.db.commit()
         self.db.refresh(integration)
@@ -230,10 +246,13 @@ class AppIntegrationService(BaseService):
             "auth_type": integration.auth_type,
             "auth_url": integration.auth_url,
             "token_url": integration.token_url,
+            "userinfo_url": integration.userinfo_url,
             "scopes": integration.scopes,
             "extra_auth_params": integration.extra_auth_params,
-            "client_id_env_key": integration.client_id_env_key,
-            "client_secret_env_key": integration.client_secret_env_key,
+            # Secrets are NEVER returned. ``has_credentials`` tells the UI
+            # whether the row has stored creds so it can decide between
+            # "Connect" and "Configure credentials first" affordances.
+            "has_credentials": integration.has_credentials(),
             "pkce_required": integration.pkce_required,
             "is_enabled": integration.is_enabled,
             "is_default": integration.is_default,
@@ -266,6 +285,10 @@ class AppIntegrationService(BaseService):
         _validate_auth_type(payload, required=require_slug)
         _validate_json_type(payload, "scopes", list, "a list of strings")
         _validate_json_type(payload, "extra_auth_params", dict, "an object")
+        for cred_key in _CREDENTIAL_FIELDS:
+            if cred_key in payload and payload[cred_key] is not None:
+                if not isinstance(payload[cred_key], str):
+                    raise _bad_request(f"{cred_key} must be a string")
         return payload
 
     def _check_duplicate_slug(self, slug: str, exclude_id=None) -> None:
@@ -327,6 +350,23 @@ def _validate_auth_type(payload: Dict[str, Any], *, required: bool) -> None:
     if auth_type not in _ALLOWED_AUTH_TYPES:
         raise _bad_request(f"auth_type must be one of: {sorted(_ALLOWED_AUTH_TYPES)}")
     payload["auth_type"] = auth_type
+
+
+def _pop_credentials(payload: Dict[str, Any]) -> Dict[str, str]:
+    """Extract and remove credential fields from ``payload``.
+
+    Returns a dict of ``{client_id, client_secret}`` containing only the keys
+    the caller supplied with non-empty values. The caller hands this to
+    :meth:`AppIntegration.set_credentials` which encrypts and merges.
+    Mutates ``payload`` so the regular field-copy loop never sees these keys.
+    """
+    out: Dict[str, str] = {}
+    for key in _CREDENTIAL_FIELDS:
+        if key in payload:
+            value = payload.pop(key)
+            if isinstance(value, str) and value.strip():
+                out[key] = value.strip()
+    return out
 
 
 def _validate_json_type(payload: Dict[str, Any], key: str, expected_type: type, human_name: str) -> None:

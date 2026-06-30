@@ -1,8 +1,10 @@
+from typing import Any, Dict
+
 from sqlalchemy import Boolean, Column, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 from core.models.base import OrgScopedModel
-from core.utils.env_resolver import resolve_env
+from core.utils.encryption import decrypt_json, encrypt_json
 
 
 class AppIntegration(OrgScopedModel):
@@ -13,9 +15,9 @@ class AppIntegration(OrgScopedModel):
     Live tokens for actual user authorizations live in ``oauth_connections``, which references
     this table via ``app_integration_id`` (many connections per integration).
 
-    Secrets are never stored here. ``client_id_env_key`` / ``client_secret_env_key`` are the
-    *names* of environment variables that hold the credentials — the values stay in env /
-    Infisical so they can be rotated and audited independently of the DB.
+    Provider credentials (``client_id`` / ``client_secret``) live in
+    ``encrypted_credentials`` — a Fernet-encrypted JSON blob keyed by credential
+    name. Use :meth:`credentials` to read and :meth:`set_credentials` to write.
     """
 
     __tablename__ = "app_integrations"
@@ -34,12 +36,18 @@ class AppIntegration(OrgScopedModel):
     auth_type = Column(String(20), nullable=False)
     auth_url = Column(String(500), nullable=True)
     token_url = Column(String(500), nullable=True)
+    # Post-OAuth ``GET`` endpoint that returns the authorising user's profile
+    # (used to capture ``user_email`` on the connection card). Optional —
+    # leave null for providers that don't expose one.
+    userinfo_url = Column(String(500), nullable=True)
     scopes = Column(JSONB, nullable=True)
     extra_auth_params = Column(JSONB, nullable=True)
 
-    # Names of env vars holding the credentials (values stay in env / Infisical).
-    client_id_env_key = Column(String(120), nullable=True)
-    client_secret_env_key = Column(String(120), nullable=True)
+    # Encrypted credential blob; shape::
+    #   {"client_id": "...", "client_secret": "..."}
+    # Stored as ``{"data": "<fernet-string>"}`` via ``encrypt_json`` so the
+    # JSONB stays valid while the payload is opaque.
+    encrypted_credentials = Column(JSONB, nullable=True)
 
     pkce_required = Column(Boolean, nullable=False, default=True)
 
@@ -49,22 +57,48 @@ class AppIntegration(OrgScopedModel):
 
     created_by_user_id = Column(UUID(as_uuid=True), nullable=True)
 
+    # ──────────────────────────────────────────────────────────────────
+    # Credential helpers
+    # ──────────────────────────────────────────────────────────────────
+
+    def credentials(self) -> Dict[str, Any]:
+        """Decrypt and return the stored credentials dict.
+
+        Returns an empty dict when no credentials are stored — callers can
+        therefore always treat the result as a dict without a ``None`` check.
+        """
+        if not self.encrypted_credentials:
+            return {}
+        return decrypt_json(self.encrypted_credentials) or {}
+
+    def set_credentials(self, updates: Dict[str, Any]) -> None:
+        """Merge ``updates`` into the stored credentials and re-encrypt.
+
+        - Existing keys not present in ``updates`` are preserved.
+        - Empty / falsy values in ``updates`` are ignored (use a separate
+          ``clear_credentials`` helper if you ever need to remove a key).
+        - Setting an empty dict has no effect.
+        """
+        clean = {k: v for k, v in (updates or {}).items() if v}
+        if not clean:
+            return
+        merged = self.credentials()
+        merged.update(clean)
+        self.encrypted_credentials = encrypt_json(merged)
+
+    def has_credentials(self) -> bool:
+        """Cheap check (no decrypt) for whether *any* credential blob is stored."""
+        return bool(self.encrypted_credentials and self.encrypted_credentials.get("data"))
+
     def is_configured(self) -> bool:
-        """True iff the credentials this row points at are present in env.
+        """True iff this integration has the credentials needed to authorize.
 
-        ``auth_type == "none"`` is always considered configured. OAuth /
-        api_key / bearer_token providers need their referenced ``client_id``
-        env var; ``client_secret`` is optional for public-client PKCE flows.
-
-        Lookups go through :func:`resolve_env`, which checks Tone's
-        Infisical-aware ``settings`` before falling back to ``os.getenv`` —
-        so secrets loaded from Infisical (not present in ``os.environ``)
-        still register as configured.
+        ``auth_type == "none"`` is always considered configured. Everything
+        else needs a ``client_id`` in the encrypted blob; ``client_secret`` is
+        optional for public-client PKCE flows.
         """
         if self.auth_type == "none":
             return True
-        if not self.client_id_env_key or not resolve_env(self.client_id_env_key):
+        if not self.has_credentials():
             return False
-        if self.client_secret_env_key and not resolve_env(self.client_secret_env_key):
-            return False
-        return True
+        return bool(self.credentials().get("client_id"))
