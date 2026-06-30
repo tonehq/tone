@@ -13,12 +13,12 @@ The previous hardcoded ``OAUTH_PROVIDERS`` dict is preserved as a commented
 snapshot at the bottom of this file for reference; nothing reads it any more.
 """
 
-import os
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
 from core.models.app_integration import AppIntegration
+from core.utils.env_resolver import resolve_env
 
 # Grouping labels for the catalog UI. Kept here (constants only) so frontend-
 # adjacent code doesn't have to import a model just to namespace categories.
@@ -74,8 +74,8 @@ def _row_to_config(row: AppIntegration) -> Dict[str, Any]:
         "use_pkce": bool(row.pkce_required),
         "token_auth": "body",
         "extra_authorize_params": dict(row.extra_auth_params or {}),
-        "client_id": os.getenv(row.client_id_env_key) if row.client_id_env_key else None,
-        "client_secret": os.getenv(row.client_secret_env_key) if row.client_secret_env_key else None,
+        "client_id": resolve_env(row.client_id_env_key) or None,
+        "client_secret": resolve_env(row.client_secret_env_key) or None,
     }
 
 
