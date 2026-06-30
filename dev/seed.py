@@ -577,6 +577,27 @@ def seed_from_configs(db, org_name, email, password):
     return stats
 
 
+def _run_chained_seeder(label: str, module_path: str) -> None:
+    """Run a standalone seeder script (e.g. ``dev.seed_app_integrations``) as
+    part of the main seed flow.
+
+    The chained scripts call ``sys.exit(1)`` on internal errors — we catch
+    ``SystemExit`` so a failure there only skips that step instead of aborting
+    the whole seed. Each chained seeder opens its own DB session, so the
+    in-flight ``main()`` session above is not affected.
+    """
+    print(f"\nSeeding {label}...")
+    try:
+        import importlib
+
+        module = importlib.import_module(module_path)
+        module.main()
+    except SystemExit as exc:
+        print(f"   ⚠ {label} seeder exited (code={exc.code}); continuing.")
+    except Exception as exc:
+        print(f"   ⚠ {label} seeder failed: {exc}; continuing.")
+
+
 def main():
     from core.database.session import get_db_script
 
@@ -607,6 +628,13 @@ def main():
         print(f"   Model Languages:  {stats['model_languages_created']} created, {stats['model_languages_skipped']} already existed")
         print(f"   API keys:         {stats['api_keys_created']} created, {stats['api_keys_none']} no env key")
         print(f"   Tools:            {stats['tools_created']} created")
+
+        # Chain the standalone seeders so a single ``python dev/seed.py`` run
+        # leaves the deployment fully seeded. They open their own DB sessions
+        # and are safe to re-run — any failure is logged but doesn't abort the
+        # main setup (each seeder is isolated in its own try block).
+        _run_chained_seeder("app_integrations", "dev.seed_app_integrations")
+        _run_chained_seeder("built-in tools", "dev.seed_built_in_tools")
     finally:
         db.close()
         ended_at = datetime.now()

@@ -32,6 +32,9 @@ export interface OAuthConnection {
   auth_type: AuthType;
   public_metadata: OAuthPublicMetadata;
   created_by_user_id: string | null;
+  /** Catalog entry this connection belongs to. Drives the MCP / Tool form's
+   *  connection-picker filter when an integration is selected. */
+  app_integration_id: string | null;
   created_at: string;
   updated_at: string;
 }

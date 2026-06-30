@@ -32,6 +32,7 @@ from core.models.invite import Invite
 from core.models.member import Member
 
 # Auth & Credentials
+from core.models.app_integration import AppIntegration
 from core.models.oauth_connection import OAuthConnection
 from core.models.api_key import ApiKey
 
