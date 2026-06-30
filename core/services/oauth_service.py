@@ -109,6 +109,7 @@ class OAuthService(BaseService):
             encrypted_credentials=encrypted_credentials,
             public_metadata=public_metadata,
             created_by_user_id=created_by,
+            app_integration_id=coerce_uuid(data.get("app_integration_id")),
         )
         self.db.add(connection)
         self.db.commit()

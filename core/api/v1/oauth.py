@@ -1,3 +1,4 @@
+import json
 import time
 import urllib.parse
 from typing import Any, Dict, Optional, Tuple
@@ -20,8 +21,13 @@ from core.services.oauth_providers import (
 )
 from core.services.oauth_service import OAuthService, normalize_scopes
 from core.utils.auth_helpers import require_org_id
-from core.utils.encryption import decrypt_json, encrypt_json
+from core.utils.encryption import decrypt, decrypt_json, encrypt, encrypt_json
 from core.utils.pkce import pkce_pair
+
+# PKCE state lives in the encrypted ``state`` parameter for this long before the
+# callback rejects it. Real-world OAuth handshakes complete in seconds; ten
+# minutes is generous slack for slow consent screens or multi-factor prompts.
+_PKCE_STATE_TTL_SECONDS = 600
 
 router = APIRouter()
 
@@ -38,47 +44,59 @@ def _get_service(claims: JWTClaims, db: Session) -> OAuthService:
 # ─────────────────────────────────────────────────────────────────────
 
 
-def _create_pending_pkce_row(
-    db: Session,
+def _encode_pkce_state(
+    verifier: str,
     org_id: UUID,
     user_id: UUID,
     provider_slug: str,
-    verifier: str,
-) -> OAuthConnection:
-    """Create a pending ``OAuthConnection`` to carry the PKCE verifier between
-    the authorize redirect and the callback. The row's ``id`` becomes the
-    OAuth ``state`` parameter, so the callback can look the verifier back up
-    without trusting it to the browser or the provider.
+) -> str:
+    """Encrypt the PKCE handshake context into an opaque OAuth ``state`` string.
 
-    The pending row is upgraded to ``active`` by the callback via the regular
-    :meth:`OAuthService.create_connection` upsert path (which matches on
-    ``provider_slug + created_by_user_id``).
+    Carrying verifier + identity in the encrypted state lets the callback finish
+    the handshake without an in-flight ``OAuthConnection`` row, which used to
+    leak pending rows whenever a user abandoned the consent screen. Fernet's
+    output is URL-safe base64, so it slots straight into a redirect URL.
+
+    The payload also includes the originating ``provider_slug`` and an issued-at
+    timestamp so the callback can reject state replayed for a different provider
+    or after :data:`_PKCE_STATE_TTL_SECONDS`.
     """
-    integration_row = _row_by_slug(db, org_id, provider_slug)
-    # Use the same default label ``OAuthService.create_connection`` would set,
-    # so the callback's upsert (which only patches credentials + metadata,
-    # never the label) leaves the row reading correctly without an extra
-    # write. Falls back to a friendlier display name from the catalog when
-    # the row has one.
-    label = (
-        integration_row.display_name
-        if integration_row and integration_row.display_name
-        else provider_slug.replace("_", " ").title()
-    )
-    pending = OAuthConnection(
-        organization_id=org_id,
-        provider_slug=provider_slug,
-        label=label,
-        auth_type="oauth",
-        encrypted_credentials=encrypt_json({"code_verifier": verifier}),
-        public_metadata={"status": "pending"},
-        created_by_user_id=user_id,
-        app_integration_id=integration_row.id if integration_row else None,
-    )
-    db.add(pending)
-    db.commit()
-    db.refresh(pending)
-    return pending
+    payload = json.dumps({
+        "v": verifier,
+        "o": str(org_id),
+        "u": str(user_id),
+        "p": provider_slug,
+        "t": int(time.time()),
+    })
+    return encrypt(payload)
+
+
+def _decode_pkce_state(state: str, provider: str) -> Optional[Dict[str, Any]]:
+    """Inverse of :func:`_encode_pkce_state`. Returns ``None`` for any state
+    that is not a current, valid PKCE token for this provider.
+
+    Callers should fall through to :func:`_resolve_pkce_state` (legacy pending
+    rows still in flight from before the stateless flow shipped) and finally to
+    the ``org_id:user_id:provider`` legacy non-PKCE shape on a ``None`` here.
+    """
+    try:
+        decoded = decrypt(state)
+        payload = json.loads(decoded)
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("p") != provider:
+        return None
+    if not payload.get("v"):
+        return None
+    issued = payload.get("t") or 0
+    try:
+        if int(time.time()) - int(issued) > _PKCE_STATE_TTL_SECONDS:
+            return None
+    except (TypeError, ValueError):
+        return None
+    return payload
 
 
 def _resolve_pkce_state(
@@ -87,7 +105,9 @@ def _resolve_pkce_state(
     """Resolve a UUID-shaped ``state`` to its pending row + verifier.
 
     Returns ``(pending_row, verifier)`` if found, ``(None, None)`` otherwise.
-    Non-UUID state values are treated as legacy non-PKCE flows by the caller.
+    Used only as a fallback for any pending rows that were inserted by the old
+    PKCE flow before this code shipped — new handshakes use the stateless
+    :func:`_encode_pkce_state` path and never write a pending row.
     """
     try:
         state_uuid = UUID(state)
@@ -293,15 +313,16 @@ def authorize(
 
     # PKCE branch: providers whose ``pkce_required`` is true (e.g. HubSpot's
     # MCP Auth App) need ``code_challenge`` + ``code_challenge_method``. We
-    # park the verifier in a pending OAuthConnection row and use its UUID as
-    # the ``state`` so the callback can retrieve it without ever sending the
-    # verifier off-host. Non-PKCE providers keep the legacy ``org:user:slug``
-    # state format — backward compatible for everything that worked before.
+    # carry the verifier + identity through the encrypted ``state`` parameter
+    # so the callback can finish the handshake without inserting a row up
+    # front — abandoned consent screens used to leave orphaned "pending"
+    # connection rows in the DB. Non-PKCE providers keep the legacy
+    # ``org:user:slug`` state format — backward compatible for everything
+    # that worked before.
     if config.get("use_pkce"):
         user_uuid = UUID(str(claims.user_id))
         verifier, challenge = pkce_pair()
-        pending = _create_pending_pkce_row(db, org_id, user_uuid, provider, verifier)
-        params["state"] = str(pending.id)
+        params["state"] = _encode_pkce_state(verifier, org_id, user_uuid, provider)
         params["code_challenge"] = challenge
         params["code_challenge_method"] = "S256"
     else:
@@ -325,23 +346,34 @@ def callback(
     state: str = Query(..., description="State parameter with org_id:user_id:provider"),
     db: Session = Depends(get_db),
 ):
-    # Two ``state`` shapes are accepted:
-    #   1. UUID  → PKCE flow; the row carries verifier + org + user.
-    #   2. ``org_id:user_id:provider`` → legacy non-PKCE flow.
-    # Try (1) first; fall through to (2) if no pending row matches.
-    pending, verifier = _resolve_pkce_state(db, state, provider)
-    if pending:
-        org_id = pending.organization_id
-        user_id = pending.created_by_user_id
+    # Three ``state`` shapes are accepted, in priority order:
+    #   1. Fernet-encrypted JSON  → current PKCE flow; carries verifier + org + user.
+    #      This is the only shape new authorize requests emit.
+    #   2. UUID                    → legacy PKCE pending row (still in flight from
+    #                                handshakes started before the stateless flow
+    #                                shipped); the row carries verifier + identity.
+    #   3. ``org_id:user_id:provider`` → legacy non-PKCE flow.
+    pending: Optional[OAuthConnection] = None
+    verifier: Optional[str] = None
+    encoded = _decode_pkce_state(state, provider)
+    if encoded:
+        org_id = UUID(encoded["o"])
+        user_id = UUID(encoded["u"])
+        verifier = encoded["v"]
     else:
-        try:
-            org_id_str, user_id_str, state_provider = state.split(":")
-            org_id = UUID(org_id_str)
-            user_id = UUID(user_id_str)
-        except (ValueError, TypeError):
-            raise HTTPException(status_code=400, detail="Invalid state parameter")
-        if state_provider != provider:
-            raise HTTPException(status_code=400, detail="Provider mismatch in state")
+        pending, verifier = _resolve_pkce_state(db, state, provider)
+        if pending:
+            org_id = pending.organization_id
+            user_id = pending.created_by_user_id
+        else:
+            try:
+                org_id_str, user_id_str, state_provider = state.split(":")
+                org_id = UUID(org_id_str)
+                user_id = UUID(user_id_str)
+            except (ValueError, TypeError):
+                raise HTTPException(status_code=400, detail="Invalid state parameter")
+            if state_provider != provider:
+                raise HTTPException(status_code=400, detail="Provider mismatch in state")
 
     config = get_provider_config(db, org_id, provider)
     if not config:
@@ -404,6 +436,23 @@ def callback(
         except Exception:
             pass
 
+    # HubSpot doesn't expose an OIDC-style userinfo endpoint, so the generic
+    # block above can't capture the account email. Use the token-info endpoint
+    # instead — it accepts the access token in the URL path and returns the
+    # account email in the ``user`` field. Without this, every HubSpot
+    # connection shows up in the MCP / tool picker as just "HubSpot" with no
+    # way to tell two accounts apart.
+    if not user_email and provider == "hubspot":
+        try:
+            with httpx.Client() as client:
+                hubspot_info = client.get(
+                    f"https://api.hubapi.com/oauth/v1/access-tokens/{access_token}"
+                )
+                if hubspot_info.status_code == 200:
+                    user_email = hubspot_info.json().get("user")
+        except Exception:
+            pass
+
     svc = OAuthService(db, org_id=org_id)
     token_payload = {
         "access_token": access_token,
@@ -413,7 +462,7 @@ def callback(
         "user_email": user_email,
     }
     if pending:
-        # PKCE flow — promote the pending row in place (or fold into an
+        # Legacy PKCE pending row — promote it in place (or fold into an
         # existing duplicate). Routing through ``complete_pkce_connection``
         # avoids the duplicate-row bug ``create_connection``'s upsert hits
         # when the pending row lacks ``user_email``.
@@ -425,11 +474,16 @@ def callback(
             user_email=user_email,
         )
     else:
-        # Legacy / non-PKCE flow — the row didn't exist yet, so the upsert is
-        # the right tool (matches an existing row by user_email if present).
+        # Stateless PKCE *and* non-PKCE both arrive here — no row exists yet,
+        # so the upsert is the right tool (matches an existing row by
+        # user_email when present, otherwise inserts a new one). Resolve the
+        # catalog row up front so the new connection inherits its
+        # ``app_integration_id`` for the per-integration filter in the picker.
+        integration_row = _row_by_slug(db, org_id, provider)
         connection = svc.create_connection({
             "provider_slug": provider,
             "created_by_user_id": user_id,
+            "app_integration_id": integration_row.id if integration_row else None,
             **token_payload,
         })
 
