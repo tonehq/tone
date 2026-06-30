@@ -119,19 +119,30 @@ class OAuthService(BaseService):
         self,
         provider: Optional[str] = None,
         user_id: Optional[Union[str, UUID]] = None,
+        app_integration_id: Optional[Union[str, UUID]] = None,
     ) -> List[OAuthConnection]:
+        """List connections in the current org, optionally filtered.
+
+        ``app_integration_id`` lets the MCP / tool create forms show only
+        connections that belong to the integration the user picked — e.g.
+        only HubSpot connections when creating a HubSpot MCP.
+        """
         q = self.query(OAuthConnection)
         if provider:
             q = q.filter(OAuthConnection.provider_slug == provider)
         uid = coerce_uuid(user_id)
         if uid is not None:
             q = q.filter(OAuthConnection.created_by_user_id == uid)
+        aid = coerce_uuid(app_integration_id)
+        if aid is not None:
+            q = q.filter(OAuthConnection.app_integration_id == aid)
         return q.order_by(OAuthConnection.updated_at.desc()).all()
 
     def list_connections(
         self,
         provider_slug: Optional[str] = None,
         user_id: Optional[Union[str, UUID]] = None,
+        app_integration_id: Optional[Union[str, UUID]] = None,
     ) -> List[Dict[str, Any]]:
         """Return every connection in the org (no pagination)."""
         q = self.query(OAuthConnection)
@@ -140,6 +151,9 @@ class OAuthService(BaseService):
         uid = coerce_uuid(user_id)
         if uid is not None:
             q = q.filter(OAuthConnection.created_by_user_id == uid)
+        aid = coerce_uuid(app_integration_id)
+        if aid is not None:
+            q = q.filter(OAuthConnection.app_integration_id == aid)
         items = q.order_by(OAuthConnection.updated_at.desc()).all()
         return [c.to_dict() for c in items]
 
@@ -226,7 +240,7 @@ class OAuthService(BaseService):
         Defaults to the connection's own provider when ``provider`` is omitted.
         """
         provider = provider or connection.provider_slug
-        return self.validate_scopes(connection, get_provider_scopes(provider))
+        return self.validate_scopes(connection, get_provider_scopes(self.db, self.org_id, provider))
 
     @staticmethod
     def raise_if_missing_scopes(result: Dict[str, Any]) -> None:
@@ -504,7 +518,7 @@ class OAuthService(BaseService):
 
         # Generic MCP connections (provider_slug ``mcp:<host>``) aren't in the catalog — their
         # token endpoint and dynamically-registered client live in the connection record itself.
-        config = get_provider_config(provider)
+        config = get_provider_config(self.db, self.org_id, provider)
         if config:
             token_url = config["token_url"]
             refresh_data = {
@@ -580,6 +594,78 @@ class OAuthService(BaseService):
 
     def connection_response(self, connection: OAuthConnection) -> Dict[str, Any]:
         return connection.to_dict()
+
+    def complete_pkce_connection(
+        self,
+        pending: OAuthConnection,
+        token_data: Dict[str, Any],
+        provider: str,
+        user_id,
+        user_email: Optional[str],
+    ) -> OAuthConnection:
+        """Finalise a PKCE catalog OAuth handshake without creating duplicates.
+
+        At authorize time the PKCE flow creates a ``pending`` row to park the
+        verifier + ``app_integration_id``. That row has no ``user_email`` yet,
+        so :meth:`create_connection`'s ``(provider_slug, user_id, user_email)``
+        upsert filter can't find it — calling ``create_connection`` here would
+        therefore insert a *second* row and orphan the pending one (the bug
+        this method exists to prevent).
+
+        Resolution order:
+
+        1. If a pre-existing active row matches the same provider + user +
+           ``user_email``, the user is reconnecting. Update *that* row,
+           inherit ``app_integration_id`` from the pending row if it's
+           missing, and drop the pending scratchpad.
+        2. Otherwise the pending row IS the canonical connection — apply
+           tokens to it in place and clear the ``status="pending"`` marker.
+        """
+        duplicate: Optional[OAuthConnection] = None
+        if user_email:
+            duplicate = (
+                self.query(OAuthConnection)
+                .filter(
+                    OAuthConnection.provider_slug == provider,
+                    OAuthConnection.created_by_user_id == user_id,
+                    OAuthConnection.id != pending.id,
+                    OAuthConnection.public_metadata["user_email"].astext == user_email,
+                )
+                .first()
+            )
+
+        if duplicate:
+            if not duplicate.app_integration_id and pending.app_integration_id:
+                duplicate.app_integration_id = pending.app_integration_id
+            connection = self._apply_tokens(duplicate, token_data)
+            self.db.delete(pending)
+            self.db.commit()
+            return connection
+
+        connection = self._apply_tokens(pending, token_data)
+        return self.clear_pending_status(connection)
+
+    def clear_pending_status(self, connection: OAuthConnection) -> OAuthConnection:
+        """Drop the ``status='pending'`` marker from a connection's metadata.
+
+        The PKCE catalog flow stamps ``public_metadata.status = 'pending'`` at
+        authorize time so the partially-populated row is filtered out of the
+        connection picker. After the callback completes the token exchange,
+        :meth:`_apply_tokens` (called via :meth:`create_connection`) merges
+        new fields into metadata but never removes the marker — so callers
+        must explicitly clear it here once the row is fully populated.
+
+        Idempotent: rows that don't have a pending marker are returned
+        unchanged with no DB write.
+        """
+        metadata = connection.public_metadata or {}
+        if metadata.get("status") != "pending":
+            return connection
+        updated = dict(metadata)
+        updated.pop("status", None)
+        connection.public_metadata = updated
+        self.db.commit()
+        return connection
 
     # ──────────────────────────────────────────────────────────────────────
     # Internal

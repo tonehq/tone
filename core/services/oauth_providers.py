@@ -1,164 +1,166 @@
-"""OAuth provider catalog — the single source of truth for supported integrations.
+"""OAuth provider catalog — DB-backed.
 
-Each entry is a *descriptor* the authorize/callback/refresh flows read at runtime. Adding a new
-product is a config change here (plus client credentials in settings), not a code change in the
-flow. Secrets (client_id/client_secret) are resolved lazily from ``settings`` so importing this
-module never requires them to be present; a provider whose credentials are missing is simply
-reported as ``configured: false`` in the public catalog and cannot be authorized.
+Provider descriptors live in the ``app_integrations`` table. These helpers read
+from that table (org-scoped) and produce the same dict shapes the rest of the
+OAuth code already expects, so callers only had to gain ``db`` + ``org_id``
+arguments — no further changes.
 
-Descriptor fields:
-  - ``slug``            : stable identifier used everywhere (DB ``provider_slug``, URLs)
-  - ``display_name``    : human label
-  - ``description``     : one-line catalog blurb
-  - ``category``        : grouping for the UI ("google" | "productivity" | "dev_crm")
-  - ``auth_type``       : always "oauth" here (api_key/bearer providers live elsewhere)
-  - ``auth_url`` / ``token_url`` / ``userinfo_url`` (optional)
-  - ``scopes``          : LIST of scope strings the authorize request asks for
-  - ``scope_delimiter`` : how scopes are joined in the request (Google=" ", Linear=",")
-  - ``use_pkce``        : whether the authorize/token exchange uses PKCE (S256)
-  - ``token_auth``      : "body" (client creds in form body) | "basic" (HTTP Basic header)
-  - ``extra_authorize_params`` : provider-specific query params (e.g. Notion ``owner=user``)
-  - ``client_id`` / ``client_secret`` : zero-arg lambdas resolving from ``settings``
+Secrets are resolved lazily from env vars referenced by the row's
+``client_id_env_key`` / ``client_secret_env_key`` columns, mirroring the
+behaviour of the previous hardcoded catalog.
+
+All descriptors come from the ``app_integrations`` table — see
+``dev/seed_app_integrations.py`` for the seed shape and
+``core/models/app_integration.py`` for the column model.
 """
 
 from typing import Any, Dict, List, Optional
 
-from core.config import settings
+from sqlalchemy.orm import Session
 
-# Grouping labels for the catalog UI.
+from core.models.app_integration import AppIntegration
+
+# Grouping labels for the catalog UI. Kept here (constants only) so frontend-
+# adjacent code doesn't have to import a model just to namespace categories.
 CATEGORY_GOOGLE = "google"
 CATEGORY_PRODUCTIVITY = "productivity"
 CATEGORY_DEV_CRM = "dev_crm"
 
-_GOOGLE_USERINFO = "https://www.googleapis.com/oauth2/v2/userinfo"
-
-OAUTH_PROVIDERS: Dict[str, Dict[str, Any]] = {
-    "google_calendar": {
-        "display_name": "Google Calendar",
-        "description": "Create events, check availability, and manage schedules from voice calls.",
-        "category": CATEGORY_GOOGLE,
-        "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
-        "token_url": "https://oauth2.googleapis.com/token",
-        "userinfo_url": _GOOGLE_USERINFO,
-        "scopes": [
-            "https://www.googleapis.com/auth/calendar",
-            "https://www.googleapis.com/auth/userinfo.email",
-        ],
-        # offline access + forced consent so Google returns a refresh token.
-        "extra_authorize_params": {"access_type": "offline", "prompt": "consent"},
-        "client_id": lambda: settings.GOOGLE_CLIENT_ID,
-        "client_secret": lambda: settings.GOOGLE_CLIENT_SECRET,
-    },
-    "google_sheets": {
-        "display_name": "Google Sheets",
-        "description": "Read and write spreadsheet data during conversations.",
-        "category": CATEGORY_GOOGLE,
-        "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
-        "token_url": "https://oauth2.googleapis.com/token",
-        "userinfo_url": _GOOGLE_USERINFO,
-        "scopes": [
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/userinfo.email",
-        ],
-        "extra_authorize_params": {"access_type": "offline", "prompt": "consent"},
-        "client_id": lambda: settings.GOOGLE_CLIENT_ID,
-        "client_secret": lambda: settings.GOOGLE_CLIENT_SECRET,
-    },
-}
-
-# Maps a built-in tool_type to the OAuth provider whose scopes it requires. Backend mirror of the
-# frontend ``TOOL_TYPE_OAUTH_PROVIDER`` map; used for scope validation when a tool is configured.
+# Maps a built-in tool_type to the OAuth provider whose scopes it requires.
+# This is a code-level association (built-in tools are defined in code, not
+# in the DB) so the map stays static — it's not catalog data.
 TOOL_TYPE_TO_PROVIDER: Dict[str, str] = {
     "google_calendar": "google_calendar",
     "google_sheets": "google_sheets",
 }
 
-# Defaults applied to any descriptor field a provider omits.
-_DEFAULTS: Dict[str, Any] = {
-    "auth_type": "oauth",
-    "userinfo_url": None,
-    "scopes": [],
-    "scope_delimiter": " ",
-    "use_pkce": False,
-    "token_auth": "body",
-    "extra_authorize_params": {},
-}
+
+# ──────────────────────────────────────────────────────────────────────
+# Internal helpers
+# ──────────────────────────────────────────────────────────────────────
 
 
-def _raw(provider: str) -> Optional[Dict[str, Any]]:
-    return OAUTH_PROVIDERS.get(provider)
+def _row_by_slug(db: Session, org_id, slug: str) -> Optional[AppIntegration]:
+    """Fetch the ``app_integrations`` row for ``(org, slug)`` or ``None``."""
+    return (
+        db.query(AppIntegration)
+        .filter(
+            AppIntegration.organization_id == org_id,
+            AppIntegration.slug == slug,
+        )
+        .first()
+    )
 
 
-def get_provider_config(provider: str) -> Optional[Dict[str, Any]]:
-    """Return a fully-resolved provider config (with secrets), or ``None`` if unknown.
+def _row_to_config(row: AppIntegration) -> Dict[str, Any]:
+    """Project a row into the dict shape OAuth flows expect.
 
-    Secrets are resolved here; callers must treat the result as sensitive and never expose it.
+    Secrets (``client_id`` / ``client_secret``) come from the row's
+    encrypted blob — see :meth:`AppIntegration.credentials`. Fields that
+    aren't yet modelled as columns (``userinfo_url``, ``scope_delimiter``,
+    ``token_auth``) fall back to sane defaults; they can be promoted to
+    columns later without breaking callers.
     """
-    raw = _raw(provider)
-    if not raw:
-        return None
+    creds = row.credentials()
     return {
-        "slug": provider,
-        "display_name": raw.get("display_name", provider.replace("_", " ").title()),
-        "description": raw.get("description", ""),
-        "category": raw.get("category", CATEGORY_PRODUCTIVITY),
-        "auth_type": raw.get("auth_type", _DEFAULTS["auth_type"]),
-        "auth_url": raw["auth_url"],
-        "token_url": raw["token_url"],
-        "userinfo_url": raw.get("userinfo_url", _DEFAULTS["userinfo_url"]),
-        "scopes": list(raw.get("scopes", _DEFAULTS["scopes"])),
-        "scope_delimiter": raw.get("scope_delimiter", _DEFAULTS["scope_delimiter"]),
-        "use_pkce": raw.get("use_pkce", _DEFAULTS["use_pkce"]),
-        "token_auth": raw.get("token_auth", _DEFAULTS["token_auth"]),
-        "extra_authorize_params": dict(raw.get("extra_authorize_params", {})),
-        "client_id": raw["client_id"](),
-        "client_secret": raw["client_secret"](),
+        "slug": row.slug,
+        "display_name": row.display_name,
+        "description": row.description or "",
+        "category": row.category or CATEGORY_PRODUCTIVITY,
+        "auth_type": row.auth_type,
+        "auth_url": row.auth_url,
+        "token_url": row.token_url,
+        "userinfo_url": row.userinfo_url,
+        "scopes": list(row.scopes or []),
+        "scope_delimiter": " ",
+        "use_pkce": bool(row.pkce_required),
+        "token_auth": "body",
+        "extra_authorize_params": dict(row.extra_auth_params or {}),
+        "client_id": creds.get("client_id"),
+        "client_secret": creds.get("client_secret"),
     }
 
 
-def get_provider_scopes(provider: str) -> List[str]:
-    """Return the scope list a provider declares (empty list if unknown or scopeless)."""
-    raw = _raw(provider)
-    if not raw:
-        return []
-    return list(raw.get("scopes", []))
+# ──────────────────────────────────────────────────────────────────────
+# Public lookups (all take db + org_id)
+# ──────────────────────────────────────────────────────────────────────
 
 
-def is_configured(provider: str) -> bool:
-    """A provider is configured iff its client credentials are present in settings."""
-    raw = _raw(provider)
-    if not raw:
-        return False
-    try:
-        return bool(raw["client_id"]() and raw["client_secret"]())
-    except Exception:
-        return False
+def get_provider_config(db: Session, org_id, provider: str) -> Optional[Dict[str, Any]]:
+    """Return a fully-resolved provider config (with secrets), or ``None``."""
+    row = _row_by_slug(db, org_id, provider)
+    return _row_to_config(row) if row else None
 
 
-def get_supported_providers() -> List[str]:
-    return list(OAUTH_PROVIDERS.keys())
+def get_provider_scopes(db: Session, org_id, provider: str) -> List[str]:
+    """Return the scope list a provider declares (empty if unknown)."""
+    row = _row_by_slug(db, org_id, provider)
+    return list(row.scopes or []) if row else []
 
 
-def get_catalog() -> List[Dict[str, Any]]:
-    """Public, secret-free catalog for the frontend integrations grid."""
-    catalog: List[Dict[str, Any]] = []
-    for slug, raw in OAUTH_PROVIDERS.items():
-        catalog.append(
-            {
-                "slug": slug,
-                "display_name": raw.get("display_name", slug.replace("_", " ").title()),
-                "description": raw.get("description", ""),
-                "category": raw.get("category", CATEGORY_PRODUCTIVITY),
-                "auth_type": raw.get("auth_type", _DEFAULTS["auth_type"]),
-                "scopes": list(raw.get("scopes", [])),
-                "configured": is_configured(slug),
-            }
+def is_configured(db: Session, org_id, provider: str) -> bool:
+    """A provider is configured iff its referenced env vars are set.
+
+    Delegates to :meth:`AppIntegration.is_configured` so the env-var rules
+    live in exactly one place.
+    """
+    row = _row_by_slug(db, org_id, provider)
+    return bool(row and row.is_configured())
+
+
+def get_supported_providers(db: Session, org_id) -> List[str]:
+    """Slugs of every enabled provider in the org's catalog."""
+    rows = (
+        db.query(AppIntegration)
+        .filter(
+            AppIntegration.organization_id == org_id,
+            AppIntegration.is_enabled.is_(True),
         )
-    return catalog
+        .order_by(AppIntegration.sort_order, AppIntegration.display_name)
+        .all()
+    )
+    return [r.slug for r in rows]
+
+
+def get_catalog(db: Session, org_id) -> List[Dict[str, Any]]:
+    """Public, secret-free catalog for the frontend integrations grid."""
+    rows = (
+        db.query(AppIntegration)
+        .filter(
+            AppIntegration.organization_id == org_id,
+            AppIntegration.is_enabled.is_(True),
+        )
+        .order_by(AppIntegration.sort_order, AppIntegration.display_name)
+        .all()
+    )
+    return [
+        {
+            # ``id`` + ``is_default`` are surfaced so the integrations grid can
+            # route to the edit page and decide whether the Delete option is
+            # available (default rows are seed-managed and protected).
+            "id": str(r.id),
+            "is_default": bool(r.is_default),
+            "slug": r.slug,
+            "display_name": r.display_name,
+            "description": r.description or "",
+            "category": r.category or CATEGORY_PRODUCTIVITY,
+            "auth_type": r.auth_type,
+            "scopes": list(r.scopes or []),
+            "configured": r.is_configured(),
+        }
+        for r in rows
+    ]
 
 
 def provider_for_tool_type(tool_type: Optional[str]) -> Optional[str]:
-    """Resolve the OAuth provider slug whose scopes a built-in tool_type requires."""
+    """Resolve the OAuth provider slug whose scopes a built-in tool_type
+    requires. Static map — not catalog data."""
     if not tool_type:
         return None
     return TOOL_TYPE_TO_PROVIDER.get(tool_type)
+
+
+# Source of truth for these descriptors now lives in
+# ``dev/seed_app_integrations.py`` (seeded into ``app_integrations``). The
+# previous hardcoded ``OAUTH_PROVIDERS`` dict was removed once the DB-backed
+# lookups above became the only readers.

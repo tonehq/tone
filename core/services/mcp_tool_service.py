@@ -191,6 +191,102 @@ def get_mcp_server_refs(agent_id: int) -> list:
     return [{"id": str(r.id), "name": r.name} for r in rows]
 
 
+def _collect_json_refs(obj, out: list) -> None:
+    """Recursively walk a JSON value, appending every ``$ref`` string to ``out``."""
+    if isinstance(obj, dict):
+        ref = obj.get("$ref")
+        if isinstance(ref, str):
+            out.append(ref)
+        for v in obj.values():
+            _collect_json_refs(v, out)
+    elif isinstance(obj, list):
+        for item in obj:
+            _collect_json_refs(item, out)
+
+
+def _json_ref_resolves(ref: str, schema_root: dict) -> bool:
+    """Return True iff ``ref`` is a local JSON Pointer (``#/...``) that resolves
+    against ``schema_root``. External or dangling references return False."""
+    if not isinstance(ref, str) or not ref.startswith("#/"):
+        return False
+    cur = schema_root
+    for token in ref[2:].split("/"):
+        token = token.replace("~1", "/").replace("~0", "~")
+        if isinstance(cur, dict) and token in cur:
+            cur = cur[token]
+        elif isinstance(cur, list):
+            try:
+                cur = cur[int(token)]
+            except (ValueError, IndexError):
+                return False
+        else:
+            return False
+    return True
+
+
+def _schema_has_unresolved_refs(schema) -> tuple:
+    """Return ``(has_bad, list_of_bad_refs)`` for a JSON schema.
+
+    Some MCP servers (notably HubSpot's ``manage_crm_objects``) ship tool schemas
+    whose ``$ref`` pointers target definitions that were never included. Strict
+    LLM APIs (Groq, Gemini) reject the entire tool batch when any one schema is
+    malformed — killing every other tool on the same agent. We pre-validate so
+    the broken tools can be dropped while the rest continue to work.
+    """
+    if not isinstance(schema, dict) or not schema:
+        return False, []
+    refs: list = []
+    _collect_json_refs(schema, refs)
+    if not refs:
+        return False, []
+    unresolved = [r for r in refs if not _json_ref_resolves(r, schema)]
+    return bool(unresolved), unresolved
+
+
+async def _filter_invalid_mcp_tool_schemas(mcp_client) -> tuple:
+    """Pre-list the MCP server's tools, validate their JSON schemas, and configure
+    ``mcp_client``'s built-in ``tools_filter`` to skip ones with unresolved $refs.
+
+    Returns ``(kept_names_or_None, dropped_with_reasons)``. On any internal
+    error (e.g. pipecat changed its private API) returns ``(None, [])`` so
+    registration falls back to no filtering — never blocks tool loading.
+
+    Cost: one extra ``session.list_tools()`` round-trip per server at pipeline
+    build time (~50–150 ms). Zero overhead during the live call.
+    """
+    try:
+        session = mcp_client._ensure_connected()
+        available = await session.list_tools()
+    except Exception as e:
+        logger.debug("Schema pre-validation skipped (could not list tools): {}", e)
+        return None, []
+
+    kept: set = set()
+    dropped: list = []
+    for tool in getattr(available, "tools", []) or []:
+        try:
+            has_bad, bad_refs = _schema_has_unresolved_refs(tool.inputSchema or {})
+        except Exception:
+            kept.add(tool.name)
+            continue
+        if has_bad:
+            dropped.append((tool.name, bad_refs[:2]))
+        else:
+            kept.add(tool.name)
+
+    if dropped:
+        try:
+            mcp_client._tools_filter = kept
+        except Exception as e:
+            logger.warning(
+                "Could not apply tools_filter to MCPClient (pipecat API may have changed): {}",
+                e,
+            )
+            return None, dropped
+
+    return kept, dropped
+
+
 async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, current_turn=None, tool_dedup=None) -> Optional[ToolsSchema]:
     """Connect to all MCP servers linked to an agent and register their tools with the LLM.
 
@@ -299,6 +395,36 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, current
             # session must stay open for the entire call: the LLM keeps a reference to
             # mcp_client._tool_wrapper, which uses the same session at runtime.
             await asyncio.wait_for(mcp_client.start(), timeout=MCP_REGISTER_TIMEOUT_S)
+
+            # Pre-validate tool schemas: some MCP servers (HubSpot's ``manage_crm_objects``,
+            # for example) advertise tools whose JSON schemas contain unresolved ``$ref``s.
+            # Strict LLM APIs reject the entire tool batch when any one schema is malformed,
+            # so without this step a single bad tool silently breaks every other tool on the
+            # same agent. We configure the MCPClient's built-in ``tools_filter`` so the
+            # downstream ``register_tools`` skips the broken ones automatically.
+            try:
+                _kept, _dropped = await asyncio.wait_for(
+                    _filter_invalid_mcp_tool_schemas(mcp_client),
+                    timeout=MCP_REGISTER_TIMEOUT_S,
+                )
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Schema pre-validation timed out for MCP server '{}'; continuing without filtering",
+                    server.name,
+                )
+                _kept, _dropped = None, []
+            if _dropped:
+                logger.warning(
+                    "MCP server '{}': dropped {} tool(s) with invalid JSON schemas: {}",
+                    server.name, len(_dropped),
+                    [name for name, _ in _dropped],
+                )
+                for _name, _refs in _dropped:
+                    logger.debug(
+                        "MCP server '{}': tool '{}' has unresolved $refs: {}",
+                        server.name, _name, _refs,
+                    )
+
             # Decorate every handler MCPClient registers so MCP tool calls log their
             # name/arguments/output during the conversation; restore afterwards so only this
             # server's tools are wrapped.

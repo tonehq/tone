@@ -11,6 +11,8 @@ export interface MCPServer {
   auth_config: Record<string, string> | null;
   meta_data: Record<string, unknown> | null;
   oauth_connection_id?: string | null;
+  /** Catalog entry this server belongs to. Optional. */
+  app_integration_id?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -27,6 +29,7 @@ export interface MCPServerUpsertPayload {
   auth_config?: Record<string, string> | null;
   meta_data?: Record<string, unknown> | null;
   oauth_connection_id?: string | null;
+  app_integration_id?: string | null;
   is_active?: boolean;
 }
 

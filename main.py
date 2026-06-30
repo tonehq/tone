@@ -19,7 +19,8 @@ from core.internal.capabilities import init_capabilities, is_ee_enabled, get_cap
 from core.api.v1 import (
     auth, users, organizations, agent_configs, channels, oauth,
     knowledge_base, agents, mcp_servers, services, tools, dashboard,
-    call_logs, call_metrics, sessions, workflows, webrtc, audit_logs
+    call_logs, call_metrics, sessions, workflows, webrtc, audit_logs,
+    app_integrations,
 )
 from core.middleware.request_context import RequestContextMiddleware
 import core.models
@@ -89,6 +90,7 @@ if ee_enabled:
     from ee.api.v1 import knowledge_base as ee_knowledge_base
     from ee.api.v1 import agents as ee_agents
     from ee.api.v1 import mcp_servers as ee_mcp_servers
+    from ee.api.v1 import app_integrations as ee_app_integrations
     from ee.api.v1 import services as ee_services
     from ee.api.v1 import tools as ee_tools
     from ee.api.v1 import dashboard as ee_dashboard
@@ -105,6 +107,7 @@ if ee_enabled:
     api_v1.include_router(ee_knowledge_base.router, prefix="/knowledge-base", tags=["knowledge-base"])
     api_v1.include_router(ee_agents.router, prefix="/agent", tags=["agent"])
     api_v1.include_router(ee_mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
+    api_v1.include_router(ee_app_integrations.router, prefix="/app-integration", tags=["app-integration"])
     api_v1.include_router(ee_services.router, prefix="/services", tags=["services"])
     api_v1.include_router(ee_tools.router, prefix="/tool", tags=["tool"])
     api_v1.include_router(ee_dashboard.router, prefix="/dashboard", tags=["dashboard"])
@@ -125,6 +128,7 @@ else:
     api_v1.include_router(knowledge_base.router, prefix="/knowledge-base", tags=["knowledge-base"])
     api_v1.include_router(agents.router, prefix="/agent", tags=["agent"])
     api_v1.include_router(mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
+    api_v1.include_router(app_integrations.router, prefix="/app-integration", tags=["app-integration"])
     api_v1.include_router(services.router, prefix="/services", tags=["services"])
     api_v1.include_router(tools.router, prefix="/tool", tags=["tool"])
     api_v1.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])

@@ -17,7 +17,9 @@ import SettingsSection from '@/components/tools/SettingsSection';
 import { Switch } from '@/components/ui/switch';
 import { useGoBack } from '@/hooks/useGoBack';
 import { getMcpServer } from '@/services/mcpServerService';
+import { listAppIntegrations } from '@/services/appIntegrationService';
 import { discoverMcpOAuth, getOAuthCatalog, getOAuthConnections } from '@/services/oauthService';
+import type { AppIntegration } from '@/types/appIntegration';
 import type { MCPServer, MCPServerUpsertPayload } from '@/types/mcp';
 import type { OAuthCatalogProvider, OAuthConnection } from '@/types/oauth';
 import { cn } from '@/utils/cn';
@@ -58,6 +60,10 @@ interface HttpHeaderField {
   value: string;
 }
 
+// Radix Select reserves the empty string for "no selection", so we sentinel
+// the unset state instead of using ``""`` in the form value.
+const NO_APP_INTEGRATION = '__none__';
+
 interface MCPFormState {
   name: string;
   description: string;
@@ -69,6 +75,8 @@ interface MCPFormState {
   use_api_key: boolean;
   api_key: string;
   oauth_connection_id: string;
+  /** Linked catalog entry. Drives the OAuth connection picker filter. */
+  app_integration_id: string;
   http_headers: HttpHeaderField[];
   is_active: boolean;
 }
@@ -84,6 +92,7 @@ const DEFAULT_VALUES: MCPFormState = {
   use_api_key: false,
   api_key: '',
   oauth_connection_id: NO_OAUTH_CONNECTION,
+  app_integration_id: NO_APP_INTEGRATION,
   http_headers: [],
   is_active: true,
 };
@@ -126,6 +135,7 @@ function serverToFormState(s: MCPServer): MCPFormState {
     use_api_key: !!auth.api_key,
     api_key: auth.api_key ?? '',
     oauth_connection_id: s.oauth_connection_id ?? NO_OAUTH_CONNECTION,
+    app_integration_id: s.app_integration_id ?? NO_APP_INTEGRATION,
     http_headers: Object.entries(headersMap).map(([key, value]) => ({
       key,
       value: String(value),
@@ -153,6 +163,10 @@ function formStateToUpsertPayload(s: MCPFormState, id?: string): MCPServerUpsert
     oauth_connection_id:
       s.oauth_connection_id && s.oauth_connection_id !== NO_OAUTH_CONNECTION
         ? s.oauth_connection_id
+        : null,
+    app_integration_id:
+      s.app_integration_id && s.app_integration_id !== NO_APP_INTEGRATION
+        ? s.app_integration_id
         : null,
     meta_data: { timeout: s.timeout, http_headers: headersMap },
     is_active: s.is_active,
@@ -193,15 +207,19 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
     name: 'http_headers',
   });
 
-  // OAuth connections available to back this server, plus the catalog (for required scopes).
+  // OAuth connections available to back this server, plus the catalog (for required scopes)
+  // and the app-integrations list that drives the "Linked integration" picker. The OAuth
+  // connections are refetched whenever the user picks a different integration so the dropdown
+  // only ever shows connections linked to that catalog entry.
   const [oauthConnections, setOauthConnections] = useState<OAuthConnection[]>([]);
   const [catalog, setCatalog] = useState<OAuthCatalogProvider[]>([]);
+  const [appIntegrations, setAppIntegrations] = useState<AppIntegration[]>([]);
 
   useEffect(() => {
-    Promise.all([getOAuthConnections(), getOAuthCatalog()])
-      .then(([connections, providers]) => {
-        setOauthConnections(connections);
+    Promise.all([getOAuthCatalog(), listAppIntegrations({ page_size: 200 })])
+      .then(([providers, integrations]) => {
         setCatalog(providers);
+        setAppIntegrations(integrations.rows.filter((r) => r.is_enabled));
       })
       .catch((error) => handleApiError(error));
   }, []);
@@ -258,6 +276,29 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
   const watchedTimeout = watch('timeout');
   const watchedServerUrl = watch('server_url') ?? '';
   const watchedOAuthId = watch('oauth_connection_id') ?? '';
+  const watchedAppIntegrationId = watch('app_integration_id') ?? NO_APP_INTEGRATION;
+
+  // Refetch the OAuth-connection list whenever the linked-integration picker
+  // changes. ``NO_APP_INTEGRATION`` shows all connections (no filter); a real
+  // id narrows the list to that catalog entry's connections only. Cancelled
+  // flag suppresses out-of-order responses if the user toggles quickly.
+  useEffect(() => {
+    let cancelled = false;
+    const params =
+      watchedAppIntegrationId && watchedAppIntegrationId !== NO_APP_INTEGRATION
+        ? { app_integration_id: watchedAppIntegrationId }
+        : {};
+    getOAuthConnections(params)
+      .then((connections) => {
+        if (!cancelled) setOauthConnections(connections);
+      })
+      .catch((error) => {
+        if (!cancelled) handleApiError(error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [watchedAppIntegrationId]);
   const watchedUseBearer = watch('use_bearer_token');
   const watchedUseApiKey = watch('use_api_key');
 
@@ -275,6 +316,14 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
           : 'None';
 
   const selectedConnection = oauthConnections.find((c) => c.id === watchedOAuthId) ?? null;
+  // Picker for the catalog-entry filter. ``__none__`` sentinel keeps Radix happy.
+  const appIntegrationOptions = [
+    { value: NO_APP_INTEGRATION, label: 'None — show all connections' },
+    ...appIntegrations.map((i) => ({
+      value: i.id,
+      label: i.display_name,
+    })),
+  ];
   const connectionOptions = [
     { value: NO_OAUTH_CONNECTION, label: 'None — use static headers' },
     // Skip in-flight MCP discovery handshakes (status 'pending') — they hold no usable token yet,
@@ -321,6 +370,9 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
         watchedServerUrl.trim(),
         watchedName || undefined,
         window.location.pathname,
+        watchedAppIntegrationId && watchedAppIntegrationId !== NO_APP_INTEGRATION
+          ? watchedAppIntegrationId
+          : undefined,
       );
       window.location.href = url;
     } catch (error) {
@@ -497,6 +549,17 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
                 onToggle={() => toggleSection('settings')}
               >
                 <div className="space-y-5">
+                  {/* Linked integration is asked FIRST — it scopes the rest of the form
+                      (server URL hints, OAuth account dropdown filter, new-connection tagging).
+                      Defaults to "None" so existing forms continue to work unchanged. */}
+                  <SelectInput
+                    name="app_integration_id"
+                    control={control}
+                    label="Linked integration"
+                    placeholder="None — show all connections"
+                    options={appIntegrationOptions}
+                    helperText="Filters the OAuth account list below to this integration only."
+                  />
                   <TextInput
                     name="name"
                     control={control}

@@ -285,6 +285,7 @@ class McpServerService(BaseService):
             auth_config=encrypt_auth_config(data.get("auth_config")),
             meta_data=data.get("meta_data"),
             oauth_connection_id=oauth_connection_id,
+            app_integration_id=data.get("app_integration_id"),
             is_active=data.get("is_active", True),
             organization_id=self.org_id,
             created_at=now,
@@ -626,8 +627,15 @@ class McpServerService(BaseService):
         """Connect to an MCP server and return its available tools."""
         mcp_server = self.get_mcp_server(mcp_server_id)
         decrypted_auth = decrypt_auth_config(mcp_server.auth_config)
+        extra_headers = {
+            **headers_from_meta(mcp_server.meta_data),
+            **self._resolve_oauth_headers(mcp_server.oauth_connection_id),
+        }
         result = await self.validate_mcp_connection(
-            mcp_server.server_url, mcp_server.transport_type, decrypted_auth
+            mcp_server.server_url,
+            mcp_server.transport_type,
+            decrypted_auth,
+            extra_headers=extra_headers,
         )
         self._sync_mcp_tools(mcp_server, result["tools"])
         return {
@@ -650,6 +658,9 @@ class McpServerService(BaseService):
             "meta_data": mcp_server.meta_data,
             "oauth_connection_id": (
                 str(mcp_server.oauth_connection_id) if mcp_server.oauth_connection_id else None
+            ),
+            "app_integration_id": (
+                str(mcp_server.app_integration_id) if mcp_server.app_integration_id else None
             ),
             "is_active": mcp_server.is_active,
             "created_at": mcp_server.created_at,

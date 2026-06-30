@@ -22,3 +22,4 @@ class McpServer(OrgScopedModel):
     meta_data = Column(JSONB, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     oauth_connection_id = Column(UUID(as_uuid=True), ForeignKey("oauth_connections.id", ondelete="SET NULL"), nullable=True)
+    app_integration_id = Column(UUID(as_uuid=True), ForeignKey("app_integrations.id", ondelete="SET NULL"), nullable=True)

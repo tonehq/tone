@@ -13,7 +13,8 @@ import type { OAuthCatalogProvider } from '@/types/oauth';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { KeyRound, Phone, Plug, RefreshCw, Sparkles } from 'lucide-react';
+import { KeyRound, Phone, Plug, Plus, RefreshCw, Settings, Sparkles } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const CATALOG_ANCHOR_ID = 'integrations-available-providers';
@@ -38,6 +39,7 @@ interface IntegrationsProps {
 }
 
 export default function Integrations({ refreshKey }: IntegrationsProps) {
+  const router = useRouter();
   const channelGridRef = useRef<ChannelGridHandle | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -52,11 +54,18 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
   const [catalog, setCatalog] = useState<OAuthCatalogProvider[]>([]);
   const [customCredentialOpen, setCustomCredentialOpen] = useState(false);
 
-  useEffect(() => {
+  // Memoised so it can be passed to AvailableIntegrationsCatalog as the
+  // ``onCatalogChanged`` callback — fired after admin actions (delete) so the
+  // grid reflects the change without a page reload.
+  const refreshCatalog = useCallback(() => {
     getOAuthCatalog()
       .then(setCatalog)
       .catch((err) => handleApiError(err));
   }, []);
+
+  useEffect(() => {
+    refreshCatalog();
+  }, [refreshCatalog]);
 
   // Provider slug → required scopes, used to drive the scope-status badges on connection cards.
   const requiredScopesByProvider = useMemo(
@@ -138,6 +147,22 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
           </div>
           <div className="flex items-center gap-2 self-start sm:self-auto">
             <CustomButton
+              type="primary"
+              size="sm"
+              onClick={() => router.push('/settings/integrations/new')}
+              icon={<Plus className="size-3.5" />}
+            >
+              New integration
+            </CustomButton>
+            <CustomButton
+              type="default"
+              size="sm"
+              onClick={() => router.push('/settings/integrations/manage')}
+              icon={<Settings className="size-3.5" />}
+            >
+              Manage
+            </CustomButton>
+            <CustomButton
               type="default"
               size="sm"
               onClick={() => setCustomCredentialOpen(true)}
@@ -185,6 +210,7 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
               connectedSlugs={connectedOAuthSlugs}
               configuredChannelTypes={configuredChannelTypes}
               catalog={catalog}
+              onCatalogChanged={refreshCatalog}
             />
           </section>
 

@@ -18,6 +18,10 @@ interface ProviderTileProps {
   dimmed?: boolean;
   /** Call-to-action rendered at the foot of the tile (Connect / Add API key / …). */
   cta: ReactNode;
+  /** Optional actions slot — rendered next to the "In use" badge. Used by the
+   * OAuth catalog tiles to show an admin kebab menu (Edit / Delete). Channels
+   * and other tile types omit it and the slot collapses. */
+  actionsSlot?: ReactNode;
 }
 
 /**
@@ -36,6 +40,7 @@ export default function ProviderTile({
   isInUse = false,
   dimmed = false,
   cta,
+  actionsSlot,
 }: ProviderTileProps) {
   return (
     <article
@@ -64,12 +69,15 @@ export default function ProviderTile({
         >
           {icon}
         </div>
-        {isInUse && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
-            <Check className="size-3" strokeWidth={2.5} />
-            In use
-          </span>
-        )}
+        <div className="flex items-center gap-1.5">
+          {isInUse && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+              <Check className="size-3" strokeWidth={2.5} />
+              In use
+            </span>
+          )}
+          {actionsSlot}
+        </div>
       </header>
 
       <div className="mt-4 min-w-0 flex-1">
