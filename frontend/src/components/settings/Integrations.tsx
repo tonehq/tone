@@ -13,7 +13,8 @@ import type { OAuthCatalogProvider } from '@/types/oauth';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { KeyRound, Phone, Plug, RefreshCw, Sparkles } from 'lucide-react';
+import { KeyRound, Phone, Plug, Plus, RefreshCw, Sparkles } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const CATALOG_ANCHOR_ID = 'integrations-available-providers';
@@ -38,6 +39,7 @@ interface IntegrationsProps {
 }
 
 export default function Integrations({ refreshKey }: IntegrationsProps) {
+  const router = useRouter();
   const channelGridRef = useRef<ChannelGridHandle | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -137,6 +139,14 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
             </p>
           </div>
           <div className="flex items-center gap-2 self-start sm:self-auto">
+            <CustomButton
+              type="primary"
+              size="sm"
+              onClick={() => router.push('/settings/integrations/new')}
+              icon={<Plus className="size-3.5" />}
+            >
+              New integration
+            </CustomButton>
             <CustomButton
               type="default"
               size="sm"

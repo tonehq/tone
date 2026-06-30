@@ -83,7 +83,9 @@ class ToolService(BaseService):
             return
         svc = OAuthService(self.db, org_id=self.org_id)
         connection = svc.get_connection(oauth_connection_id)
-        svc.raise_if_missing_scopes(svc.validate_scopes(connection, get_provider_scopes(provider)))
+        svc.raise_if_missing_scopes(
+            svc.validate_scopes(connection, get_provider_scopes(self.db, self.org_id, provider))
+        )
 
     def _check_duplicate_name(self, name: str, exclude_id=None) -> None:
         """Raise 409 if a tool with the same name already exists in this org."""

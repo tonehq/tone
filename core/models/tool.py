@@ -27,4 +27,5 @@ class Tool(OrgScopedModel):
     is_template = Column(Boolean, nullable=False, default=False)
     mcp_server_id = Column(UUID(as_uuid=True), ForeignKey("mcp_servers.id", ondelete="CASCADE"), nullable=True)
     oauth_connection_id = Column(UUID(as_uuid=True), ForeignKey("oauth_connections.id", ondelete="SET NULL"), nullable=True)
+    app_integration_id = Column(UUID(as_uuid=True), ForeignKey("app_integrations.id", ondelete="SET NULL"), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)

@@ -285,6 +285,7 @@ class McpServerService(BaseService):
             auth_config=encrypt_auth_config(data.get("auth_config")),
             meta_data=data.get("meta_data"),
             oauth_connection_id=oauth_connection_id,
+            app_integration_id=data.get("app_integration_id"),
             is_active=data.get("is_active", True),
             organization_id=self.org_id,
             created_at=now,
@@ -657,6 +658,9 @@ class McpServerService(BaseService):
             "meta_data": mcp_server.meta_data,
             "oauth_connection_id": (
                 str(mcp_server.oauth_connection_id) if mcp_server.oauth_connection_id else None
+            ),
+            "app_integration_id": (
+                str(mcp_server.app_integration_id) if mcp_server.app_integration_id else None
             ),
             "is_active": mcp_server.is_active,
             "created_at": mcp_server.created_at,

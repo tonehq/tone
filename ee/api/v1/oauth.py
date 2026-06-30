@@ -8,6 +8,11 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
+from core.api.v1.oauth import (
+    _create_pending_pkce_row,
+    _resolve_pkce_state,
+)
+from core.utils.pkce import pkce_pair
 from core.config import settings
 from core.database.session import get_db
 from core.services.oauth_providers import (
@@ -34,11 +39,19 @@ def _get_service(claims: EEJWTClaims, db: Session) -> OAuthService:
 @router.get("/connections")
 def get_connections(
     provider: str = Query(None, description="Filter by provider (e.g. google_calendar)"),
+    app_integration_id: str = Query(
+        None,
+        description="Filter to connections linked to this app_integrations row.",
+    ),
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
     svc = _get_service(claims, db)
-    connections = svc.get_connections(provider=provider, user_id=claims.user_id)
+    connections = svc.get_connections(
+        provider=provider,
+        user_id=claims.user_id,
+        app_integration_id=app_integration_id,
+    )
     return [svc.connection_response(c) for c in connections]
 
 
@@ -50,6 +63,7 @@ def list_connections(
 ):
     return _get_service(claims, db).list_connections(
         provider_slug=body.get("provider_slug"),
+        app_integration_id=body.get("app_integration_id"),
     )
 
 
@@ -76,14 +90,20 @@ def disconnect(
 
 
 @router.get("/providers")
-def list_providers():
-    return {"providers": get_supported_providers()}
+def list_providers(
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    return {"providers": get_supported_providers(db, UUID(claims.org_id))}
 
 
 @router.get("/catalog")
-def catalog():
+def catalog(
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
     """Public, secret-free provider catalog for the integrations grid."""
-    return {"providers": get_catalog()}
+    return {"providers": get_catalog(db, UUID(claims.org_id))}
 
 
 @router.post("/custom_credential", status_code=status.HTTP_201_CREATED)
@@ -168,8 +188,9 @@ def mcp_callback(
 def authorize(
     provider: str,
     claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
 ):
-    config = get_provider_config(provider)
+    config = get_provider_config(db, UUID(claims.org_id), provider)
     if not config:
         raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
 
@@ -179,15 +200,25 @@ def authorize(
             detail=f"OAuth credentials not configured for {provider}",
         )
 
-    state = f"{claims.org_id}:{claims.user_id}:{provider}"
     callback_url = f"{BACKEND_URL}/oauth/{provider}/callback"
-
     params = {
         "client_id": config["client_id"],
         "redirect_uri": callback_url,
         "response_type": "code",
-        "state": state,
     }
+
+    # PKCE branch — see ``core/api/v1/oauth.py`` for the design notes.
+    if config.get("use_pkce"):
+        org_uuid = UUID(claims.org_id)
+        user_uuid = UUID(str(claims.user_id))
+        verifier, challenge = pkce_pair()
+        pending = _create_pending_pkce_row(db, org_uuid, user_uuid, provider, verifier)
+        params["state"] = str(pending.id)
+        params["code_challenge"] = challenge
+        params["code_challenge_method"] = "S256"
+    else:
+        params["state"] = f"{claims.org_id}:{claims.user_id}:{provider}"
+
     # Some providers (Notion, ClickUp) have no OAuth scopes; omit the param entirely for them.
     scopes = config.get("scopes") or []
     if scopes:
@@ -206,19 +237,27 @@ def callback(
     state: str = Query(..., description="State parameter with org_id:user_id:provider"),
     db: Session = Depends(get_db),
 ):
-    config = get_provider_config(provider)
+    # Two ``state`` shapes are accepted:
+    #   1. UUID  → PKCE flow; the row carries verifier + org + user.
+    #   2. ``org_id:user_id:provider`` → legacy non-PKCE flow.
+    # Try (1) first; fall through to (2) if no pending row matches.
+    pending, verifier = _resolve_pkce_state(db, state, provider)
+    if pending:
+        org_id = pending.organization_id
+        user_id = pending.created_by_user_id
+    else:
+        try:
+            org_id_str, user_id_str, state_provider = state.split(":")
+            org_id = UUID(org_id_str)
+            user_id = UUID(user_id_str)
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid state parameter")
+        if state_provider != provider:
+            raise HTTPException(status_code=400, detail="Provider mismatch in state")
+
+    config = get_provider_config(db, org_id, provider)
     if not config:
         raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
-
-    try:
-        org_id_str, user_id_str, state_provider = state.split(":")
-        org_id = UUID(org_id_str)
-        user_id = UUID(user_id_str)
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=400, detail="Invalid state parameter")
-
-    if state_provider != provider:
-        raise HTTPException(status_code=400, detail="Provider mismatch in state")
 
     callback_url = f"{BACKEND_URL}/oauth/{provider}/callback"
 
@@ -227,6 +266,10 @@ def callback(
         "grant_type": "authorization_code",
         "redirect_uri": callback_url,
     }
+    # PKCE: include the verifier we stashed at authorize time. Providers that
+    # didn't require PKCE just ignore the extra field.
+    if verifier:
+        token_data["code_verifier"] = verifier
     # Providers either accept client creds in the body (default) or require HTTP Basic (Notion).
     token_kwargs: Dict[str, Any] = {"data": token_data}
     if config.get("token_auth") == "basic":
@@ -273,7 +316,7 @@ def callback(
             pass
 
     svc = OAuthService(db, org_id=org_id)
-    svc.create_connection({
+    connection = svc.create_connection({
         "provider_slug": provider,
         "access_token": access_token,
         "refresh_token": refresh_token,
@@ -282,6 +325,11 @@ def callback(
         "user_email": user_email,
         "created_by_user_id": user_id,
     })
+
+    # PKCE path stamps ``status="pending"`` on the pre-callback row; promote
+    # it to active now that the token exchange has succeeded so the
+    # connection-picker stops filtering this row out.
+    svc.clear_pending_status(connection)
 
     frontend_url = settings.APPLICATION_URL.rstrip("/")
     return RedirectResponse(
