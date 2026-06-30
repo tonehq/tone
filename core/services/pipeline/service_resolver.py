@@ -42,7 +42,7 @@ from core.utils.encryption import decrypt
 # removed in `load_agent_service_config`'s `result` dict). It is folded into every cache
 # version stamp, so a deploy that changes the shape invalidates all persisted entries
 # instead of serving them with a stale shape — there is no TTL to clear them otherwise.
-PAYLOAD_FORMAT_VERSION = "v2"
+PAYLOAD_FORMAT_VERSION = "v4"  # v4: workflow mode uses the workflow prompt alone (no base persona)
 
 
 def _resolve_org_id(org_id):
@@ -277,6 +277,187 @@ def _config_service_ids(config) -> dict:
     }
 
 
+def _published_workflow_graph(db: Session, config, org_id=None) -> Optional[dict]:
+    """Return the assigned workflow's published-version graph (org-scoped), or None outside
+    workflow mode / when no workflow is assigned / there is no published version with a graph.
+
+    Loaded once per resolve so the playbook text and the synthesized apiRequest tools derive
+    from the same graph and share one node_id -> fn-name map (names never drift)."""
+    if getattr(config, "mode", "prompt") != "workflow":
+        return None
+    workflow_id = getattr(config, "workflow_id", None)
+    if not workflow_id:
+        return None
+
+    from core.models.workflow import Workflow, WorkflowVersion
+
+    wf_q = db.query(Workflow).filter(Workflow.id == workflow_id)
+    if org_id:
+        wf_q = wf_q.filter(Workflow.organization_id == org_id)
+    wf = wf_q.first()
+    if not wf or not wf.published_version_id:
+        return None
+    ver_q = db.query(WorkflowVersion).filter(WorkflowVersion.id == wf.published_version_id)
+    if org_id:
+        ver_q = ver_q.filter(WorkflowVersion.organization_id == org_id)
+    ver = ver_q.first()
+    if not ver or not ver.graph:
+        return None
+    return ver.graph
+
+
+def _workflow_tool_names(db: Session, graph: dict, org_id=None) -> dict:
+    """Map each tool node's ``toolId`` / ``mcpServerId`` → display name so the serialized
+    steps can name the exact (agent-attached) tool or MCP server to use. Org-scoped;
+    returns {} when there are no tool/MCP ids."""
+    nodes = graph.get("nodes") or []
+    tool_ids, mcp_ids = [], []
+    for n in nodes:
+        data = (n or {}).get("data") or {}
+        if data.get("toolId"):
+            tool_ids.append(data["toolId"])
+        if data.get("mcpServerId"):
+            mcp_ids.append(data["mcpServerId"])
+    names: dict = {}
+    if tool_ids:
+        from core.models.tool import Tool
+
+        q = db.query(Tool).filter(Tool.id.in_(tool_ids))
+        if org_id:
+            q = q.filter(Tool.organization_id == org_id)
+        names.update({str(t.id): t.name for t in q.all()})
+    if mcp_ids:
+        from core.models.mcp_server import McpServer
+
+        q = db.query(McpServer).filter(McpServer.id.in_(mcp_ids))
+        if org_id:
+            q = q.filter(McpServer.organization_id == org_id)
+        names.update({str(m.id): m.name for m in q.all()})
+    return names
+
+
+def _kv_to_dict(rows, decrypt: bool) -> dict:
+    """Turn a [{key, value, encrypt?}] list into a {key: value} dict, decrypting
+    encrypt-flagged values (stored AES-encrypted in the graph). Bad/blank rows dropped."""
+    out: dict = {}
+    if not isinstance(rows, list):
+        return out
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        k = (r.get("key") or "").strip()
+        if not k:
+            continue
+        v = r.get("value") or ""
+        if decrypt and r.get("encrypt") and v:
+            try:
+                from core.utils.encryption import decrypt as _dec
+                v = _dec(v)
+            except Exception:
+                continue
+        out[k] = v
+    return out
+
+
+def _merge_tools(real_tools: list, api_tools: list) -> list:
+    """Append synthesized apiRequest tools to the agent's real tools, renaming any
+    apiRequest tool whose (sanitized) name collides with a real tool so both stay callable."""
+    if not api_tools:
+        return real_tools
+    from core.services.custom_tool_service import sanitize_tool_name
+
+    taken = {sanitize_tool_name(t.get("name") or "") for t in (real_tools or [])}
+    merged = list(real_tools or [])
+    for t in api_tools:
+        name = t.get("name") or "api_request"
+        if name in taken:
+            i = 2
+            while f"{name}_{i}" in taken:
+                i += 1
+            name = f"{name}_{i}"
+            t = {**t, "name": name}
+        taken.add(name)
+        merged.append(t)
+    return merged
+
+
+def _workflow_api_fn_names(graph: dict, taken: Optional[set] = None) -> dict:
+    """Map each apiRequest node id → the unique sanitized function name it is registered
+    under, deduped among themselves AND against ``taken`` (the agent's real tool names). The
+    playbook serializer and the synthesized tools share this map so the function names the
+    model is told to call match the names actually registered."""
+    from core.services.custom_tool_service import sanitize_tool_name
+
+    claimed = set(taken or ())
+    names: dict = {}
+    for n in (graph.get("nodes") or []):
+        if not isinstance(n, dict) or n.get("type") != "apiRequest":
+            continue
+        nid = n.get("id")
+        d = n.get("data") or {}
+        raw = (d.get("name") or nid or "api_request").strip()
+        fn = sanitize_tool_name(raw)
+        if fn in claimed:
+            i = 2
+            while f"{fn}_{i}" in claimed:
+                i += 1
+            fn = f"{fn}_{i}"
+        claimed.add(fn)
+        names[str(nid)] = fn
+    return names
+
+
+def _build_api_request_tools(graph: dict, fn_names: dict) -> list:
+    """Synthesize the graph's apiRequest nodes into webhook-tool dicts (same shape as
+    serialize_agent_tools) so the existing builder loop registers them as callable HTTP
+    functions. ``fn_names`` (from _workflow_api_fn_names) supplies each node's already-deduped
+    function name. Secrets in headers/static body are decrypted here for runtime use."""
+    from core.services.custom_tool_service import sanitize_tool_name
+
+    tools: list = []
+    for n in (graph.get("nodes") or []):
+        if not isinstance(n, dict) or n.get("type") != "apiRequest":
+            continue
+        nid = n.get("id")
+        d = n.get("data") or {}
+        raw_name = (d.get("name") or nid or "api_request").strip()
+        fn_name = fn_names.get(str(nid)) or sanitize_tool_name(raw_name)
+
+        props, required = {}, []
+        for p in (d.get("requestBody") or []):
+            if not isinstance(p, dict) or not (p.get("name") or "").strip():
+                continue
+            pname = p["name"].strip()
+            props[pname] = {"type": p.get("type") or "string", "description": p.get("description") or ""}
+            if p.get("required"):
+                required.append(pname)
+
+        tools.append({
+            "id": None,
+            "name": fn_name,
+            "description": (d.get("description") or f"API request: {raw_name}"),
+            "tool_type": "custom",
+            "parameters": {"type": "object", "properties": props, "required": required},
+            "url": d.get("url") or "",
+            "method": (d.get("method") or "GET").upper(),
+            "auth_type": "none",
+            "auth_config": None,
+            "meta_data": None,
+            "oauth_connection_id": None,
+            "mcp_server_id": None,
+            "is_workflow_api_request": True,
+            "headers": _kv_to_dict(d.get("headers"), decrypt=True),
+            "static_body": _kv_to_dict(d.get("staticBody"), decrypt=True),
+        })
+    return tools
+
+
+def _compose_system_prompt(base_prompt: Optional[str], workflow_prompt: Optional[str]) -> str:
+    """Layer the agent persona prompt above the workflow playbook (either may be empty)."""
+    parts = [p.strip() for p in (base_prompt, workflow_prompt) if p and p.strip()]
+    return "\n\n".join(parts)
+
+
 def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[Optional[str], Optional[Any]]:
     """Return (version_stamp, active_config) for an agent.
 
@@ -393,20 +574,41 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
         .where(*_mcp_where).scalar_subquery()
     )
 
+    # Workflow assignment: the assigned workflow's published-version id + updated_at are
+    # folded into the SAME combined query (as scalar subqueries) so re-assigning or
+    # re-publishing invalidates the cache without a second per-call round-trip. When the
+    # config isn't in workflow mode the id is NULL → the joins yield NULL (no extra cost).
+    from core.models.workflow import Workflow, WorkflowVersion
+
+    mode = getattr(config, "mode", "prompt") or "prompt"
+    workflow_id = getattr(config, "workflow_id", None) if mode == "workflow" else None
+    wf_id_sq = (
+        select(WorkflowVersion.id).select_from(Workflow)
+        .join(WorkflowVersion, WorkflowVersion.id == Workflow.published_version_id)
+        .where(Workflow.id == workflow_id).scalar_subquery()
+    )
+    wf_ts_sq = (
+        select(WorkflowVersion.updated_at).select_from(Workflow)
+        .join(WorkflowVersion, WorkflowVersion.id == Workflow.published_version_id)
+        .where(Workflow.id == workflow_id).scalar_subquery()
+    )
+
     (
         prov_max, model_max, voice_ts, key_count, key_max,
         tool_count, tool_link_max, tool_max, kb_count, kb_link_max, kb_max,
-        mcp_count, mcp_link_max, mcp_max,
+        mcp_count, mcp_link_max, mcp_max, wf_ver_id, wf_ver_ts,
     ) = db.execute(
         select(
             prov_sq, model_sq, voice_sq, key_cnt_sq, key_max_sq,
             tool_cnt_sq, tool_link_sq, tool_max_sq, kb_cnt_sq, kb_link_sq, kb_max_sq,
-            mcp_cnt_sq, mcp_link_sq, mcp_max_sq,
+            mcp_cnt_sq, mcp_link_sq, mcp_max_sq, wf_id_sq, wf_ts_sq,
         )
     ).one()
 
     def _s(ts):
         return ts.isoformat() if ts is not None else "none"
+
+    wf_stamp = f"{wf_ver_id}:{_s(wf_ver_ts)}" if wf_ver_id is not None else "none"
 
     version = "|".join([
         f"fmt:{PAYLOAD_FORMAT_VERSION}",
@@ -418,6 +620,7 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
         f"tools:{tool_count}:{_s(tool_link_max)}:{_s(tool_max)}",
         f"kb:{kb_count}:{_s(kb_link_max)}:{_s(kb_max)}",
         f"mcp:{mcp_count}:{_s(mcp_link_max)}:{_s(mcp_max)}",
+        f"wf:{mode}:{workflow_id}:{wf_stamp}",
     ])
     return version, config
 
@@ -445,7 +648,15 @@ def load_agent_service_config(
     org_id = _resolve_org_id(org_id)
 
     version, config = compute_agent_cache_version(db, agent, org_id=org_id)
-    if config is None or not config.system_prompt_template:
+    if config is None:
+        return None
+    # A runnable agent needs either a system prompt or an assigned workflow (workflow mode
+    # can drive the call with no standalone prompt). Cheap signal check — the workflow graph
+    # itself is only serialized below on a cache miss.
+    _in_workflow_mode = (
+        getattr(config, "mode", "prompt") == "workflow" and getattr(config, "workflow_id", None)
+    )
+    if not config.system_prompt_template and not _in_workflow_mode:
         return None
 
     cache_key = f"agent_pipeline_config:{agent_id}"
@@ -461,9 +672,68 @@ def load_agent_service_config(
     if not is_s2s and (not stt_spec or not tts_spec):
         return None
 
-    messages = [{"role": "system", "content": config.system_prompt_template}]
-    if getattr(config, "first_message", None) and config.first_message.strip():
-        messages.append({"role": "assistant", "content": config.first_message.strip()})
+    real_tools = serialize_agent_tools(agent_id)
+
+    workflow_prompt = None
+    workflow_greeting = None
+    api_request_tools: list = []
+    try:
+        graph = _published_workflow_graph(db, config, org_id)
+        if graph:
+            from core.services.custom_tool_service import sanitize_tool_name
+            from core.services.workflow.prompt_serializer import (
+                serialize_graph_for_llm,
+                workflow_first_message,
+            )
+
+            taken = {sanitize_tool_name(t.get("name") or "") for t in real_tools}
+            api_fn_names = _workflow_api_fn_names(graph, taken)
+            workflow_prompt = (
+                serialize_graph_for_llm(
+                    graph, _workflow_tool_names(db, graph, org_id), api_fn_names
+                )
+                or None
+            )
+            workflow_greeting = workflow_first_message(graph) or None
+            api_request_tools = _build_api_request_tools(graph, api_fn_names)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[workflow] failed to load workflow for agent={}: {}", agent_id, exc)
+        workflow_prompt = None
+        workflow_greeting = None
+        api_request_tools = []
+
+    if _in_workflow_mode and workflow_prompt:
+        # Workflow selected and loaded: drive the call ENTIRELY from the workflow playbook.
+        # The agent's base persona prompt is intentionally dropped — keeping it would let its
+        # own greeting/flow/instructions conflict with and override the workflow's steps.
+        system_content = workflow_prompt.strip()
+    else:
+        # Prompt mode, or workflow mode but the workflow failed/empty → fall back to the
+        # base persona prompt (compose handles either part being empty).
+        system_content = _compose_system_prompt(
+            getattr(config, "system_prompt_template", None), workflow_prompt
+        )
+    if not system_content:
+        return None
+
+    # S2S models read the system prompt from the LLM metadata (set in _build_service_specs
+    # from system_prompt_template); override it with the composed content so workflow mode
+    # reaches realtime models too.
+    if is_s2s and isinstance(llm_spec.get("metadata"), dict):
+        llm_spec["metadata"]["system_prompt"] = system_content
+        llm_spec["metadata"]["system_instruction"] = system_content
+
+    messages = [{"role": "system", "content": system_content}]
+    # Greeting spoken on connect. In workflow mode the workflow's start step owns the
+    # opening line — use it and ignore config.first_message, falling back to
+    # config.first_message only when the workflow defines no start message.
+    cfg_first = (getattr(config, "first_message", None) or "").strip()
+    if _in_workflow_mode and workflow_prompt:
+        greeting = (workflow_greeting or "").strip() or cfg_first
+    else:
+        greeting = cfg_first
+    if greeting:
+        messages.append({"role": "assistant", "content": greeting})
 
     result = {
         "_cache_version": version,
@@ -473,7 +743,7 @@ def load_agent_service_config(
         "is_s2s": is_s2s,
         "messages": messages,
         "end_call_message": getattr(config, "end_call_message", None),
-        "tools": serialize_agent_tools(agent_id),
+        "tools": _merge_tools(real_tools, api_request_tools),
         "kb": get_kb_document_names(agent_id),
         # `{id, name}` refs for the call-log snapshot. Cached here so the runner can
         # write them in the same INSERT that creates the call row — no per-call queries.

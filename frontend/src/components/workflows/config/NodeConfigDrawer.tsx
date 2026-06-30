@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { Plus, Trash2 } from 'lucide-react';
 
@@ -12,7 +12,9 @@ import TextAreaField from '@/components/shared/TextAreaField';
 import CheckboxField from '@/components/shared/CheckboxField';
 import SelectInput from '@/components/shared/SelectInput';
 import SearchableSelect from '@/components/shared/SearchableSelect';
+import ApiRequestForm from './ApiRequestForm';
 import { fetchToolsAtom, toolsAtom } from '@/atoms/ToolAtom';
+import { fetchMcpServersAtom, mcpServersAtom } from '@/atoms/MCPAtom';
 import { NODE_REGISTRY } from '@/components/workflows/nodeRegistry';
 import type {
   ConditionEdgeData,
@@ -23,6 +25,14 @@ import type {
 } from '@/types/workflow';
 
 type D = Record<string, unknown>;
+
+/** Variable value types the extractor supports. */
+const VAR_TYPE_OPTIONS = [
+  { value: 'string', label: 'Text' },
+  { value: 'number', label: 'Number' },
+  { value: 'boolean', label: 'Yes / No' },
+  { value: 'date', label: 'Date' },
+];
 
 interface Props {
   node: WorkflowNode | null;
@@ -59,12 +69,30 @@ const NodeConfigDrawer: React.FC<Props> = ({
   const { tools, loading: toolsLoading } = useAtomValue(toolsAtom);
   const fetchTools = useSetAtom(fetchToolsAtom);
 
+  const { servers: mcpServers, loading: mcpLoading } = useAtomValue(mcpServersAtom);
+  const fetchMcp = useSetAtom(fetchMcpServersAtom);
+
+  // Tool node "source" (Tool vs MCP) — local so picking MCP switches the picker before an
+  // id is chosen. Re-synced whenever a different node opens.
+  const [toolSource, setToolSource] = useState<'tool' | 'mcp'>('tool');
+  useEffect(() => {
+    if (node?.type === 'tool') {
+      setToolSource((node.data as D)?.mcpServerId ? 'mcp' : 'tool');
+    }
+  }, [node?.id, node?.type]);
+
   const isToolNode = node?.type === 'tool';
   useEffect(() => {
-    if (isToolNode && tools.length === 0 && !toolsLoading) fetchTools();
-  }, [isToolNode, tools.length, toolsLoading, fetchTools]);
+    if (!isToolNode) return;
+    if (tools.length === 0 && !toolsLoading) fetchTools();
+    if (mcpServers.length === 0 && !mcpLoading) fetchMcp();
+  }, [isToolNode, tools.length, toolsLoading, fetchTools, mcpServers.length, mcpLoading, fetchMcp]);
 
   const toolOptions = useMemo(() => tools.map((t) => ({ value: t.id, label: t.name })), [tools]);
+  const mcpOptions = useMemo(
+    () => mcpServers.map((s) => ({ value: s.id, label: s.name })),
+    [mcpServers],
+  );
 
   // ── node editing ──
   const renderNode = () => {
@@ -144,16 +172,91 @@ const NodeConfigDrawer: React.FC<Props> = ({
 
         {/* tool */}
         {type === 'tool' && (
-          <SearchableSelect
-            name="tool"
-            label="Tool"
-            options={toolOptions}
-            value={String(data.toolId ?? '')}
-            onValueChange={(v) => patch({ toolId: v, tool: undefined })}
-            loading={toolsLoading}
-            placeholder="Select a tool (webhook / custom / MCP)"
-          />
+          <div className="flex flex-col gap-3">
+            <SelectInput
+              name="tool-source"
+              label="Action source"
+              options={[
+                { value: 'tool', label: 'Tool (webhook / custom)' },
+                { value: 'mcp', label: 'MCP server' },
+              ]}
+              value={toolSource}
+              onValueChange={(src) => {
+                const next = src === 'mcp' ? 'mcp' : 'tool';
+                setToolSource(next);
+                // Clear the other source's selection so only one is set on the node.
+                patch(
+                  next === 'mcp'
+                    ? { toolId: undefined, tool: undefined }
+                    : { mcpServerId: undefined },
+                );
+              }}
+            />
+
+            {toolSource === 'mcp' ? (
+              <>
+                <SearchableSelect
+                  name="mcp-server"
+                  label="MCP server"
+                  options={mcpOptions}
+                  value={String(data.mcpServerId ?? '')}
+                  onValueChange={(v) =>
+                    patch({ mcpServerId: v, toolId: undefined, tool: undefined })
+                  }
+                  loading={mcpLoading}
+                  placeholder="Select an MCP server"
+                />
+                <TextInput
+                  name="mcp-tool-name"
+                  label="MCP tool to call (optional)"
+                  value={String(data.mcpToolName ?? '')}
+                  onChange={(e) => patch({ mcpToolName: e.target.value || undefined })}
+                  placeholder="e.g. clickup_create_task"
+                  className="font-mono"
+                  helperText="Name the exact tool so the model calls it directly instead of guessing."
+                />
+              </>
+            ) : (
+              <SearchableSelect
+                name="tool"
+                label="Tool"
+                options={toolOptions}
+                value={String(data.toolId ?? '')}
+                onValueChange={(v) =>
+                  patch({
+                    toolId: v,
+                    mcpServerId: undefined,
+                    mcpToolName: undefined,
+                    tool: undefined,
+                  })
+                }
+                loading={toolsLoading}
+                placeholder="Select a tool (webhook / custom)"
+              />
+            )}
+
+            <TextAreaField
+              name="tool-notes"
+              label="Step details / instructions"
+              rows={4}
+              autoResize
+              value={String(data.notes ?? '')}
+              onChange={(e) => patch({ notes: e.target.value })}
+              placeholder={
+                'How to call the tool — e.g. list_id, exact field values, what to put in the ' +
+                'description. Use {{variables}} for collected values.'
+              }
+              helperText="Passed to the model as the step's details so it calls the tool with the right arguments."
+            />
+
+            <p className="text-[11px] text-muted-foreground">
+              The selected tool / MCP server must also be attached to the agent (Tools &amp; MCP) so
+              the model can call it at this step.
+            </p>
+          </div>
         )}
+
+        {type === 'apiRequest' && <ApiRequestForm data={data} patch={patch} />}
 
         {/* transfer destination */}
         {type === 'transferCall' && (
@@ -194,17 +297,28 @@ const NodeConfigDrawer: React.FC<Props> = ({
                   <Card key={i} className="bg-card">
                     <div className="flex items-start gap-2">
                       <div className="flex flex-1 flex-col gap-2">
-                        <TextInput
-                          name={`var-name-${i}`}
-                          value={String(v.title ?? '')}
-                          onChange={(e) =>
-                            setVars(
-                              vars.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)),
-                            )
-                          }
-                          placeholder="variable_name"
-                          className="font-mono"
-                        />
+                        <div className="flex items-center gap-2">
+                          <TextInput
+                            name={`var-name-${i}`}
+                            value={String(v.title ?? '')}
+                            onChange={(e) =>
+                              setVars(
+                                vars.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)),
+                              )
+                            }
+                            placeholder="variable_name"
+                            className="flex-1 font-mono"
+                          />
+                          <SelectInput
+                            name={`var-type-${i}`}
+                            options={VAR_TYPE_OPTIONS}
+                            value={String(v.type ?? 'string')}
+                            onValueChange={(val) =>
+                              setVars(vars.map((x, j) => (j === i ? { ...x, type: val } : x)))
+                            }
+                            className="w-28 shrink-0"
+                          />
+                        </div>
                         <TextInput
                           name={`var-desc-${i}`}
                           value={String(v.description ?? '')}

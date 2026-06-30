@@ -121,8 +121,56 @@ def build_custom_tool_schemas(tools: List[Tool]) -> Optional[ToolsSchema]:
     return ToolsSchema(standard_tools=function_schemas)
 
 
+_MAX_RESPONSE_CHARS = 8000
+_BLOCKED_HOST_SUFFIXES = (".internal", ".local")
+_BLOCKED_HOSTS = {"localhost", "metadata.google.internal"}
+
+
+def _assert_safe_url(url: str) -> None:
+    """SSRF guard: require https:// and reject loopback/private/link-local/metadata hosts.
+    Hostnames are not DNS-resolved here (DNS-rebinding SSRF is out of scope for v1)."""
+    import ipaddress
+    import socket
+    import urllib.parse
+
+    parsed = urllib.parse.urlparse(url or "")
+    if parsed.scheme != "https":
+        raise ValueError("Only https:// URLs are allowed")
+    host = (parsed.hostname or "").lower()
+    if not host:
+        raise ValueError("URL has no host")
+    if host in _BLOCKED_HOSTS or any(host.endswith(s) for s in _BLOCKED_HOST_SUFFIXES):
+        raise ValueError("Blocked host")
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        ip = None
+        try:
+            ip = ipaddress.ip_address(socket.inet_aton(host))
+        except (OSError, ValueError):
+            ip = None
+    if ip is not None and (
+        ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast
+    ):
+        raise ValueError("Blocked private/loopback/link-local IP")
+
+
+def _interp(text, ctx: dict):
+    """Interpolate {{var}} in a string from ctx (LLM args). Non-strings pass through.
+    Header values get CR/LF stripped to prevent header injection."""
+    if not isinstance(text, str):
+        return text
+    from core.services.pipeline.prompt_variables import substitute_variables
+
+    return substitute_variables(text, ctx) or ""
+
+
 def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None):
-    """Create a handler function for a custom tool that calls the customer's webhook."""
+    """Create a handler function for a custom tool that calls the customer's webhook.
+
+    Also powers workflow **API Request** nodes: if the tool object carries ``headers``
+    (dict) and/or ``static_body`` (dict), those are merged in and ``{{var}}``-interpolated
+    from the LLM-provided args, with an SSRF/HTTPS guard and a response-size cap."""
 
     async def handle_tool_call(params: FunctionCallParams) -> None:
         import time as _time
@@ -158,8 +206,15 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
                 credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
                 headers["Authorization"] = f"Basic {credentials}"
 
-            # Build the URL — replace {placeholder} with argument values
-            url = tool.url
+            extra_headers = getattr(tool, "headers", None)
+            if isinstance(extra_headers, dict):
+                for hk, hv in extra_headers.items():
+                    if not hk:
+                        continue
+                    val = _interp(hv, arguments)
+                    headers[str(hk)] = str(val).replace("\r", "").replace("\n", "")
+
+            url = _interp(tool.url, arguments)
             remaining_args = dict(arguments)
             for key, value in arguments.items():
                 placeholder = "{" + key + "}"
@@ -167,24 +222,36 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
                     url = url.replace(placeholder, str(value))
                     remaining_args.pop(key)
 
-            # Make HTTP request to the customer's webhook
+            if getattr(tool, "is_workflow_api_request", False):
+                _assert_safe_url(url)
+
+            static_body = getattr(tool, "static_body", None)
+            if isinstance(static_body, dict) and static_body:
+                body = {k: _interp(v, arguments) for k, v in static_body.items()}
+                body.update(remaining_args)
+            else:
+                body = remaining_args
+
             async with httpx.AsyncClient(timeout=30.0) as client:
                 if tool.method.upper() == "GET":
-                    response = await client.get(url, params=remaining_args, headers=headers)
+                    response = await client.get(url, params=body, headers=headers)
                 else:
                     response = await client.request(
                         method=tool.method.upper(),
                         url=url,
-                        json=remaining_args,
+                        json=body,
                         headers=headers,
                     )
 
-            # Parse and return the response
             try:
                 result = response.json()
                 result_text = json.dumps(result)
             except Exception:
                 result_text = response.text
+            if isinstance(result_text, str) and len(result_text) > _MAX_RESPONSE_CHARS:
+                result_text = result_text[:_MAX_RESPONSE_CHARS] + "…(truncated)"
+            if response.status_code >= 400:
+                result_text = f"(HTTP {response.status_code}) {result_text}"
 
             logger.info(
                 "🔧 Custom tool result ← tool='{}' status={} args={} output={}",
@@ -202,13 +269,20 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
 
             await params.result_callback(result_text)
 
+        except httpx.TimeoutException:
+            logger.warning("Custom tool '{}' timed out", tool.name)
+            tool_call_entry["result"] = "error: timeout"
+            tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
+            if tool_call_entries is not None:
+                tool_call_entries.append(tool_call_entry)
+            await params.result_callback("The request timed out. Please tell the caller and continue.")
         except Exception as e:
             logger.error("Custom tool '{}' failed: {}", tool.name, e)
             tool_call_entry["result"] = f"error: {str(e)}"
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
             if tool_call_entries is not None:
                 tool_call_entries.append(tool_call_entry)
-            await params.result_callback(f"Error calling tool: {str(e)}")
+            await params.result_callback(f"The request could not be completed: {str(e)}")
 
     return handle_tool_call
 

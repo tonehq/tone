@@ -1,5 +1,6 @@
 import {
   GitBranch,
+  Globe,
   MessageSquare,
   PhoneForwarded,
   PhoneOff,
@@ -58,6 +59,11 @@ const ACCENTS: Record<WorkflowNodeType, NodeAccent> = {
     chip: 'bg-rose-500/10 ring-1 ring-inset ring-rose-500/20 text-rose-600 dark:text-rose-300',
     bar: 'bg-rose-500/70',
     mini: '#f43f5e',
+  },
+  apiRequest: {
+    chip: 'bg-teal-500/10 ring-1 ring-inset ring-teal-500/20 text-teal-600 dark:text-teal-300',
+    bar: 'bg-teal-500/70',
+    mini: '#14b8a6',
   },
 };
 
@@ -130,6 +136,28 @@ export const NODE_REGISTRY: Record<WorkflowNodeType, NodeTypeMeta> = {
     deletable: true,
     defaultData: () => ({ messagePlan: { firstMessage: 'Thanks for calling. Goodbye!' } }),
   },
+  apiRequest: {
+    type: 'apiRequest',
+    label: 'API Request',
+    description: 'Call an HTTP API and use the response',
+    icon: Globe,
+    category: 'Actions',
+    accent: ACCENTS.apiRequest,
+    hasTarget: true,
+    terminal: false,
+    deletable: true,
+    defaultData: () => ({
+      description: 'API request tool',
+      method: 'GET',
+      url: '',
+      headers: [],
+      requestBody: [],
+      staticBody: [],
+      responseFields: [],
+      aliases: [],
+      messages: {},
+    }),
+  },
 };
 
 export const NODE_CATEGORIES: { heading: string; items: NodeTypeMeta[] }[] = [
@@ -137,7 +165,12 @@ export const NODE_CATEGORIES: { heading: string; items: NodeTypeMeta[] }[] = [
   { heading: 'Logic', items: [NODE_REGISTRY.decision] },
   {
     heading: 'Actions',
-    items: [NODE_REGISTRY.tool, NODE_REGISTRY.transferCall, NODE_REGISTRY.endCall],
+    items: [
+      NODE_REGISTRY.tool,
+      NODE_REGISTRY.apiRequest,
+      NODE_REGISTRY.transferCall,
+      NODE_REGISTRY.endCall,
+    ],
   },
 ];
 

@@ -22,6 +22,8 @@ import {
   type NodeChange,
   type ReactFlowInstance,
 } from '@xyflow/react';
+import { Layers, Plus, Sparkles } from 'lucide-react';
+
 import AppLoader from '@/components/shared/AppLoader';
 import CustomButton from '@/components/shared/CustomButton';
 import CustomDrawer from '@/components/shared/CustomDrawer';
@@ -29,10 +31,11 @@ import TextAreaField from '@/components/shared/TextAreaField';
 import { showToast } from '@/utils/toast';
 import { handleApiError } from '@/utils/helpers';
 import {
+  exportWorkflowAtom,
   fetchWorkflowAtom,
   publishWorkflowAtom,
   saveDraftAtom,
-  workflowEditorStatusAtom,
+  workflowIssuesAtom,
 } from '@/atoms/WorkflowAtom';
 import type {
   ConditionEdgeData,
@@ -51,6 +54,14 @@ import WorkflowToolbar from '@/components/workflows/WorkflowToolbar';
 interface Props {
   workflowId: string;
 }
+
+/** One-tap building blocks for the global prompt drawer. */
+const GLOBAL_PROMPT_SNIPPETS = [
+  'Be warm, professional, and concise.',
+  'Ask only one question at a time and wait for the answer.',
+  'Always read key details back to confirm before acting.',
+  'Never make up information you have not been given.',
+];
 
 const defaultEdgeOptions = {
   type: 'condition',
@@ -74,7 +85,8 @@ function BuilderInner({ workflowId }: Props) {
   const fetchWorkflow = useSetAtom(fetchWorkflowAtom);
   const saveDraft = useSetAtom(saveDraftAtom);
   const publish = useSetAtom(publishWorkflowAtom);
-  const setStatus = useSetAtom(workflowEditorStatusAtom);
+  const exportWorkflow = useSetAtom(exportWorkflowAtom);
+  const setIssuesAtom = useSetAtom(workflowIssuesAtom);
 
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
@@ -91,6 +103,7 @@ function BuilderInner({ workflowId }: Props) {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
 
@@ -103,6 +116,7 @@ function BuilderInner({ workflowId }: Props) {
         if (!active) return;
         setName(wf.name);
         setWfStatus(wf.status);
+        setHasUnpublishedChanges(wf.has_unpublished_changes);
         setGlobalPrompt(wf.graph.globalPrompt ?? '');
         artifactPlanRef.current = wf.graph.artifactPlan ?? null;
         checksumRef.current = wf.graph_checksum;
@@ -127,14 +141,17 @@ function BuilderInner({ workflowId }: Props) {
     const t = setTimeout(() => {
       const found = validateGraph(nodes, edges);
       setIssues(found);
-      setStatus((s) => ({ ...s, issues: found }));
+      setIssuesAtom(found);
     }, 250);
     return () => clearTimeout(t);
-  }, [nodes, edges, loading, setStatus]);
+  }, [nodes, edges, loading, setIssuesAtom]);
 
-  useEffect(() => {
-    setStatus((s) => ({ ...s, dirty, saving }));
-  }, [dirty, saving, setStatus]);
+  useEffect(
+    () => () => {
+      setIssuesAtom([]);
+    },
+    [setIssuesAtom],
+  );
 
   // warn on unload while dirty
   useEffect(() => {
@@ -254,15 +271,21 @@ function BuilderInner({ workflowId }: Props) {
   );
 
   const handleSave = useCallback(async () => {
+    if (saving) return;
     setSaving(true);
+    const sent = buildGraph();
+    const sentJson = JSON.stringify(sent);
     try {
       const detail = await saveDraft({
         workflowId,
-        graph: buildGraph(),
+        graph: sent,
         expectedChecksum: checksumRef.current,
       });
       checksumRef.current = detail.graph_checksum;
-      setDirty(false);
+      setHasUnpublishedChanges(detail.has_unpublished_changes);
+      // Only mark clean if nothing was edited during the in-flight save — otherwise the
+      // newest edits would be silently shown as "saved".
+      if (JSON.stringify(buildGraph()) === sentJson) setDirty(false);
       setLastSavedAt(Date.now());
       showToast.success('Draft saved');
     } catch (err) {
@@ -270,16 +293,20 @@ function BuilderInner({ workflowId }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [buildGraph, saveDraft, workflowId]);
+  }, [buildGraph, saveDraft, workflowId, saving]);
 
   const handlePublish = useCallback(async () => {
+    if (saving) return; // avoid double-submit / checksum conflict with an in-flight save
     setSaving(true);
+    const sent = buildGraph();
+    const sentJson = JSON.stringify(sent);
     try {
-      await saveDraft({ workflowId, graph: buildGraph(), expectedChecksum: checksumRef.current });
+      await saveDraft({ workflowId, graph: sent, expectedChecksum: checksumRef.current });
       const detail = await publish(workflowId);
       checksumRef.current = detail.graph_checksum;
       setWfStatus(detail.status);
-      setDirty(false);
+      setHasUnpublishedChanges(detail.has_unpublished_changes);
+      if (JSON.stringify(buildGraph()) === sentJson) setDirty(false);
       setLastSavedAt(Date.now());
       showToast.success(
         'Workflow published',
@@ -290,7 +317,24 @@ function BuilderInner({ workflowId }: Props) {
     } finally {
       setSaving(false);
     }
-  }, [buildGraph, publish, saveDraft, workflowId]);
+  }, [buildGraph, publish, saveDraft, workflowId, saving]);
+
+  const handleExport = useCallback(async () => {
+    try {
+      const vapi = await exportWorkflow(workflowId);
+      const blob = new Blob([JSON.stringify(vapi, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(name || 'workflow').replace(/\s+/g, '-').toLowerCase()}.vapi.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      handleApiError(err);
+    }
+  }, [exportWorkflow, workflowId, name]);
 
   const focusNode = useCallback(
     (nodeName: string) => {
@@ -343,15 +387,14 @@ function BuilderInner({ workflowId }: Props) {
         status={status}
         saving={saving}
         dirty={dirty}
+        hasUnpublishedChanges={hasUnpublishedChanges}
         lastSavedAt={lastSavedAt}
         issues={issues}
         onBack={() => router.push('/workflows')}
         onSave={handleSave}
         onPublish={handlePublish}
         onOpenGlobalPrompt={() => setGlobalOpen(true)}
-        onExport={() =>
-          window.open(`/api/v1/workflow/export_vapi?workflow_id=${workflowId}`, '_blank')
-        }
+        onExport={handleExport}
         onFocusNode={focusNode}
       />
 
@@ -359,8 +402,26 @@ function BuilderInner({ workflowId }: Props) {
         <div
           ref={canvasRef}
           className="workflow-canvas relative min-h-0 flex-1"
+          tabIndex={0}
+          role="application"
+          aria-label="Workflow canvas. Select a node or edge and press Enter to edit it."
           onDrop={onDrop}
           onDragOver={onDragOver}
+          onKeyDown={(e) => {
+            // Keyboard access: Enter opens the config drawer for the selected node/edge.
+            if (e.key !== 'Enter') return;
+            const selNode = getNodes().find((n) => n.selected);
+            if (selNode) {
+              setSelectedNodeId(selNode.id);
+              setSelectedEdgeId(null);
+              return;
+            }
+            const selEdge = edges.find((ed) => ed.selected);
+            if (selEdge) {
+              setSelectedEdgeId(selEdge.id);
+              setSelectedNodeId(null);
+            }
+          }}
         >
           <NodeActionsContext.Provider value={nodeActions}>
             <EdgeActionsContext.Provider value={edgeActions}>
@@ -438,16 +499,86 @@ function BuilderInner({ workflowId }: Props) {
           </div>
         }
       >
-        <TextAreaField
-          name="global-prompt"
-          rows={9}
-          placeholder="e.g. Be calm, warm, and concise. Always read details back to confirm."
-          value={globalPrompt}
-          onChange={(e) => {
-            setGlobalPrompt(e.target.value);
-            setDirty(true);
-          }}
-        />
+        <div className="flex flex-col gap-4">
+          {/* layered-prompt explainer */}
+          <div className="rounded-xl border border-border bg-muted/40 p-3.5">
+            <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+              <Layers className="h-3.5 w-3.5 text-primary" />
+              How prompts apply
+            </div>
+            <p className="mt-1.5 text-[12px] text-muted-foreground">
+              In workflow mode the workflow drives the call on its own — the agent&apos;s system
+              prompt is not used. Set the call-wide persona and tone here.
+            </p>
+            <ol className="mt-2.5 space-y-1.5 text-[12px] text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                <span>
+                  <span className="font-medium text-foreground/80">Global prompt</span> — this text,
+                  applied to every node.
+                </span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/40" />
+                <span>
+                  <span className="font-medium text-foreground/80">Node prompt</span> — what to do
+                  at each step.
+                </span>
+              </li>
+            </ol>
+          </div>
+
+          <TextAreaField
+            name="global-prompt"
+            label="Global instructions"
+            rows={10}
+            maxLength={4000}
+            placeholder="e.g. Be calm, warm, and concise. Always read details back to confirm before acting."
+            helperText="Keep it about call-wide tone and rules — leave step-specific instructions to each node."
+            value={globalPrompt}
+            onChange={(e) => {
+              setGlobalPrompt(e.target.value);
+              setDirty(true);
+            }}
+          />
+
+          <div className="-mt-1 flex items-center justify-between">
+            <span className="text-[11px] text-muted-foreground">
+              Use <code className="font-mono text-foreground/70">{'{{variables}}'}</code> to insert
+              collected values.
+            </span>
+            <span className="font-mono text-[11px] text-muted-foreground">
+              {globalPrompt.length}/4000
+            </span>
+          </div>
+
+          {/* quick starters */}
+          <div>
+            <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              <Sparkles className="h-3 w-3" />
+              Quick add
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {GLOBAL_PROMPT_SNIPPETS.map((snippet) => (
+                <CustomButton
+                  key={snippet}
+                  type="default"
+                  size="xs"
+                  icon={<Plus className="h-3 w-3" />}
+                  onClick={() => {
+                    setGlobalPrompt((prev) =>
+                      prev.trim() ? `${prev.trim()}\n${snippet}` : snippet,
+                    );
+                    setDirty(true);
+                  }}
+                  className="!h-auto whitespace-normal py-1 text-left text-[11px] font-normal"
+                >
+                  {snippet}
+                </CustomButton>
+              ))}
+            </div>
+          </div>
+        </div>
       </CustomDrawer>
     </div>
   );

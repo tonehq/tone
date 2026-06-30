@@ -35,6 +35,7 @@ const PlainTextAreaField = forwardRef<HTMLTextAreaElement, TextAreaFieldBaseProp
       className,
       labelClassName,
       rows = 3,
+      autoResize = false,
       ...props
     },
     ref,
@@ -69,7 +70,7 @@ const PlainTextAreaField = forwardRef<HTMLTextAreaElement, TextAreaFieldBaseProp
           rows={rows}
           aria-invalid={error || undefined}
           className={cn(
-            'resize-none',
+            autoResize ? 'resize-y' : 'resize-none',
             error &&
               'border-destructive focus-visible:border-destructive focus-visible:ring-destructive/50',
             className,

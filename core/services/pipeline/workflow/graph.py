@@ -36,7 +36,9 @@ class WorkflowGraphRuntime:
                 continue
             self._nodes[nid] = n
             data = n.get("data") or {}
-            if data.get("isStart"):
+            # First start node wins deterministically (matches the LLM-mode serializer,
+            # which also treats the first isStart node as the entry point).
+            if data.get("isStart") and self._start_id is None:
                 self._start_id = nid
             if data.get("isGlobal"):
                 self._global_ids.append(nid)

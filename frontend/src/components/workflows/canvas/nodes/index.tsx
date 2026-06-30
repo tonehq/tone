@@ -4,7 +4,7 @@ import React, { createContext, useContext, useMemo } from 'react';
 import type { NodeProps } from '@xyflow/react';
 import { useAtomValue } from 'jotai';
 
-import { workflowEditorStatusAtom } from '@/atoms/WorkflowAtom';
+import { workflowIssuesAtom } from '@/atoms/WorkflowAtom';
 import { NODE_REGISTRY } from '@/components/workflows/nodeRegistry';
 import BaseNode from './BaseNode';
 
@@ -15,8 +15,8 @@ interface NodeActions {
 export const NodeActionsContext = createContext<NodeActions>({});
 
 function useNodeIssues(id: string) {
-  const status = useAtomValue(workflowEditorStatusAtom);
-  return useMemo(() => status.issues.filter((i) => i.node_name === id), [status.issues, id]);
+  const issues = useAtomValue(workflowIssuesAtom);
+  return useMemo(() => issues.filter((i) => i.node_name === id), [issues, id]);
 }
 
 function useNodeDelete(id: string) {
@@ -77,9 +77,11 @@ function ToolNode({ id, data, selected }: NodeProps) {
   const inline = (d.tool as D | undefined)?.type;
   const summary = inline
     ? `Built-in: ${str(inline)}`
-    : str(d.toolId)
-      ? `Tool ${str(d.toolId).slice(0, 8)}…`
-      : '';
+    : str(d.mcpServerId)
+      ? `MCP server ${str(d.mcpServerId).slice(0, 8)}…`
+      : str(d.toolId)
+        ? `Tool ${str(d.toolId).slice(0, 8)}…`
+        : '';
   return (
     <BaseNode
       meta={NODE_REGISTRY.tool}
@@ -132,10 +134,31 @@ function EndCallNode({ id, data, selected }: NodeProps) {
   );
 }
 
+function ApiRequestNode({ id, data, selected }: NodeProps) {
+  const d = data as D;
+  const issues = useNodeIssues(id);
+  const onDelete = useNodeDelete(id);
+  const method = (str(d.method) || 'GET').toUpperCase();
+  const url = str(d.url);
+  return (
+    <BaseNode
+      meta={NODE_REGISTRY.apiRequest}
+      title={str(d.name) || id}
+      summary={url ? `${method} ${url}` : str(d.description) || 'No endpoint set'}
+      selected={selected}
+      isGlobal={Boolean(d.isGlobal)}
+      onDelete={onDelete}
+      errorCount={issues.length}
+      errorMessages={issues.map((i) => i.message)}
+    />
+  );
+}
+
 export const nodeTypes = {
   conversation: ConversationNode,
   decision: DecisionNode,
   tool: ToolNode,
   transferCall: TransferCallNode,
   endCall: EndCallNode,
+  apiRequest: ApiRequestNode,
 };
