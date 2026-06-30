@@ -277,40 +277,33 @@ def _config_service_ids(config) -> dict:
     }
 
 
-def _load_workflow_prompt(db: Session, config, org_id=None) -> Tuple[Optional[str], Optional[str]]:
-    """When the config runs in workflow mode, render the assigned workflow's published
-    graph into an instruction block for the LLM.
+def _published_workflow_graph(db: Session, config, org_id=None) -> Optional[dict]:
+    """Return the assigned workflow's published-version graph (org-scoped), or None outside
+    workflow mode / when no workflow is assigned / there is no published version with a graph.
 
-    Returns ``(playbook_text, start_first_message)`` — the serialized pathway plus the
-    start node's opening line (the greeting to speak on connect). Both are None outside
-    workflow mode, when no workflow is assigned, or when there is no published version."""
+    Loaded once per resolve so the playbook text and the synthesized apiRequest tools derive
+    from the same graph and share one node_id -> fn-name map (names never drift)."""
     if getattr(config, "mode", "prompt") != "workflow":
-        return None, None
+        return None
     workflow_id = getattr(config, "workflow_id", None)
     if not workflow_id:
-        return None, None
+        return None
 
     from core.models.workflow import Workflow, WorkflowVersion
-    from core.services.workflow.prompt_serializer import (
-        serialize_graph_for_llm,
-        workflow_first_message,
-    )
 
     wf_q = db.query(Workflow).filter(Workflow.id == workflow_id)
     if org_id:
         wf_q = wf_q.filter(Workflow.organization_id == org_id)
     wf = wf_q.first()
     if not wf or not wf.published_version_id:
-        return None, None
+        return None
     ver_q = db.query(WorkflowVersion).filter(WorkflowVersion.id == wf.published_version_id)
     if org_id:
         ver_q = ver_q.filter(WorkflowVersion.organization_id == org_id)
     ver = ver_q.first()
     if not ver or not ver.graph:
-        return None, None
-    text = serialize_graph_for_llm(ver.graph, _workflow_tool_names(db, ver.graph, org_id))
-    greeting = workflow_first_message(ver.graph)
-    return (text or None), (greeting or None)
+        return None
+    return ver.graph
 
 
 def _workflow_tool_names(db: Session, graph: dict, org_id=None) -> dict:
@@ -341,6 +334,122 @@ def _workflow_tool_names(db: Session, graph: dict, org_id=None) -> dict:
             q = q.filter(McpServer.organization_id == org_id)
         names.update({str(m.id): m.name for m in q.all()})
     return names
+
+
+def _kv_to_dict(rows, decrypt: bool) -> dict:
+    """Turn a [{key, value, encrypt?}] list into a {key: value} dict, decrypting
+    encrypt-flagged values (stored AES-encrypted in the graph). Bad/blank rows dropped."""
+    out: dict = {}
+    if not isinstance(rows, list):
+        return out
+    for r in rows:
+        if not isinstance(r, dict):
+            continue
+        k = (r.get("key") or "").strip()
+        if not k:
+            continue
+        v = r.get("value") or ""
+        if decrypt and r.get("encrypt") and v:
+            try:
+                from core.utils.encryption import decrypt as _dec
+                v = _dec(v)
+            except Exception:
+                continue
+        out[k] = v
+    return out
+
+
+def _merge_tools(real_tools: list, api_tools: list) -> list:
+    """Append synthesized apiRequest tools to the agent's real tools, renaming any
+    apiRequest tool whose (sanitized) name collides with a real tool so both stay callable."""
+    if not api_tools:
+        return real_tools
+    from core.services.custom_tool_service import sanitize_tool_name
+
+    taken = {sanitize_tool_name(t.get("name") or "") for t in (real_tools or [])}
+    merged = list(real_tools or [])
+    for t in api_tools:
+        name = t.get("name") or "api_request"
+        if name in taken:
+            i = 2
+            while f"{name}_{i}" in taken:
+                i += 1
+            name = f"{name}_{i}"
+            t = {**t, "name": name}
+        taken.add(name)
+        merged.append(t)
+    return merged
+
+
+def _workflow_api_fn_names(graph: dict, taken: Optional[set] = None) -> dict:
+    """Map each apiRequest node id → the unique sanitized function name it is registered
+    under, deduped among themselves AND against ``taken`` (the agent's real tool names). The
+    playbook serializer and the synthesized tools share this map so the function names the
+    model is told to call match the names actually registered."""
+    from core.services.custom_tool_service import sanitize_tool_name
+
+    claimed = set(taken or ())
+    names: dict = {}
+    for n in (graph.get("nodes") or []):
+        if not isinstance(n, dict) or n.get("type") != "apiRequest":
+            continue
+        nid = n.get("id")
+        d = n.get("data") or {}
+        raw = (d.get("name") or nid or "api_request").strip()
+        fn = sanitize_tool_name(raw)
+        if fn in claimed:
+            i = 2
+            while f"{fn}_{i}" in claimed:
+                i += 1
+            fn = f"{fn}_{i}"
+        claimed.add(fn)
+        names[str(nid)] = fn
+    return names
+
+
+def _build_api_request_tools(graph: dict, fn_names: dict) -> list:
+    """Synthesize the graph's apiRequest nodes into webhook-tool dicts (same shape as
+    serialize_agent_tools) so the existing builder loop registers them as callable HTTP
+    functions. ``fn_names`` (from _workflow_api_fn_names) supplies each node's already-deduped
+    function name. Secrets in headers/static body are decrypted here for runtime use."""
+    from core.services.custom_tool_service import sanitize_tool_name
+
+    tools: list = []
+    for n in (graph.get("nodes") or []):
+        if not isinstance(n, dict) or n.get("type") != "apiRequest":
+            continue
+        nid = n.get("id")
+        d = n.get("data") or {}
+        raw_name = (d.get("name") or nid or "api_request").strip()
+        fn_name = fn_names.get(str(nid)) or sanitize_tool_name(raw_name)
+
+        props, required = {}, []
+        for p in (d.get("requestBody") or []):
+            if not isinstance(p, dict) or not (p.get("name") or "").strip():
+                continue
+            pname = p["name"].strip()
+            props[pname] = {"type": p.get("type") or "string", "description": p.get("description") or ""}
+            if p.get("required"):
+                required.append(pname)
+
+        tools.append({
+            "id": None,
+            "name": fn_name,
+            "description": (d.get("description") or f"API request: {raw_name}"),
+            "tool_type": "custom",
+            "parameters": {"type": "object", "properties": props, "required": required},
+            "url": d.get("url") or "",
+            "method": (d.get("method") or "GET").upper(),
+            "auth_type": "none",
+            "auth_config": None,
+            "meta_data": None,
+            "oauth_connection_id": None,
+            "mcp_server_id": None,
+            "is_workflow_api_request": True,
+            "headers": _kv_to_dict(d.get("headers"), decrypt=True),
+            "static_body": _kv_to_dict(d.get("staticBody"), decrypt=True),
+        })
+    return tools
 
 
 def _compose_system_prompt(base_prompt: Optional[str], workflow_prompt: Optional[str]) -> str:
@@ -563,14 +672,36 @@ def load_agent_service_config(
     if not is_s2s and (not stt_spec or not tts_spec):
         return None
 
-    # Workflow mode: flatten the assigned workflow's published graph into the system prompt
-    # so the LLM follows the pathway. Guarded so a bad/missing workflow degrades to prompt
-    # mode instead of aborting a live-call resolve.
+    real_tools = serialize_agent_tools(agent_id)
+
+    workflow_prompt = None
+    workflow_greeting = None
+    api_request_tools: list = []
     try:
-        workflow_prompt, workflow_greeting = _load_workflow_prompt(db, config, org_id)
-    except Exception as exc:  # noqa: BLE001 — never let workflow load kill the resolve
-        logger.warning("[workflow] failed to load workflow prompt for agent={}: {}", agent_id, exc)
-        workflow_prompt, workflow_greeting = None, None
+        graph = _published_workflow_graph(db, config, org_id)
+        if graph:
+            from core.services.custom_tool_service import sanitize_tool_name
+            from core.services.workflow.prompt_serializer import (
+                serialize_graph_for_llm,
+                workflow_first_message,
+            )
+
+            taken = {sanitize_tool_name(t.get("name") or "") for t in real_tools}
+            api_fn_names = _workflow_api_fn_names(graph, taken)
+            workflow_prompt = (
+                serialize_graph_for_llm(
+                    graph, _workflow_tool_names(db, graph, org_id), api_fn_names
+                )
+                or None
+            )
+            workflow_greeting = workflow_first_message(graph) or None
+            api_request_tools = _build_api_request_tools(graph, api_fn_names)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[workflow] failed to load workflow for agent={}: {}", agent_id, exc)
+        workflow_prompt = None
+        workflow_greeting = None
+        api_request_tools = []
+
     if _in_workflow_mode and workflow_prompt:
         # Workflow selected and loaded: drive the call ENTIRELY from the workflow playbook.
         # The agent's base persona prompt is intentionally dropped — keeping it would let its
@@ -612,7 +743,7 @@ def load_agent_service_config(
         "is_s2s": is_s2s,
         "messages": messages,
         "end_call_message": getattr(config, "end_call_message", None),
-        "tools": serialize_agent_tools(agent_id),
+        "tools": _merge_tools(real_tools, api_request_tools),
         "kb": get_kb_document_names(agent_id),
         # `{id, name}` refs for the call-log snapshot. Cached here so the runner can
         # write them in the same INSERT that creates the call row — no per-call queries.

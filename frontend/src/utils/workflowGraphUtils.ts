@@ -155,6 +155,18 @@ export function validateGraph(nodes: WorkflowNode[], edges: WorkflowEdge[]): Val
       });
     if (!terminal && out[n.id] === 0 && !globalIds.has(n.id))
       issues.push({ code: 'DEAD_END', node_name: n.id, message: 'Node has no outgoing edge.' });
+
+    if (n.type === 'apiRequest') {
+      const url = String((n.data as { url?: unknown }).url ?? '').trim();
+      if (!url)
+        issues.push({ code: 'INVALID_URL', node_name: n.id, message: 'API request needs a URL.' });
+      else if (!url.startsWith('https://') && !url.startsWith('{{'))
+        issues.push({
+          code: 'INVALID_URL',
+          node_name: n.id,
+          message: 'API request URL must use https://.',
+        });
+    }
   });
 
   if (starts.length === 1) {

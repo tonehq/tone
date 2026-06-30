@@ -12,6 +12,7 @@ import TextAreaField from '@/components/shared/TextAreaField';
 import CheckboxField from '@/components/shared/CheckboxField';
 import SelectInput from '@/components/shared/SelectInput';
 import SearchableSelect from '@/components/shared/SearchableSelect';
+import ApiRequestForm from './ApiRequestForm';
 import { fetchToolsAtom, toolsAtom } from '@/atoms/ToolAtom';
 import { fetchMcpServersAtom, mcpServersAtom } from '@/atoms/MCPAtom';
 import { NODE_REGISTRY } from '@/components/workflows/nodeRegistry';
@@ -254,6 +255,8 @@ const NodeConfigDrawer: React.FC<Props> = ({
             </p>
           </div>
         )}
+
+        {type === 'apiRequest' && <ApiRequestForm data={data} patch={patch} />}
 
         {/* transfer destination */}
         {type === 'transferCall' && (

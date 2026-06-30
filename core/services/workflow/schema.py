@@ -90,6 +90,59 @@ class DecisionData(_BaseNodeData):
     prompt: Optional[str] = None
 
 
+class KeyValueField(BaseModel):
+    """A header or static-body entry. ``value`` may contain ``{{var}}`` templates.
+    ``encrypt`` marks the value to be stored AES-encrypted in the graph at rest."""
+    model_config = ConfigDict(extra="allow")
+    key: str
+    value: str = ""
+    encrypt: bool = False
+
+
+class RequestBodyProp(BaseModel):
+    """A request-body property the LLM fills (becomes a tool parameter)."""
+    model_config = ConfigDict(extra="allow")
+    name: str
+    type: str = "string"
+    required: bool = False
+    description: str = ""
+
+
+class ResponseField(BaseModel):
+    """A field to extract from the JSON response (prompt-guided)."""
+    model_config = ConfigDict(extra="allow")
+    name: str
+    type: str = "string"
+    required: bool = False
+
+
+class ResponseAlias(BaseModel):
+    """Map a response field to a different workflow-variable name (prompt-guided)."""
+    model_config = ConfigDict(extra="allow")
+    responseField: str
+    alias: str
+
+
+class ApiMessages(BaseModel):
+    model_config = ConfigDict(extra="allow")
+    start: Optional[str] = None
+    success: Optional[str] = None
+    failed: Optional[str] = None
+    delayed: Optional[str] = None
+
+
+class ApiRequestData(_BaseNodeData):
+    description: str = ""
+    method: str = "GET"
+    url: str = ""
+    headers: List[KeyValueField] = Field(default_factory=list)
+    requestBody: List[RequestBodyProp] = Field(default_factory=list)
+    staticBody: List[KeyValueField] = Field(default_factory=list)
+    responseFields: List[ResponseField] = Field(default_factory=list)
+    aliases: List[ResponseAlias] = Field(default_factory=list)
+    messages: Optional[ApiMessages] = None
+
+
 # ---------------------------------------------------------------------------
 # Nodes (discriminated union on ``type``)
 # ---------------------------------------------------------------------------
@@ -125,8 +178,15 @@ class DecisionNode(_NodeBase):
     data: DecisionData
 
 
+class ApiRequestNode(_NodeBase):
+    type: Literal["apiRequest"]
+    data: ApiRequestData
+
+
 WorkflowNode = Annotated[
-    Union[ConversationNode, ToolNode, TransferCallNode, EndCallNode, DecisionNode],
+    Union[
+        ConversationNode, ToolNode, TransferCallNode, EndCallNode, DecisionNode, ApiRequestNode
+    ],
     Field(discriminator="type"),
 ]
 
@@ -283,6 +343,30 @@ def validate_graph(graph: Dict[str, Any]) -> List[Dict[str, Any]]:
             issues.append({"code": "TERMINAL_OUTGOING", "node_name": n.id, "message": "Terminal node must not have outgoing edges."})
         if not is_terminal and out_map[n.id] == 0 and n.id not in global_ids:
             issues.append({"code": "DEAD_END", "node_name": n.id, "message": "Non-terminal node has no outgoing edge."})
+
+    _METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
+    for n in nodes:
+        if n.type != "apiRequest":
+            continue
+        d = n.data
+        url = (getattr(d, "url", "") or "").strip()
+        if not url:
+            issues.append({"code": "INVALID_URL", "node_name": n.id, "message": "API Request needs a URL."})
+        elif not (url.startswith("https://") or url.startswith("{{")):
+            issues.append({"code": "INVALID_URL", "node_name": n.id, "message": "API Request URL must use https://."})
+        if (getattr(d, "method", "GET") or "GET").upper() not in _METHODS:
+            issues.append({"code": "INVALID_METHOD", "node_name": n.id, "message": "Unsupported HTTP method."})
+        for label, rows, keyattr in (
+            ("header", getattr(d, "headers", None) or [], "key"),
+            ("static body field", getattr(d, "staticBody", None) or [], "key"),
+            ("body property", getattr(d, "requestBody", None) or [], "name"),
+        ):
+            seen_keys = set()
+            for row in rows:
+                k = (getattr(row, keyattr, "") or "").strip()
+                if k and k in seen_keys:
+                    issues.append({"code": "DUPLICATE_KEY", "node_name": n.id, "message": f"Duplicate {label} '{k}'."})
+                seen_keys.add(k)
 
     # 6. Reachability from start (global nodes are reachable by definition).
     if starts:

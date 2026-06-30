@@ -13,6 +13,7 @@ The input is the canonical React-Flow-native graph:
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List
 
 _TYPE_LABEL = {
@@ -21,11 +22,19 @@ _TYPE_LABEL = {
     "tool": "Tool / action step",
     "transferCall": "Transfer step",
     "endCall": "End step",
+    "apiRequest": "API request step",
 }
 
 
 def _s(v: Any) -> str:
     return v.strip() if isinstance(v, str) else ""
+
+
+def _fn_name(name: str) -> str:
+    """Mirror custom_tool_service.sanitize_tool_name so the playbook names the exact
+    function the runtime registers for this API Request node."""
+    cleaned = re.sub(r"[^a-zA-Z0-9_-]", "_", (name or "").strip())
+    return (cleaned or "tool")[:64]
 
 
 def _first_message(data: Dict[str, Any]) -> str:
@@ -76,15 +85,23 @@ def workflow_first_message(graph: Dict[str, Any]) -> str:
 
 
 def serialize_graph_for_llm(
-    graph: Dict[str, Any], tool_names: Dict[str, str] | None = None
+    graph: Dict[str, Any],
+    tool_names: Dict[str, str] | None = None,
+    api_fn_names: Dict[str, str] | None = None,
 ) -> str:
     """Flatten a workflow graph into an instruction block for the system prompt.
 
     ``tool_names`` maps a tool node's ``toolId`` to the tool's display name so the step
-    instruction can tell the model exactly which (attached) tool to call. Returns an empty
-    string when the graph has no usable nodes.
+    instruction can tell the model exactly which (attached) tool to call.
+
+    ``api_fn_names`` maps an apiRequest node's id to the (already-deduped) function name the
+    runtime registers it under. When provided it is used verbatim so the name the model is
+    told to call matches the registered tool even when names collide; otherwise the name is
+    derived locally via ``_fn_name``. Returns an empty string when the graph has no usable
+    nodes.
     """
     tool_names = tool_names or {}
+    api_fn_names = api_fn_names or {}
     if not isinstance(graph, dict):
         return ""
 
@@ -196,6 +213,30 @@ def serialize_graph_for_llm(
             notes = _s(data.get("notes"))
             if notes:
                 lines.append(f"- Details: {notes}")
+
+        if ntype == "apiRequest":
+            fn = api_fn_names.get(nid) or _fn_name(_s(data.get("name")) or nid)
+            method = (_s(data.get("method")) or "GET").upper()
+            lines.append(
+                f"- Call the `{fn}` tool to complete this step (it makes an HTTP {method} request). "
+                "Only call it at this step, after the guest has confirmed the details — "
+                "never earlier in the conversation."
+            )
+            returned: List[str] = []
+            for f in (data.get("responseFields") or []):
+                if isinstance(f, dict) and _s(f.get("name")):
+                    returned.append(_s(f.get("name")))
+            for a in (data.get("aliases") or []):
+                if isinstance(a, dict) and _s(a.get("alias")):
+                    src = _s(a.get("responseField"))
+                    returned.append(f"{_s(a.get('alias'))}" + (f" (from {src})" if src else ""))
+            if returned:
+                lines.append(
+                    f"- It returns: {', '.join(returned)} — remember these for later steps."
+                )
+            msgs = data.get("messages") if isinstance(data.get("messages"), dict) else {}
+            if _s(msgs.get("start")):
+                lines.append(f'- Before calling, say: "{_s(msgs.get("start"))}"')
 
         if ntype == "transferCall":
             dest = data.get("destination") if isinstance(data.get("destination"), dict) else {}

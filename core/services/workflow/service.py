@@ -26,6 +26,58 @@ def _checksum(graph: Dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _api_request_secret_rows(graph: Dict[str, Any]):
+    """Yield (node_id, row) for every apiRequest header/staticBody row marked encrypt."""
+    for n in (graph or {}).get("nodes") or []:
+        if not isinstance(n, dict) or n.get("type") != "apiRequest":
+            continue
+        nid = n.get("id")
+        data = n.get("data") or {}
+        for field in ("headers", "staticBody"):
+            for row in data.get(field) or []:
+                if isinstance(row, dict) and row.get("encrypt"):
+                    yield nid, field, row
+
+
+def _encrypt_graph_secrets(graph: Dict[str, Any], prev_graph: Optional[Dict[str, Any]] = None) -> None:
+    """Encrypt encrypt-flagged header/static values in place (AES, idempotent via the
+    ``_encrypted`` marker). An empty value carries over the previously-saved secret from
+    ``prev_graph`` so masking-then-saving (the UI never receives plaintext) doesn't wipe it."""
+    from core.utils.encryption import encrypt
+
+    prev: Dict[tuple, str] = {}
+    if prev_graph:
+        for nid, field, row in _api_request_secret_rows(prev_graph):
+            if row.get("_encrypted") and row.get("value"):
+                prev[(nid, field, (row.get("key") or "").strip())] = row["value"]
+
+    for nid, field, row in _api_request_secret_rows(graph):
+        val = row.get("value") or ""
+        if row.get("_encrypted") and val:
+            continue
+        if not val:
+            carried = prev.get((nid, field, (row.get("key") or "").strip()))
+            if carried:
+                row["value"] = carried
+                row["_encrypted"] = True
+            continue
+        row["value"] = encrypt(val)
+        row["_encrypted"] = True
+
+
+def _mask_graph_secrets(graph: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a deep copy with encrypted secret values blanked so the editor never receives
+    ciphertext or plaintext — the row keeps ``encrypt``/``_encrypted`` so the UI shows a
+    'saved' placeholder and an empty submit carries the secret over."""
+    import copy
+
+    g = copy.deepcopy(graph or {})
+    for _nid, _field, row in _api_request_secret_rows(g):
+        if row.get("_encrypted"):
+            row["value"] = ""
+    return g
+
+
 class WorkflowService(BaseService):
     # ── lookups ────────────────────────────────────────────────────────────
     def _get(self, workflow_id: str) -> Workflow:
@@ -97,7 +149,7 @@ class WorkflowService(BaseService):
             "draft_version_id": str(wf.draft_version_id) if wf.draft_version_id else None,
             "published_version_id": str(wf.published_version_id) if wf.published_version_id else None,
             "latest_version": wf.latest_version,
-            "graph": (draft.graph if draft else wf_schema.empty_graph()),
+            "graph": _mask_graph_secrets(draft.graph if draft else wf_schema.empty_graph()),
             "graph_checksum": draft.graph_checksum if draft else None,
             "is_valid": bool(draft.is_valid) if draft else False,
             "validation_errors": (draft.validation_errors or []) if draft else [],
@@ -142,6 +194,7 @@ class WorkflowService(BaseService):
         size_err = wf_schema.graph_size_error(graph)
         if size_err:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=size_err)
+        _encrypt_graph_secrets(graph)
         errors = wf_schema.validate_graph(graph)
 
         wf = Workflow(
@@ -215,6 +268,7 @@ class WorkflowService(BaseService):
                 detail="This workflow was changed elsewhere. Reload before saving.",
             )
 
+        _encrypt_graph_secrets(graph, prev_graph=draft.graph)
         errors = wf_schema.validate_graph(graph)
         draft.graph = graph
         draft.start_node_name = wf_schema.find_start_node_name(graph)
@@ -315,7 +369,7 @@ class WorkflowService(BaseService):
         published = self._version(wf.published_version_id)
         draft = self._version(wf.draft_version_id)
         graph = (published or draft).graph if (published or draft) else wf_schema.empty_graph()
-        return vapi_adapter.to_vapi(graph)
+        return vapi_adapter.to_vapi(_mask_graph_secrets(graph))
 
     # ── helpers ────────────────────────────────────────────────────────────
     def _invalidate_assigned_agents(self, workflow_id: UUID) -> None:

@@ -15,6 +15,7 @@ class WorkflowNodeType(str, enum.Enum):
     TRANSFER_CALL = "transferCall"
     END_CALL = "endCall"
     DECISION = "decision"
+    API_REQUEST = "apiRequest"
 
 
 class EdgeConditionType(str, enum.Enum):

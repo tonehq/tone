@@ -134,10 +134,31 @@ function EndCallNode({ id, data, selected }: NodeProps) {
   );
 }
 
+function ApiRequestNode({ id, data, selected }: NodeProps) {
+  const d = data as D;
+  const issues = useNodeIssues(id);
+  const onDelete = useNodeDelete(id);
+  const method = (str(d.method) || 'GET').toUpperCase();
+  const url = str(d.url);
+  return (
+    <BaseNode
+      meta={NODE_REGISTRY.apiRequest}
+      title={str(d.name) || id}
+      summary={url ? `${method} ${url}` : str(d.description) || 'No endpoint set'}
+      selected={selected}
+      isGlobal={Boolean(d.isGlobal)}
+      onDelete={onDelete}
+      errorCount={issues.length}
+      errorMessages={issues.map((i) => i.message)}
+    />
+  );
+}
+
 export const nodeTypes = {
   conversation: ConversationNode,
   decision: DecisionNode,
   tool: ToolNode,
   transferCall: TransferCallNode,
   endCall: EndCallNode,
+  apiRequest: ApiRequestNode,
 };
