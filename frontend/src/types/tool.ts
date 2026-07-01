@@ -13,6 +13,7 @@ export interface Tool {
   auth_config: Record<string, string> | null;
   meta_data: Record<string, unknown> | null;
   oauth_connection_id: string | null;
+  app_integration_id?: string | null;
   mcp_server_id?: string | null;
   is_active: boolean;
   is_template?: boolean;
@@ -20,7 +21,7 @@ export interface Tool {
   updated_at: string;
 }
 
-export type ToolAuthType = 'none' | 'api_key' | 'bearer' | 'basic';
+export type ToolAuthType = 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth';
 
 export type ToolHttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
@@ -50,6 +51,7 @@ export interface ToolUpsertPayload {
   auth_config?: Record<string, string> | null;
   meta_data?: Record<string, unknown> | null;
   oauth_connection_id?: string | null;
+  app_integration_id?: string | null;
   is_active?: boolean;
 }
 
