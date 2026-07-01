@@ -20,6 +20,14 @@ export const createWorkflow = async (
   return res.data;
 };
 
+export const cloneWorkflow = async (workflowId: string, name?: string): Promise<WorkflowDetail> => {
+  const res = await axiosInstance.post<WorkflowDetail>('/workflow/clone', {
+    workflow_id: workflowId,
+    name: name?.trim() || undefined,
+  });
+  return res.data;
+};
+
 export const getWorkflow = async (workflowId: string): Promise<WorkflowDetail> => {
   const res = await axiosInstance.get<WorkflowDetail>('/workflow/get', {
     params: { workflow_id: workflowId },

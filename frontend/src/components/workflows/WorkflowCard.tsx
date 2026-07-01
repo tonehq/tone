@@ -13,9 +13,10 @@ interface WorkflowCardProps {
   wf: WorkflowSummary;
   onOpen: (id: string) => void;
   onDelete: (wf: WorkflowSummary) => void;
+  onClone: (wf: WorkflowSummary) => void;
 }
 
-const WorkflowCard: React.FC<WorkflowCardProps> = ({ wf, onOpen, onDelete }) => {
+const WorkflowCard: React.FC<WorkflowCardProps> = ({ wf, onOpen, onDelete, onClone }) => {
   const published = wf.status === 'published';
   return (
     <Card
@@ -75,6 +76,8 @@ const WorkflowCard: React.FC<WorkflowCardProps> = ({ wf, onOpen, onDelete }) => 
             <ActionMenu
               itemName={wf.name}
               onEdit={() => onOpen(wf.id)}
+              onClone={() => onClone(wf)}
+              cloneLabel="Duplicate workflow"
               onDelete={() => Promise.resolve(onDelete(wf))}
               deleteDescription={`This permanently removes "${wf.name}". Workflows assigned to an agent must be unassigned first.`}
             />

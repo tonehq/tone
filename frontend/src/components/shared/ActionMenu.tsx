@@ -1,29 +1,34 @@
 'use client';
 
 import { CustomButton, CustomModal } from '@/components/shared';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Copy, Pencil, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 export interface ActionMenuProps {
   onEdit: () => void;
   onDelete: () => Promise<void>;
+  /** Optional duplicate action — renders a copy button between edit and delete when provided. */
+  onClone?: () => void | Promise<void>;
   itemName?: string;
   deleteTitle?: string;
   deleteDescription?: string;
   confirmText?: string;
   editLabel?: string;
   deleteLabel?: string;
+  cloneLabel?: string;
 }
 
 export default function ActionMenu({
   onEdit,
   onDelete,
+  onClone,
   itemName,
   deleteTitle,
   deleteDescription,
   confirmText = 'Delete',
   editLabel = 'Edit',
   deleteLabel = 'Delete',
+  cloneLabel = 'Duplicate',
 }: ActionMenuProps) {
   const resolvedTitle = deleteTitle ?? (itemName ? `Delete ${itemName}?` : 'Delete');
   const resolvedDescription =
@@ -59,6 +64,21 @@ export default function ActionMenu({
         <Pencil className="size-4" />
         <span className="sr-only">{editLabel}</span>
       </CustomButton>
+      {onClone && (
+        <CustomButton
+          type="text"
+          size="icon-xs"
+          onClick={(e) => {
+            e.stopPropagation();
+            void onClone();
+          }}
+          className="text-muted-foreground hover:text-foreground"
+          aria-label={cloneLabel}
+        >
+          <Copy className="size-4" />
+          <span className="sr-only">{cloneLabel}</span>
+        </CustomButton>
+      )}
       <CustomButton
         type="text"
         size="icon-xs"
@@ -75,7 +95,9 @@ export default function ActionMenu({
 
       <CustomModal
         open={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
+        onClose={() => {
+          if (!deleting) setConfirmOpen(false);
+        }}
         title={resolvedTitle}
         description={resolvedDescription}
         confirmText={confirmText}

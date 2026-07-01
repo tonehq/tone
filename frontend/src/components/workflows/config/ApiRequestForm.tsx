@@ -28,6 +28,13 @@ const PROP_TYPES = ['string', 'number', 'boolean', 'object', 'array'].map((t) =>
 
 const s = (v: unknown) => (typeof v === 'string' ? v : '');
 
+// Stable per-row id so an encrypted value's carry-over on the backend survives a key rename
+// (the server matches masked rows back to their stored secret by `_rid`, then by key name).
+const rid = (): string =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `r-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+
 const ApiRequestForm: React.FC<Props> = ({ data, patch }) => {
   const arr = (k: string): Row[] => (Array.isArray(data[k]) ? (data[k] as Row[]) : []);
   const setArr = (k: string, next: Row[]) => patch({ [k]: next });
@@ -125,7 +132,7 @@ const ApiRequestForm: React.FC<Props> = ({ data, patch }) => {
           type="text"
           size="xs"
           icon={<Plus className="h-3.5 w-3.5" />}
-          onClick={() => add('headers', { key: '', value: '', encrypt: false })}
+          onClick={() => add('headers', { key: '', value: '', encrypt: false, _rid: rid() })}
         >
           Add Header
         </CustomButton>
@@ -233,7 +240,7 @@ const ApiRequestForm: React.FC<Props> = ({ data, patch }) => {
           type="text"
           size="xs"
           icon={<Plus className="h-3.5 w-3.5" />}
-          onClick={() => add('staticBody', { key: '', value: '', encrypt: false })}
+          onClick={() => add('staticBody', { key: '', value: '', encrypt: false, _rid: rid() })}
         >
           Add Field
         </CustomButton>

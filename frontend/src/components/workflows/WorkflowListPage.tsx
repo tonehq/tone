@@ -14,6 +14,7 @@ import { handleApiError } from '@/utils/helpers';
 import type { SearchToken, TokenSearchField } from '@/types/components';
 import type { WorkflowSummary } from '@/types/workflow';
 import CreateWorkflowModal from './CreateWorkflowModal';
+import CloneWorkflowModal from './CloneWorkflowModal';
 import WorkflowEmptyState from './WorkflowEmptyState';
 import WorkflowCard from './WorkflowCard';
 import WorkflowCardSkeleton from './WorkflowCardSkeleton';
@@ -37,14 +38,15 @@ const WorkflowListPage: React.FC = () => {
   const remove = useSetAtom(deleteWorkflowAtom);
 
   const [createOpen, setCreateOpen] = useState(false);
+  const [cloneTarget, setCloneTarget] = useState<WorkflowSummary | null>(null);
   const [errored, setErrored] = useState(false);
   const [loadedOnce, setLoadedOnce] = useState(false);
   const [tokens, setTokens] = useState<SearchToken[]>([]);
 
   const load = useCallback(
-    (silent = false) => {
+    (silent = false): Promise<void> => {
       setErrored(false);
-      fetchList()
+      return fetchList()
         .catch((err) => {
           setErrored(true);
           if (!silent) handleApiError(err);
@@ -64,14 +66,17 @@ const WorkflowListPage: React.FC = () => {
     async (wf: WorkflowSummary) => {
       try {
         await remove(wf.id);
+        // Keep the delete dialog's loader up until the list refresh lands.
+        await load(true);
         showToast.success('Workflow deleted');
-        load(true);
       } catch (err) {
         handleApiError(err);
       }
     },
     [remove, load],
   );
+
+  const handleClone = useCallback((wf: WorkflowSummary) => setCloneTarget(wf), []);
 
   const filtered = useMemo(() => {
     const statusVals = tokens.filter((t) => t.field === 'status').map((t) => t.value);
@@ -212,13 +217,18 @@ const WorkflowListPage: React.FC = () => {
                 visible: { opacity: 1, y: 0, transition: { duration: 0.35 } },
               }}
             >
-              <WorkflowCard wf={wf} onOpen={open} onDelete={handleDelete} />
+              <WorkflowCard wf={wf} onOpen={open} onDelete={handleDelete} onClone={handleClone} />
             </motion.div>
           ))}
         </motion.div>
       )}
 
       <CreateWorkflowModal open={createOpen} onClose={() => setCreateOpen(false)} />
+      <CloneWorkflowModal
+        workflow={cloneTarget}
+        onClose={() => setCloneTarget(null)}
+        onCloned={() => load(true)}
+      />
     </div>
   );
 };
