@@ -1,6 +1,7 @@
 import { atom } from 'jotai';
 
 import {
+  cloneWorkflow,
   createWorkflow,
   deleteWorkflow,
   exportVapiWorkflow,
@@ -55,6 +56,12 @@ export const createWorkflowAtom = atom(
 
 export const deleteWorkflowAtom = atom(null, async (_get, _set, workflowId: string) =>
   deleteWorkflow(workflowId),
+);
+
+export const cloneWorkflowAtom = atom(
+  null,
+  async (_get, _set, payload: { workflowId: string; name?: string }): Promise<WorkflowDetail> =>
+    cloneWorkflow(payload.workflowId, payload.name),
 );
 
 // ─── editor (single workflow) ───────────────────────────────────────────────

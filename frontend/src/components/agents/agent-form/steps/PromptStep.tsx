@@ -158,15 +158,15 @@ export default function PromptStep() {
           const Icon = m.icon;
           const active = mode === m.key;
           return (
-            <button
+            <CustomButton
               key={m.key}
-              type="button"
+              type="text"
               aria-pressed={active}
               onClick={() => setMode(m.key)}
               className={cn(
-                'flex cursor-pointer items-center gap-3 rounded-lg px-3.5 py-2.5 text-left transition-all',
+                'h-auto w-full items-center justify-start gap-3 rounded-lg px-3.5 py-2.5 text-left transition-all',
                 active
-                  ? 'bg-card shadow-sm ring-1 ring-border'
+                  ? 'bg-card shadow-sm ring-1 ring-border hover:bg-card'
                   : 'opacity-70 hover:bg-card/60 hover:opacity-100',
               )}
             >
@@ -184,7 +184,7 @@ export default function PromptStep() {
                 <span className="block text-sm font-semibold text-foreground">{m.label}</span>
                 <span className="block truncate text-[11.5px] text-muted-foreground">{m.hint}</span>
               </span>
-            </button>
+            </CustomButton>
           );
         })}
       </div>

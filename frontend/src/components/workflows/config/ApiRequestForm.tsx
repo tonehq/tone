@@ -1,14 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
-import { ChevronDown, Cog, KeyRound, ListTree, Plus, Repeat2, Send, Trash2 } from 'lucide-react';
+import React from 'react';
+import { Cog, KeyRound, ListTree, Plus, Repeat2, Send } from 'lucide-react';
 
-import { cn } from '@/utils/cn';
 import CustomButton from '@/components/shared/CustomButton';
 import TextInput from '@/components/shared/TextInput';
 import TextAreaField from '@/components/shared/TextAreaField';
 import SelectInput from '@/components/shared/SelectInput';
 import CheckboxField from '@/components/shared/CheckboxField';
+import Section from './ApiRequestSection';
+import RemoveBtn from './ApiRequestRemoveButton';
+import Empty from './ApiRequestEmptyHint';
 
 type D = Record<string, unknown>;
 type Row = Record<string, unknown>;
@@ -26,58 +28,12 @@ const PROP_TYPES = ['string', 'number', 'boolean', 'object', 'array'].map((t) =>
 
 const s = (v: unknown) => (typeof v === 'string' ? v : '');
 
-/** Collapsible config section (icon + title + one-line description), keyboard-operable. */
-const Section: React.FC<{
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  defaultOpen?: boolean;
-  children: React.ReactNode;
-}> = ({ title, description, icon, defaultOpen = false, children }) => {
-  const [open, setOpen] = useState(defaultOpen);
-  return (
-    <div className="overflow-hidden rounded-lg border border-border bg-muted/20">
-      <button
-        type="button"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full cursor-pointer items-center gap-2.5 px-3 py-2.5 text-left hover:bg-muted/40"
-      >
-        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground ring-1 ring-inset ring-border">
-          {icon}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-[13px] font-medium text-foreground">{title}</span>
-          <span className="block truncate text-[11px] text-muted-foreground">{description}</span>
-        </span>
-        <ChevronDown
-          className={cn(
-            'h-4 w-4 shrink-0 text-muted-foreground transition-transform',
-            open && 'rotate-180',
-          )}
-        />
-      </button>
-      {open && <div className="flex flex-col gap-3 border-t border-border p-3">{children}</div>}
-    </div>
-  );
-};
-
-const RemoveBtn: React.FC<{ onClick: () => void; label: string }> = ({ onClick, label }) => (
-  <CustomButton
-    type="text"
-    size="icon-sm"
-    aria-label={label}
-    onClick={onClick}
-    className="mt-1 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-    icon={<Trash2 className="h-4 w-4" />}
-  />
-);
-
-const Empty: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <p className="rounded-md border border-dashed border-border px-3 py-2 text-center text-xs text-muted-foreground">
-    {children}
-  </p>
-);
+// Stable per-row id so an encrypted value's carry-over on the backend survives a key rename
+// (the server matches masked rows back to their stored secret by `_rid`, then by key name).
+const rid = (): string =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `r-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
 const ApiRequestForm: React.FC<Props> = ({ data, patch }) => {
   const arr = (k: string): Row[] => (Array.isArray(data[k]) ? (data[k] as Row[]) : []);
@@ -176,7 +132,7 @@ const ApiRequestForm: React.FC<Props> = ({ data, patch }) => {
           type="text"
           size="xs"
           icon={<Plus className="h-3.5 w-3.5" />}
-          onClick={() => add('headers', { key: '', value: '', encrypt: false })}
+          onClick={() => add('headers', { key: '', value: '', encrypt: false, _rid: rid() })}
         >
           Add Header
         </CustomButton>
@@ -284,7 +240,7 @@ const ApiRequestForm: React.FC<Props> = ({ data, patch }) => {
           type="text"
           size="xs"
           icon={<Plus className="h-3.5 w-3.5" />}
-          onClick={() => add('staticBody', { key: '', value: '', encrypt: false })}
+          onClick={() => add('staticBody', { key: '', value: '', encrypt: false, _rid: rid() })}
         >
           Add Field
         </CustomButton>
@@ -370,7 +326,7 @@ const ApiRequestForm: React.FC<Props> = ({ data, patch }) => {
 
       <Section
         title="Messages"
-        description="What the agent says around the call"
+        description="What the agent says before making the call"
         icon={<Send className="h-3.5 w-3.5" />}
       >
         <TextInput
@@ -379,13 +335,6 @@ const ApiRequestForm: React.FC<Props> = ({ data, patch }) => {
           value={s(messages.start)}
           onChange={(e) => setMsg('start', e.target.value)}
           placeholder="One moment while I look that up…"
-        />
-        <TextInput
-          name="msg-failed"
-          label="On failure (optional)"
-          value={s(messages.failed)}
-          onChange={(e) => setMsg('failed', e.target.value)}
-          placeholder="Sorry, I couldn't complete that right now."
         />
       </Section>
     </div>
