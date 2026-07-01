@@ -219,8 +219,15 @@ const WorkflowToolbar: React.FC<Props> = ({
           </div>
         </CustomPopover>
 
-        <CustomButton type="default" size="sm" loading={saving} onClick={onSave}>
-          Save draft
+        <CustomButton
+          type="default"
+          size="sm"
+          loading={saving}
+          disabled={status === 'published' && !dirty}
+          onClick={onSave}
+          title={status === 'published' && !dirty ? 'No unsaved changes.' : undefined}
+        >
+          {status === 'published' ? 'Save' : 'Save draft'}
         </CustomButton>
         <CustomButton
           type="primary"

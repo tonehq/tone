@@ -39,24 +39,43 @@ def _api_request_secret_rows(graph: Dict[str, Any]):
                     yield nid, field, row
 
 
+def _secret_lookup_keys(nid, field: str, row: Dict[str, Any]) -> List[tuple]:
+    """Identity keys used to match a masked (blanked) row back to its stored secret.
+    Prefer the stable row id ``_rid`` — it survives a header/field-key rename — and fall
+    back to the (mutable) key for rows saved before row ids existed."""
+    keys: List[tuple] = []
+    rid = row.get("_rid")
+    if isinstance(rid, str) and rid.strip():
+        keys.append((nid, field, "rid", rid.strip()))
+    name = (row.get("key") or "").strip()
+    if name:
+        keys.append((nid, field, "key", name))
+    return keys
+
+
 def _encrypt_graph_secrets(graph: Dict[str, Any], prev_graph: Optional[Dict[str, Any]] = None) -> None:
     """Encrypt encrypt-flagged header/static values in place (AES, idempotent via the
     ``_encrypted`` marker). An empty value carries over the previously-saved secret from
-    ``prev_graph`` so masking-then-saving (the UI never receives plaintext) doesn't wipe it."""
+    ``prev_graph`` so masking-then-saving (the UI never receives plaintext) doesn't wipe it.
+    Carry-over matches on the stable row id first (so renaming a key preserves the secret),
+    then on the key name for older rows that predate row ids."""
     from core.utils.encryption import encrypt
 
     prev: Dict[tuple, str] = {}
     if prev_graph:
         for nid, field, row in _api_request_secret_rows(prev_graph):
             if row.get("_encrypted") and row.get("value"):
-                prev[(nid, field, (row.get("key") or "").strip())] = row["value"]
+                for k in _secret_lookup_keys(nid, field, row):
+                    prev.setdefault(k, row["value"])
 
     for nid, field, row in _api_request_secret_rows(graph):
         val = row.get("value") or ""
         if row.get("_encrypted") and val:
             continue
         if not val:
-            carried = prev.get((nid, field, (row.get("key") or "").strip()))
+            carried = next(
+                (prev[k] for k in _secret_lookup_keys(nid, field, row) if k in prev), None
+            )
             if carried:
                 row["value"] = carried
                 row["_encrypted"] = True
@@ -234,6 +253,45 @@ class WorkflowService(BaseService):
         wf.draft_version_id = draft.id
         self.db.commit()
         return self.detail(wf)
+
+    # ── clone ──────────────────────────────────────────────────────────────
+    def clone(
+        self, workflow_id: str, user_id: Optional[UUID], name: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Duplicate a workflow's current graph into a NEW draft workflow. Uses the
+        caller-provided ``name`` when given (surfacing ``create``'s 409 on a duplicate),
+        otherwise auto-names it "<name> (clone)". Only the workflow itself is copied —
+        agent assignments, version history and publish state are NOT carried over (the
+        clone starts as a fresh, unpublished draft). Encrypted apiRequest secrets
+        round-trip unchanged because ``create`` re-runs the idempotent secret encryption."""
+        import copy
+
+        src = self._get(workflow_id)
+        # Prefer the draft graph (latest edits); fall back to the published snapshot.
+        draft = self._version(src.draft_version_id)
+        graph = draft.graph if (draft and draft.graph) else None
+        if graph is None and src.published_version_id:
+            pub = self._version(src.published_version_id)
+            graph = pub.graph if pub else None
+        graph = copy.deepcopy(graph) if graph else wf_schema.empty_graph()
+
+        new_name = (name or "").strip() or self._unique_clone_name(src.name)
+        return self.create(new_name, src.description, user_id, graph=graph)
+
+    def _unique_clone_name(self, base: str) -> str:
+        """"<base> (clone)", disambiguated with a numeric suffix if already taken, so the
+        clone never collides with ``create``'s duplicate-name guard."""
+        base = (base or "Workflow")[:180]  # leave room for the " (clone) N" suffix (name ≤ 200)
+        candidate = f"{base} (clone)"
+        n = 2
+        while (
+            self.query(Workflow)
+            .filter(Workflow.name == candidate, Workflow.deleted_at.is_(None))
+            .first()
+        ):
+            candidate = f"{base} (clone) {n}"
+            n += 1
+        return candidate
 
     # ── save draft ─────────────────────────────────────────────────────────
     def save_draft(

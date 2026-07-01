@@ -41,6 +41,11 @@ class PublishRequest(BaseModel):
     workflow_id: str
 
 
+class CloneWorkflowRequest(BaseModel):
+    workflow_id: str
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+
+
 class ImportVapiRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
@@ -115,6 +120,17 @@ def publish_workflow(
     svc = _get_service(claims, db)
     user_id = UUID(claims.user_id) if claims.user_id else None
     return svc.publish(body.workflow_id, user_id)
+
+
+@router.post("/clone", status_code=status.HTTP_201_CREATED)
+def clone_workflow(
+    body: CloneWorkflowRequest,
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    svc = _get_service(claims, db)
+    user_id = UUID(claims.user_id) if claims.user_id else None
+    return svc.clone(body.workflow_id, user_id, body.name)
 
 
 @router.get("/list_versions")
