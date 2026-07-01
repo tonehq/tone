@@ -91,6 +91,12 @@ class CreateAgentRequest(BaseModel):
     upload_ids: Optional[List[str]] = None
     phone_numbers: Optional[List[PhoneNumberAttachment]] = None
     web_channel_ids: Optional[List[str]] = None
+    # Optional per-attachment OAuth-connection overrides for this agent version.
+    # Maps tool_id / mcp_server_id → oauth_connection_id (or ``null`` to clear).
+    # Omitted entries fall back to ``tools.oauth_connection_id`` /
+    # ``mcp_servers.oauth_connection_id`` at runtime.
+    tool_oauth_overrides: Optional[Dict[str, Optional[str]]] = None
+    mcp_server_oauth_overrides: Optional[Dict[str, Optional[str]]] = None
 
 
 class UpdateAgentRequest(BaseModel):
@@ -104,6 +110,8 @@ class UpdateAgentRequest(BaseModel):
     upload_ids: Optional[List[str]] = None
     phone_numbers: Optional[List[PhoneNumberAttachment]] = None
     web_channel_ids: Optional[List[str]] = None
+    tool_oauth_overrides: Optional[Dict[str, Optional[str]]] = None
+    mcp_server_oauth_overrides: Optional[Dict[str, Optional[str]]] = None
 
 
 class SaveAsNewVersionRequest(BaseModel):
@@ -127,6 +135,8 @@ class SaveAsNewVersionRequest(BaseModel):
     upload_ids: Optional[List[str]] = None
     phone_numbers: Optional[List[PhoneNumberAttachment]] = None
     web_channel_ids: Optional[List[str]] = None
+    tool_oauth_overrides: Optional[Dict[str, Optional[str]]] = None
+    mcp_server_oauth_overrides: Optional[Dict[str, Optional[str]]] = None
     source_config_id: Optional[str] = None
     from_scratch: Optional[bool] = False
 
@@ -145,6 +155,8 @@ class UpdateVersionRequest(BaseModel):
     upload_ids: Optional[List[str]] = None
     phone_numbers: Optional[List[PhoneNumberAttachment]] = None
     web_channel_ids: Optional[List[str]] = None
+    tool_oauth_overrides: Optional[Dict[str, Optional[str]]] = None
+    mcp_server_oauth_overrides: Optional[Dict[str, Optional[str]]] = None
     source_config_id: Optional[str] = None
 
 

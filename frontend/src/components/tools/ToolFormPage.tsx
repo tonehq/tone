@@ -6,6 +6,7 @@ import BuiltInToolForm from '@/components/tools/BuiltInToolForm';
 import CustomToolForm from '@/components/tools/CustomToolForm';
 import { useGoBack } from '@/hooks/useGoBack';
 import type { BuiltInToolFormData, CustomToolFormData } from '@/schemas/tool';
+import { finalizeAttachmentAndRedirect } from '@/services/agentAttachmentService';
 import { getTool } from '@/services/toolService';
 import type {
   Tool,
@@ -15,11 +16,12 @@ import type {
   ToolType,
   ToolUpsertPayload,
 } from '@/types/tool';
+import { readAttachContext } from '@/utils/agentAttachmentContext';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface ToolFormPageProps {
   toolId?: string;
@@ -33,6 +35,10 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   const [, upsertToolAction] = useAtom(upsertToolAtom);
   const [, deleteToolAction] = useAtom(deleteToolAtom);
   const [, fetchTools] = useAtom(fetchToolsAtom);
+
+  // Present only when the user reached this page via the agent config
+  // "New tool" button — see ``ToolsMcpStep``.
+  const attachCtx = useMemo(() => readAttachContext(searchParams), [searchParams]);
   const goBack = useGoBack('/tools');
 
   const templateId = searchParams.get('template_id');
@@ -132,11 +138,22 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   const executeSave = async (payload: ToolUpsertPayload) => {
     setSaving(true);
     try {
-      await upsertToolAction(payload);
+      const savedTool = await upsertToolAction(payload);
       showToast.success(isEditMode ? 'Tool updated successfully' : 'Tool created successfully');
       setSaved(true);
       await fetchTools();
-      if (!isEditMode) router.push('/tools');
+      if (isEditMode) return;
+      // When launched from the agent config page, attach the created tool to
+      // that agent's viewing version and bounce back; otherwise land on the
+      // tools list. See ``finalizeAttachmentAndRedirect`` for the shared flow.
+      await finalizeAttachmentAndRedirect({
+        router,
+        attachCtx,
+        kind: 'tool',
+        itemId: savedTool?.id,
+        attachedMessage: 'Tool attached to the agent version',
+        fallbackRedirect: '/tools',
+      });
     } catch (error) {
       handleApiError(error);
     } finally {

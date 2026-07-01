@@ -3,6 +3,8 @@
 
 import { fetchMcpServersAtom, upsertMcpServerAtom } from '@/atoms/MCPAtom';
 import HttpHeadersBuilder from '@/components/mcp/HttpHeadersBuilder';
+import { finalizeAttachmentAndRedirect } from '@/services/agentAttachmentService';
+import { readAttachContext } from '@/utils/agentAttachmentContext';
 import {
   AppLoader,
   CustomButton,
@@ -39,8 +41,8 @@ import {
   Signal,
   Sparkles,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 import { Controller, useFieldArray, useForm } from 'react-hook-form';
 
 type TransportType = 'shttp' | 'sse';
@@ -173,7 +175,12 @@ interface MCPFormPageProps {
 
 export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const isEditMode = typeof serverId === 'string' && serverId.length > 0;
+
+  // Present only when opened via the agent config "New MCP server" button —
+  // see ``ToolsMcpStep`` and ``utils/agentAttachmentContext``.
+  const attachCtx = useMemo(() => readAttachContext(searchParams), [searchParams]);
 
   const [, upsertServer] = useAtom(upsertMcpServerAtom);
   const [, fetchServers] = useAtom(fetchMcpServersAtom);
@@ -305,12 +312,22 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
     const payload = formStateToUpsertPayload(data, isEditMode ? serverId : undefined);
     setSaving(true);
     try {
-      await upsertServer(payload);
+      const savedServer = await upsertServer(payload);
       await fetchServers();
       showToast.success(
         isEditMode ? 'MCP server updated successfully' : 'MCP server created successfully',
       );
-      router.push('/mcp');
+      if (isEditMode) return;
+      // When launched from the agent config page, attach the new MCP server
+      // to that agent's viewing version and bounce back — same flow as tools.
+      await finalizeAttachmentAndRedirect({
+        router,
+        attachCtx,
+        kind: 'mcp_server',
+        itemId: savedServer?.id,
+        attachedMessage: 'MCP server attached to the agent version',
+        fallbackRedirect: '/mcp',
+      });
     } catch (error) {
       handleApiError(error);
     } finally {
