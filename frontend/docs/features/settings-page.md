@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Settings page (`/settings`) is the centralized configuration hub for managing organization-level settings in Tone. It provides four sections accessible via a sidebar navigation: **API Keys**, **Members**, **Organization**, and **Web Hooks**.
+The Settings page (`/settings`) is the centralized configuration hub for managing organization-level settings in Tone. It provides the following sections accessible via a sidebar navigation: **User Settings**, **Organizations**, **Members**, **Model Providers**, **Integrations**, and **Audit Logs**.
 
 **Route:** `/settings`
 **Auth Required:** Yes (authenticated users only)
@@ -303,7 +303,141 @@ The Organization section manages access control settings for the organization.
 
 ---
 
-## 4. Web Hook Section
+## 4. Audit Logs Section
+
+The Audit Logs section shows every configuration change made to an agent — created / updated / deleted events, attach/detach of tools, MCP servers, knowledge bases, phone numbers, and web channels, plus version lifecycle events.
+
+**Route:** `/settings/audit-logs`
+**Rendered in:** `src/components/settings/auditLogs/AuditLogs.tsx`
+**Auth required (backend):** `require_admin_or_owner`
+
+### Layout
+
+The page has three stacked sections:
+
+1. **Header** — Title + subtitle.
+2. **Stat cards** (`AuditLogStats.tsx`) — 5 counters: Total Events, Created, Updated, Deleted, Attachments.
+3. **Filters row** (`AuditLogFilters.tsx`) — Agent selector (`SearchableSelect`, required), Actions dropdown, Resources dropdown.
+4. **Table** (`AuditLogsTable.tsx`) — Uses shared `CustomTable` with columns Action / Resource / User / IP Address / Changes / Time. Click a row to open a details drawer.
+5. **Details drawer** (`AuditLogDetailsDrawer.tsx`) — Renders the full before/after diff, plus request ID, IP, and user agent.
+
+### Empty state
+
+The backend endpoint requires `agent_id`. Until the user picks an agent from the filter row, the table area shows an empty state ("Select an agent"). The stat cards render at reduced opacity to signal the same.
+
+### Backend contract
+
+| Method | Endpoint             | Description                        | Auth                     |
+| ------ | -------------------- | ---------------------------------- | ------------------------ |
+| POST   | `/api/v1/audit-log/list` | Paginated audit rows for one agent | `require_admin_or_owner` |
+
+**Request body:**
+
+```jsonc
+{
+  "agent_id": "uuid",              // required
+  "actions": ["agent.tool.attached", ...], // optional
+  "actor_user_id": "uuid",         // optional
+  "start_date_time": "ISO",        // optional
+  "end_date_time": "ISO",          // optional
+  "page_no": 1,
+  "page_size": 20                  // max 200
+}
+```
+
+**Response:**
+
+```jsonc
+{
+  "items": [
+    {
+      "id": "uuid",
+      "created_at": "ISO",
+      "actor_user_id": "uuid|null",
+      "action": "agent.tool.attached",
+      "agent_id": "uuid",
+      "agent_config_id": "uuid|null",
+      "target_resource_type": "tool|mcp_server|knowledge_base|phone_number|web_channel|agent_config|null",
+      "target_resource_id": "string|null",
+      "changes": { "before": {...}, "after": {...}, "extra": {...} },
+      "request_id": "string|null",
+      "ip_address": "string|null",
+      "user_agent": "string|null"
+    }
+  ],
+  "total": 123,
+  "page_no": 1,
+  "page_size": 20
+}
+```
+
+Rows are ordered newest-first. Rows sharing the same `request_id` represent one user action (e.g. one agent save can emit N rows). Secret-shaped keys in `changes` are masked to `"***"` server-side.
+
+### Action enum (from `core/services/audit_actions.py`)
+
+| Group     | Actions                                                                                                                                                                                                                                                                                                          |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Agent     | `agent.created`, `agent.updated`, `agent.deleted`, `agent.config.updated`                                                                                                                                                                                                                                        |
+| Version   | `agent.version.created`, `agent.version.updated`, `agent.version.switched`, `agent.version.deleted`                                                                                                                                                                                                              |
+| Attach    | `agent.tool.attached`/`detached`, `agent.mcp.attached`/`detached`, `agent.knowledge_base.attached`/`detached`, `agent.phone_number.attached`/`detached`, `agent.web_channel.attached`/`detached`                                                                                                                  |
+
+The `Actions` filter dropdown groups these into 5 verb families (Create / Update / Delete / Attach-Detach / Versions) so users don't have to reason about the 18-item enum.
+
+### Data hydration
+
+`actor_user_id` and `target_resource_id` are stored as bare UUIDs — the backend does not join. Names are hydrated client-side via `useAuditLookups`, which fetches (in parallel, on mount):
+
+- Members (`/user/get_all_users_for_organization`) — one page of up to 500 rows.
+- Tools (`/tool/get_all_tools`).
+- MCP servers (`/mcp-server/list`).
+
+Knowledge-base, phone-number, and web-channel targets currently fall back to a short-UUID display. When a resource has been hard-deleted the row still renders (audit is append-only), showing the raw UUID.
+
+### State (Jotai)
+
+**Defined in:** `src/atoms/AuditLogAtom.tsx`
+
+| Atom                          | Purpose                                                                          |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| `auditLogParamsAtom`          | Current filter/pagination state (`agent_id`, `action_group`, `resource_type`, `page`, `page_size`). |
+| `loadableAuditLogPagedAtom`   | Async paged fetch, short-circuits to an empty response when no agent is selected. |
+| `setAuditLogParamsAtom`       | Patcher — automatically resets `page` to 1 when filters change.                  |
+| `refetchAuditLogAtom`         | Bump to force a refetch (used by the toolbar refresh button).                    |
+
+### Client-side filtering
+
+`resource_type` is applied on the current page after the fetch, because the backend list endpoint does not accept a resource-type filter. The Search input on the table is also client-side (via `CustomTable`'s built-in search) — the backend audit-log endpoint does not accept a search parameter.
+
+### File structure
+
+```
+frontend/src/
+  app/(dashboard)/settings/audit-logs/
+    page.tsx                          # Thin route wrapper
+
+  components/settings/auditLogs/
+    AuditLogs.tsx                     # Page container
+    AuditLogStats.tsx                 # 5 stat cards
+    AuditLogFilters.tsx               # Agent + Actions + Resources dropdowns
+    AuditLogsTable.tsx                # CustomTable with 6 columns
+    AuditLogDetailsDrawer.tsx         # Before/after diff drawer
+    useAuditLookups.ts                # Actor + target name hydration
+    useAuditStats.ts                  # 5 parallel counts by action group
+    constants.ts                      # ACTION_META, RESOURCE_LABEL, shortId
+
+  atoms/
+    AuditLogAtom.tsx                  # Params + paged loadable + refetch
+
+  services/
+    auditLogService.ts                # POST /audit-log/list
+
+  types/settings/
+    auditLog.ts                       # Request/response + enum types
+```
+
+---
+
+## 5. Web Hook Section
 
 The Web Hook section is planned for configuring webhook endpoints for event notifications.
 
