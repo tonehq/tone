@@ -15,8 +15,13 @@ The org+name partial unique index is narrowed to legacy rows only
 (agent_id IS NULL) because per-agent-version copies intentionally share names.
 
 Revision ID: e2d8b4a7c9f1
-Revises: b7c3f1a9d2e4
+Revises: e9c4b7a1d3f8
 Create Date: 2026-07-02
+
+Note: chained on top of the dev tools/MCP head (e9c4b7a1d3f8) rather than
+b7c3f1a9d2e4 directly, so the workflow chain stays linear with dev and no
+separate merge-heads migration is needed. e9c4b7a1d3f8 already includes
+b7c3f1a9d2e4 in its ancestry (via the 1b567efe78d3 merge).
 
 """
 import uuid
@@ -28,7 +33,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = 'e2d8b4a7c9f1'
-down_revision = 'b7c3f1a9d2e4'
+down_revision = 'e9c4b7a1d3f8'
 branch_labels = None
 depends_on = None
 
