@@ -94,6 +94,29 @@ function AttachmentSummaryRow({
   );
 }
 
+/** Skeleton rows shown while the tool/MCP catalog loads. The selected ids are
+ * known immediately (form state) but their names/descriptions come from the
+ * catalog fetch, so without this the attached rows flash empty under the
+ * "N selected" badge. Row count mirrors the selection so layout stays stable. */
+function AttachmentSkeletonList({ count }: { count: number }) {
+  return (
+    <div className="grid gap-2" aria-hidden>
+      {Array.from({ length: Math.max(1, count) }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-2.5 rounded-xl border border-border/70 bg-background p-3"
+        >
+          <div className="size-7 shrink-0 animate-pulse rounded-lg bg-muted" />
+          <div className="flex-1 space-y-1.5">
+            <div className="h-3.5 w-1/3 animate-pulse rounded bg-muted" />
+            <div className="h-3 w-2/3 animate-pulse rounded bg-muted" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Placeholder shown when nothing is attached — same layout for both sections. */
 function EmptyAttached({ label, onManage }: { label: string; onManage: () => void }) {
   return (
@@ -264,7 +287,9 @@ export default function ToolsMcpStep() {
           </div>
         }
       >
-        {selectedToolIds.length === 0 ? (
+        {loading ? (
+          <AttachmentSkeletonList count={selectedToolIds.length} />
+        ) : selectedToolIds.length === 0 ? (
           <EmptyAttached label="tools" onManage={() => setToolsModalOpen(true)} />
         ) : (
           <div className="grid gap-2">
@@ -324,7 +349,9 @@ export default function ToolsMcpStep() {
           </div>
         }
       >
-        {selectedMcpIds.length === 0 ? (
+        {loading ? (
+          <AttachmentSkeletonList count={selectedMcpIds.length} />
+        ) : selectedMcpIds.length === 0 ? (
           <EmptyAttached label="MCP servers" onManage={() => setMcpModalOpen(true)} />
         ) : (
           <div className="grid gap-2">

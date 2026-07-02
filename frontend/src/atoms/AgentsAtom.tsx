@@ -84,10 +84,10 @@ export const fetchAgentAtom = atom(
   async (
     _get,
     _set,
-    args: string | { agentId: string; configId?: string },
+    args: string | { agentId: string; configId?: string; version?: number },
   ): Promise<AgentDetail> => {
     if (typeof args === 'string') return getAgent(args);
-    return getAgent(args.agentId, args.configId);
+    return getAgent(args.agentId, args.configId, args.version);
   },
 );
 

@@ -324,12 +324,25 @@ def get_agent(
             "against this specific config version instead of the live one."
         ),
     ),
+    version: Optional[int] = Query(
+        None,
+        description=(
+            "Optional version number. Resolved to that version server-side so a "
+            "deep-linked ?version=<n> loads in a single request. Ignored when "
+            "config_id is given."
+        ),
+    ),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
     svc = _get_service(claims, db)
     agent = svc.get_agent(agent_id)
-    config = svc.get_version(agent_id, config_id) if config_id else None
+    if config_id:
+        config = svc.get_version(agent_id, config_id)
+    elif version is not None:
+        config = svc.get_version_by_number(agent_id, version)
+    else:
+        config = None
     return svc.agent_response(agent, config=config)
 
 

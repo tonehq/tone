@@ -809,6 +809,27 @@ class AgentService(BaseService):
             )
         return cfg
 
+    def get_version_by_number(self, agent_id: str, version: int) -> AgentConfig:
+        """Fetch one version by its version number, scoped to the agent. Lets the
+        editor deep-link ``?version=<n>`` and resolve it in a single request
+        (no default-fetch-then-config-fetch round trip). Raises 404 if missing."""
+        agent = self.get_agent(agent_id)
+        cfg = (
+            self.query(AgentConfig)
+            .filter(
+                AgentConfig.agent_id == agent.id,
+                AgentConfig.version == version,
+                AgentConfig.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if not cfg:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Version not found for this agent",
+            )
+        return cfg
+
     def save_as_new_version(
         self,
         agent_id: str,
@@ -1327,6 +1348,46 @@ class AgentService(BaseService):
                 detail="Workflow has validation issues — fix them before assigning it to an agent",
             )
 
+    def _ensure_version_owned_workflow(self, target: AgentConfig) -> None:
+        """Preserve the one-copy-per-version invariant on in-place assignment.
+
+        A workflow assigned via Save (rather than during version creation, which
+        already deep-copies) can be a sibling version's copy — every card in the
+        agent's Workflow tab is owned by this agent, so it passes
+        ``_assert_assignable_workflow``. Assigning it in place would leave a
+        single workflow row driving two versions, so editing it in the builder
+        would change both. When ``target`` now points at an agent-owned workflow
+        that another live config of the same agent also references, deep-copy it
+        and repoint ``target`` at the private copy. Freshly created (unreferenced)
+        workflows and legacy org-level rows are left untouched."""
+        if target.workflow_id is None:
+            return
+        from core.models.workflow import Workflow
+        from core.services.workflow.service import WorkflowService
+
+        wf = (
+            self.query(Workflow)
+            .filter(Workflow.id == target.workflow_id, Workflow.deleted_at.is_(None))
+            .first()
+        )
+        if not wf or wf.agent_id is None:
+            return  # missing, or a legacy shared row — nothing to isolate
+        shared_with_other_version = (
+            self.query(AgentConfig)
+            .filter(
+                AgentConfig.workflow_id == wf.id,
+                AgentConfig.deleted_at.is_(None),
+                AgentConfig.id != target.id,
+            )
+            .count()
+        )
+        if shared_with_other_version == 0:
+            return
+        wf_copy = WorkflowService(
+            self.db, user_id=self._user_id, org_id=self.org_id
+        ).duplicate_for_agent_version(wf.id, wf.agent_id, self._user_id)
+        target.workflow_id = wf_copy.id
+
     def _apply_config_fields_audited(
         self,
         agent: Agent,
@@ -1346,6 +1407,11 @@ class AgentService(BaseService):
         """
         before_snap = self._snapshot(target, self._CONFIG_FIELDS)
         self._apply_config_fields(target, config_data)
+        # In-place assignment can point two versions at one workflow row; give
+        # this version its own copy before auditing so the log reflects what is
+        # actually persisted. (Version creation has its own deep-copy and uses
+        # the non-audited apply path, so it doesn't double-copy here.)
+        self._ensure_version_owned_workflow(target)
         self.audit.log_field_diff(
             AgentAuditAction.CONFIG_UPDATED,
             agent_id=agent.id,

@@ -3,7 +3,7 @@
 import { useAtom } from 'jotai';
 import { isEqual } from 'lodash';
 import { ArrowLeft, Phone, Sparkles, Trash2 } from 'lucide-react';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FormProvider, useForm, useWatch } from 'react-hook-form';
 
@@ -72,8 +72,14 @@ const HEADER_TINT: Record<AgentDirection, string> = {
 export default function AgentEditorShell({ agentType, agentId, children }: AgentEditorShellProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const isEditMode = !!agentId;
   const mode = isEditMode ? 'edit' : 'create';
+
+  // The version to restore on first load, captured once from ?version=<n> so
+  // it survives a refresh / shared deep-link. Kept in a ref so the load effect
+  // doesn't re-run every time we sync the query param back to the URL.
+  const initialVersionParamRef = useRef<string | null>(searchParams.get('version'));
 
   const [, fetchAgent] = useAtom(fetchAgentAtom);
   const [, createAgent] = useAtom(createAgentAtom);
@@ -181,15 +187,36 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     if (!isEditMode || !agentId) return;
     let cancelled = false;
     setLoading(true);
-    fetchAgent(agentId)
-      .then((d) => {
+    const raw = initialVersionParamRef.current;
+    const parsed = raw != null ? Number(raw) : NaN;
+    const requestedVersion = Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+    (async () => {
+      try {
+        // Single request: ?version=<n> is resolved server-side (no
+        // default-fetch-then-config-fetch round trip). Fall back to the live
+        // version only if the requested one no longer exists.
+        let d: AgentDetail;
+        try {
+          d =
+            requestedVersion != null
+              ? await fetchAgent({ agentId, version: requestedVersion })
+              : await fetchAgent(agentId);
+        } catch (err) {
+          if (
+            requestedVersion != null &&
+            (err as { response?: { status?: number } })?.response?.status === 404
+          ) {
+            d = await fetchAgent(agentId);
+          } else {
+            throw err;
+          }
+        }
         if (cancelled) return;
         applyDetail(d);
-        // Initial chip selection = whatever the backend resolved as current
-        // (the published version when no config_id is requested).
+        // Initial chip selection = whatever the backend rendered (the requested
+        // version, or the live one when no valid version was requested).
         setViewedConfigId(d.config?.id ?? null);
-      })
-      .catch((err) => {
+      } catch (err) {
         if (cancelled) return;
         if ((err as { response?: { status?: number } })?.response?.status === 404) {
           showToast.error('Agent not found', 'It may have been deleted.');
@@ -197,14 +224,34 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
           return;
         }
         handleApiError(err);
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
   }, [agentId, applyDetail, fetchAgent, isEditMode, router]);
+
+  /** Version number of the currently-viewed version (the chip selection). */
+  const viewedVersionNum = useMemo(
+    () => (detail?.versions ?? []).find((v) => v.id === viewedConfigId)?.version ?? null,
+    [detail?.versions, viewedConfigId],
+  );
+
+  // Keep ?version=<n> in the URL in sync with the viewed version so a refresh or
+  // shared link reopens the same version. Also re-applies the param after a
+  // section switch (nav links carry no query) — self-healing, no reload since
+  // the load effect doesn't depend on the query. Skipped on the full-screen
+  // workflow builder sub-route.
+  useEffect(() => {
+    if (!isEditMode || loading || viewedVersionNum == null) return;
+    if (/\/workflow\/[^/]+$/.test(pathname)) return;
+    if (searchParams.get('version') === String(viewedVersionNum)) return;
+    const qs = new URLSearchParams(Array.from(searchParams.entries()));
+    qs.set('version', String(viewedVersionNum));
+    router.replace(`${pathname}?${qs.toString()}`, { scroll: false });
+  }, [isEditMode, loading, viewedVersionNum, pathname, searchParams, router]);
 
   /** Map a server validation-error payload onto RHF fields and jump to the
    * tab where the first failure lives. */
