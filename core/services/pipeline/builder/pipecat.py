@@ -108,6 +108,7 @@ class PipecatPipelineBuilder(PipelineBuilder):
             LLMContextAggregatorPair, LLMUserAggregatorParams)
         from pipecat.turns.user_turn_strategies import UserTurnStrategies
         from pipecat.audio.vad.silero import SileroVADAnalyzer
+        from pipecat.audio.vad.vad_analyzer import VADParams
         from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
         from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
         from pipecat.audio.turn.smart_turn.base_smart_turn import SmartTurnParams
@@ -271,13 +272,15 @@ class PipecatPipelineBuilder(PipelineBuilder):
             # Standard pipeline: STT -> LLM -> TTS
             context = LLMContext(messages, combined_tools)
             smart_turn_analyzer = LocalSmartTurnAnalyzerV3(
-                confidence_threshold=0.9,
+                confidence_threshold=0.5,
                 params=SmartTurnParams(stop_secs=0.4),
             )
             context_aggregator = LLMContextAggregatorPair(
                 context,
                 user_params=LLMUserAggregatorParams(
-                    vad_analyzer=SileroVADAnalyzer(),
+                    vad_analyzer=SileroVADAnalyzer(
+                        params=VADParams(stop_secs=0.4),
+                    ),
                     user_turn_strategies=UserTurnStrategies(
                         stop=[
                             # Primary: Smart Turn (the new design's turn detector).
@@ -285,7 +288,7 @@ class PipecatPipelineBuilder(PipelineBuilder):
                             # Telephony fallback: fire end-of-turn when transcription
                             # goes quiet even if Silero VAD never reports "stopped"
                             # (phone-line noise can keep VAD stuck in speaking state).
-                            TranscriptionTimeoutUserTurnStopStrategy(timeout=1.5),
+                            TranscriptionTimeoutUserTurnStopStrategy(timeout=0.6),
                         ]
                     ),
                 ),
