@@ -1,5 +1,9 @@
 export type MCPTransportType = 'sse' | 'streamable_http';
 
+/** Explicit auth-method column. Mirrors ``tools.auth_type`` in the backend so
+ * both entities share the same set. See ``core/utils/auth_types.py``. */
+export type MCPAuthType = 'none' | 'api_key' | 'bearer' | 'basic' | 'oauth';
+
 export interface MCPServer {
   id: string;
   name: string;
@@ -8,6 +12,7 @@ export interface MCPServer {
   endpoint?: string | null;
   icon?: string | null;
   transport_type: MCPTransportType;
+  auth_type: MCPAuthType | null;
   auth_config: Record<string, string> | null;
   meta_data: Record<string, unknown> | null;
   oauth_connection_id?: string | null;
@@ -26,6 +31,7 @@ export interface MCPServerUpsertPayload {
   endpoint?: string | null;
   icon?: string | null;
   transport_type?: MCPTransportType;
+  auth_type?: MCPAuthType;
   auth_config?: Record<string, string> | null;
   meta_data?: Record<string, unknown> | null;
   oauth_connection_id?: string | null;

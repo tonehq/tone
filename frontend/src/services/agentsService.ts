@@ -62,7 +62,14 @@ export const listAgentVersions = async (agentId: string): Promise<AgentVersionSu
  *  payload once and routes it to whichever endpoint the user picked. */
 type VersionPayload = Pick<
   UpdateAgentPayload,
-  'config' | 'tool_ids' | 'mcp_server_ids' | 'upload_ids' | 'phone_numbers' | 'web_channel_ids'
+  | 'config'
+  | 'tool_ids'
+  | 'mcp_server_ids'
+  | 'upload_ids'
+  | 'phone_numbers'
+  | 'web_channel_ids'
+  | 'tool_oauth_overrides'
+  | 'mcp_server_oauth_overrides'
 > & { source_config_id?: string | null };
 
 /** Spawn a new draft version of the agent.

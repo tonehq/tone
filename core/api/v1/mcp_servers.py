@@ -114,6 +114,7 @@ async def validate_mcp_server(
     server_url = data.get("server_url")
     transport_type = data.get("transport_type", "streamable_http")
     auth_config = data.get("auth_config")
+    auth_type = data.get("auth_type")
     oauth_connection_id = data.get("oauth_connection_id")
     if not server_url:
         raise HTTPException(status_code=400, detail="server_url is required")
@@ -126,7 +127,8 @@ async def validate_mcp_server(
         **svc._resolve_oauth_headers(oauth_connection_id),
     }
     return await svc.validate_mcp_connection(
-        server_url, transport_type, auth_config, extra_headers=extra_headers
+        server_url, transport_type, auth_config,
+        extra_headers=extra_headers, auth_type=auth_type,
     )
 
 

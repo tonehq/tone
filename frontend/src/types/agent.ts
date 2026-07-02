@@ -78,6 +78,12 @@ export interface AgentPhoneNumberInput {
 
 // ─── API payloads ──────────────────────────────────────────────────────────
 
+/** Sparse map from tool_id / mcp_server_id → OAuth connection id (or `null`
+ * to explicitly clear the version-level override). Omitted entries are left
+ * untouched — the runtime falls back to the entity default from the Tools /
+ * MCP page. */
+export type OAuthOverrideMap = Record<string, string | null>;
+
 export interface CreateAgentPayload {
   name: string;
   agent_type: AgentDirection;
@@ -89,6 +95,8 @@ export interface CreateAgentPayload {
   upload_ids?: string[];
   phone_numbers?: AgentPhoneNumberInput[];
   web_channel_ids?: string[];
+  tool_oauth_overrides?: OAuthOverrideMap;
+  mcp_server_oauth_overrides?: OAuthOverrideMap;
 }
 
 /** Partial — only present fields are touched. Arrays present (even []) =
@@ -100,11 +108,19 @@ export type UpdateAgentPayload = Partial<CreateAgentPayload>;
 export interface AgentToolRef {
   id: string;
   name: string;
+  /** Per-version OAuth override set on the agent config page (or `null` when
+   * no override — runtime falls back to `default_oauth_connection_id`). */
+  oauth_connection_id?: string | null;
+  /** The tool's default OAuth from the Tools page, echoed so the UI can show
+   * "Using default (label)" without a second lookup. */
+  default_oauth_connection_id?: string | null;
 }
 
 export interface AgentMcpServerRef {
   id: string;
   name: string;
+  oauth_connection_id?: string | null;
+  default_oauth_connection_id?: string | null;
 }
 
 export interface AgentDocumentRef {
@@ -231,6 +247,11 @@ export interface AgentFormState {
   upload_ids: string[];
   phone_numbers: AgentPhoneNumberInput[];
   web_channel_ids: string[];
+  /** Per-attachment OAuth override maps ({@link OAuthOverrideMap}). Only
+   * entries the user actually touched are sent to the backend — an entry
+   * that mirrors the tool/MCP's default OAuth is treated as "no override". */
+  tool_oauth_overrides: OAuthOverrideMap;
+  mcp_server_oauth_overrides: OAuthOverrideMap;
 }
 
 export interface CreateAgentModalOption {

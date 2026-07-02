@@ -50,6 +50,27 @@ AGENT_METADATA_KEYS = (
 )
 
 
+def _normalize_oauth_overrides(
+    raw: Optional[Dict[str, Optional[str]]],
+) -> Dict[UUID, Optional[UUID]]:
+    """Convert the raw ``{tool_id/mcp_server_id: oauth_connection_id or None}``
+    payload from the request into a UUID-keyed map.
+
+    Preserves the "explicit ``None`` = clear override" semantics so the caller
+    (``_sync_tools`` / ``_sync_mcp_servers``) can distinguish "not present in
+    map = leave the existing row alone" from "present as ``None`` = drop the
+    override and fall back to the entity default".
+    """
+    if not raw:
+        return {}
+    out: Dict[UUID, Optional[UUID]] = {}
+    for k, v in raw.items():
+        if k is None:
+            continue
+        out[UUID(str(k))] = UUID(str(v)) if v else None
+    return out
+
+
 def _agent_unique_constraint_detail(exc: IntegrityError) -> str:
     """Return a user-friendly message for Agent integrity-error violations.
 
@@ -1066,10 +1087,16 @@ class AgentService(BaseService):
         """
         tool_ids = data.get("tool_ids")
         if tool_ids is not None:
-            self._sync_tools(agent, config, tool_ids)
+            self._sync_tools(
+                agent, config, tool_ids,
+                oauth_overrides=data.get("tool_oauth_overrides"),
+            )
         mcp_server_ids = data.get("mcp_server_ids")
         if mcp_server_ids is not None:
-            self._sync_mcp_servers(agent, config, mcp_server_ids)
+            self._sync_mcp_servers(
+                agent, config, mcp_server_ids,
+                oauth_overrides=data.get("mcp_server_oauth_overrides"),
+            )
         upload_ids = data.get("upload_ids")
         if upload_ids is not None:
             self._sync_knowledge_base(agent, config, upload_ids)
@@ -1494,7 +1521,11 @@ class AgentService(BaseService):
             )
             .all()
         ):
-            self.db.add(AgentTool(**base, tool_id=row.tool_id))
+            self.db.add(AgentTool(
+                **base,
+                tool_id=row.tool_id,
+                oauth_connection_id=row.oauth_connection_id,
+            ))
 
         for row in (
             self.query(AgentMcpServer)
@@ -1526,7 +1557,13 @@ class AgentService(BaseService):
                 AgentKnowledgeBase(**base, knowledge_base_id=row.knowledge_base_id)
             )
 
-    def _sync_tools(self, agent: Agent, config: Optional[AgentConfig], tool_ids: List[str]) -> None:
+    def _sync_tools(
+        self,
+        agent: Agent,
+        config: Optional[AgentConfig],
+        tool_ids: List[str],
+        oauth_overrides: Optional[Dict[str, Optional[str]]] = None,
+    ) -> None:
         uuids = [UUID(str(tid)) for tid in tool_ids]
         if uuids:
             existing_tools = self.query(Tool).filter(Tool.id.in_(uuids)).all()
@@ -1534,6 +1571,8 @@ class AgentService(BaseService):
             missing = [str(u) for u in uuids if u not in found]
             if missing:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Tools not found: {', '.join(missing)}")
+
+        override_map = _normalize_oauth_overrides(oauth_overrides)
 
         # All writes are scoped to this config — editing v11's tools must not
         # touch v10's rows, and v10's rows must keep their `agent_config_id`.
@@ -1544,11 +1583,15 @@ class AgentService(BaseService):
             AgentTool.agent_config_id == config_id,
         ]
 
-        # Snapshot before the diff so the audit-log sees attach/detach events
-        # against the same scope the writes below operate on.
-        before_ids = {
-            r[0] for r in self.db.query(AgentTool.tool_id).filter(*scope).all()
+        # Fetch existing rows once — same result set serves the audit snapshot
+        # (before_ids) AND the dedup/update pass below. Loading the full row
+        # (vs. only tool_id) lets us mutate ``oauth_connection_id`` in place
+        # without re-querying after the delete.
+        existing_rows = {
+            r.tool_id: r
+            for r in self.db.query(AgentTool).filter(*scope).all()
         }
+        before_ids = set(existing_rows.keys())
 
         # Delete tools not in the new set
         if uuids:
@@ -1558,18 +1601,23 @@ class AgentService(BaseService):
         else:
             self.db.query(AgentTool).filter(*scope).delete(synchronize_session=False)
 
-        # Insert missing
-        if uuids:
-            existing_rows = self.db.query(AgentTool.tool_id).filter(*scope).all()
-            existing_set = {r[0] for r in existing_rows}
-            for tid in uuids:
-                if tid not in existing_set:
-                    self.db.add(AgentTool(
-                        agent_id=agent.id,
-                        tool_id=tid,
-                        agent_config_id=config_id,
-                        organization_id=self.org_id,
-                    ))
+        # Insert missing rows and update OAuth overrides for existing rows in
+        # a single pass — the caller may resend the same tool_ids list only to
+        # change one row's OAuth override.
+        for tid in uuids:
+            override_provided = tid in override_map
+            override_value = override_map.get(tid)
+            row = existing_rows.get(tid)
+            if row is None:
+                self.db.add(AgentTool(
+                    agent_id=agent.id,
+                    tool_id=tid,
+                    agent_config_id=config_id,
+                    organization_id=self.org_id,
+                    oauth_connection_id=override_value,
+                ))
+            elif override_provided and row.oauth_connection_id != override_value:
+                row.oauth_connection_id = override_value
 
         self.audit.log_attachment_diff(
             agent_id=agent.id,
@@ -1581,7 +1629,13 @@ class AgentService(BaseService):
             resource_type=AuditResourceType.TOOL,
         )
 
-    def _sync_mcp_servers(self, agent: Agent, config: Optional[AgentConfig], mcp_server_ids: List[str]) -> None:
+    def _sync_mcp_servers(
+        self,
+        agent: Agent,
+        config: Optional[AgentConfig],
+        mcp_server_ids: List[str],
+        oauth_overrides: Optional[Dict[str, Optional[str]]] = None,
+    ) -> None:
         uuids = {UUID(str(sid)) for sid in mcp_server_ids}
 
         if uuids:
@@ -1591,6 +1645,8 @@ class AgentService(BaseService):
             if missing:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"MCP servers not found: {', '.join(missing)}")
 
+        override_map = _normalize_oauth_overrides(oauth_overrides)
+
         config_id = config.id if config else None
         scope = [
             AgentMcpServer.agent_id == agent.id,
@@ -1598,10 +1654,13 @@ class AgentService(BaseService):
             AgentMcpServer.agent_config_id == config_id,
         ]
 
-        before_ids = {
-            r[0]
-            for r in self.db.query(AgentMcpServer.mcp_server_id).filter(*scope).all()
+        # Single fetch feeds both the audit snapshot and the dedup/update pass
+        # below — see the matching comment in ``_sync_tools``.
+        existing_rows = {
+            r.mcp_server_id: r
+            for r in self.db.query(AgentMcpServer).filter(*scope).all()
         }
+        before_ids = set(existing_rows.keys())
 
         # Delete rows not in the new set
         if uuids:
@@ -1611,15 +1670,14 @@ class AgentService(BaseService):
         else:
             self.db.query(AgentMcpServer).filter(*scope).delete(synchronize_session=False)
 
-        # Insert any missing links
-        if uuids:
-            existing_ids = {
-                r[0]
-                for r in self.db.query(AgentMcpServer.mcp_server_id).filter(*scope).all()
-            }
-            for sid in uuids:
-                if sid in existing_ids:
-                    continue
+        # Insert missing rows and update OAuth overrides for existing rows in
+        # one pass — mirrors the tool sync so a single request can flip an
+        # override without reshuffling attachments.
+        for sid in uuids:
+            override_provided = sid in override_map
+            override_value = override_map.get(sid)
+            row = existing_rows.get(sid)
+            if row is None:
                 if config_id is None:
                     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Agent config required to attach MCP servers")
                 self.db.add(AgentMcpServer(
@@ -1627,7 +1685,10 @@ class AgentService(BaseService):
                     agent_config_id=config_id,
                     mcp_server_id=sid,
                     organization_id=self.org_id,
+                    oauth_connection_id=override_value,
                 ))
+            elif override_provided and row.oauth_connection_id != override_value:
+                row.oauth_connection_id = override_value
 
         self.audit.log_attachment_diff(
             agent_id=agent.id,
@@ -1934,9 +1995,16 @@ class AgentService(BaseService):
         # filter on `IS NULL` correctly returns an empty list.
         config_id_for_attachments = config.id if config else None
 
-        # Tools
+        # Tools — return both the per-version OAuth override
+        # (``oauth_connection_id``) and the tool's default so the UI can render
+        # "Using default (label)" without a follow-up call.
         tool_rows = (
-            self.db.query(Tool)
+            self.db.query(
+                Tool.id,
+                Tool.name,
+                Tool.oauth_connection_id,
+                AgentTool.oauth_connection_id,
+            )
             .join(AgentTool, AgentTool.tool_id == Tool.id)
             .filter(
                 AgentTool.agent_id == agent.id,
@@ -1945,11 +2013,24 @@ class AgentService(BaseService):
             )
             .all()
         )
-        result["tools"] = [{"id": str(t.id), "name": t.name} for t in tool_rows]
+        result["tools"] = [
+            {
+                "id": str(tid),
+                "name": tname,
+                "oauth_connection_id": str(link_oauth) if link_oauth else None,
+                "default_oauth_connection_id": str(default_oauth) if default_oauth else None,
+            }
+            for tid, tname, default_oauth, link_oauth in tool_rows
+        ]
 
         # MCP Servers
         mcp_rows = (
-            self.db.query(McpServer)
+            self.db.query(
+                McpServer.id,
+                McpServer.name,
+                McpServer.oauth_connection_id,
+                AgentMcpServer.oauth_connection_id,
+            )
             .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)
             .filter(
                 AgentMcpServer.agent_id == agent.id,
@@ -1958,7 +2039,15 @@ class AgentService(BaseService):
             )
             .all()
         )
-        result["mcp_servers"] = [{"id": str(ms.id), "name": ms.name} for ms in mcp_rows]
+        result["mcp_servers"] = [
+            {
+                "id": str(mid),
+                "name": mname,
+                "oauth_connection_id": str(link_oauth) if link_oauth else None,
+                "default_oauth_connection_id": str(default_oauth) if default_oauth else None,
+            }
+            for mid, mname, default_oauth, link_oauth in mcp_rows
+        ]
 
         # Documents (knowledge base uploads)
         kb_rows = (

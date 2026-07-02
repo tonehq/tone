@@ -1,6 +1,7 @@
+import base64
 import uuid as uuid_lib
 from datetime import datetime, timezone
-from typing import Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException, status
 
@@ -11,6 +12,15 @@ from core.services.base import BaseService
 from core.models.mcp_server import McpServer
 from core.models.agent_mcp_server import AgentMcpServer
 from core.models.tool import Tool
+from core.utils.auth_types import (
+    AUTH_TYPE_API_KEY,
+    AUTH_TYPE_BASIC,
+    AUTH_TYPE_BEARER,
+    AUTH_TYPE_NONE,
+    AUTH_TYPE_OAUTH,
+    VALID_AUTH_TYPES,
+    normalize_auth_type,
+)
 from core.utils.encryption import encrypt, decrypt
 from core.utils.faceted_query import apply_filters, apply_sort, build_facets, distinct_values
 
@@ -59,48 +69,98 @@ def _try_decrypt(value):
         return value
 
 
-def build_auth_headers(auth_config, already_decrypted=False) -> dict:
-    """Build HTTP headers from auth_config.
+def build_auth_headers(
+    auth_config,
+    already_decrypted: bool = False,
+    auth_type: Optional[str] = None,
+) -> dict:
+    """Build HTTP headers from ``auth_config`` for an MCP server.
 
-    All auth sources are MERGED (not mutually exclusive), because the UI lets a
-    server use an API key / bearer token AND custom HTTP headers at the same time
-    (e.g. ClickUp: ``Authorization: Bearer <key>`` plus ``x-workspace-id``).
-    Explicit custom headers win on name conflicts; the api_key/token only fills
-    ``Authorization`` if a custom header hasn't already set it.
+    When ``auth_type`` is provided, the header shape is chosen explicitly:
+
+    * ``'bearer'`` -> ``Authorization: Bearer <bearer_token>``
+    * ``'api_key'`` -> ``<auth_header or 'Authorization'>: <scheme> <api_key>``
+      (scheme defaults to ``'Bearer'``; pass ``auth_scheme=''`` for a raw token)
+    * ``'basic'`` -> ``Authorization: Basic <base64(username:password)>``
+    * ``'oauth'`` / ``'none'`` -> no header from ``auth_config`` (OAuth headers
+      come from the connection resolver at call time)
+
+    When ``auth_type`` is ``None`` (legacy rows written before the column existed),
+    fall back to merging every source found in ``auth_config``. Explicit custom
+    headers still win on name conflicts. This preserves the pre-``auth_type``
+    behavior for any row that hasn't been migrated / re-saved yet.
     """
     if not auth_config:
         return {}
     decrypted = auth_config if already_decrypted else decrypt_auth_config(auth_config)
-    headers = {}
+    headers: dict = {}
 
-    # 1) Explicit custom headers (list form), e.g. x-workspace-id
+    _apply_custom_headers(decrypted, headers)
+
+    normalized = normalize_auth_type(auth_type) if auth_type is not None else None
+    if normalized is None:
+        _apply_legacy_auth_config(decrypted, headers)
+        return headers
+
+    if normalized == AUTH_TYPE_BEARER:
+        token = decrypted.get("bearer_token") or decrypted.get("token")
+        if token:
+            headers.setdefault("Authorization", f"Bearer {token}")
+    elif normalized == AUTH_TYPE_API_KEY:
+        api_key = decrypted.get("api_key")
+        if api_key:
+            target = (
+                decrypted.get("auth_header")
+                or decrypted.get("api_key_header")
+                or "Authorization"
+            )
+            scheme = decrypted.get("auth_scheme")
+            if scheme is None:
+                scheme = "Bearer"
+            value = f"{scheme} {api_key}".strip() if scheme else str(api_key)
+            if not any(k.lower() == target.lower() for k in headers):
+                headers[target] = value
+    elif normalized == AUTH_TYPE_BASIC:
+        username = decrypted.get("username", "")
+        password = decrypted.get("password", "")
+        if username or password:
+            credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+            headers.setdefault("Authorization", f"Basic {credentials}")
+    # AUTH_TYPE_OAUTH / AUTH_TYPE_NONE: no auth_config-sourced header.
+
+    return headers
+
+
+def _apply_custom_headers(decrypted: dict, headers: dict) -> None:
+    """Merge custom ``x-*`` headers (both list-form and legacy pair-form) into
+    ``headers``. Shared across every auth_type since a server can carry custom
+    headers (e.g. ClickUp's ``x-workspace-id``) alongside its auth."""
     if isinstance(decrypted.get("headers"), list):
         for h in decrypted["headers"]:
             if h.get("header_name") and h.get("header_value"):
                 headers[h["header_name"]] = h["header_value"]
 
-    # 2) Single header_name/header_value pair (legacy single-header form)
     if decrypted.get("header_name") and decrypted.get("header_value"):
         headers.setdefault(decrypted["header_name"], decrypted["header_value"])
 
-    # 3) API key / bearer token → a CONFIGURABLE header + scheme, so this works for
-    #    any provider instead of being hardcoded to "Authorization: Bearer".
-    #      default                         -> Authorization: Bearer <secret>
-    #      auth_header="X-Api-Key", scheme="" -> X-Api-Key: <secret>      (e.g. Postman)
-    #      auth_scheme=""                  -> Authorization: <secret>     (e.g. ClickUp raw token)
-    #      auth_scheme="Basic"             -> Authorization: Basic <secret>
-    #    Only applied if that header wasn't already set by a custom header above.
-    secret = decrypted.get("api_key") or decrypted.get("token") or decrypted.get("bearer_token")
-    if secret:
-        target = decrypted.get("auth_header") or decrypted.get("api_key_header") or "Authorization"
-        scheme = decrypted.get("auth_scheme")
-        if scheme is None:
-            scheme = "Bearer"
-        value = f"{scheme} {secret}".strip() if scheme else str(secret)
-        if not any(k.lower() == target.lower() for k in headers):
-            headers[target] = value
 
-    return headers
+def _apply_legacy_auth_config(decrypted: dict, headers: dict) -> None:
+    """Legacy behavior: infer bearer/api_key from the JSON keys.
+
+    Only used for rows written before the ``auth_type`` column existed. Once a
+    row is saved with ``auth_type`` set, the explicit branches in
+    :func:`build_auth_headers` handle it and this fallback is skipped.
+    """
+    secret = decrypted.get("api_key") or decrypted.get("token") or decrypted.get("bearer_token")
+    if not secret:
+        return
+    target = decrypted.get("auth_header") or decrypted.get("api_key_header") or "Authorization"
+    scheme = decrypted.get("auth_scheme")
+    if scheme is None:
+        scheme = "Bearer"
+    value = f"{scheme} {secret}".strip() if scheme else str(secret)
+    if not any(k.lower() == target.lower() for k in headers):
+        headers[target] = value
 
 
 def headers_from_meta(meta_data) -> dict:
@@ -121,6 +181,23 @@ def headers_from_meta(meta_data) -> dict:
 class McpServerService(BaseService):
 
     VALID_TRANSPORT_TYPES = {"sse", "streamable_http"}
+
+    def _validate_auth_type(self, auth_type: Optional[str]) -> str:
+        """Normalize + validate the incoming ``auth_type``.
+
+        Empty / missing is treated as ``'none'`` so callers can omit the field.
+        Rejects unknown values so the DB never grows a mystery auth-mode.
+        """
+        normalized = normalize_auth_type(auth_type)
+        if normalized not in VALID_AUTH_TYPES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Invalid auth_type '{auth_type}'. "
+                    f"Must be one of: {sorted(VALID_AUTH_TYPES)}"
+                ),
+            )
+        return normalized
 
     def _check_duplicate_name(self, name: str, exclude_id=None) -> None:
         query = self.query(McpServer).filter(McpServer.name == name)
@@ -199,6 +276,8 @@ class McpServerService(BaseService):
                 self._check_duplicate_name(update_data["name"], exclude_id=mcp_server_id)
             if "transport_type" in update_data:
                 self._validate_transport_type(update_data["transport_type"])
+            if "auth_type" in update_data:
+                update_data["auth_type"] = self._validate_auth_type(update_data["auth_type"])
 
             # Resolve the effective OAuth connection (incoming value wins, else the stored one)
             # and block the update early if it lacks the provider's required scopes.
@@ -207,7 +286,7 @@ class McpServerService(BaseService):
                 self._validate_oauth_scopes(effective_oauth_id)
 
             # Validate connection if connection-related fields changed
-            connection_fields = {"server_url", "transport_type", "auth_config", "oauth_connection_id"}
+            connection_fields = {"server_url", "transport_type", "auth_config", "oauth_connection_id", "auth_type"}
             validation_result = None
             if connection_fields & update_data.keys():
                 validate_url = update_data.get("server_url", existing.server_url)
@@ -217,13 +296,15 @@ class McpServerService(BaseService):
                 else:
                     validate_auth = decrypt_auth_config(existing.auth_config)
                 effective_meta = update_data.get("meta_data", existing.meta_data)
+                effective_auth_type = update_data.get("auth_type", existing.auth_type)
                 # OAuth bearer takes precedence over any custom header of the same name.
                 extra_headers = {
                     **headers_from_meta(effective_meta),
                     **self._resolve_oauth_headers(effective_oauth_id),
                 }
                 validation_result = await self.validate_mcp_connection(
-                    validate_url, validate_transport, validate_auth, extra_headers=extra_headers
+                    validate_url, validate_transport, validate_auth,
+                    extra_headers=extra_headers, auth_type=effective_auth_type,
                 )
 
             if "auth_config" in update_data:
@@ -259,6 +340,7 @@ class McpServerService(BaseService):
         self._check_duplicate_name(data["name"])
         transport_type = data.get("transport_type", "streamable_http")
         self._validate_transport_type(transport_type)
+        auth_type = self._validate_auth_type(data.get("auth_type"))
 
         # Block creation early if a linked OAuth connection lacks required scopes.
         oauth_connection_id = data.get("oauth_connection_id")
@@ -271,7 +353,7 @@ class McpServerService(BaseService):
         }
         validation_result = await self.validate_mcp_connection(
             data["server_url"], transport_type, data.get("auth_config"),
-            extra_headers=extra_headers,
+            extra_headers=extra_headers, auth_type=auth_type,
         )
 
         mcp_server = McpServer(
@@ -282,6 +364,7 @@ class McpServerService(BaseService):
             endpoint=data.get("endpoint"),
             icon=data.get("icon"),
             transport_type=transport_type,
+            auth_type=auth_type,
             auth_config=encrypt_auth_config(data.get("auth_config")),
             meta_data=data.get("meta_data"),
             oauth_connection_id=oauth_connection_id,
@@ -559,17 +642,27 @@ class McpServerService(BaseService):
         self,
         server_url: str,
         transport_type: str,
-        auth_config: dict = None,
-        extra_headers: dict = None,
+        auth_config: Optional[dict] = None,
+        extra_headers: Optional[dict] = None,
+        auth_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Connect to an MCP server with raw (unencrypted) config and return its tools.
+
+        ``auth_type`` selects the header-building branch (see :func:`build_auth_headers`).
+        When ``None``, the header builder falls back to legacy inference so existing rows
+        keep validating the same way they did before this column existed.
+
         Raises HTTPException(400) on failure."""
         from mcp.client.session import ClientSession
         from mcp.client.sse import sse_client
         from mcp.client.streamable_http import streamablehttp_client
 
         self._validate_transport_type(transport_type)
-        headers = build_auth_headers(auth_config, already_decrypted=True) if auth_config else {}
+        headers = (
+            build_auth_headers(auth_config, already_decrypted=True, auth_type=auth_type)
+            if auth_config
+            else {}
+        )
         if extra_headers:
             # OAuth-resolved bearer (or other dynamic auth) takes precedence over static headers.
             headers = {**headers, **extra_headers}
@@ -636,6 +729,7 @@ class McpServerService(BaseService):
             mcp_server.transport_type,
             decrypted_auth,
             extra_headers=extra_headers,
+            auth_type=mcp_server.auth_type,
         )
         self._sync_mcp_tools(mcp_server, result["tools"])
         return {
@@ -654,6 +748,7 @@ class McpServerService(BaseService):
             "endpoint": mcp_server.endpoint,
             "icon": mcp_server.icon,
             "transport_type": mcp_server.transport_type,
+            "auth_type": normalize_auth_type(mcp_server.auth_type),
             "auth_config": decrypt_auth_config(mcp_server.auth_config),
             "meta_data": mcp_server.meta_data,
             "oauth_connection_id": (
