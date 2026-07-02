@@ -24,7 +24,13 @@ class ParakeetSTTService(SegmentedSTTService):
         self._url = url
         self._language = language
         self._trace_id = trace_id
-        self.set_model_name(model)
+        # pipecat < 0.0.104 had set_model_name(); newer versions store the
+        # model on _settings and sync it to metrics separately.
+        if hasattr(self, "set_model_name"):
+            self.set_model_name(model)
+        else:
+            self._settings.model = model
+            self._sync_model_name_to_metrics()
 
     def can_generate_metrics(self) -> bool:
         return True
