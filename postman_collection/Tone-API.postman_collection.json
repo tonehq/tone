@@ -7564,7 +7564,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"sales-mcp\",\n  \"description\": \"Sales CRM tools\",\n  \"server_url\": \"https://sales-mcp.acme.com/mcp\",\n  \"transport_type\": \"streamable_http\",\n  \"auth_config\": {\"token\": \"sk-mcp-token-here\"},\n  \"meta_data\": {\"timeout\": 30},\n  \"is_active\": true\n}",
+              "raw": "{\n  \"name\": \"sales-mcp\",\n  \"description\": \"Sales CRM tools\",\n  \"server_url\": \"https://sales-mcp.acme.com/mcp\",\n  \"transport_type\": \"streamable_http\",\n  \"auth_type\": \"bearer\",\n  \"auth_config\": {\"bearer_token\": \"sk-mcp-token-here\"},\n  \"meta_data\": {\"timeout\": 30},\n  \"is_active\": true\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -7589,7 +7589,7 @@
               "name": "200 OK (created)",
               "code": 200,
               "status": "OK",
-              "body": "{\n  \"id\": \"{{mcp_server_id}}\",\n  \"name\": \"sales-mcp\",\n  \"description\": \"Sales CRM tools\",\n  \"server_url\": \"https://sales-mcp.acme.com/mcp\",\n  \"transport_type\": \"streamable_http\",\n  \"auth_config\": {\"token\": \"sk-mcp-token-here\"},\n  \"meta_data\": {\"timeout\": 30},\n  \"is_active\": true,\n  \"created_at\": \"2026-05-27T10:00:00+00:00\",\n  \"updated_at\": \"2026-05-27T10:00:00+00:00\"\n}"
+              "body": "{\n  \"id\": \"{{mcp_server_id}}\",\n  \"name\": \"sales-mcp\",\n  \"description\": \"Sales CRM tools\",\n  \"server_url\": \"https://sales-mcp.acme.com/mcp\",\n  \"transport_type\": \"streamable_http\",\n  \"auth_type\": \"bearer\",\n  \"auth_config\": {\"bearer_token\": \"sk-mcp-token-here\"},\n  \"meta_data\": {\"timeout\": 30},\n  \"is_active\": true,\n  \"created_at\": \"2026-05-27T10:00:00+00:00\",\n  \"updated_at\": \"2026-05-27T10:00:00+00:00\"\n}"
             },
             {
               "name": "200 OK (updated)",
@@ -7653,7 +7653,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"server_url\": \"https://sales-mcp.acme.com/mcp\",\n  \"transport_type\": \"streamable_http\",\n  \"auth_config\": {\"token\": \"sk-...\"}\n}",
+              "raw": "{\n  \"server_url\": \"https://sales-mcp.acme.com/mcp\",\n  \"transport_type\": \"streamable_http\",\n  \"auth_type\": \"bearer\",\n  \"auth_config\": {\"bearer_token\": \"sk-...\"}\n}",
               "options": {
                 "raw": {
                   "language": "json"

@@ -136,17 +136,24 @@ def _install_mcp_call_logging(llm, server_name: str, server_id=None, tool_call_e
 
 
 def get_mcp_servers_for_agent(agent_id: int):
-    """Fetch all active MCP servers linked to an agent's published version."""
+    """Fetch all active MCP servers linked to an agent's published version.
+
+    The link table's ``oauth_connection_id`` (per-version override) is selected
+    in the same query and stamped onto each ``McpServer`` as
+    ``effective_oauth_connection_id`` — the OAuth header builder reads that
+    attribute so the override rule stays in one place.
+    """
     from core.database.session import get_db_context
     from core.models.mcp_server import McpServer
     from core.models.agent_mcp_server import AgentMcpServer
     from core.utils.agent_scope import published_config_subquery
+    from core.utils.oauth_resolution import stamp_effective
 
     published_config_sq = published_config_subquery(agent_id)
 
     with get_db_context() as db:
         rows = (
-            db.query(McpServer)
+            db.query(McpServer, AgentMcpServer.oauth_connection_id)
             .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)
             .filter(
                 AgentMcpServer.agent_id == agent_id,
@@ -156,7 +163,8 @@ def get_mcp_servers_for_agent(agent_id: int):
             .all()
         )
         servers = []
-        for server in rows:
+        for server, link_oauth in rows:
+            stamp_effective(server, link_oauth)
             db.expunge(server)
             servers.append(server)
         return servers
@@ -321,15 +329,18 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, current
             # then custom meta_data headers (e.g. ClickUp's x-workspace-id) override those, then the
             # OAuth bearer (resolved below) overrides everything. Keeping the order identical here
             # ensures a server that validates with one set of headers authenticates with the same
-            # set during a live call.
-            headers = build_auth_headers(server.auth_config)
+            # set during a live call. ``auth_type`` selects the header shape explicitly for rows
+            # written after the migration; older rows (auth_type is None) fall back to inference.
+            headers = build_auth_headers(server.auth_config, auth_type=getattr(server, "auth_type", None))
             headers.update(headers_from_meta(getattr(server, "meta_data", None)))
 
             # OAuth-backed connectors (e.g. ClickUp, Google Calendar) authenticate via a
             # linked OAuth connection, NOT a static header. Resolve a fresh (auto-refreshed)
             # bearer token so their tools actually load — without this the remote returns
             # 0 tools (or 401) and the agent silently can't book anything.
-            oauth_connection_id = getattr(server, "oauth_connection_id", None)
+            # Prefers the agent-version override, falling back to the server default.
+            from core.utils.oauth_resolution import effective_of
+            oauth_connection_id = effective_of(server)
             if oauth_connection_id:
                 try:
                     from core.database.session import get_db_context

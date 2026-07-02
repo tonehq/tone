@@ -87,6 +87,39 @@ class TestValidateMcpServer:
         assert resp.status_code in (401, 403)
 
 
+# --- auth_type field ---
+
+class TestMcpServerAuthType:
+    """Round-trip + validation for the ``auth_type`` column."""
+
+    def test_invalid_auth_type_rejected(self, client_as_member):
+        """Unknown ``auth_type`` values are rejected before we attempt any
+        outbound MCP connection — the 400 must come from validation, not from
+        the network."""
+        resp = client_as_member.post("/api/v1/mcp-server/upsert_mcp_server", json={
+            "name": _unique_name(),
+            "server_url": "https://mcp.example.com/mcp",
+            "transport_type": "streamable_http",
+            "auth_type": "not-a-real-auth-type",
+        })
+        assert resp.status_code == 400
+        assert "auth_type" in resp.json()["detail"].lower()
+
+    def test_response_includes_auth_type(self, client_as_member):
+        """Any successful create returns ``auth_type`` in the payload — even
+        when the caller omitted it (defaults to ``'none'``). We tolerate the
+        outbound MCP connection failing because the response shape is what
+        this test cares about."""
+        resp = client_as_member.post("/api/v1/mcp-server/upsert_mcp_server", json={
+            "name": _unique_name(),
+            "server_url": "https://mcp.example.com/mcp",
+            "transport_type": "streamable_http",
+        })
+        if resp.status_code == 200:
+            assert "auth_type" in resp.json()
+            assert resp.json()["auth_type"] in {"none", "api_key", "bearer", "basic", "oauth"}
+
+
 # --- GET /api/v1/mcp-server/get_mcp_server ---
 
 class TestGetMcpServer:

@@ -18,6 +18,7 @@ class McpServer(OrgScopedModel):
     endpoint = Column(String(500), nullable=True)
     icon = Column(String(255), nullable=True)
     transport_type = Column(String(50), nullable=False, default="streamable_http")
+    auth_type = Column(String(50), nullable=True, default="none")
     auth_config = Column(JSONB, nullable=True)
     meta_data = Column(JSONB, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)

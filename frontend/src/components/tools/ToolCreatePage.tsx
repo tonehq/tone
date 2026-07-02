@@ -2,14 +2,15 @@
 
 import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { ArrowLeft, ArrowUpRight, Code2, Wrench } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 
 import { CustomButton } from '@/components/shared';
 import { TOOL_TYPE_HEADER } from '@/constants/toolForm';
 import { useGoBack } from '@/hooks/useGoBack';
 import { getTemplateTools } from '@/services/toolService';
 import type { Tool } from '@/types/tool';
+import { readAttachContext, withAttachContext } from '@/utils/agentAttachmentContext';
 import { cn } from '@/utils/cn';
 
 interface ToolTypeCardProps {
@@ -108,8 +109,18 @@ function ToolTypeCard({
 
 export default function ToolCreatePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const goBack = useGoBack('/tools');
   const reduceMotion = useReducedMotion();
+
+  // If we were opened from the agent config page ("New tool" button), forward
+  // the attach context onto whichever /tools/create/custom URL the user picks
+  // so the form page can finish the attach after save. See
+  // ``utils/agentAttachmentContext.ts`` for the contract.
+  const attachCtx = useMemo(() => readAttachContext(searchParams), [searchParams]);
+  const customCreateHref = attachCtx
+    ? withAttachContext('/tools/create/custom', attachCtx)
+    : '/tools/create/custom';
 
   const [templates, setTemplates] = useState<Tool[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
@@ -125,7 +136,8 @@ export default function ToolCreatePage() {
   }, []);
 
   const handleSelectTemplate = (template: Tool) => {
-    router.push(`/tools/create/custom?template_id=${template.id}`);
+    const base = `/tools/create/custom?template_id=${template.id}`;
+    router.push(attachCtx ? withAttachContext(base, attachCtx) : base);
   };
 
   const container: Variants = {
@@ -184,7 +196,7 @@ export default function ToolCreatePage() {
               badge="API"
               badgeClassName="bg-sky-500/10 text-sky-700 dark:text-sky-400"
               description="Call any external API or webhook. Define the endpoint, parameters, and authentication."
-              onClick={() => router.push('/tools/create/custom')}
+              onClick={() => router.push(customCreateHref)}
               variants={item}
             />
 

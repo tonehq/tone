@@ -39,7 +39,24 @@ export const defaultFormState = (agentType: AgentDirection): AgentFormState => (
   upload_ids: [],
   phone_numbers: [],
   web_channel_ids: [],
+  tool_oauth_overrides: {},
+  mcp_server_oauth_overrides: {},
 });
+
+/** Build the OAuth override map from AgentDetail refs. Only stores entries
+ * where the version-level override actually differs from the entity default,
+ * so hydrating and re-serializing an untouched form produces an empty diff. */
+function refsToOAuthOverrides<T extends { id: string; oauth_connection_id?: string | null }>(
+  refs: T[] | undefined,
+): Record<string, string | null> {
+  const out: Record<string, string | null> = {};
+  for (const ref of refs ?? []) {
+    if (ref.oauth_connection_id != null) {
+      out[ref.id] = ref.oauth_connection_id;
+    }
+  }
+  return out;
+}
 
 /** Hydrate a form state from the backend's AgentDetail. */
 export function agentDetailToFormState(detail: AgentDetail): AgentFormState {
@@ -74,6 +91,8 @@ export function agentDetailToFormState(detail: AgentDetail): AgentFormState {
       label: p.label ?? null,
     })),
     web_channel_ids: (detail.web_channels ?? []).map((c) => c.channel_id),
+    tool_oauth_overrides: refsToOAuthOverrides(detail.tools),
+    mcp_server_oauth_overrides: refsToOAuthOverrides(detail.mcp_servers),
   };
 }
 
@@ -109,7 +128,25 @@ function phoneListEqual(a: AgentPhoneNumberInput[], b: AgentPhoneNumberInput[]):
   });
 }
 
+/** Strip override entries whose tool/mcp is no longer selected — a UI-only
+ * cleanup so we never send an override for something the agent isn't using.
+ * Also drops entries with a ``null`` value that never existed on the server
+ * baseline, since sending ``{id: null}`` in that case is a no-op. */
+function pruneOverrides(
+  overrides: Record<string, string | null>,
+  selectedIds: string[],
+): Record<string, string | null> {
+  const selected = new Set(selectedIds);
+  const out: Record<string, string | null> = {};
+  for (const [id, val] of Object.entries(overrides)) {
+    if (selected.has(id)) out[id] = val;
+  }
+  return out;
+}
+
 export function formStateToCreatePayload(state: AgentFormState): CreateAgentPayload {
+  const toolOverrides = pruneOverrides(state.tool_oauth_overrides, state.tool_ids);
+  const mcpOverrides = pruneOverrides(state.mcp_server_oauth_overrides, state.mcp_server_ids);
   return {
     name: state.name.trim(),
     agent_type: state.agent_type,
@@ -121,6 +158,8 @@ export function formStateToCreatePayload(state: AgentFormState): CreateAgentPayl
     upload_ids: state.upload_ids,
     phone_numbers: state.phone_numbers,
     web_channel_ids: state.web_channel_ids,
+    ...(Object.keys(toolOverrides).length > 0 && { tool_oauth_overrides: toolOverrides }),
+    ...(Object.keys(mcpOverrides).length > 0 && { mcp_server_oauth_overrides: mcpOverrides }),
   };
 }
 
@@ -156,6 +195,18 @@ export function formStateToUpdatePayload(
   if (!valuesEqual(next.mcp_server_ids, prev.mcp_server_ids)) {
     payload.mcp_server_ids = next.mcp_server_ids;
   }
+
+  // OAuth overrides — send when the user changed a per-attachment override,
+  // OR when the selection changed (backend needs to see cleared entries for
+  // newly-removed tools/MCPs). Prunes stale entries for detached items so the
+  // payload never carries an override for something no longer selected.
+  const nextToolOv = pruneOverrides(next.tool_oauth_overrides, next.tool_ids);
+  const prevToolOv = pruneOverrides(prev.tool_oauth_overrides, prev.tool_ids);
+  if (!valuesEqual(nextToolOv, prevToolOv)) payload.tool_oauth_overrides = nextToolOv;
+  const nextMcpOv = pruneOverrides(next.mcp_server_oauth_overrides, next.mcp_server_ids);
+  const prevMcpOv = pruneOverrides(prev.mcp_server_oauth_overrides, prev.mcp_server_ids);
+  if (!valuesEqual(nextMcpOv, prevMcpOv)) payload.mcp_server_oauth_overrides = nextMcpOv;
+
   if (!valuesEqual(next.upload_ids, prev.upload_ids)) payload.upload_ids = next.upload_ids;
   if (!phoneListEqual(next.phone_numbers, prev.phone_numbers)) {
     payload.phone_numbers = next.phone_numbers;
