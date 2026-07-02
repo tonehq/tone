@@ -40,9 +40,8 @@ def _sample_tool_data(**overrides):
 
 
 def _create_tool(client, **overrides):
-    """Create a tool via the upsert endpoint (it accepts arbitrary fields including
-    tool_type, which the typed /create_tool schema strips). Returns the response JSON.
-    """
+    """Create a tool via the single ``/upsert_tool`` endpoint (create path is
+    the id-less branch). Returns the response JSON."""
     data = _sample_tool_data(**overrides)
     resp = client.post("/api/v1/tool/upsert_tool", json=data)
     assert resp.status_code == 200, f"Failed to create tool: {resp.text}"
@@ -68,14 +67,17 @@ def _create_agent(client):
     pytest.skip("Cannot create or find an agent for this test")
 
 
-# --- POST /api/v1/tool/create_tool ---
+# --- POST /api/v1/tool/upsert_tool (create path) ---
 
 class TestCreateTool:
-    """Tests for POST /api/v1/tool/create_tool"""
+    """Create-path scenarios for POST /api/v1/tool/upsert_tool.
+
+    Kept as a separate class so create-side coverage stays discoverable — the
+    id-less branch of upsert is functionally the old /create_tool endpoint.
+    """
 
     def test_create_tool_success(self, client_as_member):
-        """Postman: Create Tool - Success (201). Routed via /upsert_tool because the
-        /create_tool Pydantic schema drops tool_type, which the DB requires."""
+        """Postman: Create Tool - Success (200)."""
         data = _sample_tool_data(
             auth_type="api_key",
             auth_config={"header_name": "X-API-Key", "api_key": "your-key"},
@@ -106,24 +108,22 @@ class TestCreateTool:
     def test_create_tool_missing_name(self, client_as_member):
         data = _sample_tool_data()
         del data["name"]
-        response = client_as_member.post("/api/v1/tool/create_tool", json=data)
-        assert response.status_code == 422
+        response = client_as_member.post("/api/v1/tool/upsert_tool", json=data)
+        # Missing name on the create branch surfaces as 400 from the service
+        # layer (see ToolService.upsert_tool).
+        assert response.status_code == 400
+        assert "name" in response.json()["detail"].lower()
 
     def test_create_tool_missing_description(self, client_as_member):
         data = _sample_tool_data()
         del data["description"]
-        response = client_as_member.post("/api/v1/tool/create_tool", json=data)
-        assert response.status_code == 422
-
-    def test_create_tool_missing_url(self, client_as_member):
-        data = _sample_tool_data()
-        del data["url"]
-        response = client_as_member.post("/api/v1/tool/create_tool", json=data)
-        assert response.status_code == 422
+        response = client_as_member.post("/api/v1/tool/upsert_tool", json=data)
+        assert response.status_code == 400
+        assert "description" in response.json()["detail"].lower()
 
     def test_create_tool_unauthenticated(self, client_unauthenticated):
         data = _sample_tool_data()
-        response = client_unauthenticated.post("/api/v1/tool/create_tool", json=data)
+        response = client_unauthenticated.post("/api/v1/tool/upsert_tool", json=data)
         assert response.status_code in (401, 403)
 
     def test_create_tool_with_auth_config(self, client_as_member):
@@ -310,71 +310,6 @@ class TestUpsertTool:
         response = client_unauthenticated.post("/api/v1/tool/upsert_tool", json={
             "name": "Tool", "description": "A tool", "url": "https://example.com",
         })
-        assert response.status_code in (401, 403)
-
-
-# --- PUT /api/v1/tool/update_tool ---
-
-class TestUpdateTool:
-    """Tests for PUT /api/v1/tool/update_tool"""
-
-    def test_update_tool_success(self, client_as_member):
-        """Postman: Update Tool - Success (200)."""
-        tool = _create_tool(client_as_member)
-        try:
-            response = client_as_member.put(
-                f"/api/v1/tool/update_tool?tool_id={tool['id']}",
-                json={
-                    "name": "Updated Weather API",
-                    "description": "Updated description",
-                    "is_active": False,
-                },
-            )
-            assert response.status_code in (200, 400, 500)
-            if response.status_code == 200:
-                result = response.json()
-                assert result["name"] == "Updated Weather API"
-                assert result["description"] == "Updated description"
-                assert result["is_active"] is False
-        except NameError:
-            pass
-
-    def test_update_tool_partial_update(self, client_as_member):
-        tool = _create_tool(client_as_member)
-        try:
-            response = client_as_member.put(
-                f"/api/v1/tool/update_tool?tool_id={tool['id']}",
-                json={"description": "New description"},
-            )
-            assert response.status_code in (200, 400, 500)
-            if response.status_code == 200:
-                assert response.json()["description"] == "New description"
-                assert response.json()["name"] == tool["name"]
-        except NameError:
-            pass
-
-    def test_update_tool_not_found(self, client_as_member):
-        try:
-            response = client_as_member.put(
-                "/api/v1/tool/update_tool?tool_id=999999",
-                json={"name": "X"},
-            )
-            assert response.status_code in (404, 400, 422, 500)
-        except (ValueError, Exception):
-            pass
-
-    def test_update_tool_missing_id(self, client_as_member):
-        response = client_as_member.put(
-            "/api/v1/tool/update_tool",
-            json={"name": "X"},
-        )
-        assert response.status_code == 422
-
-    def test_update_tool_unauthenticated(self, client_unauthenticated):
-        response = client_unauthenticated.put(
-            "/api/v1/tool/update_tool?tool_id=1",
-            json={"name": "X"},
-        )
         assert response.status_code in (401, 403)
 
 

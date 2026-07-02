@@ -69,9 +69,13 @@ export default function AvailableIntegrationsCatalog({
     setPendingProvider(providerKey);
     try {
       const url = await getOAuthAuthorizeUrl(providerKey);
-      window.location.href = url;
+      // Open the OAuth authorize URL in a new tab so the user's current work
+      // in this window isn't lost during the provider round-trip. ``noopener,noreferrer``
+      // prevents the opened page from touching ``window.opener``.
+      window.open(url, '_blank', 'noopener,noreferrer');
     } catch (err) {
       handleApiError(err);
+    } finally {
       setPendingProvider(null);
     }
   };

@@ -98,33 +98,6 @@ class ToolService(BaseService):
                 detail=f"A tool with name '{name}' already exists in this organization",
             )
 
-    def create_tool(self, data: Dict[str, Any]) -> Tool:
-        self._check_duplicate_name(data["name"])
-        if data.get("oauth_connection_id"):
-            self._validate_oauth_connection(data["oauth_connection_id"])
-        now = datetime.now(timezone.utc)
-        tool = Tool(
-            id=uuid_lib.uuid4(),
-            name=data["name"],
-            description=data["description"],
-            parameters=data.get("parameters", {}),
-            url=data["url"],
-            method=data.get("method", "POST"),
-            auth_type=data.get("auth_type", "none"),
-            auth_config=encrypt_auth_config(data.get("auth_config")),
-            meta_data=data.get("meta_data"),
-            oauth_connection_id=data.get("oauth_connection_id"),
-            app_integration_id=data.get("app_integration_id"),
-            is_active=data.get("is_active", True),
-            organization_id=self.org_id,
-            created_at=now,
-            updated_at=now,
-        )
-        self.db.add(tool)
-        self.db.commit()
-        self.db.refresh(tool)
-        return tool
-
     def get_tools(self) -> List[Tool]:
         return self.query(Tool).filter(Tool.tool_type != 'mcp').all()
 
@@ -138,34 +111,6 @@ class ToolService(BaseService):
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Tool not found",
             )
-        return tool
-
-    def update_tool(self, tool_id, data: Dict[str, Any]) -> Tool:
-        tool = self.get_tool(tool_id)
-        if tool.is_template:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Template tools cannot be edited",
-            )
-        # Built-in tools: only allow updating name, description, meta_data, auth_config, and is_active
-        if tool.tool_type != "custom":
-            allowed = {
-                "name", "description", "meta_data", "auth_config", "is_active",
-                "oauth_connection_id", "app_integration_id",
-            }
-            data = {k: v for k, v in data.items() if k in allowed}
-        if data.get("oauth_connection_id"):
-            self._validate_oauth_connection(data["oauth_connection_id"])
-        if "name" in data:
-            self._check_duplicate_name(data["name"], exclude_id=tool_id)
-        if "auth_config" in data:
-            data["auth_config"] = encrypt_auth_config(data["auth_config"])
-        for key, value in data.items():
-            if hasattr(tool, key):
-                setattr(tool, key, value)
-        tool.updated_at = int(time.time())
-        self.db.commit()
-        self.db.refresh(tool)
         return tool
 
     def upsert_tool(self, data: Dict[str, Any]) -> Tool:

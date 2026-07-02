@@ -194,7 +194,7 @@ export default function ToolsMcpStep() {
         id: t.id,
         name: t.name,
         description: t.description,
-        usesOAuth: t.auth_type === 'oauth' || !!t.oauth_connection_id,
+        usesOAuth: t.auth_type === 'oauth',
         defaultConnectionId: t.oauth_connection_id,
         appIntegrationId: t.app_integration_id ?? null,
       })),
@@ -206,7 +206,7 @@ export default function ToolsMcpStep() {
         id: m.id,
         name: m.name,
         description: m.description,
-        usesOAuth: !!m.oauth_connection_id,
+        usesOAuth: m.auth_type === 'oauth',
         defaultConnectionId: m.oauth_connection_id ?? null,
         appIntegrationId: m.app_integration_id ?? null,
       })),
@@ -222,7 +222,11 @@ export default function ToolsMcpStep() {
     const effectiveId = overrideId ?? defaultId ?? null;
     if (!effectiveId) return null;
     const conn = connectionById.get(effectiveId);
-    const label = conn?.label || conn?.provider_slug || 'connected account';
+    if (!conn) return null;
+    // Same shape the MCP / Tool edit pages use: "<user_email> (<provider_slug>)"
+    // — falls back through label / slug so a connection without a stored email
+    // still renders something meaningful.
+    const label = `${conn.public_metadata?.user_email || conn.label || conn.provider_slug} (${conn.provider_slug})`;
     return overrideId ? label : `${label} (default)`;
   };
 
@@ -267,7 +271,7 @@ export default function ToolsMcpStep() {
             {selectedToolIds.map((toolId) => {
               const tool = toolById.get(toolId);
               if (!tool) return null;
-              const usesOAuth = tool.auth_type === 'oauth' || !!tool.oauth_connection_id;
+              const usesOAuth = tool.auth_type === 'oauth';
               return (
                 <AttachmentSummaryRow
                   key={tool.id}
@@ -327,7 +331,7 @@ export default function ToolsMcpStep() {
             {selectedMcpIds.map((mcpId) => {
               const server = mcpById.get(mcpId);
               if (!server) return null;
-              const usesOAuth = !!server.oauth_connection_id;
+              const usesOAuth = server.auth_type === 'oauth';
               return (
                 <AttachmentSummaryRow
                   key={server.id}

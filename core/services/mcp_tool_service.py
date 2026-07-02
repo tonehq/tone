@@ -329,8 +329,9 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, current
             # then custom meta_data headers (e.g. ClickUp's x-workspace-id) override those, then the
             # OAuth bearer (resolved below) overrides everything. Keeping the order identical here
             # ensures a server that validates with one set of headers authenticates with the same
-            # set during a live call.
-            headers = build_auth_headers(server.auth_config)
+            # set during a live call. ``auth_type`` selects the header shape explicitly for rows
+            # written after the migration; older rows (auth_type is None) fall back to inference.
+            headers = build_auth_headers(server.auth_config, auth_type=getattr(server, "auth_type", None))
             headers.update(headers_from_meta(getattr(server, "meta_data", None)))
 
             # OAuth-backed connectors (e.g. ClickUp, Google Calendar) authenticate via a

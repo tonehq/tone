@@ -21,7 +21,7 @@ import { useGoBack } from '@/hooks/useGoBack';
 import { NO_APP_INTEGRATION, useIntegrationConnections } from '@/hooks/useIntegrationConnections';
 import { getMcpServer } from '@/services/mcpServerService';
 import { discoverMcpOAuth } from '@/services/oauthService';
-import type { MCPServer, MCPServerUpsertPayload } from '@/types/mcp';
+import type { MCPAuthType, MCPServer, MCPServerUpsertPayload } from '@/types/mcp';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
@@ -116,19 +116,38 @@ function getFaviconUrl(hostname: string | null): string | null {
   return `https://www.google.com/s2/favicons?domain=${getApexDomain(hostname)}&sz=64`;
 }
 
+/** Derive the ``auth_type`` string the backend expects from the form state.
+ *
+ * OAuth wins because a selected connection is the strongest signal of intent;
+ * bearer / api_key are the two static-credential toggles the form currently
+ * exposes; everything else is ``none``. Kept as a pure function so the payload
+ * builder and any "what auth is active?" label reads from a single source.
+ */
+function deriveAuthType(s: MCPFormState): MCPAuthType {
+  if (s.oauth_connection_id && s.oauth_connection_id !== NO_OAUTH_CONNECTION) return 'oauth';
+  if (s.use_bearer_token && s.bearer_token.trim()) return 'bearer';
+  if (s.use_api_key && s.api_key.trim()) return 'api_key';
+  return 'none';
+}
+
 function serverToFormState(s: MCPServer): MCPFormState {
   const auth = s.auth_config ?? {};
   const meta = (s.meta_data ?? {}) as { timeout?: number; http_headers?: Record<string, string> };
   const headersMap = meta.http_headers ?? {};
+  // Prefer the explicit ``auth_type`` (post-migration rows). Legacy rows without
+  // it fall back to inferring the two toggles from ``auth_config`` keys — same
+  // behavior the form had before this column existed.
+  const useBearer = s.auth_type != null ? s.auth_type === 'bearer' : !!auth.bearer_token;
+  const useApiKey = s.auth_type != null ? s.auth_type === 'api_key' : !!auth.api_key;
   return {
     name: s.name ?? '',
     description: s.description ?? '',
     server_url: s.server_url ?? '',
     timeout: typeof meta.timeout === 'number' ? meta.timeout : 20,
     transport_type: s.transport_type === 'streamable_http' ? 'shttp' : 'sse',
-    use_bearer_token: !!auth.bearer_token,
+    use_bearer_token: useBearer,
     bearer_token: auth.bearer_token ?? '',
-    use_api_key: !!auth.api_key,
+    use_api_key: useApiKey,
     api_key: auth.api_key ?? '',
     oauth_connection_id: s.oauth_connection_id ?? NO_OAUTH_CONNECTION,
     app_integration_id: s.app_integration_id ?? NO_APP_INTEGRATION,
@@ -155,6 +174,7 @@ function formStateToUpsertPayload(s: MCPFormState, id?: string): MCPServerUpsert
     description: s.description,
     server_url: s.server_url,
     transport_type: s.transport_type === 'shttp' ? 'streamable_http' : 'sse',
+    auth_type: deriveAuthType(s),
     auth_config: Object.keys(authConfig).length > 0 ? authConfig : null,
     oauth_connection_id:
       s.oauth_connection_id && s.oauth_connection_id !== NO_OAUTH_CONNECTION

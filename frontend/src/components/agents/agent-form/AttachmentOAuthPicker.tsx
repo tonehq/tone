@@ -47,10 +47,18 @@ export default function AttachmentOAuthPicker({
   disabled,
   onChange,
 }: AttachmentOAuthPickerProps) {
+  /** Human-readable label for one connection. Prefers the authorized account's
+   * email (from ``public_metadata.user_email``) so the user can tell "which
+   * account" at a glance, then falls back to the admin-set label or provider
+   * slug. Mirrors the picker on the MCP / Tool edit pages so labels are
+   * consistent across every OAuth surface. */
+  const labelForConnection = (c: OAuthConnection): string =>
+    `${c.public_metadata?.user_email || c.label || c.provider_slug} (${c.provider_slug})`;
+
   const defaultLabel = useMemo(() => {
     if (!defaultConnectionId) return null;
     const match = connections.find((c) => c.id === defaultConnectionId);
-    return match?.label || match?.provider_slug || 'connected account';
+    return match ? labelForConnection(match) : 'connected account';
   }, [connections, defaultConnectionId]);
 
   const options: SearchableSelectOption[] = useMemo(() => {
@@ -69,7 +77,7 @@ export default function AttachmentOAuthPicker({
       defaultOption,
       ...scoped.map<SearchableSelectOption>((c) => ({
         value: c.id,
-        label: c.label || c.provider_slug,
+        label: labelForConnection(c),
       })),
     ];
   }, [appIntegrationId, connections, defaultLabel]);
