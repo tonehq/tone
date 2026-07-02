@@ -42,7 +42,32 @@ from core.utils.encryption import decrypt
 # removed in `load_agent_service_config`'s `result` dict). It is folded into every cache
 # version stamp, so a deploy that changes the shape invalidates all persisted entries
 # instead of serving them with a stale shape — there is no TTL to clear them otherwise.
-PAYLOAD_FORMAT_VERSION = "v4"  # v4: workflow mode uses the workflow prompt alone (no base persona)
+PAYLOAD_FORMAT_VERSION = "v7"  # v7: add voice-response rules (brevity + no Markdown) alongside tool-usage rules
+
+
+# Appended to every agent's system prompt so responses stay TTS-friendly. Two rule sets:
+# (1) Voice Response Rules — keep replies short and free of Markdown/formatting symbols
+#     that TTS would otherwise read literally ("asterisk asterisk Thursday").
+# (2) Tool Usage Rules — prevent tool invocations from leaking into speech (narration,
+#     tool names, raw JSON, IDs, URLs). Kept short and generic so it composes with any
+#     persona/workflow.
+_VOICE_AGENT_RULES = """# Voice Response Rules
+
+- Keep replies short — one or two sentences. Only give more detail if the user explicitly asks for it.
+- Never use Markdown formatting. No asterisks, hyphens, headings, bullet points, backticks, code blocks, or links. Write plain sentences that sound natural when read aloud.
+- Do not read symbols, punctuation, or formatting characters. Speak numbers and units naturally (e.g., "twenty-eight degrees" not "28°C").
+
+# Tool Usage Rules
+
+You may use tools to fulfill the user's request. When you do:
+
+- Never mention that you are using a tool or describe how you are using it.
+- Never mention tool names, parameters, IDs, raw outputs, JSON, URLs, or internal implementation details.
+- Do not narrate your actions (e.g., "Let me check", "I'll look that up", "One moment while I fetch that").
+- Respond only with the final answer in a natural, conversational way.
+- If information comes from a tool, summarize it in one or two concise sentences. Do not read raw data aloud.
+- If a tool fails or the requested information cannot be retrieved, briefly explain the issue in plain language and, when possible, suggest the next best step. Do not mention internal errors or implementation details.
+- If the user explicitly asks how you obtained the information, simply say that you checked the available information and avoid referring to tools or internal systems."""
 
 
 def _resolve_org_id(org_id):
@@ -717,6 +742,11 @@ def load_agent_service_config(
         )
     if not system_content:
         return None
+
+    # Append the shared voice-agent rules (brevity + no Markdown + tool-usage guardrails)
+    # so every agent — prompt mode or workflow mode, S2S or classic LLM — inherits the
+    # same protections against TTS leaks and long/formatted replies.
+    system_content = f"{system_content}\n\n{_VOICE_AGENT_RULES}"
 
     # S2S models read the system prompt from the LLM metadata (set in _build_service_specs
     # from system_prompt_template); override it with the composed content so workflow mode
