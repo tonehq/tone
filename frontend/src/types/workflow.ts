@@ -42,9 +42,12 @@ export interface WorkflowSummary {
   id: string;
   name: string;
   description: string | null;
-  status: 'draft' | 'published';
   is_valid: boolean;
   agents_using: number;
+  /** Owning agent (null for legacy org-level workflows). */
+  agent_id?: string | null;
+  /** Agent version numbers whose live configs reference this workflow. */
+  assigned_versions?: number[];
   updated_at: string | null;
 }
 
@@ -52,24 +55,14 @@ export interface WorkflowDetail {
   id: string;
   name: string;
   description: string | null;
-  status: 'draft' | 'published';
   agents_using: number;
+  agent_id?: string | null;
+  assigned_versions?: number[];
   draft_version_id: string | null;
-  published_version_id: string | null;
-  latest_version: number;
   graph: WorkflowGraph;
   graph_checksum: string | null;
   is_valid: boolean;
   validation_errors: ValidationIssue[];
-  has_published: boolean;
-  has_unpublished_changes: boolean;
   created_at: string | null;
   updated_at: string | null;
-}
-
-export interface WorkflowVersionSummary {
-  id: string;
-  version: number;
-  is_live: boolean;
-  published_at: string | null;
 }

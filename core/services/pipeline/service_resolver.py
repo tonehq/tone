@@ -278,11 +278,13 @@ def _config_service_ids(config) -> dict:
 
 
 def _published_workflow_graph(db: Session, config, org_id=None) -> Optional[dict]:
-    """Return the assigned workflow's published-version graph (org-scoped), or None outside
-    workflow mode / when no workflow is assigned / there is no published version with a graph.
+    """Return the assigned workflow's working graph (org-scoped), or None outside
+    workflow mode / when no workflow is assigned / there is no graph.
 
-    Loaded once per resolve so the playbook text and the synthesized apiRequest tools derive
-    from the same graph and share one node_id -> fn-name map (names never drift)."""
+    Workflows have no separate publish step — ``draft_version_id`` points at the
+    single working graph, which is what the call uses. Loaded once per resolve so
+    the playbook text and the synthesized apiRequest tools derive from the same
+    graph and share one node_id -> fn-name map (names never drift)."""
     if getattr(config, "mode", "prompt") != "workflow":
         return None
     workflow_id = getattr(config, "workflow_id", None)
@@ -295,9 +297,9 @@ def _published_workflow_graph(db: Session, config, org_id=None) -> Optional[dict
     if org_id:
         wf_q = wf_q.filter(Workflow.organization_id == org_id)
     wf = wf_q.first()
-    if not wf or not wf.published_version_id:
+    if not wf or not wf.draft_version_id:
         return None
-    ver_q = db.query(WorkflowVersion).filter(WorkflowVersion.id == wf.published_version_id)
+    ver_q = db.query(WorkflowVersion).filter(WorkflowVersion.id == wf.draft_version_id)
     if org_id:
         ver_q = ver_q.filter(WorkflowVersion.organization_id == org_id)
     ver = ver_q.first()
@@ -574,22 +576,22 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
         .where(*_mcp_where).scalar_subquery()
     )
 
-    # Workflow assignment: the assigned workflow's published-version id + updated_at are
+    # Workflow assignment: the assigned workflow's working-version id + updated_at are
     # folded into the SAME combined query (as scalar subqueries) so re-assigning or
-    # re-publishing invalidates the cache without a second per-call round-trip. When the
-    # config isn't in workflow mode the id is NULL → the joins yield NULL (no extra cost).
+    # editing the workflow invalidates the cache without a second per-call round-trip.
+    # When the config isn't in workflow mode the id is NULL → the joins yield NULL.
     from core.models.workflow import Workflow, WorkflowVersion
 
     mode = getattr(config, "mode", "prompt") or "prompt"
     workflow_id = getattr(config, "workflow_id", None) if mode == "workflow" else None
     wf_id_sq = (
         select(WorkflowVersion.id).select_from(Workflow)
-        .join(WorkflowVersion, WorkflowVersion.id == Workflow.published_version_id)
+        .join(WorkflowVersion, WorkflowVersion.id == Workflow.draft_version_id)
         .where(Workflow.id == workflow_id).scalar_subquery()
     )
     wf_ts_sq = (
         select(WorkflowVersion.updated_at).select_from(Workflow)
-        .join(WorkflowVersion, WorkflowVersion.id == Workflow.published_version_id)
+        .join(WorkflowVersion, WorkflowVersion.id == Workflow.draft_version_id)
         .where(Workflow.id == workflow_id).scalar_subquery()
     )
 

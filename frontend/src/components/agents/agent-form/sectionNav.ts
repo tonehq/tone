@@ -14,7 +14,9 @@ export interface AgentSection {
 }
 
 // Order matters — this is the order shown in the rail and the order the routed
-// section pages follow.
+// section pages follow. The "Prompt" section hosts both the system prompt and
+// the agent's workflows behind a Prompt/Workflow toggle (they're two ways to
+// drive the same conversation), so there is no separate Workflow entry.
 export const AGENT_SECTIONS: AgentSection[] = [
   { key: 'basics', label: 'Basics', icon: Bot },
   { key: 'prompt', label: 'Prompt', icon: MessageSquare },

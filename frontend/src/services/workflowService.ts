@@ -3,27 +3,38 @@ import type {
   WorkflowDetail,
   WorkflowGraph,
   WorkflowSummary,
-  WorkflowVersionSummary,
   ValidationIssue,
 } from '@/types/workflow';
 
-export const listWorkflows = async (): Promise<WorkflowSummary[]> => {
-  const res = await axiosInstance.get<WorkflowSummary[]>('/workflow/list');
+export const listWorkflows = async (agentId?: string): Promise<WorkflowSummary[]> => {
+  const res = await axiosInstance.get<WorkflowSummary[]>('/workflow/list', {
+    params: agentId ? { agent_id: agentId } : undefined,
+  });
   return Array.isArray(res.data) ? res.data : [];
 };
 
 export const createWorkflow = async (
   name: string,
   description?: string,
+  agentId?: string,
 ): Promise<WorkflowDetail> => {
-  const res = await axiosInstance.post<WorkflowDetail>('/workflow/create', { name, description });
+  const res = await axiosInstance.post<WorkflowDetail>('/workflow/create', {
+    name,
+    description,
+    agent_id: agentId,
+  });
   return res.data;
 };
 
-export const cloneWorkflow = async (workflowId: string, name?: string): Promise<WorkflowDetail> => {
+export const cloneWorkflow = async (
+  workflowId: string,
+  name?: string,
+  agentId?: string,
+): Promise<WorkflowDetail> => {
   const res = await axiosInstance.post<WorkflowDetail>('/workflow/clone', {
     workflow_id: workflowId,
     name: name?.trim() || undefined,
+    agent_id: agentId,
   });
   return res.data;
 };
@@ -53,22 +64,6 @@ export const validateWorkflow = async (
 ): Promise<{ is_valid: boolean; errors: ValidationIssue[] }> => {
   const res = await axiosInstance.post('/workflow/validate', { graph });
   return res.data;
-};
-
-export const publishWorkflow = async (workflowId: string): Promise<WorkflowDetail> => {
-  const res = await axiosInstance.post<WorkflowDetail>('/workflow/publish', {
-    workflow_id: workflowId,
-  });
-  return res.data;
-};
-
-export const listWorkflowVersions = async (
-  workflowId: string,
-): Promise<WorkflowVersionSummary[]> => {
-  const res = await axiosInstance.get<WorkflowVersionSummary[]>('/workflow/list_versions', {
-    params: { workflow_id: workflowId },
-  });
-  return Array.isArray(res.data) ? res.data : [];
 };
 
 export const deleteWorkflow = async (workflowId: string): Promise<{ success: boolean }> => {
