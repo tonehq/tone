@@ -61,7 +61,16 @@ class QwenWebSocketTTSService(TTSService):
         self._language = _qwen_language(language)
         self._trace_id = trace_id
         self._websocket = None
-        self.set_model_name("Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice")
+        self._apply_model_name("Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice")
+
+    def _apply_model_name(self, model: str):
+        # pipecat < 0.0.104 had set_model_name(); newer versions store the
+        # model on _settings and sync it to metrics separately.
+        if hasattr(self, "set_model_name"):
+            self.set_model_name(model)
+        else:
+            self._settings.model = model
+            self._sync_model_name_to_metrics()
 
     def __str__(self):
         return f"{self.name}"
@@ -70,7 +79,7 @@ class QwenWebSocketTTSService(TTSService):
         return True
 
     async def set_model(self, model: str):
-        self.set_model_name(model)
+        self._apply_model_name(model)
 
     async def set_voice(self, voice: str):
         self._voice_id = voice
