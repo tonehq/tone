@@ -17,15 +17,12 @@ import type { ValidationIssue } from '@/types/workflow';
 
 interface Props {
   name: string;
-  status: 'draft' | 'published';
   saving: boolean;
   dirty: boolean;
-  hasUnpublishedChanges: boolean;
   lastSavedAt: number | null;
   issues: ValidationIssue[];
   onBack: () => void;
   onSave: () => void;
-  onPublish: () => void;
   onOpenGlobalPrompt: () => void;
   onExport: () => void;
   onFocusNode?: (nodeName: string) => void;
@@ -33,15 +30,12 @@ interface Props {
 
 const WorkflowToolbar: React.FC<Props> = ({
   name,
-  status,
   saving,
   dirty,
-  hasUnpublishedChanges,
   lastSavedAt,
   issues,
   onBack,
   onSave,
-  onPublish,
   onOpenGlobalPrompt,
   onExport,
   onFocusNode,
@@ -50,18 +44,13 @@ const WorkflowToolbar: React.FC<Props> = ({
   const [moreOpen, setMoreOpen] = useState(false);
   const valid = issues.length === 0;
 
-  const pendingPublish = status === 'published' && (hasUnpublishedChanges || dirty);
-  const nothingToPublish = status === 'published' && !hasUnpublishedChanges && !dirty;
-
   const savedLabel = saving
     ? 'Saving…'
     : dirty
       ? 'Unsaved changes'
-      : status === 'published' && hasUnpublishedChanges
-        ? 'Saved · not published yet'
-        : lastSavedAt
-          ? 'All changes saved'
-          : 'Up to date';
+      : lastSavedAt
+        ? 'All changes saved'
+        : 'Up to date';
 
   return (
     <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-card/80 px-3 backdrop-blur">
@@ -70,41 +59,14 @@ const WorkflowToolbar: React.FC<Props> = ({
         <CustomButton
           type="text"
           size="icon-sm"
-          aria-label="Back to workflows"
+          aria-label="Back"
           onClick={onBack}
           icon={<ChevronLeft className="h-4 w-4" />}
           className="text-muted-foreground"
         />
         <div className="h-6 w-px bg-border" />
         <div className="min-w-0 pl-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-semibold text-foreground">{name}</span>
-            <span
-              className={cn(
-                'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ring-inset',
-                status === 'published'
-                  ? 'bg-emerald-500/10 text-emerald-600 ring-emerald-500/20 dark:text-emerald-300'
-                  : 'bg-amber-500/10 text-amber-600 ring-amber-500/20 dark:text-amber-300',
-              )}
-            >
-              <span
-                className={cn(
-                  'h-1.5 w-1.5 rounded-full',
-                  status === 'published' ? 'bg-emerald-500' : 'bg-amber-500',
-                )}
-              />
-              {status === 'published' ? 'Published' : 'Draft'}
-            </span>
-            {pendingPublish && (
-              <span
-                title="Your edits are saved as a draft but aren't live yet. Publish to update assigned agents."
-                className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-600 ring-1 ring-inset ring-amber-500/20 dark:text-amber-300"
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-                Unpublished changes
-              </span>
-            )}
-          </div>
+          <span className="block truncate text-sm font-semibold text-foreground">{name}</span>
           <div className="font-mono text-[11px] text-muted-foreground">{savedLabel}</div>
         </div>
       </div>
@@ -220,25 +182,20 @@ const WorkflowToolbar: React.FC<Props> = ({
         </CustomPopover>
 
         <CustomButton
-          type="default"
-          size="sm"
-          loading={saving}
-          disabled={status === 'published' && !dirty}
-          onClick={onSave}
-          title={status === 'published' && !dirty ? 'No unsaved changes.' : undefined}
-        >
-          {status === 'published' ? 'Save' : 'Save draft'}
-        </CustomButton>
-        <CustomButton
           type="primary"
           size="sm"
-          disabled={!valid || saving || nothingToPublish}
-          onClick={onPublish}
+          loading={saving}
+          disabled={saving || !dirty}
+          onClick={onSave}
           title={
-            nothingToPublish ? 'No changes to publish — the live version is up to date.' : undefined
+            !dirty
+              ? 'No unsaved changes'
+              : valid
+                ? 'Save — assigned agents use this on the next call'
+                : 'Saves the graph — resolve the issues to make it assignable'
           }
         >
-          {pendingPublish ? 'Publish changes' : 'Publish'}
+          Save
         </CustomButton>
       </div>
     </div>

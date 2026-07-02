@@ -14,7 +14,7 @@ interface Props {
 const FEATURES = [
   { icon: GitBranch, label: 'Branch on caller intent' },
   { icon: PhoneForwarded, label: 'Call tools & transfer' },
-  { icon: Workflow, label: 'Reuse across agents' },
+  { icon: Workflow, label: 'One copy per agent version' },
 ];
 
 const WorkflowEmptyState: React.FC<Props> = ({ onCreate }) => (

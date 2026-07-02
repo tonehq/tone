@@ -1,16 +1,14 @@
 'use client';
 
-import { ExternalLink, GitBranch, MessageSquare, Sparkles, Wand2, Workflow } from 'lucide-react';
-import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { CircleAlert, MessageSquare, Sparkles, Wand2, Workflow } from 'lucide-react';
+import { useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
-import { useAtomValue, useSetAtom } from 'jotai';
 
 import SectionCard, { ACCENTS } from '@/components/agents/agent-form/SectionCard';
+import AgentWorkflowsSection from '@/components/agents/agent-workflows/AgentWorkflowsSection';
+import { useAgentEditor } from '@/components/agents/AgentEditorContext';
 import { CustomButton, RichPromptEditorField } from '@/components/shared';
-import SearchableSelect from '@/components/shared/SearchableSelect';
 import { Badge } from '@/components/ui/badge';
-import { fetchWorkflowListAtom, workflowsAtom } from '@/atoms/WorkflowAtom';
 import { generateSystemPrompt, improveSystemPrompt } from '@/services/aiService';
 import type { AgentFormState } from '@/types/agent';
 import { cn } from '@/utils/cn';
@@ -36,64 +34,48 @@ type Mode = 'prompt' | 'workflow';
 const MODES: { key: Mode; label: string; icon: typeof MessageSquare; hint: string }[] = [
   {
     key: 'prompt',
-    label: 'Single prompt',
+    label: 'Prompt',
     icon: MessageSquare,
-    hint: 'One instruction set drives the whole call',
+    hint: 'A single instruction set steers the whole call.',
   },
   {
     key: 'workflow',
     label: 'Workflow',
     icon: Workflow,
-    hint: 'A visual conversation pathway drives the call',
+    hint: 'A visual pathway drives the conversation.',
   },
 ];
 
+/**
+ * The agent's "Prompt" section — the single place a conversation is authored.
+ * A Prompt/Workflow toggle picks how the call is driven: either the system
+ * prompt editor, or the agent's workflows (agent-scoped, one copy per version).
+ */
 export default function PromptStep() {
   const { control, setValue } = useFormContext<AgentFormState>();
+  const { detail, agentId, agentType } = useAgentEditor();
+
   const mode = (useWatch({ control, name: 'config.mode' }) ?? 'prompt') as Mode;
   const workflowId = useWatch({ control, name: 'config.workflow_id' }) ?? '';
   const prompt = useWatch({ control, name: 'config.system_prompt_template' }) ?? '';
   const name = useWatch({ control, name: 'name' }) ?? '';
   const description = useWatch({ control, name: 'description' }) ?? '';
-  const agentType = useWatch({ control, name: 'agent_type' }) ?? '';
 
   const [busy, setBusy] = useState(false);
 
-  const { list, loading } = useAtomValue(workflowsAtom);
-  const fetchList = useSetAtom(fetchWorkflowListAtom);
+  const basePath = agentId ? `/agents/edit/${agentType}/${agentId}` : `/agents/create/${agentType}`;
 
-  useEffect(() => {
-    if (mode === 'workflow' && list.length === 0 && !loading) {
-      fetchList().catch(() => {});
-    }
-  }, [mode, list.length, loading, fetchList]);
-
-  const publishedOptions = useMemo(
-    () => list.filter((w) => w.status === 'published').map((w) => ({ value: w.id, label: w.name })),
-    [list],
-  );
-
-  // If the agent already references a workflow that is no longer published (unpublished or
-  // deleted), keep it visible in the dropdown so the assignment isn't silently lost.
-  const assignedMissing =
-    !!workflowId && !publishedOptions.some((o) => o.value === workflowId) && !loading;
-  const wfOptions = useMemo(() => {
-    const known = list.find((w) => w.id === workflowId);
-    return assignedMissing
-      ? [
-          ...publishedOptions,
-          {
-            value: String(workflowId),
-            label: `${known?.name ?? 'Assigned workflow'} (unpublished)`,
-          },
-        ]
-      : publishedOptions;
-  }, [publishedOptions, assignedMissing, workflowId, list]);
+  // `config` is the version currently loaded in the editor; its `version` is
+  // always present (non-optional), unlike the optional `versions` list.
+  const viewedVersion = detail?.config?.version ?? null;
+  const versionLabel = viewedVersion != null ? `v${viewedVersion}` : 'this agent';
 
   const needsSelection = mode === 'workflow' && !workflowId;
 
   const setMode = (m: Mode) => {
     setValue('config.mode', m, { shouldDirty: true });
+    // Prompt mode never keeps a workflow assignment; workflow mode waits for the
+    // user to pick one from the cards below.
     if (m === 'prompt') setValue('config.workflow_id', null, { shouldDirty: true });
   };
 
@@ -151,44 +133,61 @@ export default function PromptStep() {
   );
 
   return (
-    <div className="flex h-full flex-col gap-4">
-      {/* conversation-flow driver toggle */}
-      <div className="grid grid-cols-2 gap-2 rounded-xl border border-border bg-muted/30 p-1.5">
-        {MODES.map((m) => {
-          const Icon = m.icon;
-          const active = mode === m.key;
-          return (
-            <CustomButton
-              key={m.key}
-              type="text"
-              aria-pressed={active}
-              onClick={() => setMode(m.key)}
-              className={cn(
-                'h-auto w-full items-center justify-start gap-3 rounded-lg px-3.5 py-2.5 text-left transition-all',
-                active
-                  ? 'bg-card shadow-sm ring-1 ring-border hover:bg-card'
-                  : 'opacity-70 hover:bg-card/60 hover:opacity-100',
-              )}
-            >
-              <span
+    <div className="flex h-full flex-col gap-3">
+      {/* ── Conversation-driver hero (compact) ───────────────────────────── */}
+      <section className="relative overflow-hidden rounded-xl border border-border/80 bg-gradient-to-br from-primary/[0.05] via-transparent to-transparent px-3.5 py-3 ring-1 ring-inset ring-border/40">
+        <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
+          <h2 className="text-[13px] font-semibold tracking-tight text-foreground">
+            How {versionLabel} drives conversations
+          </h2>
+          <p className="text-[11.5px] text-muted-foreground">
+            Pick one way to run the call — each version keeps its own setup.
+          </p>
+        </div>
+
+        <div role="group" aria-label="Conversation mode" className="grid grid-cols-2 gap-2">
+          {MODES.map((m) => {
+            const Icon = m.icon;
+            const active = mode === m.key;
+            return (
+              <CustomButton
+                key={m.key}
+                type="text"
+                aria-pressed={active}
+                onClick={() => setMode(m.key)}
                 className={cn(
-                  'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+                  'h-auto min-h-0 items-center justify-start gap-2.5 whitespace-normal rounded-lg border px-3 py-2 text-left font-normal transition-all',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40',
                   active
-                    ? 'bg-primary/10 text-primary ring-1 ring-inset ring-primary/20'
-                    : 'bg-muted text-muted-foreground',
+                    ? 'border-primary/40 bg-card shadow-sm hover:bg-card'
+                    : 'border-border/60 opacity-80 hover:border-foreground/20 hover:bg-card/60 hover:opacity-100',
                 )}
               >
-                <Icon className="size-4" strokeWidth={2} />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-semibold text-foreground">{m.label}</span>
-                <span className="block truncate text-[11.5px] text-muted-foreground">{m.hint}</span>
-              </span>
-            </CustomButton>
-          );
-        })}
-      </div>
+                <span
+                  className={cn(
+                    'inline-flex size-7 shrink-0 items-center justify-center rounded-md ring-1 ring-inset transition-colors',
+                    active
+                      ? 'bg-primary/10 text-primary ring-primary/20'
+                      : 'bg-muted text-muted-foreground ring-border/60',
+                  )}
+                >
+                  <Icon className="size-3.5" strokeWidth={2} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[12.5px] font-semibold leading-tight text-foreground">
+                    {m.label}
+                  </span>
+                  <span className="block truncate text-[11px] leading-tight text-muted-foreground">
+                    {m.hint}
+                  </span>
+                </span>
+              </CustomButton>
+            );
+          })}
+        </div>
+      </section>
 
+      {/* ── Body ─────────────────────────────────────────────────────────── */}
       {mode === 'prompt' ? (
         <SectionCard
           icon={<MessageSquare className="size-3.5" strokeWidth={2.25} />}
@@ -214,78 +213,19 @@ export default function PromptStep() {
           </p>
         </SectionCard>
       ) : (
-        <SectionCard
-          icon={<Workflow className="size-3.5" strokeWidth={2.25} />}
-          iconClassName={ACCENTS.violet}
-          title="Assigned workflow"
-          description="The selected workflow's flow is sent to the model so it follows the pathway. Only published workflows can be assigned."
-        >
-          <div className="flex flex-col gap-4">
-            <SearchableSelect
-              name="config.workflow_id"
-              label="Workflow"
-              options={wfOptions}
-              value={String(workflowId)}
-              onValueChange={(v) => setValue('config.workflow_id', v, { shouldDirty: true })}
-              loading={loading}
-              placeholder={
-                publishedOptions.length
-                  ? 'Select a published workflow'
-                  : 'No published workflows yet'
-              }
-            />
-
-            {needsSelection && (
-              <p className="text-xs font-medium text-destructive">
-                Select a published workflow, or switch back to Single prompt — Workflow mode needs
-                an assigned workflow.
-              </p>
-            )}
-            {assignedMissing && (
-              <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
-                The assigned workflow is no longer published. Re-publish it or choose another before
-                saving.
-              </p>
-            )}
-
-            {!loading && publishedOptions.length === 0 && (
-              <div className="rounded-lg border border-dashed border-border bg-muted/30 p-4 text-center">
-                <span className="mx-auto mb-2 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-muted text-muted-foreground ring-1 ring-inset ring-border">
-                  <GitBranch className="size-4" />
-                </span>
-                <p className="text-sm font-medium text-foreground">No published workflows</p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  Create a workflow and publish it before assigning it here.
-                </p>
-                <Link href="/workflows" className="mt-3 inline-block">
-                  <CustomButton
-                    type="default"
-                    size="sm"
-                    icon={<ExternalLink className="size-3.5" />}
-                  >
-                    Open Workflows
-                  </CustomButton>
-                </Link>
-              </div>
-            )}
-
-            {workflowId && (
-              <Link
-                href={`/workflows/${workflowId}`}
-                className="inline-flex w-fit items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-              >
-                <ExternalLink className="size-3.5" />
-                Edit this workflow
-              </Link>
-            )}
-
-            <div className="rounded-lg border border-border bg-muted/30 p-3 text-[12px] text-muted-foreground">
-              <span className="font-medium text-foreground/80">Note:</span> in workflow mode the
-              workflow drives the call on its own — your Single-prompt system prompt is not used.
-              Put any persona or tone guidance in the workflow&apos;s global prompt instead.
-            </div>
-          </div>
-        </SectionCard>
+        <div className="flex flex-col gap-3">
+          {needsSelection && agentId && (
+            <p className="flex items-center gap-1.5 text-[12px] font-medium text-amber-700 dark:text-amber-300">
+              <CircleAlert className="size-3.5 shrink-0" />
+              Pick a workflow below to run {versionLabel}, or switch back to Prompt.
+            </p>
+          )}
+          <AgentWorkflowsSection
+            agentId={agentId}
+            basePath={basePath}
+            viewedVersion={viewedVersion}
+          />
+        </div>
       )}
     </div>
   );

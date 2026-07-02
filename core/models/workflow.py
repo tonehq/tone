@@ -13,48 +13,52 @@ from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from core.models.base import OrgScopedModel
-from core.models.enums import WorkflowStatus
 
 
 class Workflow(OrgScopedModel):
-    """Org-level, reusable node-based conversation workflow (a "pathway").
+    """Agent-owned node-based conversation workflow (a "pathway").
 
-    Not owned by any single agent — an agent's live AgentConfig references it via
-    ``workflow_id``. Holds pointers to its current editable draft version and the
-    published version that goes live when assigned.
+    Owned by the agent in ``agent_id``; each agent version (AgentConfig) references
+    its own independent copy via ``workflow_id`` — creating a new agent version
+    deep-copies the workflow so edits on one version never leak into another.
+    ``agent_id IS NULL`` marks legacy org-level rows from before agent scoping.
+
+    Workflows have no publish step of their own: ``version_id`` points at the single
+    working graph, which is what a call uses. The agent version's own publish is the
+    real "go live" gate.
     """
 
     __tablename__ = "workflows"
     __table_args__ = (
-        # Partial unique index: names are unique per org among LIVE rows only, so a
-        # soft-deleted workflow's name can be reused.
+        # Partial unique index: name uniqueness only applies to legacy org-level
+        # rows — per-agent-version copies intentionally share names.
         Index(
             "uq_workflows_org_name",
             "organization_id",
             "name",
             unique=True,
-            postgresql_where=text("deleted_at IS NULL"),
+            postgresql_where=text("deleted_at IS NULL AND agent_id IS NULL"),
         ),
         Index("ix_workflows_organization_id", "organization_id"),
+        Index("ix_workflows_agent_id", "agent_id"),
     )
 
     name = Column(String(200), nullable=False)
-    description = Column(String(500), nullable=True)
-    status = Column(
-        String(16), nullable=False, default=WorkflowStatus.DRAFT.value
-    )  # draft | published
-
-    published_version_id = Column(
+    agent_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("workflow_versions.id", ondelete="SET NULL", use_alter=True),
+        ForeignKey("agents.id", ondelete="SET NULL"),
         nullable=True,
     )
+    description = Column(String(500), nullable=True)
+
+    # Pointer to the single working graph (the column is still named
+    # ``draft_version_id`` for migration stability; there is no separate published
+    # version anymore).
     draft_version_id = Column(
         UUID(as_uuid=True),
         ForeignKey("workflow_versions.id", ondelete="SET NULL", use_alter=True),
         nullable=True,
     )
-    latest_version = Column(Integer, nullable=False, default=0)
 
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
@@ -66,17 +70,13 @@ class Workflow(OrgScopedModel):
         cascade="all, delete-orphan",
         foreign_keys="WorkflowVersion.workflow_id",
     )
-    published_version = relationship(
-        "WorkflowVersion", foreign_keys=[published_version_id], post_update=True
-    )
     draft_version = relationship(
         "WorkflowVersion", foreign_keys=[draft_version_id], post_update=True
     )
 
 
 class WorkflowVersion(OrgScopedModel):
-    """A snapshot of a workflow's graph. The single ``is_draft=True`` row is the
-    editable working copy; ``is_draft=False`` rows are immutable published snapshots.
+    """The single working graph for a workflow (one row per workflow).
 
     The ``graph`` JSONB is the canonical React-Flow-native graph
     (``{schemaVersion, nodes, edges, globalPrompt, artifactPlan}``) with the Vapi
@@ -95,8 +95,7 @@ class WorkflowVersion(OrgScopedModel):
         ForeignKey("workflows.id", ondelete="CASCADE"),
         nullable=False,
     )
-    version = Column(Integer, nullable=False)
-    is_draft = Column(Boolean, nullable=False, default=True)
+    version = Column(Integer, nullable=False, default=0)
 
     graph = Column(
         JSONB,
@@ -107,7 +106,6 @@ class WorkflowVersion(OrgScopedModel):
     graph_checksum = Column(String(64), nullable=True)
     is_valid = Column(Boolean, nullable=False, default=False)
     validation_errors = Column(JSONB, nullable=True)
-    published_at = Column(DateTime(timezone=True), nullable=True)
 
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     deleted_at = Column(DateTime(timezone=True), nullable=True)

@@ -122,16 +122,26 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     () => !isEqual(methods.getValues(), loadedBaselineRef.current),
     [watchedValues, methods],
   );
+  // Navigation that stays under the editor base path (switching sections,
+  // opening the nested workflow builder) keeps the same persisted form, so no
+  // state is lost — it must never trigger the unsaved-changes prompt.
+  const isInternalNav = useCallback((dest: string) => dest.startsWith(basePath), [basePath]);
+
   const { promptOpen, guardedAction, confirmLeave, cancelLeave } = useUnsavedChangesGuard(isDirty, {
-    // Switching sections stays under the editor base path and keeps the same
-    // persisted form — so it should never trigger the unsaved-changes prompt.
-    // Only navigating OUT of the editor warns.
-    isInternalNavigation: (dest) => dest.startsWith(basePath),
+    isInternalNavigation: isInternalNav,
   });
 
   const safeNavigate = useCallback(
-    (href: string) => guardedAction(() => router.push(href)),
-    [guardedAction, router],
+    (href: string) => {
+      // Internal navigation never loses state, so bypass the guard entirely.
+      // (guardedAction only checks dirtiness — it doesn't know the destination.)
+      if (isInternalNav(href)) {
+        router.push(href);
+        return;
+      }
+      guardedAction(() => router.push(href));
+    },
+    [guardedAction, isInternalNav, router],
   );
   const navContextValue = useMemo(() => ({ safeNavigate }), [safeNavigate]);
   const navGroups = useMemo(() => buildAgentNav(basePath, mode), [basePath, mode]);
@@ -538,6 +548,24 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     },
     [guardedAction, handleSave],
   );
+
+  // The nested workflow builder (/agents/edit/<type>/<id>/workflow/<wfId>) is a
+  // full-canvas editor with its own toolbar. Render it edge-to-edge — no editor
+  // rail, save-bar or max-width wrapper — while keeping the form/nav/editor
+  // providers mounted so the agent's unsaved state survives the round-trip and
+  // returning to a section counts as internal navigation (no discard prompt).
+  const isBuilderRoute = /\/workflow\/[^/]+$/.test(pathname);
+  if (isBuilderRoute) {
+    return (
+      <FormProvider {...methods}>
+        <AgentFormNavProvider value={navContextValue}>
+          <AgentEditorProvider value={editorContextValue}>
+            <div className="h-full w-full min-w-0 bg-background">{children}</div>
+          </AgentEditorProvider>
+        </AgentFormNavProvider>
+      </FormProvider>
+    );
+  }
 
   return (
     <FormProvider {...methods}>

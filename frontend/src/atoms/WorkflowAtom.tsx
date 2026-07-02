@@ -7,7 +7,6 @@ import {
   exportVapiWorkflow,
   getWorkflow,
   listWorkflows,
-  publishWorkflow,
   saveWorkflowDraft,
 } from '@/services/workflowService';
 import type {
@@ -26,7 +25,7 @@ function makeLatestTracker() {
   };
 }
 
-// ─── org-level workflow list ────────────────────────────────────────────────
+// ─── agent-scoped workflow list ─────────────────────────────────────────────
 interface WorkflowsState {
   list: WorkflowSummary[];
   loading: boolean;
@@ -35,23 +34,29 @@ interface WorkflowsState {
 export const workflowsAtom = atom<WorkflowsState>({ list: [], loading: false });
 
 const listTracker = makeLatestTracker();
-export const fetchWorkflowListAtom = atom(null, async (get, set): Promise<WorkflowSummary[]> => {
-  const isLatest = listTracker();
-  set(workflowsAtom, { ...get(workflowsAtom), loading: true });
-  try {
-    const rows = await listWorkflows();
-    if (isLatest()) set(workflowsAtom, { list: rows, loading: false });
-    return rows;
-  } catch (err) {
-    if (isLatest()) set(workflowsAtom, { ...get(workflowsAtom), loading: false });
-    throw err;
-  }
-});
+export const fetchWorkflowListAtom = atom(
+  null,
+  async (get, set, payload?: { agentId?: string }): Promise<WorkflowSummary[]> => {
+    const isLatest = listTracker();
+    set(workflowsAtom, { ...get(workflowsAtom), loading: true });
+    try {
+      const rows = await listWorkflows(payload?.agentId);
+      if (isLatest()) set(workflowsAtom, { list: rows, loading: false });
+      return rows;
+    } catch (err) {
+      if (isLatest()) set(workflowsAtom, { ...get(workflowsAtom), loading: false });
+      throw err;
+    }
+  },
+);
 
 export const createWorkflowAtom = atom(
   null,
-  async (_get, _set, payload: { name: string; description?: string }): Promise<WorkflowDetail> =>
-    createWorkflow(payload.name, payload.description),
+  async (
+    _get,
+    _set,
+    payload: { name: string; description?: string; agentId?: string },
+  ): Promise<WorkflowDetail> => createWorkflow(payload.name, payload.description, payload.agentId),
 );
 
 export const deleteWorkflowAtom = atom(null, async (_get, _set, workflowId: string) =>
@@ -60,8 +65,11 @@ export const deleteWorkflowAtom = atom(null, async (_get, _set, workflowId: stri
 
 export const cloneWorkflowAtom = atom(
   null,
-  async (_get, _set, payload: { workflowId: string; name?: string }): Promise<WorkflowDetail> =>
-    cloneWorkflow(payload.workflowId, payload.name),
+  async (
+    _get,
+    _set,
+    payload: { workflowId: string; name?: string; agentId?: string },
+  ): Promise<WorkflowDetail> => cloneWorkflow(payload.workflowId, payload.name, payload.agentId),
 );
 
 // ─── editor (single workflow) ───────────────────────────────────────────────
@@ -78,11 +86,6 @@ export const saveDraftAtom = atom(
     payload: { workflowId: string; graph: WorkflowGraph; expectedChecksum?: string | null },
   ): Promise<WorkflowDetail> =>
     saveWorkflowDraft(payload.workflowId, payload.graph, payload.expectedChecksum),
-);
-
-export const publishWorkflowAtom = atom(
-  null,
-  async (_get, _set, workflowId: string): Promise<WorkflowDetail> => publishWorkflow(workflowId),
 );
 
 export const exportWorkflowAtom = atom(

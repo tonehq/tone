@@ -1,4 +1,4 @@
-"""WorkflowService — org-level CRUD + draft/publish/validate for visual workflows."""
+"""WorkflowService — agent-scoped CRUD + draft/publish/validate for visual workflows."""
 from __future__ import annotations
 
 import hashlib
@@ -10,14 +10,15 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 
+from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
-from core.models.enums import WorkflowStatus
 from core.models.workflow import Workflow, WorkflowVersion
 from core.services.base import BaseService
 from core.services.workflow import schema as wf_schema
 from core.services.workflow import vapi_adapter
 
-# Draft rows always use version 0; published snapshots use 1, 2, 3, …
+# Every workflow has a single working row at version 0 (there are no published
+# snapshots anymore — the agent version's own publish is the "go live" gate).
 _DRAFT_VERSION = 0
 
 
@@ -134,14 +135,46 @@ class WorkflowService(BaseService):
             .count()
         )
 
-    # ── list / get ─────────────────────────────────────────────────────────
-    def list(self) -> List[Dict[str, Any]]:
+    def _configs_using(self, workflow_id: UUID) -> int:
+        # Count live config rows (agent versions) — a workflow referenced by ANY live
+        # version must not be deleted, even if all references are from one agent.
+        return (
+            self.query(AgentConfig)
+            .filter(AgentConfig.workflow_id == workflow_id, AgentConfig.deleted_at.is_(None))
+            .count()
+        )
+
+    def _assigned_versions(self, workflow_id: UUID) -> List[int]:
         rows = (
-            self.query(Workflow)
-            .filter(Workflow.deleted_at.is_(None))
-            .order_by(Workflow.updated_at.desc())
+            self.query(AgentConfig)
+            .with_entities(AgentConfig.version)
+            .filter(AgentConfig.workflow_id == workflow_id, AgentConfig.deleted_at.is_(None))
+            .order_by(AgentConfig.version.asc())
             .all()
         )
+        return [v for (v,) in rows]
+
+    def _resolve_agent(self, agent_id) -> Agent:
+        try:
+            aid = UUID(str(agent_id))
+        except (ValueError, TypeError):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+        agent = (
+            self.query(Agent)
+            .filter(Agent.id == aid, Agent.deleted_at.is_(None))
+            .first()
+        )
+        if not agent:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+        return agent
+
+    # ── list / get ─────────────────────────────────────────────────────────
+    def list(self, agent_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        q = self.query(Workflow).filter(Workflow.deleted_at.is_(None))
+        if agent_id:
+            agent = self._resolve_agent(agent_id)
+            q = q.filter(Workflow.agent_id == agent.id)
+        rows = q.order_by(Workflow.updated_at.desc()).all()
         return [self.summary(wf) for wf in rows]
 
     def summary(self, wf: Workflow) -> Dict[str, Any]:
@@ -150,32 +183,27 @@ class WorkflowService(BaseService):
             "id": str(wf.id),
             "name": wf.name,
             "description": wf.description,
-            "status": wf.status,
             "is_valid": bool(draft.is_valid) if draft else False,
             "agents_using": self._agents_using(wf.id),
+            "agent_id": str(wf.agent_id) if wf.agent_id else None,
+            "assigned_versions": self._assigned_versions(wf.id),
             "updated_at": wf.updated_at.isoformat() if wf.updated_at else None,
         }
 
     def detail(self, wf: Workflow) -> Dict[str, Any]:
         draft = self._version(wf.draft_version_id)
-        published = self._version(wf.published_version_id)
         return {
             "id": str(wf.id),
             "name": wf.name,
             "description": wf.description,
-            "status": wf.status,
             "agents_using": self._agents_using(wf.id),
+            "agent_id": str(wf.agent_id) if wf.agent_id else None,
+            "assigned_versions": self._assigned_versions(wf.id),
             "draft_version_id": str(wf.draft_version_id) if wf.draft_version_id else None,
-            "published_version_id": str(wf.published_version_id) if wf.published_version_id else None,
-            "latest_version": wf.latest_version,
             "graph": _mask_graph_secrets(draft.graph if draft else wf_schema.empty_graph()),
             "graph_checksum": draft.graph_checksum if draft else None,
             "is_valid": bool(draft.is_valid) if draft else False,
             "validation_errors": (draft.validation_errors or []) if draft else [],
-            "has_published": published is not None,
-            "has_unpublished_changes": bool(
-                published and draft and draft.graph_checksum != published.graph_checksum
-            ),
             "created_at": wf.created_at.isoformat() if wf.created_at else None,
             "updated_at": wf.updated_at.isoformat() if wf.updated_at else None,
         }
@@ -190,6 +218,7 @@ class WorkflowService(BaseService):
         description: Optional[str],
         user_id: Optional[UUID],
         graph: Optional[Dict[str, Any]] = None,
+        agent_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         if not user_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="user_id is required")
@@ -197,13 +226,15 @@ class WorkflowService(BaseService):
         if not name:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Workflow name is required")
 
-        # Friendly duplicate-name check (the DB unique constraint is the backstop below).
-        existing = (
-            self.query(Workflow)
-            .filter(Workflow.name == name, Workflow.deleted_at.is_(None))
-            .first()
+        agent = self._resolve_agent(agent_id) if agent_id else None
+
+        # Friendly duplicate-name check scoped to the owning agent (legacy org-level
+        # rows keep the org-wide check; the partial DB index is their backstop).
+        dup_q = self.query(Workflow).filter(
+            Workflow.name == name, Workflow.deleted_at.is_(None)
         )
-        if existing:
+        dup_q = dup_q.filter(Workflow.agent_id == (agent.id if agent else None))
+        if dup_q.first():
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f'A workflow named "{name}" already exists. Choose a different name.',
@@ -220,9 +251,8 @@ class WorkflowService(BaseService):
             organization_id=self.org_id,
             name=name,
             description=description,
-            status=WorkflowStatus.DRAFT.value,
-            latest_version=0,
             created_by_user_id=user_id,
+            agent_id=agent.id if agent else None,
         )
         self.db.add(wf)
 
@@ -230,7 +260,6 @@ class WorkflowService(BaseService):
             organization_id=self.org_id,
             workflow_id=wf.id,
             version=_DRAFT_VERSION,
-            is_draft=True,
             graph=graph,
             start_node_name=wf_schema.find_start_node_name(graph),
             graph_checksum=_checksum(graph),
@@ -256,42 +285,92 @@ class WorkflowService(BaseService):
 
     # ── clone ──────────────────────────────────────────────────────────────
     def clone(
-        self, workflow_id: str, user_id: Optional[UUID], name: Optional[str] = None
+        self,
+        workflow_id: str,
+        user_id: Optional[UUID],
+        name: Optional[str] = None,
+        agent_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Duplicate a workflow's current graph into a NEW draft workflow. Uses the
-        caller-provided ``name`` when given (surfacing ``create``'s 409 on a duplicate),
-        otherwise auto-names it "<name> (clone)". Only the workflow itself is copied —
-        agent assignments, version history and publish state are NOT carried over (the
-        clone starts as a fresh, unpublished draft). Encrypted apiRequest secrets
-        round-trip unchanged because ``create`` re-runs the idempotent secret encryption."""
+        """Duplicate a workflow's graph into a NEW workflow. Uses the caller-provided
+        ``name`` when given (surfacing ``create``'s 409 on a duplicate), otherwise
+        auto-names it "<name> (clone)". The clone keeps the source's owning agent
+        unless ``agent_id`` overrides it. Only the graph is copied — agent
+        assignments are NOT carried over. Encrypted apiRequest secrets round-trip
+        unchanged because ``create`` re-runs the idempotent secret encryption."""
         import copy
 
         src = self._get(workflow_id)
-        # Prefer the draft graph (latest edits); fall back to the published snapshot.
         draft = self._version(src.draft_version_id)
-        graph = draft.graph if (draft and draft.graph) else None
-        if graph is None and src.published_version_id:
-            pub = self._version(src.published_version_id)
-            graph = pub.graph if pub else None
-        graph = copy.deepcopy(graph) if graph else wf_schema.empty_graph()
+        graph = copy.deepcopy(draft.graph) if (draft and draft.graph) else wf_schema.empty_graph()
 
-        new_name = (name or "").strip() or self._unique_clone_name(src.name)
-        return self.create(new_name, src.description, user_id, graph=graph)
+        owner_id = agent_id or (str(src.agent_id) if src.agent_id else None)
+        new_name = (name or "").strip() or self._unique_clone_name(src.name, owner_id)
+        return self.create(new_name, src.description, user_id, graph=graph, agent_id=owner_id)
 
-    def _unique_clone_name(self, base: str) -> str:
-        """"<base> (clone)", disambiguated with a numeric suffix if already taken, so the
-        clone never collides with ``create``'s duplicate-name guard."""
+    def _unique_clone_name(self, base: str, agent_id: Optional[str] = None) -> str:
+        """"<base> (clone)", disambiguated with a numeric suffix if already taken within
+        the same owner scope, so the clone never collides with ``create``'s guard."""
         base = (base or "Workflow")[:180]  # leave room for the " (clone) N" suffix (name ≤ 200)
+        owner = UUID(str(agent_id)) if agent_id else None
         candidate = f"{base} (clone)"
         n = 2
         while (
             self.query(Workflow)
-            .filter(Workflow.name == candidate, Workflow.deleted_at.is_(None))
+            .filter(
+                Workflow.name == candidate,
+                Workflow.deleted_at.is_(None),
+                Workflow.agent_id == owner,
+            )
             .first()
         ):
             candidate = f"{base} (clone) {n}"
             n += 1
         return candidate
+
+    # ── per-agent-version deep copy ────────────────────────────────────────
+    def duplicate_for_agent_version(
+        self, source_workflow_id, agent_id: UUID, user_id: Optional[UUID]
+    ) -> Workflow:
+        """Deep-copy a workflow for a newly created agent version so each version owns
+        an independent copy (editing one never affects another).
+
+        Copies the single working graph. Flush-only: no commit and no name suffix, so
+        the copy joins the caller's transaction (agent ``save_as_new_version``) and
+        rolls back with it. Encrypted apiRequest secrets are carried verbatim inside
+        the copied graph JSON (same org-level AES key)."""
+        import copy
+
+        src = self._get(source_workflow_id)
+        draft = self._version(src.draft_version_id)
+
+        wf = Workflow(
+            organization_id=self.org_id,
+            name=src.name,
+            description=src.description,
+            created_by_user_id=user_id or src.created_by_user_id,
+            agent_id=agent_id,
+        )
+        self.db.add(wf)
+        self.db.flush()
+
+        if draft:
+            draft_copy = WorkflowVersion(
+                organization_id=self.org_id,
+                workflow_id=wf.id,
+                version=_DRAFT_VERSION,
+                graph=copy.deepcopy(draft.graph),
+                start_node_name=draft.start_node_name,
+                graph_checksum=draft.graph_checksum,
+                is_valid=draft.is_valid,
+                validation_errors=copy.deepcopy(draft.validation_errors or []),
+                created_by_user_id=user_id or draft.created_by_user_id,
+            )
+            self.db.add(draft_copy)
+            self.db.flush()
+            wf.draft_version_id = draft_copy.id
+
+        self.db.flush()
+        return wf
 
     # ── save draft ─────────────────────────────────────────────────────────
     def save_draft(
@@ -307,12 +386,11 @@ class WorkflowService(BaseService):
         wf = self._get(workflow_id)
         draft = self._version(wf.draft_version_id)
         if not draft:
-            # Recover: create a draft if somehow missing.
+            # Recover: create the working version if somehow missing.
             draft = WorkflowVersion(
                 organization_id=self.org_id,
                 workflow_id=wf.id,
                 version=_DRAFT_VERSION,
-                is_draft=True,
                 graph=graph,
                 created_by_user_id=user_id,
             )
@@ -334,78 +412,25 @@ class WorkflowService(BaseService):
         draft.is_valid = len(errors) == 0
         draft.validation_errors = errors
         self.db.commit()
+
+        # Saving is the only "go live" step for a workflow now — drop the pipeline
+        # cache so assigned agents pick up the edited graph on the next call.
+        self._invalidate_assigned_agents(wf.id)
         return self.detail(wf)
 
     # ── validate (no persistence) ──────────────────────────────────────────
     def validate(self, graph: Dict[str, Any]) -> List[Dict[str, Any]]:
         return wf_schema.validate_graph(graph)
 
-    # ── publish ────────────────────────────────────────────────────────────
-    def publish(self, workflow_id: str, user_id: Optional[UUID]) -> Dict[str, Any]:
-        wf = self._get(workflow_id)
-        draft = self._version(wf.draft_version_id)
-        if not draft:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nothing to publish")
-
-        errors = wf_schema.validate_graph(draft.graph)
-        if errors:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"message": "Workflow has validation errors", "errors": errors},
-            )
-
-        wf.latest_version = (wf.latest_version or 0) + 1
-        snapshot = WorkflowVersion(
-            organization_id=self.org_id,
-            workflow_id=wf.id,
-            version=wf.latest_version,
-            is_draft=False,
-            graph=draft.graph,
-            start_node_name=draft.start_node_name,
-            graph_checksum=draft.graph_checksum,
-            is_valid=True,
-            validation_errors=[],
-            published_at=datetime.now(timezone.utc),
-            created_by_user_id=user_id,
-        )
-        self.db.add(snapshot)
-        self.db.flush()
-        wf.published_version_id = snapshot.id
-        wf.status = WorkflowStatus.PUBLISHED.value
-        self.db.commit()
-
-        self._invalidate_assigned_agents(wf.id)
-        return self.detail(wf)
-
-    # ── versions / delete ──────────────────────────────────────────────────
-    def list_versions(self, workflow_id: str) -> List[Dict[str, Any]]:
-        wf = self._get(workflow_id)
-        rows = (
-            self.query(WorkflowVersion)
-            .filter(
-                WorkflowVersion.workflow_id == wf.id,
-                WorkflowVersion.is_draft.is_(False),
-                WorkflowVersion.deleted_at.is_(None),
-            )
-            .order_by(WorkflowVersion.version.desc())
-            .all()
-        )
-        return [
-            {
-                "id": str(v.id),
-                "version": v.version,
-                "is_live": v.id == wf.published_version_id,
-                "published_at": v.published_at.isoformat() if v.published_at else None,
-            }
-            for v in rows
-        ]
-
+    # ── delete ─────────────────────────────────────────────────────────────
     def delete(self, workflow_id: str) -> Dict[str, Any]:
         wf = self._get(workflow_id)
-        if self._agents_using(wf.id) > 0:
+        # Block deletion while ANY live agent version references it — even several
+        # versions of the same agent (per-version copies must outlive their version).
+        if self._configs_using(wf.id) > 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Workflow is assigned to one or more agents. Unassign it first.",
+                detail="Workflow is assigned to one or more agent versions. Unassign it first.",
             )
         wf.deleted_at = datetime.now(timezone.utc)
         self.db.commit()
@@ -418,15 +443,17 @@ class WorkflowService(BaseService):
         description: Optional[str],
         vapi_graph: Dict[str, Any],
         user_id: Optional[UUID],
+        agent_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         canonical = vapi_adapter.from_vapi(vapi_graph or {})
-        return self.create(name=name, description=description, user_id=user_id, graph=canonical)
+        return self.create(
+            name=name, description=description, user_id=user_id, graph=canonical, agent_id=agent_id
+        )
 
     def export_vapi(self, workflow_id: str) -> Dict[str, Any]:
         wf = self._get(workflow_id)
-        published = self._version(wf.published_version_id)
         draft = self._version(wf.draft_version_id)
-        graph = (published or draft).graph if (published or draft) else wf_schema.empty_graph()
+        graph = draft.graph if draft else wf_schema.empty_graph()
         return vapi_adapter.to_vapi(_mask_graph_secrets(graph))
 
     # ── helpers ────────────────────────────────────────────────────────────
