@@ -279,15 +279,31 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
         await updateAgent({ id: agentId, values: rootChanges });
       }
 
+      // Config: send only fields that actually changed. Prevents
+      // AgentConfigRequest's ``_require_workflow_when_workflow_mode`` validator
+      // from firing on a saved-but-stale ``mode: 'workflow'`` / ``workflow_id: null``
+      // pair when the user is saving unrelated tool/MCP/OAuth changes. Same
+      // code path for both tool and MCP saves.
+      const cfgDiff: Record<string, unknown> = {};
+      if (full.config) {
+        (Object.keys(full.config) as (keyof typeof full.config)[]).forEach((key) => {
+          if (!isEqual(full.config![key], baseline.config[key])) {
+            cfgDiff[key] = full.config![key];
+          }
+        });
+      }
+
       const updated = await updateAgentVersion({
         agentId,
         values: {
-          config: full.config,
+          ...(Object.keys(cfgDiff).length > 0 && { config: cfgDiff as typeof full.config }),
           tool_ids: full.tool_ids,
           mcp_server_ids: full.mcp_server_ids,
           upload_ids: full.upload_ids,
           phone_numbers: full.phone_numbers,
           web_channel_ids: full.web_channel_ids,
+          tool_oauth_overrides: full.tool_oauth_overrides,
+          mcp_server_oauth_overrides: full.mcp_server_oauth_overrides,
           source_config_id: detail?.config?.id ?? null,
         },
       });

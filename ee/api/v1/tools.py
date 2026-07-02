@@ -1,8 +1,8 @@
 from uuid import UUID
-from typing import Optional, List, Dict, Any
+from typing import List, Dict, Any
 
 from fastapi import APIRouter, Body, Depends, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from core.database.session import get_db
@@ -14,49 +14,8 @@ from ee.middleware.auth import require_ee_org_member, EEJWTClaims
 router = APIRouter()
 
 
-class CreateToolRequest(BaseModel):
-    name: str
-    description: str
-    parameters: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    url: str
-    method: str = "POST"
-    auth_type: str = "none"
-    auth_config: Optional[Dict[str, Any]] = None
-    meta_data: Optional[Dict[str, Any]] = None
-    oauth_connection_id: Optional[UUID] = None
-    # Catalog row this tool is linked to. Drives the OAuth connection picker
-    # filter on the form — same role as in MCP server creation.
-    app_integration_id: Optional[UUID] = None
-    is_active: bool = True
-
-
-class UpdateToolRequest(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    parameters: Optional[Dict[str, Any]] = None
-    url: Optional[str] = None
-    method: Optional[str] = None
-    auth_type: Optional[str] = None
-    auth_config: Optional[Dict[str, Any]] = None
-    meta_data: Optional[Dict[str, Any]] = None
-    oauth_connection_id: Optional[UUID] = None
-    app_integration_id: Optional[UUID] = None
-    is_active: Optional[bool] = None
-
-
 def _get_service(claims: EEJWTClaims, db: Session) -> ToolService:
     return ToolService(db, org_id=UUID(claims.org_id))
-
-
-@router.post("/create_tool", status_code=status.HTTP_201_CREATED)
-def create_tool(
-    body: CreateToolRequest,
-    claims: EEJWTClaims = Depends(require_ee_org_member),
-    db: Session = Depends(get_db),
-):
-    svc = _get_service(claims, db)
-    tool = svc.create_tool(body.model_dump())
-    return svc.tool_response(tool)
 
 
 @router.post("/list")
@@ -127,19 +86,6 @@ def upsert_tool(
     """Create or update a tool. Send id to update; send name and description to create."""
     svc = _get_service(claims, db)
     tool = svc.upsert_tool(data)
-    return svc.tool_response(tool)
-
-
-@router.put("/update_tool")
-def update_tool(
-    tool_id: str = Query(..., description="The tool ID to update"),
-    body: UpdateToolRequest = None,
-    claims: EEJWTClaims = Depends(require_ee_org_member),
-    db: Session = Depends(get_db),
-):
-    svc = _get_service(claims, db)
-    data = body.model_dump(exclude_none=True)
-    tool = svc.update_tool(tool_id, data)
     return svc.tool_response(tool)
 
 

@@ -16,6 +16,7 @@ from pipecat.services.llm_service import FunctionCallParams
 from core.models.tool import Tool
 from core.models.agent_tool import AgentTool
 from core.utils.logging import truncate_for_log
+from core.utils.oauth_resolution import effective_of, stamp_effective
 
 
 def _resolve_oauth_bearer(tool: Tool) -> Optional[str]:
@@ -28,8 +29,13 @@ def _resolve_oauth_bearer(tool: Tool) -> Optional[str]:
     header rather than crashing the agent's turn — the API call may still
     succeed for endpoints that don't require auth, and if it doesn't, the
     failure surfaces as a normal HTTP error the LLM can react to.
+
+    Uses the version-level override (``agent_tools.oauth_connection_id``) when
+    the caller stamped it on the tool; otherwise falls back to the tool's own
+    default.
     """
-    if not tool.oauth_connection_id:
+    oauth_id = effective_of(tool)
+    if not oauth_id:
         logger.warning(
             "Custom tool '{}' has auth_type='oauth' but no oauth_connection_id set; "
             "calling without an Authorization header",
@@ -42,7 +48,7 @@ def _resolve_oauth_bearer(tool: Tool) -> Optional[str]:
     try:
         with get_db_context() as db:
             svc = OAuthService(db, org_id=tool.organization_id)
-            connection = svc.get_connection(tool.oauth_connection_id)
+            connection = svc.get_connection(oauth_id)
             return svc.get_valid_access_token_for_connection(connection)
     except Exception as exc:
         logger.warning(
@@ -55,7 +61,14 @@ def _resolve_oauth_bearer(tool: Tool) -> Optional[str]:
 
 
 def get_custom_tools_for_agent(agent_id: int) -> List[Tool]:
-    """Fetch all active custom tools linked to an agent's published version."""
+    """Fetch all active custom tools linked to an agent's published version.
+
+    The link table's ``oauth_connection_id`` (per-version override) is selected
+    in the same query and stamped onto each Tool as ``effective_oauth_connection_id``
+    — see ``core.utils.oauth_resolution``. Handlers read that attribute instead
+    of ``tool.oauth_connection_id`` so the override rule stays in one place and
+    the fetch stays a single round-trip.
+    """
     from core.database.session import get_db_context
     from core.services.tool_service import decrypt_auth_config
     from core.utils.agent_scope import published_config_subquery
@@ -65,8 +78,8 @@ def get_custom_tools_for_agent(agent_id: int) -> List[Tool]:
     published_config_sq = published_config_subquery(agent_id)
 
     with get_db_context() as db:
-        tools = (
-            db.query(Tool)
+        rows = (
+            db.query(Tool, AgentTool.oauth_connection_id)
             .join(AgentTool, AgentTool.tool_id == Tool.id)
             .filter(
                 AgentTool.agent_id == agent_id,
@@ -75,9 +88,11 @@ def get_custom_tools_for_agent(agent_id: int) -> List[Tool]:
             )
             .all()
         )
-        # Detach from session so they can be used after db closes
-        for tool in tools:
+        tools: List[Tool] = []
+        for tool, link_oauth in rows:
+            stamp_effective(tool, link_oauth)
             db.expunge(tool)
+            tools.append(tool)
 
     # Decrypt auth_config for runtime use
     for tool in tools:
@@ -490,7 +505,8 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
             from core.database.session import get_db_context
             from core.services.oauth_service import OAuthService
 
-            if not tool.oauth_connection_id:
+            resolved_oauth_id = effective_of(tool)
+            if not resolved_oauth_id:
                 logger.error("google_calendar: tool '{}' has no oauth_connection_id set", tool.name)
                 _log_tool_call("error: no oauth_connection_id")
                 await params.result_callback(
@@ -500,9 +516,9 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
 
             with get_db_context() as db:
                 svc = OAuthService(db, org_id=effective_org_id)
-                connection = svc.get_connection(tool.oauth_connection_id)
+                connection = svc.get_connection(resolved_oauth_id)
                 if not connection:
-                    logger.error("google_calendar: OAuth connection {} not found for org {}", tool.oauth_connection_id, effective_org_id)
+                    logger.error("google_calendar: OAuth connection {} not found for org {}", resolved_oauth_id, effective_org_id)
                     _log_tool_call("error: OAuth connection not found")
                     await params.result_callback(
                         "Google Calendar connection not found. Please reconnect Google Calendar in the Integrations settings."
