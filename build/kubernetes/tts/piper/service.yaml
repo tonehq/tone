@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-tts-piper-service
+  namespace: staging
+  labels:
+    app: staging-tts-piper
+spec:
+  selector:
+    app: staging-tts-piper
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8000
