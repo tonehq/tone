@@ -15,6 +15,11 @@ from pipecat.frames.frames import (
 )
 from pipecat.services.tts_service import TTSService
 
+try:  # pipecat >= 1.4.0 — settings object + run_tts(text, context_id)
+    from pipecat.services.tts_service import TTSSettings
+except ImportError:  # older pipecat — set_model_name() + run_tts(text)
+    TTSSettings = None
+
 _LANG_LABELS = {
     "en": "English", "zh": "Chinese", "ja": "Japanese", "ko": "Korean",
     "de": "German", "fr": "French", "ru": "Russian", "pt": "Portuguese",
@@ -54,14 +59,30 @@ class QwenWebSocketTTSService(TTSService):
         trace_id: Optional[str] = None,
         **kwargs,
     ):
-        super().__init__(sample_rate=sample_rate, **kwargs)
+        model_name = "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
+        if TTSSettings is not None:
+            # New pipecat: all settings fields must be initialized in __init__,
+            # and the base pushes TTSStarted/StoppedFrames + audio context.
+            super().__init__(
+                sample_rate=sample_rate,
+                push_start_frame=True,
+                push_stop_frames=True,
+                settings=TTSSettings(
+                    model=model_name,
+                    voice=voice_id,
+                    language=_qwen_language(language),
+                ),
+                **kwargs,
+            )
+        else:
+            super().__init__(sample_rate=sample_rate, **kwargs)
 
         self._url = url
         self._voice_id = voice_id
         self._language = _qwen_language(language)
         self._trace_id = trace_id
         self._websocket = None
-        self._apply_model_name("Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice")
+        self._apply_model_name(model_name)
 
     def _apply_model_name(self, model: str):
         # pipecat < 0.0.104 had set_model_name(); newer versions store the
@@ -122,7 +143,12 @@ class QwenWebSocketTTSService(TTSService):
         finally:
             self._websocket = None
 
-    async def run_tts(self, text: str) -> AsyncGenerator[Frame, None]:
+    async def run_tts(self, text: str, context_id: str = "") -> AsyncGenerator[Frame, None]:
+        # New pipecat calls run_tts(text, context_id) and pushes
+        # TTSStarted/StoppedFrames itself (push_start_frame/push_stop_frames);
+        # old pipecat calls run_tts(text) and expects us to yield them.
+        new_api = TTSSettings is not None
+        audio_kwargs = {"context_id": context_id} if new_api else {}
         logger.debug(f"{self}: Generating TTS [{text}]")
         try:
             if not self._websocket or self._websocket.state is not State.OPEN:
@@ -132,17 +158,18 @@ class QwenWebSocketTTSService(TTSService):
             await self._websocket.send(
                 json.dumps({"text": text, "speaker": self._voice_id, "language": self._language})
             )
+            await self.start_tts_usage_metrics(text)
 
             started = False
             sample_rate = self.sample_rate
             async for message in self._websocket:
                 if isinstance(message, (bytes, bytearray)):
                     if not started:
-                        await self.start_tts_usage_metrics(text)
-                        yield TTSStartedFrame()
+                        if not new_api:
+                            yield TTSStartedFrame()
                         started = True
                     await self.stop_ttfb_metrics()
-                    yield TTSAudioRawFrame(bytes(message), sample_rate, 1)
+                    yield TTSAudioRawFrame(bytes(message), sample_rate, 1, **audio_kwargs)
                     continue
 
                 try:
@@ -154,8 +181,8 @@ class QwenWebSocketTTSService(TTSService):
                 msg_type = content.get("type")
                 if msg_type == "start":
                     sample_rate = content.get("sample_rate") or self.sample_rate
-                    await self.start_tts_usage_metrics(text)
-                    yield TTSStartedFrame()
+                    if not started and not new_api:
+                        yield TTSStartedFrame()
                     started = True
                 elif msg_type == "end":
                     break
@@ -163,11 +190,13 @@ class QwenWebSocketTTSService(TTSService):
                     yield ErrorFrame(error=f"Qwen TTS error: {content.get('detail')}")
                     break
 
-            yield TTSStoppedFrame()
+            if not new_api:
+                yield TTSStoppedFrame()
         except websockets.exceptions.ConnectionClosed as e:
             logger.warning(f"{self} websocket closed during synthesis: {e}")
             await self._disconnect()
-            yield TTSStoppedFrame()
+            if not new_api:
+                yield TTSStoppedFrame()
         except Exception as e:
             logger.exception(f"{self} TTS generation failed")
             yield ErrorFrame(error=f"Qwen TTS generation failed: {e}")
