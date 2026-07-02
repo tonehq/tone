@@ -30,7 +30,3 @@ class AgentConfigMode(str, enum.Enum):
     WORKFLOW = "workflow"  # the assigned workflow graph drives turn-to-turn flow
 
 
-class WorkflowStatus(str, enum.Enum):
-    """Lifecycle status of a workflow container."""
-    DRAFT = "draft"          # never published
-    PUBLISHED = "published"  # has at least one published version

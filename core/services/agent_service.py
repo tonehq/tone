@@ -956,6 +956,28 @@ class AgentService(BaseService):
             )
         from datetime import datetime, timezone
         cfg.deleted_at = datetime.now(timezone.utc)
+        # Retire the version's owned workflow copy alongside it — unless another
+        # live version still references it. Legacy unowned workflows are kept.
+        if cfg.workflow_id is not None:
+            from core.models.workflow import Workflow
+
+            wf = (
+                self.query(Workflow)
+                .filter(Workflow.id == cfg.workflow_id, Workflow.deleted_at.is_(None))
+                .first()
+            )
+            if wf and wf.agent_id == agent.id:
+                others = (
+                    self.query(AgentConfig)
+                    .filter(
+                        AgentConfig.workflow_id == wf.id,
+                        AgentConfig.deleted_at.is_(None),
+                        AgentConfig.id != cfg.id,
+                    )
+                    .count()
+                )
+                if others == 0:
+                    wf.deleted_at = datetime.now(timezone.utc)
         self.audit.log(
             AgentAuditAction.VERSION_DELETED,
             agent_id=agent.id,
@@ -1114,6 +1136,14 @@ class AgentService(BaseService):
         # Delete config
         self.db.query(AgentConfig).filter(AgentConfig.agent_id == agent.id).delete(synchronize_session=False)
 
+        # Soft-delete the agent's owned workflow copies before the hard delete —
+        # the FK is SET NULL, so without this they would linger as live orphans.
+        from datetime import datetime, timezone
+        from core.models.workflow import Workflow
+        self.db.query(Workflow).filter(
+            Workflow.agent_id == agent.id, Workflow.deleted_at.is_(None)
+        ).update({"deleted_at": datetime.now(timezone.utc)}, synchronize_session=False)
+
         self.db.delete(agent)
         self.db.commit()
         return {"message": "Agent deleted successfully"}
@@ -1232,14 +1262,15 @@ class AgentService(BaseService):
                         detail=f"Invalid {field}",
                     )
             if field == "workflow_id" and val is not None:
-                self._assert_assignable_workflow(val)
+                self._assert_assignable_workflow(val, target.agent_id)
             setattr(target, field, val)
 
-    def _assert_assignable_workflow(self, workflow_id: UUID) -> None:
+    def _assert_assignable_workflow(self, workflow_id: UUID, agent_id: Optional[UUID]) -> None:
         """Guard workflow assignment: the workflow must exist, belong to the caller's org
-        (``self.query`` is org-scoped), and have a published version. Prevents assigning
-        another org's workflow (IDOR) or an unpublished draft."""
-        from core.models.workflow import Workflow
+        (``self.query`` is org-scoped), be owned by this agent (or be a legacy unowned
+        row), and be valid (its graph passes validation). Prevents assigning another
+        org's workflow (IDOR), another agent's per-version copy, or a broken graph."""
+        from core.models.workflow import Workflow, WorkflowVersion
 
         wf = (
             self.query(Workflow)
@@ -1250,10 +1281,23 @@ class AgentService(BaseService):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found"
             )
-        if not wf.published_version_id:
+        if wf.agent_id is not None and agent_id is not None and wf.agent_id != agent_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Workflow must be published before it can be assigned to an agent",
+                detail="Workflow belongs to a different agent",
+            )
+        version = (
+            self.query(WorkflowVersion)
+            .filter(
+                WorkflowVersion.id == wf.draft_version_id,
+                WorkflowVersion.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if not version or not version.is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Workflow has validation issues — fix them before assigning it to an agent",
             )
 
     def _apply_config_fields_audited(
@@ -1418,6 +1462,17 @@ class AgentService(BaseService):
         self._apply_config_fields(new_config, config_data)
         self.db.add(new_config)
         self.db.flush()
+        # Each agent version owns an independent workflow copy — deep-copy the
+        # referenced workflow's single working graph so editing one version's
+        # workflow never changes another's. Flush-only inside this transaction,
+        # so a failure later rolls the copy back too.
+        if not from_scratch and new_config.workflow_id is not None:
+            from core.services.workflow.service import WorkflowService
+
+            wf_copy = WorkflowService(
+                self.db, user_id=user_id, org_id=self.org_id
+            ).duplicate_for_agent_version(new_config.workflow_id, agent.id, user_id)
+            new_config.workflow_id = wf_copy.id
         # Clone attachment rows so the new version owns its own snapshot.
         # _sync_* may overwrite specific lists later in the same transaction
         # if the caller explicitly sent tool_ids / mcp_server_ids / upload_ids.

@@ -16,9 +16,11 @@ interface Props {
   onClose: () => void;
   /** Refresh the list; awaited so the modal loader stays up until it resolves. */
   onCloned: () => Promise<void> | void;
+  /** Owning agent for the clone (defaults to the source workflow's owner). */
+  agentId?: string;
 }
 
-const CloneWorkflowModal: React.FC<Props> = ({ workflow, onClose, onCloned }) => {
+const CloneWorkflowModal: React.FC<Props> = ({ workflow, onClose, onCloned, agentId }) => {
   const clone = useSetAtom(cloneWorkflowAtom);
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -37,7 +39,7 @@ const CloneWorkflowModal: React.FC<Props> = ({ workflow, onClose, onCloned }) =>
     }
     setLoading(true);
     try {
-      const created = await clone({ workflowId: workflow.id, name: trimmed });
+      const created = await clone({ workflowId: workflow.id, name: trimmed, agentId });
       // Keep the modal + loader up until the refreshed list has loaded.
       await onCloned();
       showToast.success(`Cloned as “${created.name}”`);

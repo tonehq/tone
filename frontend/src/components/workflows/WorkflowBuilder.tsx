@@ -3,7 +3,7 @@
 import '@xyflow/react/dist/style.css';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { useSetAtom } from 'jotai';
 import {
@@ -33,7 +33,6 @@ import { handleApiError } from '@/utils/helpers';
 import {
   exportWorkflowAtom,
   fetchWorkflowAtom,
-  publishWorkflowAtom,
   saveDraftAtom,
   workflowIssuesAtom,
 } from '@/atoms/WorkflowAtom';
@@ -53,6 +52,9 @@ import WorkflowToolbar from '@/components/workflows/WorkflowToolbar';
 
 interface Props {
   workflowId: string;
+  /** Where the Back button goes. Overrides the `returnTo` query param when set
+   * (used by the nested agent route, which knows the exact section to return to). */
+  backHref?: string;
 }
 
 /** One-tap building blocks for the global prompt drawer. */
@@ -77,20 +79,28 @@ function isMeaningful(changes: NodeChange[] | EdgeChange[]): boolean {
   });
 }
 
-function BuilderInner({ workflowId }: Props) {
+function BuilderInner({ workflowId, backHref: backHrefProp }: Props) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Prefer the explicit prop (nested agent route), else a same-origin `returnTo`
+  // query param ("/..." but not "//..."), else fall back to the agents list.
+  const backHref = useMemo(() => {
+    if (backHrefProp && backHrefProp.startsWith('/') && !backHrefProp.startsWith('//')) {
+      return backHrefProp;
+    }
+    const raw = searchParams.get('returnTo');
+    return raw && raw.startsWith('/') && !raw.startsWith('//') ? raw : '/agents';
+  }, [backHrefProp, searchParams]);
   const { resolvedTheme } = useTheme();
   const { screenToFlowPosition, fitView, getNodes } = useReactFlow();
 
   const fetchWorkflow = useSetAtom(fetchWorkflowAtom);
   const saveDraft = useSetAtom(saveDraftAtom);
-  const publish = useSetAtom(publishWorkflowAtom);
   const exportWorkflow = useSetAtom(exportWorkflowAtom);
   const setIssuesAtom = useSetAtom(workflowIssuesAtom);
 
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState('');
-  const [status, setWfStatus] = useState<'draft' | 'published'>('draft');
   const [globalPrompt, setGlobalPrompt] = useState('');
   const [globalOpen, setGlobalOpen] = useState(false);
   const artifactPlanRef = useRef<Record<string, unknown> | null>(null);
@@ -103,7 +113,6 @@ function BuilderInner({ workflowId }: Props) {
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
-  const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
 
@@ -115,8 +124,6 @@ function BuilderInner({ workflowId }: Props) {
         const wf = await fetchWorkflow(workflowId);
         if (!active) return;
         setName(wf.name);
-        setWfStatus(wf.status);
-        setHasUnpublishedChanges(wf.has_unpublished_changes);
         setGlobalPrompt(wf.graph.globalPrompt ?? '');
         artifactPlanRef.current = wf.graph.artifactPlan ?? null;
         checksumRef.current = wf.graph_checksum;
@@ -270,54 +277,38 @@ function BuilderInner({ workflowId }: Props) {
     [getNodes, edges, globalPrompt],
   );
 
+  // Single Save action — there is no separate publish step. The saved graph is
+  // what the assigned agent uses on the next call; the agent version's own
+  // Publish is the real "go live for calls" gate.
   const handleSave = useCallback(async () => {
     if (saving) return;
     setSaving(true);
     const sent = buildGraph();
     const sentJson = JSON.stringify(sent);
+    const isValid = validateGraph(nodes, edges).length === 0;
     try {
-      const detail = await saveDraft({
+      const saved = await saveDraft({
         workflowId,
         graph: sent,
         expectedChecksum: checksumRef.current,
       });
-      checksumRef.current = detail.graph_checksum;
-      setHasUnpublishedChanges(detail.has_unpublished_changes);
+      checksumRef.current = saved.graph_checksum;
       // Only mark clean if nothing was edited during the in-flight save — otherwise the
       // newest edits would be silently shown as "saved".
       if (JSON.stringify(buildGraph()) === sentJson) setDirty(false);
       setLastSavedAt(Date.now());
-      showToast.success('Draft saved');
-    } catch (err) {
-      handleApiError(err);
-    } finally {
-      setSaving(false);
-    }
-  }, [buildGraph, saveDraft, workflowId, saving]);
-
-  const handlePublish = useCallback(async () => {
-    if (saving) return; // avoid double-submit / checksum conflict with an in-flight save
-    setSaving(true);
-    const sent = buildGraph();
-    const sentJson = JSON.stringify(sent);
-    try {
-      await saveDraft({ workflowId, graph: sent, expectedChecksum: checksumRef.current });
-      const detail = await publish(workflowId);
-      checksumRef.current = detail.graph_checksum;
-      setWfStatus(detail.status);
-      setHasUnpublishedChanges(detail.has_unpublished_changes);
-      if (JSON.stringify(buildGraph()) === sentJson) setDirty(false);
-      setLastSavedAt(Date.now());
       showToast.success(
-        'Workflow published',
-        'Assigned agents will use the new graph on the next call.',
+        'Saved',
+        isValid
+          ? 'Assigned agents use this workflow on the next call.'
+          : 'Resolve the validation issues to make it assignable.',
       );
     } catch (err) {
       handleApiError(err);
     } finally {
       setSaving(false);
     }
-  }, [buildGraph, publish, saveDraft, workflowId, saving]);
+  }, [buildGraph, saveDraft, workflowId, saving, nodes, edges]);
 
   const handleExport = useCallback(async () => {
     try {
@@ -384,15 +375,12 @@ function BuilderInner({ workflowId }: Props) {
     <div className="flex h-full min-h-0 flex-col">
       <WorkflowToolbar
         name={name}
-        status={status}
         saving={saving}
         dirty={dirty}
-        hasUnpublishedChanges={hasUnpublishedChanges}
         lastSavedAt={lastSavedAt}
         issues={issues}
-        onBack={() => router.push('/workflows')}
+        onBack={() => router.push(backHref)}
         onSave={handleSave}
-        onPublish={handlePublish}
         onOpenGlobalPrompt={() => setGlobalOpen(true)}
         onExport={handleExport}
         onFocusNode={focusNode}
@@ -584,9 +572,9 @@ function BuilderInner({ workflowId }: Props) {
   );
 }
 
-const WorkflowBuilder: React.FC<Props> = ({ workflowId }) => (
+const WorkflowBuilder: React.FC<Props> = ({ workflowId, backHref }) => (
   <ReactFlowProvider>
-    <BuilderInner workflowId={workflowId} />
+    <BuilderInner workflowId={workflowId} backHref={backHref} />
   </ReactFlowProvider>
 );
 

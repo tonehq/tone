@@ -14,9 +14,13 @@ import { handleApiError } from '@/utils/helpers';
 interface Props {
   open: boolean;
   onClose: () => void;
+  /** Owning agent — the workflow is created under this agent's Workflow tab. */
+  agentId?: string;
+  /** Agent editor base path — the new workflow opens at `<base>/workflow/<id>`. */
+  builderBasePath?: string;
 }
 
-const CreateWorkflowModal: React.FC<Props> = ({ open, onClose }) => {
+const CreateWorkflowModal: React.FC<Props> = ({ open, onClose, agentId, builderBasePath }) => {
   const router = useRouter();
   const create = useSetAtom(createWorkflowAtom);
   const [name, setName] = useState('');
@@ -35,10 +39,14 @@ const CreateWorkflowModal: React.FC<Props> = ({ open, onClose }) => {
     }
     setLoading(true);
     try {
-      const wf = await create({ name: name.trim(), description: description.trim() || undefined });
+      const wf = await create({
+        name: name.trim(),
+        description: description.trim() || undefined,
+        agentId,
+      });
       reset();
       onClose();
-      router.push(`/workflows/${wf.id}`);
+      router.push(builderBasePath ? `${builderBasePath}/workflow/${wf.id}` : `/workflows/${wf.id}`);
     } catch (err) {
       handleApiError(err);
     } finally {
