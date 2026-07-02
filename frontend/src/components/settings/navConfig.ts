@@ -1,4 +1,4 @@
-import { Building2, Cable, LayoutGrid, Plug, UserCircle, Users } from 'lucide-react';
+import { Building2, Cable, LayoutGrid, Plug, ScrollText, UserCircle, Users } from 'lucide-react';
 
 // Single source of truth for the settings destinations. Both the settings rail
 // (settings/layout.tsx) and the overview landing page (SettingsOverview.tsx)
@@ -72,6 +72,18 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         href: '/settings/integrations',
         icon: Cable,
         description: 'Connect external apps and manage API credentials.',
+      },
+    ],
+  },
+  {
+    heading: 'Audit',
+    caption: 'Who changed what, and when',
+    items: [
+      {
+        label: 'Audit Logs',
+        href: '/settings/audit-logs',
+        icon: ScrollText,
+        description: 'Review every configuration change made to your agents.',
       },
     ],
   },
