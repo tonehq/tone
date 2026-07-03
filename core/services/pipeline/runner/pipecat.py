@@ -188,6 +188,8 @@ class PipecatPipelineRunner(PipelineRunner):
 
             @build.user_aggregator.event_handler("on_user_turn_stopped")
             async def on_user_turn_stopped(aggregator, strategy, message: UserTurnStoppedMessage):
+                if not (message.content or "").strip():
+                    return
                 transcript_entries.append({
                     "role": "user",
                     "text": message.content,
@@ -196,6 +198,8 @@ class PipecatPipelineRunner(PipelineRunner):
 
             @build.assistant_aggregator.event_handler("on_assistant_turn_stopped")
             async def on_assistant_turn_stopped(aggregator, message: AssistantTurnStoppedMessage):
+                if not (message.content or "").strip():
+                    return
                 transcript_entries.append({
                     "role": "assistant",
                     "text": message.content,
