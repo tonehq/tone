@@ -195,12 +195,27 @@ def _build_service_specs(
         from the DB row when present. Missing/NULL `base_url` falls through — the
         factory's per-provider default (or Pipecat's class default) applies, so
         behavior is byte-identical to pre-base_url for any model without a URL.
+
+        Defense (staging incident 2026-07-03): a stale `model_id` left behind by a
+        provider switch can point at another provider's model row — injecting that
+        row's base_url silently redirects the service (Deepgram STT ended up on the
+        parakeet k8s URL). Only inject when the model row belongs to the settings'
+        provider; on mismatch, warn and skip.
         """
         metadata = _filter_by_model_schema(settings, model_id)
         if model_id:
             m = model_by_id.get(model_id)
             if m and m.base_url:
-                metadata["base_url"] = m.base_url
+                spec_pid = _to_uuid(settings.get("provider_id"))
+                if spec_pid and m.provider_id != spec_pid:
+                    logger.warning(
+                        "[resolver] provider/model_id mismatch for agent_id={}: "
+                        "model {} ({!r}) belongs to provider {} but settings.provider_id={} "
+                        "— skipping base_url injection",
+                        config.agent_id, m.id, m.name, m.provider_id, spec_pid,
+                    )
+                else:
+                    metadata["base_url"] = m.base_url
         return metadata
 
     # ── LLM ──
@@ -612,9 +627,19 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
 
     wf_stamp = f"{wf_ver_id}:{_s(wf_ver_ts)}" if wf_ver_id is not None else "none"
 
+    # The referenced ids themselves are part of the stamp, not just row
+    # timestamps/counts. A manual DB edit that swaps e.g. stt_settings.model_id
+    # bumps no updated_at anywhere (onupdate is client-side) and doesn't
+    # necessarily change MAX(updated_at) over the new id set — without the ids
+    # the stamp would match and the cache would keep serving the old payload
+    # until a worker restart (as happened on staging, 2026-07-03).
+    ref_ids = ":".join(
+        str(ids[k]) for k in ("llm_pid", "llm_mid", "stt_pid", "stt_mid", "tts_pid", "tts_mid")
+    )
     version = "|".join([
         f"fmt:{PAYLOAD_FORMAT_VERSION}",
         f"cfg:{config.id}:{_s(config.updated_at)}",
+        f"ids:{ref_ids}:{voice_uuid}",
         f"prov:{_s(prov_max)}",
         f"model:{_s(model_max)}",
         f"voice:{_s(voice_ts)}",

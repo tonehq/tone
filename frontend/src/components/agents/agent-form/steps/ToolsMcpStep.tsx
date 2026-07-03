@@ -37,9 +37,22 @@ function toggleId(list: string[], id: string): string[] {
   return Array.from(set);
 }
 
+/** Auth types that can resolve credentials from a stored connection (OAuth,
+ * custom bearer, OAuth2 client-credentials — all live in the same connection
+ * store). The per-attachment connection picker is shown for these, or whenever
+ * a default connection is already linked regardless of auth type. */
+const CONNECTION_AUTH_TYPES: ReadonlySet<string> = new Set(['oauth', 'bearer', 'api_key']);
+
+function supportsConnection(
+  authType: string | null | undefined,
+  connectionId: string | null | undefined,
+): boolean {
+  return (authType != null && CONNECTION_AUTH_TYPES.has(authType)) || connectionId != null;
+}
+
 /** Compact summary row shown OUTSIDE the modal for a currently-attached
- * tool / MCP. Displays the entity name, an OAuth connection chip when the
- * attachment authenticates via OAuth, and a remove ``×``. All configuration
+ * tool / MCP. Displays the entity name, a connection chip when the attachment
+ * resolves credentials from a stored connection, and a remove ``×``. All configuration
  * (add / remove / override) is done inside the modal — this row is a summary
  * of the current state so the section stays readable at a glance.
  */
@@ -76,7 +89,7 @@ function AttachmentSummaryRow({
           )}
           {oauthLabel && (
             <span className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-muted/70 px-2 py-0.5 text-[11px] text-muted-foreground">
-              OAuth: {oauthLabel}
+              Connection: {oauthLabel}
             </span>
           )}
         </div>
@@ -192,6 +205,14 @@ export default function ToolsMcpStep() {
     [oauthConnections],
   );
 
+  // A credential created inline from a picker row is added to the shared list
+  // so it's immediately selectable across every attachment (deduped by id in
+  // case a refetch races it in).
+  const addConnection = (created: OAuthConnection) =>
+    setOauthConnections((prev) =>
+      prev.some((c) => c.id === created.id) ? prev : [created, ...prev],
+    );
+
   const toggleTool = (toolId: string) =>
     setValue('tool_ids', toggleId(selectedToolIds, toolId), { shouldDirty: true });
   const toggleMcp = (mcpId: string) =>
@@ -217,9 +238,8 @@ export default function ToolsMcpStep() {
         id: t.id,
         name: t.name,
         description: t.description,
-        usesOAuth: t.auth_type === 'oauth',
+        supportsConnection: supportsConnection(t.auth_type, t.oauth_connection_id),
         defaultConnectionId: t.oauth_connection_id,
-        appIntegrationId: t.app_integration_id ?? null,
       })),
     [tools],
   );
@@ -229,14 +249,13 @@ export default function ToolsMcpStep() {
         id: m.id,
         name: m.name,
         description: m.description,
-        usesOAuth: m.auth_type === 'oauth',
+        supportsConnection: supportsConnection(m.auth_type, m.oauth_connection_id),
         defaultConnectionId: m.oauth_connection_id ?? null,
-        appIntegrationId: m.app_integration_id ?? null,
       })),
     [mcpServers],
   );
 
-  /** Human-readable label for the OAuth connection currently in use for an
+  /** Human-readable label for the connection currently in use for an
    * attachment. Prefers the override, falls back to the entity default. */
   const oauthLabelFor = (
     overrideId: string | null | undefined,
@@ -249,8 +268,7 @@ export default function ToolsMcpStep() {
     // Same shape the MCP / Tool edit pages use: "<user_email> (<provider_slug>)"
     // — falls back through label / slug so a connection without a stored email
     // still renders something meaningful.
-    const label = `${conn.public_metadata?.user_email || conn.label || conn.provider_slug} (${conn.provider_slug})`;
-    return overrideId ? label : `${label} (default)`;
+    return `${conn.public_metadata?.user_email || conn.label || conn.provider_slug} (${conn.provider_slug})`;
   };
 
   return (
@@ -296,7 +314,6 @@ export default function ToolsMcpStep() {
             {selectedToolIds.map((toolId) => {
               const tool = toolById.get(toolId);
               if (!tool) return null;
-              const usesOAuth = tool.auth_type === 'oauth';
               return (
                 <AttachmentSummaryRow
                   key={tool.id}
@@ -305,7 +322,7 @@ export default function ToolsMcpStep() {
                   icon={<Wrench className="size-3.5" />}
                   iconClassName={TOOLS_ACCENT_ICON}
                   oauthLabel={
-                    usesOAuth
+                    supportsConnection(tool.auth_type, tool.oauth_connection_id)
                       ? oauthLabelFor(toolOverrides[tool.id], tool.oauth_connection_id)
                       : null
                   }
@@ -358,7 +375,6 @@ export default function ToolsMcpStep() {
             {selectedMcpIds.map((mcpId) => {
               const server = mcpById.get(mcpId);
               if (!server) return null;
-              const usesOAuth = server.auth_type === 'oauth';
               return (
                 <AttachmentSummaryRow
                   key={server.id}
@@ -367,7 +383,7 @@ export default function ToolsMcpStep() {
                   icon={<Server className="size-3.5" />}
                   iconClassName={MCP_ACCENT_ICON}
                   oauthLabel={
-                    usesOAuth
+                    supportsConnection(server.auth_type, server.oauth_connection_id)
                       ? oauthLabelFor(mcpOverrides[server.id], server.oauth_connection_id)
                       : null
                   }
@@ -395,6 +411,7 @@ export default function ToolsMcpStep() {
         rowIconClassName={TOOLS_ACCENT_ICON}
         onToggle={toggleTool}
         onOverrideChange={setToolOverride}
+        onConnectionCreated={addConnection}
       />
 
       <AttachmentManagerModal
@@ -412,6 +429,7 @@ export default function ToolsMcpStep() {
         rowIconClassName={MCP_ACCENT_ICON}
         onToggle={toggleMcp}
         onOverrideChange={setMcpOverride}
+        onConnectionCreated={addConnection}
       />
     </div>
   );

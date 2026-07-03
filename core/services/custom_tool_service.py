@@ -3,7 +3,7 @@
 import json
 import re
 from types import SimpleNamespace
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, List, Optional, Tuple
 
 import httpx
 from fastapi import HTTPException
@@ -19,28 +19,27 @@ from core.utils.logging import truncate_for_log
 from core.utils.oauth_resolution import effective_of, stamp_effective
 
 
-def _resolve_oauth_bearer(tool: Tool) -> Optional[str]:
-    """Return a valid OAuth access token for ``tool``'s linked connection.
+def _resolve_connection_header(tool: Tool) -> Optional[Tuple[str, str]]:
+    """Return the ``(header_name, header_value)`` auth header for ``tool``'s
+    linked connection, if any.
+
+    The connection is the version-level override (``agent_tools.oauth_connection_id``)
+    when the caller stamped it on the tool, otherwise the tool's own default.
+    Works for every credential kind stored in ``oauth_connections``: 3-legged
+    OAuth (refreshed transparently), static bearer credentials, and OAuth2
+    client-credentials (minted on demand) resolve to ``Authorization: Bearer
+    <token>``; API-key credentials resolve to their custom header (e.g.
+    ``X-API-Key: <key>``) — all via ``OAuthService.resolve_connection_auth_header``.
 
     Opens a short-lived DB session because custom tool handlers run inside the
-    voice pipeline (no request context). ``OAuthService.get_valid_access_token_for_connection``
-    transparently refreshes the token if it's near expiry. Any failure here
-    is logged and swallowed so the call falls through with no Authorization
-    header rather than crashing the agent's turn — the API call may still
-    succeed for endpoints that don't require auth, and if it doesn't, the
-    failure surfaces as a normal HTTP error the LLM can react to.
-
-    Uses the version-level override (``agent_tools.oauth_connection_id``) when
-    the caller stamped it on the tool; otherwise falls back to the tool's own
-    default.
+    voice pipeline (no request context). Any failure here is logged and
+    swallowed so the call falls through (inline ``auth_config``, or no
+    Authorization header) rather than crashing the agent's turn — the API call
+    may still succeed for endpoints that don't require auth, and if it doesn't,
+    the failure surfaces as a normal HTTP error the LLM can react to.
     """
     oauth_id = effective_of(tool)
     if not oauth_id:
-        logger.warning(
-            "Custom tool '{}' has auth_type='oauth' but no oauth_connection_id set; "
-            "calling without an Authorization header",
-            tool.name,
-        )
         return None
     from core.database.session import get_db_context
     from core.services.oauth_service import OAuthService
@@ -49,11 +48,11 @@ def _resolve_oauth_bearer(tool: Tool) -> Optional[str]:
         with get_db_context() as db:
             svc = OAuthService(db, org_id=tool.organization_id)
             connection = svc.get_connection(oauth_id)
-            return svc.get_valid_access_token_for_connection(connection)
+            return svc.resolve_connection_auth_header(connection)
     except Exception as exc:
         logger.warning(
-            "Custom tool '{}' OAuth token resolution failed ({}); calling without an "
-            "Authorization header so the request still goes out",
+            "Custom tool '{}' connection credential resolution failed ({}); falling back to "
+            "inline credentials so the request still goes out",
             tool.name,
             exc,
         )
@@ -109,7 +108,7 @@ def get_custom_tools_for_agent(agent_id: int) -> List[Tool]:
 _CACHED_TOOL_FIELDS = (
     "id", "name", "description", "tool_type", "parameters",
     "url", "method", "auth_type", "auth_config", "meta_data",
-    "oauth_connection_id", "mcp_server_id",
+    "oauth_connection_id", "effective_oauth_connection_id", "mcp_server_id",
 )
 
 
@@ -122,7 +121,7 @@ def serialize_agent_tools(agent_id: int) -> List[dict]:
     for t in tools:
         d = {f: getattr(t, f, None) for f in _CACHED_TOOL_FIELDS}
         # UUID columns must be stringified to survive a JSON round-trip through Redis.
-        for k in ("id", "oauth_connection_id", "mcp_server_id"):
+        for k in ("id", "oauth_connection_id", "effective_oauth_connection_id", "mcp_server_id"):
             if d.get(k) is not None:
                 d[k] = str(d[k])
         out.append(d)
@@ -242,10 +241,22 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
             # Build request headers
             headers = {"Content-Type": "application/json"}
 
-            # Add auth headers based on auth_type
+            # Add auth headers. A linked connection (per-assignment override →
+            # tool default, see core/utils/oauth_resolution.py) wins over inline
+            # ``auth_config`` regardless of auth_type. OAuth / bearer /
+            # client-credentials connections resolve to a bearer token, minted
+            # fresh on every call so an in-flight refresh mid-conversation never
+            # leaves a stale token; API-key connections resolve to their custom
+            # header (e.g. ``X-API-Key``). Inline credentials are the fallback
+            # when no connection is linked (or its resolution failed — fail-open,
+            # logged in the resolver).
             auth_config = tool.auth_config or {}
+            connection_id = effective_of(tool)
             logger.info("Custom tool '{}' auth_type={}", tool.name, tool.auth_type)
-            if tool.auth_type == "api_key":
+            conn_header = _resolve_connection_header(tool) if connection_id else None
+            if conn_header:
+                headers[conn_header[0]] = conn_header[1]
+            elif tool.auth_type == "api_key":
                 header_name = auth_config.get("header", "X-API-Key")
                 headers[header_name] = auth_config.get("value", "")
             elif tool.auth_type == "bearer_token" or tool.auth_type == "bearer":
@@ -256,15 +267,12 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
                 password = auth_config.get("password", "")
                 credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
                 headers["Authorization"] = f"Basic {credentials}"
-            elif tool.auth_type == "oauth":
-                # OAuth-backed custom tools point at the connected account via
-                # ``tool.oauth_connection_id``. We mint a *fresh* bearer token
-                # on every call so an in-flight refresh during a conversation
-                # doesn't leave the agent calling the API with a stale token.
-                # The OAuthService handles refresh + expiry transparently.
-                token = _resolve_oauth_bearer(tool)
-                if token:
-                    headers["Authorization"] = f"Bearer {token}"
+            elif tool.auth_type == "oauth" and not connection_id:
+                logger.warning(
+                    "Custom tool '{}' has auth_type='oauth' but no linked connection; "
+                    "calling without an Authorization header",
+                    tool.name,
+                )
 
             extra_headers = getattr(tool, "headers", None)
             if isinstance(extra_headers, dict):

@@ -97,10 +97,21 @@ async def upsert_mcp_server(
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    """Create or update an MCP server. Send id to update; send name and server_url to create."""
+    """Create or update an MCP server. Send id to update; send name and server_url to create.
+
+    Optional ``agent_ids`` full-syncs the server's published-version agent
+    attachments (absent = attachments untouched). Sync problems come back in
+    ``attachment_warnings`` — the server itself is still saved."""
     svc = _get_service(claims, db)
     mcp_server = await svc.upsert_mcp_server(data)
-    return svc.mcp_server_response(mcp_server)
+    resp = svc.mcp_server_response(mcp_server)
+    warnings = getattr(mcp_server, "attachment_warnings", None)
+    if warnings:
+        resp["attachment_warnings"] = warnings
+    summary = getattr(mcp_server, "attachment_summary", None)
+    if summary is not None:
+        resp["attachment_summary"] = summary
+    return resp
 
 
 @router.post("/validate_mcp_server", status_code=status.HTTP_200_OK)
@@ -174,6 +185,18 @@ def delete_mcp_server(
 ):
     svc = _get_service(claims, db)
     return svc.delete_mcp_server(mcp_server_id)
+
+
+@router.get("/get_agents_by_mcp_server")
+def get_agents_by_mcp_server(
+    mcp_server_id: str = Query(..., description="The MCP server ID to fetch attached agents for"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Agents whose published version reaches this server — feeds the edit
+    form's Agents section (counterpart of upsert_mcp_server's ``agent_ids``)."""
+    svc = _get_service(claims, db)
+    return svc.get_agents_by_mcp_server(mcp_server_id)
 
 
 @router.post("/attach_mcp_server_to_agents")

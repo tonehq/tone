@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 
-import { AccountMenu } from '@/components/layout/AccountMenu';
+import { AccountMenu, AccountMenuSettingsLink } from '@/components/layout/AccountMenu';
 import { SidebarShell, type SidebarNavGroup } from '@/components/layout/SidebarShell';
 import { CustomButton } from '@/components/shared';
 import {
@@ -167,13 +167,7 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
 function AppUserMenu({ collapsed }: { collapsed: boolean }) {
   return (
     <AccountMenu collapsed={collapsed}>
-      <Link
-        href="/settings"
-        className="flex h-9 w-full items-center gap-3 rounded-md px-3 text-sm font-normal text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-      >
-        <Settings className="h-4 w-4 text-muted-foreground" />
-        Settings
-      </Link>
+      <AccountMenuSettingsLink />
     </AccountMenu>
   );
 }

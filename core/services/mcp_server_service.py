@@ -2,6 +2,7 @@ import base64
 import uuid as uuid_lib
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from uuid import UUID
 
 from fastapi import HTTPException, status
 
@@ -260,7 +261,15 @@ class McpServerService(BaseService):
             )
 
     async def upsert_mcp_server(self, data: Dict[str, Any]) -> McpServer:
-        """Create or update an MCP server. Send id to update; send name and server_url to create."""
+        """Create or update an MCP server. Send id to update; send name and server_url to create.
+
+        Optional ``agent_ids``: when present, the server's published-version
+        attachments are full-synced to exactly that agent list after the row is
+        saved (absent key = attachments untouched). Sync problems are reported
+        via the transient ``attachment_warnings`` attribute, not raised."""
+        # Popped before the field loops below so it can never be setattr'd
+        # onto the row.
+        agent_ids = data.pop("agent_ids", None)
         mcp_server_id = data.get("id")
         now = datetime.now(timezone.utc)
 
@@ -324,6 +333,8 @@ class McpServerService(BaseService):
             self.db.refresh(existing)
             if validation_result:
                 self._sync_mcp_tools(existing, validation_result["tools"])
+            if agent_ids is not None:
+                self._sync_agent_attachments(existing, agent_ids)
             return existing
 
         # Create new MCP server
@@ -378,7 +389,107 @@ class McpServerService(BaseService):
         self.db.commit()
         self.db.refresh(mcp_server)
         self._sync_mcp_tools(mcp_server, validation_result["tools"])
+        if agent_ids is not None:
+            self._sync_agent_attachments(mcp_server, agent_ids)
         return mcp_server
+
+    def _sync_agent_attachments(self, mcp_server: McpServer, agent_ids: List) -> None:
+        """Full-sync the server's published-version attachments to ``agent_ids``.
+
+        Mirror of ``ToolService._sync_agent_attachments``: the list becomes the
+        exact set of agents whose PUBLISHED version reaches this server, reusing
+        ``attach_to_agents`` / ``detach_from_agents`` for published-version
+        resolution, scope validation, and audit logging. State problems come
+        back as warning strings so the saved row isn't rolled back; malformed
+        ids still raise 400.
+
+        Stamps ``attachment_warnings`` and ``attachment_summary``
+        (``{"attached": n, "detached": n}``) onto ``mcp_server`` for the
+        response layer, so the client can confirm what actually changed.
+        """
+        from core.models.agent import Agent
+
+        try:
+            desired = {UUID(str(a)) for a in agent_ids}
+        except (ValueError, TypeError, AttributeError):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="agent_ids must be a list of agent UUIDs",
+            )
+
+        warnings: List[str] = []
+        rows = (
+            self.db.query(Agent.id, Agent.name, Agent.published_config_id)
+            .filter(
+                Agent.id.in_(desired),
+                Agent.organization_id == self.org_id,
+                Agent.deleted_at.is_(None),
+            )
+            .all()
+        ) if desired else []
+        unknown = desired - {r.id for r in rows}
+        if unknown:
+            warnings.append(
+                "Unknown agents skipped: " + ", ".join(sorted(str(u) for u in unknown))
+            )
+        unpublished = sorted(r.name for r in rows if r.published_config_id is None)
+        if unpublished:
+            warnings.append(
+                "Agents without a published version skipped (publish them first): "
+                + ", ".join(unpublished)
+            )
+        attachable = {r.id for r in rows if r.published_config_id is not None}
+
+        current = {
+            aid
+            for (aid,) in self.db.query(AgentMcpServer.agent_id)
+            .join(Agent, Agent.id == AgentMcpServer.agent_id)
+            .filter(
+                AgentMcpServer.mcp_server_id == mcp_server.id,
+                AgentMcpServer.agent_config_id == Agent.published_config_id,
+                Agent.organization_id == self.org_id,
+            )
+            .all()
+        }
+
+        to_add = sorted(attachable - current)
+        to_remove = sorted(current - desired)
+        attached = detached = 0
+        if to_add:
+            try:
+                self.attach_to_agents(mcp_server.id, to_add)
+                attached = len(to_add)
+            except HTTPException as exc:
+                warnings.append(f"Attach failed: {exc.detail}")
+        if to_remove:
+            try:
+                self.detach_from_agents(mcp_server.id, to_remove)
+                detached = len(to_remove)
+            except HTTPException as exc:
+                warnings.append(f"Detach failed: {exc.detail}")
+        mcp_server.attachment_warnings = warnings
+        mcp_server.attachment_summary = {"attached": attached, "detached": detached}
+
+    def get_agents_by_mcp_server(self, mcp_server_id) -> List[Dict[str, str]]:
+        """Agents whose PUBLISHED version reaches this server — the same scope
+        ``_sync_agent_attachments`` reads and writes, so the edit form can
+        round-trip the list without drift."""
+        from core.models.agent import Agent
+
+        self.get_mcp_server(mcp_server_id)
+        rows = (
+            self.db.query(Agent.id, Agent.name)
+            .join(AgentMcpServer, AgentMcpServer.agent_id == Agent.id)
+            .filter(
+                AgentMcpServer.mcp_server_id == mcp_server_id,
+                AgentMcpServer.agent_config_id == Agent.published_config_id,
+                Agent.organization_id == self.org_id,
+                Agent.deleted_at.is_(None),
+            )
+            .order_by(Agent.name.asc())
+            .all()
+        )
+        return [{"id": str(r.id), "name": r.name} for r in rows]
 
     # ``status`` is derived from the boolean ``is_active`` via a CASE expression
     # so it flows through the generic faceted-query helpers as a string facet.
@@ -613,11 +724,15 @@ class McpServerService(BaseService):
         return [self.mcp_server_response(server) for server in rows]
 
     def _resolve_oauth_headers(self, oauth_connection_id) -> Dict[str, str]:
-        """Resolve a fresh ``Authorization: Bearer`` header from a linked OAuth connection.
+        """Resolve the auth header from a linked connection.
 
-        Returns ``{}`` when no connection is linked. Raises HTTPException(400) when the connection
-        is missing or its token can't be obtained, so the failure is visible at config time rather
-        than silently producing an unauthenticated server that discovers zero tools at call time.
+        For OAuth / bearer / client-credentials connections this is a fresh
+        ``Authorization: Bearer`` header; for API-key connections it is the
+        credential's custom header (e.g. ``X-API-Key: <key>``). Returns ``{}``
+        when no connection is linked. Raises HTTPException(400) when the
+        connection is missing or its credential can't be resolved, so the
+        failure is visible at config time rather than silently producing an
+        unauthenticated server that discovers zero tools at call time.
         """
         if not oauth_connection_id:
             return {}
@@ -625,8 +740,8 @@ class McpServerService(BaseService):
 
         svc = OAuthService(self.db, org_id=self.org_id)
         connection = svc.get_connection(oauth_connection_id)  # 404 if missing
-        token = svc.get_valid_access_token_for_connection(connection)
-        return {"Authorization": f"Bearer {token}"}
+        header_name, header_value = svc.resolve_connection_auth_header(connection)
+        return {header_name: header_value}
 
     def _validate_oauth_scopes(self, oauth_connection_id) -> None:
         """Block config when a linked connection lacks the provider's required scopes."""

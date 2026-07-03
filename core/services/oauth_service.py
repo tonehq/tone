@@ -9,7 +9,7 @@ Each connection lives in ``oauth_connections``:
 """
 
 import time
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 from uuid import UUID
 
 import httpx
@@ -312,6 +312,26 @@ class OAuthService(BaseService):
                 "status": "active",
             }
             auth_type = "bearer"
+        elif auth_kind == "api_key":
+            # A raw API key applied to a caller-named header (default
+            # ``X-API-Key``). Unlike bearer/oauth these never resolve to an
+            # ``Authorization: Bearer`` token — see
+            # ``resolve_connection_auth_header``.
+            api_key = (data.get("api_key") or data.get("token") or "").strip()
+            if not api_key:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="api_key is required for an API key credential",
+                )
+            header_name = (data.get("header_name") or "X-API-Key").strip() or "X-API-Key"
+            encrypted = encrypt_json({"api_key": api_key})
+            metadata = {
+                "credential_type": "custom",
+                "auth_kind": "api_key",
+                "header_name": header_name,
+                "status": "active",
+            }
+            auth_type = "api_key"
         elif auth_kind == "oauth2_client_credentials":
             token_url = (data.get("token_url") or "").strip()
             client_id = (data.get("client_id") or "").strip()
@@ -476,6 +496,36 @@ class OAuthService(BaseService):
             )
         return self.get_valid_access_token_for_connection(connection)
 
+    def resolve_connection_auth_header(
+        self, connection: OAuthConnection
+    ) -> Tuple[str, str]:
+        """Resolve a connection into the ``(header_name, header_value)`` pair to
+        apply on an outgoing request.
+
+        API-key credentials carry a raw key applied to a caller-named header
+        (``header_name`` in ``public_metadata``, default ``X-API-Key``) — they
+        have no token flow, so they never route through
+        ``get_valid_access_token_for_connection``. Every other kind (3-legged
+        OAuth, static bearer, OAuth2 client-credentials) resolves to a fresh
+        ``Authorization: Bearer <token>`` exactly as before.
+        """
+        metadata = connection.public_metadata or {}
+        if metadata.get("auth_kind") == "api_key" or connection.auth_type == "api_key":
+            tokens = self.get_decrypted_tokens(connection)
+            api_key = tokens.get("api_key") or tokens.get("access_token")
+            if not api_key:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"API-key credential '{connection.label or connection.provider_slug}' "
+                        "has no stored key."
+                    ),
+                )
+            header_name = metadata.get("header_name") or "X-API-Key"
+            return header_name, api_key
+        token = self.get_valid_access_token_for_connection(connection)
+        return "Authorization", f"Bearer {token}"
+
     def get_valid_access_token_for_connection(self, connection: OAuthConnection) -> str:
         provider = connection.provider_slug
         metadata = connection.public_metadata or {}
@@ -494,6 +544,18 @@ class OAuthService(BaseService):
             return token
         if metadata.get("grant_type") == "client_credentials":
             return self._mint_client_credentials_token(connection)
+        if auth_kind == "api_key" or connection.auth_type == "api_key":
+            # API-key credentials have no token flow — without this guard they
+            # fall into the refresh path below and fail with a misleading
+            # "no refresh token" error.
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Credential '{connection.label or provider}' is an API key and "
+                    "cannot be resolved to a bearer token. Link an OAuth or bearer "
+                    "credential instead."
+                ),
+            )
 
         try:
             tokens = self.get_decrypted_tokens(connection)

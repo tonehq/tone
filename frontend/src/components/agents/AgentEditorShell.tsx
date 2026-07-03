@@ -26,7 +26,7 @@ import CreateVersionModal, {
 import PublishVersionConfirmModal from '@/components/agents/PublishVersionConfirmModal';
 import { AgentFormNavProvider } from '@/components/agents/agent-form/AgentFormNav';
 import { buildAgentNav } from '@/components/agents/agent-form/sectionNav';
-import { AccountMenu } from '@/components/layout/AccountMenu';
+import { AccountMenu, AccountMenuSettingsLink } from '@/components/layout/AccountMenu';
 import { isSidebarItemActive, SidebarShell } from '@/components/layout/SidebarShell';
 import { AppLoader, CustomButton, CustomModal } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
@@ -629,7 +629,11 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
               primary={(collapsed) => (
                 <BackToAgents collapsed={collapsed} onLeave={guardedAction} />
               )}
-              footer={(collapsed) => <AccountMenu collapsed={collapsed} />}
+              footer={(collapsed) => (
+                <AccountMenu collapsed={collapsed}>
+                  <AccountMenuSettingsLink />
+                </AccountMenu>
+              )}
             />
 
             {/* ── Content column ─────────────────────────────────────────── */}

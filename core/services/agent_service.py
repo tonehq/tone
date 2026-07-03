@@ -9,6 +9,7 @@ from uuid import UUID
 import traceback
 
 from fastapi import HTTPException, status
+from loguru import logger
 
 from core.services.audit_actions import AgentAuditAction, AuditResourceType
 from core.services.base import BaseService
@@ -1312,6 +1313,127 @@ class AgentService(BaseService):
             if field == "workflow_id" and val is not None:
                 self._assert_assignable_workflow(val, target.agent_id)
             setattr(target, field, val)
+        # Every settings write funnels through here (in-place update, version
+        # update, version clone), so this is the one choke point that can
+        # guarantee provider_id/model_id consistency before the row is flushed.
+        # Scope the guard to the settings blocks THIS write actually carried:
+        # reconciling an untouched block would let a pre-existing corrupt row
+        # (which the audit CLI is responsible for) block or silently mutate an
+        # unrelated edit (e.g. a first_message-only save). Pre-existing bad rows
+        # are surfaced by `config_audit`, not repaired opportunistically here.
+        written_settings = {k for k, _ in self._SETTINGS_MODEL_KINDS if k in data}
+        if written_settings:
+            self._reconcile_target_model_ids(target, only=written_settings)
+
+    # Per-service settings JSONB column → the Model.kind it may reference.
+    _SETTINGS_MODEL_KINDS = (
+        ("llm_settings", "llm"),
+        ("stt_settings", "stt"),
+        ("voice_settings", "tts"),
+    )
+
+    def _reconcile_target_model_ids(
+        self, target: AgentConfig, only: Optional[set] = None
+    ) -> None:
+        """Write-guard: never persist a ``settings.model_id`` that belongs to a
+        different provider than ``settings.provider_id``.
+
+        ``only`` restricts the check to those settings keys (e.g. ``{"stt_settings"}``)
+        — the caller passes the blocks that were part of the current write so an
+        untouched, pre-existing bad block can't reject/mutate an unrelated edit.
+        ``None`` (the default) checks all three blocks.
+
+        The editor resets the model when the provider is switched, but a stale
+        ``model_id`` from the previous provider could survive the merge (staging
+        incident 2026-07-03: a Deepgram STT config kept the parakeet model_id,
+        whose ``Model.base_url`` redirected DeepgramSTTService to the parakeet
+        k8s service and the call transcribed nothing). For each service settings
+        dict that declares a ``provider_id``:
+
+        * a ``model_id`` pointing at a model of that provider is left alone;
+        * a mismatched or dangling ``model_id`` is re-resolved from the settings'
+          ``model`` name under the declared provider and rewritten;
+        * when the name can't be resolved either, the stale id is dropped if the
+          name literal can drive the call at runtime (the STT path), otherwise
+          the save is rejected with a field-level validation error;
+        * a missing ``model_id`` is filled in when the ``model`` name maps to a
+          model of the declared provider.
+        """
+        def _as_uuid(value):
+            try:
+                return UUID(str(value)) if value else None
+            except (ValueError, TypeError, AttributeError):
+                return None
+
+        for settings_key, kind in self._SETTINGS_MODEL_KINDS:
+            if only is not None and settings_key not in only:
+                continue
+            settings = getattr(target, settings_key, None)
+            if not isinstance(settings, dict):
+                continue
+
+            provider_id = _as_uuid(settings.get("provider_id"))
+            if not provider_id:
+                continue
+            model_id = _as_uuid(settings.get("model_id"))
+            model_name = settings.get("model")
+
+            row = (
+                self.db.query(Model).filter(Model.id == model_id).first()
+                if model_id
+                else None
+            )
+            if row is not None and row.provider_id == provider_id:
+                continue  # consistent — nothing to do
+            if model_id is None and not model_name:
+                continue  # nothing to resolve from
+
+            resolved = (
+                self.db.query(Model)
+                .filter(
+                    Model.provider_id == provider_id,
+                    Model.kind == kind,
+                    Model.name == str(model_name),
+                    Model.is_active.is_(True),
+                )
+                .first()
+                if model_name
+                else None
+            )
+
+            fixed = dict(settings)
+            if resolved is not None:
+                fixed["model_id"] = str(resolved.id)
+            elif row is not None and not model_name:
+                # Provably cross-provider id with no way to re-resolve it.
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "message": "Validation failed",
+                        "errors": {
+                            settings_key: {
+                                "model_id": [
+                                    "Selected model belongs to a different provider. Pick a model for the selected provider."
+                                ]
+                            }
+                        },
+                    },
+                )
+            elif model_id is not None:
+                # Stale or dangling id with no same-provider replacement; the
+                # model name literal drives the call at runtime, so drop the id
+                # rather than persist a cross-provider reference.
+                logger.warning(
+                    "[agent-config] dropping stale {}.model_id={} (provider_id={}, model={!r}) for agent_config={}",
+                    settings_key, model_id, provider_id, model_name, target.id,
+                )
+                fixed.pop("model_id", None)
+            else:
+                continue  # name-only settings with no catalog row — leave as-is
+
+            if fixed != settings:
+                # New dict object so SQLAlchemy's JSONB change detection fires.
+                setattr(target, settings_key, fixed)
 
     def _assert_assignable_workflow(self, workflow_id: UUID, agent_id: Optional[UUID]) -> None:
         """Guard workflow assignment: the workflow must exist, belong to the caller's org
@@ -1462,11 +1584,35 @@ class AgentService(BaseService):
         )
         return (row[0] + 1) if row else 1
 
-    @staticmethod
-    def _invalidate_pipeline_cache(agent_id) -> None:
-        """Drop the resolver's cached pipeline so the next call re-reads the DB."""
+    def _invalidate_pipeline_cache(self, agent_id) -> None:
+        """Refresh the resolver's cached pipeline for an agent right after a save.
+
+        Two steps, run once the config write has been committed:
+
+        1. Delete the stale Redis entry.
+        2. Immediately re-resolve and re-store it from the just-saved config, so
+           the very next call runs on the new data — instead of paying a lazy
+           cache-miss resolve on the first call after the edit.
+
+        This is what makes "update the agent → the cache is updated at the same
+        time" literally true: by the time this method returns, the cache holds
+        the corrected config (e.g. the reconciled STT model_id). The re-warm is
+        best-effort — if the config is an incomplete draft that can't resolve,
+        the delete in step 1 already guarantees the next call won't serve stale
+        data, so a resolve failure only logs.
+        """
         from core.services.redis_service import cache_delete
+
         cache_delete(f"agent_pipeline_config:{agent_id}")
+        try:
+            from core.services.pipeline.service_resolver import load_agent_service_config
+
+            load_agent_service_config(self.db, agent_id, org_id=self.org_id)
+        except Exception as e:  # noqa: BLE001 — re-warm must never break a save
+            logger.warning(
+                "[agent-config] pipeline cache re-warm failed for agent={}: {}",
+                agent_id, e,
+            )
 
     def _upsert_new_config(self, agent: Agent, config_data: Dict[str, Any], user_id: Optional[UUID]) -> AgentConfig:
         """Update the live config in place, or create v1 if the agent has none yet."""
@@ -1678,6 +1824,31 @@ class AgentService(BaseService):
                 AgentKnowledgeBase(**base, knowledge_base_id=row.knowledge_base_id)
             )
 
+    def _validate_override_connections(
+        self, override_map: Dict[UUID, Optional[UUID]]
+    ) -> None:
+        """Reject per-attachment overrides pointing at connections that don't
+        exist in this org — mirrors ``tool_service._validate_oauth_connection``
+        for the entity-level default. ``None`` values (clear override) pass."""
+        wanted = {v for v in override_map.values() if v is not None}
+        if not wanted:
+            return
+        from core.models.oauth_connection import OAuthConnection
+
+        found = {
+            row[0]
+            for row in self.query(OAuthConnection)
+            .filter(OAuthConnection.id.in_(wanted))
+            .with_entities(OAuthConnection.id)
+            .all()
+        }
+        missing = [str(v) for v in wanted if v not in found]
+        if missing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"OAuth connections not found: {', '.join(missing)}",
+            )
+
     def _sync_tools(
         self,
         agent: Agent,
@@ -1694,6 +1865,7 @@ class AgentService(BaseService):
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Tools not found: {', '.join(missing)}")
 
         override_map = _normalize_oauth_overrides(oauth_overrides)
+        self._validate_override_connections(override_map)
 
         # All writes are scoped to this config — editing v11's tools must not
         # touch v10's rows, and v10's rows must keep their `agent_config_id`.
@@ -1767,6 +1939,7 @@ class AgentService(BaseService):
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"MCP servers not found: {', '.join(missing)}")
 
         override_map = _normalize_oauth_overrides(oauth_overrides)
+        self._validate_override_connections(override_map)
 
         config_id = config.id if config else None
         scope = [

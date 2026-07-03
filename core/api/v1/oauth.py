@@ -209,10 +209,11 @@ def create_custom_credential(
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    """Create a user-defined credential (OAuth 2.0 client-credentials or Bearer token).
+    """Create a user-defined credential (OAuth 2.0 client-credentials, Bearer token, or API key).
 
-    Body: { name, auth_kind: "oauth2_client_credentials" | "bearer",
-            token_url?, client_id?, client_secret?, scope?, token? }
+    Body: { name, auth_kind: "oauth2_client_credentials" | "bearer" | "api_key",
+            token_url?, client_id?, client_secret?, scope?, token?,
+            api_key?, header_name? }
     """
     svc = _get_service(claims, db)
     connection = svc.create_custom_credential({**body, "created_by_user_id": claims.user_id})

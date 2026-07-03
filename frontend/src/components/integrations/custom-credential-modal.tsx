@@ -2,6 +2,7 @@
 
 import { CustomModal, SelectInput, TextInput } from '@/components/shared';
 import { createCustomCredential, type CustomCredentialAuthKind } from '@/services/oauthService';
+import type { OAuthConnection } from '@/types/oauth';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -12,6 +13,7 @@ import { z } from 'zod';
 const AUTH_KIND_OPTIONS = [
   { label: 'OAuth 2.0 (client credentials)', value: 'oauth2_client_credentials' },
   { label: 'Bearer Token', value: 'bearer' },
+  { label: 'API Key', value: 'api_key' },
 ];
 
 const schema = z
@@ -22,6 +24,8 @@ const schema = z
     client_secret: z.string().optional(),
     scope: z.string().optional(),
     token: z.string().optional(),
+    api_key: z.string().optional(),
+    header_name: z.string().optional(),
   })
   .passthrough();
 
@@ -34,12 +38,16 @@ const EMPTY: FormData = {
   client_secret: '',
   scope: '',
   token: '',
+  api_key: '',
+  header_name: '',
 };
 
 interface CustomCredentialModalProps {
   open: boolean;
   onClose: () => void;
-  onCreated: () => void;
+  /** Called after a successful create. Receives the new connection so callers
+   * (e.g. the agent-config picker) can select it immediately. */
+  onCreated: (created?: OAuthConnection) => void;
 }
 
 export default function CustomCredentialModal({
@@ -64,6 +72,7 @@ export default function CustomCredentialModal({
   }, [open, reset]);
 
   const isOAuth = authKind === 'oauth2_client_credentials';
+  const isApiKey = authKind === 'api_key';
 
   const onFormSubmit = async (data: FormData) => {
     // Mirror the backend's required fields per auth kind before submitting.
@@ -74,13 +83,17 @@ export default function CustomCredentialModal({
       showToast.error('Token URL, Client ID and Client Secret are required for OAuth 2.0');
       return;
     }
-    if (!isOAuth && !data.token?.trim()) {
+    if (isApiKey && !data.api_key?.trim()) {
+      showToast.error('API Key is required for an API Key credential');
+      return;
+    }
+    if (!isOAuth && !isApiKey && !data.token?.trim()) {
       showToast.error('Token is required for a Bearer credential');
       return;
     }
     setSaving(true);
     try {
-      await createCustomCredential({
+      const created = await createCustomCredential({
         name: data.name.trim(),
         auth_kind: authKind,
         ...(isOAuth
@@ -90,11 +103,16 @@ export default function CustomCredentialModal({
               client_secret: data.client_secret?.trim(),
               scope: data.scope?.trim() || undefined,
             }
-          : { token: data.token?.trim() }),
+          : isApiKey
+            ? {
+                api_key: data.api_key?.trim(),
+                header_name: data.header_name?.trim() || undefined,
+              }
+            : { token: data.token?.trim() }),
       });
       showToast.success('Custom credential created');
       reset(EMPTY);
-      onCreated();
+      onCreated(created);
       onClose();
     } catch (err) {
       handleApiError(err);
@@ -165,6 +183,25 @@ export default function CustomCredentialModal({
               control={control}
               label="Scope"
               placeholder="e.g. read write (space separated, optional)"
+              disabled={saving}
+            />
+          </>
+        ) : isApiKey ? (
+          <>
+            <TextInput
+              name="header_name"
+              control={control}
+              label="Header Name"
+              placeholder="X-API-Key"
+              disabled={saving}
+            />
+            <TextInput
+              name="api_key"
+              control={control}
+              label="API Key"
+              type="password"
+              placeholder="Enter API key"
+              isRequired
               disabled={saving}
             />
           </>

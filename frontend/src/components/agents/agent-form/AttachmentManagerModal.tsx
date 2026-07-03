@@ -16,14 +16,13 @@ export interface AttachmentManagerOption {
   id: string;
   name: string;
   description?: string | null;
-  /** Whether this attachment authenticates via OAuth — when ``true`` the
-   * modal reveals an OAuth picker under a selected row. */
-  usesOAuth: boolean;
-  /** The entity's default OAuth connection (from the Tool/MCP page). Used to
-   * label "Use default (…)" in the picker. */
+  /** Whether this attachment can resolve credentials from a stored connection
+   * (OAuth, custom bearer, client-credentials) — when ``true`` the modal
+   * reveals a connection picker under a selected row. */
+  supportsConnection: boolean;
+  /** The entity's default connection (from the Tool/MCP page). Picking it in
+   * the connection picker maps back to "no override". */
   defaultConnectionId?: string | null;
-  /** Optional catalog scoping so the picker only lists matching connections. */
-  appIntegrationId?: string | null;
 }
 
 interface AttachmentManagerModalProps {
@@ -47,6 +46,9 @@ interface AttachmentManagerModalProps {
   emptyState?: ReactNode;
   onToggle: (id: string) => void;
   onOverrideChange: (id: string, next: string | null) => void;
+  /** Bubble up a credential created inline from a row's picker so the parent
+   * can add it to the shared connection list. */
+  onConnectionCreated?: (created: OAuthConnection) => void;
 }
 
 /** Single modal that owns BOTH the browse/select step and the per-attachment
@@ -71,6 +73,7 @@ export default function AttachmentManagerModal({
   emptyState,
   onToggle,
   onOverrideChange,
+  onConnectionCreated,
 }: AttachmentManagerModalProps) {
   const [search, setSearch] = useState('');
 
@@ -173,13 +176,13 @@ export default function AttachmentManagerModal({
                         <Check className="size-3" />
                       </span>
                     </button>
-                    {isSelected && opt.usesOAuth && (
+                    {isSelected && opt.supportsConnection && (
                       <AttachmentOAuthPicker
                         overrideConnectionId={overrides[opt.id] ?? null}
                         defaultConnectionId={opt.defaultConnectionId ?? null}
                         connections={connections}
-                        appIntegrationId={opt.appIntegrationId ?? null}
                         onChange={(next) => onOverrideChange(opt.id, next)}
+                        onConnectionCreated={onConnectionCreated}
                       />
                     )}
                   </li>

@@ -85,10 +85,21 @@ def upsert_tool(
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    """Create or update a tool. Send id to update; send name and description to create."""
+    """Create or update a tool. Send id to update; send name and description to create.
+
+    Optional ``agent_ids`` full-syncs the tool's published-version agent
+    attachments (absent = attachments untouched). Sync problems come back in
+    ``attachment_warnings`` — the tool itself is still saved."""
     svc = _get_service(claims, db)
     tool = svc.upsert_tool(data)
-    return svc.tool_response(tool)
+    resp = svc.tool_response(tool)
+    warnings = getattr(tool, "attachment_warnings", None)
+    if warnings:
+        resp["attachment_warnings"] = warnings
+    summary = getattr(tool, "attachment_summary", None)
+    if summary is not None:
+        resp["attachment_summary"] = summary
+    return resp
 
 
 @router.delete("/delete_tool", status_code=status.HTTP_200_OK)
@@ -109,6 +120,18 @@ class AttachToolRequest(BaseModel):
 class DetachToolRequest(BaseModel):
     tool_id: str
     agent_ids: List[str]
+
+
+@router.get("/get_agents_by_tool")
+def get_agents_by_tool(
+    tool_id: str = Query(..., description="The tool ID to fetch attached agents for"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Agents whose published version carries this tool — feeds the edit form's
+    Agents section (the counterpart of upsert_tool's ``agent_ids``)."""
+    svc = _get_service(claims, db)
+    return svc.get_agents_by_tool(tool_id)
 
 
 @router.post("/attach_tool_to_agents")

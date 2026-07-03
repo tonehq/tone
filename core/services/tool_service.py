@@ -114,7 +114,16 @@ class ToolService(BaseService):
         return tool
 
     def upsert_tool(self, data: Dict[str, Any]) -> Tool:
-        """Create or update a tool. Send id to update; send name and description to create."""
+        """Create or update a tool. Send id to update; send name and description to create.
+
+        Optional ``agent_ids``: when present, the tool's published-version
+        attachments are full-synced to exactly that agent list after the row is
+        saved (absent key = attachments untouched). Sync problems (unpublished
+        agent, missing scopes, …) are reported via the transient
+        ``attachment_warnings`` attribute instead of failing the save."""
+        # Popped before the field loops below so it can never be setattr'd
+        # onto the row.
+        agent_ids = data.pop("agent_ids", None)
         tool_id = data.get("id")
         now = datetime.now(timezone.utc)
 
@@ -154,6 +163,8 @@ class ToolService(BaseService):
             existing.updated_at = now
             self.db.commit()
             self.db.refresh(existing)
+            if agent_ids is not None:
+                self._sync_agent_attachments(existing, agent_ids)
             return existing
 
         # Create new tool
@@ -194,7 +205,111 @@ class ToolService(BaseService):
         self.db.add(tool)
         self.db.commit()
         self.db.refresh(tool)
+        if agent_ids is not None:
+            self._sync_agent_attachments(tool, agent_ids)
         return tool
+
+    def _sync_agent_attachments(self, tool: Tool, agent_ids: List) -> None:
+        """Full-sync the tool's published-version attachments to ``agent_ids``.
+
+        Companion to ``upsert_tool``'s optional ``agent_ids`` field: the list
+        becomes the exact set of agents whose PUBLISHED version carries the
+        tool. Reuses ``attach_tool_to_agents`` / ``detach_tool_from_agents`` so
+        published-version resolution, scope validation, and per-agent audit
+        logging stay in one place. State problems (unknown agent, no published
+        version, missing scopes) come back as warning strings — the tool row is
+        already saved and shouldn't be rolled back because one agent isn't
+        attachable. Malformed ids are a caller bug and still raise 400.
+
+        Stamps two transient attributes onto ``tool`` for the response layer:
+        ``attachment_warnings`` (list of strings) and ``attachment_summary``
+        (``{"attached": n, "detached": n}`` — what actually changed, so the
+        client can confirm the sync did what the user expected).
+        """
+        from core.models.agent import Agent
+
+        try:
+            desired = {UUID(str(a)) for a in agent_ids}
+        except (ValueError, TypeError, AttributeError):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="agent_ids must be a list of agent UUIDs",
+            )
+
+        warnings: List[str] = []
+        rows = (
+            self.db.query(Agent.id, Agent.name, Agent.published_config_id)
+            .filter(
+                Agent.id.in_(desired),
+                Agent.organization_id == self.org_id,
+                Agent.deleted_at.is_(None),
+            )
+            .all()
+        ) if desired else []
+        unknown = desired - {r.id for r in rows}
+        if unknown:
+            warnings.append(
+                "Unknown agents skipped: " + ", ".join(sorted(str(u) for u in unknown))
+            )
+        unpublished = sorted(r.name for r in rows if r.published_config_id is None)
+        if unpublished:
+            warnings.append(
+                "Agents without a published version skipped (publish them first): "
+                + ", ".join(unpublished)
+            )
+        attachable = {r.id for r in rows if r.published_config_id is not None}
+
+        # Current = agents whose PUBLISHED config carries this tool. Draft /
+        # historical versions are out of scope, mirroring attach/detach.
+        current = {
+            aid
+            for (aid,) in self.db.query(AgentTool.agent_id)
+            .join(Agent, Agent.id == AgentTool.agent_id)
+            .filter(
+                AgentTool.tool_id == tool.id,
+                AgentTool.agent_config_id == Agent.published_config_id,
+                Agent.organization_id == self.org_id,
+            )
+            .all()
+        }
+
+        to_add = sorted(attachable - current)
+        to_remove = sorted(current - desired)
+        attached = detached = 0
+        if to_add:
+            try:
+                attached = len(self.attach_tool_to_agents(to_add, tool.id))
+            except HTTPException as exc:
+                warnings.append(f"Attach failed: {exc.detail}")
+        if to_remove:
+            try:
+                self.detach_tool_from_agents(to_remove, tool.id)
+                detached = len(to_remove)
+            except HTTPException as exc:
+                warnings.append(f"Detach failed: {exc.detail}")
+        tool.attachment_warnings = warnings
+        tool.attachment_summary = {"attached": attached, "detached": detached}
+
+    def get_agents_by_tool(self, tool_id) -> List[Dict[str, str]]:
+        """Agents whose PUBLISHED version carries this tool — the same scope
+        ``_sync_agent_attachments`` reads and writes, so the edit form can
+        round-trip the list without drift."""
+        from core.models.agent import Agent
+
+        self.get_tool(tool_id)
+        rows = (
+            self.db.query(Agent.id, Agent.name)
+            .join(AgentTool, AgentTool.agent_id == Agent.id)
+            .filter(
+                AgentTool.tool_id == tool_id,
+                AgentTool.agent_config_id == Agent.published_config_id,
+                Agent.organization_id == self.org_id,
+                Agent.deleted_at.is_(None),
+            )
+            .order_by(Agent.name.asc())
+            .all()
+        )
+        return [{"id": str(r.id), "name": r.name} for r in rows]
 
     def delete_tool(self, tool_id) -> Dict[str, str]:
         tool = self.get_tool(tool_id)
