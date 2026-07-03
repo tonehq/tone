@@ -8,6 +8,7 @@ import { readAttachContext } from '@/utils/agentAttachmentContext';
 import {
   AppLoader,
   CustomButton,
+  CustomModal,
   ScopeStatus,
   SelectInput,
   SliderField,
@@ -15,11 +16,12 @@ import {
   TextInput,
 } from '@/components/shared';
 import CheckboxField from '@/components/shared/CheckboxField';
+import AgentAttachmentPicker from '@/components/tools/AgentAttachmentPicker';
 import SettingsSection from '@/components/tools/SettingsSection';
 import { Switch } from '@/components/ui/switch';
 import { useGoBack } from '@/hooks/useGoBack';
 import { NO_APP_INTEGRATION, useIntegrationConnections } from '@/hooks/useIntegrationConnections';
-import { getMcpServer } from '@/services/mcpServerService';
+import { getAgentsByMcpServer, getMcpServer } from '@/services/mcpServerService';
 import { discoverMcpOAuth } from '@/services/oauthService';
 import type { MCPAuthType, MCPServer, MCPServerUpsertPayload } from '@/types/mcp';
 import { cn } from '@/utils/cn';
@@ -28,6 +30,7 @@ import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
 import {
   ArrowLeft,
+  Bot,
   Boxes,
   Cable,
   Check,
@@ -42,7 +45,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Controller, useFieldArray, useForm } from 'react-hook-form';
 
 type TransportType = 'shttp' | 'sse';
@@ -118,15 +121,17 @@ function getFaviconUrl(hostname: string | null): string | null {
 
 /** Derive the ``auth_type`` string the backend expects from the form state.
  *
- * OAuth wins because a selected connection is the strongest signal of intent;
- * bearer / api_key are the two static-credential toggles the form currently
- * exposes; everything else is ``none``. Kept as a pure function so the payload
- * builder and any "what auth is active?" label reads from a single source.
+ * The static-credential toggles (bearer / api_key) name the auth type when
+ * active — a selected connection can coexist with them (it's sent separately
+ * as ``oauth_connection_id`` and takes precedence at runtime). ``oauth`` is
+ * only derived when a connection is the sole credential source; everything
+ * else is ``none``. Kept as a pure function so the payload builder and any
+ * "what auth is active?" label reads from a single source.
  */
 function deriveAuthType(s: MCPFormState): MCPAuthType {
-  if (s.oauth_connection_id && s.oauth_connection_id !== NO_OAUTH_CONNECTION) return 'oauth';
   if (s.use_bearer_token && s.bearer_token.trim()) return 'bearer';
   if (s.use_api_key && s.api_key.trim()) return 'api_key';
+  if (s.oauth_connection_id && s.oauth_connection_id !== NO_OAUTH_CONNECTION) return 'oauth';
   return 'none';
 }
 
@@ -212,8 +217,26 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
     settings: true,
     server: true,
     protocol: true,
+    agents: true,
     status: true,
   });
+
+  // Agents section — attachments sync to each agent's PUBLISHED version.
+  // ``agentsTouched`` gates the payload: agent_ids is only sent when the user
+  // actually changed the list, so an untouched save never rewrites attachments.
+  const [attachedAgentIds, setAttachedAgentIds] = useState<string[]>([]);
+  const [agentsTouched, setAgentsTouched] = useState(false);
+  const [agentsLoading, setAgentsLoading] = useState(isEditMode);
+  const [agentsLoadFailed, setAgentsLoadFailed] = useState(false);
+  // Server-side baseline of attached agents — the detach confirmation compares
+  // against this, and it's refreshed after every successful save.
+  const initialAgentIdsRef = useRef<string[]>([]);
+  // A save that would detach agents parks its payload here until the user
+  // confirms via the modal below.
+  const [pendingDetachSave, setPendingDetachSave] = useState<{
+    payload: MCPServerUpsertPayload;
+    count: number;
+  } | null>(null);
 
   const toggleSection = (key: string) => {
     setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -244,8 +267,24 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
       sessionStorage.removeItem(MCP_FORM_DRAFT_KEY);
       if (draft) {
         try {
-          const parsed = JSON.parse(draft) as MCPFormState;
+          const { __agent_ids, __agents_touched, __agent_baseline, ...parsed } = JSON.parse(
+            draft,
+          ) as MCPFormState & {
+            __agent_ids?: string[];
+            __agents_touched?: boolean;
+            __agent_baseline?: string[];
+          };
           if (newConnectionId) parsed.oauth_connection_id = newConnectionId;
+          // Agent selection (and its server baseline, used by the detach
+          // confirmation) rides along in the stash so the OAuth round-trip
+          // doesn't silently drop it.
+          if (Array.isArray(__agent_ids)) {
+            setAttachedAgentIds(__agent_ids);
+            setAgentsTouched(!!__agents_touched);
+          }
+          if (Array.isArray(__agent_baseline)) {
+            initialAgentIdsRef.current = __agent_baseline;
+          }
           reset(parsed);
         } catch {
           if (newConnectionId) setValue('oauth_connection_id', newConnectionId);
@@ -254,6 +293,7 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
         setValue('oauth_connection_id', newConnectionId);
       }
       setLoadingServer(false);
+      setAgentsLoading(false);
       // Strip the one-shot query params so a refresh doesn't re-trigger the restore.
       window.history.replaceState(null, '', window.location.pathname);
       return;
@@ -271,6 +311,22 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
       })
       .finally(() => {
         if (!cancelled) setLoadingServer(false);
+      });
+    // Attachments load separately: a failure here disables the Agents section
+    // (so a save can't blindly detach) without killing the form.
+    getAgentsByMcpServer(serverId)
+      .then((refs) => {
+        if (cancelled) return;
+        const ids = refs.map((r) => r.id);
+        setAttachedAgentIds(ids);
+        initialAgentIdsRef.current = ids;
+        setAgentsLoadFailed(false);
+      })
+      .catch(() => {
+        if (!cancelled) setAgentsLoadFailed(true);
+      })
+      .finally(() => {
+        if (!cancelled) setAgentsLoading(false);
       });
     return () => {
       cancelled = true;
@@ -329,14 +385,44 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
     : [];
 
   const onSave = async (data: MCPFormState) => {
-    const payload = formStateToUpsertPayload(data, isEditMode ? serverId : undefined);
+    const payload: MCPServerUpsertPayload = {
+      ...formStateToUpsertPayload(data, isEditMode ? serverId : undefined),
+      ...(agentsTouched && !agentsLoadFailed ? { agent_ids: attachedAgentIds } : {}),
+    };
+    // Detaching is destructive for live agents — a save that would remove the
+    // server from previously-attached agents must be confirmed first.
+    if (payload.agent_ids) {
+      const selected = new Set(payload.agent_ids);
+      const removedCount = initialAgentIdsRef.current.filter((id) => !selected.has(id)).length;
+      if (removedCount > 0) {
+        setPendingDetachSave({ payload, count: removedCount });
+        return;
+      }
+    }
+    await doSave(payload);
+  };
+
+  const doSave = async (payload: MCPServerUpsertPayload) => {
     setSaving(true);
     try {
       const savedServer = await upsertServer(payload);
       await fetchServers();
+      const summary = savedServer?.attachment_summary;
       showToast.success(
         isEditMode ? 'MCP server updated successfully' : 'MCP server created successfully',
+        summary && (summary.attached > 0 || summary.detached > 0)
+          ? `Attached to ${summary.attached} agent(s), detached from ${summary.detached}.`
+          : undefined,
       );
+      if (savedServer?.attachment_warnings?.length) {
+        showToast.warning(
+          'Some agent attachments were skipped',
+          savedServer.attachment_warnings.join(' • '),
+          8,
+        );
+      }
+      if (payload.agent_ids) initialAgentIdsRef.current = payload.agent_ids;
+      setAgentsTouched(false);
       if (isEditMode) return;
       // When launched from the agent config page, attach the new MCP server
       // to that agent's viewing version and bounce back — same flow as tools.
@@ -362,9 +448,19 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
     }
     setDiscovering(true);
     try {
-      // Stash the in-progress form and tell the backend where to send the user back to, so the
-      // OAuth round-trip returns to this form with edits intact and the new connection selected.
-      sessionStorage.setItem(MCP_FORM_DRAFT_KEY, JSON.stringify(getValues()));
+      // Stash the in-progress form (plus the Agents selection, which lives
+      // outside RHF) and tell the backend where to send the user back to, so
+      // the OAuth round-trip returns with edits intact and the new connection
+      // selected.
+      sessionStorage.setItem(
+        MCP_FORM_DRAFT_KEY,
+        JSON.stringify({
+          ...getValues(),
+          __agent_ids: attachedAgentIds,
+          __agents_touched: agentsTouched,
+          __agent_baseline: initialAgentIdsRef.current,
+        }),
+      );
       const url = await discoverMcpOAuth(
         watchedServerUrl.trim(),
         watchedName || undefined,
@@ -385,6 +481,30 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <CustomModal
+        open={!!pendingDetachSave}
+        onClose={() => setPendingDetachSave(null)}
+        title="Detach from agents?"
+        description={
+          pendingDetachSave
+            ? `Saving will detach this MCP server from ${pendingDetachSave.count} agent${
+                pendingDetachSave.count === 1 ? '' : 's'
+              } currently using it on their live version. Calls on ${
+                pendingDetachSave.count === 1 ? 'that agent' : 'those agents'
+              } will no longer reach this server's tools.`
+            : undefined
+        }
+        confirmText="Detach and save"
+        confirmType="danger"
+        confirmLoading={saving}
+        onConfirm={() => {
+          if (!pendingDetachSave) return;
+          const { payload } = pendingDetachSave;
+          setPendingDetachSave(null);
+          doSave(payload);
+        }}
+      />
+
       {/* Top bar */}
       <div className="relative flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background py-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -668,8 +788,9 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
                         </p>
                       </div>
                       <p className="mt-0.5 text-[11.5px] text-muted-foreground">
-                        Authenticate with a connected account instead of a static token. Manage
-                        connections in Integrations.
+                        Authenticate with a connected account instead of a static token. Takes
+                        precedence over the static credentials below. Manage connections in
+                        Integrations.
                       </p>
                       <div className="mt-3 border-t border-border/60 pt-3">
                         <SelectInput
@@ -834,6 +955,28 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
                       />
                     </div>
                   )}
+                />
+              </SettingsSection>
+
+              {/* Agents */}
+              <SettingsSection
+                title="Agents"
+                description="Attach this MCP server to agents' live (published) versions"
+                icon={Bot}
+                iconColor="text-amber-600 dark:text-amber-400"
+                iconBg="bg-amber-50 dark:bg-amber-500/10"
+                isOpen={openSections.agents}
+                onToggle={() => toggleSection('agents')}
+              >
+                <AgentAttachmentPicker
+                  selectedIds={attachedAgentIds}
+                  onChange={(ids) => {
+                    setAttachedAgentIds(ids);
+                    setAgentsTouched(true);
+                  }}
+                  loading={agentsLoading}
+                  loadFailed={agentsLoadFailed}
+                  entityLabel="MCP server"
                 />
               </SettingsSection>
 

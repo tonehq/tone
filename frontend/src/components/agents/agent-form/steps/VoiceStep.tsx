@@ -556,8 +556,13 @@ export default function VoiceStep() {
                 shouldDirty: true,
               });
               // Reset the model when the provider changes — names rarely
-              // overlap across providers.
+              // overlap across providers. model_id must go with it: leaving
+              // the old provider's id behind makes the backend resolve the
+              // wrong model row (and its base_url) on calls.
               setValue('config.stt_settings.model' as never, null as never, {
+                shouldDirty: true,
+              });
+              setValue('config.stt_settings.model_id' as never, null as never, {
                 shouldDirty: true,
               });
             }}
@@ -572,11 +577,17 @@ export default function VoiceStep() {
             }))}
             loading={loadingSttModels}
             value={sttModel ?? ''}
-            onValueChange={(v) =>
+            onValueChange={(v) => {
               setValue('config.stt_settings.model' as never, (v || null) as never, {
                 shouldDirty: true,
-              })
-            }
+              });
+              // Keep model_id in lockstep with the selected model name so a
+              // stale id from a previous provider can never be saved.
+              const matched = sttModels.find((m) => m.name === v);
+              setValue('config.stt_settings.model_id' as never, (matched?.id ?? null) as never, {
+                shouldDirty: true,
+              });
+            }}
             disabled={!sttProviderId}
             placeholder={sttProviderId ? 'Select a model' : 'Pick a provider first'}
           />

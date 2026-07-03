@@ -1,8 +1,8 @@
 """VAD-independent fallback turn stop strategy.
 
-Triggers end-of-turn when transcription activity stops for a configurable
-timeout period. This works even when Silero VAD is stuck in the "speaking"
-state due to phone line noise, providing a robust fallback for telephony.
+Ends the user turn on transcription inactivity, for telephony setups where VAD
+(and the Smart-Turn analyzer that depends on it) never reports "stopped". A
+committed final is required because the LLM aggregator discards interims.
 """
 
 import asyncio
@@ -20,11 +20,10 @@ from pipecat.utils.asyncio.task_manager import BaseTaskManager
 
 
 class TranscriptionTimeoutUserTurnStopStrategy(BaseUserTurnStopStrategy):
-    """Fallback stop strategy that triggers based on transcription inactivity.
+    """Fallback stop strategy that triggers on transcription inactivity.
 
-    Does NOT depend on VAD frames at all. Monitors transcription activity
-    (both final and interim) and triggers end-of-turn when no new
-    transcriptions arrive for `timeout` seconds after any speech was detected.
+    Does NOT depend on VAD frames. Fires end-of-turn when no new transcription
+    arrives for `timeout` seconds after a final transcript has been committed.
     """
 
     def __init__(self, *, timeout: float = 1.5, **kwargs):
@@ -32,6 +31,7 @@ class TranscriptionTimeoutUserTurnStopStrategy(BaseUserTurnStopStrategy):
         self._timeout = timeout
         self._has_speech = False
         self._got_final = False
+        self._triggered = False
         self._last_activity_time: float = 0
         self._text = ""
         self._event = asyncio.Event()
@@ -41,6 +41,7 @@ class TranscriptionTimeoutUserTurnStopStrategy(BaseUserTurnStopStrategy):
         await super().reset()
         self._has_speech = False
         self._got_final = False
+        self._triggered = False
         self._last_activity_time = 0
         self._text = ""
         self._event.clear()
@@ -86,10 +87,12 @@ class TranscriptionTimeoutUserTurnStopStrategy(BaseUserTurnStopStrategy):
                 await self._maybe_trigger()
 
     async def _maybe_trigger(self):
-        if self._got_final or not self._has_speech:
+        # Once per turn, and only after a final (interims never reach the LLM).
+        if self._triggered or not self._got_final:
             return
         elapsed = time.time() - self._last_activity_time
         if elapsed >= self._timeout:
+            self._triggered = True
             logger.info(
                 f"[TranscriptionTimeout] triggering end-of-turn after "
                 f"{elapsed:.1f}s inactivity, text={self._text!r}"

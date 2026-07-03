@@ -1,6 +1,7 @@
 'use client';
 
-import { ChevronDown, LogOut } from 'lucide-react';
+import { ChevronDown, LogOut, Settings } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 import { AvatarBadge } from '@/components/layout/AvatarBadge';
@@ -11,9 +12,26 @@ import { authApi } from '@/lib/api/auth';
 import { getInitials } from '@/lib/utils';
 import { useAuthStore, REFRESH_TOKEN } from '@/stores/auth';
 
-// Shared account menu used by BOTH the main app sidebar and the settings rail.
-// The two only differ in the extra links shown above the theme toggle (the app
-// sidebar adds a "Settings" entry), so consumers pass those via `children`.
+/** Standard "Settings" entry for the account menu. Every rail except the
+ * settings rail itself (where you're already in Settings) passes this as
+ * `children` so the shortcut stays consistent across the app sidebar, the
+ * agent editor rail, and the call-detail rail. */
+export function AccountMenuSettingsLink() {
+  return (
+    <Link
+      href="/settings"
+      className="flex h-9 w-full items-center gap-3 rounded-md px-3 text-sm font-normal text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+    >
+      <Settings className="h-4 w-4 text-muted-foreground" />
+      Settings
+    </Link>
+  );
+}
+
+// Shared account menu used by the main app sidebar, the agent editor rail,
+// the call-detail rail, and the settings rail. They only differ in the extra
+// links shown above the theme toggle (most add `AccountMenuSettingsLink`; the
+// settings rail adds none), so consumers pass those via `children`.
 export function AccountMenu({
   collapsed,
   children,

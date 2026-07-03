@@ -229,7 +229,10 @@ async def _ws_stream_loop(ws, model, client):
                 elif last_text:
                     stable += 1
                     if stable >= SILENCE_TICKS:
-                        log.info("ws/asr %s end-of-turn reset: %r", client, last_text)
+                        # Emit a `final` at end-of-turn (interim partials never reach the LLM).
+                        log.info("ws/asr %s end-of-turn final: %r", client, last_text)
+                        await ws.send_json({"type": "final", "text": last_text,
+                                            "ms": round((time.monotonic() - t0) * 1000)})
                         session = _StreamSession(model)
                         last_text = ""
                         stable = 0

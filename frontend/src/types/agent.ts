@@ -190,6 +190,13 @@ export interface AgentDropdownItem {
   name: string;
 }
 
+/** GET /tool/get_agents_by_tool and /mcp-server/get_agents_by_mcp_server —
+ * agents whose published version carries the entity. */
+export interface AttachedAgentRef {
+  id: string;
+  name: string;
+}
+
 export interface ListAgentsParams {
   page?: number;
   page_size?: number;

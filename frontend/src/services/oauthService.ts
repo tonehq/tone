@@ -91,7 +91,7 @@ export const discoverMcpOAuth = async (
   return data.auth_url;
 };
 
-export type CustomCredentialAuthKind = 'oauth2_client_credentials' | 'bearer';
+export type CustomCredentialAuthKind = 'oauth2_client_credentials' | 'bearer' | 'api_key';
 
 export interface CustomCredentialPayload {
   name: string;
@@ -101,9 +101,13 @@ export interface CustomCredentialPayload {
   client_secret?: string;
   scope?: string;
   token?: string;
+  /** API-key credentials: the raw key and the header it is applied to. */
+  api_key?: string;
+  header_name?: string;
 }
 
-/** Create a user-defined credential (OAuth 2.0 client-credentials or static Bearer token). */
+/** Create a user-defined credential (OAuth 2.0 client-credentials, static Bearer
+ * token, or raw API key applied to a custom header). */
 export const createCustomCredential = async (
   payload: CustomCredentialPayload,
 ): Promise<OAuthConnection> => {
