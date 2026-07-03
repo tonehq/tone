@@ -8,7 +8,7 @@ metadata:
     environment: staging
     component: call
 spec:
-  replicas: 2
+  replicas: 4
   selector:
     matchLabels:
       app: staging-tone-call-worker
