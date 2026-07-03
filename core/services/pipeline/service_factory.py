@@ -677,6 +677,20 @@ def build_tts(spec: dict) -> Optional[Any]:
                 cb_kwargs["sample_rate"] = metadata["sample_rate"]
             return QwenWebSocketTTSService(url=ws_url, trace_id=get_trace_id(), **cb_kwargs)
 
+        if provider_name == "piper":
+            # Self-hosted Piper (rhasspy) — CPU-only, same /ws/tts protocol as Qwen
+            # (announces sample_rate=22050 in its start message), so we reuse
+            # QwenWebSocketTTSService pointed at the piper service.
+            from core.services.pipeline.qwen_tts_service import QwenWebSocketTTSService
+            from core.logging import get_trace_id
+            ws_url = metadata.get("base_url") or "ws://staging-tts-piper-service.staging.svc.cluster.local/ws/tts"
+            piper_kwargs = {"sample_rate": metadata.get("sample_rate") or 22050}
+            if tts_voice_id is not None:
+                piper_kwargs["voice_id"] = tts_voice_id
+            if tts_language is not None:
+                piper_kwargs["language"] = tts_language
+            return QwenWebSocketTTSService(url=ws_url, trace_id=get_trace_id(), **piper_kwargs)
+
         if provider_name == "qwen_websocket":
             from core.services.pipeline.qwen_tts_service import QwenWebSocketTTSService
             from core.logging import get_trace_id

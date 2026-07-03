@@ -1,0 +1,5 @@
+# Piper 1.2.0 = stable synthesize_stream_raw API (1.3+ / piper1-gpl changed the API).
+# piper-phonemize wheels bundle espeak-ng data; onnxruntime CPU wheel pulled in automatically.
+piper-tts==1.2.0
+fastapi
+uvicorn[standard]

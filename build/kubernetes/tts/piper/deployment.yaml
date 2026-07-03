@@ -1,0 +1,90 @@
+# TTS — Piper (rhasspy) via piper-tts + onnxruntime. CPU-ONLY: no GPU request,
+# pinned OFF the GPU nodes so the A16 stays free for STT. Voice model (~60 MB)
+# is downloaded from HF at startup into an emptyDir.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staging-tts-piper-deployment
+  namespace: staging
+  labels:
+    app: staging-tts-piper
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: staging-tts-piper
+  template:
+    metadata:
+      labels:
+        app: staging-tts-piper
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: nvidia.com/gpu.present
+                    operator: DoesNotExist
+      containers:
+        - name: piper
+          image: python:3.11-slim
+          workingDir: /app
+          command: ["bash", "-lc"]
+          args:
+            - |
+              set -e
+              pip install --no-cache-dir -r /app/requirements.txt
+              python - <<'EOF'
+              import os, urllib.request
+              base = "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/"
+              for f in ("en_US-lessac-medium.onnx", "en_US-lessac-medium.onnx.json"):
+                  dst = "/cache/" + f
+                  if not os.path.exists(dst):
+                      print("downloading", f, flush=True)
+                      urllib.request.urlretrieve(base + f, dst)
+              EOF
+              exec uvicorn server:app --host 0.0.0.0 --port 8000
+          env:
+            - name: PIPER_MODEL
+              value: /cache/en_US-lessac-medium.onnx
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 1Gi
+          volumeMounts:
+            - name: app
+              mountPath: /app
+            - name: cache
+              mountPath: /cache
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60        # 5 min for pip + ~60MB voice download
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+      volumes:
+        - name: app
+          configMap:
+            name: tts-piper-app
+        - name: cache
+          emptyDir: {}

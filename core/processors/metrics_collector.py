@@ -90,6 +90,20 @@ def _round_optional(value: Optional[float], digits: int = 3) -> Optional[float]:
     return round(value, digits) if value is not None else None
 
 
+def _first_positive(samples: List[float]) -> Optional[float]:
+    """First sample greater than zero, or ``None`` if there are none.
+
+    Some TTS services (Cartesia, Qwen) emit a spurious ``0.0`` TTFB before
+    the real first-audio sample. Picking that as the headline hides the
+    actual latency (e.g. the greeting turn showing ``0ms`` when the real
+    TTFB was ``133ms``). This picks the first non-zero measurement instead.
+    """
+    for sample in samples:
+        if sample and sample > 0:
+            return sample
+    return None
+
+
 def _sum_field(items: List[dict], key: str) -> int:
     return sum(int(item.get(key) or 0) for item in items)
 
@@ -140,9 +154,9 @@ def _finalize_buffer(
         "user_stopped_at": buffer.user_stopped_at,
         "bot_started_at": buffer.bot_started_at,
         "end_to_end": end_to_end,
-        "stt_ttfb": _round_optional(stt[0]) if stt else None,
-        "llm_ttfb": _round_optional(llm[0]) if llm else None,
-        "tts_ttfb": _round_optional(tts[0]) if tts else None,
+        "stt_ttfb": _round_optional(_first_positive(stt)),
+        "llm_ttfb": _round_optional(_first_positive(llm)),
+        "tts_ttfb": _round_optional(_first_positive(tts)),
         "stt_ttfb_all": [_round_optional(v) for v in stt],
         "llm_ttfb_all": [_round_optional(v) for v in llm],
         "tts_ttfb_all": [_round_optional(v) for v in tts],
@@ -196,6 +210,7 @@ class MetricsCollectorProcessor(FrameProcessor):
         # Per-turn view.
         self._buffers: Dict[int, _TurnBuffer] = {}
         self._current_turn: Optional[int] = None
+        self._has_seen_turn: bool = False
         self._turn_metrics: List[dict] = []
 
         # FIFO queue of turns awaiting an STT TTFB. Pushed when a
@@ -211,6 +226,7 @@ class MetricsCollectorProcessor(FrameProcessor):
     def on_turn_started(self, turn_number: int) -> None:
         """Open a fresh buffer for ``turn_number`` and make it current."""
         self._current_turn = turn_number
+        self._has_seen_turn = True
         # Preserve an already-open buffer if process_frame created one early
         # (a TTFB metric can arrive concurrently with the turn-start event).
         existing = self._buffers.get(turn_number)
@@ -265,9 +281,17 @@ class MetricsCollectorProcessor(FrameProcessor):
 
         Events that arrive before pipecat's first turn (e.g. the agent's
         first greeting) bucket into a ``_PRE_TURN`` buffer that's flushed
-        in :py:meth:`get_turn_metrics`.
+        in :py:meth:`get_turn_metrics`. Events arriving after the last turn
+        has ended go into a throwaway buffer (turn_number=-1) that's never
+        stored — otherwise a stray metric after ``on_turn_ended`` would
+        materialize as a phantom Turn 0 row in ``turn_metrics``.
         """
-        turn = self._current_turn if self._current_turn is not None else _PRE_TURN
+        if self._current_turn is not None:
+            turn = self._current_turn
+        elif not self._has_seen_turn:
+            turn = _PRE_TURN
+        else:
+            return _TurnBuffer(turn_number=-1)
         buffer = self._buffers.get(turn)
         if buffer is None:
             buffer = _TurnBuffer(turn_number=turn, started_at=time.time())
@@ -281,6 +305,8 @@ class MetricsCollectorProcessor(FrameProcessor):
 
     def _mark_user_stopped(self) -> None:
         buffer = self._active_buffer()
+        if buffer.turn_number < 0:
+            return
         if buffer.user_stopped_at is None:
             now = time.time()
             buffer.user_stopped_at = now
@@ -296,6 +322,8 @@ class MetricsCollectorProcessor(FrameProcessor):
 
     def _mark_bot_started(self) -> None:
         buffer = self._active_buffer()
+        if buffer.turn_number < 0:
+            return
         # Capture only the first bot_started per turn — that's the user-felt
         # latency edge. Later BotStartedSpeaking frames in the same turn
         # (e.g. after a tool-call pause) don't change what the user felt.
