@@ -327,17 +327,19 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, current
         try:
             # Header precedence mirrors validate_mcp_connection exactly: static auth_config first,
             # then custom meta_data headers (e.g. ClickUp's x-workspace-id) override those, then the
-            # OAuth bearer (resolved below) overrides everything. Keeping the order identical here
-            # ensures a server that validates with one set of headers authenticates with the same
-            # set during a live call. ``auth_type`` selects the header shape explicitly for rows
-            # written after the migration; older rows (auth_type is None) fall back to inference.
+            # linked-connection header (resolved below) overrides everything. Keeping the order
+            # identical here ensures a server that validates with one set of headers authenticates
+            # with the same set during a live call. ``auth_type`` selects the header shape explicitly
+            # for rows written after the migration; older rows (auth_type is None) fall back to inference.
             headers = build_auth_headers(server.auth_config, auth_type=getattr(server, "auth_type", None))
             headers.update(headers_from_meta(getattr(server, "meta_data", None)))
 
-            # OAuth-backed connectors (e.g. ClickUp, Google Calendar) authenticate via a
-            # linked OAuth connection, NOT a static header. Resolve a fresh (auto-refreshed)
-            # bearer token so their tools actually load — without this the remote returns
-            # 0 tools (or 401) and the agent silently can't book anything.
+            # Connector-backed servers (e.g. ClickUp, Google Calendar) authenticate via a
+            # linked connection, NOT a static header. Resolve its header so their tools
+            # actually load — without this the remote returns 0 tools (or 401) and the
+            # agent silently can't book anything. OAuth / bearer / client-credentials
+            # connections resolve to a fresh (auto-refreshed) ``Authorization: Bearer``;
+            # API-key connections resolve to their custom header (e.g. ``X-API-Key``).
             # Prefers the agent-version override, falling back to the server default.
             from core.utils.oauth_resolution import effective_of
             oauth_connection_id = effective_of(server)
@@ -360,10 +362,13 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, current
                                     "some tools may be unavailable; reconnect to grant them",
                                     server.name, oauth_connection_id, scope_check["missing"],
                                 )
-                            token = svc.get_valid_access_token_for_connection(connection)
-                            headers["Authorization"] = f"Bearer {token}"
+                            # Same resolver used at config/validation time, so call-time and
+                            # validation headers match for every credential kind (bearer for
+                            # OAuth/bearer/client-credentials, custom header for API keys).
+                            header_name, header_value = svc.resolve_connection_auth_header(connection)
+                            headers[header_name] = header_value
                             logger.info(
-                                "MCP server '{}' authenticated via OAuth connection {}",
+                                "MCP server '{}' authenticated via connection {}",
                                 server.name, oauth_connection_id,
                             )
                         else:

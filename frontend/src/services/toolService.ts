@@ -1,3 +1,4 @@
+import type { AttachedAgentRef } from '@/types/agent';
 import type { Tool, ToolAttachPayload, ToolUpsertPayload } from '@/types/tool';
 import axiosInstance from '@/utils/axios';
 
@@ -23,6 +24,15 @@ export const getTool = async (toolId: string): Promise<Tool> => {
 
 export const deleteTool = async (toolId: string): Promise<void> => {
   await axiosInstance.delete('/tool/delete_tool', { params: { tool_id: toolId } });
+};
+
+/** Agents whose published version carries this tool — feeds the edit form's
+ * Agents section (counterpart of upsert_tool's `agent_ids`). */
+export const getAgentsByTool = async (toolId: string): Promise<AttachedAgentRef[]> => {
+  const { data } = await axiosInstance.get<AttachedAgentRef[]>('/tool/get_agents_by_tool', {
+    params: { tool_id: toolId },
+  });
+  return Array.isArray(data) ? data : [];
 };
 
 export const attachToolToAgents = async (payload: ToolAttachPayload): Promise<void> => {

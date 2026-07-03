@@ -20,10 +20,19 @@ export const getAllAgents = async (): Promise<AgentDropdownItem[]> => {
 };
 
 /** Fetch an agent. When `configId` is passed, the agent is rendered against
- * that specific version instead of the live one. */
-export const getAgent = async (agentId: string, configId?: string): Promise<AgentDetail> => {
+ * that specific version; alternatively `version` resolves that version number
+ * server-side (so a deep-linked ?version=<n> loads in one request). */
+export const getAgent = async (
+  agentId: string,
+  configId?: string,
+  version?: number,
+): Promise<AgentDetail> => {
   const res = await axiosInstance.get<AgentDetail>('/agent/get_agent', {
-    params: { agent_id: agentId, ...(configId ? { config_id: configId } : {}) },
+    params: {
+      agent_id: agentId,
+      ...(configId ? { config_id: configId } : {}),
+      ...(!configId && version != null ? { version } : {}),
+    },
   });
   return res.data;
 };

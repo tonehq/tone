@@ -23,6 +23,7 @@ import { showToast } from '@/utils/toast';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   ArrowLeft,
+  Bot,
   Check,
   Copy,
   LinkIcon,
@@ -32,7 +33,7 @@ import {
   Settings,
   Trash2,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 
 interface BuiltInToolFormProps {
@@ -56,6 +57,9 @@ interface BuiltInToolFormProps {
   onDelete?: () => void;
   onBack: () => void;
   onDirty: () => void;
+  /** Agents section (an ``AgentAttachmentPicker``) — owned by the page so the
+   * form stays presentation-only. */
+  agentsSection?: ReactNode;
 }
 
 export default function BuiltInToolForm({
@@ -79,12 +83,14 @@ export default function BuiltInToolForm({
   onDelete,
   onBack,
   onDirty,
+  agentsSection,
 }: BuiltInToolFormProps) {
   const [uuidCopied, setUuidCopied] = useState(false);
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     settings: true,
     connection: true,
     meta: true,
+    agents: true,
   });
 
   const oauthProvider = TOOL_TYPE_OAUTH_PROVIDER[toolType];
@@ -355,6 +361,20 @@ export default function BuiltInToolForm({
                   </div>
                 ))}
               </div>
+            </SettingsSection>
+          )}
+
+          {agentsSection && (
+            <SettingsSection
+              title="Agents"
+              description="Attach this tool to agents' live (published) versions"
+              icon={Bot}
+              iconColor="text-violet-600 dark:text-violet-400"
+              iconBg="bg-violet-50 dark:bg-violet-500/10"
+              isOpen={openSections.agents}
+              onToggle={() => toggleSection('agents')}
+            >
+              {agentsSection}
             </SettingsSection>
           )}
 

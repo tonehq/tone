@@ -1,13 +1,14 @@
 'use client';
 
 import { deleteToolAtom, fetchToolsAtom, upsertToolAtom } from '@/atoms/ToolAtom';
-import { AppLoader } from '@/components/shared';
+import { AppLoader, CustomModal } from '@/components/shared';
+import AgentAttachmentPicker from '@/components/tools/AgentAttachmentPicker';
 import BuiltInToolForm from '@/components/tools/BuiltInToolForm';
 import CustomToolForm from '@/components/tools/CustomToolForm';
 import { useGoBack } from '@/hooks/useGoBack';
 import type { BuiltInToolFormData, CustomToolFormData } from '@/schemas/tool';
 import { finalizeAttachmentAndRedirect } from '@/services/agentAttachmentService';
-import { getTool } from '@/services/toolService';
+import { getAgentsByTool, getTool } from '@/services/toolService';
 import type {
   Tool,
   ToolAuthType,
@@ -21,7 +22,7 @@ import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 interface ToolFormPageProps {
   toolId?: string;
@@ -62,6 +63,23 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
   const [appIntegrationId, setAppIntegrationId] = useState<string | null>(null);
   const [toolRecord, setToolRecord] = useState<Tool | null>(null);
 
+  // Agents section — attachments sync to each agent's PUBLISHED version.
+  // ``agentsTouched`` gates the payload: agent_ids is only sent when the user
+  // actually changed the list, so an untouched save never rewrites attachments.
+  const [attachedAgentIds, setAttachedAgentIds] = useState<string[]>([]);
+  const [agentsTouched, setAgentsTouched] = useState(false);
+  const [agentsLoading, setAgentsLoading] = useState(isEditMode);
+  const [agentsLoadFailed, setAgentsLoadFailed] = useState(false);
+  // Server-side baseline of attached agents — the detach confirmation compares
+  // against this, and it's refreshed after every successful save.
+  const initialAgentIdsRef = useRef<string[]>([]);
+  // A save that would detach agents parks its payload here until the user
+  // confirms via the modal below.
+  const [pendingDetachSave, setPendingDetachSave] = useState<{
+    payload: ToolUpsertPayload;
+    count: number;
+  } | null>(null);
+
   const [loading, setLoading] = useState(isEditMode);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(isEditMode);
@@ -94,6 +112,19 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
       setOauthConnectionId(tool.oauth_connection_id ?? null);
       setAppIntegrationId(tool.app_integration_id ?? null);
       setSaved(true);
+      // Attachments load separately: a failure here disables the Agents
+      // section (so a save can't blindly detach) without killing the form.
+      try {
+        const refs = await getAgentsByTool(toolId);
+        const ids = refs.map((r) => r.id);
+        setAttachedAgentIds(ids);
+        initialAgentIdsRef.current = ids;
+        setAgentsLoadFailed(false);
+      } catch {
+        setAgentsLoadFailed(true);
+      } finally {
+        setAgentsLoading(false);
+      }
     } catch (error) {
       handleApiError(error);
       router.push('/tools');
@@ -135,11 +166,37 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
     }
   }, [authType, authHeaderName, authApiKey, authBearerToken, authUsername, authPassword]);
 
-  const executeSave = async (payload: ToolUpsertPayload) => {
+  const executeSave = async (payload: ToolUpsertPayload, skipDetachConfirm = false) => {
+    // Detaching is destructive for live agents — a save that would remove the
+    // tool from previously-attached agents must be confirmed first. The
+    // payload is parked and re-submitted from the modal's confirm button.
+    if (payload.agent_ids && !skipDetachConfirm) {
+      const selected = new Set(payload.agent_ids);
+      const removedCount = initialAgentIdsRef.current.filter((id) => !selected.has(id)).length;
+      if (removedCount > 0) {
+        setPendingDetachSave({ payload, count: removedCount });
+        return;
+      }
+    }
     setSaving(true);
     try {
       const savedTool = await upsertToolAction(payload);
-      showToast.success(isEditMode ? 'Tool updated successfully' : 'Tool created successfully');
+      const summary = savedTool?.attachment_summary;
+      showToast.success(
+        isEditMode ? 'Tool updated successfully' : 'Tool created successfully',
+        summary && (summary.attached > 0 || summary.detached > 0)
+          ? `Attached to ${summary.attached} agent(s), detached from ${summary.detached}.`
+          : undefined,
+      );
+      if (savedTool?.attachment_warnings?.length) {
+        showToast.warning(
+          'Some agent attachments were skipped',
+          savedTool.attachment_warnings.join(' • '),
+          8,
+        );
+      }
+      if (payload.agent_ids) initialAgentIdsRef.current = payload.agent_ids;
+      setAgentsTouched(false);
       setSaved(true);
       await fetchTools();
       if (isEditMode) return;
@@ -174,16 +231,17 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
       oauth_connection_id: oauthConnectionId,
       app_integration_id: appIntegrationId,
       is_active: true,
+      ...(agentsTouched && !agentsLoadFailed ? { agent_ids: attachedAgentIds } : {}),
     };
     await executeSave(payload);
   };
 
   const handleCustomSave = async (data: CustomToolFormData) => {
-    // OAuth-backed custom tools carry their credential link via
-    // ``oauth_connection_id`` (resolved fresh at call time) instead of
-    // ``auth_config``. Send the picker fields only on the OAuth branch so
-    // switching auth types away from OAuth correctly drops the binding.
-    const isOAuth = authType === 'oauth';
+    // Connection-capable auth types (oauth / bearer / api_key) can carry a
+    // credential link via ``oauth_connection_id`` (resolved fresh at call
+    // time; wins over inline ``auth_config``). Send the picker fields only on
+    // those branches so switching to none/basic correctly drops the binding.
+    const usesConnection = authType === 'oauth' || authType === 'bearer' || authType === 'api_key';
     const payload: ToolUpsertPayload = {
       ...(isEditMode && toolId ? { id: toolId } : {}),
       name: data.name.trim(),
@@ -193,12 +251,19 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
       parameters,
       auth_type: authType,
       auth_config: buildAuthConfig(),
-      oauth_connection_id: isOAuth ? oauthConnectionId : null,
-      app_integration_id: isOAuth ? appIntegrationId : null,
+      oauth_connection_id: usesConnection ? oauthConnectionId : null,
+      app_integration_id: usesConnection ? appIntegrationId : null,
       is_active: isActive,
+      ...(agentsTouched && !agentsLoadFailed ? { agent_ids: attachedAgentIds } : {}),
     };
     await executeSave(payload);
   };
+
+  const handleAttachedAgentsChange = useCallback((ids: string[]) => {
+    setAttachedAgentIds(ids);
+    setAgentsTouched(true);
+    setSaved(false);
+  }, []);
 
   const handleParametersChange = useCallback((schema: ToolParametersSchema) => {
     setParameters(schema);
@@ -226,64 +291,108 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
     );
   }
 
+  const agentsSection = (
+    <AgentAttachmentPicker
+      selectedIds={attachedAgentIds}
+      onChange={handleAttachedAgentsChange}
+      loading={agentsLoading}
+      loadFailed={agentsLoadFailed}
+      entityLabel="tool"
+    />
+  );
+
+  const detachConfirmModal = (
+    <CustomModal
+      open={!!pendingDetachSave}
+      onClose={() => setPendingDetachSave(null)}
+      title="Detach from agents?"
+      description={
+        pendingDetachSave
+          ? `Saving will detach this tool from ${pendingDetachSave.count} agent${
+              pendingDetachSave.count === 1 ? '' : 's'
+            } currently using it on their live version. Calls on ${
+              pendingDetachSave.count === 1 ? 'that agent' : 'those agents'
+            } will no longer see this tool.`
+          : undefined
+      }
+      confirmText="Detach and save"
+      confirmType="danger"
+      confirmLoading={saving}
+      onConfirm={() => {
+        if (!pendingDetachSave) return;
+        const { payload } = pendingDetachSave;
+        setPendingDetachSave(null);
+        executeSave(payload, true);
+      }}
+    />
+  );
+
   if (isBuiltIn) {
     return (
-      <BuiltInToolForm
-        toolType={toolType}
-        name={name}
-        description={description}
-        metaData={metaData}
-        parameters={parameters}
-        toolRecord={toolRecord}
-        isEditMode={isEditMode}
-        saving={saving}
-        saved={saved}
-        oauthConnectionId={oauthConnectionId}
-        appIntegrationId={appIntegrationId}
-        onMetaDataChange={setMetaData}
-        authConfig={builtInAuthConfig}
-        onAuthConfigChange={setBuiltInAuthConfig}
-        onOAuthConnectionIdChange={setOauthConnectionId}
-        onAppIntegrationIdChange={setAppIntegrationId}
-        onSave={handleBuiltInSave}
-        onDelete={isEditMode ? handleDelete : undefined}
-        onBack={handleBack}
-        onDirty={markDirty}
-      />
+      <>
+        {detachConfirmModal}
+        <BuiltInToolForm
+          toolType={toolType}
+          name={name}
+          description={description}
+          metaData={metaData}
+          parameters={parameters}
+          toolRecord={toolRecord}
+          isEditMode={isEditMode}
+          saving={saving}
+          saved={saved}
+          oauthConnectionId={oauthConnectionId}
+          appIntegrationId={appIntegrationId}
+          onMetaDataChange={setMetaData}
+          authConfig={builtInAuthConfig}
+          onAuthConfigChange={setBuiltInAuthConfig}
+          onOAuthConnectionIdChange={setOauthConnectionId}
+          onAppIntegrationIdChange={setAppIntegrationId}
+          onSave={handleBuiltInSave}
+          onDelete={isEditMode ? handleDelete : undefined}
+          onBack={handleBack}
+          onDirty={markDirty}
+          agentsSection={agentsSection}
+        />
+      </>
     );
   }
 
   return (
-    <CustomToolForm
-      name={name}
-      description={description}
-      url={url}
-      method={method}
-      parameters={parameters}
-      authType={authType}
-      authHeaderName={authHeaderName}
-      authApiKey={authApiKey}
-      authBearerToken={authBearerToken}
-      authUsername={authUsername}
-      authPassword={authPassword}
-      appIntegrationId={appIntegrationId}
-      oauthConnectionId={oauthConnectionId}
-      isActive={isActive}
-      isEditMode={isEditMode}
-      saving={saving}
-      onMethodChange={setMethod}
-      onParametersChange={handleParametersChange}
-      onAuthTypeChange={setAuthType}
-      onAuthHeaderNameChange={setAuthHeaderName}
-      onAuthApiKeyChange={setAuthApiKey}
-      onAuthBearerTokenChange={setAuthBearerToken}
-      onAuthUsernameChange={setAuthUsername}
-      onAuthPasswordChange={setAuthPassword}
-      onAppIntegrationIdChange={setAppIntegrationId}
-      onOAuthConnectionIdChange={setOauthConnectionId}
-      onIsActiveChange={setIsActive}
-      onSave={handleCustomSave}
-      onBack={handleBack}
-    />
+    <>
+      {detachConfirmModal}
+      <CustomToolForm
+        name={name}
+        description={description}
+        url={url}
+        method={method}
+        parameters={parameters}
+        authType={authType}
+        authHeaderName={authHeaderName}
+        authApiKey={authApiKey}
+        authBearerToken={authBearerToken}
+        authUsername={authUsername}
+        authPassword={authPassword}
+        appIntegrationId={appIntegrationId}
+        oauthConnectionId={oauthConnectionId}
+        isActive={isActive}
+        isEditMode={isEditMode}
+        saving={saving}
+        onMethodChange={setMethod}
+        onParametersChange={handleParametersChange}
+        onAuthTypeChange={setAuthType}
+        onAuthHeaderNameChange={setAuthHeaderName}
+        onAuthApiKeyChange={setAuthApiKey}
+        onAuthBearerTokenChange={setAuthBearerToken}
+        onAuthUsernameChange={setAuthUsername}
+        onAuthPasswordChange={setAuthPassword}
+        onAppIntegrationIdChange={setAppIntegrationId}
+        onOAuthConnectionIdChange={setOauthConnectionId}
+        onIsActiveChange={setIsActive}
+        onSave={handleCustomSave}
+        onBack={handleBack}
+        agentsSection={agentsSection}
+      />
+    </>
   );
 }

@@ -10,7 +10,7 @@ import type { ToolAuthType, ToolHttpMethod, ToolParametersSchema } from '@/types
 import { cn } from '@/utils/cn';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowLeft, Loader2, Save } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 
 interface CustomToolFormProps {
@@ -25,11 +25,12 @@ interface CustomToolFormProps {
   authBearerToken: string;
   authUsername: string;
   authPassword: string;
-  /** Catalog row narrowing the OAuth-connection picker. Only consulted when
-   *  ``authType === 'oauth'``. */
+  /** Catalog row narrowing the connection picker. Consulted for the
+   *  connection-capable auth types (``oauth`` / ``bearer`` / ``api_key``). */
   appIntegrationId: string | null;
-  /** OAuth connection backing this tool. Only consulted when
-   *  ``authType === 'oauth'``. */
+  /** Stored connection backing this tool. Required credential source for
+   *  ``oauth``; optional for ``bearer`` / ``api_key`` where it takes
+   *  precedence over the inline secret. */
   oauthConnectionId: string | null;
   isActive: boolean;
   isEditMode: boolean;
@@ -47,6 +48,9 @@ interface CustomToolFormProps {
   onIsActiveChange: (value: boolean) => void;
   onSave: (data: CustomToolFormData) => void;
   onBack: () => void;
+  /** Agents section (an ``AgentAttachmentPicker``) — owned by the page so the
+   * form stays presentation-only. */
+  agentsSection?: ReactNode;
 }
 
 export default function CustomToolForm({
@@ -79,6 +83,7 @@ export default function CustomToolForm({
   onIsActiveChange,
   onSave,
   onBack,
+  agentsSection,
 }: CustomToolFormProps) {
   const { control, handleSubmit, watch, reset } = useForm<CustomToolFormData>({
     resolver: zodResolver(customToolSchema),
@@ -230,6 +235,29 @@ export default function CustomToolForm({
                 onValueChange={(v) => onAuthTypeChange(v as ToolAuthType)}
               />
 
+              {/* Stored connections bridge tools onto saved credentials —
+                  connected accounts (HubSpot, Slack, …) for OAuth, or custom
+                  bearer / client-credentials entries from Integrations. The
+                  runtime resolves a fresh token from the connection and injects
+                  it as ``Authorization: Bearer <token>``; a linked connection
+                  always wins over the inline secret below. */}
+              {(authType === 'oauth' || authType === 'bearer' || authType === 'api_key') && (
+                <div className="mt-3 rounded-lg bg-muted/40 p-3">
+                  <IntegrationConnectionPicker
+                    appIntegrationId={appIntegrationId}
+                    oauthConnectionId={oauthConnectionId}
+                    onAppIntegrationIdChange={onAppIntegrationIdChange}
+                    onOAuthConnectionIdChange={onOAuthConnectionIdChange}
+                  />
+                  {authType !== 'oauth' && (
+                    <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                      Optional — when a saved credential is linked it takes precedence over the
+                      inline value below.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {authType === 'api_key' && (
                 <div className="mt-3 grid grid-cols-[140px_1fr] gap-3 rounded-lg bg-muted/40 p-3">
                   <TextInput
@@ -285,22 +313,14 @@ export default function CustomToolForm({
                   />
                 </div>
               )}
-
-              {/* OAuth bridges custom tools onto already-connected accounts
-                  (HubSpot, Slack, etc.) without re-entering credentials. The
-                  runtime resolves a fresh access token from the connection
-                  and injects it as ``Authorization: Bearer <token>``. */}
-              {authType === 'oauth' && (
-                <div className="mt-3 rounded-lg bg-muted/40 p-3">
-                  <IntegrationConnectionPicker
-                    appIntegrationId={appIntegrationId}
-                    oauthConnectionId={oauthConnectionId}
-                    onAppIntegrationIdChange={onAppIntegrationIdChange}
-                    onOAuthConnectionIdChange={onOAuthConnectionIdChange}
-                  />
-                </div>
-              )}
             </div>
+
+            {agentsSection && (
+              <div className="border-t border-border/60 p-5">
+                <h3 className="mb-3 text-[13px] font-semibold text-foreground">Agents</h3>
+                {agentsSection}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { AccountMenu } from '@/components/layout/AccountMenu';
+import { AccountMenu, AccountMenuSettingsLink } from '@/components/layout/AccountMenu';
 import { isSidebarItemActive, SidebarShell } from '@/components/layout/SidebarShell';
 import { CustomButton, CustomTooltip } from '@/components/shared';
 import { useNavigation } from '@/contexts/navigation';
@@ -70,7 +70,11 @@ const CallDetailShell: React.FC<CallDetailShellProps> = ({ callId, children }) =
           activeLayoutId="call-detail-rail"
           className="hidden lg:flex"
           primary={(collapsed) => <BackToCallHistory collapsed={collapsed} />}
-          footer={(collapsed) => <AccountMenu collapsed={collapsed} />}
+          footer={(collapsed) => (
+            <AccountMenu collapsed={collapsed}>
+              <AccountMenuSettingsLink />
+            </AccountMenu>
+          )}
         />
 
         {/* ── Content column ────────────────────────────────────────── */}
