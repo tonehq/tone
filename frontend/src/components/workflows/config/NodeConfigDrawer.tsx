@@ -99,6 +99,16 @@ const NodeConfigDrawer: React.FC<Props> = ({
     if (!node) return null;
     const type = node.type as WorkflowNodeType;
     const meta = NODE_REGISTRY[type];
+    // A node whose type is no longer supported (e.g. a legacy graph opened after the
+    // type was removed). Show a safe message instead of crashing; it stays deletable.
+    if (!meta) {
+      return (
+        <p className="text-sm text-muted-foreground">
+          This node’s type (<span className="font-mono">{String(type)}</span>) is no longer
+          supported. Delete it and rebuild this step with a supported node.
+        </p>
+      );
+    }
     const Icon = meta.icon;
     const data = node.data as D;
     const patch = (p: D) => onChangeNode(node.id, { ...data, ...p });
@@ -136,16 +146,10 @@ const NodeConfigDrawer: React.FC<Props> = ({
         </div>
 
         {/* conversation: first message */}
-        {(type === 'conversation' || type === 'transferCall' || type === 'endCall') && (
+        {(type === 'conversation' || type === 'endCall') && (
           <TextAreaField
             name="first-message"
-            label={
-              type === 'endCall'
-                ? 'Goodbye message'
-                : type === 'transferCall'
-                  ? 'Message before transfer'
-                  : 'First message (spoken on entry)'
-            }
+            label={type === 'endCall' ? 'Goodbye message' : 'First message (spoken on entry)'}
             rows={type === 'conversation' ? 2 : 3}
             value={fm}
             onChange={(e) => setFirstMessage(e.target.value)}
@@ -257,18 +261,6 @@ const NodeConfigDrawer: React.FC<Props> = ({
         )}
 
         {type === 'apiRequest' && <ApiRequestForm data={data} patch={patch} />}
-
-        {/* transfer destination */}
-        {type === 'transferCall' && (
-          <TextInput
-            name="destination"
-            label="Destination number"
-            value={String((data.destination as D | undefined)?.number ?? '')}
-            onChange={(e) => patch({ destination: { type: 'number', number: e.target.value } })}
-            placeholder="+15551234567"
-            className="font-mono"
-          />
-        )}
 
         {/* extract variables */}
         {type === 'conversation' && (
@@ -447,7 +439,7 @@ const NodeConfigDrawer: React.FC<Props> = ({
               size="sm"
               icon={<Trash2 className="h-4 w-4" />}
               onClick={() => onDeleteNode(node.id)}
-              disabled={!NODE_REGISTRY[node.type as WorkflowNodeType].deletable}
+              disabled={!(NODE_REGISTRY[node.type as WorkflowNodeType]?.deletable ?? true)}
             >
               Delete
             </CustomButton>

@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 
 from sqlalchemy import case, or_
 
+from core.services.agent_attachment_sync import get_attached_agents, sync_agent_attachments
 from core.services.audit_actions import AgentAuditAction, AuditResourceType
 from core.services.base import BaseService
 from core.models.mcp_server import McpServer
@@ -396,100 +397,39 @@ class McpServerService(BaseService):
     def _sync_agent_attachments(self, mcp_server: McpServer, agent_ids: List) -> None:
         """Full-sync the server's published-version attachments to ``agent_ids``.
 
-        Mirror of ``ToolService._sync_agent_attachments``: the list becomes the
-        exact set of agents whose PUBLISHED version reaches this server, reusing
-        ``attach_to_agents`` / ``detach_from_agents`` for published-version
-        resolution, scope validation, and audit logging. State problems come
-        back as warning strings so the saved row isn't rolled back; malformed
-        ids still raise 400.
-
-        Stamps ``attachment_warnings`` and ``attachment_summary``
-        (``{"attached": n, "detached": n}``) onto ``mcp_server`` for the
-        response layer, so the client can confirm what actually changed.
+        Companion to ``upsert_mcp_server``'s optional ``agent_ids`` field.
+        Delegates to the shared ``sync_agent_attachments`` helper (behaviour
+        documented there), passing this service's own ``attach_to_agents`` /
+        ``detach_from_agents`` so published-version resolution, scope validation,
+        and audit logging stay in one place. Stamps the transient
+        ``attachment_warnings`` / ``attachment_summary`` attributes onto
+        ``mcp_server`` for the response layer.
         """
-        from core.models.agent import Agent
-
-        try:
-            desired = {UUID(str(a)) for a in agent_ids}
-        except (ValueError, TypeError, AttributeError):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="agent_ids must be a list of agent UUIDs",
-            )
-
-        warnings: List[str] = []
-        rows = (
-            self.db.query(Agent.id, Agent.name, Agent.published_config_id)
-            .filter(
-                Agent.id.in_(desired),
-                Agent.organization_id == self.org_id,
-                Agent.deleted_at.is_(None),
-            )
-            .all()
-        ) if desired else []
-        unknown = desired - {r.id for r in rows}
-        if unknown:
-            warnings.append(
-                "Unknown agents skipped: " + ", ".join(sorted(str(u) for u in unknown))
-            )
-        unpublished = sorted(r.name for r in rows if r.published_config_id is None)
-        if unpublished:
-            warnings.append(
-                "Agents without a published version skipped (publish them first): "
-                + ", ".join(unpublished)
-            )
-        attachable = {r.id for r in rows if r.published_config_id is not None}
-
-        current = {
-            aid
-            for (aid,) in self.db.query(AgentMcpServer.agent_id)
-            .join(Agent, Agent.id == AgentMcpServer.agent_id)
-            .filter(
-                AgentMcpServer.mcp_server_id == mcp_server.id,
-                AgentMcpServer.agent_config_id == Agent.published_config_id,
-                Agent.organization_id == self.org_id,
-            )
-            .all()
-        }
-
-        to_add = sorted(attachable - current)
-        to_remove = sorted(current - desired)
-        attached = detached = 0
-        if to_add:
-            try:
-                self.attach_to_agents(mcp_server.id, to_add)
-                attached = len(to_add)
-            except HTTPException as exc:
-                warnings.append(f"Attach failed: {exc.detail}")
-        if to_remove:
-            try:
-                self.detach_from_agents(mcp_server.id, to_remove)
-                detached = len(to_remove)
-            except HTTPException as exc:
-                warnings.append(f"Detach failed: {exc.detail}")
+        warnings, summary = sync_agent_attachments(
+            self.db,
+            self.org_id,
+            link_model=AgentMcpServer,
+            link_fk=AgentMcpServer.mcp_server_id,
+            entity_id=mcp_server.id,
+            agent_ids=agent_ids,
+            attach=lambda ids: (self.attach_to_agents(mcp_server.id, ids), len(ids))[1],
+            detach=lambda ids: (self.detach_from_agents(mcp_server.id, ids), len(ids))[1],
+        )
         mcp_server.attachment_warnings = warnings
-        mcp_server.attachment_summary = {"attached": attached, "detached": detached}
+        mcp_server.attachment_summary = summary
 
     def get_agents_by_mcp_server(self, mcp_server_id) -> List[Dict[str, str]]:
         """Agents whose PUBLISHED version reaches this server — the same scope
         ``_sync_agent_attachments`` reads and writes, so the edit form can
         round-trip the list without drift."""
-        from core.models.agent import Agent
-
         self.get_mcp_server(mcp_server_id)
-        rows = (
-            self.db.query(Agent.id, Agent.name)
-            .join(AgentMcpServer, AgentMcpServer.agent_id == Agent.id)
-            .filter(
-                AgentMcpServer.mcp_server_id == mcp_server_id,
-                AgentMcpServer.agent_config_id == Agent.published_config_id,
-                Agent.organization_id == self.org_id,
-                Agent.deleted_at.is_(None),
-            )
-            .order_by(Agent.name.asc())
-            .all()
+        return get_attached_agents(
+            self.db,
+            self.org_id,
+            link_model=AgentMcpServer,
+            link_fk=AgentMcpServer.mcp_server_id,
+            entity_id=mcp_server_id,
         )
-        return [{"id": str(r.id), "name": r.name} for r in rows]
 
     # ``status`` is derived from the boolean ``is_active`` via a CASE expression
     # so it flows through the generic faceted-query helpers as a string facet.

@@ -103,7 +103,19 @@ const BaseNode: React.FC<BaseNodeProps> = ({
               </CustomTooltip>
             )}
             {errorCount > 0 && (
-              <CustomTooltip content={errorMessages.join('\n') || `${errorCount} issue(s)`}>
+              <CustomTooltip
+                content={
+                  errorMessages.length ? (
+                    <ul className="max-w-[260px] list-disc space-y-1 pl-3.5 text-left">
+                      {errorMessages.map((m, i) => (
+                        <li key={i}>{m}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    `${errorCount} issue(s)`
+                  )
+                }
+              >
                 <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-amber-500/10 px-1 text-[10px] font-semibold text-amber-600 ring-1 ring-inset ring-amber-500/25 dark:text-amber-300">
                   {errorCount}
                 </span>

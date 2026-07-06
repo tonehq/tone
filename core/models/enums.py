@@ -12,7 +12,6 @@ class WorkflowNodeType(str, enum.Enum):
     """Node types for the visual workflow builder (Vapi-aligned + a decision router)."""
     CONVERSATION = "conversation"
     TOOL = "tool"
-    TRANSFER_CALL = "transferCall"
     END_CALL = "endCall"
     DECISION = "decision"
     API_REQUEST = "apiRequest"

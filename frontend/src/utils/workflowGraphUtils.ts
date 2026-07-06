@@ -8,7 +8,7 @@ import type {
 } from '@/types/workflow';
 import { NODE_REGISTRY } from '@/components/workflows/nodeRegistry';
 
-const TERMINAL = new Set<WorkflowNodeType>(['endCall', 'transferCall']);
+const TERMINAL = new Set<WorkflowNodeType>(['endCall']);
 
 export function defaultGraph(): WorkflowGraph {
   return {
@@ -102,7 +102,11 @@ export function toCleanGraph(
 export function validateGraph(nodes: WorkflowNode[], edges: WorkflowEdge[]): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
   if (nodes.length === 0) {
-    issues.push({ code: 'EMPTY', node_name: null, message: 'Workflow has no nodes.' });
+    issues.push({
+      code: 'EMPTY',
+      node_name: null,
+      message: 'This workflow is empty. Add a Start node and at least one End Call node to begin.',
+    });
     return issues;
   }
 
@@ -114,14 +118,16 @@ export function validateGraph(nodes: WorkflowNode[], edges: WorkflowEdge[]): Val
     issues.push({
       code: 'NO_START',
       node_name: null,
-      message: 'No start node — mark the entry node as Start.',
+      message:
+        'No entry point set. Open the first node and turn on “Start” so the call knows where to begin.',
     });
   else if (starts.length > 1)
     starts.forEach((n) =>
       issues.push({
         code: 'MULTIPLE_START',
         node_name: n.id,
-        message: 'More than one start node.',
+        message:
+          'Two nodes are marked as Start. A workflow can have only one — turn off “Start” on all but the entry node.',
       }),
     );
 
@@ -131,13 +137,15 @@ export function validateGraph(nodes: WorkflowNode[], edges: WorkflowEdge[]): Val
       issues.push({
         code: 'DANGLING_EDGE',
         node_name: e.source,
-        message: 'Edge from a missing node.',
+        message:
+          'A connection starts from a node that no longer exists. Delete the connection and redraw it from a real node.',
       });
     if (!idSet.has(e.target))
       issues.push({
         code: 'DANGLING_EDGE',
         node_name: e.target,
-        message: 'Edge to a missing node.',
+        message:
+          'A connection points to a node that no longer exists. Delete the connection and redraw it to a real node.',
       });
     if (e.source in out) out[e.source] += 1;
   });
@@ -151,20 +159,31 @@ export function validateGraph(nodes: WorkflowNode[], edges: WorkflowEdge[]): Val
       issues.push({
         code: 'TERMINAL_OUTGOING',
         node_name: n.id,
-        message: 'Terminal node must not have outgoing edges.',
+        message:
+          'An End Call node ends the call, so it can’t have outgoing connections. Remove the connections leaving this node.',
       });
     if (!terminal && out[n.id] === 0 && !globalIds.has(n.id))
-      issues.push({ code: 'DEAD_END', node_name: n.id, message: 'Node has no outgoing edge.' });
+      issues.push({
+        code: 'DEAD_END',
+        node_name: n.id,
+        message:
+          'This node has no outgoing connection, so the call gets stuck here. Draw a connection to the next step (or to an End Call node).',
+      });
 
     if (n.type === 'apiRequest') {
       const url = String((n.data as { url?: unknown }).url ?? '').trim();
       if (!url)
-        issues.push({ code: 'INVALID_URL', node_name: n.id, message: 'API request needs a URL.' });
+        issues.push({
+          code: 'INVALID_URL',
+          node_name: n.id,
+          message: 'This API Request node has no URL. Open it and enter the endpoint to call.',
+        });
       else if (!url.startsWith('https://') && !url.startsWith('{{'))
         issues.push({
           code: 'INVALID_URL',
           node_name: n.id,
-          message: 'API request URL must use https://.',
+          message:
+            'The API Request URL must start with https:// (or a {{variable}}). Update the URL to use a secure address.',
         });
     }
   });
@@ -187,7 +206,8 @@ export function validateGraph(nodes: WorkflowNode[], edges: WorkflowEdge[]): Val
         issues.push({
           code: 'UNREACHABLE',
           node_name: id,
-          message: 'Not reachable from the start node.',
+          message:
+            'Nothing connects to this node, so the call can never reach it. Add an incoming connection from an earlier step, or delete the node.',
         });
     });
     const typeMap = Object.fromEntries(nodes.map((n) => [n.id, n.type]));
@@ -196,7 +216,8 @@ export function validateGraph(nodes: WorkflowNode[], edges: WorkflowEdge[]): Val
       issues.push({
         code: 'NO_TERMINAL',
         node_name: null,
-        message: 'No reachable End/Transfer node — the call can never end.',
+        message:
+          'The call can never end — no End Call node is reachable from Start. Add an End Call node and connect a path to it.',
       });
   }
 
