@@ -26,6 +26,7 @@ from core.services.agent_config_service import AgentConfigService
 from core.services.channel_service import ChannelService
 from core.services.meta_data_schema_validator import MetaDataSchemaValidator
 from core.services.webrtc import supported_providers
+from core.utils.model_settings import SETTINGS_MODEL_KINDS, as_uuid
 from core.models.agent_tool import AgentTool
 from core.models.agent_mcp_server import AgentMcpServer
 from core.models.agent_knowledge_base import AgentKnowledgeBase
@@ -1321,16 +1322,9 @@ class AgentService(BaseService):
         # (which the audit CLI is responsible for) block or silently mutate an
         # unrelated edit (e.g. a first_message-only save). Pre-existing bad rows
         # are surfaced by `config_audit`, not repaired opportunistically here.
-        written_settings = {k for k, _ in self._SETTINGS_MODEL_KINDS if k in data}
+        written_settings = {k for k, _ in SETTINGS_MODEL_KINDS if k in data}
         if written_settings:
             self._reconcile_target_model_ids(target, only=written_settings)
-
-    # Per-service settings JSONB column → the Model.kind it may reference.
-    _SETTINGS_MODEL_KINDS = (
-        ("llm_settings", "llm"),
-        ("stt_settings", "stt"),
-        ("voice_settings", "tts"),
-    )
 
     def _reconcile_target_model_ids(
         self, target: AgentConfig, only: Optional[set] = None
@@ -1359,23 +1353,17 @@ class AgentService(BaseService):
         * a missing ``model_id`` is filled in when the ``model`` name maps to a
           model of the declared provider.
         """
-        def _as_uuid(value):
-            try:
-                return UUID(str(value)) if value else None
-            except (ValueError, TypeError, AttributeError):
-                return None
-
-        for settings_key, kind in self._SETTINGS_MODEL_KINDS:
+        for settings_key, kind in SETTINGS_MODEL_KINDS:
             if only is not None and settings_key not in only:
                 continue
             settings = getattr(target, settings_key, None)
             if not isinstance(settings, dict):
                 continue
 
-            provider_id = _as_uuid(settings.get("provider_id"))
+            provider_id = as_uuid(settings.get("provider_id"))
             if not provider_id:
                 continue
-            model_id = _as_uuid(settings.get("model_id"))
+            model_id = as_uuid(settings.get("model_id"))
             model_name = settings.get("model")
 
             row = (
