@@ -1,0 +1,97 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-tone-call-pod-0
+  namespace: staging
+  labels:
+    app: staging-tone-call-worker
+    environment: staging
+    component: call
+spec:
+  selector:
+    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-0
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-tone-call-pod-1
+  namespace: staging
+  labels:
+    app: staging-tone-call-worker
+    environment: staging
+    component: call
+spec:
+  selector:
+    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-1
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-tone-call-pod-2
+  namespace: staging
+  labels:
+    app: staging-tone-call-worker
+    environment: staging
+    component: call
+spec:
+  selector:
+    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-2
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: staging-tone-call-pod-ingress
+  namespace: staging
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/websocket-services: "staging-tone-call-pod-0,staging-tone-call-pod-1,staging-tone-call-pod-2"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - staging-call.trytone.ai
+      secretName: staging-tone-call-certificate
+  rules:
+    - host: staging-call.trytone.ai
+      http:
+        paths:
+          - path: /pod/0(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: staging-tone-call-pod-0
+                port:
+                  number: 80
+          - path: /pod/1(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: staging-tone-call-pod-1
+                port:
+                  number: 80
+          - path: /pod/2(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: staging-tone-call-pod-2
+                port:
+                  number: 80

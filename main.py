@@ -25,6 +25,8 @@ from core.api.v1 import (
 )
 from core.middleware.request_context import RequestContextMiddleware
 from core.utils.pod_identity import get_served_by, pod_name, node_name, deployment_name
+from core.database.session import get_db_context
+from core.services.pod_picker import PodPicker
 import core.models
 
 skip_license = settings.SKIP_LICENSE_CHECK
@@ -284,6 +286,14 @@ def metrics():
 async def twiml(request: Request) -> Response:
     host = request.url.hostname or "localhost"
     ws_url = f"wss://{host}/ws"
+    if settings.POD_PINNING_ENABLED:
+        try:
+            with get_db_context() as db:
+                pinned_url = PodPicker(db).get_pod()
+            if pinned_url:
+                ws_url = pinned_url
+        except Exception as exc:
+            print(f"[/twiml] pod pinning failed, falling back to /ws: {exc}")
     from_number = ""
     to_number = ""
     try:

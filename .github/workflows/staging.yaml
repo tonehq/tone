@@ -55,6 +55,8 @@ jobs:
           kubectl apply -f build/kubernetes/staging/call/deployment.yaml
           kubectl apply -f build/kubernetes/staging/call/certificate.yaml
           kubectl apply -f build/kubernetes/staging/call/ingress.yaml
+          kubectl apply -f build/kubernetes/staging/call/pod-routing.yaml
+          kubectl apply -f build/kubernetes/staging/worker/rbac.yaml
           kubectl apply -f build/kubernetes/staging/worker/deployment.yaml
 
       - name: Rollout restart deployments
