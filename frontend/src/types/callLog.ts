@@ -96,6 +96,12 @@ export interface CallMetrics {
   turn_metrics?: CallMetricsTurnMetric[] | null;
 }
 
+export interface ServedBy {
+  deployment?: string;
+  pod?: string;
+  node?: string;
+}
+
 export interface CallLogRow {
   id: string;
   agent_id: string;
@@ -118,6 +124,7 @@ export interface CallLogRow {
   to_number: string | null;
   provider_call_id: string | null;
   trace_id: string | null;
+  served_by: ServedBy | null;
   recording_upload_id: string | null;
   transcript: Array<{ role: string; text: string; timestamp?: string }> | null;
   tool_calls: Array<Record<string, unknown>> | null;
