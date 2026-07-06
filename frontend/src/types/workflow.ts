@@ -1,13 +1,7 @@
 import type { Edge, Node } from '@xyflow/react';
 
 // ── node types ──────────────────────────────────────────────────────────────
-export type WorkflowNodeType =
-  | 'conversation'
-  | 'decision'
-  | 'tool'
-  | 'transferCall'
-  | 'endCall'
-  | 'apiRequest';
+export type WorkflowNodeType = 'conversation' | 'decision' | 'tool' | 'endCall' | 'apiRequest';
 
 export type EdgeConditionType = 'ai' | 'logic';
 

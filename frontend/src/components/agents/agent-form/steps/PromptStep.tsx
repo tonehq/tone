@@ -135,7 +135,7 @@ export default function PromptStep() {
   return (
     <div className="flex h-full flex-col gap-3">
       {/* ── Conversation-driver hero (compact) ───────────────────────────── */}
-      <section className="relative overflow-hidden rounded-xl border border-border/80 bg-gradient-to-br from-primary/[0.05] via-transparent to-transparent px-3.5 py-3 ring-1 ring-inset ring-border/40">
+      <section className="relative shrink-0 overflow-hidden rounded-xl border border-border/80 bg-gradient-to-br from-primary/[0.05] via-transparent to-transparent px-3.5 py-3 ring-1 ring-inset ring-border/40">
         <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
           <h2 className="text-[13px] font-semibold tracking-tight text-foreground">
             How {versionLabel} drives conversations
@@ -213,7 +213,7 @@ export default function PromptStep() {
           </p>
         </SectionCard>
       ) : (
-        <div className="flex flex-col gap-3">
+        <div className="flex shrink-0 flex-col gap-3">
           {needsSelection && agentId && (
             <p className="flex items-center gap-1.5 text-[12px] font-medium text-amber-700 dark:text-amber-300">
               <CircleAlert className="size-3.5 shrink-0" />

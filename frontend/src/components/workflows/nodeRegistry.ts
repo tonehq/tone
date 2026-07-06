@@ -1,12 +1,4 @@
-import {
-  GitBranch,
-  Globe,
-  MessageSquare,
-  PhoneForwarded,
-  PhoneOff,
-  Wrench,
-  type LucideIcon,
-} from 'lucide-react';
+import { GitBranch, Globe, MessageSquare, PhoneOff, Wrench, type LucideIcon } from 'lucide-react';
 
 import type { WorkflowNodeType } from '@/types/workflow';
 
@@ -49,11 +41,6 @@ const ACCENTS: Record<WorkflowNodeType, NodeAccent> = {
     chip: 'bg-violet-500/10 ring-1 ring-inset ring-violet-500/20 text-violet-600 dark:text-violet-300',
     bar: 'bg-violet-500/70',
     mini: '#8b5cf6',
-  },
-  transferCall: {
-    chip: 'bg-sky-500/10 ring-1 ring-inset ring-sky-500/20 text-sky-600 dark:text-sky-300',
-    bar: 'bg-sky-500/70',
-    mini: '#0ea5e9',
   },
   endCall: {
     chip: 'bg-rose-500/10 ring-1 ring-inset ring-rose-500/20 text-rose-600 dark:text-rose-300',
@@ -109,21 +96,6 @@ export const NODE_REGISTRY: Record<WorkflowNodeType, NodeTypeMeta> = {
     deletable: true,
     defaultData: () => ({ toolId: '' }),
   },
-  transferCall: {
-    type: 'transferCall',
-    label: 'Transfer Call',
-    description: 'Hand the call to a number',
-    icon: PhoneForwarded,
-    category: 'Actions',
-    accent: ACCENTS.transferCall,
-    hasTarget: true,
-    terminal: true,
-    deletable: true,
-    defaultData: () => ({
-      destination: { type: 'number', number: '' },
-      messagePlan: { firstMessage: '' },
-    }),
-  },
   endCall: {
     type: 'endCall',
     label: 'End Call',
@@ -165,12 +137,7 @@ export const NODE_CATEGORIES: { heading: string; items: NodeTypeMeta[] }[] = [
   { heading: 'Logic', items: [NODE_REGISTRY.decision] },
   {
     heading: 'Actions',
-    items: [
-      NODE_REGISTRY.tool,
-      NODE_REGISTRY.apiRequest,
-      NODE_REGISTRY.transferCall,
-      NODE_REGISTRY.endCall,
-    ],
+    items: [NODE_REGISTRY.tool, NODE_REGISTRY.apiRequest, NODE_REGISTRY.endCall],
   },
 ];
 
