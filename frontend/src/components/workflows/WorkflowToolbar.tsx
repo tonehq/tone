@@ -117,10 +117,10 @@ const WorkflowToolbar: React.FC<Props> = ({
                         if (iss.node_name && onFocusNode) onFocusNode(iss.node_name);
                         setIssuesOpen(false);
                       }}
-                      className="!h-auto !items-start !justify-start gap-2 rounded-md px-2 py-1.5 text-left text-sm font-normal"
+                      className="!h-auto !items-start !justify-start gap-2 whitespace-normal rounded-md px-2 py-1.5 text-left text-sm font-normal"
                       icon={<CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />}
                     >
-                      <span>
+                      <span className="break-words">
                         {iss.node_name && (
                           <span className="font-mono text-xs text-muted-foreground">
                             {iss.node_name}:{' '}
@@ -176,7 +176,7 @@ const WorkflowToolbar: React.FC<Props> = ({
               className="!justify-start gap-2.5 rounded-md px-2 py-1.5 text-left text-sm font-normal"
               icon={<FileDown className="h-4 w-4 text-muted-foreground" />}
             >
-              Export Vapi JSON
+              Export JSON
             </CustomButton>
           </div>
         </CustomPopover>

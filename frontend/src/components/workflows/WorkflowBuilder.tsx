@@ -312,12 +312,12 @@ function BuilderInner({ workflowId, backHref: backHrefProp }: Props) {
 
   const handleExport = useCallback(async () => {
     try {
-      const vapi = await exportWorkflow(workflowId);
-      const blob = new Blob([JSON.stringify(vapi, null, 2)], { type: 'application/json' });
+      const exported = await exportWorkflow(workflowId);
+      const blob = new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `${(name || 'workflow').replace(/\s+/g, '-').toLowerCase()}.vapi.json`;
+      a.download = `${(name || 'workflow').replace(/\s+/g, '-').toLowerCase()}.json`;
       document.body.appendChild(a);
       a.click();
       a.remove();

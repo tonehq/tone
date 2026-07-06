@@ -5,8 +5,8 @@ import React from 'react';
 /** A small stylised "pathway" diagram used in the workflows empty state. */
 const WorkflowPathwayIllustration: React.FC = () => (
   <svg
-    width="300"
-    height="150"
+    width="240"
+    height="120"
     viewBox="0 0 300 150"
     fill="none"
     className="text-border"

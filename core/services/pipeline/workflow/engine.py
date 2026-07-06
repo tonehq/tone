@@ -43,7 +43,6 @@ class NodeDirective:
     system_prompt: str = ""          # global prompt + node prompt (persona prepended by runner)
     speak: Optional[str] = None      # firstMessage to TTS on entry
     end_call: bool = False
-    transfer_to: Optional[str] = None
     run_tool: Optional[Dict[str, Any]] = None  # {toolId} or {tool:{type}}
     stay: bool = False               # loop condition unmet → re-prompt current node
     register_tools: List[str] = field(default_factory=list)
@@ -201,9 +200,6 @@ class WorkflowEngine:
 
         if ntype == "endCall":
             directive.end_call = True
-        elif ntype == "transferCall":
-            dest = (data.get("destination") or {}).get("number")
-            directive.transfer_to = substitute(dest, v) if dest else None
         elif ntype == "tool":
             if data.get("toolId"):
                 directive.run_tool = {"toolId": data["toolId"]}

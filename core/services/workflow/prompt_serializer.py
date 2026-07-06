@@ -20,7 +20,6 @@ _TYPE_LABEL = {
     "conversation": "Talk step",
     "decision": "Decision step",
     "tool": "Tool / action step",
-    "transferCall": "Transfer step",
     "endCall": "End step",
     "apiRequest": "API request step",
 }
@@ -238,11 +237,6 @@ def serialize_graph_for_llm(
             if _s(msgs.get("start")):
                 lines.append(f'- Before calling, say: "{_s(msgs.get("start"))}"')
 
-        if ntype == "transferCall":
-            dest = data.get("destination") if isinstance(data.get("destination"), dict) else {}
-            number = _s(dest.get("number"))
-            lines.append(f"- Transfer the call{f' to {number}' if number else ''}.")
-
         if ntype == "endCall":
             lines.append("- End the call after speaking.")
 
@@ -268,7 +262,7 @@ def serialize_graph_for_llm(
                 else:
                     desc = "otherwise (always)"
                 lines.append(f"    → go to '{tgt}' {desc}")
-        elif ntype not in ("endCall", "transferCall"):
+        elif ntype != "endCall":
             lines.append("- Next: end the conversation politely.")
 
     return "\n".join(lines).strip()

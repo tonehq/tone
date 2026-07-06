@@ -76,12 +76,6 @@ class ToolData(_BaseNodeData):
     tool: Optional[InlineTool] = None
 
 
-class TransferCallData(_BaseNodeData):
-    destination: Optional[Dict[str, Any]] = None
-    transferPlan: Optional[Dict[str, Any]] = None
-    messagePlan: Optional[MessagePlan] = None
-
-
 class EndCallData(_BaseNodeData):
     messagePlan: Optional[MessagePlan] = None
 
@@ -163,11 +157,6 @@ class ToolNode(_NodeBase):
     data: ToolData
 
 
-class TransferCallNode(_NodeBase):
-    type: Literal["transferCall"]
-    data: TransferCallData
-
-
 class EndCallNode(_NodeBase):
     type: Literal["endCall"]
     data: EndCallData
@@ -184,13 +173,11 @@ class ApiRequestNode(_NodeBase):
 
 
 WorkflowNode = Annotated[
-    Union[
-        ConversationNode, ToolNode, TransferCallNode, EndCallNode, DecisionNode, ApiRequestNode
-    ],
+    Union[ConversationNode, ToolNode, EndCallNode, DecisionNode, ApiRequestNode],
     Field(discriminator="type"),
 ]
 
-TERMINAL_TYPES = {"endCall", "transferCall"}
+TERMINAL_TYPES = {"endCall"}
 
 
 # ---------------------------------------------------------------------------
@@ -310,25 +297,25 @@ def validate_graph(graph: Dict[str, Any]) -> List[Dict[str, Any]]:
         seen.add(nid)
 
     if not nodes:
-        issues.append({"code": "EMPTY", "node_name": None, "message": "Workflow has no nodes."})
+        issues.append({"code": "EMPTY", "node_name": None, "message": "This workflow is empty. Add a Start node and at least one End Call node to begin."})
         return issues
 
     # 3. Exactly one start node.
     starts = [n for n in nodes if getattr(n.data, "isStart", False)]
     if len(starts) == 0:
-        issues.append({"code": "NO_START", "node_name": None, "message": "No start node (set isStart on the entry node)."})
+        issues.append({"code": "NO_START", "node_name": None, "message": "No entry point set. Open the first node and turn on “Start” so the call knows where to begin."})
     elif len(starts) > 1:
         for n in starts:
-            issues.append({"code": "MULTIPLE_START", "node_name": n.id, "message": "More than one start node."})
+            issues.append({"code": "MULTIPLE_START", "node_name": n.id, "message": "Two nodes are marked as Start. A workflow can have only one — turn off “Start” on all but the entry node."})
 
     id_set = set(ids)
 
     # 4. Edges reference existing nodes.
     for e in edges:
         if e.source not in id_set:
-            issues.append({"code": "DANGLING_EDGE", "node_name": e.source, "message": f"Edge source '{e.source}' is not a node."})
+            issues.append({"code": "DANGLING_EDGE", "node_name": e.source, "message": f"A connection starts from '{e.source}', which no longer exists. Delete the connection and redraw it from a real node."})
         if e.target not in id_set:
-            issues.append({"code": "DANGLING_EDGE", "node_name": e.target, "message": f"Edge target '{e.target}' is not a node."})
+            issues.append({"code": "DANGLING_EDGE", "node_name": e.target, "message": f"A connection points to '{e.target}', which no longer exists. Delete the connection and redraw it to a real node."})
 
     # 5. Terminal nodes have no outgoing; non-terminal nodes have outgoing (unless global).
     out_map: Dict[str, int] = {nid: 0 for nid in ids}
@@ -340,9 +327,9 @@ def validate_graph(graph: Dict[str, Any]) -> List[Dict[str, Any]]:
     for n in nodes:
         is_terminal = n.type in TERMINAL_TYPES
         if is_terminal and out_map[n.id] > 0:
-            issues.append({"code": "TERMINAL_OUTGOING", "node_name": n.id, "message": "Terminal node must not have outgoing edges."})
+            issues.append({"code": "TERMINAL_OUTGOING", "node_name": n.id, "message": "An End Call node ends the call, so it can’t have outgoing connections. Remove the connections leaving this node."})
         if not is_terminal and out_map[n.id] == 0 and n.id not in global_ids:
-            issues.append({"code": "DEAD_END", "node_name": n.id, "message": "Non-terminal node has no outgoing edge."})
+            issues.append({"code": "DEAD_END", "node_name": n.id, "message": "This node has no outgoing connection, so the call gets stuck here. Draw a connection to the next step (or to an End Call node)."})
 
     _METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
     for n in nodes:
@@ -351,9 +338,9 @@ def validate_graph(graph: Dict[str, Any]) -> List[Dict[str, Any]]:
         d = n.data
         url = (getattr(d, "url", "") or "").strip()
         if not url:
-            issues.append({"code": "INVALID_URL", "node_name": n.id, "message": "API Request needs a URL."})
+            issues.append({"code": "INVALID_URL", "node_name": n.id, "message": "This API Request node has no URL. Open it and enter the endpoint to call."})
         elif not (url.startswith("https://") or url.startswith("{{")):
-            issues.append({"code": "INVALID_URL", "node_name": n.id, "message": "API Request URL must use https://."})
+            issues.append({"code": "INVALID_URL", "node_name": n.id, "message": "The API Request URL must start with https:// (or a {{variable}}). Update the URL to use a secure address."})
         if (getattr(d, "method", "GET") or "GET").upper() not in _METHODS:
             issues.append({"code": "INVALID_METHOD", "node_name": n.id, "message": "Unsupported HTTP method."})
         for label, rows, keyattr in (
@@ -384,11 +371,11 @@ def validate_graph(graph: Dict[str, Any]) -> List[Dict[str, Any]]:
             stack.extend(adj.get(cur, []))
         for nid in ids:
             if nid not in reachable:
-                issues.append({"code": "UNREACHABLE", "node_name": nid, "message": "Node is not reachable from the start node."})
+                issues.append({"code": "UNREACHABLE", "node_name": nid, "message": "Nothing connects to this node, so the call can never reach it. Add an incoming connection from an earlier step, or delete the node."})
 
         # 7. At least one reachable terminal.
         if not any(type_map[nid] in TERMINAL_TYPES for nid in reachable if nid in type_map):
-            issues.append({"code": "NO_TERMINAL", "node_name": None, "message": "No reachable End/Transfer node — the call can never end."})
+            issues.append({"code": "NO_TERMINAL", "node_name": None, "message": "The call can never end — no End Call node is reachable from Start. Add an End Call node and connect a path to it."})
 
     return issues
 
