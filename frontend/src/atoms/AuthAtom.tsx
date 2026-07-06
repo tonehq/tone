@@ -1,9 +1,9 @@
 import { atom } from 'jotai';
 
 import { authApi } from '@/lib/api/auth';
-import { ACCESS_TOKEN, LOGIN_DATA, ROUTE_LOGIN, TENANT_ID } from '@/constants';
-
-const REFRESH_TOKEN = 'refresh_token';
+import { LOGIN_DATA, TENANT_ID } from '@/constants';
+import { abortAuthRefresh } from '@/utils/axios';
+import { endSession, getRefreshToken } from '@/utils/authSession';
 
 interface User {
   id: string;
@@ -26,21 +26,14 @@ const authAtom = atom<AuthState>({
   isLoading: false,
 });
 
-function clearAuthStorage() {
-  if (typeof window === 'undefined') return;
-  localStorage.removeItem(ACCESS_TOKEN);
-  localStorage.removeItem(REFRESH_TOKEN);
-  localStorage.removeItem(TENANT_ID);
-  localStorage.removeItem(LOGIN_DATA);
-  localStorage.removeItem('user_id');
-  sessionStorage.clear();
-}
-
 const logoutAtom = atom(null, async (_get, set) => {
   set(authAtom, (prev) => ({ ...prev, isLoading: true }));
   // Capture the refresh token BEFORE clearing storage so we can hand it to
   // the backend, which uses it to revoke the matching session row.
-  const refreshToken = typeof window !== 'undefined' ? localStorage.getItem(REFRESH_TOKEN) : null;
+  const refreshToken = getRefreshToken();
+  // Reject any requests waiting on an in-flight token refresh so they don't
+  // hang forever once storage is cleared below.
+  abortAuthRefresh();
   try {
     if (refreshToken) {
       await authApi.logout({ refresh_token: refreshToken });
@@ -49,11 +42,8 @@ const logoutAtom = atom(null, async (_get, set) => {
     // Logout is best-effort on the server; we still log the user out locally.
     console.error('Logout error:', error);
   } finally {
-    clearAuthStorage();
     set(authAtom, { user: null, isAuthenticated: false, isLoading: false });
-    if (typeof window !== 'undefined') {
-      window.location.href = ROUTE_LOGIN;
-    }
+    endSession({ reason: 'manual', preserveReturnUrl: false });
   }
 });
 
