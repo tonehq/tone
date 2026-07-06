@@ -271,15 +271,19 @@ class PipecatPipelineBuilder(PipelineBuilder):
         else:
             # Standard pipeline: STT -> LLM -> TTS
             context = LLMContext(messages, combined_tools)
+            # stop_secs=0.8 (not 0.4) so a brief mid-sentence pause (~0.5s, e.g.
+            # "Hi, what <pause> can you help me with") doesn't trip end-of-turn
+            # and split one utterance into two; confidence_threshold=0.7 makes
+            # Smart Turn less trigger-happy on incomplete fragments.
             smart_turn_analyzer = LocalSmartTurnAnalyzerV3(
-                confidence_threshold=0.5,
-                params=SmartTurnParams(stop_secs=0.4),
+                confidence_threshold=0.7,
+                params=SmartTurnParams(stop_secs=0.8),
             )
             context_aggregator = LLMContextAggregatorPair(
                 context,
                 user_params=LLMUserAggregatorParams(
                     vad_analyzer=SileroVADAnalyzer(
-                        params=VADParams(stop_secs=0.4),
+                        params=VADParams(stop_secs=0.8),
                     ),
                     user_turn_strategies=UserTurnStrategies(
                         stop=[
