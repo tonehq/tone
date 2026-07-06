@@ -156,3 +156,5 @@ docs/
 /scripts
 files/
 .claude/skills/code-review
+# Keep infra/setup docs under build/docs (overrides the docs/ ignore)
+!build/docs/
