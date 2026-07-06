@@ -15,8 +15,7 @@ guards may still exist in other environments. This module makes them visible:
   post-deploy check to confirm no legacy corrupt rows remain.
 """
 
-from typing import Any, Dict, List, Optional
-from uuid import UUID
+from typing import Any, Dict, List
 
 from loguru import logger
 from sqlalchemy.orm import Session
@@ -24,20 +23,7 @@ from sqlalchemy.orm import Session
 from core.models.agent_config import AgentConfig
 from core.models.model import Model
 from core.models.model_provider import ModelProvider
-
-# Per-service settings JSONB column → the Model.kind it may reference.
-SETTINGS_MODEL_KINDS = (
-    ("llm_settings", "llm"),
-    ("stt_settings", "stt"),
-    ("voice_settings", "tts"),
-)
-
-
-def _as_uuid(value: Any) -> Optional[UUID]:
-    try:
-        return UUID(str(value)) if value else None
-    except (ValueError, TypeError, AttributeError):
-        return None
+from core.utils.model_settings import SETTINGS_MODEL_KINDS, as_uuid
 
 
 def find_provider_model_mismatches(db: Session) -> List[Dict[str, Any]]:
@@ -54,7 +40,7 @@ def find_provider_model_mismatches(db: Session) -> List[Dict[str, Any]]:
         for settings_key, _kind in SETTINGS_MODEL_KINDS:
             settings = getattr(cfg, settings_key, None) or {}
             if isinstance(settings, dict):
-                mid = _as_uuid(settings.get("model_id"))
+                mid = as_uuid(settings.get("model_id"))
                 if mid:
                     referenced_model_ids.add(mid)
 
@@ -73,8 +59,8 @@ def find_provider_model_mismatches(db: Session) -> List[Dict[str, Any]]:
             settings = getattr(cfg, settings_key, None) or {}
             if not isinstance(settings, dict):
                 continue
-            provider_id = _as_uuid(settings.get("provider_id"))
-            model_id = _as_uuid(settings.get("model_id"))
+            provider_id = as_uuid(settings.get("provider_id"))
+            model_id = as_uuid(settings.get("model_id"))
             if not provider_id or not model_id:
                 continue
             model = model_by_id.get(model_id)
