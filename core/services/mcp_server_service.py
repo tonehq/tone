@@ -2,6 +2,7 @@ import base64
 import uuid as uuid_lib
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+from uuid import UUID
 
 from fastapi import HTTPException, status
 
