@@ -66,6 +66,15 @@ class PipelineParams:
     kb_refs: List[dict] = field(default_factory=list)
     mcp_servers: List[dict] = field(default_factory=list)
     telephony_creds: Optional[dict] = None
+    # Raw workflow graph + api-fn-name map for the runtime engine (workflow mode only).
+    # Absent ⇒ prompt mode / playbook fallback; `is_workflow` gates the runtime path.
+    workflow: Optional[dict] = None
+    workflow_fn_names: dict = field(default_factory=dict)
+
+    @property
+    def is_workflow(self) -> bool:
+        """True when a runtime workflow graph is present to drive the call deterministically."""
+        return bool(self.workflow)
 
     @property
     def first_message_text(self) -> Optional[str]:
@@ -166,6 +175,8 @@ class PipelineParams:
             kb=d.get("kb"),
             kb_refs=d.get("kb_refs") or [],
             mcp_servers=d.get("mcp_servers") or [],
+            workflow=d.get("workflow"),
+            workflow_fn_names=d.get("workflow_fn_names") or {},
         )
 
     @classmethod

@@ -170,6 +170,24 @@ def serialize_graph_for_llm(
         if data.get("isGlobal") and enter_cond:
             lines.append(f"- Jump here whenever: {enter_cond}")
 
+        if ntype == "decision":
+            # A decision node is a pure router: it must not speak or collect anything,
+            # only pick one outgoing branch. Say so explicitly so the model doesn't
+            # narrate the routing or take more than one path.
+            lines.append(
+                "- Routing point only — do NOT say anything to the caller here. "
+                "Silently evaluate the branches below and continue down exactly one."
+            )
+            # Spell out the condition grammar so a branch written as a natural-language
+            # (AI) condition is judged with the same operators the deterministic engine
+            # supports on logic edges.
+            lines.append(
+                "- Branch conditions may use: comparisons (== != < <= > >=), membership "
+                "(in / not in), boolean (and / or / not), arithmetic (+ - * / % //), "
+                "dotted access (a.b), and literals (numbers, strings, true/false/yes/no, "
+                "null/nil/none). Pick the first branch whose condition holds."
+            )
+
         fm = _first_message(data)
         if fm:
             # Collapse newlines and escape quotes so the message can't distort the
@@ -179,7 +197,8 @@ def serialize_graph_for_llm(
 
         prompt = _s(data.get("prompt"))
         if prompt:
-            lines.append(f"- Do: {prompt}")
+            # On a decision node the prompt is routing guidance, not an action to perform.
+            lines.append(f"- {'Routing guidance' if ntype == 'decision' else 'Do'}: {prompt}")
 
         if ntype == "tool":
             tool = data.get("tool") if isinstance(data.get("tool"), dict) else None
@@ -246,7 +265,17 @@ def serialize_graph_for_llm(
 
         branches = outgoing.get(nid, [])
         if branches:
-            lines.append("- Next:")
+            # Branches are mutually exclusive and ordered: take the FIRST one whose
+            # condition holds. State that when there's a real choice so the model
+            # commits to a single path instead of blending several.
+            if len(branches) > 1:
+                lines.append(
+                    "- Next — pick exactly ONE branch: take the first (top-to-bottom) "
+                    "whose condition is true:"
+                )
+            else:
+                lines.append("- Next:")
+            multi = len(branches) > 1
             for e in branches:
                 tgt = name_by_id.get(_s(e.get("target")), _s(e.get("target")))
                 edata = e.get("data") if isinstance(e.get("data"), dict) else {}
@@ -260,7 +289,9 @@ def serialize_graph_for_llm(
                         else f'if "{cond_prompt}"'
                     )
                 else:
-                    desc = "otherwise (always)"
+                    # An unconditional edge is the fallback among several branches, or a
+                    # plain "always" step when it's the only way out.
+                    desc = "otherwise (if none of the above match)" if multi else "next (always)"
                 lines.append(f"    → go to '{tgt}' {desc}")
         elif ntype != "endCall":
             lines.append("- Next: end the conversation politely.")

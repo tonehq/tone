@@ -1,14 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import {
-  ChevronLeft,
-  CircleAlert,
-  CircleCheck,
-  FileDown,
-  MoreHorizontal,
-  Sparkles,
-} from 'lucide-react';
+import { ChevronLeft, CircleAlert, CircleCheck, FileDown, Sparkles } from 'lucide-react';
 
 import { cn } from '@/utils/cn';
 import CustomButton from '@/components/shared/CustomButton';
@@ -41,7 +34,6 @@ const WorkflowToolbar: React.FC<Props> = ({
   onFocusNode,
 }) => {
   const [issuesOpen, setIssuesOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   const valid = issues.length === 0;
 
   const savedLabel = saving
@@ -138,48 +130,25 @@ const WorkflowToolbar: React.FC<Props> = ({
 
         <div className="mx-0.5 h-6 w-px bg-border" />
 
-        <CustomPopover
-          open={moreOpen}
-          onOpenChange={setMoreOpen}
-          align="end"
-          width="w-52"
-          trigger={
-            <CustomButton
-              type="text"
-              size="icon-sm"
-              aria-label="More options"
-              icon={<MoreHorizontal className="h-4 w-4" />}
-              className="text-muted-foreground"
-            />
-          }
+        <CustomButton
+          type="default"
+          size="sm"
+          onClick={onOpenGlobalPrompt}
+          icon={<Sparkles className="h-3.5 w-3.5 text-muted-foreground" />}
+          title="Edit the global prompt applied to every node"
         >
-          <div className="flex flex-col">
-            <CustomButton
-              type="text"
-              fullWidth
-              onClick={() => {
-                onOpenGlobalPrompt();
-                setMoreOpen(false);
-              }}
-              className="!justify-start gap-2.5 rounded-md px-2 py-1.5 text-left text-sm font-normal"
-              icon={<Sparkles className="h-4 w-4 text-muted-foreground" />}
-            >
-              Global prompt
-            </CustomButton>
-            <CustomButton
-              type="text"
-              fullWidth
-              onClick={() => {
-                onExport();
-                setMoreOpen(false);
-              }}
-              className="!justify-start gap-2.5 rounded-md px-2 py-1.5 text-left text-sm font-normal"
-              icon={<FileDown className="h-4 w-4 text-muted-foreground" />}
-            >
-              Export JSON
-            </CustomButton>
-          </div>
-        </CustomPopover>
+          Global Prompt
+        </CustomButton>
+
+        <CustomButton
+          type="default"
+          size="sm"
+          onClick={onExport}
+          icon={<FileDown className="h-3.5 w-3.5 text-muted-foreground" />}
+          title="Export the workflow as JSON"
+        >
+          Export
+        </CustomButton>
 
         <CustomButton
           type="primary"

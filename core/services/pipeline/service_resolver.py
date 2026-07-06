@@ -729,6 +729,11 @@ def load_agent_service_config(
     workflow_prompt = None
     workflow_greeting = None
     api_request_tools: list = []
+    # Raw graph + its api-fn-name map, embedded in the payload so the runtime workflow
+    # engine can drive the call deterministically. Kept alongside (not instead of) the
+    # serialized playbook, which stays the fallback for prompt mode / S2S / load failures.
+    workflow_graph = None
+    workflow_fn_names: dict = {}
     try:
         graph = _published_workflow_graph(db, config, org_id)
         if graph:
@@ -748,11 +753,15 @@ def load_agent_service_config(
             )
             workflow_greeting = workflow_first_message(graph) or None
             api_request_tools = _build_api_request_tools(graph, api_fn_names)
+            workflow_graph = graph
+            workflow_fn_names = api_fn_names
     except Exception as exc:  # noqa: BLE001
         logger.warning("[workflow] failed to load workflow for agent={}: {}", agent_id, exc)
         workflow_prompt = None
         workflow_greeting = None
         api_request_tools = []
+        workflow_graph = None
+        workflow_fn_names = {}
 
     if _in_workflow_mode and workflow_prompt:
         # Workflow selected and loaded: drive the call ENTIRELY from the workflow playbook.
@@ -807,6 +816,13 @@ def load_agent_service_config(
         "kb_refs": get_kb_refs(agent_id),
         "mcp_servers": get_mcp_server_refs(agent_id),
     }
+    # Workflow-runtime payload: the raw graph + api-fn-name map, consumed by the runtime
+    # engine when enabled. Only present in workflow mode with a loaded graph; its absence
+    # (prompt mode, old cache entries, load failure) transparently falls back to the
+    # playbook already baked into `messages`. Secrets in the graph stay encrypted.
+    if _in_workflow_mode and workflow_graph:
+        result["workflow"] = workflow_graph
+        result["workflow_fn_names"] = workflow_fn_names
     # Persistent (no TTL): the version stamp guarantees freshness on every read, and edits
     # overwrite/invalidate the entry — so there is no need to expire it on a timer.
     cache_set(cache_key, result, ttl_seconds=None)
