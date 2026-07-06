@@ -2,12 +2,13 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
 from sqlalchemy import Float, and_, asc, cast, desc, func, or_, select
-from sqlalchemy.orm import Query, Session, aliased
+from sqlalchemy.orm import Query, Session, aliased, joinedload
 
 from core.models.agent import Agent
 from core.models.call import Call
 from core.models.call_metrics import CallMetrics
 from core.models.channel import Channel
+from core.models.pod import Pod
 from core.models.phone_number import PhoneNumber
 from core.models.upload import Upload
 from core.services.base import BaseService
@@ -307,6 +308,7 @@ class CallService(BaseService):
             # 1:1 on call_id (unique) — keeps row count equal to call count
             # so pagination math is unaffected.
             .outerjoin(CallMetrics, CallMetrics.call_id == Call.id)
+            .options(joinedload(Call.pod).joinedload(Pod.node))
         )
 
         if start_date_time is not None:
@@ -501,6 +503,15 @@ class CallService(BaseService):
         else:
             status = "in_progress"
 
+        served_by = None
+        if call.pod is not None:
+            served_by = {
+                "pod": call.pod.name,
+                "ordinal": call.pod.ordinal,
+                "node": call.pod.node.name if call.pod.node is not None else None,
+                "environment": call.pod.environment,
+            }
+
         return {
             "id": str(call.id),
             "agent_id": str(call.agent_id),
@@ -520,7 +531,7 @@ class CallService(BaseService):
             "recording_upload_id": str(call.recording_upload_id) if call.recording_upload_id else None,
             "transcript": metadata.get("transcript"),
             "tool_calls": metadata.get("tool_calls"),
-            "served_by": metadata.get("served_by"),
+            "served_by": served_by,
             "pipeline_config": call.pipeline_config,
             "metrics": metrics,
         }

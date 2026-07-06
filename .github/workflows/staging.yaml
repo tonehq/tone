@@ -60,11 +60,11 @@ jobs:
       - name: Rollout restart deployments
         run: |
           kubectl rollout restart deployment/staging-tone-api-deployment -n staging
-          kubectl rollout restart deployment/staging-tone-call-worker -n staging
+          kubectl rollout restart statefulset/staging-tone-call-worker -n staging
           kubectl rollout restart deployment/staging-tone-worker -n staging
 
       - name: Wait for rollouts
         run: |
           kubectl rollout status deployment/staging-tone-api-deployment -n staging --timeout=180s
-          kubectl rollout status deployment/staging-tone-call-worker -n staging --timeout=180s
+          kubectl rollout status statefulset/staging-tone-call-worker -n staging --timeout=180s
           kubectl rollout status deployment/staging-tone-worker -n staging --timeout=180s
