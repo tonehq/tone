@@ -1,6 +1,11 @@
+import { isAuthHandled } from '@/utils/authSession';
 import { showToast } from '@/utils/toast';
 
 export function handleApiError(error: unknown) {
+  // The auth layer (axios interceptor) already surfaced a toast + redirect for
+  // expired-session errors; skip so the user doesn't see two toasts.
+  if (isAuthHandled(error)) return;
+
   let message = 'Something went wrong. Please try again.';
   if (typeof error === 'object' && error !== null) {
     const detail = (error as any).response?.data?.detail;
