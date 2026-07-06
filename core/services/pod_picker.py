@@ -41,7 +41,7 @@ class PodPicker(BaseService):
         )
         return {pod_id: count for pod_id, count in rows}
 
-    def _pick(self) -> Optional[Pod]:
+    def pick(self) -> Optional[Pod]:
         candidates = self._candidate_pods()
         if not candidates:
             return None
@@ -62,8 +62,10 @@ class PodPicker(BaseService):
 
         return min(pool, key=lambda p: active.get(p.id, 0))
 
-    def get_pod(self) -> Optional[str]:
-        pod = self._pick()
+    def url_for(self, pod: Optional[Pod]) -> Optional[str]:
         if pod is None or pod.ordinal is None or not self.host:
             return None
         return f"wss://{self.host}/pod/{pod.ordinal}/ws"
+
+    def get_pod(self) -> Optional[str]:
+        return self.url_for(self.pick())
