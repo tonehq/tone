@@ -49,6 +49,125 @@ spec:
       targetPort: 8080
       protocol: TCP
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-tone-call-pod-3
+  namespace: staging
+  labels:
+    app: staging-tone-call-worker
+    environment: staging
+    component: call
+spec:
+  selector:
+    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-3
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-tone-call-pod-4
+  namespace: staging
+  labels:
+    app: staging-tone-call-worker
+    environment: staging
+    component: call
+spec:
+  selector:
+    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-4
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-tone-call-pod-5
+  namespace: staging
+  labels:
+    app: staging-tone-call-worker
+    environment: staging
+    component: call
+spec:
+  selector:
+    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-5
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-tone-call-pod-6
+  namespace: staging
+  labels:
+    app: staging-tone-call-worker
+    environment: staging
+    component: call
+spec:
+  selector:
+    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-6
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-tone-call-pod-7
+  namespace: staging
+  labels:
+    app: staging-tone-call-worker
+    environment: staging
+    component: call
+spec:
+  selector:
+    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-7
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-tone-call-pod-8
+  namespace: staging
+  labels:
+    app: staging-tone-call-worker
+    environment: staging
+    component: call
+spec:
+  selector:
+    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-8
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-tone-call-pod-9
+  namespace: staging
+  labels:
+    app: staging-tone-call-worker
+    environment: staging
+    component: call
+spec:
+  selector:
+    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-9
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -60,7 +179,6 @@ metadata:
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
-    nginx.ingress.kubernetes.io/websocket-services: "staging-tone-call-pod-0,staging-tone-call-pod-1,staging-tone-call-pod-2"
     nginx.ingress.kubernetes.io/use-regex: "true"
     nginx.ingress.kubernetes.io/rewrite-target: /$2
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
@@ -93,5 +211,54 @@ spec:
             backend:
               service:
                 name: staging-tone-call-pod-2
+                port:
+                  number: 80
+          - path: /pod/3(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: staging-tone-call-pod-3
+                port:
+                  number: 80
+          - path: /pod/4(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: staging-tone-call-pod-4
+                port:
+                  number: 80
+          - path: /pod/5(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: staging-tone-call-pod-5
+                port:
+                  number: 80
+          - path: /pod/6(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: staging-tone-call-pod-6
+                port:
+                  number: 80
+          - path: /pod/7(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: staging-tone-call-pod-7
+                port:
+                  number: 80
+          - path: /pod/8(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: staging-tone-call-pod-8
+                port:
+                  number: 80
+          - path: /pod/9(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: staging-tone-call-pod-9
                 port:
                   number: 80
