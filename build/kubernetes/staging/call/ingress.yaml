@@ -21,7 +21,6 @@ metadata:
     # WebSocket support
     nginx.ingress.kubernetes.io/websocket-services: "staging-tone-call-service"
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
-    nginx.ingress.kubernetes.io/upstream-hash-by: "$request_uri"
     # TLS
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     nginx.ingress.kubernetes.io/ssl-redirect: "false"

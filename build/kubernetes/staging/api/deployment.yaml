@@ -36,6 +36,18 @@ spec:
           env:
             - name: ENV
               value: "staging"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: DEPLOYMENT_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: "metadata.labels['app']"
             - name: INFISICAL_TOKEN
               valueFrom:
                 secretKeyRef:
