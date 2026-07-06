@@ -8,7 +8,7 @@ metadata:
     environment: staging
     component: worker
 spec:
-  replicas: 0
+  replicas: 1
   selector:
     matchLabels:
       app: staging-tone-worker
@@ -34,6 +34,7 @@ spec:
             - procrastinate
             - "--app=core.services.ingestion_queue.app"
             - worker
+            - "--name=$(POD_NAME)"
             - "--queues=ingestion"
             - "--concurrency=1"
             - "--no-listen-notify"
@@ -48,6 +49,18 @@ spec:
           env:
             - name: ENV
               value: "staging"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: DEPLOYMENT_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: "metadata.labels['app']"
             - name: DOCLING_NUM_THREADS
               value: "2"
             - name: OMP_NUM_THREADS

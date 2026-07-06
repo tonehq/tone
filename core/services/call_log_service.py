@@ -11,6 +11,7 @@ from core.models.channel import Channel
 from core.models.phone_number import PhoneNumber
 from core.models.upload import Upload
 from core.services.base import BaseService
+from core.utils.pod_identity import get_served_by
 
 
 class CallLogService(BaseService):
@@ -106,7 +107,7 @@ class CallLogService(BaseService):
             to_phone_number_id=to_pn_id,
             from_number_raw_by_provider=from_number,
             started_at=started_at or datetime.now(timezone.utc),
-            metadata_={},
+            metadata_=({"served_by": served_by} if (served_by := get_served_by()) else {}),
             pipeline_config=pipeline_config,
         )
         self.db.add(call)
