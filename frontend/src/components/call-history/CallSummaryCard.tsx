@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import type { CallLogRow } from '@/types/callLog';
 import { cn } from '@/utils/cn';
 import { formatDuration, formatTimeOnly } from '@/utils/date';
-import { ArrowRight, Clock, Phone, Radio } from 'lucide-react';
+import { ArrowRight, Clock, Phone, Radio, Server } from 'lucide-react';
 import React from 'react';
 
 import { getDisplayDurationSeconds } from './callDuration';
@@ -76,6 +76,11 @@ const CallSummaryCard: React.FC<CallSummaryCardProps> = ({ callLog }) => {
   const hasTimes = !!startedAt || !!endedAt;
   const hasDetails = hasPhones || !!callLog.channel_type || hasTimes;
 
+  const servedBy = callLog.served_by;
+  const servedByTooltip = servedBy
+    ? [servedBy.deployment, servedBy.node].filter(Boolean).join(' · ') || 'Served by pod'
+    : '';
+
   return (
     <section
       aria-label="Call summary"
@@ -134,6 +139,12 @@ const CallSummaryCard: React.FC<CallSummaryCardProps> = ({ callLog }) => {
             {startedAt ?? muted}
             <ChipArrow />
             {endedAt ?? muted}
+          </InfoChip>
+        )}
+
+        {servedBy?.pod && (
+          <InfoChip icon={Server} tooltip={servedByTooltip}>
+            {servedBy.pod}
           </InfoChip>
         )}
       </div>
