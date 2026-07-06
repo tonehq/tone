@@ -1,5 +1,6 @@
 import sys
 import os
+from threading import Lock
 
 from core.logging import setup_logging
 setup_logging()
@@ -23,6 +24,7 @@ from core.api.v1 import (
     app_integrations,
 )
 from core.middleware.request_context import RequestContextMiddleware
+from core.utils.pod_identity import get_served_by, pod_name, node_name, deployment_name
 import core.models
 
 skip_license = settings.SKIP_LICENSE_CHECK
@@ -226,6 +228,57 @@ def environment():
     return {"environment": settings.ENVIRONMENT}
 
 
+_active_calls_lock = Lock()
+_active_calls = 0
+
+
+def _active_calls_inc() -> None:
+    global _active_calls
+    with _active_calls_lock:
+        _active_calls += 1
+
+
+def _active_calls_dec() -> None:
+    global _active_calls
+    with _active_calls_lock:
+        if _active_calls > 0:
+            _active_calls -= 1
+
+
+def _pod_labels() -> str:
+    parts = []
+    if pod_name():
+        parts.append(f'pod="{pod_name()}"')
+    if node_name():
+        parts.append(f'node="{node_name()}"')
+    if deployment_name():
+        parts.append(f'deployment="{deployment_name()}"')
+    return "{" + ",".join(parts) + "}" if parts else ""
+
+
+@app.get("/status")
+def status():
+    with _active_calls_lock:
+        active = _active_calls
+    return {
+        "served_by": get_served_by() or None,
+        "active_calls": active,
+    }
+
+
+@app.get("/metrics")
+def metrics():
+    with _active_calls_lock:
+        active = _active_calls
+    labels = _pod_labels()
+    body = (
+        "# HELP tone_active_calls Active call WebSocket connections on this pod\n"
+        "# TYPE tone_active_calls gauge\n"
+        f"tone_active_calls{labels} {active}\n"
+    )
+    return Response(content=body, media_type="text/plain; version=0.0.4")
+
+
 @app.post("/twiml")
 @app.get("/twiml")
 async def twiml(request: Request) -> Response:
@@ -268,10 +321,18 @@ async def ws_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
     runner_args = WebSocketRunnerArguments(websocket=websocket, body={})
     try:
+        _active_calls_inc()
+    except Exception:
+        pass
+    try:
         await bot(runner_args)
     except Exception as exc:
         print(f"[/ws] bot crashed: {exc}")
     finally:
+        try:
+            _active_calls_dec()
+        except Exception:
+            pass
         try:
             await websocket.close()
         except Exception:
