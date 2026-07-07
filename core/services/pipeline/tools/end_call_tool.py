@@ -50,16 +50,20 @@ END_CALL_TOOL_SCHEMA = FunctionSchema(
 
 END_CALL_SYSTEM_PROMPT = (
     "\n\n## Ending the call\n"
-    "You have a tool called `end_call`. Use it when the user signals they want "
-    "to end the conversation. Examples of signals:\n"
+    "You have a tool called `end_call`. Use it ONLY when the user has explicitly "
+    "signaled they want to end the conversation. Examples of valid signals:\n"
     "- Explicit goodbye: \"bye\", \"goodbye\", \"have a good day\", \"talk to you later\"\n"
     "- Polite closure: \"thanks, that's all\", \"appreciate the help\", \"I'll let you go\"\n"
     "- Direct: \"hang up\", \"end the call\"\n"
-    "- Implicit: user thanks you and has no pending question after multiple exchanges\n"
     "DO NOT call `end_call` when:\n"
     "- The user has a pending question or is mid-sentence\n"
     "- The user just thanked you mid-conversation and is still engaged\n"
     "- It is unclear whether the user wants to continue\n"
+    "- The task appears complete (booking taken, question answered, details "
+    "collected) but the user has NOT said goodbye — ask if there is anything "
+    "else instead\n"
+    "If you are unsure whether the user wants to end, DO NOT call `end_call`. "
+    "Ask \"Is there anything else I can help you with?\" and wait for their reply.\n"
     "Optionally speak a brief one-sentence farewell BEFORE calling the tool. "
     "After calling it, the call ends automatically — do not generate further text.\n"
 )
