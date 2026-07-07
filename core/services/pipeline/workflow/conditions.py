@@ -150,11 +150,17 @@ def _eval(node: ast.AST, variables: Dict[str, Any]) -> Any:
         for op, comparator in zip(node.ops, node.comparators):
             right = _eval(comparator, variables)
             if isinstance(op, (ast.In, ast.NotIn)):
-                try:
-                    contained = right is not None and left in right
-                except TypeError:
-                    contained = False
-                ok = contained if isinstance(op, ast.In) else not contained
+                # A missing/null container fails closed for BOTH operators: an unknown
+                # container can't confirm membership OR non-membership, so a typo'd
+                # variable never makes an ``in``/``not in`` branch fire.
+                if right is None:
+                    ok = False
+                else:
+                    try:
+                        contained = left in right
+                    except TypeError:
+                        contained = False
+                    ok = contained if isinstance(op, ast.In) else not contained
             elif type(op) in _BIN_OPS:
                 ok = _compare(op, left, right)
             else:

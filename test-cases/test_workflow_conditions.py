@@ -142,6 +142,10 @@ class TestMembership:
     def test_membership_missing_container_fails_closed(self):
         assert evaluate_logic("{{ 'a' in missing }}", {}) is False
 
+    def test_not_in_missing_container_fails_closed(self):
+        # A typo'd/missing container must not make a `not in` branch fire either.
+        assert evaluate_logic("{{ status not in blocked }}", {"status": "paid"}) is False
+
 
 class TestAttributeAccess:
     """A12: dotted access over dict-valued variables."""
