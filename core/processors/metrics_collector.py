@@ -51,6 +51,14 @@ _TTFB_CATEGORIES = (CATEGORY_STT, CATEGORY_LLM, CATEGORY_TTS)
 # starts at 1, so collisions are impossible.
 _PRE_TURN = 0
 
+# Pending STT slots older than this many seconds are assumed dropped by the
+# provider — pipecat's ``stt_ttfb_timeout`` defaults to 2s, so this leaves
+# ~1s of headroom for event-loop lag. Pruning stale slots at metric arrival
+# and turn boundaries stops the next STT TTFB from being misattributed to a
+# stuck slot (the root cause of the FIFO-drift cascade that previously
+# blanked every subsequent turn once one metric was dropped).
+_STT_TTFB_STALE_SECONDS = 3.0
+
 
 @dataclass
 class _TurnBuffer:
@@ -254,6 +262,9 @@ class MetricsCollectorProcessor(FrameProcessor):
         )
         if self._current_turn == turn_number:
             self._current_turn = None
+        # Drop stale pending slots so the next STT TTFB isn't steered onto
+        # a turn whose metric the provider silently dropped.
+        self._prune_stale_pending_stt()
 
     # ------------------------------------------------------------------
     # Frame processing
@@ -307,18 +318,18 @@ class MetricsCollectorProcessor(FrameProcessor):
         buffer = self._active_buffer()
         if buffer.turn_number < 0:
             return
+        now = time.time()
+        # end_to_end latency uses the first user-stop of the turn — that's
+        # the user-felt edge, not any later hesitation restart.
         if buffer.user_stopped_at is None:
-            now = time.time()
             buffer.user_stopped_at = now
-            # Reserve a chronological slot for the STT TTFB this user-stop
-            # will produce. The STT service emits the metric asynchronously
-            # (up to ``stt_ttfb_timeout`` seconds later), often after this
-            # turn has already ended — so we can't rely on the active-turn
-            # bucket. ``_attribute_stt_ttfb`` consumes the queue in FIFO
-            # order so the next STT TTFB lands in this turn's row.
-            self._pending_stt.append(
-                _PendingSTT(turn_number=buffer.turn_number, user_stopped_at=now)
-            )
+        # Reserve one pending slot per user-stop, not just the first of the
+        # turn. STT services emit one TTFB per stop, so a 1:1 mapping keeps
+        # ``_attribute_stt_ttfb`` correct under VAD flapping or multiple
+        # utterances inside a single turn.
+        self._pending_stt.append(
+            _PendingSTT(turn_number=buffer.turn_number, user_stopped_at=now)
+        )
 
     def _mark_bot_started(self) -> None:
         buffer = self._active_buffer()
@@ -340,19 +351,30 @@ class MetricsCollectorProcessor(FrameProcessor):
         ``on_turn_ended`` has already fired. The currently-active turn is
         the *next* turn, not the one the user actually stopped speaking in.
 
-        We resolve this by consuming ``_pending_stt`` in FIFO order — the
-        oldest unresolved user-stop owns the next STT TTFB to arrive. If the
-        target turn is still buffered, append to its TTFB list normally.
-        If it has already been finalized, patch ``stt_ttfb_all`` (and
-        ``stt_ttfb`` if it was the first sample) on the immutable row.
+        We resolve this by matching the metric to the pending slot whose
+        ``user_stopped_at`` is closest to the implied user-stop time
+        (``arrival - value``, since ``value`` is exactly the gap between
+        user-stop and TTFB emission). Closest-match beats strict FIFO:
+        one dropped metric no longer cascades into every subsequent turn
+        showing the wrong value, and out-of-order arrivals still land in
+        the right row. Stale slots are pruned first so a stuck slot from a
+        provider-dropped metric can't intercept the next one.
 
         Returns ``True`` when the metric was attributed, ``False`` when no
         pending slot exists (in which case the caller falls back to the
         active-buffer behavior so we don't silently drop the sample).
         """
+        arrival = time.time()
+        self._prune_stale_pending_stt(now=arrival)
         if not self._pending_stt:
             return False
-        pending = self._pending_stt.popleft()
+
+        implied_user_stop = arrival - value
+        pending = min(
+            self._pending_stt,
+            key=lambda p: abs(p.user_stopped_at - implied_user_stop),
+        )
+        self._pending_stt.remove(pending)
         turn_number = pending.turn_number
         rounded = _round_optional(value)
 
@@ -375,6 +397,21 @@ class MetricsCollectorProcessor(FrameProcessor):
                     row["stt_ttfb"] = rounded
                 return True
         return False
+
+    def _prune_stale_pending_stt(self, now: Optional[float] = None) -> None:
+        """Drop pending slots older than ``_STT_TTFB_STALE_SECONDS``.
+
+        A slot older than the cutoff means the STT provider never emitted
+        a TTFB for that user-stop (pipecat's ``stt_ttfb_timeout`` has
+        elapsed). Removing it keeps the queue aligned with the metrics the
+        provider will actually produce.
+
+        Slots are appended in ``user_stopped_at`` order, so the queue stays
+        sorted by time and pruning from the left is sufficient.
+        """
+        cutoff = (now if now is not None else time.time()) - _STT_TTFB_STALE_SECONDS
+        while self._pending_stt and self._pending_stt[0].user_stopped_at < cutoff:
+            self._pending_stt.popleft()
 
     def _record_metric_data(self, data: MetricsData) -> None:
         if isinstance(data, TTFBMetricsData):

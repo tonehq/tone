@@ -2,8 +2,10 @@ import uuid
 from datetime import datetime, timezone
 from typing import Dict
 
+import httpx
 from kubernetes import client, config
 from loguru import logger
+from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.database.session import get_db_context
@@ -55,6 +57,12 @@ def sync_pods_and_nodes() -> None:
 
     pods = [p for p in core.list_namespaced_pod(namespace).items if p.status.phase == "Running"]
     nodes = core.list_node().items
+
+    call_pod_ips = {
+        p.metadata.name: p.status.pod_ip
+        for p in pods
+        if p.metadata.name.startswith(f"{prefix}-") and p.status.pod_ip
+    }
 
     pods_per_node: Dict[str, int] = {}
     for pod in pods:
@@ -131,7 +139,32 @@ def sync_pods_and_nodes() -> None:
             )
         db.commit()
 
+    _scrape_pod_resources(call_pod_ips)
+
     logger.info("pod_sync: synced {} running pods across {} nodes", len(pods), len(nodes))
+
+
+def _scrape_pod_resources(pod_ips: Dict[str, str]) -> None:
+    if not pod_ips:
+        return
+    with get_db_context() as db:
+        for name, ip in pod_ips.items():
+            try:
+                data = httpx.get(f"http://{ip}:8080/status", timeout=5.0).json()
+            except Exception as exc:
+                logger.warning("pod_sync: resource scrape failed for {}: {}", name, exc)
+                continue
+            db.execute(
+                update(Pod)
+                .where(Pod.name == name)
+                .values(
+                    mem_used_mb=data.get("mem_used_mb"),
+                    mem_limit_mb=data.get("mem_limit_mb"),
+                    cpu_used_cores=data.get("cpu_used_cores"),
+                    cpu_limit_cores=data.get("cpu_limit_cores"),
+                )
+            )
+        db.commit()
 
 
 if __name__ == "__main__":

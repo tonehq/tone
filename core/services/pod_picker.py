@@ -2,7 +2,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import func
-from sqlalchemy.orm import joinedload
 
 from core.models.call import Call
 from core.models.pod import Pod
@@ -22,7 +21,6 @@ class PodPicker(BaseService):
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=_POD_ALIVE_SECONDS)
         return (
             self.db.query(Pod)
-            .options(joinedload(Pod.node))
             .filter(
                 Pod.name.like(f"{prefix}-%"),
                 Pod.ordinal.isnot(None),
@@ -46,21 +44,26 @@ class PodPicker(BaseService):
         if not candidates:
             return None
 
+        def headroom(pod):
+            if (
+                pod.mem_limit_mb
+                and pod.mem_used_mb is not None
+                and pod.cpu_limit_cores
+                and pod.cpu_used_cores is not None
+            ):
+                free_mem = (pod.mem_limit_mb - pod.mem_used_mb) / pod.mem_limit_mb
+                free_cpu = (pod.cpu_limit_cores - pod.cpu_used_cores) / pod.cpu_limit_cores
+                return min(free_mem, free_cpu)
+            return None
+
+        scored = [(headroom(pod), pod) for pod in candidates]
+        with_data = [(score, pod) for score, pod in scored if score is not None]
+        if with_data:
+            best = max(score for score, _ in with_data)
+            return next(pod for score, pod in with_data if score == best)
+
         active = self._active_calls_by_pod()
-
-        def node_freeness(pod):
-            node = pod.node
-            if node is None or node.vcpu_per_pod is None:
-                return (float("-inf"), float("-inf"))
-            return (node.vcpu_per_pod, node.ram_per_pod_mb or 0.0)
-
-        best = max(node_freeness(p) for p in candidates)
-        if best[0] != float("-inf"):
-            pool = [p for p in candidates if node_freeness(p) == best]
-        else:
-            pool = candidates
-
-        return min(pool, key=lambda p: active.get(p.id, 0))
+        return min(candidates, key=lambda pod: active.get(pod.id, 0))
 
     def url_for(self, pod: Optional[Pod]) -> Optional[str]:
         if pod is None or pod.ordinal is None or not self.host:

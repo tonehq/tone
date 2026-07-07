@@ -19,12 +19,20 @@ from core.internal.capabilities import init_capabilities, is_ee_enabled, get_cap
 
 from core.api.v1 import (
     auth, users, organizations, agent_configs, channels, oauth,
-    knowledge_base, agents, mcp_servers, services, tools, dashboard,
+    agents, mcp_servers, services, tools, dashboard,
     call_logs, call_metrics, sessions, workflows, webrtc, audit_logs,
     app_integrations,
 )
+
+# Call pods (WORKER_MODE=voice) do not serve knowledge-base HTTP endpoints —
+# they only do RAG retrieval via document_tool_service. Skipping the router
+# import here avoids eagerly loading docling + HuggingFace transformers,
+# which shaves ~5s off container startup.
+_WORKER_MODE = os.environ.get("WORKER_MODE", "").lower()
+_LOAD_KB_ROUTER = _WORKER_MODE != "voice"
 from core.middleware.request_context import RequestContextMiddleware
 from core.utils.pod_identity import get_served_by, pod_name, node_name, deployment_name
+from core.utils.pod_resources import memory_usage, cpu_usage
 from core.database.session import get_db_context
 from core.services.pod_picker import PodPicker
 from loguru import logger
@@ -92,7 +100,6 @@ if ee_enabled:
     from ee.api.v1 import agent_configs as ee_agent_configs
     from ee.api.v1 import channels as ee_channels
     from ee.api.v1 import oauth as ee_oauth
-    from ee.api.v1 import knowledge_base as ee_knowledge_base
     from ee.api.v1 import agents as ee_agents
     from ee.api.v1 import mcp_servers as ee_mcp_servers
     from ee.api.v1 import app_integrations as ee_app_integrations
@@ -109,7 +116,9 @@ if ee_enabled:
     api_v1.include_router(ee_agent_configs.router, prefix="/agent_config", tags=["agent_config"])
     api_v1.include_router(ee_channels.router, prefix="/channel", tags=["channel"])
     api_v1.include_router(ee_oauth.router, prefix="/oauth", tags=["oauth"])
-    api_v1.include_router(ee_knowledge_base.router, prefix="/knowledge-base", tags=["knowledge-base"])
+    if _LOAD_KB_ROUTER:
+        from ee.api.v1 import knowledge_base as ee_knowledge_base
+        api_v1.include_router(ee_knowledge_base.router, prefix="/knowledge-base", tags=["knowledge-base"])
     api_v1.include_router(ee_agents.router, prefix="/agent", tags=["agent"])
     api_v1.include_router(ee_mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
     api_v1.include_router(ee_app_integrations.router, prefix="/app-integration", tags=["app-integration"])
@@ -130,7 +139,9 @@ else:
     api_v1.include_router(agent_configs.router, prefix="/agent_config", tags=["agent_config"])
     api_v1.include_router(channels.router, prefix="/channel", tags=["channel"])
     api_v1.include_router(oauth.router, prefix="/oauth", tags=["oauth"])
-    api_v1.include_router(knowledge_base.router, prefix="/knowledge-base", tags=["knowledge-base"])
+    if _LOAD_KB_ROUTER:
+        from core.api.v1 import knowledge_base
+        api_v1.include_router(knowledge_base.router, prefix="/knowledge-base", tags=["knowledge-base"])
     api_v1.include_router(agents.router, prefix="/agent", tags=["agent"])
     api_v1.include_router(mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
     api_v1.include_router(app_integrations.router, prefix="/app-integration", tags=["app-integration"])
@@ -263,9 +274,15 @@ def _pod_labels() -> str:
 def status():
     with _active_calls_lock:
         active = _active_calls
+    mem_used_mb, mem_limit_mb = memory_usage()
+    cpu_used_cores, cpu_limit_cores = cpu_usage()
     return {
         "served_by": get_served_by() or None,
         "active_calls": active,
+        "mem_used_mb": mem_used_mb,
+        "mem_limit_mb": mem_limit_mb,
+        "cpu_used_cores": cpu_used_cores,
+        "cpu_limit_cores": cpu_limit_cores,
     }
 
 
