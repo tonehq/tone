@@ -45,11 +45,17 @@ class AgentRunnerService(BaseService):
             if agent:
                 return agent
 
-        # Single JOIN: phone_number → agent (avoids 2 separate queries)
+        # Single JOIN: phone_number → agent (avoids 2 separate queries).
+        # A number should map to exactly one agent (enforced by the global conflict
+        # check on assignment + the uq_phone_numbers_assigned_number partial index).
+        # Order by created_at (then id) as a deterministic tie-breaker so that, should a
+        # legacy duplicate slip through, routing is stable rather than arbitrary — and
+        # matches the migration's created_at ASC, id ASC self-heal keep-rule.
         result = (
             self.db.query(Agent)
             .join(PhoneNumber, PhoneNumber.agent_id == Agent.id)
             .filter(PhoneNumber.number == normalized)
+            .order_by(PhoneNumber.created_at.asc(), PhoneNumber.id.asc())
             .first()
         )
 
