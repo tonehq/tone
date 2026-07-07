@@ -1833,6 +1833,257 @@
               "body": "{\"detail\": [{\"loc\": [\"body\"], \"msg\": \"field required\", \"type\": \"value_error.missing\"}]}"
             }
           ]
+        },
+        {
+          "name": "GET /auth/check_organization_exists",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/check_organization_exists?email=jane@example.com",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "check_organization_exists"
+              ],
+              "query": [
+                {
+                  "key": "email",
+                  "value": "jane@example.com"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 Exists",
+              "code": 200,
+              "status": "OK",
+              "body": "{\"exists\": true, \"organization_id\": \"{{org_id}}\", \"organization_name\": \"Acme Inc\"}"
+            },
+            {
+              "name": "200 Does not exist",
+              "code": 200,
+              "status": "OK",
+              "body": "{\"exists\": false}"
+            },
+            {
+              "name": "422 Missing email",
+              "code": 422,
+              "status": "Unprocessable Entity",
+              "body": "{\"detail\": [{\"loc\": [\"query\", \"email\"], \"msg\": \"field required\", \"type\": \"value_error.missing\"}]}"
+            }
+          ]
+        },
+        {
+          "name": "POST /auth/signup_with_firebase",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer <firebase-id-token>"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/signup_with_firebase",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "signup_with_firebase"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"first_name\": \"Jane\",\n  \"last_name\": \"Doe\",\n  \"organization_name\": \"Acme Inc\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "{\"access_token\": \"eyJhbGciOi...\", \"refresh_token\": \"eyJhbGciOi...\", \"user\": {\"id\": \"{{user_id}}\", \"email\": \"jane@example.com\"}}"
+            },
+            {
+              "name": "401 Missing Bearer header",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\"detail\": \"Missing or invalid Authorization header\"}"
+            },
+            {
+              "name": "422 Missing required firebase token",
+              "code": 422,
+              "status": "Unprocessable Entity",
+              "body": "{\"detail\": [{\"loc\": [\"header\", \"authorization\"], \"msg\": \"field required\", \"type\": \"value_error.missing\"}]}"
+            },
+            {
+              "name": "400 Firebase token invalid",
+              "code": 400,
+              "status": "Bad Request",
+              "body": "{\"detail\": \"Invalid Firebase ID token\"}"
+            }
+          ]
+        },
+        {
+          "name": "GET /auth/verify_user_email",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/verify_user_email?token={{verify_token}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "verify_user_email"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{verify_token}}"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 Verified",
+              "code": 200,
+              "status": "OK",
+              "body": "{\"verified\": true, \"user_id\": \"{{user_id}}\"}"
+            },
+            {
+              "name": "400 Token expired",
+              "code": 400,
+              "status": "Bad Request",
+              "body": "{\"detail\": \"Verification token has expired\"}"
+            },
+            {
+              "name": "404 Token not found",
+              "code": 404,
+              "status": "Not Found",
+              "body": "{\"detail\": \"Invalid verification token\"}"
+            }
+          ]
+        },
+        {
+          "name": "GET /auth/acceptForgotPassword",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/acceptForgotPassword?token={{reset_token}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "acceptForgotPassword"
+              ],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{reset_token}}"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 Token accepted (redirect data)",
+              "code": 200,
+              "status": "OK",
+              "body": "{\"user_id\": \"{{user_id}}\", \"email\": \"jane@example.com\", \"reset_allowed\": true}"
+            },
+            {
+              "name": "400 Invalid token",
+              "code": 400,
+              "status": "Bad Request",
+              "body": "{\"detail\": \"Invalid or expired reset token\"}"
+            },
+            {
+              "name": "422 Missing token",
+              "code": 422,
+              "status": "Unprocessable Entity",
+              "body": "{\"detail\": [{\"loc\": [\"query\", \"token\"], \"msg\": \"field required\", \"type\": \"value_error.missing\"}]}"
+            }
+          ]
+        },
+        {
+          "name": "POST /auth/switch_organization",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/auth/switch_organization",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "switch_organization"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organization_id\": \"{{org_id}}\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK \u2014 new tokens for target org",
+              "code": 200,
+              "status": "OK",
+              "body": "{\"access_token\": \"eyJhbGciOi...\", \"refresh_token\": \"eyJhbGciOi...\", \"organization\": {\"id\": \"{{org_id}}\", \"name\": \"Acme Inc\", \"role\": \"admin\"}}"
+            },
+            {
+              "name": "403 Not a member of that org",
+              "code": 403,
+              "status": "Forbidden",
+              "body": "{\"detail\": \"You are not a member of this organization\"}"
+            },
+            {
+              "name": "404 Organization not found",
+              "code": 404,
+              "status": "Not Found",
+              "body": "{\"detail\": \"Organization not found\"}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\"detail\": \"Not authenticated\"}"
+            }
+          ]
         }
       ]
     },
@@ -2742,6 +2993,410 @@
               "code": 401,
               "status": "Unauthorized",
               "body": "{\"detail\": \"Could not validate credentials\"}"
+            }
+          ]
+        },
+        {
+          "name": "POST /organization/get_associated_tenants",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/organization/get_associated_tenants",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "organization",
+                "get_associated_tenants"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"search\": \"acme\",\n  \"page_no\": 1,\n  \"page_size\": 20\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "{\"data\": [{\"id\": \"{{org_id}}\", \"name\": \"Acme Inc\", \"slug\": \"acme-inc\", \"role\": \"owner\"}], \"total\": 1, \"page_no\": 1, \"page_size\": 20}"
+            },
+            {
+              "name": "200 Empty",
+              "code": 200,
+              "status": "OK",
+              "body": "{\"data\": [], \"total\": 0, \"page_no\": 1, \"page_size\": 20}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\"detail\": \"Not authenticated\"}"
+            }
+          ]
+        },
+        {
+          "name": "POST /organization/create_tenants",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/organization/create_tenants?name=Acme%20Inc",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "organization",
+                "create_tenants"
+              ],
+              "query": [
+                {
+                  "key": "name",
+                  "value": "Acme Inc"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "code": 201,
+              "status": "Created",
+              "body": "{\"id\": \"{{org_id}}\", \"name\": \"Acme Inc\", \"slug\": \"acme-inc\", \"role\": \"owner\"}"
+            },
+            {
+              "name": "422 Missing name",
+              "code": 422,
+              "status": "Unprocessable Entity",
+              "body": "{\"detail\": [{\"loc\": [\"query\", \"name\"], \"msg\": \"field required\", \"type\": \"value_error.missing\"}]}"
+            },
+            {
+              "name": "409 Name already taken",
+              "code": 409,
+              "status": "Conflict",
+              "body": "{\"detail\": \"An organization with this name already exists\"}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\"detail\": \"Not authenticated\"}"
+            }
+          ]
+        },
+        {
+          "name": "POST /organization/request_access",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/organization/request_access",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "organization",
+                "request_access"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"organization_id\": \"{{org_id}}\",\n  \"message\": \"Please add me to this workspace.\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK \u2014 request submitted",
+              "code": 200,
+              "status": "OK",
+              "body": "{\"status\": \"pending\", \"request_id\": \"550e8400-e29b-41d4-a716-446655440000\"}"
+            },
+            {
+              "name": "409 Duplicate pending request",
+              "code": 409,
+              "status": "Conflict",
+              "body": "{\"detail\": \"You already have a pending access request for this organization\"}"
+            },
+            {
+              "name": "501 Not Implemented on v2 schema",
+              "code": 501,
+              "status": "Not Implemented",
+              "body": "{\"detail\": \"Org access requests are not supported on the v2 schema\"}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\"detail\": \"Not authenticated\"}"
+            }
+          ]
+        },
+        {
+          "name": "GET /organization/members",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/organization/members",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "organization",
+                "members"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "[{\"id\": \"{{user_id}}\", \"email\": \"jane@example.com\", \"first_name\": \"Jane\", \"last_name\": \"Doe\", \"role\": \"admin\", \"joined_at\": \"2026-01-15T10:30:00Z\"}]"
+            },
+            {
+              "name": "200 Empty",
+              "code": 200,
+              "status": "OK",
+              "body": "[]"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\"detail\": \"Not authenticated\"}"
+            }
+          ]
+        },
+        {
+          "name": "GET /organization/invited_users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/organization/invited_users",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "organization",
+                "invited_users"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "[{\"invitation_id\": \"{{invitation_id}}\", \"email\": \"bob@example.com\", \"role\": \"member\", \"invited_by\": \"jane@example.com\", \"expires_at\": \"2026-07-14T10:30:00Z\", \"status\": \"pending\"}]"
+            },
+            {
+              "name": "200 Empty",
+              "code": 200,
+              "status": "OK",
+              "body": "[]"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\"detail\": \"Not authenticated\"}"
+            }
+          ]
+        },
+        {
+          "name": "GET /organization/details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/organization/details?org_id={{org_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "organization",
+                "details"
+              ],
+              "query": [
+                {
+                  "key": "org_id",
+                  "value": "{{org_id}}"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "{\"id\": \"{{org_id}}\", \"name\": \"Acme Inc\", \"slug\": \"acme-inc\", \"billing_email\": \"finance@acme.com\", \"created_at\": \"2026-01-01T00:00:00Z\", \"member_count\": 12}"
+            },
+            {
+              "name": "404 Not Found",
+              "code": 404,
+              "status": "Not Found",
+              "body": "{\"detail\": \"Organization not found\"}"
+            },
+            {
+              "name": "422 Missing org_id",
+              "code": 422,
+              "status": "Unprocessable Entity",
+              "body": "{\"detail\": [{\"loc\": [\"query\", \"org_id\"], \"msg\": \"field required\", \"type\": \"value_error.missing\"}]}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\"detail\": \"Not authenticated\"}"
+            }
+          ]
+        },
+        {
+          "name": "PUT /organization/details",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/organization/details?org_id={{org_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "organization",
+                "details"
+              ],
+              "query": [
+                {
+                  "key": "org_id",
+                  "value": "{{org_id}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Corp\",\n  \"billing_email\": \"finance@acme.com\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "{\"id\": \"{{org_id}}\", \"name\": \"Acme Corp\", \"slug\": \"acme-inc\", \"billing_email\": \"finance@acme.com\"}"
+            },
+            {
+              "name": "403 Only owner/admin can edit",
+              "code": 403,
+              "status": "Forbidden",
+              "body": "{\"detail\": \"You do not have permission to update this organization\"}"
+            },
+            {
+              "name": "404 Not Found",
+              "code": 404,
+              "status": "Not Found",
+              "body": "{\"detail\": \"Organization not found\"}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\"detail\": \"Not authenticated\"}"
+            }
+          ]
+        },
+        {
+          "name": "DELETE /organization/delete",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/organization/delete?org_id={{org_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "organization",
+                "delete"
+              ],
+              "query": [
+                {
+                  "key": "org_id",
+                  "value": "{{org_id}}"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "{\"deleted\": true, \"organization_id\": \"{{org_id}}\"}"
+            },
+            {
+              "name": "403 Only owner can delete",
+              "code": 403,
+              "status": "Forbidden",
+              "body": "{\"detail\": \"Only the organization owner can delete this organization\"}"
+            },
+            {
+              "name": "404 Not Found",
+              "code": 404,
+              "status": "Not Found",
+              "body": "{\"detail\": \"Organization not found\"}"
+            },
+            {
+              "name": "422 Missing org_id",
+              "code": 422,
+              "status": "Unprocessable Entity",
+              "body": "{\"detail\": [{\"loc\": [\"query\", \"org_id\"], \"msg\": \"field required\", \"type\": \"value_error.missing\"}]}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\"detail\": \"Not authenticated\"}"
             }
           ]
         }
@@ -4913,6 +5568,72 @@
                 }
               ],
               "body": "{\"detail\": [{\"type\": \"missing\", \"loc\": [\"body\", \"text\"], \"msg\": \"Field required\", \"input\": {}}]}"
+            }
+          ]
+        },
+        {
+          "name": "PUT /agent/update_version",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/agent/update_version?agent_id={{agent_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "agent",
+                "update_version"
+              ],
+              "query": [
+                {
+                  "key": "agent_id",
+                  "value": "{{agent_id}}"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"config\": {\n    \"system_prompt\": \"You are a helpful voice assistant.\",\n    \"llm_provider\": \"openai\",\n    \"llm_model\": \"gpt-4o\",\n    \"stt_provider\": \"deepgram\",\n    \"tts_provider\": \"cartesia\"\n  },\n  \"tool_ids\": [\"{{tool_id}}\"],\n  \"mcp_server_ids\": [],\n  \"upload_ids\": [],\n  \"phone_numbers\": [],\n  \"web_channel_ids\": [],\n  \"source_config_id\": \"{{agent_config_id}}\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "{\"id\": \"{{agent_id}}\", \"uuid\": \"{{agent_id}}\", \"name\": \"Sales Bot\", \"is_active\": true, \"config\": {\"id\": \"{{agent_config_id}}\", \"system_prompt\": \"You are a helpful voice assistant.\"}}"
+            },
+            {
+              "name": "404 Agent not found",
+              "code": 404,
+              "status": "Not Found",
+              "body": "{\"detail\": \"Agent not found\"}"
+            },
+            {
+              "name": "400 source_config_id does not belong to this agent",
+              "code": 400,
+              "status": "Bad Request",
+              "body": "{\"detail\": \"source_config_id does not belong to this agent\"}"
+            },
+            {
+              "name": "422 Missing agent_id query param",
+              "code": 422,
+              "status": "Unprocessable Entity",
+              "body": "{\"detail\": [{\"loc\": [\"query\", \"agent_id\"], \"msg\": \"field required\", \"type\": \"value_error.missing\"}]}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\"detail\": \"Not authenticated\"}"
             }
           ]
         }
@@ -7736,6 +8457,18 @@
               "code": 404,
               "status": "Not Found",
               "body": "{\"detail\": \"MCP server not found\"}"
+            },
+            {
+              "name": "401 Unauthorized (missing bearer token)",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\n  \"detail\": \"Not authenticated\"\n}"
+            },
+            {
+              "name": "400 Bad Request (invalid UUID)",
+              "code": 400,
+              "status": "Bad Request",
+              "body": "{\n  \"detail\": \"Invalid mcp_server_id: not a valid UUID\"\n}"
             }
           ]
         },
@@ -7820,6 +8553,18 @@
               "code": 404,
               "status": "Not Found",
               "body": "{\"detail\": \"MCP server not found\"}"
+            },
+            {
+              "name": "400 Connection failed",
+              "code": 400,
+              "status": "Bad Request",
+              "body": "{\n  \"detail\": \"Failed to connect to MCP server: connection refused\"\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\n  \"detail\": \"Not authenticated\"\n}"
             }
           ]
         },
@@ -7859,6 +8604,18 @@
               "code": 404,
               "status": "Not Found",
               "body": "{\"detail\": \"MCP server not found\"}"
+            },
+            {
+              "name": "400 In use by agents",
+              "code": 400,
+              "status": "Bad Request",
+              "body": "{\n  \"detail\": \"Cannot delete MCP server currently attached to 3 agent(s). Detach first.\"\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\n  \"detail\": \"Not authenticated\"\n}"
             }
           ]
         },
@@ -8010,6 +8767,18 @@
               "code": 200,
               "status": "OK",
               "body": "[]"
+            },
+            {
+              "name": "404 Agent not found",
+              "code": 404,
+              "status": "Not Found",
+              "body": "{\n  \"detail\": \"Agent not found\"\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\n  \"detail\": \"Not authenticated\"\n}"
             }
           ]
         },
@@ -8267,6 +9036,18 @@
               "code": 200,
               "status": "OK",
               "body": "{\"items\": [], \"total\": 0, \"page\": 1, \"page_size\": 20}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\n  \"detail\": \"Not authenticated\"\n}"
+            },
+            {
+              "name": "422 Invalid page_size",
+              "code": 422,
+              "status": "Unprocessable Entity",
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [\"body\", \"page_size\"],\n      \"msg\": \"value is not a valid integer\",\n      \"type\": \"type_error.integer\"\n    }\n  ]\n}"
             }
           ]
         },
@@ -8306,6 +9087,12 @@
                 }
               ],
               "body": "{\"detail\": \"Could not validate credentials\"}"
+            },
+            {
+              "name": "200 OK (empty)",
+              "code": 200,
+              "status": "OK",
+              "body": "[]"
             }
           ]
         },
@@ -8345,6 +9132,12 @@
                 }
               ],
               "body": "{\"detail\": \"Could not validate credentials\"}"
+            },
+            {
+              "name": "200 OK (empty)",
+              "code": 200,
+              "status": "OK",
+              "body": "[]"
             }
           ]
         },
@@ -8384,6 +9177,12 @@
               "code": 404,
               "status": "Not Found",
               "body": "{\"detail\": \"Tool not found\"}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\n  \"detail\": \"Not authenticated\"\n}"
             }
           ]
         },
@@ -8722,6 +9521,18 @@
               "code": 200,
               "status": "OK",
               "body": "[]"
+            },
+            {
+              "name": "404 Agent not found",
+              "code": 404,
+              "status": "Not Found",
+              "body": "{\n  \"detail\": \"Agent not found\"\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\n  \"detail\": \"Not authenticated\"\n}"
             }
           ]
         },
@@ -11577,6 +12388,12 @@
                 }
               ],
               "body": "{\"detail\": \"Failed to load provider catalog\"}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\n  \"detail\": \"Not authenticated\"\n}"
             }
           ]
         },
@@ -11726,6 +12543,18 @@
               "code": 200,
               "status": "OK",
               "body": "{\"connected\": false, \"provider\": \"google_calendar\"}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\n  \"detail\": \"Not authenticated\"\n}"
+            },
+            {
+              "name": "422 Missing provider query param",
+              "code": 422,
+              "status": "Unprocessable Entity",
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [\"query\", \"provider\"],\n      \"msg\": \"field required\",\n      \"type\": \"value_error.missing\"\n    }\n  ]\n}"
             }
           ]
         },
@@ -11938,6 +12767,12 @@
                 }
               ],
               "body": "{\"detail\": \"Could not validate credentials\"}"
+            },
+            {
+              "name": "200 OK (empty)",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"providers\": []\n}"
             }
           ]
         },
@@ -11997,6 +12832,18 @@
                 }
               ],
               "body": "{\"detail\": \"name is required\"}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\n  \"detail\": \"Not authenticated\"\n}"
+            },
+            {
+              "name": "409 Duplicate label",
+              "code": 409,
+              "status": "Conflict",
+              "body": "{\n  \"detail\": \"A credential with this label already exists\"\n}"
             }
           ]
         },
@@ -12057,6 +12904,18 @@
                 }
               ],
               "body": "{\"detail\": \"server_url is required\"}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\n  \"detail\": \"Not authenticated\"\n}"
+            },
+            {
+              "name": "400 Missing server_url",
+              "code": 400,
+              "status": "Bad Request",
+              "body": "{\n  \"detail\": \"server_url is required\"\n}"
             }
           ]
         },
@@ -12121,6 +12980,18 @@
                 }
               ],
               "body": "{\"detail\": \"Unknown or expired MCP OAuth state\"}"
+            },
+            {
+              "name": "400 Unknown state",
+              "code": 400,
+              "status": "Bad Request",
+              "body": "{\n  \"detail\": \"Unknown or expired MCP OAuth state\"\n}"
+            },
+            {
+              "name": "422 Missing code param",
+              "code": 422,
+              "status": "Unprocessable Entity",
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [\"query\", \"code\"],\n      \"msg\": \"field required\",\n      \"type\": \"value_error.missing\"\n    }\n  ]\n}"
             }
           ]
         },
@@ -12311,6 +13182,18 @@
               "code": 401,
               "status": "Unauthorized",
               "body": "{\"detail\": \"Could not validate credentials\"}"
+            },
+            {
+              "name": "200 OK - empty org (no calls yet)",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"total_calls\": 0,\n  \"total_minutes\": 0,\n  \"total_agents\": 0,\n  \"active_agents\": 0,\n  \"success_rate\": 0.0,\n  \"average_call_duration_seconds\": 0,\n  \"top_agents\": [],\n  \"calls_by_day\": []\n}"
+            },
+            {
+              "name": "200 OK - active org with calls",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"total_calls\": 4820,\n  \"total_minutes\": 12655,\n  \"total_agents\": 12,\n  \"active_agents\": 8,\n  \"success_rate\": 0.87,\n  \"average_call_duration_seconds\": 158,\n  \"top_agents\": [{\"agent_id\": \"agent-uuid-1\", \"name\": \"Support Bot\", \"call_count\": 1820}],\n  \"calls_by_day\": [{\"date\": \"2026-07-01\", \"count\": 210}]\n}"
             }
           ]
         }
@@ -12698,6 +13581,118 @@
               "code": 200,
               "status": "OK",
               "body": "{\n  \"capabilities\": {\n    \"multi_tenant\": true,\n    \"telephony\": true,\n    \"webhooks\": true,\n    \"sso\": true,\n    \"firebase_signup\": true,\n    \"switch_organization\": true\n  },\n  \"edition\": \"enterprise\",\n  \"ee_enabled\": true\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /status (active call count for this pod)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/status",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "status"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"served_by\": \"tone-call-0/node-a\",\n  \"active_calls\": 3\n}"
+            },
+            {
+              "name": "200 OK - no pod identity, no active calls",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"served_by\": null,\n  \"active_calls\": 0\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /metrics (Prometheus text format)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/metrics",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "metrics"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK - metrics with pod labels",
+              "code": 200,
+              "status": "OK",
+              "body": "# HELP tone_active_calls Active call WebSocket connections on this pod\n# TYPE tone_active_calls gauge\ntone_active_calls{pod=\"tone-call-0\",node=\"node-a\",deployment=\"tone-call\"} 3\n"
+            },
+            {
+              "name": "200 OK - no pod labels",
+              "code": 200,
+              "status": "OK",
+              "body": "# HELP tone_active_calls Active call WebSocket connections on this pod\n# TYPE tone_active_calls gauge\ntone_active_calls 0\n"
+            }
+          ]
+        },
+        {
+          "name": "POST /twiml (Twilio Voice webhook - returns TwiML)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/x-www-form-urlencoded"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/twiml",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "twiml"
+              ]
+            },
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "From",
+                  "value": "+14085551234"
+                },
+                {
+                  "key": "To",
+                  "value": "+14085559876"
+                },
+                {
+                  "key": "CallSid",
+                  "value": "CA1234567890abcdef"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK - TwiML with Stream to /ws",
+              "code": 200,
+              "status": "OK",
+              "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Connect><Stream url=\"wss://api.example.com/ws\"><Parameter name=\"from\" value=\"+14085551234\" /><Parameter name=\"to\" value=\"+14085559876\" /></Stream></Connect></Response>"
+            },
+            {
+              "name": "200 OK - TwiML with pinned pod URL",
+              "code": 200,
+              "status": "OK",
+              "body": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response><Connect><Stream url=\"wss://tone-call-0.tone-call.svc.cluster.local/ws\"><Parameter name=\"from\" value=\"+14085551234\" /><Parameter name=\"to\" value=\"+14085559876\" /></Stream></Connect></Response>"
             }
           ]
         }
@@ -13173,6 +14168,18 @@
               "code": 200,
               "status": "OK",
               "body": "[]"
+            },
+            {
+              "name": "200 OK - populated list",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"members\": [\n    {\"user_id\": \"user-1\", \"email\": \"owner@acme.com\", \"name\": \"Owner\", \"role\": \"owner\"},\n    {\"user_id\": \"user-2\", \"email\": \"admin@acme.com\", \"name\": \"Admin\", \"role\": \"admin\"}\n  ]\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\n  \"detail\": \"Not authenticated\"\n}"
             }
           ]
         },
@@ -13206,6 +14213,18 @@
               "code": 200,
               "status": "OK",
               "body": "[]"
+            },
+            {
+              "name": "200 OK - populated list",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"invited\": [\n    {\"invitation_id\": \"inv-1\", \"email\": \"pending@acme.com\", \"role\": \"member\", \"invited_at\": \"2026-07-05T09:00:00Z\"}\n  ]\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\n  \"detail\": \"Not authenticated\"\n}"
             }
           ]
         },
@@ -13245,6 +14264,12 @@
               "code": 404,
               "status": "Not Found",
               "body": "{\"detail\": \"Organization not found\"}"
+            },
+            {
+              "name": "404 Not Found",
+              "code": 404,
+              "status": "Not Found",
+              "body": "{\n  \"detail\": \"Organization not found\"\n}"
             }
           ]
         },
@@ -13361,6 +14386,468 @@
               "code": 409,
               "status": "Conflict",
               "body": "{\"detail\": \"Cancel your subscription before deleting the organization\"}"
+            }
+          ]
+        },
+        {
+          "name": "GET /organization/roles (EE - list roles by scope)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/organization/roles",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "organization",
+                "roles"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"roles\": [\n    {\"code\": \"owner\", \"name\": \"Owner\", \"scope\": \"organization\"},\n    {\"code\": \"admin\", \"name\": \"Admin\", \"scope\": \"organization\"},\n    {\"code\": \"member\", \"name\": \"Member\", \"scope\": \"organization\"}\n  ]\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\n  \"detail\": \"Not authenticated\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /organization/settings (EE - get org settings)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/organization/settings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "organization",
+                "settings"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"settings\": {\n    \"require_email_verification\": true,\n    \"allow_public_signup\": false,\n    \"default_role\": \"member\",\n    \"branding\": {\"logo_url\": null, \"primary_color\": \"#0066FF\"}\n  }\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\n  \"detail\": \"Not authenticated\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "PUT /organization/settings (EE - update org settings)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/organization/settings",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "organization",
+                "settings"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"require_email_verification\": true,\n  \"allow_public_signup\": false,\n  \"default_role\": \"member\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"message\": \"Settings updated\",\n  \"settings\": {\n    \"require_email_verification\": true,\n    \"allow_public_signup\": false,\n    \"default_role\": \"member\"\n  }\n}"
+            },
+            {
+              "name": "403 Forbidden - not admin",
+              "code": 403,
+              "status": "Forbidden",
+              "body": "{\n  \"detail\": \"Requires admin or owner role\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /organization/access_requests (EE - list pending access requests)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/organization/access_requests",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "organization",
+                "access_requests"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK - list of requests",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"requests\": [\n    {\"id\": \"req-1\", \"user_id\": \"user-2\", \"email\": \"user2@acme.com\", \"status\": \"pending\", \"requested_at\": \"2026-07-06T09:00:00Z\"}\n  ]\n}"
+            },
+            {
+              "name": "200 OK - empty",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"requests\": []\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /organization/handle_access_request (EE - approve or deny access request)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/organization/handle_access_request",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "organization",
+                "handle_access_request"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"request_id\": \"req-1\",\n  \"decision\": \"approve\",\n  \"role\": \"member\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"message\": \"Access request approved\",\n  \"request_id\": \"req-1\"\n}"
+            },
+            {
+              "name": "404 Not Found",
+              "code": 404,
+              "status": "Not Found",
+              "body": "{\n  \"detail\": \"Access request not found\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /organization/update_member_role (EE - change a member's role)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/organization/update_member_role?member_id={{user_id}}&role=admin",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "organization",
+                "update_member_role"
+              ],
+              "query": [
+                {
+                  "key": "member_id",
+                  "value": "{{user_id}}"
+                },
+                {
+                  "key": "role",
+                  "value": "admin"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"message\": \"Member role updated\",\n  \"member_id\": \"user-uuid\",\n  \"role\": \"admin\"\n}"
+            },
+            {
+              "name": "403 Forbidden - not admin",
+              "code": 403,
+              "status": "Forbidden",
+              "body": "{\n  \"detail\": \"Requires admin or owner role\"\n}"
+            },
+            {
+              "name": "404 Not Found - member missing",
+              "code": 404,
+              "status": "Not Found",
+              "body": "{\n  \"detail\": \"Member not found\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "DELETE /organization/remove_user_from_organization (EE - remove a member)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/organization/remove_user_from_organization?user_id={{user_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "organization",
+                "remove_user_from_organization"
+              ],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"message\": \"User removed from organization\"\n}"
+            },
+            {
+              "name": "403 Forbidden",
+              "code": 403,
+              "status": "Forbidden",
+              "body": "{\n  \"detail\": \"Requires admin or owner role\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /organization/invite_user_to_organization (EE - invite a new user)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/organization/invite_user_to_organization",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "organization",
+                "invite_user_to_organization"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"new.member@acme.com\",\n  \"role\": \"member\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK - invitation sent",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"message\": \"Invitation sent\",\n  \"invitation_id\": \"inv-uuid\"\n}"
+            },
+            {
+              "name": "409 Conflict - user already in org",
+              "code": 409,
+              "status": "Conflict",
+              "body": "{\n  \"detail\": \"User is already a member of this organization\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /user/get_all_users_for_organization (EE - paginated org members)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/user/get_all_users_for_organization",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "get_all_users_for_organization"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"page_no\": 1,\n  \"page_size\": 20,\n  \"search\": null,\n  \"sort_by\": \"created_at\",\n  \"sort_order\": \"desc\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"items\": [{\"user_id\": \"user-1\", \"email\": \"owner@acme.com\", \"name\": \"Owner\", \"role\": \"owner\", \"joined_at\": \"2026-01-01T00:00:00Z\"}],\n  \"total\": 1,\n  \"page_no\": 1,\n  \"page_size\": 20\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\n  \"detail\": \"Not authenticated\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "POST /user/get_all_invited_users_for_organization (EE - paginated pending invites)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/user/get_all_invited_users_for_organization",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "user",
+                "get_all_invited_users_for_organization"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"page_no\": 1,\n  \"page_size\": 20,\n  \"search\": null\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"items\": [{\"invitation_id\": \"inv-1\", \"email\": \"pending@acme.com\", \"role\": \"member\", \"invited_at\": \"2026-07-05T09:00:00Z\", \"status\": \"pending\"}],\n  \"total\": 1,\n  \"page_no\": 1,\n  \"page_size\": 20\n}"
+            },
+            {
+              "name": "200 OK - empty",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"items\": [],\n  \"total\": 0,\n  \"page_no\": 1,\n  \"page_size\": 20\n}"
             }
           ]
         }
@@ -13640,6 +15127,12 @@
                 }
               ],
               "body": "{\"detail\": \"Call not found\"}"
+            },
+            {
+              "name": "404 Not Found - call has no recording",
+              "code": 404,
+              "status": "Not Found",
+              "body": "{\n  \"detail\": \"Audio recording not found for this call\"\n}"
             }
           ]
         },
@@ -13690,6 +15183,73 @@
                 }
               ],
               "body": "{\"detail\": \"Call not found\"}"
+            },
+            {
+              "name": "200 OK - full call detail",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"call_id\": \"call-uuid\",\n  \"agent_id\": \"agent-uuid\",\n  \"agent_name\": \"Support Bot\",\n  \"channel\": \"twilio\",\n  \"status\": \"completed\",\n  \"from_number\": \"+14085551234\",\n  \"to_number\": \"+14085559876\",\n  \"start_time\": \"2026-07-07T10:15:00Z\",\n  \"end_time\": \"2026-07-07T10:17:32Z\",\n  \"duration_seconds\": 152,\n  \"served_by\": \"pod-1/node-a\",\n  \"transcript\": [{\"role\": \"assistant\", \"content\": \"Hi, how can I help?\"}, {\"role\": \"user\", \"content\": \"I need to check my order.\"}]\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /call-log/{call_id}/tool-executions (list tool calls for a call)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/call-log/{{call_id}}/tool-executions?status=success&type=custom",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "call-log",
+                "{{call_id}}",
+                "tool-executions"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "success",
+                  "description": "Filter by status: success | error"
+                },
+                {
+                  "key": "type",
+                  "value": "custom",
+                  "description": "Filter by tool type: custom | send_sms | google_calendar | read_document | mcp"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK - list of tool executions",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"tool_executions\": [\n    {\"id\": \"exec-uuid-1\", \"tool_name\": \"lookup_order\", \"tool_type\": \"custom\", \"status\": \"success\", \"executed_at\": \"2026-07-07T10:15:23Z\", \"duration_ms\": 412, \"request\": {\"order_id\": \"ORD-1234\"}, \"response\": {\"status\": \"shipped\", \"tracking\": \"1Z999AA10\"}},\n    {\"id\": \"exec-uuid-2\", \"tool_name\": \"send_sms\", \"tool_type\": \"send_sms\", \"status\": \"success\", \"executed_at\": \"2026-07-07T10:15:41Z\", \"duration_ms\": 205, \"request\": {\"to\": \"+14085551234\", \"body\": \"Your order shipped.\"}, \"response\": {\"sid\": \"SM123\"}}\n  ]\n}"
+            },
+            {
+              "name": "200 OK - empty list",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"tool_executions\": []\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\n  \"detail\": \"Not authenticated\"\n}"
             }
           ]
         }
@@ -14079,6 +15639,18 @@
                 }
               ],
               "body": "{\"detail\": \"Could not validate credentials\"}"
+            },
+            {
+              "name": "200 OK - populated list",
+              "code": 200,
+              "status": "OK",
+              "body": "[\n  {\"workflow_id\": \"workflow-uuid-1\", \"name\": \"Support Flow\", \"description\": \"Handles customer support intents\", \"agent_id\": \"agent-uuid\", \"updated_at\": \"2026-07-06T15:22:00Z\"},\n  {\"workflow_id\": \"workflow-uuid-2\", \"name\": \"Sales Flow\", \"description\": null, \"agent_id\": null, \"updated_at\": \"2026-07-05T11:10:00Z\"}\n]"
+            },
+            {
+              "name": "200 OK - empty",
+              "code": 200,
+              "status": "OK",
+              "body": "[]"
             }
           ]
         },
@@ -14230,6 +15802,12 @@
                 }
               ],
               "body": "{\"detail\": \"Workflow not found\"}"
+            },
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"workflow_id\": \"workflow-uuid\",\n  \"name\": \"Support Flow\",\n  \"description\": \"Handles customer support intents\",\n  \"agent_id\": \"agent-uuid\",\n  \"graph\": {\"nodes\": [{\"id\": \"start\", \"type\": \"start\"}, {\"id\": \"intent\", \"type\": \"llm\"}], \"edges\": [{\"from\": \"start\", \"to\": \"intent\"}]},\n  \"checksum\": \"sha256:abc123\",\n  \"updated_at\": \"2026-07-06T15:22:00Z\"\n}"
             }
           ]
         },
@@ -14289,6 +15867,18 @@
                 }
               ],
               "body": "{\"detail\": \"Draft has been modified concurrently\"}"
+            },
+            {
+              "name": "200 OK - draft saved",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"workflow_id\": \"{{workflow_id}}\",\n  \"checksum\": \"sha256:def456\",\n  \"updated_at\": \"2026-07-07T10:00:00Z\"\n}"
+            },
+            {
+              "name": "409 Conflict - checksum mismatch",
+              "code": 409,
+              "status": "Conflict",
+              "body": "{\n  \"detail\": \"expected_checksum does not match the current draft - refresh and retry\"\n}"
             }
           ]
         },
@@ -14543,6 +16133,12 @@
                 }
               ],
               "body": "{\"detail\": \"Workflow not found\"}"
+            },
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "{\n  \"message\": \"Workflow deleted\",\n  \"workflow_id\": \"{{workflow_id}}\"\n}"
             }
           ]
         },
@@ -14706,6 +16302,58 @@
                 }
               ],
               "body": "{\"detail\": \"Workflow not found\"}"
+            }
+          ]
+        },
+        {
+          "name": "POST /workflow/clone (duplicate a workflow)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/workflow/clone",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "workflow",
+                "clone"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workflow_id\": \"{{workflow_id}}\",\n  \"name\": \"Support Flow (copy)\",\n  \"agent_id\": null\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "code": 201,
+              "status": "Created",
+              "body": "{\n  \"workflow_id\": \"new-workflow-uuid\",\n  \"name\": \"Support Flow (copy)\",\n  \"description\": null,\n  \"agent_id\": null,\n  \"created_at\": \"2026-07-07T10:00:00Z\",\n  \"checksum\": \"sha256:abc123\"\n}"
+            },
+            {
+              "name": "404 Not Found - source workflow missing",
+              "code": 404,
+              "status": "Not Found",
+              "body": "{\n  \"detail\": \"Workflow not found\"\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\n  \"detail\": \"Not authenticated\"\n}"
             }
           ]
         }
