@@ -59,6 +59,7 @@ class Settings:
         self.CALL_SERVER_HOST: str = get_secret("CALL_SERVER_HOST", "")
         self.CALL_WORKER_PREFIX: str = get_secret("CALL_WORKER_PREFIX", "staging-tone-call-worker")
         self.POD_SYNC_NAMESPACE: str = get_secret("POD_SYNC_NAMESPACE", "staging")
+        
 
         self.APPLICATION_URL: str = get_secret("APPLICATION_URL", "http://localhost:3000")
         self.RESEND_API_KEY: str = get_secret("RESEND_API_KEY", "")
