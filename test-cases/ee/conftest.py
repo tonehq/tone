@@ -68,6 +68,11 @@ def _make_real_client(db_session, token=None):
 
     api_v1.dependency_overrides[get_db] = _get_test_db
     client = TestClient(app)
+    # Starlette's TestClient reports request.client.host as "testclient", but
+    # audit_logs.ip_address is a Postgres INET column that rejects that literal.
+    # Send an X-Forwarded-For header so the request_context middleware picks up
+    # a valid IP and the audit-log INSERT can succeed.
+    client.headers["x-forwarded-for"] = "127.0.0.1"
     if token:
         client.headers["Authorization"] = f"Bearer {token}"
         client.headers["tenant_id"] = ORG_ID

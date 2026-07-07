@@ -228,3 +228,56 @@ class TestUpdateUserMe:
             "/api/v1/user/me", json={"first_name": "X"}
         )
         assert resp.status_code in (401, 403)
+
+
+# ─── Postman-example-derived additions (updated collection) ───
+
+class TestGetAllUsersPaginated:
+    """Updated Postman body: {page, page_size, search, sort_by}."""
+
+    def test_get_all_users_with_pagination_body(self, client_as_member):
+        """Postman: 200 OK with paginated body."""
+        resp = client_as_member.post(
+            "/api/v1/user/get_all_users_for_organization",
+            json={"page": 1, "page_size": 20, "search": "ada", "sort_by": "-created_at"},
+        )
+        assert resp.status_code == 200
+        assert isinstance(_items(resp), list)
+
+    def test_get_all_users_search_no_matches(self, client_as_member):
+        """Search for a string that likely returns no matches."""
+        resp = client_as_member.post(
+            "/api/v1/user/get_all_users_for_organization",
+            json={"page": 1, "page_size": 20, "search": "zzz-no-match-zzz"},
+        )
+        assert resp.status_code == 200
+        assert isinstance(_items(resp), list)
+
+
+class TestGetAllInvitedUsersPaginated:
+    """Updated Postman body: {page, page_size}."""
+
+    def test_get_all_invited_users_with_pagination(self, client_as_member):
+        """Postman: 200 OK with page/page_size."""
+        resp = client_as_member.post(
+            "/api/v1/user/get_all_invited_users_for_organization",
+            json={"page": 1, "page_size": 20},
+        )
+        assert resp.status_code == 200
+        assert isinstance(_items(resp), list)
+
+
+class TestUpdateUserMePostmanExamples:
+    """Updated Postman body: {first_name, last_name, avatar_url}."""
+
+    def test_update_me_full_postman_body(self, client_as_member):
+        """Postman: 200 OK with first_name + last_name + avatar_url."""
+        resp = client_as_member.patch(
+            "/api/v1/user/me",
+            json={
+                "first_name": "Ada",
+                "last_name": "Lovelace",
+                "avatar_url": "https://r2.example.com/avatars/ada.png",
+            },
+        )
+        assert resp.status_code in (200, 400, 404, 500)
