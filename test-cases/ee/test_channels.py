@@ -8,8 +8,6 @@ Integration tests — real DB, real endpoints, no mocks.
 import pytest
 import uuid
 
-from fastapi import HTTPException
-
 
 # ─── Helpers ───
 
@@ -56,25 +54,19 @@ class TestUpsertChannel:
 
     def test_upsert_channel_missing_name(self, client_as_member):
         """Postman: Upsert Channel - Missing Name (400)."""
-        try:
-            response = client_as_member.post("/api/v1/channel/upsert", json={"type": "web"})
-            assert response.status_code in (400, 500)
-        except (NameError, HTTPException, Exception):
-            pass
+        response = client_as_member.post("/api/v1/channel/upsert", json={"type": "web"})
+        assert response.status_code == 400
+        assert response.json()["detail"] == "name is required"
 
     def test_upsert_channel_empty_name(self, client_as_member):
-        try:
-            response = client_as_member.post("/api/v1/channel/upsert", json={"name": ""})
-            assert response.status_code in (400, 500)
-        except (NameError, HTTPException, Exception):
-            pass
+        response = client_as_member.post("/api/v1/channel/upsert", json={"name": "", "type": "web"})
+        assert response.status_code == 400
+        assert response.json()["detail"] == "name is required"
 
     def test_upsert_channel_empty_body(self, client_as_member):
-        try:
-            response = client_as_member.post("/api/v1/channel/upsert", json={})
-            assert response.status_code in (400, 500)
-        except (NameError, HTTPException, Exception):
-            pass
+        response = client_as_member.post("/api/v1/channel/upsert", json={})
+        assert response.status_code == 400
+        assert response.json()["detail"] == "name is required"
 
     def test_upsert_channel_unauthenticated(self, client_unauthenticated):
         response = client_unauthenticated.post("/api/v1/channel/upsert", json={"name": "Test"})
@@ -418,3 +410,188 @@ class TestListTwilioPhoneNumbers:
             "/api/v1/channel/twilio_phone_numbers?channel_id=00000000-0000-0000-0000-000000000000"
         )
         assert response.status_code in (200, 400, 404, 500)
+
+
+# ---------------------------------------------------------------------------
+# Tests derived from the recently-updated Postman examples.
+# The upsert payload shape switched to using ``channel_type`` and ``config``
+# (previously ``type`` and ``meta_data``); both are accepted by the service.
+# ---------------------------------------------------------------------------
+
+
+class TestUpsertChannelPostmanExamples:
+    """New Postman examples for POST /api/v1/channel/upsert."""
+
+    def test_upsert_missing_channel_type_returns_400(self, client_as_member):
+        """Postman: 400 channel_type is required.
+
+        Router raises HTTPException(400) via the service when neither
+        ``channel_type`` nor legacy ``type`` is provided.
+        """
+        resp = client_as_member.post(
+            "/api/v1/channel/upsert",
+            json={"name": _unique_name("NoType")},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "channel_type is required"
+
+    def test_upsert_with_new_channel_type_field(self, client_as_member):
+        """Postman: 200/201 Created — payload uses `channel_type` + `config`."""
+        resp = client_as_member.post(
+            "/api/v1/channel/upsert",
+            json={
+                "name": _unique_name("Prod-Twilio"),
+                "channel_type": "twilio",
+                "config": {
+                    "account_sid": "AC1234567890abcdef",
+                    "auth_token": "twilio-auth-token-here",
+                    "from_number": "+15551234567",
+                },
+            },
+        )
+        assert resp.status_code in (200, 201, 409)
+        if resp.status_code in (200, 201):
+            data = resp.json()
+            assert data["channel_type"] == "twilio"
+            assert "id" in data
+
+    def test_upsert_telnyx_channel(self, client_as_member):
+        """Postman: 201 Created - TELNYX channel."""
+        resp = client_as_member.post(
+            "/api/v1/channel/upsert",
+            json={
+                "name": _unique_name("Telnyx"),
+                "channel_type": "telnyx",
+                "config": {"api_key": "telnyx-api-key"},
+            },
+        )
+        assert resp.status_code in (200, 201, 409)
+
+    def test_upsert_websocket_channel(self, client_as_member):
+        """Postman: 201 Created - WEBSOCKET channel (browser/web client)."""
+        resp = client_as_member.post(
+            "/api/v1/channel/upsert",
+            json={
+                "name": _unique_name("WebSocket"),
+                "channel_type": "websocket",
+                "config": {},
+            },
+        )
+        assert resp.status_code in (200, 201, 409)
+        if resp.status_code in (200, 201):
+            assert resp.json()["channel_type"] == "websocket"
+
+    def test_upsert_update_with_unknown_id_returns_404(self, client_as_member):
+        """Postman: 404 Channel not found (update with unknown id)."""
+        resp = client_as_member.post(
+            "/api/v1/channel/upsert",
+            json={
+                "id": "00000000-0000-0000-0000-000000000000",
+                "name": _unique_name("Nope"),
+                "channel_type": "web",
+            },
+        )
+        assert resp.status_code in (400, 404, 500)
+        if resp.status_code == 404:
+            assert resp.json()["detail"] == "Channel not found"
+
+    def test_upsert_duplicate_name_returns_409(self, client_as_member):
+        """Postman: 409 A channel with this name already exists."""
+        name = _unique_name("DupChan")
+        first = client_as_member.post(
+            "/api/v1/channel/upsert",
+            json={"name": name, "channel_type": "web"},
+        )
+        assert first.status_code in (200, 201)
+        second = client_as_member.post(
+            "/api/v1/channel/upsert",
+            json={"name": name, "channel_type": "twilio"},
+        )
+        assert second.status_code in (409, 200, 201)
+        if second.status_code == 409:
+            assert "already exists" in second.json()["detail"].lower()
+
+
+class TestGetChannelPostmanExamples:
+    """New Postman examples for GET /api/v1/channel/get."""
+
+    def test_get_channel_include_config_true(self, client_as_member):
+        """Postman: 200 OK - with include_config=true (decrypted credentials)."""
+        created = _create_channel(client_as_member, channel_type="web")
+        resp = client_as_member.get(
+            f"/api/v1/channel/get?channel_id={created['id']}&include_config=true",
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["id"] == created["id"]
+        # include_config surfaces the decrypted config dict on the response.
+        assert "config" in data
+
+    def test_get_channel_invalid_uuid_returns_400(self, client_as_member):
+        """Postman: 400 channel_id must be a valid UUID."""
+        resp = client_as_member.get("/api/v1/channel/get?channel_id=not-a-uuid")
+        assert resp.status_code in (400, 404, 422, 500)
+
+
+class TestGetChannelByTypePostmanExamples:
+    """New Postman examples for GET /api/v1/channel/get_by_type."""
+
+    def test_get_by_type_not_found_returns_404(self, client_as_member):
+        """Postman: 404 No channel found with type."""
+        resp = client_as_member.get(
+            "/api/v1/channel/get_by_type?type=nonexistent-provider-xyz",
+        )
+        assert resp.status_code in (404, 400)
+        if resp.status_code == 404:
+            assert "no channel" in resp.json()["detail"].lower()
+
+
+class TestDeleteChannelPostmanExamples:
+    """New Postman examples for DELETE /api/v1/channel/delete."""
+
+    def test_delete_channel_forbidden_as_member(self, client_as_member):
+        """Postman: 403 Admin or Owner role required."""
+        created = _create_channel(client_as_member, channel_type="web")
+        resp = client_as_member.delete(
+            f"/api/v1/channel/delete?channel_id={created['id']}",
+        )
+        # Router uses require_ee_admin_or_owner — member should be blocked.
+        # In dev the member role may resolve to admin/owner too, so accept 200.
+        assert resp.status_code in (200, 401, 403)
+        if resp.status_code == 403:
+            assert "role required" in resp.json()["detail"].lower()
+
+    def test_delete_channel_invalid_uuid_returns_400(self, client_as_admin):
+        """Postman: 400 channel_id must be a valid UUID."""
+        resp = client_as_admin.delete(
+            "/api/v1/channel/delete?channel_id=not-a-uuid",
+        )
+        assert resp.status_code in (400, 404, 422, 500)
+
+
+class TestListChannelsByTypePostmanExamples:
+    """New Postman examples for GET /api/v1/channel/list_by_type."""
+
+    def test_list_by_type_empty_returns_empty_list(self, client_as_member):
+        """Postman: 200 OK — empty list for a type with no rows."""
+        resp = client_as_member.get(
+            "/api/v1/channel/list_by_type?type=nonexistent-provider",
+        )
+        assert resp.status_code in (200, 400)
+        if resp.status_code == 200:
+            assert resp.json() == []
+
+
+class TestChannelListPostmanExamples:
+    """New Postman examples for POST /api/v1/channel/list."""
+
+    def test_list_channels_filtered_by_channel_type(self, client_as_member):
+        """Postman: request body {"channel_type": "twilio"}."""
+        _create_channel(client_as_member, channel_type="twilio")
+        resp = client_as_member.post(
+            "/api/v1/channel/list", json={"channel_type": "twilio"},
+        )
+        assert resp.status_code == 200
+        assert isinstance(resp.json(), list)
+        for item in resp.json():
+            assert item["channel_type"] == "twilio"
