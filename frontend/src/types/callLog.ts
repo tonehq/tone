@@ -97,9 +97,10 @@ export interface CallMetrics {
 }
 
 export interface ServedBy {
-  deployment?: string;
   pod?: string;
+  ordinal?: number;
   node?: string;
+  environment?: string;
 }
 
 export interface CallLogRow {
