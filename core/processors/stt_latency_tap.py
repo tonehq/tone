@@ -25,7 +25,7 @@ Pipeline placement
 Insert between the STT-related upstream processors (``stt``,
 ``duplicate_filter``) and the user context aggregator. The exact slot is::
 
-    stt → duplicate_filter → stt_latency_tap → call_end_detector → user_aggregator → ...
+    stt → duplicate_filter → stt_latency_tap → user_aggregator → ...
 
 Frame contract
 --------------
