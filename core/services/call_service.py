@@ -531,6 +531,8 @@ class CallService(BaseService):
             "recording_upload_id": str(call.recording_upload_id) if call.recording_upload_id else None,
             "transcript": metadata.get("transcript"),
             "tool_calls": metadata.get("tool_calls"),
+            "ended_reason": metadata.get("ended_reason"),
+            "ended_reason_detail": metadata.get("ended_reason_detail"),
             "served_by": served_by,
             "pipeline_config": call.pipeline_config,
             "metrics": metrics,
