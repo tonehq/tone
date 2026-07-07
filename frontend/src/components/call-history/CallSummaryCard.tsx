@@ -78,7 +78,7 @@ const CallSummaryCard: React.FC<CallSummaryCardProps> = ({ callLog }) => {
 
   const servedBy = callLog.served_by;
   const servedByTooltip = servedBy
-    ? [servedBy.deployment, servedBy.node].filter(Boolean).join(' · ') || 'Served by pod'
+    ? [servedBy.node, servedBy.environment].filter(Boolean).join(' · ') || 'Served by pod'
     : '';
 
   return (
