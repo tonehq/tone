@@ -24,6 +24,14 @@ def ingest_upload(upload_id: str, org_id: str, delete_existing: bool = False) ->
     DocumentProcessingService().process_upload(UUID(upload_id), UUID(org_id), delete_existing=delete_existing)
 
 
+@app.periodic(cron="* * * * *")
+@app.task(name="sync_pods_and_nodes", queue="pod_sync")
+def sync_pods_and_nodes_task(timestamp: int) -> None:
+    from core.jobs.pod_sync import sync_pods_and_nodes
+
+    sync_pods_and_nodes()
+
+
 async def _defer_ingestion(upload_id, org_id, delete_existing: bool) -> int:
     async with app.open_async():
         return await ingest_upload.defer_async(

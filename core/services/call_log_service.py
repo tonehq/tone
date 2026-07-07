@@ -11,7 +11,7 @@ from core.models.channel import Channel
 from core.models.phone_number import PhoneNumber
 from core.models.upload import Upload
 from core.services.base import BaseService
-from core.utils.pod_identity import get_served_by
+from core.services.pod_registry_service import resolve_pod_id
 
 
 class CallLogService(BaseService):
@@ -92,6 +92,13 @@ class CallLogService(BaseService):
 
         direction = "outbound" if transport_type == "outbound" else "inbound"
 
+        try:
+            pod_id = resolve_pod_id(self.db)
+        except Exception as exc:
+            logger.warning("resolve_pod_id failed, creating call without pod attribution: {}", exc)
+            self.db.rollback()
+            pod_id = None
+
         # Callers (the pipeline runner) can pass in the moment the call truly
         # began so this timestamp is not skewed by background-thread / INSERT
         # latency. Fallback keeps the original behaviour for any other caller.
@@ -107,7 +114,8 @@ class CallLogService(BaseService):
             to_phone_number_id=to_pn_id,
             from_number_raw_by_provider=from_number,
             started_at=started_at or datetime.now(timezone.utc),
-            metadata_=({"served_by": served_by} if (served_by := get_served_by()) else {}),
+            pod_id=pod_id,
+            metadata_={},
             pipeline_config=pipeline_config,
         )
         self.db.add(call)

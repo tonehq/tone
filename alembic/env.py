@@ -38,6 +38,8 @@ from core.models.oauth_connection import OAuthConnection
 from core.models.api_key import ApiKey
 from core.models.mcp_server import McpServer
 from core.models.tool import Tool
+from core.models.node import Node
+from core.models.pod import Pod
 from core.models.call import Call
 from core.models.call_metrics import CallMetrics
 from core.models.tool_execution import ToolExecution

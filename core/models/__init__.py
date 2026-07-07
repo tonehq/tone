@@ -40,6 +40,10 @@ from core.models.api_key import ApiKey
 from core.models.mcp_server import McpServer
 from core.models.tool import Tool
 
+# Infrastructure (nodes & pods that serve calls)
+from core.models.node import Node
+from core.models.pod import Pod
+
 # Calls & Metrics
 from core.models.call import Call
 from core.models.call_metrics import CallMetrics

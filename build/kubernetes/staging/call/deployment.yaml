@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: staging-tone-call-worker
   namespace: staging
@@ -8,21 +8,24 @@ metadata:
     environment: staging
     component: call
 spec:
+  serviceName: staging-tone-call-headless
+  podManagementPolicy: Parallel
   replicas: 3
   selector:
     matchLabels:
       app: staging-tone-call-worker
-  strategy:
+  updateStrategy:
     type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
   template:
     metadata:
       labels:
         app: staging-tone-call-worker
         environment: staging
         component: call
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
     spec:
       nodeSelector:
         kubernetes.io/os: linux

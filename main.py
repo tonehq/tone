@@ -25,6 +25,9 @@ from core.api.v1 import (
 )
 from core.middleware.request_context import RequestContextMiddleware
 from core.utils.pod_identity import get_served_by, pod_name, node_name, deployment_name
+from core.database.session import get_db_context
+from core.services.pod_picker import PodPicker
+from loguru import logger
 import core.models
 
 skip_license = settings.SKIP_LICENSE_CHECK
@@ -284,6 +287,7 @@ def metrics():
 async def twiml(request: Request) -> Response:
     host = request.url.hostname or "localhost"
     ws_url = f"wss://{host}/ws"
+
     from_number = ""
     to_number = ""
     try:
@@ -296,6 +300,30 @@ async def twiml(request: Request) -> Response:
             to_number = (request.query_params.get("To") or "").strip()
     except Exception:
         pass
+
+    pod_name = None
+    pod_ordinal = None
+    node_name = None
+    if settings.POD_PINNING_ENABLED:
+        try:
+            pinned_url = None
+            with get_db_context() as db:
+                picker = PodPicker(db)
+                pod = picker.pick()
+                pinned_url = picker.url_for(pod)
+                if pod is not None:
+                    pod_name = pod.name
+                    pod_ordinal = pod.ordinal
+                    node_name = pod.node.name if pod.node is not None else None
+            if pinned_url:
+                ws_url = pinned_url
+        except Exception as exc:
+            logger.warning("[/twiml] pod pinning failed, falling back to /ws: {}", exc)
+
+    logger.info(
+        "[/twiml] REQUEST from={} to={} pod={} ordinal={} node={} pod_url={}",
+        from_number, to_number, pod_name, pod_ordinal, node_name, ws_url,
+    )
 
     from xml.sax.saxutils import escape as _xml_escape
 
@@ -312,6 +340,11 @@ async def twiml(request: Request) -> Response:
         f'<Stream url="{ws_url}">{params_xml}</Stream>'
         '</Connect>'
         '</Response>'
+    )
+
+    logger.info(
+        "[/twiml] RESPONSE from={} to={} pod={} node={} handshake_url={}",
+        from_number, to_number, pod_name, node_name, ws_url,
     )
     return Response(content=xml, media_type="application/xml")
 
