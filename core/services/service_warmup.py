@@ -49,7 +49,6 @@ _MODULES_TO_WARM = [
     "pipecat.turns.user_turn_strategies",
     "pydub",
     "pydub.audio_segment",
-    "core.processors.call_end_detector",
     "core.processors.metrics_collector",
 ]
 
