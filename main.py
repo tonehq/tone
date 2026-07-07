@@ -32,6 +32,7 @@ _WORKER_MODE = os.environ.get("WORKER_MODE", "").lower()
 _LOAD_KB_ROUTER = _WORKER_MODE != "voice"
 from core.middleware.request_context import RequestContextMiddleware
 from core.utils.pod_identity import get_served_by, pod_name, node_name, deployment_name
+from core.utils.pod_resources import memory_usage, cpu_usage
 from core.database.session import get_db_context
 from core.services.pod_picker import PodPicker
 from loguru import logger
@@ -273,9 +274,15 @@ def _pod_labels() -> str:
 def status():
     with _active_calls_lock:
         active = _active_calls
+    mem_used_mb, mem_limit_mb = memory_usage()
+    cpu_used_cores, cpu_limit_cores = cpu_usage()
     return {
         "served_by": get_served_by() or None,
         "active_calls": active,
+        "mem_used_mb": mem_used_mb,
+        "mem_limit_mb": mem_limit_mb,
+        "cpu_used_cores": cpu_used_cores,
+        "cpu_limit_cores": cpu_limit_cores,
     }
 
 
