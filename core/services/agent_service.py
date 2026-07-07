@@ -2107,18 +2107,32 @@ class AgentService(BaseService):
             channel_id = UUID(str(entry["channel_id"]))
             label = entry.get("label")
 
+            # A phone number can only route to one agent GLOBALLY — inbound calls are
+            # resolved by number alone (no org context), so the same number assigned in
+            # two orgs routes non-deterministically. Reject if any OTHER agent (in any
+            # org) already holds it, not just within this org.
+            conflict = (
+                self.db.query(PhoneNumber.id)
+                .filter(
+                    PhoneNumber.number == number,
+                    PhoneNumber.agent_id.isnot(None),
+                    PhoneNumber.agent_id != agent.id,
+                )
+                .first()
+            )
+            if conflict:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Phone number {number} is already assigned to another agent",
+                )
+
             existing = (
                 self.db.query(PhoneNumber)
                 .filter(PhoneNumber.number == number, PhoneNumber.organization_id == self.org_id)
                 .first()
             )
             if existing:
-                # Number already in DB — reassign to this agent
-                if existing.agent_id and existing.agent_id != agent.id:
-                    raise HTTPException(
-                        status_code=status.HTTP_409_CONFLICT,
-                        detail=f"Phone number {number} is already assigned to another agent",
-                    )
+                # Number already in this org — (re)assign it to this agent.
                 existing.agent_id = agent.id
                 existing.channel_id = channel_id
                 if label is not None:

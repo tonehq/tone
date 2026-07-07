@@ -144,6 +144,17 @@ function pruneOverrides(
   return out;
 }
 
+/**
+ * Normalise config for persistence. Prompt mode must never save a workflow
+ * assignment: the call-time runtime ignores it (it gates on ``mode``), and a
+ * lingering ``workflow_id`` makes version-creation wrongly clone a workflow.
+ * The UI intentionally keeps the selection in-session so toggling Prompt↔Workflow
+ * doesn't lose it — the assignment is stripped here, only at save time.
+ */
+function configForSave(config: AgentFormState['config']): AgentFormState['config'] {
+  return config.mode === 'workflow' ? config : { ...config, workflow_id: null };
+}
+
 export function formStateToCreatePayload(state: AgentFormState): CreateAgentPayload {
   const toolOverrides = pruneOverrides(state.tool_oauth_overrides, state.tool_ids);
   const mcpOverrides = pruneOverrides(state.mcp_server_oauth_overrides, state.mcp_server_ids);
@@ -152,7 +163,7 @@ export function formStateToCreatePayload(state: AgentFormState): CreateAgentPayl
     agent_type: state.agent_type,
     description: state.description.trim() || undefined,
     is_active: state.is_active,
-    config: state.config,
+    config: configForSave(state.config),
     tool_ids: state.tool_ids,
     mcp_server_ids: state.mcp_server_ids,
     upload_ids: state.upload_ids,
@@ -180,11 +191,14 @@ export function formStateToUpdatePayload(
   if (next.agent_type !== prev.agent_type) payload.agent_type = next.agent_type;
   if (next.is_active !== prev.is_active) payload.is_active = next.is_active;
 
-  // Config: diff per-field; only include the fields that changed.
+  // Config: diff per-field; only include the fields that changed. Normalise both
+  // sides so a prompt-mode workflow_id is stripped before diffing (see configForSave).
+  const nextCfg = configForSave(next.config);
+  const prevCfg = configForSave(prev.config);
   const cfgDiff: Record<string, unknown> = {};
-  (Object.keys(next.config) as (keyof AgentFormState['config'])[]).forEach((key) => {
-    if (!valuesEqual(next.config[key], prev.config[key])) {
-      cfgDiff[key] = next.config[key];
+  (Object.keys(nextCfg) as (keyof AgentFormState['config'])[]).forEach((key) => {
+    if (!valuesEqual(nextCfg[key], prevCfg[key])) {
+      cfgDiff[key] = nextCfg[key];
     }
   });
   if (Object.keys(cfgDiff).length > 0) {
