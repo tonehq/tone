@@ -17,19 +17,26 @@ from core.internal.machine import generate_fingerprint
 from core.internal.license import init_license_validator, get_license_info
 from core.internal.capabilities import init_capabilities, is_ee_enabled, get_capabilities
 
-from core.api.v1 import (
-    auth, users, organizations, agent_configs, channels, oauth,
-    agents, mcp_servers, services, tools, dashboard,
-    call_logs, call_metrics, sessions, workflows, webrtc, audit_logs,
-    app_integrations,
-)
-
-# Call pods (WORKER_MODE=voice) do not serve knowledge-base HTTP endpoints —
-# they only do RAG retrieval via document_tool_service. Skipping the router
-# import here avoids eagerly loading docling + HuggingFace transformers,
-# which shaves ~5s off container startup.
+# Call pods (WORKER_MODE=voice) only serve /ws, /twiml, /health, /ready,
+# /metrics, /status, /environment, and pod-pinned WebRTC signaling. All CRUD
+# routers (auth, users, orgs, agents, tools, dashboard, ...) plus knowledge
+# base are handled by API pods, never call pods. Skipping their imports here
+# avoids pulling docling + HuggingFace transformers + Pydantic schemas + a
+# large SQLAlchemy graph, shaving several seconds off container startup.
 _WORKER_MODE = os.environ.get("WORKER_MODE", "").lower()
-_LOAD_KB_ROUTER = _WORKER_MODE != "voice"
+_LOAD_FULL_API = _WORKER_MODE != "voice"
+
+# webrtc router is always loaded — call pods receive
+#   POST /api/v1/webrtc/agent/{id}/start   (via /pod/{N}/... pod-pinning)
+from core.api.v1 import webrtc
+
+if _LOAD_FULL_API:
+    from core.api.v1 import (
+        auth, users, organizations, agent_configs, channels, oauth,
+        agents, mcp_servers, services, tools, dashboard,
+        call_logs, call_metrics, sessions, workflows, audit_logs,
+        app_integrations,
+    )
 from core.middleware.request_context import RequestContextMiddleware
 from core.utils.pod_identity import get_served_by, pod_name, node_name, deployment_name
 from core.utils.pod_resources import memory_usage, cpu_usage
@@ -93,66 +100,68 @@ api_v1.add_middleware(
 if ee_enabled:
     # EE routers are imported individually because ``ee/api/v1/__init__.py``
     # no longer eagerly imports siblings (some still reference dropped
-    # pre-v2 models).
-    from ee.api.v1 import auth as ee_auth
-    from ee.api.v1 import users as ee_users
-    from ee.api.v1 import organizations as ee_organizations
-    from ee.api.v1 import agent_configs as ee_agent_configs
-    from ee.api.v1 import channels as ee_channels
-    from ee.api.v1 import oauth as ee_oauth
-    from ee.api.v1 import agents as ee_agents
-    from ee.api.v1 import mcp_servers as ee_mcp_servers
-    from ee.api.v1 import app_integrations as ee_app_integrations
-    from ee.api.v1 import services as ee_services
-    from ee.api.v1 import tools as ee_tools
-    from ee.api.v1 import dashboard as ee_dashboard
-    from ee.api.v1 import call_logs as ee_call_logs
-    from ee.api.v1 import call_metrics as ee_call_metrics
+    # pre-v2 models). CRUD routers are skipped on call pods (see _LOAD_FULL_API).
+    if _LOAD_FULL_API:
+        from ee.api.v1 import auth as ee_auth
+        from ee.api.v1 import users as ee_users
+        from ee.api.v1 import organizations as ee_organizations
+        from ee.api.v1 import agent_configs as ee_agent_configs
+        from ee.api.v1 import channels as ee_channels
+        from ee.api.v1 import oauth as ee_oauth
+        from ee.api.v1 import agents as ee_agents
+        from ee.api.v1 import mcp_servers as ee_mcp_servers
+        from ee.api.v1 import app_integrations as ee_app_integrations
+        from ee.api.v1 import services as ee_services
+        from ee.api.v1 import tools as ee_tools
+        from ee.api.v1 import dashboard as ee_dashboard
+        from ee.api.v1 import call_logs as ee_call_logs
+        from ee.api.v1 import call_metrics as ee_call_metrics
 
-    api_v1.include_router(ee_auth.router, prefix="/auth", tags=["auth"])
-    api_v1.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
-    api_v1.include_router(ee_users.router, prefix="/user", tags=["users"])
-    api_v1.include_router(ee_organizations.router, prefix="/organization", tags=["organization"])
-    api_v1.include_router(ee_agent_configs.router, prefix="/agent_config", tags=["agent_config"])
-    api_v1.include_router(ee_channels.router, prefix="/channel", tags=["channel"])
-    api_v1.include_router(ee_oauth.router, prefix="/oauth", tags=["oauth"])
-    if _LOAD_KB_ROUTER:
+        api_v1.include_router(ee_auth.router, prefix="/auth", tags=["auth"])
+        api_v1.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
+        api_v1.include_router(ee_users.router, prefix="/user", tags=["users"])
+        api_v1.include_router(ee_organizations.router, prefix="/organization", tags=["organization"])
+        api_v1.include_router(ee_agent_configs.router, prefix="/agent_config", tags=["agent_config"])
+        api_v1.include_router(ee_channels.router, prefix="/channel", tags=["channel"])
+        api_v1.include_router(ee_oauth.router, prefix="/oauth", tags=["oauth"])
         from ee.api.v1 import knowledge_base as ee_knowledge_base
         api_v1.include_router(ee_knowledge_base.router, prefix="/knowledge-base", tags=["knowledge-base"])
-    api_v1.include_router(ee_agents.router, prefix="/agent", tags=["agent"])
-    api_v1.include_router(ee_mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
-    api_v1.include_router(ee_app_integrations.router, prefix="/app-integration", tags=["app-integration"])
-    api_v1.include_router(ee_services.router, prefix="/services", tags=["services"])
-    api_v1.include_router(ee_tools.router, prefix="/tool", tags=["tool"])
-    api_v1.include_router(ee_dashboard.router, prefix="/dashboard", tags=["dashboard"])
-    api_v1.include_router(ee_call_logs.router, prefix="/call-log", tags=["call-log"])
-    api_v1.include_router(ee_call_metrics.router, prefix="/call-metrics", tags=["call-metrics"])
-    api_v1.include_router(workflows.router, prefix="/workflow", tags=["workflow"])
+        api_v1.include_router(ee_agents.router, prefix="/agent", tags=["agent"])
+        api_v1.include_router(ee_mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
+        api_v1.include_router(ee_app_integrations.router, prefix="/app-integration", tags=["app-integration"])
+        api_v1.include_router(ee_services.router, prefix="/services", tags=["services"])
+        api_v1.include_router(ee_tools.router, prefix="/tool", tags=["tool"])
+        api_v1.include_router(ee_dashboard.router, prefix="/dashboard", tags=["dashboard"])
+        api_v1.include_router(ee_call_logs.router, prefix="/call-log", tags=["call-log"])
+        api_v1.include_router(ee_call_metrics.router, prefix="/call-metrics", tags=["call-metrics"])
+        api_v1.include_router(workflows.router, prefix="/workflow", tags=["workflow"])
+        api_v1.include_router(audit_logs.router, prefix="/audit-log", tags=["audit-log"])
+    # webrtc is always mounted — needed on call pods for WebRTC signaling.
     api_v1.include_router(webrtc.router, prefix="/webrtc", tags=["webrtc"])
-    api_v1.include_router(audit_logs.router, prefix="/audit-log", tags=["audit-log"])
     print("EE edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
 else:
-    api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
-    api_v1.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
-    api_v1.include_router(users.router, prefix="/user", tags=["users"])
-    api_v1.include_router(organizations.router, prefix="/organization", tags=["organization"])
-    api_v1.include_router(agent_configs.router, prefix="/agent_config", tags=["agent_config"])
-    api_v1.include_router(channels.router, prefix="/channel", tags=["channel"])
-    api_v1.include_router(oauth.router, prefix="/oauth", tags=["oauth"])
-    if _LOAD_KB_ROUTER:
+    if _LOAD_FULL_API:
         from core.api.v1 import knowledge_base
+        api_v1.include_router(auth.router, prefix="/auth", tags=["auth"])
+        api_v1.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
+        api_v1.include_router(users.router, prefix="/user", tags=["users"])
+        api_v1.include_router(organizations.router, prefix="/organization", tags=["organization"])
+        api_v1.include_router(agent_configs.router, prefix="/agent_config", tags=["agent_config"])
+        api_v1.include_router(channels.router, prefix="/channel", tags=["channel"])
+        api_v1.include_router(oauth.router, prefix="/oauth", tags=["oauth"])
         api_v1.include_router(knowledge_base.router, prefix="/knowledge-base", tags=["knowledge-base"])
-    api_v1.include_router(agents.router, prefix="/agent", tags=["agent"])
-    api_v1.include_router(mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
-    api_v1.include_router(app_integrations.router, prefix="/app-integration", tags=["app-integration"])
-    api_v1.include_router(services.router, prefix="/services", tags=["services"])
-    api_v1.include_router(tools.router, prefix="/tool", tags=["tool"])
-    api_v1.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
-    api_v1.include_router(call_logs.router, prefix="/call-log", tags=["call-log"])
-    api_v1.include_router(call_metrics.router, prefix="/call-metrics", tags=["call-metrics"])
-    api_v1.include_router(workflows.router, prefix="/workflow", tags=["workflow"])
+        api_v1.include_router(agents.router, prefix="/agent", tags=["agent"])
+        api_v1.include_router(mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
+        api_v1.include_router(app_integrations.router, prefix="/app-integration", tags=["app-integration"])
+        api_v1.include_router(services.router, prefix="/services", tags=["services"])
+        api_v1.include_router(tools.router, prefix="/tool", tags=["tool"])
+        api_v1.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
+        api_v1.include_router(call_logs.router, prefix="/call-log", tags=["call-log"])
+        api_v1.include_router(call_metrics.router, prefix="/call-metrics", tags=["call-metrics"])
+        api_v1.include_router(workflows.router, prefix="/workflow", tags=["workflow"])
+        api_v1.include_router(audit_logs.router, prefix="/audit-log", tags=["audit-log"])
+    # webrtc is always mounted — needed on call pods for WebRTC signaling.
     api_v1.include_router(webrtc.router, prefix="/webrtc", tags=["webrtc"])
-    api_v1.include_router(audit_logs.router, prefix="/audit-log", tags=["audit-log"])
     print("Core edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
 
 

@@ -34,3 +34,35 @@ class TestGetDashboardStats:
     def test_unauthenticated(self, client_unauthenticated):
         resp = client_unauthenticated.get("/api/v1/dashboard/stats")
         assert resp.status_code in (401, 403)
+
+    # --- Postman-example-derived tests -----------------------------------
+
+    def test_unauthenticated_detail_message(self, client_unauthenticated):
+        """Postman: 401 No bearer token → {"detail": "Could not validate credentials"}."""
+        resp = client_unauthenticated.get("/api/v1/dashboard/stats")
+        assert resp.status_code in (401, 403)
+        body = resp.json()
+        assert "detail" in body
+
+    def test_success_rate_is_numeric(self, client_as_member):
+        """Postman: even on empty orgs, success_rate is 0.0 (never null/NaN)."""
+        resp = client_as_member.get("/api/v1/dashboard/stats")
+        assert resp.status_code == 200
+        data = resp.json()
+        # Response uses one of two shapes; both include success_rate as a number.
+        if "success_rate" in data:
+            assert isinstance(data["success_rate"], (int, float))
+            assert data["success_rate"] >= 0
+
+    def test_numeric_counters_are_non_negative(self, client_as_member):
+        """Postman examples show total_agents/active_calls/minutes_used as
+        non-negative numbers (0 on empty orgs)."""
+        resp = client_as_member.get("/api/v1/dashboard/stats")
+        assert resp.status_code == 200
+        data = resp.json()
+        for key in ("total_agents", "active_calls", "minutes_used",
+                    "total_calls", "total_minutes", "active_agents",
+                    "average_call_duration_seconds"):
+            if key in data and data[key] is not None:
+                assert isinstance(data[key], (int, float))
+                assert data[key] >= 0
