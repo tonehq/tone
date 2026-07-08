@@ -8,6 +8,7 @@ payload lives encrypted in ``encrypted_config`` (JSONB).
 from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 
+import requests
 from fastapi import HTTPException, status
 from loguru import logger
 from sqlalchemy.exc import IntegrityError
@@ -270,6 +271,83 @@ class ChannelService(BaseService):
                     "id": getattr(n, "sid", number),
                     "number": number,
                     "label": getattr(n, "friendly_name", None),
+                    "channel_id": str(record.id),
+                    "assigned_to": assignments_by_number.get(number),
+                }
+            )
+        return results
+
+    def list_telnyx_phone_numbers(self, channel_id: Union[str, UUID]) -> List[Dict[str, Any]]:
+        """Fetch phone numbers from Telnyx for a Telnyx channel, merged with
+        local PhoneNumber rows so the UI can mark numbers already assigned to an
+        agent in this org."""
+        record = self._get_record(channel_id)
+        if (record.channel_type or "").lower() != "telnyx":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Channel is not a Telnyx channel",
+            )
+
+        config = decrypt_json(record.encrypted_config)
+        api_key = config.get("api_key")
+        if not api_key:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Telnyx credentials are not configured for this channel",
+            )
+
+        try:
+            response = requests.get(
+                "https://api.telnyx.com/v2/phone_numbers",
+                headers={"Authorization": f"Bearer {api_key}"},
+                params={"page[size]": 250},
+                timeout=15,
+            )
+            response.raise_for_status()
+            telnyx_numbers = response.json().get("data", [])
+        except requests.HTTPError as e:
+            detail = "Telnyx API error"
+            try:
+                errors = response.json().get("errors") or []
+                if errors:
+                    detail = f"Telnyx API error: {errors[0].get('detail') or errors[0].get('title')}"
+            except Exception:
+                pass
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from e
+        except Exception as e:
+            logger.exception("Unexpected error fetching Telnyx phone numbers")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to fetch phone numbers from Telnyx",
+            ) from e
+
+        local_rows = (
+            self.db.query(PhoneNumber, Agent.name.label("agent_name"))
+            .outerjoin(Agent, Agent.id == PhoneNumber.agent_id)
+            .filter(
+                PhoneNumber.channel_id == record.id,
+                PhoneNumber.organization_id == self.org_id,
+            )
+            .all()
+        )
+        assignments_by_number: Dict[str, Dict[str, Any]] = {}
+        for pn, agent_name in local_rows:
+            if pn.agent_id:
+                assignments_by_number[pn.number] = {
+                    "agent_id": str(pn.agent_id),
+                    "agent_name": agent_name,
+                }
+
+        results: List[Dict[str, Any]] = []
+        for n in telnyx_numbers:
+            number = n.get("phone_number")
+            if not number:
+                continue
+            results.append(
+                {
+                    "id": n.get("id", number),
+                    "number": number,
+                    "label": n.get("customer_reference") or n.get("connection_name"),
                     "channel_id": str(record.id),
                     "assigned_to": assignments_by_number.get(number),
                 }

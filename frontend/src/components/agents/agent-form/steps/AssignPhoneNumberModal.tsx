@@ -5,7 +5,11 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { CustomButton, CustomModal, SelectInput } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
-import { listChannelPhoneNumbers, listTwilioPhoneNumbers } from '@/services/channelService';
+import {
+  listChannelPhoneNumbers,
+  listTelnyxPhoneNumbers,
+  listTwilioPhoneNumbers,
+} from '@/services/channelService';
 import type { ChannelPhoneNumber } from '@/services/channelService';
 import type { AgentPhoneNumberInput } from '@/types/agent';
 import type { Channel } from '@/types/integration';
@@ -97,8 +101,13 @@ export default function AssignPhoneNumberModal({
       return;
     }
     const selectedChannel = channels.find((c) => c.id === channelId);
-    const isTwilio = selectedChannel?.channel_type?.toLowerCase() === 'twilio';
-    const fetcher = isTwilio ? listTwilioPhoneNumbers : listChannelPhoneNumbers;
+    const providerType = selectedChannel?.channel_type?.toLowerCase();
+    const fetcher =
+      providerType === 'twilio'
+        ? listTwilioPhoneNumbers
+        : providerType === 'telnyx'
+          ? listTelnyxPhoneNumbers
+          : listChannelPhoneNumbers;
     let cancelled = false;
     setLoadingNumbers(true);
     fetcher(channelId)

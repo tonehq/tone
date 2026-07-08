@@ -19,6 +19,7 @@ const CHANNEL_FIELDS: Record<string, ChannelField[]> = {
     { name: 'account_sid', label: 'Account SID', placeholder: 'Enter account SID' },
     { name: 'auth_token', label: 'Auth Token', type: 'password', placeholder: 'Enter auth token' },
   ],
+  telnyx: [{ name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Enter API key' }],
   plivo: [
     { name: 'auth_id', label: 'Auth ID', placeholder: 'Enter auth ID' },
     { name: 'auth_token', label: 'Auth Token', type: 'password', placeholder: 'Enter auth token' },
@@ -33,6 +34,7 @@ const CHANNEL_FIELDS: Record<string, ChannelField[]> = {
 
 const CHANNEL_TYPE_OPTIONS = [
   { label: 'Twilio', value: 'twilio' },
+  { label: 'Telnyx', value: 'telnyx' },
   { label: 'Plivo', value: 'plivo' },
   { label: 'LiveKit', value: 'livekit' },
   { label: 'Daily', value: 'daily' },
