@@ -40,6 +40,15 @@ export const API_KEY_PROVIDERS: ProviderCardConfig[] = [
     accentColor: 'bg-red-500',
   },
   {
+    key: 'telnyx',
+    name: 'Telnyx',
+    description: 'Cloud communications platform for voice calls and phone numbers.',
+    icon: <Phone size={18} className="text-orange-500" />,
+    iconBg: 'bg-orange-50 dark:bg-orange-500/10',
+    iconBorder: 'border-orange-200/50 dark:border-orange-500/20 shadow-sm dark:shadow-none',
+    accentColor: 'bg-orange-500',
+  },
+  {
     key: 'plivo',
     name: 'Plivo',
     description: 'Cloud communications platform for voice calls and phone numbers.',

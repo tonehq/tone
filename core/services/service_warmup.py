@@ -31,6 +31,7 @@ _MODULES_TO_WARM = [
     "pipecat.processors.frame_processor",
     "pipecat.processors.frameworks.rtvi",
     "pipecat.serializers.twilio",
+    "pipecat.serializers.telnyx",
     "pipecat.services.anthropic.llm",
     "pipecat.services.cartesia.stt",
     "pipecat.services.cartesia.tts",

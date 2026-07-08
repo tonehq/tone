@@ -140,3 +140,15 @@ def list_twilio_phone_numbers(
     merged with local assignment info so the UI can flag numbers already
     bound to another agent in this org."""
     return _svc(claims, db).list_twilio_phone_numbers(channel_id)
+
+
+@router.get("/telnyx_phone_numbers")
+def list_telnyx_phone_numbers(
+    channel_id: str = Query(..., description="The Telnyx channel ID to fetch numbers for"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Fetch live phone numbers from Telnyx for the given channel, merged with
+    local assignment info so the UI can flag numbers already bound to another
+    agent in this org."""
+    return _svc(claims, db).list_telnyx_phone_numbers(channel_id)

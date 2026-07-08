@@ -15,7 +15,7 @@ class TelnyxTransport(TelephonyProvider):
         )
         return TelnyxFrameSerializer(
             stream_id=call_data["stream_id"],
-            call_control_id=call_data.get("call_control_id"),
+            call_control_id=call_data.get("call_control_id") or call_data.get("call_id"),
             outbound_encoding=call_data.get("outbound_encoding", "PCMU"),
             inbound_encoding="PCMU",
             api_key=telnyx_api_key,
