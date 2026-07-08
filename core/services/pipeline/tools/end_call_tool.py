@@ -126,10 +126,17 @@ END_CALL_TOOL_SCHEMA = FunctionSchema(
         "reason": {
             "type": "string",
             "description": (
-                "Quote the user's exact confirmation from Step 2, e.g. "
-                "\"user confirmed with 'yes'\", \"user said 'goodbye' after "
-                "confirmation\", \"user said 'please go ahead'\". If you "
-                "cannot quote an explicit confirmation, do NOT call this tool."
+                "Quote the user's exact confirmation, given as a DIRECT reply "
+                "to your \"Can I end the call?\" question — not to any other "
+                "question. Examples: \"user confirmed with 'yes'\" (after you "
+                "asked to end), \"user said 'goodbye' after your end-call "
+                "ask\", \"user said 'please go ahead' to end-call ask\". "
+                "DO NOT reuse task-level confirmations (e.g. \"user said "
+                "'confirm the booking'\", \"user said 'go ahead' about the "
+                "order\", \"user said 'that's correct' about the details\") "
+                "as reasons — those confirm the TASK, not ending the call. "
+                "If you cannot quote a direct call-end confirmation, do NOT "
+                "call this tool."
             ),
         },
     },
@@ -176,11 +183,24 @@ END_CALL_SYSTEM_PROMPT = (
     "- The `reason` argument must quote the user's exact confirmation words. "
     "Vague reasons like \"conversation complete\" are invalid and mean you "
     "should not be calling the tool.\n"
+    "- **Ask AT MOST ONCE per conversation.** If you have already asked "
+    "\"Can I end the call?\" (or any variant) earlier in this conversation "
+    "and the user did not clearly confirm, DO NOT ask again. Continue the "
+    "conversation naturally and let the user hang up on their own. Asking "
+    "the same closing question repeatedly is worse than not ending at all.\n"
+    "- **Task confirmations are NOT call-end confirmations.** Whatever your "
+    "domain (booking, ordering, scheduling, support, sales, information "
+    "lookup, form filling, etc.), the user will often say things like "
+    "\"confirm\", \"go ahead\", \"proceed\", \"that's correct\", \"looks "
+    "good\", \"sounds right\", \"yes\", \"okay\" to move the task forward. "
+    "These words refer to the TASK, not the CALL. Never treat them as "
+    "permission to end the call. Only accept them as call-end confirmation "
+    "if they are a DIRECT reply to your \"Can I end the call?\" question "
+    "and there is no other pending topic between the two.\n"
     "\n"
     "If you are ever unsure whether the user really wants to end, DO NOT "
-    "call `end_call`. Ask again or keep the conversation going. It is far "
-    "better to have one extra exchange than to end a call the user did not "
-    "want ended.\n"
+    "call `end_call`. Keep the conversation going — but do NOT re-ask the "
+    "confirmation question if you already asked it once.\n"
 )
 
 
