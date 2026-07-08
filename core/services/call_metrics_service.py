@@ -217,6 +217,14 @@ class CallMetricsService(BaseService):
         """
         arrays = {field: (getattr(metric, field) or []) for field in _METRIC_FIELDS}
 
+        # Drop the spurious 0.0 / null samples before summarizing. Some TTS
+        # services (Cartesia, Qwen) emit a placeholder 0.0 TTFB before the
+        # real first-audio sample; the STT/LLM paths can emit nulls. Including
+        # them drags the avg down and skews the percentiles. This matches the
+        # frontend's ``cleanSamples`` (keep only v > 0).
+        ttfb_s = _positive(s.get("value") for s in arrays["ttfb"])
+        latency_s = _positive(s.get("latency") for s in arrays["user_bot_latency"])
+
         response: Dict[str, Any] = {
             "id": str(metric.id),
             "call_id": str(call_id or metric.call_id),
@@ -226,16 +234,17 @@ class CallMetricsService(BaseService):
             "ended_at": ended_at.isoformat() if ended_at else None,
             "duration_seconds": duration_seconds,
 
-            "avg_ttfb_ms": _avg(s.get("value") for s in arrays["ttfb"]),
-            "p99_ttfb_ms": _percentile((s.get("value") for s in arrays["ttfb"]), 0.99),
-            "avg_latency_s": _avg(s.get("latency") for s in arrays["user_bot_latency"]),
-            "p99_latency_s": _percentile(
-                (s.get("latency") for s in arrays["user_bot_latency"]), 0.99
-            ),
+            # TTFB is stored in seconds; the ``_ms`` fields expose milliseconds.
+            "avg_ttfb_ms": _to_ms(_avg(ttfb_s)),
+            "p50_ttfb_ms": _to_ms(_percentile(ttfb_s, 0.50)),
+            "p99_ttfb_ms": _to_ms(_percentile(ttfb_s, 0.99)),
+            "avg_latency_s": _avg(latency_s),
+            "p50_latency_s": _percentile(latency_s, 0.50),
+            "p99_latency_s": _percentile(latency_s, 0.99),
             "total_tokens": _sum(s.get("total_tokens") for s in arrays["llm_usage"]),
             "total_tts_chars": _sum(s.get("characters") for s in arrays["tts_usage"]),
             "total_stt_audio_ms": _sum(s.get("audio_ms") for s in arrays["stt_usage"]),
-            "turn_count": len(arrays["turns"]),
+            "turn_count": _turn_count(arrays["turn_metrics"], arrays["turns"]),
         }
 
         if not summary_only:
@@ -243,6 +252,36 @@ class CallMetricsService(BaseService):
                 response[field] = value
 
         return response
+
+
+def _positive(values) -> List[float]:
+    """Keep only real, positive numeric samples.
+
+    Mirrors the frontend ``cleanSamples`` — placeholder ``0.0`` TTFBs and
+    ``null`` entries are not real measurements and must not enter the avg /
+    percentile math.
+    """
+    return [v for v in values if isinstance(v, (int, float)) and v > 0]
+
+
+def _to_ms(seconds: Optional[float]) -> Optional[float]:
+    """Convert a seconds value to milliseconds for the ``_ms`` response fields."""
+    return round(seconds * 1000, 3) if seconds is not None else None
+
+
+def _turn_count(turn_metrics: List[dict], turns: List[dict]) -> int:
+    """Number of real user→bot exchanges.
+
+    When per-turn data exists, count turns with a measured ``end_to_end`` —
+    this drops the greeting (the bot spoke first, so there is no user→bot gap)
+    and any abandoned turn. Falls back to the raw pipecat turn count for legacy
+    rows recorded before ``turn_metrics`` was collected. Mirrors the frontend
+    ``MetricsContent``/``summarizeMetrics`` logic and the ``turn_count`` sort
+    column in ``CallService`` so every surface reports the same number.
+    """
+    if turn_metrics:
+        return sum(1 for t in turn_metrics if t.get("end_to_end") is not None)
+    return len(turns)
 
 
 def _avg(values) -> Optional[float]:
