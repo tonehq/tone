@@ -32,7 +32,6 @@ def _cpu_usage_usec() -> Optional[int]:
                 return None
     return None
 
-
 def _cpu_limit_cores() -> Optional[float]:
     data = _read(f"{_CGROUP}/cpu.max")
     if not data:
