@@ -1,10 +1,10 @@
 # 🎙️ Open Source AI Voice Agent Builder
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.68+-green.svg)](https://fastapi.tiangolo.com/)
-[![React](https://img.shields.io/badge/React-18+-blue.svg)](https://reactjs.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-13+-blue.svg)](https://www.postgresql.org/)
+[License: MIT](https://opensource.org/licenses/MIT)
+[Python](https://www.python.org/downloads/)
+[FastAPI](https://fastapi.tiangolo.com/)
+[React](https://reactjs.org/)
+[PostgreSQL](https://www.postgresql.org/)
 
 > **The open source alternative to Retell, Synthflow, and Vapi** - Build reliable, observable, and easily testable AI voice agents with a focus on developer experience.
 
@@ -15,21 +15,23 @@ This project is an open source AI Voice agent Builder that empowers developers a
 ### 🎯 Vision
 
 We believe in democratizing AI voice technology through open source solutions. Our platform provides:
+
 - **Reliability First**: Rock-solid voice agent infrastructure
 - **Full Observability**: Complete visibility into agent performance and conversations
 - **Real-time Testing**: Built-in testing capabilities for seamless development
 - **No Vendor Lock-in**: Own your data and infrastructure
 
-
 ### 🛠️ Roadmap
 
 #### 🎯 Phase 1: Foundation (Current)
+
 - [x] Basic agent creation and management
 - [x] Tool calling infrastructure
 - [x] Call management system
 - [x] Multi-tenant architecture
 
 #### 🎯 Phase 2: Enhanced Capabilities
+
 - [ ] **Quick AI Phone and Web Voice agents** - Rapid deployment templates
 - [ ] **Enhanced Tool calling** - More integrations and custom tools
 - [ ] **End to end real time testing functionalities** - Built-in voice agent testing capabilities
@@ -37,12 +39,14 @@ We believe in democratizing AI voice technology through open source solutions. O
 - [ ] **Model Routing** - Connect with different LLMs (OpenAI, Anthropic, etc.)
 
 #### 🎯 Phase 3: Workflow & Integration
+
 - [ ] **AI Conversation Workflow Builder** - Visual workflow designer
 - [ ] **MCP Actions Support** - Model Context Protocol integration
 - [ ] **Multiple STT/TTS Models** - Choice of speech recognition and synthesis
 - [ ] **Speech-to-Speech Models** - Direct speech-to-speech capabilities
 
 #### 🎯 Phase 4: Ecosystem
+
 - [ ] **CRM Integrations** - Salesforce, HubSpot, Pipedrive
 - [ ] **Productivity Integrations** - Google Sheets, Cal.com, Notion
 - [ ] **N8N Integration** - Workflow automation platform
@@ -53,16 +57,19 @@ We believe in democratizing AI voice technology through open source solutions. O
 ### Tech Stack
 
 **Frontend**
-- React 18+ with modern hooks
+
+- Next.js 15 (App Router) + React 19 + TypeScript
 - Deployed on Vercel
 
 **Backend**
+
 - FastAPI (Python 3.10+)
 - PostgreSQL with SQLAlchemy ORM
 - Alembic for database migrations
 - Infisical for secrets management
 
 **Infrastructure**
+
 - Docker containerization
 - Kubernetes deployment
 - Cloudflare R2 for file storage
@@ -73,26 +80,66 @@ We believe in democratizing AI voice technology through open source solutions. O
 ### Prerequisites
 
 - Python 3.10 or higher (download from [python.org](https://www.python.org/downloads/). Verify with `python --version`)
-- Node.js 16+
+- Node.js 18.18+ (Node 20+ recommended for Next.js 15)
 - PostgreSQL 14+
 - Docker (optional)
 
 ### Installation
 
 1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/ai-voice-agent-builder.git
-   cd ai-voice-agent-builder
-   ```
+  ```bash
+   git clone https://github.com/tonehq/tone.git
+   cd tone
+  ```
+2. **Set up your `.env` file**
+  ```bash
+   # Create a .env file in the project root with:
+   #   DATABASE_URL=postgresql://<user>:<password>@<host>/<dbname>
+   #   JWT_SECRET_KEY=<your-secret-key>
+   #   ENCRYPTION_KEY=<your-encryption-key>
+   # Optional: provider API keys (OPENAI_API_KEY, DEEPGRAM_API_KEY, etc.)
+  ```
+3. **Export the Cloudsmith URL** (required for the private `tone-pipecat` package)
+  ```bash
+   # Get the real URL from Cloudsmith → tonehq/tone repo → Set Me Up → Python.
+   export PIP_EXTRA_INDEX_URL="https://<user>:<token>@dl.cloudsmith.io/<entitlement>/tonehq/tone/python/simple/"
+  ```
 
-2. **Backend Setup**
-   ```bash
+#### Option A — One-command setup (recommended)
+
+Runs Python install, venv, dependencies, migrations, procrastinate schema, DB seed, Node.js install, and frontend `npm install` — all in one go.
+
+```bash
+./dev-bootstrap.sh
+```
+
+When it finishes, start the servers:
+
+```bash
+# Backend
+source venv/bin/activate
+python main.py
+
+# Frontend (in a separate terminal)
+cd frontend && npm run dev
+```
+
+#### Option B — Manual setup
+
+Prefer to run each step yourself? Follow the manual backend and frontend steps below.
+
+1. **Backend Setup**
+  ```bash
    # Create virtual environment (requires Python 3.10+)
    python -m venv venv
 
    # Activate the virtual environment
    source venv/bin/activate          # macOS / Linux
    # venv\Scripts\activate           # Windows (PowerShell/CMD)
+
+   # Configure Cloudsmith index for the private `tone-pipecat` package.
+   # Get the entitlement token from Cloudsmith (tonehq/tone repo).
+   export PIP_EXTRA_INDEX_URL="https://<user>:<token>@dl.cloudsmith.io/<entitlement>/tonehq/tone/python/simple/"
 
    # Install dependencies
    pip install -r requirements.txt
@@ -106,6 +153,10 @@ We believe in democratizing AI voice technology through open source solutions. O
    # Run database migrations
    alembic upgrade head
 
+   # Apply the Procrastinate ingestion-queue schema (one-time, per environment).
+   # Required before the document-ingestion worker can run.
+   PYTHONPATH=. python -m procrastinate --app=core.services.ingestion_queue.app schema --apply
+
    # Seed service providers, models, and voices
    python dev/seed.py
 
@@ -114,28 +165,17 @@ We believe in democratizing AI voice technology through open source solutions. O
 
    # Enterprise edition
    # uvicorn main_ee:app --host 0.0.0.0 --port 8000 --reload
-   ```
-
+  ```
    **Seed Data (`dev/seed.py`)**
-
    The seed script sets up your initial data — it creates an owner user, organization, and populates all supported service providers (LLM, STT, TTS), their models, and voices from `dev/dev-data.json`.
-
    When you run `python dev/seed.py`, it will interactively prompt you for:
-   - **Organization name** — your organization/workspace name
-   - **Owner email** — the admin user's email (used for login)
-   - **Password** — must be 8+ characters with uppercase, lowercase, digit, and special character
-
+  - **Organization name** — your organization/workspace name
+  - **Owner email** — the admin user's email (used for login)
+  - **Password** — must be 8+ characters with uppercase, lowercase, digit, and special character
    To auto-populate API keys for providers during seeding, set the corresponding environment variables in your `.env` file before running the script. For example:
-   ```bash
-   OPENAI_API_KEY=sk-...
-   DEEPGRAM_API_KEY=...
-   ELEVENLABS_API_KEY=...
-   CARTESIA_API_KEY=...
-   ```
    Any provider whose API key env var is not set will be seeded without a key — you can add keys later through the UI.
-
-3. **Frontend Setup**
-   ```bash
+2. **Frontend Setup**
+  ```bash
    cd frontend
 
    # Install dependencies
@@ -143,22 +183,20 @@ We believe in democratizing AI voice technology through open source solutions. O
 
    # Start the frontend dev server (Next.js + Turbopack on :3000)
    npm run dev
-   ```
-
-4. **Access the application**
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
-   - API Documentation: http://localhost:8000/docs
+  ```
+3. **Access the application**
+  - Frontend: [http://localhost:3000](http://localhost:3000)
+  - Backend API: [http://localhost:8000](http://localhost:8000)
+  - API Documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ### Docker Setup
 
 ```bash
-# Build and run with Docker Compose
-docker-compose up -d
+# Build the backend image
+docker build -f core/Dockerfile -t tone .
 
-# The application will be available at:
-# - Frontend: http://localhost:3000
-# - Backend: http://localhost:8000
+# Run it (expects DATABASE_URL and other env vars to be provided)
+docker run --rm -p 8000:8000 --env-file .env tone
 ```
 
 ## 📚 Documentation
@@ -206,8 +244,6 @@ dev/
 - **Tools**: External integrations and API calls that agents can use
 - **Calls**: Voice call sessions with transcription and metadata
 - **Organizations**: Multi-tenant structure for team collaboration
-
-
 
 ⭐ **Star this repository** if you find it useful!
 
