@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
-from sqlalchemy import Float, and_, asc, cast, desc, func, or_, select
+from sqlalchemy import Float, and_, asc, case, cast, desc, func, or_, select
 from sqlalchemy.orm import Query, Session, aliased, joinedload
 
 from core.models.agent import Agent
@@ -86,6 +86,35 @@ class CallService(BaseService):
     # Filtering helpers (shared by get_calls and get_facets)
     # ------------------------------------------------------------------
 
+    def _turn_count_expr(self):
+        """SQL expression for the user-visible turn count.
+
+        Counts ``turn_metrics`` array elements whose ``end_to_end`` is a real
+        value (``IS NOT NULL``) — i.e. turns where an actual user→bot latency
+        was measured. This drops the greeting turn (the bot speaks first, so
+        there is no user→bot gap) and any abandoned/interrupted turn, exactly
+        matching the frontend's ``turn_metrics.filter(t => t.end_to_end !=
+        null).length``. Rows whose ``turn_metrics`` is missing or an empty
+        array fall back to the raw pipecat turn count, mirroring the Python
+        ``_turn_count`` (``if turn_metrics``) so every surface agrees.
+        """
+        element = func.jsonb_array_elements(CallMetrics.turn_metrics).column_valued("tm")
+        counted = (
+            select(func.count())
+            .where(element.op("->>")("end_to_end").isnot(None))
+            .scalar_subquery()
+        )
+        return case(
+            (
+                and_(
+                    func.jsonb_typeof(CallMetrics.turn_metrics) == "array",
+                    func.jsonb_array_length(CallMetrics.turn_metrics) > 0,
+                ),
+                counted,
+            ),
+            else_=func.jsonb_array_length(CallMetrics.turns),
+        )
+
     def _filter_column_map(self) -> Dict[str, Any]:
         """Map filter/sort field names to their SQLAlchemy column expressions.
 
@@ -109,9 +138,16 @@ class CallService(BaseService):
             "stt_model": Call.pipeline_config["stt"]["model_name"].astext,
             "tts_provider": Call.pipeline_config["tts"]["provider_name"].astext,
             "tts_model": Call.pipeline_config["tts"]["model_name"].astext,
-            # Computed: length of CallMetrics.turns JSONB array. NULL (calls
-            # without metrics or with non-array turns) is excluded by BETWEEN.
-            "turn_count": func.jsonb_array_length(CallMetrics.turns),
+            # Computed: number of real user→bot exchanges — the value the UI
+            # renders in the Turns column. Counts turn_metrics rows with a
+            # measured end_to_end (drops the greeting, where the bot spoke
+            # first, and any abandoned turn), falling back to the raw pipecat
+            # turn count (jsonb_array_length(turns)) for legacy rows recorded
+            # before turn_metrics existed. Mirrors the frontend
+            # summarizeMetrics()/MetricsContent overview so the sortable /
+            # filterable column matches the rendered cell. NULL (no metrics)
+            # is excluded by BETWEEN.
+            "turn_count": self._turn_count_expr(),
             # Computed: AVG(latency) over CallMetrics.user_bot_latency JSONB
             # array elements ({"latency": float}). NULL (no metrics / empty
             # array) is excluded by BETWEEN, matching turn_count semantics.
