@@ -15,6 +15,12 @@ from typing import Optional
 
 from loguru import logger
 
+from core.services.pipeline.call_end_events import (
+    EVENT_CALL_ENDED,
+    EVENT_CALL_ENDED_ERROR,
+    REASON_CLIENT_DISCONNECT,
+    log_call_event,
+)
 from core.services.pipeline.runner.base import PipelineRunner
 
 
@@ -64,6 +70,16 @@ class PipecatPipelineRunner(PipelineRunner):
         current_turn: dict = {"number": 0}
         tool_dedup: dict = {}
         call_log_updated = {"done": False}
+        # First-wins stamp of why the call ended. The end_call tool handler
+        # sets it via the shared dict; the transport disconnect handler falls
+        # back to "client_disconnect" only if nothing else has set it yet.
+        # Persisted onto metadata_ by CallLogService.complete_call.
+        end_reason_holder: dict = {"reason": None, "detail": None}
+        # The DB row's calls.id, populated once _create_call_log_in_thread
+        # returns. Threaded through the builder to the tool handler and the
+        # keyword detector so their structured log lines carry the id — makes
+        # each Grafana line directly joinable to the DB row.
+        call_id_holder: dict = {"id": None}
         audio_buffer = None
 
         async def _get_call_log_id():
@@ -129,6 +145,7 @@ class PipecatPipelineRunner(PipelineRunner):
                         )
                         if call_log:
                             call_log_state["id"] = call_log.id
+                            call_id_holder["id"] = str(call_log.id)
                             logger.info("[TIMING] create_call_log thread (+%.3fs)", _time.monotonic() - _t)
                         else:
                             logger.warning("create_call_log returned None (no channel resolved) — no call record created")
@@ -159,6 +176,9 @@ class PipecatPipelineRunner(PipelineRunner):
             tool_call_entries=tool_call_entries,
             current_turn=current_turn,
             tool_dedup=tool_dedup,
+            end_reason_holder=end_reason_holder,
+            call_id_holder=call_id_holder,
+            transcript_entries=transcript_entries,
         )
         task = build.task
         rtvi = build.rtvi
@@ -314,17 +334,28 @@ class PipecatPipelineRunner(PipelineRunner):
                                 metrics=collected_metrics,
                                 tool_calls=tool_call_entries or None,
                                 recording_duration_seconds=recording_seconds,
+                                ended_reason=end_reason_holder.get("reason"),
+                                ended_reason_detail=end_reason_holder.get("detail"),
                             )
                         call_log_updated["done"] = True
                         logger.info(
-                            "Call log completed: id={} r2_key={} transcript_entries={} metrics_collected={}",
+                            "Call log completed: id={} r2_key={} transcript_entries={} metrics_collected={} ended_reason={}",
                             call_log_id,
                             r2_object_key,
                             len(transcript_data) if transcript_data else 0,
                             {k: len(v) for k, v in collected_metrics.items()},
+                            end_reason_holder.get("reason"),
                         )
                     except Exception as e:
                         logger.error("Failed to complete call log in on_audio_data: {}", e)
+                        log_call_event(
+                            EVENT_CALL_ENDED_ERROR,
+                            call_id=str(call_log_id) if call_log_id else None,
+                            source="on_audio_data_complete_call",
+                            reason=end_reason_holder.get("reason"),
+                            error_type=type(e).__name__,
+                            error=str(e),
+                        )
 
         async def _start_session():
             if audio_buffer:
@@ -341,7 +372,37 @@ class PipecatPipelineRunner(PipelineRunner):
 
         async def _end_session(participant):
             logger.info("Client disconnected: {}", participant)
-            await task.cancel()
+            # First-wins: only stamp client_disconnect if the LLM tool or the
+            # keyword detector hasn't already claimed the reason. Those two
+            # queue EndFrame first, which eventually causes the transport to
+            # disconnect too — we don't want to relabel their attribution.
+            claimed_here = False
+            if end_reason_holder.get("reason") is None:
+                end_reason_holder["reason"] = REASON_CLIENT_DISCONNECT
+                claimed_here = True
+            # Only emit the structured "call_ended" line if we're the origin
+            # of the end. If the LLM tool or keyword already stamped a reason,
+            # that path already emitted its own call_ended event — a second
+            # line here would double-count in Grafana.
+            if claimed_here:
+                log_call_event(
+                    EVENT_CALL_ENDED,
+                    call_id=call_id_holder.get("id"),
+                    reason=REASON_CLIENT_DISCONNECT,
+                    source="transport",
+                    participant=str(participant) if participant is not None else None,
+                )
+            try:
+                await task.cancel()
+            except Exception as e:
+                log_call_event(
+                    EVENT_CALL_ENDED_ERROR,
+                    call_id=call_id_holder.get("id"),
+                    source="transport_cancel",
+                    error_type=type(e).__name__,
+                    error=str(e),
+                )
+                logger.exception("task.cancel() failed during client disconnect")
 
         @transport.event_handler("on_client_connected")
         async def on_client_connected(transport, client):
@@ -398,12 +459,31 @@ class PipecatPipelineRunner(PipelineRunner):
                             transcript=transcript_data,
                             metrics=collected_metrics,
                             tool_calls=tool_call_entries or None,
+                            ended_reason=end_reason_holder.get("reason"),
+                            ended_reason_detail=end_reason_holder.get("detail"),
                         )
-                    logger.info("Call log completed (fallback): id={}", call_log_id)
+                    logger.info(
+                        "Call log completed (fallback): id={} ended_reason={}",
+                        call_log_id, end_reason_holder.get("reason"),
+                    )
                 except Exception as e:
                     logger.error("Failed to complete call log id={}: {}", call_log_id, e)
+                    log_call_event(
+                        EVENT_CALL_ENDED_ERROR,
+                        call_id=str(call_log_id) if call_log_id else None,
+                        source="fallback_complete_call",
+                        reason=end_reason_holder.get("reason"),
+                        error_type=type(e).__name__,
+                        error=str(e),
+                    )
                     try:
                         with get_db_context() as db:
                             CallLogService(db).fail_call(call_log_id)
-                    except Exception:
-                        pass
+                    except Exception as e_fail:
+                        log_call_event(
+                            EVENT_CALL_ENDED_ERROR,
+                            call_id=str(call_log_id) if call_log_id else None,
+                            source="fallback_fail_call",
+                            error_type=type(e_fail).__name__,
+                            error=str(e_fail),
+                        )

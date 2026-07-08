@@ -31,6 +31,7 @@ _MODULES_TO_WARM = [
     "pipecat.processors.frame_processor",
     "pipecat.processors.frameworks.rtvi",
     "pipecat.serializers.twilio",
+    "pipecat.serializers.telnyx",
     "pipecat.services.anthropic.llm",
     "pipecat.services.cartesia.stt",
     "pipecat.services.cartesia.tts",
@@ -49,7 +50,6 @@ _MODULES_TO_WARM = [
     "pipecat.turns.user_turn_strategies",
     "pydub",
     "pydub.audio_segment",
-    "core.processors.call_end_detector",
     "core.processors.metrics_collector",
 ]
 

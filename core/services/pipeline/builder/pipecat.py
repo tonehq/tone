@@ -96,6 +96,18 @@ class PipecatPipelineBuilder(PipelineBuilder):
         tool_call_entries: Any = None,
         current_turn: Any = None,
         tool_dedup: Any = None,
+        # Runner-owned dict for attributing why the call ended
+        # (llm_end_call / client_disconnect). Handed to the end_call tool
+        # handler; first-wins so a later transport disconnect can't overwrite it.
+        end_reason_holder: Any = None,
+        # Runner-owned dict carrying the DB row's calls.id once available.
+        # Piped into the same downstream sinks so their structured log lines
+        # include call_id=<uuid> for direct Grafana → DB joins.
+        call_id_holder: Any = None,
+        # Runner-owned list of {role, text, timestamp} turn entries. Passed to
+        # the end_call handler so its confirmation guard can inspect the
+        # conversation and refuse a tool call that skipped the ask/reply step.
+        transcript_entries: Any = None,
     ) -> BuildResult:
         params = self.params
         is_s2s = params.is_s2s
@@ -115,7 +127,6 @@ class PipecatPipelineBuilder(PipelineBuilder):
         from pipecat.processors.aggregators.llm_text_processor import LLMTextProcessor
         from pipecat.processors.frameworks.rtvi import (RTVIObserver, RTVIProcessor)
 
-        from core.processors.call_end_detector import CallEndDetectorProcessor
         from core.processors.metrics_collector import MetricsCollectorProcessor
         from core.processors.stt_audio_usage_tap import STTAudioUsageTap
         from core.processors.stt_latency_tap import STTLatencyTap
@@ -192,8 +203,9 @@ class PipecatPipelineBuilder(PipelineBuilder):
             except Exception as e:
                 logger.warning("MCP tools unavailable, disabled: {}", e)
 
-        # Built-in end_call tool — always-on for every agent. LLM-driven call
-        # termination; complements the keyword fast-path in CallEndDetectorProcessor.
+        # Built-in end_call tool — always-on for every agent. The single,
+        # canonical path for ending a call (mandatory two-step confirmation
+        # is encoded in END_CALL_SYSTEM_PROMPT).
         end_call_registered = False
         if llm and agent:
             from core.services.pipeline.tools.end_call_tool import (
@@ -204,6 +216,9 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 create_end_call_handler(
                     tool_call_entries=tool_call_entries,
                     current_turn=current_turn,
+                    end_reason_holder=end_reason_holder,
+                    call_id_holder=call_id_holder,
+                    transcript_entries=transcript_entries,
                 ),
             )
             end_call_registered = True
@@ -300,7 +315,11 @@ class PipecatPipelineBuilder(PipelineBuilder):
             user_aggregator = context_aggregator.user()
             assistant_aggregator = context_aggregator.assistant()
             llm_text_processor = LLMTextProcessor()
-            call_end_detector = CallEndDetectorProcessor(end_call_message=params.end_call_message)
+            # Keyword-based CallEndDetectorProcessor intentionally removed.
+            # All end-of-call decisions now flow through the LLM's end_call
+            # tool with a mandatory two-step confirmation (see END_CALL_SYSTEM_PROMPT).
+            # The agent_config.end_call_message column is preserved for
+            # backwards compatibility but no longer takes effect.
             logger.info("[TIMING] context + aggregators + processors created (+%.3fs)", _time.monotonic() - _t)
 
             # VADSpeakingTimeout caps a stuck VAD "speaking" segment (8s) so
@@ -348,7 +367,6 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 stt,
                 duplicate_filter,
                 stt_latency_tap,
-                call_end_detector,
                 user_aggregator,
                 llm,
                 llm_text_processor,
