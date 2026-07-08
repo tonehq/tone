@@ -23,7 +23,20 @@ cd "$SCRIPT_DIR"
 echo "==> Running Alembic migrations (alembic upgrade head)..."
 alembic upgrade head
 
-# ── Step 2: Seed the database ───────────────────────────────────────
+# ── Step 2: Apply Procrastinate ingestion-queue schema ──────────────
+# One-time per environment. Not managed by Alembic. Required before the
+# document-ingestion worker can run; without it the worker error-loops on
+# a missing table.
+
+echo ""
+echo "==> Applying Procrastinate ingestion-queue schema..."
+if PYTHONPATH=. python -m procrastinate --app=core.services.ingestion_queue.app healthchecks &>/dev/null; then
+    echo "    Schema already applied — skipping."
+else
+    PYTHONPATH=. python -m procrastinate --app=core.services.ingestion_queue.app schema --apply
+fi
+
+# ── Step 3: Seed the database ───────────────────────────────────────
 # Reads dev/dev-data.json and prompts for org name, email, and password.
 # Seeds: User, Organization, Member, ServiceProviders (LLM/STT/TTS),
 # Models, ApiKeys (encrypted, from env vars), and Voices.
