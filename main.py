@@ -1,13 +1,11 @@
 import sys
 import os
-from threading import Lock
 
 from core.logging import setup_logging
 setup_logging()
 
-from fastapi import FastAPI, Request, WebSocket
+from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
 
 from pipecat.runner.types import WebSocketRunnerArguments
 
@@ -38,11 +36,12 @@ if _LOAD_FULL_API:
         app_integrations,
     )
 from core.middleware.request_context import RequestContextMiddleware
-from core.utils.pod_identity import get_served_by, pod_name, node_name, deployment_name
-from core.utils.pod_resources import memory_usage, cpu_usage
-from core.database.session import get_db_context
-from core.services.pod_picker import PodPicker
-from loguru import logger
+from core.api.telephony_routes import router as telephony_router
+from core.api.monitoring_routes import (
+    router as monitoring_router,
+    active_calls_inc,
+    active_calls_dec,
+)
 import core.models
 
 skip_license = settings.SKIP_LICENSE_CHECK
@@ -251,188 +250,8 @@ def environment():
     return {"environment": settings.ENVIRONMENT}
 
 
-_active_calls_lock = Lock()
-_active_calls = 0
-
-
-def _active_calls_inc() -> None:
-    global _active_calls
-    with _active_calls_lock:
-        _active_calls += 1
-
-
-def _active_calls_dec() -> None:
-    global _active_calls
-    with _active_calls_lock:
-        if _active_calls > 0:
-            _active_calls -= 1
-
-
-def _pod_labels() -> str:
-    parts = []
-    if pod_name():
-        parts.append(f'pod="{pod_name()}"')
-    if node_name():
-        parts.append(f'node="{node_name()}"')
-    if deployment_name():
-        parts.append(f'deployment="{deployment_name()}"')
-    return "{" + ",".join(parts) + "}" if parts else ""
-
-
-@app.get("/status")
-def status():
-    with _active_calls_lock:
-        active = _active_calls
-    mem_used_mb, mem_limit_mb = memory_usage()
-    cpu_used_cores, cpu_limit_cores = cpu_usage()
-    return {
-        "served_by": get_served_by() or None,
-        "active_calls": active,
-        "mem_used_mb": mem_used_mb,
-        "mem_limit_mb": mem_limit_mb,
-        "cpu_used_cores": cpu_used_cores,
-        "cpu_limit_cores": cpu_limit_cores,
-    }
-
-
-@app.get("/metrics")
-def metrics():
-    with _active_calls_lock:
-        active = _active_calls
-    labels = _pod_labels()
-    body = (
-        "# HELP tone_active_calls Active call WebSocket connections on this pod\n"
-        "# TYPE tone_active_calls gauge\n"
-        f"tone_active_calls{labels} {active}\n"
-    )
-    return Response(content=body, media_type="text/plain; version=0.0.4")
-
-
-@app.post("/twiml")
-@app.get("/twiml")
-async def twiml(request: Request) -> Response:
-    host = request.url.hostname or "localhost"
-    ws_url = f"wss://{host}/ws"
-
-    from_number = ""
-    to_number = ""
-    try:
-        if request.method == "POST":
-            form = await request.form()
-            from_number = (form.get("From") or "").strip()
-            to_number = (form.get("To") or "").strip()
-        else:
-            from_number = (request.query_params.get("From") or "").strip()
-            to_number = (request.query_params.get("To") or "").strip()
-    except Exception:
-        pass
-
-    pod_name = None
-    pod_ordinal = None
-    node_name = None
-    if settings.POD_PINNING_ENABLED:
-        try:
-            pinned_url = None
-            with get_db_context() as db:
-                picker = PodPicker(db)
-                pod = picker.pick()
-                pinned_url = picker.url_for(pod)
-                if pod is not None:
-                    pod_name = pod.name
-                    pod_ordinal = pod.ordinal
-                    node_name = pod.node.name if pod.node is not None else None
-            if pinned_url:
-                ws_url = pinned_url
-        except Exception as exc:
-            logger.warning("[/twiml] pod pinning failed, falling back to /ws: {}", exc)
-
-    logger.info(
-        "[/twiml] REQUEST from={} to={} pod={} ordinal={} node={} pod_url={}",
-        from_number, to_number, pod_name, pod_ordinal, node_name, ws_url,
-    )
-
-    from xml.sax.saxutils import escape as _xml_escape
-
-    params_xml = ""
-    if from_number:
-        params_xml += f'<Parameter name="from" value="{_xml_escape(from_number)}" />'
-    if to_number:
-        params_xml += f'<Parameter name="to" value="{_xml_escape(to_number)}" />'
-
-    xml = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        '<Response>'
-        '<Connect>'
-        f'<Stream url="{ws_url}">{params_xml}</Stream>'
-        '</Connect>'
-        '</Response>'
-    )
-
-    logger.info(
-        "[/twiml] RESPONSE from={} to={} pod={} node={} handshake_url={}",
-        from_number, to_number, pod_name, node_name, ws_url,
-    )
-    return Response(content=xml, media_type="application/xml")
-
-
-@app.post("/telnyx/texml")
-@app.get("/telnyx/texml")
-async def telnyx_texml(request: Request) -> Response:
-    host = request.url.hostname or "localhost"
-    ws_url = f"wss://{host}/ws"
-
-    from_number = ""
-    to_number = ""
-    try:
-        if request.method == "POST":
-            form = await request.form()
-            from_number = (form.get("From") or "").strip()
-            to_number = (form.get("To") or "").strip()
-        else:
-            from_number = (request.query_params.get("From") or "").strip()
-            to_number = (request.query_params.get("To") or "").strip()
-    except Exception:
-        pass
-
-    pod_name = None
-    pod_ordinal = None
-    node_name = None
-    if settings.POD_PINNING_ENABLED:
-        try:
-            pinned_url = None
-            with get_db_context() as db:
-                picker = PodPicker(db)
-                pod = picker.pick()
-                pinned_url = picker.url_for(pod)
-                if pod is not None:
-                    pod_name = pod.name
-                    pod_ordinal = pod.ordinal
-                    node_name = pod.node.name if pod.node is not None else None
-            if pinned_url:
-                ws_url = pinned_url
-        except Exception as exc:
-            logger.warning("[/telnyx/texml] pod pinning failed, falling back to /ws: {}", exc)
-
-    logger.info(
-        "[/telnyx/texml] REQUEST from={} to={} pod={} ordinal={} node={} pod_url={}",
-        from_number, to_number, pod_name, pod_ordinal, node_name, ws_url,
-    )
-
-    xml = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        '<Response>'
-        '<Connect>'
-        f'<Stream url="{ws_url}" bidirectionalMode="rtp"></Stream>'
-        '</Connect>'
-        '<Pause length="40"/>'
-        '</Response>'
-    )
-
-    logger.info(
-        "[/telnyx/texml] RESPONSE from={} to={} pod={} node={} handshake_url={}",
-        from_number, to_number, pod_name, node_name, ws_url,
-    )
-    return Response(content=xml, media_type="application/xml")
+app.include_router(telephony_router)
+app.include_router(monitoring_router)
 
 
 @app.websocket("/ws")
@@ -440,7 +259,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
     runner_args = WebSocketRunnerArguments(websocket=websocket, body={})
     try:
-        _active_calls_inc()
+        active_calls_inc()
     except Exception:
         pass
     try:
@@ -449,7 +268,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         print(f"[/ws] bot crashed: {exc}")
     finally:
         try:
-            _active_calls_dec()
+            active_calls_dec()
         except Exception:
             pass
         try:
