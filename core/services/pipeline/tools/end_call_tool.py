@@ -52,18 +52,41 @@ _CONFIRMATION_ASK_PATTERN = re.compile(
 )
 
 
+# Express-end path: the user's OWN message directly commands the end.
+# When this matches on a short user turn, we skip the assistant-ask
+# requirement — the user has given a direct instruction and asking for
+# confirmation again would feel tone-deaf. Kept short so contextual
+# mentions ("I hope you don't hang up on me before...") don't false-trigger.
+_USER_END_REQUEST_MAX_WORDS = 8
+_USER_END_REQUEST_PATTERN = re.compile(
+    r"\b("
+    r"hang up|"
+    r"end (?:the |this |our )?call|"
+    r"end (?:it|now|it now|the call now)|"
+    r"disconnect|"
+    r"stop (?:the |this )?call|"
+    r"cut (?:the )?call|"
+    r"just (?:hang up|end)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
 def _confirmation_valid(transcript_entries: Optional[list]) -> bool:
-    """Return True iff the two-step confirmation was actually completed.
+    """Return True iff the end_call attempt is authorized.
 
-    The confirmation flow is:
-      1. Assistant asks "Can I end the call?" (matches ``_CONFIRMATION_ASK_PATTERN``).
-      2. User replies (any content).
-      3. Assistant fires end_call.
+    Two paths are accepted:
 
-    We validate that (1) and (2) both happened in that order by looking at
-    the assistant turn(s) immediately preceding the user's most recent turn.
-    If any of those assistant turns contain a confirmation ask, the flow
-    is valid. Otherwise the LLM tried to skip step 1 and we refuse.
+    * **Standard two-step flow**:
+        1. Assistant asks "Can I end the call?" (matches
+           ``_CONFIRMATION_ASK_PATTERN``).
+        2. User replies (any content).
+        3. Assistant fires end_call.
+
+    * **Express path — user-initiated end**:
+        The user's most recent message is short (``≤ _USER_END_REQUEST_MAX_WORDS``
+        words) AND matches ``_USER_END_REQUEST_PATTERN``. The user has
+        directly commanded the end, so no assistant ask is required.
 
     ``transcript_entries`` is the runner-owned list populated by the
     aggregator handlers; ``None`` (unwired) falls back to allowing the call
@@ -83,9 +106,17 @@ def _confirmation_valid(transcript_entries: Optional[list]) -> bool:
     if last_user_idx is None:
         return False  # No user turn yet — nothing could have been confirmed.
 
-    # Immediately-preceding contiguous assistant turns must include a
-    # confirmation ask. (LLM may stream multiple assistant messages in a
-    # single turn; scan all of them.)
+    # Express path: user's own short direct end request.
+    last_user_text = transcript_entries[last_user_idx].get("text", "") or ""
+    if (
+        len(last_user_text.split()) <= _USER_END_REQUEST_MAX_WORDS
+        and _USER_END_REQUEST_PATTERN.search(last_user_text)
+    ):
+        return True
+
+    # Standard path: immediately-preceding contiguous assistant turns must
+    # include a confirmation ask. (LLM may stream multiple assistant
+    # messages in a single turn; scan all of them.)
     for i in range(last_user_idx - 1, -1, -1):
         entry = transcript_entries[i]
         if entry.get("role") != "assistant":
@@ -149,15 +180,49 @@ END_CALL_SYSTEM_PROMPT = (
     "You have a tool called `end_call`. It is governed by a MANDATORY "
     "two-step confirmation. You MUST never end the call in a single turn.\n"
     "\n"
+    "**Task completion — announce, then ask for follow-ups (do this FIRST).**\n"
+    "Whenever you finish what the user asked for — a booking made, an order "
+    "placed, an appointment scheduled, a question answered, information "
+    "provided, a form filled, a request logged, or any other requested "
+    "action — do BOTH of the following before anything else:\n"
+    "1. Clearly announce the completion in one short natural sentence "
+    "appropriate to your domain (e.g. \"Your booking is confirmed\", \"The "
+    "order has been placed\", \"I've scheduled the appointment for you\", "
+    "\"Here is the information you asked for\").\n"
+    "2. Ask a natural follow-up question inviting more, e.g. \"Is there "
+    "anything else I can help you with?\" — then WAIT for the user's reply.\n"
+    "Do NOT skip either half. Do NOT jump straight from task completion to "
+    "\"Can I end the call?\" — the user must first know their task is done "
+    "AND be given the chance to ask for more.\n"
+    "Only if the user's reply indicates they have nothing more (\"no that's "
+    "all\", \"nothing else\", \"I'm good\", \"that's it\") should you move "
+    "on to Step 1 below.\n"
+    "\n"
+    "**Express end path — when the user directly asks to hang up.**\n"
+    "If the user's own message clearly and directly asks you to end the "
+    "call (says \"hang up\", \"end the call\", \"end it now\", \"disconnect\", "
+    "\"cut the call\", \"just hang up\", or similar in a short direct "
+    "message), SKIP the two-step confirmation below. The user has already "
+    "given a direct instruction — asking \"Can I end the call?\" would be "
+    "unnecessary and feel tone-deaf. Instead:\n"
+    "1. Say a brief thank-you farewell in ONE sentence (e.g. \"Thank you "
+    "for calling — have a great day!\", \"Thanks, take care!\", \"Alright, "
+    "thanks for reaching out — goodbye!\").\n"
+    "2. Immediately call `end_call`.\n"
+    "Use the `reason` argument to quote the user's exact end request "
+    "(e.g. \"user said 'hang up'\", \"user said 'end the call'\"). This "
+    "express path applies only when the user's own message contains an "
+    "explicit direct end request — never for indirect signals like "
+    "\"thanks\" or \"that's all\".\n"
+    "\n"
     "**Step 1 — Ask for confirmation.**\n"
     "When ANY of the following happen, do NOT call `end_call`. Instead, ask "
     "the user for permission to end and WAIT for their reply:\n"
     "- The user says a farewell word (\"bye\", \"goodbye\", \"have a good "
     "day\", \"talk to you later\", \"I'll let you go\", \"that's all\", "
     "\"hang up\", \"end the call\").\n"
-    "- The user says the task is done or they have no more questions.\n"
-    "- The task appears complete (booking taken, question answered, details "
-    "collected).\n"
+    "- The user has confirmed (in the completion step above) that they need "
+    "nothing else.\n"
     "\n"
     "Reply with a short closing line plus a confirmation question, for example:\n"
     "- \"Alright, thank you for calling. Can I end the call now?\"\n"
@@ -188,6 +253,12 @@ END_CALL_SYSTEM_PROMPT = (
     "and the user did not clearly confirm, DO NOT ask again. Continue the "
     "conversation naturally and let the user hang up on their own. Asking "
     "the same closing question repeatedly is worse than not ending at all.\n"
+    "- **Ask \"Is there anything else?\" at most TWICE per conversation.** "
+    "The first time is fine after your first task completes. The second "
+    "time is fine if the user brought up another task and you finished "
+    "that too. After that, do NOT keep asking. Continue naturally and let "
+    "the user tell you if they need more. Asking \"anything else?\" over "
+    "and over turns the call into an awkward loop.\n"
     "- **Task confirmations are NOT call-end confirmations.** Whatever your "
     "domain (booking, ordering, scheduling, support, sales, information "
     "lookup, form filling, etc.), the user will often say things like "
