@@ -166,6 +166,8 @@ class CallLogService(BaseService):
         metrics: Optional[dict] = None,
         tool_calls: Optional[List[dict]] = None,
         recording_duration_seconds: Optional[int] = None,
+        ended_reason: Optional[str] = None,
+        ended_reason_detail: Optional[str] = None,
     ) -> Optional[Call]:
         call = self.db.query(Call).filter(Call.id == call_log_id).first()
         if not call:
@@ -195,6 +197,10 @@ class CallLogService(BaseService):
             metadata["tool_calls"] = tool_calls
         if audio_file_path:
             metadata["audio_file_path"] = audio_file_path
+        if ended_reason:
+            metadata["ended_reason"] = ended_reason
+        if ended_reason_detail:
+            metadata["ended_reason_detail"] = ended_reason_detail
         call.metadata_ = metadata
 
         self.db.commit()

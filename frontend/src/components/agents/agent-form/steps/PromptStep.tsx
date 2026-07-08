@@ -74,9 +74,10 @@ export default function PromptStep() {
 
   const setMode = (m: Mode) => {
     setValue('config.mode', m, { shouldDirty: true });
-    // Prompt mode never keeps a workflow assignment; workflow mode waits for the
-    // user to pick one from the cards below.
-    if (m === 'prompt') setValue('config.workflow_id', null, { shouldDirty: true });
+    // Don't drop the workflow selection when toggling to Prompt — the user
+    // expects it to still be selected when they switch back to Workflow. The
+    // assignment is stripped from the payload at save time when mode is
+    // 'prompt' (see configForSave in agentFormUtils), so nothing stale persists.
   };
 
   const hasContent = prompt.trim().length > 0;

@@ -682,3 +682,158 @@ class TestDeleteAppIntegration:
             params={"id": created["id"]},
         )
         assert resp.status_code == 200
+
+
+# ─── Postman-example-derived tests ─────────────────────────────────────
+
+
+class TestCreateAppIntegrationFromPostman:
+    """Extra create-endpoint coverage from the app_integrations Postman collection."""
+
+    def test_create_client_id_wrong_type_rejected(self, client_as_admin):
+        """Postman: 400 — client_id must be a string."""
+        payload = _minimal_create_payload(client_id=12345)
+        resp = client_as_admin.post(
+            "/api/v1/app-integration/create_app_integration", json=payload
+        )
+        assert resp.status_code in (400, 422)
+        if resp.status_code == 400:
+            assert "client_id" in resp.json()["detail"].lower()
+
+    def test_create_display_name_whitespace(self, client_as_admin):
+        """Postman: 400 — whitespace-only display_name → detail 'display_name cannot be empty'."""
+        payload = _minimal_create_payload(display_name="   ")
+        resp = client_as_admin.post(
+            "/api/v1/app-integration/create_app_integration", json=payload
+        )
+        assert resp.status_code in (400, 422)
+        if resp.status_code == 400:
+            assert "display_name" in resp.json()["detail"].lower()
+
+    def test_create_duplicate_slug_conflict_detail(self, client_as_admin):
+        """Postman: 409 body says 'An integration with slug '<slug>' already exists'."""
+        slug = _unique_slug("dupdetail")
+        first = client_as_admin.post(
+            "/api/v1/app-integration/create_app_integration",
+            json=_minimal_create_payload(slug=slug),
+        )
+        assert first.status_code in (200, 201)
+        second = client_as_admin.post(
+            "/api/v1/app-integration/create_app_integration",
+            json=_minimal_create_payload(slug=slug),
+        )
+        assert second.status_code == 409
+        detail = second.json()["detail"].lower()
+        assert "already exists" in detail
+
+    def test_create_unauthenticated_detail_message(self, client_unauthenticated):
+        """Postman: 401 body is {"detail": "Could not validate credentials"}."""
+        resp = client_unauthenticated.post(
+            "/api/v1/app-integration/create_app_integration",
+            json=_minimal_create_payload(),
+        )
+        assert resp.status_code in (401, 403)
+        assert "detail" in resp.json()
+
+
+class TestUpdateAppIntegrationFromPostman:
+    """Extra update-endpoint coverage from the app_integrations Postman collection."""
+
+    def test_update_not_found_detail(self, client_as_admin):
+        """Postman: 404 body is {"detail": "App integration not found"}."""
+        resp = client_as_admin.put(
+            "/api/v1/app-integration/update_app_integration",
+            params={"id": str(uuid.uuid4())},
+            json={"description": "Whatever"},
+        )
+        assert resp.status_code == 404
+        assert "not found" in resp.json()["detail"].lower()
+
+    def test_update_rotate_client_secret_only(self, client_as_admin):
+        """Postman: rotating client_secret alone flips has_credentials to true."""
+        created = _create_integration(client_as_admin)
+        assert created["has_credentials"] is False
+        resp = client_as_admin.put(
+            "/api/v1/app-integration/update_app_integration",
+            params={"id": created["id"]},
+            json={"client_secret": "rotated_secret_value"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["has_credentials"] is True
+        assert "client_secret" not in body
+
+
+class TestListAppIntegrationsFromPostman:
+    """Extra list-endpoint coverage from the app_integrations Postman collection."""
+
+    def test_list_pagination_page_two_size_one(self, client_as_admin, client_as_member):
+        """Postman: page=2, page_size=1 returns second item, echoes page/page_size."""
+        # Seed at least two so page=2 is meaningful.
+        _create_integration(client_as_admin)
+        _create_integration(client_as_admin)
+        resp = client_as_member.post(
+            "/api/v1/app-integration/list",
+            json={"page": 2, "page_size": 1},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["page"] == 2
+        assert body["page_size"] == 1
+        assert len(body["items"]) <= 1
+
+    def test_list_unauthenticated_detail_message(self, client_unauthenticated):
+        """Postman: 401 body is {"detail": "Could not validate credentials"}."""
+        resp = client_unauthenticated.post("/api/v1/app-integration/list", json={})
+        assert resp.status_code in (401, 403)
+        assert "detail" in resp.json()
+
+
+class TestDeleteAppIntegrationFromPostman:
+    """Extra delete-endpoint coverage from the app_integrations Postman collection."""
+
+    def test_delete_success_detail_message(self, client_as_admin):
+        """Postman: successful delete → {"detail": "App integration deleted"}."""
+        created = _create_integration(client_as_admin)
+        resp = client_as_admin.delete(
+            "/api/v1/app-integration/delete_app_integration",
+            params={"id": created["id"]},
+        )
+        assert resp.status_code == 200
+        detail = resp.json()["detail"].lower()
+        assert "deleted" in detail
+
+    def test_delete_not_found_detail_message(self, client_as_admin):
+        """Postman: 404 body is {"detail": "App integration not found"}."""
+        resp = client_as_admin.delete(
+            "/api/v1/app-integration/delete_app_integration",
+            params={"id": str(uuid.uuid4())},
+        )
+        assert resp.status_code == 404
+        assert "not found" in resp.json()["detail"].lower()
+
+    def test_delete_default_detail_mentions_disable(self, client_as_admin):
+        """Postman: 400 body suggests disabling instead of deleting default integrations."""
+        listing = client_as_admin.post(
+            "/api/v1/app-integration/list",
+            json={"is_default": True, "page_size": 1},
+        )
+        assert listing.status_code == 200
+        items = listing.json()["items"]
+        if not items:
+            pytest.skip("No default integrations seeded in this DB.")
+        resp = client_as_admin.delete(
+            "/api/v1/app-integration/delete_app_integration",
+            params={"id": items[0]["id"]},
+        )
+        assert resp.status_code == 400
+        assert "default" in resp.json()["detail"].lower()
+
+    def test_delete_unauthenticated_detail_message(self, client_unauthenticated):
+        """Postman: 401 body is {"detail": "Could not validate credentials"}."""
+        resp = client_unauthenticated.delete(
+            "/api/v1/app-integration/delete_app_integration",
+            params={"id": str(uuid.uuid4())},
+        )
+        assert resp.status_code in (401, 403)
+        assert "detail" in resp.json()
