@@ -1,12 +1,15 @@
 import { atom } from 'jotai';
 
 import {
+  cloneAgent,
   createAgent,
+  createAgentFromTemplate,
   createAgentVersion,
   deleteAgent,
   deleteAgentVersion,
   getAgent,
   getAllAgents,
+  listAgentTemplates,
   listAgentVersions,
   listAgents,
   switchActiveAgentVersion,
@@ -16,6 +19,7 @@ import {
 import type {
   AgentDetail,
   AgentDropdownItem,
+  AgentTemplateSummary,
   AgentVersionSummary,
   AgentsState,
   CreateAgentPayload,
@@ -107,6 +111,23 @@ export const updateAgentAtom = atom(
 export const deleteAgentAtom = atom(null, async (_get, _set, agentId: string) => {
   await deleteAgent(agentId);
 });
+
+export const cloneAgentAtom = atom(
+  null,
+  async (_get, _set, args: { agentId: string; name?: string }): Promise<AgentDetail> =>
+    cloneAgent(args.agentId, args.name),
+);
+
+export const listAgentTemplatesAtom = atom(
+  null,
+  async (_get, _set): Promise<AgentTemplateSummary[]> => listAgentTemplates(),
+);
+
+export const createAgentFromTemplateAtom = atom(
+  null,
+  async (_get, _set, args: { sourceConfigId: string; name?: string }): Promise<AgentDetail> =>
+    createAgentFromTemplate(args.sourceConfigId, args.name),
+);
 
 // ─── versioning ────────────────────────────────────────────────────────────
 

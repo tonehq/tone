@@ -4,6 +4,7 @@ import { deleteAgentAtom } from '@/atoms/AgentsAtom';
 import { AgentActionMenu } from '@/components/agents/AgentActionMenu';
 import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 import { agentsListConfig } from '@/components/agents/agentsListConfig';
+import CloneAgentModal from '@/components/agents/CloneAgentModal';
 import CreateAgentModal from '@/components/agents/CreateAgentModal';
 import {
   CustomButton,
@@ -31,6 +32,7 @@ const AgentListPage: React.FC = () => {
   const fl = useFacetedList(agentsListConfig);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [cloneTarget, setCloneTarget] = useState<ApiAgent | null>(null);
 
   const handleEdit = useCallback(
     (row: ApiAgent) => {
@@ -57,6 +59,10 @@ const AgentListPage: React.FC = () => {
     },
     [removeAgent, fl],
   );
+
+  const handleClone = useCallback((row: ApiAgent) => {
+    setCloneTarget(row);
+  }, []);
 
   const columns: CustomTableColumn<ApiAgent>[] = [
     {
@@ -135,6 +141,7 @@ const AgentListPage: React.FC = () => {
           agentName={record.name}
           onEdit={() => handleEdit(record)}
           onDelete={() => handleDelete(record.id)}
+          onClone={() => handleClone(record)}
         />
       ),
     },
@@ -217,6 +224,12 @@ const AgentListPage: React.FC = () => {
       />
 
       <CreateAgentModal open={modalOpen} onClose={() => setModalOpen(false)} />
+
+      <CloneAgentModal
+        agent={cloneTarget}
+        onClose={() => setCloneTarget(null)}
+        onCloned={() => fl.refresh()}
+      />
     </div>
   );
 };

@@ -1,10 +1,22 @@
 'use client';
 
 import { CustomButton, CustomModal } from '@/components/shared';
+import SearchableSelect from '@/components/shared/SearchableSelect';
+import TextInput from '@/components/shared/TextInput';
+import {
+  createAgentFromTemplateAtom,
+  cloneAgentAtom,
+  fetchAllAgentsAtom,
+  listAgentTemplatesAtom,
+} from '@/atoms/AgentsAtom';
 import { AgentType } from '@/types/agent';
+import type { AgentDropdownItem, AgentTemplateSummary } from '@/types/agent';
 import { cn } from '@/utils/cn';
-import { ArrowDownLeft, ArrowUpRight, PhoneIncoming, PhoneOutgoing } from 'lucide-react';
+import { handleApiError } from '@/utils/helpers';
+import { useSetAtom } from 'jotai';
+import { ArrowDownLeft, ArrowUpRight, Check, PhoneIncoming, PhoneOutgoing } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { useEffect, useMemo, useState } from 'react';
 
 interface CreateAgentModalProps {
   open: boolean;
@@ -84,11 +96,98 @@ const agentOptions: AgentOption[] = [
 
 const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ open, onClose }) => {
   const router = useRouter();
+  const loadTemplates = useSetAtom(listAgentTemplatesAtom);
+  const loadAgents = useSetAtom(fetchAllAgentsAtom);
+  const createFromTemplate = useSetAtom(createAgentFromTemplateAtom);
+  const cloneAgent = useSetAtom(cloneAgentAtom);
+
+  const [templates, setTemplates] = useState<AgentTemplateSummary[]>([]);
+  const [agents, setAgents] = useState<AgentDropdownItem[]>([]);
+  const [sourcesLoading, setSourcesLoading] = useState(false);
+  const [selected, setSelected] = useState('');
+  const [name, setName] = useState('');
+  // The name we pre-filled for the current selection. When the user leaves it
+  // untouched we submit a blank name so the server applies its own default
+  // (template name / "(copy)" auto-suffixed on collision) instead of a verbatim
+  // name that 409s on the second create from the same source.
+  const [defaultName, setDefaultName] = useState('');
+  const [creating, setCreating] = useState(false);
+
+  // Load templates + existing agents when the modal opens; reset on close.
+  useEffect(() => {
+    if (!open) {
+      setSelected('');
+      setName('');
+      setDefaultName('');
+      return;
+    }
+    let cancelled = false;
+    setSourcesLoading(true);
+    Promise.all([loadTemplates(), loadAgents()])
+      .then(([tpls, ags]) => {
+        if (cancelled) return;
+        setTemplates(tpls);
+        setAgents(ags);
+      })
+      .catch((err) => {
+        if (!cancelled) handleApiError(err);
+      })
+      .finally(() => {
+        if (!cancelled) setSourcesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, loadTemplates, loadAgents]);
+
+  // Templates first, then existing agents. The value prefix encodes the source
+  // kind so the create handler routes to the right endpoint.
+  const sourceOptions = useMemo(
+    () => [
+      ...templates.map((t) => ({ value: `template:${t.source_config_id}`, label: t.name })),
+      ...agents.map((a) => ({ value: `agent:${a.id}`, label: a.name })),
+    ],
+    [templates, agents],
+  );
+
+  const handleSelectSource = (value: string) => {
+    setSelected(value);
+    const opt = sourceOptions.find((o) => o.value === value);
+    if (!opt) return;
+    // A template seeds its own name (the server keeps it verbatim); an existing
+    // agent seeds "<name> (copy)". Either way we remember it so an unedited
+    // value can be submitted blank and auto-named server-side.
+    const seeded = (value.startsWith('template:') ? opt.label : `${opt.label} (copy)`).slice(0, 50);
+    setName(seeded);
+    setDefaultName(seeded);
+  };
 
   const handleSelectAgent = (type: AgentType) => {
     onClose();
     if (type === 'inbound' || type === 'outbound') {
       router.push(`/agents/create/${type}`);
+    }
+  };
+
+  const handleCreateFromSource = async () => {
+    const trimmed = name.trim();
+    if (!selected || !trimmed || creating) return;
+    const [kind, id] = selected.split(':');
+    // Unedited default → send blank so the server auto-names (and auto-numbers
+    // on collision). Only a name the user actually customised is sent verbatim.
+    const payloadName = trimmed === defaultName.trim() ? undefined : trimmed;
+    setCreating(true);
+    try {
+      const created =
+        kind === 'template'
+          ? await createFromTemplate({ sourceConfigId: id, name: payloadName })
+          : await cloneAgent({ agentId: id, name: payloadName });
+      onClose();
+      router.push(`/agents/edit/${created.agent_type}/${created.id}/overview`);
+    } catch (err) {
+      handleApiError(err);
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -195,6 +294,73 @@ const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ open, onClose }) =>
             </CustomButton>
           );
         })}
+      </div>
+
+      {/* Start from a template or an existing agent — copies the whole config
+          into a new agent, then drops the user into the editor to tweak it. */}
+      <div className="mt-6">
+        <div className="mb-4 flex items-center gap-3">
+          <span className="h-px flex-1 bg-border" />
+          <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            or start from a template
+          </span>
+          <span className="h-px flex-1 bg-border" />
+        </div>
+
+        <div className="flex flex-col gap-3">
+          <SearchableSelect
+            name="create-agent-source"
+            label="Template or existing agent"
+            options={sourceOptions}
+            value={selected}
+            onValueChange={handleSelectSource}
+            loading={sourcesLoading}
+            placeholder="Select a template or agent to copy"
+            searchPlaceholder="Search templates & agents…"
+            emptyMessage="No templates or agents yet."
+            renderOption={(option, isSelected) => {
+              const isTemplate = option.value.startsWith('template:');
+              return (
+                <div className="flex w-full items-center gap-2">
+                  <span
+                    className={cn(
+                      'rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide',
+                      isTemplate
+                        ? 'bg-violet-500/15 text-violet-600 dark:text-violet-300'
+                        : 'bg-muted text-muted-foreground',
+                    )}
+                  >
+                    {isTemplate ? 'Template' : 'Agent'}
+                  </span>
+                  <span className="flex-1 truncate">{option.label}</span>
+                  {isSelected && <Check className="ml-2 size-4 shrink-0" />}
+                </div>
+              );
+            }}
+          />
+
+          {selected && (
+            <TextInput
+              name="create-agent-clone-name"
+              label="New agent name"
+              value={name}
+              maxLength={50}
+              placeholder="e.g. Sales Concierge"
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCreateFromSource()}
+            />
+          )}
+
+          <CustomButton
+            type="primary"
+            fullWidth
+            loading={creating}
+            disabled={!selected || !name.trim()}
+            onClick={handleCreateFromSource}
+          >
+            Create from selection
+          </CustomButton>
+        </div>
       </div>
     </CustomModal>
   );

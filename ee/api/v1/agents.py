@@ -5,7 +5,9 @@ from fastapi import APIRouter, Body, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from core.api.v1.agents import (
+    CloneAgentRequest,
     CreateAgentRequest,
+    CreateFromTemplateRequest,
     GeneratePromptRequest,
     GeneratedPromptResponse,
     ImprovePromptRequest,
@@ -116,6 +118,39 @@ def delete_agent(
 ):
     svc = _get_service(claims, db)
     return svc.delete_agent(agent_id)
+
+
+@router.post("/clone_agent", status_code=status.HTTP_201_CREATED)
+def clone_agent(
+    agent_id: str = Query(..., description="The agent ID to clone"),
+    body: Optional[CloneAgentRequest] = None,
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    svc = _get_service(claims, db)
+    user_id = UUID(claims.user_id) if claims.user_id else None
+    agent = svc.clone_agent(agent_id, user_id, name=body.name if body else None)
+    return svc.agent_response(agent)
+
+
+@router.get("/list_templates")
+def list_agent_templates(
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    return _get_service(claims, db).list_templates()
+
+
+@router.post("/create_from_template", status_code=status.HTTP_201_CREATED)
+def create_from_template(
+    body: CreateFromTemplateRequest,
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    svc = _get_service(claims, db)
+    user_id = UUID(claims.user_id) if claims.user_id else None
+    agent = svc.create_from_template(body.source_config_id, user_id, name=body.name)
+    return svc.agent_response(agent)
 
 
 # ---------------------------------------------------------------------------
