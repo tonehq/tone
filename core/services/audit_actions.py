@@ -29,6 +29,7 @@ class AgentAuditAction:
     VERSION_UPDATED: Final[str] = "agent.version.updated"
     VERSION_SWITCHED: Final[str] = "agent.version.switched"
     VERSION_DELETED: Final[str] = "agent.version.deleted"
+    TEMPLATE_CREATED: Final[str] = "agent.template.created"
 
     # Attachments — one row per resource diff
     TOOL_ATTACHED: Final[str] = "agent.tool.attached"
