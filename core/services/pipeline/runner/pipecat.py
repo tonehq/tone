@@ -101,11 +101,30 @@ class PipecatPipelineRunner(PipelineRunner):
                     return None
                 md = spec.get("metadata") or {}
                 model_id = md.get("model_id")
-                return {
+                # `provider_name` stays the slug — call filters/grouping key off it
+                # via JSONB paths (see CallService.get_filter_values). The friendly
+                # name goes in a separate `provider_display_name` field for the UI.
+                snap = {
                     "provider_name": spec.get("provider_name"),
+                    "provider_display_name": spec.get("provider_display_name"),
                     "model_name": spec.get("model_name"),
                     "model_id": str(model_id) if model_id is not None else None,
                 }
+                # The TTS spec carries the resolved voice + language on its metadata
+                # (see service_resolver._build_service_specs). Store both the raw ids
+                # and their human-readable display values so the call-history snapshot
+                # is self-sufficient — the UI shows friendly names without reading the
+                # mutable live agent config, and never renders a raw voice-id or a
+                # bare language code.
+                if md.get("voice_id") is not None:
+                    snap["voice_id"] = md.get("voice_id")
+                if md.get("voice_name") is not None:
+                    snap["voice_name"] = md.get("voice_name")
+                if md.get("language") is not None:
+                    snap["language"] = md.get("language")
+                if md.get("language_display") is not None:
+                    snap["language_display"] = md.get("language_display")
+                return snap
 
             # `custom_tools` mirrors the resolver's tool cache filtered to non-MCP tools
             # (mcp_server_id IS NULL) to match the original snapshot semantics. MCP servers
