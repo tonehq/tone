@@ -97,9 +97,29 @@ We believe in democratizing AI voice technology through open source solutions. O
    #   DATABASE_URL=postgresql://<user>:<password>@<host>/<dbname>
    #   JWT_SECRET_KEY=<your-secret-key>
    #   ENCRYPTION_KEY=<your-encryption-key>
+   #
+   # Infisical (used by dev-bootstrap.sh and to run the app):
+   #   INFISICAL_PROJECT_ID=<your-project-id>
+   #   INFISICAL_ENV=<staging|dev|production>
+   #
+   # Cloudsmith (private tone-pipecat package):
+   #   PIP_EXTRA_INDEX_URL=https://<user>:<token>@dl.cloudsmith.io/<entitlement>/tonehq/tone/python/simple/
+   #
    # Optional: provider API keys (OPENAI_API_KEY, DEEPGRAM_API_KEY, etc.)
   ```
-3. **Export the Cloudsmith URL** (required for the private `tone-pipecat` package)
+3. **Install the Infisical CLI and log in**
+  ```bash
+   # macOS
+   brew install infisical/get-cli/infisical
+
+   # Linux
+   curl -1sLf 'https://artifacts-cli.infisical.com/setup.deb.sh' | sudo -E bash
+   sudo apt install -y infisical
+
+   # Log in once (opens a browser)
+   infisical login
+  ```
+4. **Export the Cloudsmith URL** (required for the private `tone-pipecat` package)
   ```bash
    # Get the real URL from Cloudsmith → tonehq/tone repo → Set Me Up → Python.
    export PIP_EXTRA_INDEX_URL="https://<user>:<token>@dl.cloudsmith.io/<entitlement>/tonehq/tone/python/simple/"
@@ -116,9 +136,10 @@ Runs Python install, venv, dependencies, migrations, procrastinate schema, DB se
 When it finishes, start the servers:
 
 ```bash
-# Backend
+# Backend (secrets are injected by infisical run)
 source venv/bin/activate
-python main.py
+infisical run --projectId "$INFISICAL_PROJECT_ID" --env="$INFISICAL_ENV" -- \
+    uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 # Frontend (in a separate terminal)
 cd frontend && npm run dev
