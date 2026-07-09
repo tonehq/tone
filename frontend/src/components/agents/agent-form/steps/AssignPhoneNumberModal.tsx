@@ -7,6 +7,7 @@ import { CustomButton, CustomModal, SelectInput } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import {
   listChannelPhoneNumbers,
+  listExotelPhoneNumbers,
   listTelnyxPhoneNumbers,
   listTwilioPhoneNumbers,
 } from '@/services/channelService';
@@ -107,7 +108,9 @@ export default function AssignPhoneNumberModal({
         ? listTwilioPhoneNumbers
         : providerType === 'telnyx'
           ? listTelnyxPhoneNumbers
-          : listChannelPhoneNumbers;
+          : providerType === 'exotel'
+            ? listExotelPhoneNumbers
+            : listChannelPhoneNumbers;
     let cancelled = false;
     setLoadingNumbers(true);
     fetcher(channelId)

@@ -65,7 +65,10 @@ class TwilioTransport(TelephonyProvider):
 
     def create_serializer(self, call_data: dict):
         # Reuse credentials cached by AgentRunnerService if available
-        twilio_creds = call_data.get("_twilio_creds") or get_twilio_credentials(org_id=call_data.get("_org_id"))
+        twilio_creds = call_data.get("_twilio_creds") or get_twilio_credentials(
+            org_id=call_data.get("_org_id"),
+            channel_id=call_data.get("_channel_id"),
+        )
         return TwilioFrameSerializer(
             stream_sid=call_data["stream_id"],
             call_sid=call_data["call_id"],

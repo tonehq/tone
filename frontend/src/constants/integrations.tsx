@@ -58,6 +58,15 @@ export const API_KEY_PROVIDERS: ProviderCardConfig[] = [
     accentColor: 'bg-emerald-500',
   },
   {
+    key: 'exotel',
+    name: 'Exotel',
+    description: 'Cloud communications platform for voice calls and phone numbers.',
+    icon: <Phone size={18} className="text-indigo-500" />,
+    iconBg: 'bg-indigo-50 dark:bg-indigo-500/10',
+    iconBorder: 'border-indigo-200/50 dark:border-indigo-500/20 shadow-sm dark:shadow-none',
+    accentColor: 'bg-indigo-500',
+  },
+  {
     key: 'livekit',
     name: 'LiveKit',
     description: 'Real-time WebRTC platform for in-browser voice calls.',

@@ -11,7 +11,8 @@ class TelnyxTransport(TelephonyProvider):
 
     def create_serializer(self, call_data: dict):
         telnyx_api_key = call_data.get("_telnyx_creds", {}).get("api_key") or get_telnyx_api_key(
-            org_id=call_data.get("_org_id")
+            org_id=call_data.get("_org_id"),
+            channel_id=call_data.get("_channel_id"),
         )
         return TelnyxFrameSerializer(
             stream_id=call_data["stream_id"],

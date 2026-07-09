@@ -124,3 +124,15 @@ def list_telnyx_phone_numbers(
     local assignment info so the UI can flag numbers already bound to another
     agent in this org."""
     return _svc(claims, db).list_telnyx_phone_numbers(channel_id)
+
+
+@router.get("/exotel_phone_numbers")
+def list_exotel_phone_numbers(
+    channel_id: str = Query(..., description="The Exotel channel ID to fetch numbers for"),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    """Fetch live IncomingPhoneNumbers from Exotel for the given channel,
+    merged with local assignment info so the UI can flag numbers already
+    bound to another agent in this org."""
+    return _svc(claims, db).list_exotel_phone_numbers(channel_id)

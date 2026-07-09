@@ -89,6 +89,23 @@ class TelephonyTransport(CallTransport):
         if from_number or to_number:
             logger.info(f"Call from: {from_number} to: {to_number}")
 
+        # Resolve which Channel this call belongs to via the dialed number, so
+        # orgs with multiple provider accounts (e.g. two Twilio accounts) use the
+        # right credentials instead of whichever channel row happens to come first.
+        if to_number and call_data.get("_channel_id") is None:
+            from core.database.session import get_db_context
+            from core.models.phone_number import PhoneNumber
+            try:
+                with get_db_context() as db:
+                    q = db.query(PhoneNumber).filter(PhoneNumber.number == to_number)
+                    if org_id := call_data.get("_org_id"):
+                        q = q.filter(PhoneNumber.organization_id == org_id)
+                    pn = q.first()
+                    if pn:
+                        call_data["_channel_id"] = str(pn.channel_id)
+            except Exception as e:
+                logger.warning(f"channel_id lookup for {to_number} failed: {e}")
+
         # Make call metadata available to run_bot() and the runner (call-log creation
         # reads call_data/transport_type from runner_args.body). Mutate in place — this
         # is the same body object run_bot() later reads.

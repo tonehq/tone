@@ -354,6 +354,88 @@ class ChannelService(BaseService):
             )
         return results
 
+    def list_exotel_phone_numbers(self, channel_id: Union[str, UUID]) -> List[Dict[str, Any]]:
+        """Fetch IncomingPhoneNumbers from Exotel for an Exotel channel, merged
+        with local PhoneNumber rows so the UI can mark numbers already assigned
+        to an agent in this org."""
+        record = self._get_record(channel_id)
+        if (record.channel_type or "").lower() != "exotel":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Channel is not an Exotel channel",
+            )
+
+        config = decrypt_json(record.encrypted_config)
+        api_key = config.get("api_key")
+        api_token = config.get("api_token")
+        account_sid = config.get("account_sid")
+        subdomain = config.get("subdomain") or "api.exotel.com"
+        if not api_key or not api_token or not account_sid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Exotel credentials are not configured for this channel",
+            )
+
+        url = f"https://{subdomain}/v1/Accounts/{account_sid}/IncomingPhoneNumbers.json"
+        try:
+            response = requests.get(
+                url,
+                auth=(api_key, api_token),
+                timeout=15,
+            )
+            response.raise_for_status()
+            payload = response.json() or {}
+            exotel_numbers = payload.get("IncomingPhoneNumbers") or []
+        except requests.HTTPError as e:
+            detail = "Exotel API error"
+            try:
+                body = response.json()
+                if isinstance(body, dict):
+                    detail = f"Exotel API error: {body.get('RestException') or body.get('message') or detail}"
+            except Exception:
+                pass
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail) from e
+        except Exception as e:
+            logger.exception("Unexpected error fetching Exotel phone numbers")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Failed to fetch phone numbers from Exotel",
+            ) from e
+
+        local_rows = (
+            self.db.query(PhoneNumber, Agent.name.label("agent_name"))
+            .outerjoin(Agent, Agent.id == PhoneNumber.agent_id)
+            .filter(
+                PhoneNumber.channel_id == record.id,
+                PhoneNumber.organization_id == self.org_id,
+            )
+            .all()
+        )
+        assignments_by_number: Dict[str, Dict[str, Any]] = {}
+        for pn, agent_name in local_rows:
+            if pn.agent_id:
+                assignments_by_number[pn.number] = {
+                    "agent_id": str(pn.agent_id),
+                    "agent_name": agent_name,
+                }
+
+        results: List[Dict[str, Any]] = []
+        for n in exotel_numbers:
+            entry = n.get("IncomingPhoneNumber", n) if isinstance(n, dict) else {}
+            number = entry.get("PhoneNumber") or entry.get("phone_number")
+            if not number:
+                continue
+            results.append(
+                {
+                    "id": entry.get("Sid") or entry.get("sid") or number,
+                    "number": number,
+                    "label": entry.get("FriendlyName") or entry.get("friendly_name"),
+                    "channel_id": str(record.id),
+                    "assigned_to": assignments_by_number.get(number),
+                }
+            )
+        return results
+
     # ──────────────────────────────────────────────────────────────────────
     # Internal
     # ──────────────────────────────────────────────────────────────────────

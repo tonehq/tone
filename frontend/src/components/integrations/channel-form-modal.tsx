@@ -24,6 +24,12 @@ const CHANNEL_FIELDS: Record<string, ChannelField[]> = {
     { name: 'auth_id', label: 'Auth ID', placeholder: 'Enter auth ID' },
     { name: 'auth_token', label: 'Auth Token', type: 'password', placeholder: 'Enter auth token' },
   ],
+  exotel: [
+    { name: 'account_sid', label: 'Account SID', placeholder: 'Enter account SID' },
+    { name: 'api_key', label: 'API Key', placeholder: 'Enter API key' },
+    { name: 'api_token', label: 'API Token', type: 'password', placeholder: 'Enter API token' },
+    { name: 'subdomain', label: 'Subdomain', placeholder: 'e.g. api.exotel.com' },
+  ],
   livekit: [
     { name: 'url', label: 'Server URL', placeholder: 'wss://your-project.livekit.cloud' },
     { name: 'api_key', label: 'API Key', placeholder: 'Enter API key' },
@@ -36,6 +42,7 @@ const CHANNEL_TYPE_OPTIONS = [
   { label: 'Twilio', value: 'twilio' },
   { label: 'Telnyx', value: 'telnyx' },
   { label: 'Plivo', value: 'plivo' },
+  { label: 'Exotel', value: 'exotel' },
   { label: 'LiveKit', value: 'livekit' },
   { label: 'Daily', value: 'daily' },
 ];
@@ -48,6 +55,8 @@ const ALL_FIELD_NAMES = [
   'url',
   'api_key',
   'api_secret',
+  'api_token',
+  'subdomain',
 ];
 
 type ChannelFormData = Record<string, string>;

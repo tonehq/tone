@@ -81,6 +81,25 @@ async def twiml(request: Request) -> Response:
     return Response(content=xml, media_type="application/xml")
 
 
+@router.post("/exotel/applet")
+@router.get("/exotel/applet")
+async def exotel_applet(request: Request) -> Response:
+    ws_url, from_number, to_number, pod_name, node_name = await _resolve_stream(request, "/exotel/applet")
+
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<Response>'
+        f'<Stream url="{ws_url}"/>'
+        '</Response>'
+    )
+
+    logger.info(
+        "[/exotel/applet] RESPONSE from={} to={} pod={} node={} handshake_url={}",
+        from_number, to_number, pod_name, node_name, ws_url,
+    )
+    return Response(content=xml, media_type="application/xml")
+
+
 @router.post("/telnyx/texml")
 @router.get("/telnyx/texml")
 async def telnyx_texml(request: Request) -> Response:

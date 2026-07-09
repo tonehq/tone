@@ -49,9 +49,11 @@ def channel_config(provider_slug: str, org_id=None, channel_id=None, db=None) ->
         return _query(session)
 
 
-def get_twilio_credentials(org_id=None) -> dict:
-    """Fetch Twilio account_sid and auth_token from the org's Twilio channel."""
-    cfg = channel_config("twilio", org_id)
+def get_twilio_credentials(org_id=None, channel_id=None) -> dict:
+    """Fetch Twilio account_sid and auth_token. When ``channel_id`` is given,
+    the credentials come from that specific channel (correct when an org has
+    multiple Twilio accounts); otherwise falls back to the org's first Twilio channel."""
+    cfg = channel_config("twilio", org_id, channel_id=channel_id)
     account_sid = cfg.get("account_sid")
     auth_token = cfg.get("auth_token")
     if account_sid and auth_token:
@@ -59,9 +61,11 @@ def get_twilio_credentials(org_id=None) -> dict:
     return {}
 
 
-def get_plivo_credentials(org_id=None) -> dict:
-    """Fetch Plivo auth_id and auth_token from the org's Plivo channel."""
-    cfg = channel_config("plivo", org_id)
+def get_plivo_credentials(org_id=None, channel_id=None) -> dict:
+    """Fetch Plivo auth_id and auth_token. When ``channel_id`` is given, the
+    credentials come from that specific channel (correct when an org has multiple
+    Plivo accounts); otherwise falls back to the org's first Plivo channel."""
+    cfg = channel_config("plivo", org_id, channel_id=channel_id)
     auth_id = cfg.get("auth_id")
     auth_token = cfg.get("auth_token")
     if auth_id and auth_token:
@@ -69,6 +73,27 @@ def get_plivo_credentials(org_id=None) -> dict:
     return {}
 
 
-def get_telnyx_api_key(org_id=None) -> str:
-    """Fetch the Telnyx API key from the org's Telnyx channel."""
-    return channel_config("telnyx", org_id).get("api_key") or ""
+def get_telnyx_api_key(org_id=None, channel_id=None) -> str:
+    """Fetch the Telnyx API key. When ``channel_id`` is given, the key comes from
+    that specific channel (correct when an org has multiple Telnyx accounts);
+    otherwise falls back to the org's first Telnyx channel."""
+    return channel_config("telnyx", org_id, channel_id=channel_id).get("api_key") or ""
+
+
+def get_exotel_credentials(org_id=None, channel_id=None) -> dict:
+    """Fetch Exotel api_key, api_token, account_sid, subdomain. When ``channel_id``
+    is given, the credentials come from that specific channel (correct when an org
+    has multiple Exotel accounts); otherwise falls back to the org's first Exotel channel."""
+    cfg = channel_config("exotel", org_id, channel_id=channel_id)
+    api_key = cfg.get("api_key")
+    api_token = cfg.get("api_token")
+    account_sid = cfg.get("account_sid")
+    subdomain = cfg.get("subdomain")
+    if api_key and api_token and account_sid:
+        return {
+            "api_key": api_key,
+            "api_token": api_token,
+            "account_sid": account_sid,
+            "subdomain": subdomain or "api.exotel.com",
+        }
+    return {}

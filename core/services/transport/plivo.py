@@ -10,7 +10,10 @@ class PlivoTransport(TelephonyProvider):
     transport_type = "plivo"
 
     def create_serializer(self, call_data: dict):
-        plivo_creds = call_data.get("_plivo_creds") or get_plivo_credentials(org_id=call_data.get("_org_id"))
+        plivo_creds = call_data.get("_plivo_creds") or get_plivo_credentials(
+            org_id=call_data.get("_org_id"),
+            channel_id=call_data.get("_channel_id"),
+        )
         return PlivoFrameSerializer(
             stream_id=call_data["stream_id"],
             call_id=call_data.get("call_id"),
