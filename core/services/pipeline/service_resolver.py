@@ -130,6 +130,9 @@ def _make_service_spec(provider, model_name, api_key, metadata) -> Optional[dict
         return None
     return {
         "provider_name": (provider.slug or "").strip().lower(),
+        # Human-readable provider name for the call-history snapshot. `provider_name`
+        # stays the slug (the factory keys off it); this is display-only.
+        "provider_display_name": provider.display_name or provider.slug,
         "api_key": api_key,
         "model_name": model_name,
         "metadata": metadata,
@@ -278,11 +281,18 @@ def _build_service_specs(
     )
     tts_metadata = _build_metadata(voice_settings, tts_mid)
     tts_metadata["voice_id"] = resolved_voice
+    # Human-readable voice name for the call-history snapshot (falls back to the
+    # resolved id). Filtered out of the factory's InputParams by build_input_params.
+    tts_metadata["voice_name"] = (voice_row.name if voice_row else None) or resolved_voice
     # The factory reads metadata["language"]; prefer the language *code* (e.g. "en")
     # over the display name (e.g. "English"), which Pipecat's Language enum rejects.
     tts_language = voice_settings.get("language_code") or voice_settings.get("language")
     if tts_language:
         tts_metadata["language"] = tts_language
+    # Display name (e.g. "English") for the snapshot — the factory never reads this.
+    tts_language_display = voice_settings.get("language") or tts_language
+    if tts_language_display:
+        tts_metadata["language_display"] = tts_language_display
     tts_spec = _make_service_spec(
         provider_by_id.get(tts_pid),
         _mname(tts_mid),

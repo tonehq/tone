@@ -1,6 +1,5 @@
 'use client';
 
-import { AppLoader } from '@/components/shared';
 import type { CallLogRow } from '@/types/callLog';
 import { BrainCircuit, Mic, Volume2 } from 'lucide-react';
 import React from 'react';
@@ -55,27 +54,19 @@ const PipelineCard: React.FC<PipelineCardProps> = ({ icon: Icon, title, rows }) 
 // ─── section ──────────────────────────────────────────────────────────────────
 
 const CallConfigurationsSection: React.FC<CallConfigurationsSectionProps> = ({ callLog }) => {
-  const { data: pipeline, loading: pipelineLoading } = useCallConfiguration({
-    agentId: callLog.agent_id,
+  // Derived synchronously from the call's immutable pipeline snapshot — no
+  // fetch, so there's no loading state to hold the tab on.
+  const { data: pipeline } = useCallConfiguration({
+    pipelineConfig: callLog.pipeline_config,
     metrics: callLog.metrics,
   });
-
-  // Hold the entire tab on the project's shared loader until the pipeline is
-  // ready, so the page doesn't paint a partial state and then shift.
-  // `min-h-0` overrides AppLoader's default `min-h-screen` (via tailwind-merge),
-  // letting it size to its parent so it centers within the tab body — not at
-  // 50vh, which would sit below the visible area now that the sticky summary
-  // card consumes space above.
-  if (pipelineLoading && !pipeline) {
-    return <AppLoader className="min-h-0 h-full" />;
-  }
 
   return (
     <div className="flex flex-col">
       <h3 className="mb-1 text-sm font-medium text-foreground">Pipeline</h3>
       <p className="mb-3 text-xs text-muted-foreground">
-        Reflects the agent&apos;s current configuration. Model names come from this call&apos;s
-        metrics when available.
+        Reflects the configuration used for this call. Model names come from this call&apos;s
+        configuration, falling back to its metrics.
       </p>
 
       {!pipeline ? (
