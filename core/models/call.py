@@ -21,6 +21,10 @@ class Call(OrgScopedModel):
     from_phone_number_id = Column(UUID(as_uuid=True), ForeignKey("phone_numbers.id", ondelete="SET NULL"), nullable=True)
     to_phone_number_id = Column(UUID(as_uuid=True), ForeignKey("phone_numbers.id", ondelete="SET NULL"), nullable=True)
     from_number_raw_by_provider = Column(String(50), nullable=True)
+    # Immutable snapshot of the dialed number at call time. Preserves history when
+    # the linked PhoneNumber row is later reassigned or deleted (which SETs NULL on
+    # to_phone_number_id via the FK). Read paths prefer this over the join.
+    to_number = Column(String(50), nullable=True)
     provider_call_id = Column(String(120), nullable=True)
     # Correlates this call to its server logs (format: {short_uuid}-{agent_id}-{call_id}).
     trace_id = Column(String(120), nullable=True, index=True)

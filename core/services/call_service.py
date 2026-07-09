@@ -322,6 +322,54 @@ class CallService(BaseService):
 
         return result
 
+    def _response_columns(self, from_pn) -> List[Any]:
+        """Labeled columns fetched alongside Call for /list and /get.
+
+        Labels are the contract with :meth:`_row_to_response`, which unpacks
+        by attribute name — so column order here is irrelevant to callers.
+        ``from_pn`` is passed in because the alias is created fresh per query.
+        """
+        return [
+            Agent.name.label("agent_name"),
+            Agent.agent_type.label("agent_type"),
+            Channel.channel_type.label("channel_type"),
+            from_pn.number.label("from_number"),
+            CallMetrics.id.label("metrics_id"),
+            CallMetrics.ttfb.label("metrics_ttfb"),
+            CallMetrics.processing.label("metrics_processing"),
+            CallMetrics.llm_usage.label("metrics_llm_usage"),
+            CallMetrics.tts_usage.label("metrics_tts_usage"),
+            CallMetrics.stt_usage.label("metrics_stt_usage"),
+            CallMetrics.user_bot_latency.label("metrics_user_bot_latency"),
+            CallMetrics.turns.label("metrics_turns"),
+            CallMetrics.turn_metrics.label("metrics_turn_metrics"),
+        ]
+
+    def _row_to_response(self, row) -> Dict[str, Any]:
+        """Build a call-response dict from a SQLAlchemy Row.
+
+        Reads labeled columns by attribute so reordering :meth:`_response_columns`
+        never breaks the mapping.
+        """
+        return self.call_response(
+            call=row[0],
+            agent_name=row.agent_name,
+            agent_type=row.agent_type,
+            channel_type=row.channel_type,
+            from_number=row.from_number,
+            metrics=self._metrics_payload(
+                metrics_id=row.metrics_id,
+                ttfb=row.metrics_ttfb,
+                processing=row.metrics_processing,
+                llm_usage=row.metrics_llm_usage,
+                tts_usage=row.metrics_tts_usage,
+                stt_usage=row.metrics_stt_usage,
+                user_bot_latency=row.metrics_user_bot_latency,
+                turns=row.metrics_turns,
+                turn_metrics=row.metrics_turn_metrics,
+            ),
+        )
+
     def get_calls(
         self,
         page_no: int = 1,
@@ -332,15 +380,17 @@ class CallService(BaseService):
         sort_by: Optional[str] = None,
         sort_order: str = "desc",
     ) -> Dict[str, Any]:
+        # to_number is read from Call.to_number (immutable snapshot on the row),
+        # not joined from PhoneNumber — the FK sets NULL on reassignment/delete,
+        # which used to erase the value from history. from_pn is still joined
+        # because inbound callers may match one of our known numbers.
         from_pn = aliased(PhoneNumber, name="from_pn")
-        to_pn = aliased(PhoneNumber, name="to_pn")
 
         base_query = (
             self.query(Call)
             .join(Agent, Call.agent_id == Agent.id)
             .join(Channel, Call.channel_id == Channel.id)
             .outerjoin(from_pn, Call.from_phone_number_id == from_pn.id)
-            .outerjoin(to_pn, Call.to_phone_number_id == to_pn.id)
             # 1:1 on call_id (unique) — keeps row count equal to call count
             # so pagination math is unaffected.
             .outerjoin(CallMetrics, CallMetrics.call_id == Call.id)
@@ -368,86 +418,32 @@ class CallService(BaseService):
         offset = (page_no - 1) * page_size
         results = (
             base_query
-            .add_columns(
-                Agent.name.label("agent_name"),
-                Agent.agent_type.label("agent_type"),
-                Channel.channel_type.label("channel_type"),
-                from_pn.number.label("from_number"),
-                to_pn.number.label("to_number"),
-                CallMetrics.id.label("metrics_id"),
-                CallMetrics.ttfb.label("metrics_ttfb"),
-                CallMetrics.processing.label("metrics_processing"),
-                CallMetrics.llm_usage.label("metrics_llm_usage"),
-                CallMetrics.tts_usage.label("metrics_tts_usage"),
-                CallMetrics.stt_usage.label("metrics_stt_usage"),
-                CallMetrics.user_bot_latency.label("metrics_user_bot_latency"),
-                CallMetrics.turns.label("metrics_turns"),
-                CallMetrics.turn_metrics.label("metrics_turn_metrics"),
-            )
+            .add_columns(*self._response_columns(from_pn))
             .offset(offset)
             .limit(page_size)
             .all()
         )
 
-        data = [
-            self.call_response(
-                call=row[0],
-                agent_name=row[1],
-                agent_type=row[2],
-                channel_type=row[3],
-                from_number=row[4],
-                to_number=row[5],
-                metrics=self._metrics_payload(
-                    metrics_id=row[6],
-                    ttfb=row[7],
-                    processing=row[8],
-                    llm_usage=row[9],
-                    tts_usage=row[10],
-                    stt_usage=row[11],
-                    user_bot_latency=row[12],
-                    turns=row[13],
-                    turn_metrics=row[14],
-                ),
-            )
-            for row in results
-        ]
-
         return {
-            "data": data,
+            "data": [self._row_to_response(row) for row in results],
             "total": total,
             "page_no": page_no,
             "page_size": page_size,
         }
 
     def get_call_by_id(self, call_id: str) -> Optional[Dict[str, Any]]:
+        # See get_calls for why to_number is not joined from PhoneNumber.
         from_pn = aliased(PhoneNumber, name="from_pn")
-        to_pn = aliased(PhoneNumber, name="to_pn")
 
         result = (
             self.query(Call)
             .join(Agent, Call.agent_id == Agent.id)
             .join(Channel, Call.channel_id == Channel.id)
             .outerjoin(from_pn, Call.from_phone_number_id == from_pn.id)
-            .outerjoin(to_pn, Call.to_phone_number_id == to_pn.id)
             # Mirror /list so the single-call response carries the joined
             # CallMetrics record under the `metrics` key.
             .outerjoin(CallMetrics, CallMetrics.call_id == Call.id)
-            .add_columns(
-                Agent.name.label("agent_name"),
-                Agent.agent_type.label("agent_type"),
-                Channel.channel_type.label("channel_type"),
-                from_pn.number.label("from_number"),
-                to_pn.number.label("to_number"),
-                CallMetrics.id.label("metrics_id"),
-                CallMetrics.ttfb.label("metrics_ttfb"),
-                CallMetrics.processing.label("metrics_processing"),
-                CallMetrics.llm_usage.label("metrics_llm_usage"),
-                CallMetrics.tts_usage.label("metrics_tts_usage"),
-                CallMetrics.stt_usage.label("metrics_stt_usage"),
-                CallMetrics.user_bot_latency.label("metrics_user_bot_latency"),
-                CallMetrics.turns.label("metrics_turns"),
-                CallMetrics.turn_metrics.label("metrics_turn_metrics"),
-            )
+            .add_columns(*self._response_columns(from_pn))
             .filter(Call.id == call_id)
             .first()
         )
@@ -455,25 +451,7 @@ class CallService(BaseService):
         if not result:
             return None
 
-        return self.call_response(
-            call=result[0],
-            agent_name=result[1],
-            agent_type=result[2],
-            channel_type=result[3],
-            from_number=result[4],
-            to_number=result[5],
-            metrics=self._metrics_payload(
-                metrics_id=result[6],
-                ttfb=result[7],
-                processing=result[8],
-                llm_usage=result[9],
-                tts_usage=result[10],
-                stt_usage=result[11],
-                user_bot_latency=result[12],
-                turns=result[13],
-                turn_metrics=result[14],
-            ),
-        )
+        return self._row_to_response(result)
 
     def get_audio_url(self, call_id: str) -> Dict[str, Any]:
         call = self.query(Call).filter(Call.id == call_id).first()
@@ -525,7 +503,6 @@ class CallService(BaseService):
         agent_type: Optional[str] = None,
         channel_type: Optional[str] = None,
         from_number: Optional[str] = None,
-        to_number: Optional[str] = None,
         metrics: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         metadata = call.metadata_ or {}
@@ -561,7 +538,7 @@ class CallService(BaseService):
             "duration_seconds": call.duration_seconds,
             "recording_duration_seconds": call.recording_duration_seconds,
             "from_number": from_number or call.from_number_raw_by_provider,
-            "to_number": to_number,
+            "to_number": call.to_number,
             "provider_call_id": call.provider_call_id,
             "trace_id": call.trace_id,
             "recording_upload_id": str(call.recording_upload_id) if call.recording_upload_id else None,

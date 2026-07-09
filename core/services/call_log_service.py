@@ -113,6 +113,7 @@ class CallLogService(BaseService):
             from_phone_number_id=from_pn_id,
             to_phone_number_id=to_pn_id,
             from_number_raw_by_provider=from_number,
+            to_number=to_number,
             started_at=started_at or datetime.now(timezone.utc),
             pod_id=pod_id,
             metadata_={},
