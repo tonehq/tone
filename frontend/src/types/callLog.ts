@@ -103,6 +103,41 @@ export interface ServedBy {
   environment?: string;
 }
 
+/**
+ * One service (LLM / STT / TTS) inside the call's pipeline snapshot. Each field
+ * that has a raw id and a human-readable form carries both: `provider_name` is
+ * the provider slug (call filters key off it) with `provider_display_name` for
+ * the UI; the TTS spec adds `voice_id` + `voice_name` and `language` (code) +
+ * `language_display`. The display fields are present only for calls placed after
+ * the snapshot started capturing them, so the UI falls back to the raw value.
+ */
+export interface PipelineSpecSnapshot {
+  provider_name: string | null;
+  provider_display_name?: string | null;
+  model_name: string | null;
+  model_id: string | null;
+  voice_id?: string | null;
+  voice_name?: string | null;
+  language?: string | null;
+  language_display?: string | null;
+}
+
+/**
+ * Immutable snapshot of the pipeline used for a single call, captured at call
+ * start and stored on the call row. This — NOT the live agent config — is the
+ * source of truth for the Call Configurations tab, so editing the agent later
+ * never rewrites what a past call shows.
+ */
+export interface PipelineConfigSnapshot {
+  llm: PipelineSpecSnapshot | null;
+  stt: PipelineSpecSnapshot | null;
+  tts: PipelineSpecSnapshot | null;
+  is_s2s?: boolean;
+  custom_tools?: Array<{ id: string | null; name: string | null }>;
+  mcp_servers?: unknown[];
+  knowledge_bases?: unknown[];
+}
+
 export interface CallLogRow {
   id: string;
   agent_id: string;
@@ -136,6 +171,13 @@ export interface CallLogRow {
    * the full payload without a second round-trip.
    */
   metrics: (CallMetrics & { id: string }) | null;
+  /**
+   * Immutable snapshot of the pipeline used for THIS call (provider/model, plus
+   * voice/language on newer calls), captured at call start. Null for very old
+   * calls persisted before snapshots existed. Drives the Configurations tab so
+   * it reflects what the call actually used — not the agent's current config.
+   */
+  pipeline_config: PipelineConfigSnapshot | null;
 }
 
 export type ToolExecutionStatus = 'success' | 'error';
