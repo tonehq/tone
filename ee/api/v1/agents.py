@@ -12,6 +12,7 @@ from core.api.v1.agents import (
     GeneratedPromptResponse,
     ImprovePromptRequest,
     SaveAsNewVersionRequest,
+    SaveAsTemplateRequest,
     SwitchActiveVersionRequest,
     UpdateAgentRequest,
     UpdateVersionRequest,
@@ -151,6 +152,19 @@ def create_from_template(
     user_id = UUID(claims.user_id) if claims.user_id else None
     agent = svc.create_from_template(body.source_config_id, user_id, name=body.name)
     return svc.agent_response(agent)
+
+
+@router.post("/save_as_template", status_code=status.HTTP_201_CREATED)
+def save_as_template(
+    body: SaveAsTemplateRequest,
+    agent_id: str = Query(..., description="The agent whose live config to snapshot as a template"),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    svc = _get_service(claims, db)
+    user_id = UUID(claims.user_id) if claims.user_id else None
+    config = svc.save_as_template(agent_id, user_id, name=body.name)
+    return svc.version_response(config, is_live=False)
 
 
 # ---------------------------------------------------------------------------

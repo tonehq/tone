@@ -64,6 +64,11 @@ export interface AgentVersionSummary {
   id: string;
   version: number;
   is_live: boolean;
+  /** True for reusable template snapshots (is_template=true) — excluded from the
+   *  version history and never promoted to live. */
+  is_template?: boolean;
+  /** Display label; set for templates, null for ordinary versions. */
+  name?: string | null;
   created_at: string | null;
   updated_at: string | null;
   published_at: string | null;

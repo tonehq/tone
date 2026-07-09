@@ -630,6 +630,106 @@ class TestAgentTemplates:
         assert all(v["id"] != cfg_id for v in resp.json())
 
 
+# ─── POST /api/v1/agent/save_as_template ───
+
+class TestSaveAsTemplate:
+    """Tests for POST /api/v1/agent/save_as_template?agent_id=... — snapshots an
+    agent's live config into a reusable template (is_template=true)."""
+
+    def test_save_as_template_happy_path(self, client_as_member):
+        agent = _create_agent(
+            client_as_member,
+            config={"first_message": "hi tpl", "system_prompt_template": "You are T"},
+        )
+        resp = client_as_member.post(
+            f"/api/v1/agent/save_as_template?agent_id={agent['id']}",
+            json={"name": "Support Starter"},
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["is_template"] is True
+        assert body["name"] == "Support Starter"
+        assert body["is_live"] is False
+
+    def test_save_as_template_excluded_from_versions(self, client_as_member):
+        agent = _create_agent(client_as_member, config={"first_message": "hi"})
+        tpl = client_as_member.post(
+            f"/api/v1/agent/save_as_template?agent_id={agent['id']}",
+            json={"name": _unique_name("Tpl")},
+        ).json()
+        resp = client_as_member.get(f"/api/v1/agent/list_versions?agent_id={agent['id']}")
+        assert resp.status_code == 200
+        assert all(v["id"] != tpl["id"] for v in resp.json())
+
+    def test_save_as_template_appears_in_list_templates(self, client_as_member):
+        agent = _create_agent(client_as_member, config={"first_message": "hi"})
+        name = _unique_name("Listed")
+        tpl = client_as_member.post(
+            f"/api/v1/agent/save_as_template?agent_id={agent['id']}",
+            json={"name": name},
+        ).json()
+        resp = client_as_member.get("/api/v1/agent/list_templates")
+        assert resp.status_code == 200
+        match = next((t for t in resp.json() if t["source_config_id"] == tpl["id"]), None)
+        assert match is not None
+        assert match["name"] == name
+
+    def test_save_as_template_then_create_from_template(self, client_as_member):
+        agent = _create_agent(
+            client_as_member,
+            config={"first_message": "hi round-trip", "system_prompt_template": "RT"},
+        )
+        tpl = client_as_member.post(
+            f"/api/v1/agent/save_as_template?agent_id={agent['id']}",
+            json={"name": _unique_name("RT")},
+        ).json()
+        new_name = _unique_name("FromSaved")
+        resp = client_as_member.post(
+            "/api/v1/agent/create_from_template",
+            json={"source_config_id": tpl["id"], "name": new_name},
+        )
+        assert resp.status_code == 201, resp.text
+        created = resp.json()
+        assert created["name"] == new_name
+        assert created["config"]["first_message"] == "hi round-trip"
+
+    def test_save_as_template_missing_name_422(self, client_as_member):
+        agent = _create_agent(client_as_member, config={"first_message": "hi"})
+        resp = client_as_member.post(
+            f"/api/v1/agent/save_as_template?agent_id={agent['id']}",
+            json={},
+        )
+        assert resp.status_code == 422
+
+    def test_save_as_template_blank_name_400(self, client_as_member):
+        agent = _create_agent(client_as_member, config={"first_message": "hi"})
+        resp = client_as_member.post(
+            f"/api/v1/agent/save_as_template?agent_id={agent['id']}",
+            json={"name": "   "},
+        )
+        assert resp.status_code == 400
+
+    def test_save_as_template_missing_agent_id_422(self, client_as_member):
+        resp = client_as_member.post(
+            "/api/v1/agent/save_as_template", json={"name": "x"}
+        )
+        assert resp.status_code == 422
+
+    def test_save_as_template_unknown_agent_404(self, client_as_member):
+        resp = client_as_member.post(
+            f"/api/v1/agent/save_as_template?agent_id={_SENTINEL_UUID}",
+            json={"name": "x"},
+        )
+        assert resp.status_code == 404
+
+    def test_save_as_template_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.post(
+            f"/api/v1/agent/save_as_template?agent_id={_SENTINEL_UUID}",
+            json={"name": "x"},
+        )
+        assert resp.status_code in (401, 403)
+
+
 # ─── GET /api/v1/agent/list_versions ───
 
 class TestListAgentVersions:

@@ -112,7 +112,13 @@ def get_active_agent_config(db: Session, agent: Any) -> Optional[AgentConfig]:
         return cfg
     return (
         db.query(AgentConfig)
-        .filter(AgentConfig.agent_id == agent_id)
+        .filter(
+            AgentConfig.agent_id == agent_id,
+            # Templates are reusable snapshots, never servable — exclude them so
+            # the latest-version fallback can't serve a just-saved template
+            # (which carries the highest version number).
+            AgentConfig.is_template.is_(False),
+        )
         .order_by(AgentConfig.is_default.desc(), AgentConfig.version.desc())
         .first()
     )
