@@ -732,6 +732,282 @@ class AgentService(BaseService):
 
         return agent
 
+    def _unique_agent_name(self, base: str) -> str:
+        """Return an org-unique agent name derived from ``base``.
+
+        ``"<base> (copy)"`` first, then ``"<base> (copy) N"`` on collision. The
+        base is truncated so the result fits ``agents.name`` (``String(50)``).
+        """
+        MAX_NAME_LEN = 50
+        base = (base or "Agent").strip()
+
+        def _fit(suffix: str) -> str:
+            room = MAX_NAME_LEN - len(suffix)
+            return (base[:room].rstrip() + suffix) if room > 0 else suffix.strip()[:MAX_NAME_LEN]
+
+        def _taken(name: str) -> bool:
+            return (
+                self.query(Agent)
+                .filter(
+                    Agent.organization_id == self.org_id,
+                    Agent.name == name,
+                    Agent.deleted_at.is_(None),
+                )
+                .first()
+                is not None
+            )
+
+        candidate = _fit(" (copy)")
+        n = 2
+        while _taken(candidate):
+            candidate = _fit(f" (copy) {n}")
+            n += 1
+        return candidate
+
+    def clone_agent(
+        self, agent_id: str, user_id: Optional[UUID], name: Optional[str] = None
+    ) -> Agent:
+        """Deep-clone an entire agent into a new, independent one.
+
+        The source's live config (published → latest) becomes the clone's
+        version 1, along with a deep copy of that config's tool / MCP /
+        knowledge-base rows and an independent copy of the assigned workflow
+        graph. Phone numbers and web channels are intentionally NOT carried
+        over — phone numbers are globally unique and the clone starts clean.
+
+        ``name`` sets the new agent's name. When provided it is used verbatim
+        (a collision with an existing agent raises 409); when omitted or blank
+        it defaults to ``"<source> (copy)"`` (auto-suffixed on collision). The
+        cloned config is promoted to live.
+        """
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="user_id is required")
+
+        source = self.get_agent(agent_id)
+        live = self._resolve_current_config(source)
+
+        # Explicit name wins (truncated to the column limit); otherwise
+        # auto-suffix from the source name.
+        requested = (name or "").strip()
+        new_name = requested[:50] if requested else self._unique_agent_name(source.name)
+
+        try:
+            if live is not None:
+                new_agent = self._clone_config_into_new_agent(
+                    live,
+                    name=new_name,
+                    agent_type=source.agent_type,
+                    description=source.description,
+                    is_active=source.is_active,
+                    user_id=user_id,
+                )
+            else:
+                # No config to copy — just duplicate the bare agent shell.
+                new_agent = Agent(
+                    name=new_name,
+                    description=source.description,
+                    agent_type=source.agent_type,
+                    is_active=source.is_active,
+                    created_by_user_id=user_id,
+                    organization_id=self.org_id,
+                )
+                self.db.add(new_agent)
+                self.db.flush()
+
+            self.audit.log(
+                AgentAuditAction.DUPLICATED,
+                agent_id=new_agent.id,
+                after=self._snapshot(new_agent, self._AGENT_ROOT_FIELDS),
+                extra={"source_agent_id": str(source.id)},
+            )
+            self.db.commit()
+        except IntegrityError as e:
+            self.db.rollback()
+            detail = _agent_unique_constraint_detail(e)
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from e
+        except HTTPException:
+            self.db.rollback()
+            raise
+        except Exception:
+            self.db.rollback()
+            raise
+
+        return new_agent
+
+    def _clone_config_into_new_agent(
+        self,
+        source_config: AgentConfig,
+        *,
+        name: str,
+        agent_type: str,
+        description: Optional[str],
+        is_active: bool,
+        user_id: UUID,
+    ) -> Agent:
+        """Create a new agent whose live v1 config is a deep copy of ``source_config``.
+
+        Copies ``_CONFIG_FIELDS``, deep-copies the assigned workflow graph, and
+        clones the source config's tool / MCP / knowledge-base rows under the new
+        agent. The new config is promoted to live. The caller owns the audit log
+        and commit — this only builds the rows (flush-only) so it can be shared
+        by ``clone_agent`` (clone an agent) and ``create_from_template``.
+        """
+        from datetime import datetime, timezone
+
+        new_agent = Agent(
+            name=name,
+            description=description,
+            agent_type=agent_type,
+            is_active=is_active,
+            created_by_user_id=user_id,
+            organization_id=self.org_id,
+        )
+        self.db.add(new_agent)
+        self.db.flush()
+
+        new_config = AgentConfig(
+            agent_id=new_agent.id,
+            version=1,
+            created_by_user_id=user_id,
+            organization_id=self.org_id,
+            published_at=datetime.now(timezone.utc),
+            is_default=False,
+            is_template=False,
+            name=None,
+        )
+        # Copy every versioned config field from the source config.
+        for field in self._CONFIG_FIELDS:
+            setattr(new_config, field, getattr(source_config, field, None))
+        self.db.add(new_config)
+        self.db.flush()
+
+        # Each agent owns an independent workflow copy — deep-copy the source's
+        # graph so editing the clone never touches the original.
+        if new_config.workflow_id is not None:
+            from core.services.workflow.service import WorkflowService
+
+            wf_copy = WorkflowService(
+                self.db, user_id=user_id, org_id=self.org_id
+            ).duplicate_for_agent_version(new_config.workflow_id, new_agent.id, user_id)
+            new_config.workflow_id = wf_copy.id
+
+        # Deep-copy the tool / MCP / KB rows across agents.
+        self._clone_attachments(
+            new_agent,
+            source_agent_id=source_config.agent_id,
+            source_config_id=source_config.id,
+            target_config_id=new_config.id,
+        )
+        self.db.flush()
+
+        new_agent.published_config_id = new_config.id
+        return new_agent
+
+    def list_templates(self) -> List[Dict[str, Any]]:
+        """All template configs in the org (``is_template=true``), with the
+        display name and the owning agent's type/name for the picker."""
+        rows = (
+            self.query(AgentConfig)
+            .join(Agent, Agent.id == AgentConfig.agent_id)
+            .filter(
+                AgentConfig.is_template.is_(True),
+                AgentConfig.deleted_at.is_(None),
+                Agent.deleted_at.is_(None),
+            )
+            .with_entities(
+                AgentConfig.id,
+                AgentConfig.name,
+                AgentConfig.mode,
+                Agent.name.label("agent_name"),
+                Agent.agent_type,
+            )
+            .order_by(AgentConfig.name.asc().nullslast())
+            .all()
+        )
+        return [
+            {
+                "source_config_id": str(r.id),
+                "name": r.name or r.agent_name,
+                "agent_name": r.agent_name,
+                "agent_type": r.agent_type,
+                "mode": r.mode or "prompt",
+            }
+            for r in rows
+        ]
+
+    def create_from_template(
+        self, source_config_id: str, user_id: Optional[UUID], name: Optional[str] = None
+    ) -> Agent:
+        """Create a new agent by deep-copying a template config (``is_template=true``).
+
+        The new agent inherits the template owner's ``agent_type``/``description``;
+        its name is the provided ``name`` (verbatim, truncated to 50) or the
+        template's name. The copied config is promoted to live and the user can
+        edit it afterwards in the agent editor.
+        """
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="user_id is required")
+
+        try:
+            cfg_id = UUID(str(source_config_id))
+        except (ValueError, TypeError) as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid source_config_id"
+            ) from e
+
+        template = (
+            self.query(AgentConfig)
+            .filter(
+                AgentConfig.id == cfg_id,
+                AgentConfig.is_template.is_(True),
+                AgentConfig.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if not template:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Template not found")
+
+        owner = (
+            self.query(Agent)
+            .filter(Agent.id == template.agent_id, Agent.deleted_at.is_(None))
+            .first()
+        )
+        agent_type = owner.agent_type if owner else "inbound"
+        description = owner.description if owner else None
+
+        requested = (name or "").strip()
+        base_name = requested or template.name or (owner.name if owner else "Agent")
+        new_name = base_name[:50] if requested else self._unique_agent_name(base_name)
+
+        try:
+            new_agent = self._clone_config_into_new_agent(
+                template,
+                name=new_name,
+                agent_type=agent_type,
+                description=description,
+                is_active=True,
+                user_id=user_id,
+            )
+            self.audit.log(
+                AgentAuditAction.CREATED,
+                agent_id=new_agent.id,
+                after=self._snapshot(new_agent, self._AGENT_ROOT_FIELDS),
+                extra={"source_config_id": str(template.id), "from_template": True},
+            )
+            self.db.commit()
+        except IntegrityError as e:
+            self.db.rollback()
+            detail = _agent_unique_constraint_detail(e)
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from e
+        except HTTPException:
+            self.db.rollback()
+            raise
+        except Exception:
+            self.db.rollback()
+            raise
+
+        return new_agent
+
     def update_agent(self, agent_id: str, data: Dict[str, Any], user_id: Optional[UUID]) -> Agent:
         """Update an existing agent in place. Only provided fields are changed.
 
@@ -785,7 +1061,13 @@ class AgentService(BaseService):
         agent = self.get_agent(agent_id)
         rows = (
             self.query(AgentConfig)
-            .filter(AgentConfig.agent_id == agent.id, AgentConfig.deleted_at.is_(None))
+            .filter(
+                AgentConfig.agent_id == agent.id,
+                AgentConfig.deleted_at.is_(None),
+                # Template configs are reusable snapshots, not servable versions —
+                # keep them out of the version history.
+                AgentConfig.is_template.is_(False),
+            )
             .order_by(AgentConfig.version.desc())
             .all()
         )
@@ -962,6 +1244,11 @@ class AgentService(BaseService):
         """
         agent = self.get_agent(agent_id)
         cfg = self.get_version(agent_id, config_id)
+        if cfg.is_template:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A template config cannot be promoted to live.",
+            )
         if agent.published_config_id == cfg.id:
             return agent
         try:
@@ -1040,6 +1327,8 @@ class AgentService(BaseService):
             "id": str(config.id),
             "version": config.version,
             "is_live": is_live,
+            "is_template": bool(getattr(config, "is_template", False)),
+            "name": getattr(config, "name", None),
             "created_at": config.created_at.isoformat() if config.created_at else None,
             "updated_at": config.updated_at.isoformat() if config.updated_at else None,
             "published_at": config.published_at.isoformat() if config.published_at else None,
@@ -1754,13 +2043,20 @@ class AgentService(BaseService):
         *,
         source_config_id: UUID,
         target_config_id: UUID,
+        source_agent_id: Optional[UUID] = None,
     ) -> None:
         """Duplicate tool / MCP / KB rows from one config to another.
 
         Each row keeps its foreign-id (tool_id / mcp_server_id /
         knowledge_base_id) but is rewritten under ``target_config_id`` so the
         per-config unique constraint stays valid.
+
+        ``source_agent_id`` defaults to ``agent.id`` (same-agent versioning). Pass
+        it explicitly to clone across agents — e.g. cloning a whole agent, where
+        the source rows belong to a different agent but the copies are written
+        under the target ``agent``.
         """
+        src_agent_id = source_agent_id or agent.id
         base = {
             "agent_id": agent.id,
             "agent_config_id": target_config_id,
@@ -1770,7 +2066,7 @@ class AgentService(BaseService):
         for row in (
             self.query(AgentTool)
             .filter(
-                AgentTool.agent_id == agent.id,
+                AgentTool.agent_id == src_agent_id,
                 AgentTool.organization_id == self.org_id,
                 AgentTool.agent_config_id == source_config_id,
             )
@@ -1785,7 +2081,7 @@ class AgentService(BaseService):
         for row in (
             self.query(AgentMcpServer)
             .filter(
-                AgentMcpServer.agent_id == agent.id,
+                AgentMcpServer.agent_id == src_agent_id,
                 AgentMcpServer.organization_id == self.org_id,
                 AgentMcpServer.agent_config_id == source_config_id,
             )
@@ -1802,7 +2098,7 @@ class AgentService(BaseService):
         for row in (
             self.query(AgentKnowledgeBase)
             .filter(
-                AgentKnowledgeBase.agent_id == agent.id,
+                AgentKnowledgeBase.agent_id == src_agent_id,
                 AgentKnowledgeBase.organization_id == self.org_id,
                 AgentKnowledgeBase.agent_config_id == source_config_id,
             )

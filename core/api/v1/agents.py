@@ -164,6 +164,19 @@ class SwitchActiveVersionRequest(BaseModel):
     config_id: str
 
 
+class CloneAgentRequest(BaseModel):
+    """Body for ``POST /agent/clone_agent``. ``name`` is optional — when omitted
+    the clone is auto-named ``"<source> (copy)"``."""
+    name: Optional[str] = None
+
+
+class CreateFromTemplateRequest(BaseModel):
+    """Body for ``POST /agent/create_from_template``. ``name`` is optional — when
+    omitted the new agent takes the template's name."""
+    source_config_id: str
+    name: Optional[str] = None
+
+
 class GeneratePromptRequest(BaseModel):
     agent_name: Optional[str] = None
     agent_description: Optional[str] = None
@@ -368,6 +381,39 @@ def delete_agent(
 ):
     svc = _get_service(claims, db)
     return svc.delete_agent(agent_id)
+
+
+@router.post("/clone_agent", status_code=status.HTTP_201_CREATED)
+def clone_agent(
+    agent_id: str = Query(..., description="The agent ID to clone"),
+    body: Optional[CloneAgentRequest] = None,
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    svc = _get_service(claims, db)
+    user_id = UUID(claims.user_id) if claims.user_id else None
+    agent = svc.clone_agent(agent_id, user_id, name=body.name if body else None)
+    return svc.agent_response(agent)
+
+
+@router.get("/list_templates")
+def list_agent_templates(
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    return _get_service(claims, db).list_templates()
+
+
+@router.post("/create_from_template", status_code=status.HTTP_201_CREATED)
+def create_from_template(
+    body: CreateFromTemplateRequest,
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    svc = _get_service(claims, db)
+    user_id = UUID(claims.user_id) if claims.user_id else None
+    agent = svc.create_from_template(body.source_config_id, user_id, name=body.name)
+    return svc.agent_response(agent)
 
 
 # ---------------------------------------------------------------------------

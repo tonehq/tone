@@ -22,6 +22,11 @@ class AgentConfig(OrgScopedModel):
         nullable=True,
     )
     is_default = Column(Boolean, nullable=False, default=False)
+    # Marks this config as a reusable template surfaced in the "create from
+    # template" picker. ``name`` is the template's display label (nullable for
+    # ordinary, non-template config versions).
+    is_template = Column(Boolean, nullable=False, server_default="false")
+    name = Column(String(200), nullable=True)
     published_at = Column(DateTime(timezone=True), nullable=True)
     first_message = Column(String(1000), nullable=True)
     end_call_message = Column(String(1000), nullable=True)

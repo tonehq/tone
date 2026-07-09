@@ -190,6 +190,16 @@ export interface AgentDropdownItem {
   name: string;
 }
 
+/** GET /agent/list_templates — an agent config flagged `is_template=true`,
+ * offered as a starting point in the Create Agent dialog. */
+export interface AgentTemplateSummary {
+  source_config_id: string;
+  name: string;
+  agent_name: string;
+  agent_type: AgentDirection;
+  mode: 'prompt' | 'workflow';
+}
+
 /** GET /tool/get_agents_by_tool and /mcp-server/get_agents_by_mcp_server —
  * agents whose published version carries the entity. */
 export interface AttachedAgentRef {

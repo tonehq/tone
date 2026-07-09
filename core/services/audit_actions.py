@@ -19,6 +19,7 @@ class AgentAuditAction:
     CREATED: Final[str] = "agent.created"
     UPDATED: Final[str] = "agent.updated"
     DELETED: Final[str] = "agent.deleted"
+    DUPLICATED: Final[str] = "agent.duplicated"
 
     # Config content (prompt, model/voice/stt settings, etc.)
     CONFIG_UPDATED: Final[str] = "agent.config.updated"

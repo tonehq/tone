@@ -2,6 +2,7 @@ import axiosInstance from '@/utils/axios';
 import type {
   AgentDetail,
   AgentDropdownItem,
+  AgentTemplateSummary,
   AgentVersionSummary,
   CreateAgentPayload,
   ListAgentsParams,
@@ -54,6 +55,42 @@ export const updateAgent = async (
 
 export const deleteAgent = async (agentId: string): Promise<void> => {
   await axiosInstance.delete('/agent/delete_agent', { params: { agent_id: agentId } });
+};
+
+/** Deep-clone an entire agent into a new, independent one. The clone carries a
+ *  copy of the source's live config plus its tool / MCP / knowledge-base
+ *  attachments and workflow graph; phone numbers and web channels are not
+ *  copied. `name` sets the new agent's name; when omitted it is auto-named
+ *  "<name> (copy)" server-side. */
+export const cloneAgent = async (agentId: string, name?: string): Promise<AgentDetail> => {
+  const trimmed = name?.trim();
+  const res = await axiosInstance.post<AgentDetail>(
+    '/agent/clone_agent',
+    trimmed ? { name: trimmed } : {},
+    { params: { agent_id: agentId } },
+  );
+  return res.data;
+};
+
+/** List agent configs flagged as templates (is_template=true) for the Create
+ *  Agent picker. */
+export const listAgentTemplates = async (): Promise<AgentTemplateSummary[]> => {
+  const res = await axiosInstance.get<AgentTemplateSummary[]>('/agent/list_templates');
+  return Array.isArray(res.data) ? res.data : [];
+};
+
+/** Create a new agent by deep-copying a template config. `name` sets the new
+ *  agent's name; when omitted it takes the template's name. */
+export const createAgentFromTemplate = async (
+  sourceConfigId: string,
+  name?: string,
+): Promise<AgentDetail> => {
+  const trimmed = name?.trim();
+  const res = await axiosInstance.post<AgentDetail>('/agent/create_from_template', {
+    source_config_id: sourceConfigId,
+    ...(trimmed ? { name: trimmed } : {}),
+  });
+  return res.data;
 };
 
 // ─── versioning ────────────────────────────────────────────────────────────

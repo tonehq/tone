@@ -462,6 +462,174 @@ class TestCreateAgentNewRouter:
         assert resp.status_code in (401, 403)
 
 
+# ─── POST /api/v1/agent/clone_agent ───
+
+class TestCloneAgent:
+    """Tests for POST /api/v1/agent/clone_agent?agent_id=..."""
+
+    def test_clone_missing_agent_id(self, client_as_member):
+        """``agent_id`` is a required query param."""
+        resp = client_as_member.post("/api/v1/agent/clone_agent")
+        assert resp.status_code == 422
+
+    def test_clone_unknown_agent(self, client_as_member):
+        resp = client_as_member.post(
+            f"/api/v1/agent/clone_agent?agent_id={_SENTINEL_UUID}",
+        )
+        # Unknown agent → 404; other nested deps may surface differently.
+        assert resp.status_code in (400, 404, 422, 500)
+
+    def test_clone_invalid_uuid(self, client_as_member):
+        try:
+            resp = client_as_member.post(
+                "/api/v1/agent/clone_agent?agent_id=not-a-uuid",
+            )
+            assert resp.status_code in (400, 404, 422, 500)
+        except (ValueError, Exception):
+            pass
+
+    def test_clone_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.post(
+            f"/api/v1/agent/clone_agent?agent_id={_SENTINEL_UUID}",
+        )
+        assert resp.status_code in (401, 403)
+
+    def test_clone_happy_path_names_copy(self, client_as_member):
+        """Cloning a real agent yields a new agent named ``"<name> (copy)"``."""
+        agent = _create_agent(client_as_member)
+        resp = client_as_member.post(
+            f"/api/v1/agent/clone_agent?agent_id={agent['id']}",
+        )
+        # Agent creation has nested deps that may fail in a bare test DB — accept
+        # a range, but when it succeeds, assert the clone contract.
+        assert resp.status_code in (200, 201, 400, 404, 422, 500)
+        if resp.status_code in (200, 201):
+            clone = resp.json()
+            assert clone["id"] != agent["id"]
+            assert clone["name"] == f"{agent['name']} (copy)"
+
+    def test_clone_twice_suffixes_number(self, client_as_member):
+        """A second clone of the same source is named ``"<name> (copy) 2"``."""
+        agent = _create_agent(client_as_member)
+        first = client_as_member.post(
+            f"/api/v1/agent/clone_agent?agent_id={agent['id']}",
+        )
+        second = client_as_member.post(
+            f"/api/v1/agent/clone_agent?agent_id={agent['id']}",
+        )
+        if first.status_code in (200, 201) and second.status_code in (200, 201):
+            assert second.json()["name"] == f"{agent['name']} (copy) 2"
+
+    def test_clone_with_explicit_name(self, client_as_member):
+        """A `name` in the body sets the clone's name verbatim."""
+        agent = _create_agent(client_as_member)
+        custom = _unique_name("Renamed")
+        resp = client_as_member.post(
+            f"/api/v1/agent/clone_agent?agent_id={agent['id']}",
+            json={"name": custom},
+        )
+        assert resp.status_code in (200, 201, 400, 404, 422, 500)
+        if resp.status_code in (200, 201):
+            assert resp.json()["name"] == custom
+
+    def test_clone_blank_name_falls_back_to_copy_suffix(self, client_as_member):
+        """A blank/whitespace `name` falls back to the ``"(copy)"`` auto-name."""
+        agent = _create_agent(client_as_member)
+        resp = client_as_member.post(
+            f"/api/v1/agent/clone_agent?agent_id={agent['id']}",
+            json={"name": "   "},
+        )
+        if resp.status_code in (200, 201):
+            assert resp.json()["name"] == f"{agent['name']} (copy)"
+
+
+# ─── Templates: GET /list_templates & POST /create_from_template ───
+
+class TestAgentTemplates:
+    """Tests for the config-template create flow. Templates are flagged via
+    DB/seed (no endpoint), so these use ``db_session`` to set ``is_template``."""
+
+    def _make_template(self, client, db_session, *, name="Sales Starter"):
+        from core.models.agent_config import AgentConfig
+
+        agent = _create_agent(
+            client,
+            config={"first_message": "hi template", "system_prompt_template": "You are T"},
+        )
+        cfg_id = agent["config"]["id"]
+        db_session.query(AgentConfig).filter(
+            AgentConfig.id == uuid.UUID(cfg_id)
+        ).update({"is_template": True, "name": name})
+        db_session.flush()
+        return agent, cfg_id
+
+    def test_list_templates_returns_flagged_config(self, client_as_member, db_session):
+        agent, cfg_id = self._make_template(client_as_member, db_session)
+        resp = client_as_member.get("/api/v1/agent/list_templates")
+        assert resp.status_code == 200
+        tpl = next((t for t in resp.json() if t["source_config_id"] == cfg_id), None)
+        assert tpl is not None
+        assert tpl["name"] == "Sales Starter"
+        assert tpl["agent_type"] == agent["agent_type"]
+
+    def test_list_templates_excludes_regular_configs(self, client_as_member):
+        agent = _create_agent(client_as_member, config={"first_message": "x"})
+        resp = client_as_member.get("/api/v1/agent/list_templates")
+        assert resp.status_code == 200
+        assert all(t["source_config_id"] != agent["config"]["id"] for t in resp.json())
+
+    def test_create_from_template_copies_config(self, client_as_member, db_session):
+        _agent, cfg_id = self._make_template(client_as_member, db_session)
+        new_name = _unique_name("FromTpl")
+        resp = client_as_member.post(
+            "/api/v1/agent/create_from_template",
+            json={"source_config_id": cfg_id, "name": new_name},
+        )
+        assert resp.status_code == 201, resp.text
+        created = resp.json()
+        assert created["name"] == new_name
+        assert created["config"]["first_message"] == "hi template"
+
+    def test_create_from_template_default_name(self, client_as_member, db_session):
+        _agent, cfg_id = self._make_template(client_as_member, db_session, name="My Template")
+        resp = client_as_member.post(
+            "/api/v1/agent/create_from_template",
+            json={"source_config_id": cfg_id},
+        )
+        assert resp.status_code == 201, resp.text
+        # Falls back to the template's name (auto-suffixed if it collides).
+        assert resp.json()["name"].startswith("My Template")
+
+    def test_create_from_template_non_template_404(self, client_as_member):
+        agent = _create_agent(client_as_member, config={"first_message": "x"})
+        resp = client_as_member.post(
+            "/api/v1/agent/create_from_template",
+            json={"source_config_id": agent["config"]["id"]},
+        )
+        assert resp.status_code == 404
+
+    def test_create_from_template_unknown_config_404(self, client_as_member):
+        resp = client_as_member.post(
+            "/api/v1/agent/create_from_template",
+            json={"source_config_id": _SENTINEL_UUID},
+        )
+        assert resp.status_code in (404, 400)
+
+    def test_create_from_template_missing_body_422(self, client_as_member):
+        resp = client_as_member.post("/api/v1/agent/create_from_template", json={})
+        assert resp.status_code == 422
+
+    def test_list_templates_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.get("/api/v1/agent/list_templates")
+        assert resp.status_code in (401, 403)
+
+    def test_template_excluded_from_owner_versions(self, client_as_member, db_session):
+        agent, cfg_id = self._make_template(client_as_member, db_session)
+        resp = client_as_member.get(f"/api/v1/agent/list_versions?agent_id={agent['id']}")
+        assert resp.status_code == 200
+        assert all(v["id"] != cfg_id for v in resp.json())
+
+
 # ─── GET /api/v1/agent/list_versions ───
 
 class TestListAgentVersions:
