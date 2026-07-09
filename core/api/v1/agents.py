@@ -177,6 +177,12 @@ class CreateFromTemplateRequest(BaseModel):
     name: Optional[str] = None
 
 
+class SaveAsTemplateRequest(BaseModel):
+    """Body for ``POST /agent/save_as_template``. ``name`` is the template's
+    display label shown in the create-from-template picker."""
+    name: str
+
+
 class GeneratePromptRequest(BaseModel):
     agent_name: Optional[str] = None
     agent_description: Optional[str] = None
@@ -414,6 +420,19 @@ def create_from_template(
     user_id = UUID(claims.user_id) if claims.user_id else None
     agent = svc.create_from_template(body.source_config_id, user_id, name=body.name)
     return svc.agent_response(agent)
+
+
+@router.post("/save_as_template", status_code=status.HTTP_201_CREATED)
+def save_as_template(
+    body: SaveAsTemplateRequest,
+    agent_id: str = Query(..., description="The agent whose live config to snapshot as a template"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    svc = _get_service(claims, db)
+    user_id = UUID(claims.user_id) if claims.user_id else None
+    config = svc.save_as_template(agent_id, user_id, name=body.name)
+    return svc.version_response(config, is_live=False)
 
 
 # ---------------------------------------------------------------------------

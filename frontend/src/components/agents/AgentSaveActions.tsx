@@ -1,14 +1,15 @@
 'use client';
 
-import { GitBranchPlus, Loader2, Radio, Save } from 'lucide-react';
+import { GitBranchPlus, LayoutTemplate, Loader2, Radio, Save } from 'lucide-react';
 
 import { CustomButton, CustomTooltip } from '@/components/shared';
 
-export type AgentSaveAction = 'save' | 'publish' | 'create-version';
+export type AgentSaveAction = 'save' | 'publish' | 'create-version' | 'save-as-template';
 
 interface AgentSaveActionsProps {
   /** `create` mode shows a single "Create agent" button. `edit` mode shows
-   *  Save + Create version + Publish as three distinct top-level buttons. */
+   *  Save + Create version + Save as template + Publish as distinct top-level
+   *  buttons. */
   mode: 'create' | 'edit';
   /** True when at least one draft (non-published) version exists. Drives
    *  whether the Publish toolbar button is enabled — clicking opens a picker
@@ -29,10 +30,11 @@ const SPINNER = <Loader2 className={`${ICON_CLASS} animate-spin`} />;
  * Primary action area for the agent editor toolbar.
  *
  * - **create** mode: one "Create agent" button.
- * - **edit** mode: three buttons — **Save** (mutates the loaded version in
+ * - **edit** mode: four buttons — **Save** (mutates the loaded version in
  *   place), **Create version** (opens a dialog to copy from or start fresh),
- *   and **Publish** (opens the version picker modal). Publish is disabled
- *   when there are no drafts to promote.
+ *   **Save as template** (opens a dialog to snapshot the live config as a
+ *   reusable template), and **Publish** (opens the version picker modal).
+ *   Publish is disabled when there are no drafts to promote.
  */
 export default function AgentSaveActions({
   mode,
@@ -86,6 +88,16 @@ export default function AgentSaveActions({
         className="h-8"
       >
         Create version
+      </CustomButton>
+      <CustomButton
+        type="default"
+        size="sm"
+        icon={<LayoutTemplate className={ICON_CLASS} />}
+        onClick={() => onAction('save-as-template')}
+        disabled={busy}
+        className="h-8"
+      >
+        Save as template
       </CustomButton>
       <PublishButton
         publishing={publishing}
