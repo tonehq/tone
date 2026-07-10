@@ -188,7 +188,17 @@ async def _ws_stream_loop(ws, model, client):
     chunk = bytearray()
     decodes = 0
     first = True
-    STEP = TARGET_SR * 2
+    # Decode granularity. The cache-aware session is fed every STEP bytes; at
+    # end-of-turn only the un-fed tail (< STEP) is processed in the final feed,
+    # so STEP directly bounds the end-of-turn STT latency (stt_ttfb = time from
+    # the caller stopping to the final transcript). At the old hardcoded 1s
+    # (TARGET_SR*2) a full second of audio had to be decoded after the caller
+    # stopped — the ~490ms+ we measured. Smaller STEP = shorter tail = lower
+    # latency, at the cost of slightly more (cheap, incremental) decodes.
+    # Env-tunable so it can be dialed without a redeploy; 320ms is a good
+    # latency/accuracy balance for this streaming model.
+    STEP_MS = int(os.environ.get("STT_STEP_MS", "320"))
+    STEP = max(1, int(TARGET_SR * 2 * STEP_MS / 1000))
     SILENCE_TICKS = int(os.environ.get("STT_SILENCE_TICKS", "2"))
     last_text = ""
     stable = 0
