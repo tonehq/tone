@@ -36,6 +36,18 @@ spec:
           env:
             - name: STT_MODEL
               value: "nvidia/nemotron-speech-streaming-en-0.6b"
+            # Decode granularity (ms). Bounds end-of-turn STT latency: only the
+            # un-fed tail (< this) is decoded after the caller stops. Lower =
+            # faster final transcript, more (cheap incremental) decodes. Was an
+            # effective 1000ms; 320 cuts the end-of-turn tail ~3x. Tune here.
+            - name: STT_STEP_MS
+              value: "320"
+            # End-of-turn "stable" fallback fires after STT_SILENCE_TICKS unchanged
+            # decodes, i.e. after STT_STEP_MS * ticks of silence. Keep that window
+            # ~2s (matches the old 1000ms*2) so a brief mid-sentence pause doesn't
+            # split an utterance into two: 6 * 320ms ≈ 1920ms.
+            - name: STT_SILENCE_TICKS
+              value: "6"
             - name: HF_HOME
               value: /cache/hf
             - name: NEMO_CACHE_DIR
