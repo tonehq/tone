@@ -10,6 +10,12 @@ metadata:
     app: staging-stt-nemotron
 spec:
   replicas: 1
+  # Startup is slow: the container pip-installs deps then downloads/loads the
+  # NeMo model (the startupProbe allows up to 25 min). The default rollout
+  # progress deadline is only 600s (10 min), so a healthy-but-slow start was
+  # marked "exceeded its progress deadline" and failed the deploy. Give the
+  # rollout longer than the startupProbe budget so a normal cold start passes.
+  progressDeadlineSeconds: 1800
   strategy:
     type: Recreate
   selector:
