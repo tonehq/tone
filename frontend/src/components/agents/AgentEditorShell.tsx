@@ -24,6 +24,7 @@ import CreateVersionModal, {
   type CreateVersionSelection,
 } from '@/components/agents/CreateVersionModal';
 import PublishVersionConfirmModal from '@/components/agents/PublishVersionConfirmModal';
+import SaveAsTemplateModal from '@/components/agents/SaveAsTemplateModal';
 import { AgentFormNavProvider } from '@/components/agents/agent-form/AgentFormNav';
 import { buildAgentNav } from '@/components/agents/agent-form/sectionNav';
 import { AccountMenu, AccountMenuSettingsLink } from '@/components/layout/AccountMenu';
@@ -100,6 +101,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   const [deleting, setDeleting] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [createVersionOpen, setCreateVersionOpen] = useState(false);
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false);
   const [detail, setDetail] = useState<AgentDetail | null>(null);
   /** Which version is loaded in the form. Null until the agent has loaded. */
   const [viewedConfigId, setViewedConfigId] = useState<string | null>(null);
@@ -544,6 +546,14 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   const agentName = methods.watch('name') || (isEditMode ? 'Untitled agent' : 'New agent');
   const agentInitial = (agentName.trim().charAt(0) || 'A').toUpperCase();
 
+  // Stable target for the save-as-template dialog — a fresh object literal on
+  // every render would retrigger the modal's name-seeding effect and wipe the
+  // user's input. Null while the dialog is closed.
+  const saveTemplateTarget = useMemo(
+    () => (isEditMode && agentId && saveTemplateOpen ? { id: agentId, name: agentName } : null),
+    [isEditMode, agentId, saveTemplateOpen, agentName],
+  );
+
   const versions = detail?.versions ?? [];
   const publishedVersion = useMemo(() => versions.find((v) => v.is_live) ?? null, [versions]);
   /** What the form is rendering right now. Driven by the backend response
@@ -589,6 +599,13 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
         // any unsaved edits on the currently-loaded version would be lost.
         // Same guard as Publish.
         guardedAction(() => setCreateVersionOpen(true));
+        return;
+      }
+      if (action === 'save-as-template') {
+        // Snapshots the live config server-side (like clone) — it neither
+        // reads nor reloads the form, so no discard guard is needed. Just open
+        // the naming dialog.
+        setSaveTemplateOpen(true);
         return;
       }
       void handleSave();
@@ -821,6 +838,11 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
               versions={versions}
               publishedVersionId={publishedVersion?.id ?? null}
               loading={creatingVersion}
+            />
+
+            <SaveAsTemplateModal
+              agent={saveTemplateTarget}
+              onClose={() => setSaveTemplateOpen(false)}
             />
           </div>
         </AgentEditorProvider>

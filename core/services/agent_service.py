@@ -1008,6 +1008,78 @@ class AgentService(BaseService):
 
         return new_agent
 
+    def save_as_template(
+        self, agent_id: str, user_id: Optional[UUID], name: str
+    ) -> AgentConfig:
+        """Snapshot an agent's live config as a reusable template.
+
+        A template is a deep, independent copy of the agent's current live
+        config — its fields, workflow graph and tool / MCP / knowledge-base
+        attachments — flagged ``is_template=True`` and carrying a display
+        ``name``. It is stored under the same agent but excluded from the
+        version history (see ``list_versions``) and can never be promoted to
+        live; it is only consumable via ``create_from_template``, which
+        deep-copies it into a brand-new agent.
+
+        This mirrors the "save as new version" clone path (fields + workflow +
+        attachments are duplicated by ``_create_new_version_config``) but marks
+        the row a template instead of promoting or drafting a servable version.
+        """
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="user_id is required")
+
+        template_name = (name or "").strip()
+        if not template_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Template name is required",
+            )
+        # Fit the ``agent_configs.name`` column (String(200)).
+        template_name = template_name[:200]
+
+        agent = self.get_agent(agent_id)
+        live = self._resolve_current_config(agent)
+        if live is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Agent has no configuration to save as a template",
+            )
+
+        try:
+            template = self._create_new_version_config(
+                agent,
+                {},
+                user_id,
+                make_live=False,
+                source_config_id=live.id,
+                is_template=True,
+                template_name=template_name,
+            )
+            self.audit.log(
+                AgentAuditAction.TEMPLATE_CREATED,
+                agent_id=agent.id,
+                agent_config_id=template.id,
+                target_resource_type=AuditResourceType.AGENT_CONFIG,
+                target_resource_id=str(template.id),
+                extra={
+                    "template_name": template_name,
+                    "source_config_id": str(live.id),
+                },
+            )
+            self.db.commit()
+        except IntegrityError as e:
+            self.db.rollback()
+            detail = _agent_unique_constraint_detail(e)
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail) from e
+        except HTTPException:
+            self.db.rollback()
+            raise
+        except Exception:
+            self.db.rollback()
+            raise
+
+        return template
+
     def update_agent(self, agent_id: str, data: Dict[str, Any], user_id: Optional[UUID]) -> Agent:
         """Update an existing agent in place. Only provided fields are changed.
 
@@ -1835,7 +1907,15 @@ class AgentService(BaseService):
                 return cfg
         return (
             self.query(AgentConfig)
-            .filter(AgentConfig.agent_id == agent.id, AgentConfig.deleted_at.is_(None))
+            .filter(
+                AgentConfig.agent_id == agent.id,
+                AgentConfig.deleted_at.is_(None),
+                # Templates are reusable snapshots, never servable versions — they
+                # carry the highest version number when just saved, so without
+                # this filter the latest-version fallback would resolve a template
+                # as the agent's live config.
+                AgentConfig.is_template.is_(False),
+            )
             .order_by(AgentConfig.version.desc())
             .first()
         )
@@ -1930,6 +2010,8 @@ class AgentService(BaseService):
         make_live: bool = False,
         source_config_id: Optional[UUID] = None,
         from_scratch: bool = False,
+        is_template: bool = False,
+        template_name: Optional[str] = None,
     ) -> AgentConfig:
         """Persist a new version row (version N+1).
 
@@ -1970,6 +2052,11 @@ class AgentService(BaseService):
             created_by_user_id=user_id,
             organization_id=self.org_id,
             published_at=now,
+            # Template rows are reusable snapshots flagged out of the version
+            # history and never promoted to live; a normal version leaves these
+            # at their column defaults (is_template=False, name=None).
+            is_template=is_template,
+            name=template_name,
         )
         # Seed from the source so fields the request didn't touch are preserved.
         if source is not None:
@@ -2691,10 +2778,16 @@ class AgentService(BaseService):
             for ac, ch in channel_rows
         ]
 
-        # Version history (single query — driving the editor's version selector)
+        # Version history (single query — driving the editor's version selector).
+        # Templates are reusable snapshots, not servable versions — keep them out
+        # of the selector, matching ``list_versions``.
         version_rows = (
             self.query(AgentConfig)
-            .filter(AgentConfig.agent_id == agent.id, AgentConfig.deleted_at.is_(None))
+            .filter(
+                AgentConfig.agent_id == agent.id,
+                AgentConfig.deleted_at.is_(None),
+                AgentConfig.is_template.is_(False),
+            )
             .order_by(AgentConfig.version.desc())
             .all()
         )

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-llm-gemma-service
+  namespace: staging
+  labels:
+    app: staging-llm-gemma
+spec:
+  type: ClusterIP
+  selector:
+    app: staging-llm-gemma
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

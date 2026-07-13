@@ -1,0 +1,338 @@
+"""Unit tests for core.services.rag.pipeline.RAGPipeline (isolated, no DB/network)."""
+
+import io
+
+import pytest
+
+from core.services.rag.pipeline import RAGPipeline
+from core.services.rag.chunkers import Chunker
+from core.services.rag.embedders import Embedder
+from core.services.rag.readers import DocumentReader
+from core.services.rag.types import Chunk, Document, SearchResult
+from core.services.rag.vector_stores.base import VectorStore
+from core.services.rag.vector_stores.memory_store import InMemoryVectorStore
+
+
+class RecordingEmbedder(Embedder):
+    dimensions = 3
+
+    def __init__(self, per_text=None):
+        self._per_text = per_text
+        self.embed_texts_calls = []
+        self.embed_query_calls = []
+
+    def embed_texts(self, texts):
+        self.embed_texts_calls.append(list(texts))
+        if self._per_text is not None:
+            return [self._per_text(t) for t in texts]
+        return [[float(len(t)), 0.0, 1.0] for t in texts]
+
+    def embed_query(self, query):
+        self.embed_query_calls.append(query)
+        return [float(len(query)), 0.0, 1.0]
+
+
+class KeywordEmbedder(Embedder):
+    def __init__(self, vocab):
+        self.vocab = vocab
+        self.dimensions = len(vocab)
+
+    def embed_texts(self, texts):
+        out = []
+        for t in texts:
+            low = t.lower()
+            out.append([1.0 if w in low else 0.0 for w in self.vocab])
+        return out
+
+
+class FakeChunker(Chunker):
+    def __init__(self, chunks=None, per_call=None):
+        self._chunks = chunks
+        self._per_call = per_call
+        self.documents = []
+
+    def chunk(self, document):
+        self.documents.append(document)
+        if self._chunks is not None:
+            return [Chunk(index=c.index, text=c.text) for c in self._chunks]
+        n = self._per_call if self._per_call is not None else 1
+        return [Chunk(index=i, text=f"c{i}") for i in range(n)]
+
+
+class SingleChunkPassthroughChunker(Chunker):
+    def chunk(self, document):
+        return [Chunk(index=0, text=document.text)]
+
+
+class FakeReader(DocumentReader):
+    def __init__(self, document=None, per_range=None):
+        self._document = document
+        self._per_range = per_range
+        self.read_calls = []
+        self.read_path_calls = []
+
+    def supports(self, content_type):
+        return True
+
+    def read(self, file_bytes, content_type, page_range=None):
+        self.read_calls.append((content_type, page_range))
+        if self._per_range is not None:
+            return self._per_range(page_range)
+        return self._document
+
+    def read_path(self, file_path, content_type, page_range=None):
+        self.read_path_calls.append((file_path, content_type, page_range))
+        return self._document
+
+
+class RecordingStore(VectorStore):
+    def __init__(self, results=None):
+        self.records = []
+        self.query_calls = []
+        self._results = results or []
+
+    def add(self, records):
+        self.records.extend(records)
+        return len(records)
+
+    def query(self, embedding, top_k=3, *, filters=None):
+        self.query_calls.append({"embedding": embedding, "top_k": top_k, "filters": filters})
+        return list(self._results)
+
+    def delete(self, *, filters):
+        return 0
+
+    def count(self, *, filters=None):
+        return len(self.records)
+
+
+def build_pipeline(*, embedder=None, store=None, reader=None, chunker=None):
+    return RAGPipeline(
+        embedder=embedder or RecordingEmbedder(),
+        store=store or InMemoryVectorStore(),
+        reader=reader,
+        chunker=chunker or FakeChunker(per_call=1),
+    )
+
+
+def _make_pdf(pages):
+    from PyPDF2 import PdfWriter
+
+    writer = PdfWriter()
+    for _ in range(pages):
+        writer.add_blank_page(width=72, height=72)
+    buf = io.BytesIO()
+    writer.write(buf)
+    return buf.getvalue()
+
+
+def test_ingest_text_returns_count_and_calls_collaborators():
+    embedder = RecordingEmbedder()
+    store = InMemoryVectorStore()
+    chunker = FakeChunker(chunks=[Chunk(0, "alpha"), Chunk(1, "beta")])
+    pipe = build_pipeline(embedder=embedder, store=store, chunker=chunker)
+
+    result = pipe.ingest_text("alpha beta")
+
+    assert result == 2
+    assert store.count() == 2
+    assert embedder.embed_texts_calls == [["alpha", "beta"]]
+    assert len(chunker.documents) == 1
+
+
+def test_ingest_text_empty_chunks_skips_embed_and_store():
+    embedder = RecordingEmbedder()
+    store = InMemoryVectorStore()
+    pipe = build_pipeline(embedder=embedder, store=store, chunker=FakeChunker(chunks=[]))
+
+    result = pipe.ingest_text("anything")
+
+    assert result == 0
+    assert embedder.embed_texts_calls == []
+    assert store.count() == 0
+
+
+def test_ingest_text_merges_metadata_and_sets_chunk_index():
+    store = InMemoryVectorStore()
+    chunker = FakeChunker(chunks=[Chunk(0, "one"), Chunk(1, "two")])
+    pipe = build_pipeline(store=store, chunker=chunker)
+
+    pipe.ingest_text("body", metadata={"agent_id": 7, "source": "kb"})
+
+    metas = sorted((r.metadata for r in store._records), key=lambda m: m["chunk_index"])
+    assert metas[0] == {"agent_id": 7, "source": "kb", "chunk_index": 0}
+    assert metas[1] == {"agent_id": 7, "source": "kb", "chunk_index": 1}
+
+
+def test_ingest_document_aligns_text_with_embedding():
+    store = RecordingStore()
+    chunker = FakeChunker(chunks=[Chunk(0, "aa"), Chunk(1, "bbbb")])
+    embedder = RecordingEmbedder(per_text=lambda t: [float(len(t))])
+    pipe = build_pipeline(embedder=embedder, store=store, chunker=chunker)
+
+    pipe.ingest_text("x")
+
+    by_text = {r.text: r.embedding for r in store.records}
+    assert by_text == {"aa": [2.0], "bbbb": [4.0]}
+
+
+def test_ingest_file_reads_then_ingests():
+    reader = FakeReader(document=Document(text="hello world"))
+    pipe = build_pipeline(reader=reader, chunker=FakeChunker(per_call=1))
+
+    result = pipe.ingest_file(b"raw", "text/plain")
+
+    assert result == 1
+    assert reader.read_calls == [("text/plain", None)]
+
+
+def test_ingest_file_raises_when_no_text_and_no_native():
+    reader = FakeReader(document=Document(text="   ", native=None))
+    pipe = build_pipeline(reader=reader)
+
+    with pytest.raises(ValueError):
+        pipe.ingest_file(b"raw", "application/pdf")
+
+
+def test_ingest_file_allows_empty_text_when_native_present():
+    reader = FakeReader(document=Document(text="", native=object()))
+    pipe = build_pipeline(reader=reader, chunker=FakeChunker(per_call=1))
+
+    assert pipe.ingest_file(b"raw", "application/pdf") == 1
+
+
+def test_streaming_batches_and_reports_each_batch():
+    embedder = RecordingEmbedder()
+    store = InMemoryVectorStore()
+    chunker = FakeChunker(per_call=5)
+    pipe = build_pipeline(embedder=embedder, store=store, chunker=chunker)
+    seen = []
+
+    total = pipe.ingest_text_streaming(
+        "body", batch_size=2, on_batch=lambda idx, size, elapsed: seen.append((idx, size))
+    )
+
+    assert total == 5
+    assert [len(c) for c in embedder.embed_texts_calls] == [2, 2, 1]
+    assert seen == [(0, 2), (1, 2), (2, 1)]
+    assert store.count() == 5
+
+
+def test_streaming_single_batch_when_under_batch_size():
+    embedder = RecordingEmbedder()
+    pipe = build_pipeline(embedder=embedder, chunker=FakeChunker(per_call=3))
+    seen = []
+
+    total = pipe.ingest_text_streaming("body", batch_size=10, on_batch=lambda i, s, e: seen.append(s))
+
+    assert total == 3
+    assert len(embedder.embed_texts_calls) == 1
+    assert seen == [3]
+
+
+def test_streaming_zero_chunks_never_flushes():
+    embedder = RecordingEmbedder()
+    pipe = build_pipeline(embedder=embedder, chunker=FakeChunker(chunks=[]))
+    seen = []
+
+    total = pipe.ingest_text_streaming("body", batch_size=4, on_batch=lambda i, s, e: seen.append(s))
+
+    assert total == 0
+    assert embedder.embed_texts_calls == []
+    assert seen == []
+
+
+def test_streaming_preserves_chunk_index_from_chunker():
+    store = InMemoryVectorStore()
+    chunker = FakeChunker(chunks=[Chunk(3, "x"), Chunk(7, "y")])
+    pipe = build_pipeline(store=store, chunker=chunker)
+
+    pipe.ingest_text_streaming("body", batch_size=10)
+
+    assert sorted(r.metadata["chunk_index"] for r in store._records) == [3, 7]
+
+
+def test_ingest_file_streaming_raises_on_empty():
+    reader = FakeReader(document=Document(text="", native=None))
+    pipe = build_pipeline(reader=reader)
+
+    with pytest.raises(ValueError):
+        pipe.ingest_file_streaming(b"raw", "text/plain")
+
+
+def test_ingest_path_uses_read_path():
+    reader = FakeReader(document=Document(text="from disk"))
+    pipe = build_pipeline(reader=reader, chunker=FakeChunker(per_call=2))
+
+    result = pipe.ingest_path("/tmp/doc.txt", "text/plain")
+
+    assert result == 2
+    assert reader.read_path_calls == [("/tmp/doc.txt", "text/plain", None)]
+
+
+def test_paged_non_pdf_delegates_to_streaming():
+    reader = FakeReader(document=Document(text="plain body"))
+    pipe = build_pipeline(reader=reader, chunker=FakeChunker(per_call=1))
+
+    result = pipe.ingest_file_paged(b"raw", "text/plain")
+
+    assert result == 1
+    assert reader.read_calls == [("text/plain", None)]
+
+
+def test_paged_pdf_batches_pages_and_offsets_chunk_index():
+    pdf_bytes = _make_pdf(3)
+    store = InMemoryVectorStore()
+    reader = FakeReader(per_range=lambda pr: Document(text=f"page {pr}"))
+    chunker = FakeChunker(per_call=2)
+    pipe = build_pipeline(store=store, reader=reader, chunker=chunker)
+    batches = []
+
+    total = pipe.ingest_file_paged(
+        pdf_bytes, "application/pdf", page_batch=1,
+        on_batch=lambda bi, start, end, n, elapsed: batches.append((start, end, n)),
+    )
+
+    assert total == 6
+    assert [pr for _, pr in reader.read_calls] == [(1, 1), (2, 2), (3, 3)]
+    assert batches == [(1, 1, 2), (2, 2, 2), (3, 3, 2)]
+    assert sorted(r.metadata["chunk_index"] for r in store._records) == [0, 1, 2, 3, 4, 5]
+
+
+def test_retrieve_embeds_query_and_forwards_top_k_and_filters():
+    embedder = RecordingEmbedder()
+    store = RecordingStore(results=[SearchResult(text="hit", score=0.1)])
+    pipe = build_pipeline(embedder=embedder, store=store)
+
+    results = pipe.retrieve("who is the CEO?", top_k=5, filters={"agent_id": 1})
+
+    assert [r.text for r in results] == ["hit"]
+    assert embedder.embed_query_calls == ["who is the CEO?"]
+    assert store.query_calls[0]["top_k"] == 5
+    assert store.query_calls[0]["filters"] == {"agent_id": 1}
+
+
+def test_retrieve_ranks_most_similar_chunk_first():
+    embedder = KeywordEmbedder(["cat", "dog", "fish"])
+    store = InMemoryVectorStore()
+    pipe = build_pipeline(embedder=embedder, store=store, chunker=SingleChunkPassthroughChunker())
+    pipe.ingest_text("a cat sat on the mat")
+    pipe.ingest_text("a dog ran fast")
+    pipe.ingest_text("a fish swam away")
+
+    top = pipe.retrieve("tell me about the cat", top_k=1)
+
+    assert len(top) == 1
+    assert "cat" in top[0].text
+
+
+def test_retrieve_respects_metadata_filters():
+    embedder = KeywordEmbedder(["cat", "dog", "fish"])
+    store = InMemoryVectorStore()
+    pipe = build_pipeline(embedder=embedder, store=store, chunker=SingleChunkPassthroughChunker())
+    pipe.ingest_text("cat one", metadata={"agent_id": 1})
+    pipe.ingest_text("cat two", metadata={"agent_id": 2})
+
+    results = pipe.retrieve("cat", top_k=10, filters={"agent_id": 1})
+
+    assert [r.metadata["agent_id"] for r in results] == [1]

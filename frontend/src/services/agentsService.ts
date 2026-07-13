@@ -93,6 +93,22 @@ export const createAgentFromTemplate = async (
   return res.data;
 };
 
+/** Snapshot an agent's live config as a reusable template (is_template=true).
+ *  Deep-copies the config's fields, workflow graph and tool / MCP / knowledge-base
+ *  attachments; `name` is the template's required display label. Returns the
+ *  created template config summary. */
+export const saveAgentAsTemplate = async (
+  agentId: string,
+  name: string,
+): Promise<AgentVersionSummary> => {
+  const res = await axiosInstance.post<AgentVersionSummary>(
+    '/agent/save_as_template',
+    { name: name.trim() },
+    { params: { agent_id: agentId } },
+  );
+  return res.data;
+};
+
 // ─── versioning ────────────────────────────────────────────────────────────
 
 export const listAgentVersions = async (agentId: string): Promise<AgentVersionSummary[]> => {

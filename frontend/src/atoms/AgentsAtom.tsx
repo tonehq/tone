@@ -12,6 +12,7 @@ import {
   listAgentTemplates,
   listAgentVersions,
   listAgents,
+  saveAgentAsTemplate,
   switchActiveAgentVersion,
   updateAgent,
   updateAgentVersion,
@@ -127,6 +128,12 @@ export const createAgentFromTemplateAtom = atom(
   null,
   async (_get, _set, args: { sourceConfigId: string; name?: string }): Promise<AgentDetail> =>
     createAgentFromTemplate(args.sourceConfigId, args.name),
+);
+
+export const saveAgentAsTemplateAtom = atom(
+  null,
+  async (_get, _set, args: { agentId: string; name: string }): Promise<AgentVersionSummary> =>
+    saveAgentAsTemplate(args.agentId, args.name),
 );
 
 // ─── versioning ────────────────────────────────────────────────────────────
