@@ -22,21 +22,27 @@ spec:
         node.kubernetes.io/instance-type: vcg-a40-4c-20g-8vram
       containers:
         - name: gemma
-          image: vllm/vllm-openai:v0.6.6
+          image: vllm/vllm-openai:v0.8.5
           args:
             - --model
-            - google/gemma-2-2b-it
+            - RedHatAI/gemma-3-4b-it-quantized.w4a16
             - --served-model-name
+            - gemma-3-4b-it
             - gemma-2-2b-it
             - --dtype
             - bfloat16
             - --max-model-len
-            - "4096"
+            - "8192"
             - --max-num-seqs
-            - "16"
+            - "2"
             - --gpu-memory-utilization
-            - "0.85"
+            - "0.95"
             - --enforce-eager
+            - --enable-auto-tool-choice
+            - --tool-call-parser
+            - llama3_json
+            - --chat-template
+            - /config/gemma_chat_template.jinja
             - --host
             - 0.0.0.0
             - --port
@@ -60,6 +66,8 @@ spec:
               mountPath: /cache
             - name: dshm
               mountPath: /dev/shm
+            - name: chat-template
+              mountPath: /config
           startupProbe:
             httpGet:
               path: /health
@@ -85,3 +93,6 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 2Gi
+        - name: chat-template
+          configMap:
+            name: gemma-chat-template
