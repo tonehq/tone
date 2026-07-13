@@ -12613,6 +12613,100 @@
         }
       ],
       "status": "active"
+    },
+    {
+      "name": "cerebras",
+      "provider_type": "llm",
+      "display_name": "Cerebras",
+      "description": "Cerebras inference (OpenAI-compatible Chat Completions endpoint)",
+      "api_key_env": "CEREBRAS_API_KEY",
+      "models": [
+        {
+          "name": "gpt-oss-120b",
+          "base_url": "https://api.cerebras.ai/v1",
+          "meta_data": {
+            "model": "gpt-oss-120b",
+            "max_tokens": 32768
+          },
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.5
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 1.5"
+            },
+            {
+              "name": "top_p",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+            },
+            {
+              "name": "max_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 1,
+                "max": 131000
+              },
+              "required": 0,
+              "description": "Maximum number of tokens to generate. Min: 1"
+            }
+          ]
+        }
+      ],
+      "meta_data_schema": [
+        {
+          "name": "temperature",
+          "data_type": "float",
+          "type": "input number",
+          "format": "float",
+          "validator": {
+            "min": 0.0,
+            "max": 1.5
+          },
+          "required": 0,
+          "description": "Controls randomness in output. Range: 0.0 to 1.5"
+        },
+        {
+          "name": "top_p",
+          "data_type": "float",
+          "type": "input number",
+          "format": "float",
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
+          "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+        },
+        {
+          "name": "max_tokens",
+          "data_type": "integer",
+          "type": "input number",
+          "format": "integer",
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
+          "description": "Maximum number of tokens to generate. Min: 1"
+        }
+      ],
+      "status": "active"
     }
   ],
   "stt_providers": [
