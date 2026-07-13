@@ -39,10 +39,16 @@ limited to:
   STT-handling path catches it.
 """
 
+import os
 import time
 from typing import Optional
 
+from loguru import logger
+
 from pipecat.frames.frames import (
+    BotStartedSpeakingFrame,
+    CancelFrame,
+    EndFrame,
     Frame,
     MetricsFrame,
     TranscriptionFrame,
@@ -51,6 +57,16 @@ from pipecat.frames.frames import (
 )
 from pipecat.metrics.metrics import TTFBMetricsData
 from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
+
+# Upper bound (seconds) on a plausible STT TTFB. A streaming STT emits its final
+# transcript within a few hundred ms of the caller stopping; it never legitimately
+# takes seconds. Anything above this is a measurement artifact — the armed
+# `user_stopped_at` anchor survived a long real-world SILENCE (caller pausing/
+# thinking, end of call, or a late/spurious transcript) and the gap got recorded
+# as "STT latency". Those samples produced phantom 60s+ p99 spikes on the dashboard
+# while the real STT was ~300-800ms. We discard them instead of emitting a metric.
+# Env-tunable so it can be relaxed without a redeploy.
+MAX_SANE_STT_TTFB_S = float(os.getenv("STT_MAX_SANE_TTFB_S", "5.0"))
 
 
 class STTLatencyTap(FrameProcessor):
@@ -93,6 +109,12 @@ class STTLatencyTap(FrameProcessor):
             # in between overwrites — we'd rather attribute the next
             # transcript to the most recent stop than to a stale one.
             self._user_stopped_at = time.time()
+        elif isinstance(frame, (BotStartedSpeakingFrame, EndFrame, CancelFrame)):
+            # The bot has started responding (so this turn's STT already
+            # resolved), or the call is ending. Any still-armed stop is stale —
+            # disarm it so a later/spurious transcript isn't matched to it and
+            # recorded as a multi-second "STT latency".
+            self._user_stopped_at = None
         elif isinstance(frame, TranscriptionFrame) and self._user_stopped_at is not None:
             await self._emit_stt_ttfb()
 
@@ -110,6 +132,15 @@ class STTLatencyTap(FrameProcessor):
         # Consume the slot — the next transcript belongs to the next stop.
         self._user_stopped_at = None
         if ttfb < 0:
+            return
+        if ttfb > MAX_SANE_STT_TTFB_S:
+            # Silence-gap artifact, not real STT time — drop it so it doesn't
+            # inflate the STT p99 with phantom multi-second spikes.
+            logger.debug(
+                "[stt-ttfb] discarding implausible STT TTFB {:.1f}s (> {:.0f}s cap) "
+                "— treated as a silence gap, not STT processing time",
+                ttfb, MAX_SANE_STT_TTFB_S,
+            )
             return
         data = TTFBMetricsData(
             processor=self._stt_processor_name,
