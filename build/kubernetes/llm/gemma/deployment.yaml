@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staging-llm-gemma-deployment
+  namespace: staging
+  labels:
+    app: staging-llm-gemma
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 1800
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: staging-llm-gemma
+  template:
+    metadata:
+      labels:
+        app: staging-llm-gemma
+    spec:
+      nodeSelector:
+        node.kubernetes.io/instance-type: vcg-a40-4c-20g-8vram
+      containers:
+        - name: gemma
+          image: vllm/vllm-openai:v0.6.6
+          args:
+            - --model
+            - google/gemma-2-2b-it
+            - --served-model-name
+            - gemma-2-2b-it
+            - --dtype
+            - bfloat16
+            - --max-model-len
+            - "4096"
+            - --max-num-seqs
+            - "16"
+            - --gpu-memory-utilization
+            - "0.85"
+            - --enforce-eager
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8000"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token-secret
+                  key: HF_TOKEN
+            - name: HF_HOME
+              value: /cache/hf
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: cache
+              mountPath: /cache
+            - name: dshm
+              mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 15
+            failureThreshold: 100
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+      volumes:
+        - name: cache
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
