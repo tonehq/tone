@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gemma-chat-template
+  namespace: staging
+data:
+  gemma_chat_template.jinja: |
+    {{ bos_token }}{%- set sys = namespace(text='') -%}
+    {%- for m in messages -%}
+    {%- if m['role'] == 'system' -%}{%- set sys.text = sys.text + m['content'] + '\n\n' -%}{%- endif -%}
+    {%- endfor -%}
+    {%- if tools -%}
+    {%- set sys.text = sys.text + '\n\n# Tools\nYou have access to the following functions. When the caller asks for facts, prices, policies, hours, availability, documents, or anything a function can look up or do, you MUST call the appropriate function instead of answering from memory or guessing. Never invent information a function can provide.\nWhen you call a function, your ENTIRE reply MUST be exactly one JSON object and NOTHING else — no greeting, no explanation, no answer, no text before or after. Do NOT answer the factual question yourself; only emit the call and wait for its result. Use exactly this format:\n{"name": "function_name", "parameters": {"arg1": "value1"}}\n\nAvailable functions:\n' -%}
+    {%- for t in tools -%}
+    {%- set sys.text = sys.text + (t['function'] | tojson) + '\n' -%}
+    {%- endfor -%}
+    {%- endif -%}
+    {%- set injected = namespace(done=false) -%}
+    {%- for m in messages -%}
+    {%- if m['role'] == 'system' -%}
+    {%- elif m['role'] == 'user' -%}
+    {{ '<start_of_turn>user\n' }}{%- if not injected.done and sys.text -%}{{ sys.text }}{%- set injected.done = true -%}{%- endif -%}{{ m['content'] | trim }}{{ '<end_of_turn>\n' }}
+    {%- elif m['role'] == 'assistant' or m['role'] == 'model' -%}
+    {{ '<start_of_turn>model\n' }}{%- if m['content'] -%}{{ m['content'] | trim }}{%- endif -%}{%- if m['tool_calls'] -%}{%- for tc in m['tool_calls'] -%}{{ '{"name": "' + tc['function']['name'] + '", "parameters": ' + (tc['function']['arguments'] | string) + '}' }}{%- endfor -%}{%- endif -%}{{ '<end_of_turn>\n' }}
+    {%- elif m['role'] == 'tool' -%}
+    {{ '<start_of_turn>user\n[tool result] ' + (m['content'] | string | trim) + '<end_of_turn>\n' }}
+    {%- endif -%}
+    {%- endfor -%}
+    {%- if add_generation_prompt -%}{{ '<start_of_turn>model\n' }}{%- endif -%}
