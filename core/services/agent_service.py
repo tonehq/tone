@@ -1610,7 +1610,7 @@ class AgentService(BaseService):
                     .filter(ModelProvider.id == UUID(str(provider_id)))
                     .first()
                 )
-                if provider and provider.meta_data_schema:
+                if provider and isinstance(provider.meta_data_schema, dict):
                     schema = provider.meta_data_schema.get(kind)
 
             if not schema:
