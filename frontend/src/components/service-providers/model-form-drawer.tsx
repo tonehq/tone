@@ -36,6 +36,7 @@ interface FormState {
   display_name: string;
   kind: ServiceKind | '';
   description: string;
+  base_url: string;
   is_active: boolean;
 }
 
@@ -49,6 +50,7 @@ function initialFormState(
       display_name: '',
       kind: defaultKind ?? '',
       description: '',
+      base_url: '',
       is_active: true,
     };
   }
@@ -57,6 +59,7 @@ function initialFormState(
     display_name: editing.display_name ?? '',
     kind: editing.kind,
     description: editing.description ?? '',
+    base_url: editing.base_url ?? '',
     is_active: editing.is_active,
   };
 }
@@ -95,6 +98,7 @@ export default function ModelFormDrawer({
       display_name: form.display_name.trim() || undefined,
       kind: form.kind as ServiceKind,
       description: form.description.trim() || undefined,
+      base_url: form.base_url.trim() || undefined,
       is_active: form.is_active,
     };
     await onSubmit(payload, editing?.id);
@@ -159,6 +163,13 @@ export default function ModelFormDrawer({
           onChange={(e) => update('description', e.target.value)}
           rows={3}
           placeholder="Short summary of the model."
+        />
+        <TextInput
+          name="base_url"
+          label="Base URL"
+          value={form.base_url}
+          onChange={(e) => update('base_url', e.target.value)}
+          placeholder="Optional — overrides the provider default endpoint"
         />
         <CheckboxField
           id="is_active"

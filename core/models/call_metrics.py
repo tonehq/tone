@@ -25,4 +25,8 @@ class CallMetrics(OrgScopedModel):
     turns = Column(JSONB, nullable=True)
     turn_metrics = Column(JSONB, nullable=True)
 
+    # Persisted avg/p50/p99 for TTFB + user-bot latency, computed at write
+    # time from the raw arrays above. Read path prefers this over recomputing.
+    computed_stats = Column(JSONB, nullable=True)
+
     call = relationship("Call", back_populates="metrics_record")

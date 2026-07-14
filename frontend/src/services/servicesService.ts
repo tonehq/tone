@@ -152,6 +152,7 @@ export interface ModelUpsertPayload {
   display_name?: string;
   kind: 'llm' | 'stt' | 'tts';
   description?: string;
+  base_url?: string;
   is_active?: boolean;
 }
 

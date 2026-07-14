@@ -11,9 +11,9 @@ from core.models.call import Call
 from core.models.call_metrics import CallMetrics
 from core.services.base import BaseService
 
-# Single source of truth for the metric columns. Drives the upsert payload,
-# the ON CONFLICT update set, and the response formatter — change a column
-# here and all three stay in sync.
+# Single source of truth for the raw metric columns. Drives the upsert
+# payload, the ON CONFLICT update set, and the response formatter — change a
+# column here and all three stay in sync.
 _METRIC_FIELDS = (
     "ttfb",
     "processing",
@@ -23,6 +23,17 @@ _METRIC_FIELDS = (
     "user_bot_latency",
     "turns",
     "turn_metrics",
+)
+
+# Keys inside the persisted ``computed_stats`` JSONB. Same names as the API
+# response so the read path can spread them directly with no translation.
+_STATS_KEYS = (
+    "avg_ttfb_ms",
+    "p50_ttfb_ms",
+    "p99_ttfb_ms",
+    "avg_latency_s",
+    "p50_latency_s",
+    "p99_latency_s",
 )
 
 
@@ -54,6 +65,7 @@ class CallMetricsService(BaseService):
             "call_id": call_id,
             "updated_at": datetime.now(timezone.utc),
             **{field: metrics.get(field) for field in _METRIC_FIELDS},
+            "computed_stats": _compute_stats(metrics),
         }
 
         stmt = pg_insert(CallMetrics).values(**payload)
@@ -61,6 +73,7 @@ class CallMetricsService(BaseService):
             index_elements=["call_id"],
             set_={
                 **{field: getattr(stmt.excluded, field) for field in _METRIC_FIELDS},
+                "computed_stats": stmt.excluded.computed_stats,
                 "updated_at": stmt.excluded.updated_at,
             },
         )
@@ -207,23 +220,23 @@ class CallMetricsService(BaseService):
         """Format a CallMetrics row for the API.
 
         ``summary_only=True`` returns identifiers + derived scalars only
-        (used by ``list_metrics`` to keep the page payload small). The full
-        per-sample arrays are still loaded from the DB to compute the
-        scalars, but they are dropped from the response body.
+        (used by ``list_metrics`` to keep the page payload small).
 
         ``summary_only=False`` (default) returns the full payload including
-        the six metric arrays — used by ``get_by_call_id`` so the modal
+        the raw metric arrays — used by ``get_by_call_id`` so the modal
         can render the full breakdown when a row is clicked.
+
+        Percentile / average stats come from the persisted
+        ``computed_stats`` column written at upsert time; legacy rows
+        without that value fall back to computing on the fly from the raw
+        arrays so the response shape stays stable.
         """
         arrays = {field: (getattr(metric, field) or []) for field in _METRIC_FIELDS}
 
-        # Drop the spurious 0.0 / null samples before summarizing. Some TTS
-        # services (Cartesia, Qwen) emit a placeholder 0.0 TTFB before the
-        # real first-audio sample; the STT/LLM paths can emit nulls. Including
-        # them drags the avg down and skews the percentiles. This matches the
-        # frontend's ``cleanSamples`` (keep only v > 0).
-        ttfb_s = _positive(s.get("value") for s in arrays["ttfb"])
-        latency_s = _positive(s.get("latency") for s in arrays["user_bot_latency"])
+        # Prefer the persisted stats written at upsert time. Legacy rows and
+        # any row whose stats were never populated fall back to computing on
+        # the fly from the raw arrays so the response shape stays stable.
+        stats = metric.computed_stats or _compute_stats(arrays)
 
         response: Dict[str, Any] = {
             "id": str(metric.id),
@@ -235,12 +248,7 @@ class CallMetricsService(BaseService):
             "duration_seconds": duration_seconds,
 
             # TTFB is stored in seconds; the ``_ms`` fields expose milliseconds.
-            "avg_ttfb_ms": _to_ms(_avg(ttfb_s)),
-            "p50_ttfb_ms": _to_ms(_percentile(ttfb_s, 0.50)),
-            "p99_ttfb_ms": _to_ms(_percentile(ttfb_s, 0.99)),
-            "avg_latency_s": _avg(latency_s),
-            "p50_latency_s": _percentile(latency_s, 0.50),
-            "p99_latency_s": _percentile(latency_s, 0.99),
+            **{key: stats.get(key) for key in _STATS_KEYS},
             "total_tokens": _sum(s.get("total_tokens") for s in arrays["llm_usage"]),
             "total_tts_chars": _sum(s.get("characters") for s in arrays["tts_usage"]),
             "total_stt_audio_ms": _sum(s.get("audio_ms") for s in arrays["stt_usage"]),
@@ -262,6 +270,27 @@ def _positive(values) -> List[float]:
     percentile math.
     """
     return [v for v in values if isinstance(v, (int, float)) and v > 0]
+
+
+def _compute_stats(arrays: Dict[str, Any]) -> Dict[str, Optional[float]]:
+    """Summary avg/p50/p99 for TTFB and user-bot latency samples.
+
+    Written to ``call_metrics.computed_stats`` at upsert time and read back
+    by the response formatter. Kept as a pure function so write and read
+    paths share one implementation. Accepts either the pipecat metrics dict
+    (write path) or the dict of DB arrays (read-path fallback) — both expose
+    the same ``ttfb`` and ``user_bot_latency`` keys.
+    """
+    ttfb_s = _positive(s.get("value") for s in (arrays.get("ttfb") or []))
+    latency_s = _positive(s.get("latency") for s in (arrays.get("user_bot_latency") or []))
+    return {
+        "avg_ttfb_ms": _to_ms(_avg(ttfb_s)),
+        "p50_ttfb_ms": _to_ms(_percentile(ttfb_s, 0.50)),
+        "p99_ttfb_ms": _to_ms(_percentile(ttfb_s, 0.99)),
+        "avg_latency_s": _avg(latency_s),
+        "p50_latency_s": _percentile(latency_s, 0.50),
+        "p99_latency_s": _percentile(latency_s, 0.99),
+    }
 
 
 def _to_ms(seconds: Optional[float]) -> Optional[float]:

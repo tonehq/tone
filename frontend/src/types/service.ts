@@ -77,6 +77,7 @@ export interface ProviderModel {
   display_name: string | null;
   kind: ServiceKind;
   description: string | null;
+  base_url: string | null;
   is_active: boolean;
   meta_data: Record<string, unknown> | null;
   meta_data_schema: import('@/types/provider').MetaDataSchemaField[] | null;
