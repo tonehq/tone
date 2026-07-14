@@ -2,7 +2,7 @@
 Model management). Shared by ``core/api/v1/services.py`` and
 ``ee/api/v1/services.py`` so the two editions cannot drift."""
 
-from typing import Any, Iterable, List
+from typing import Any, Iterable, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -84,12 +84,19 @@ def _model_to_dict(m: Model) -> dict:
         "display_name": m.display_name,
         "kind": m.kind,
         "description": m.description,
+        "base_url": m.base_url,
         "is_active": bool(m.is_active),
         "meta_data": m.meta_data,
         "meta_data_schema": m.meta_data_schema,
         "created_at": int(m.created_at.timestamp()) if m.created_at else None,
         "updated_at": int(m.updated_at.timestamp()) if m.updated_at else None,
     }
+
+
+def _optional_str(body: dict, key: str) -> Optional[str]:
+    """Trim a request-body string and return ``None`` for empty/missing values.
+    Centralises the ``(x or "").strip() or None`` pattern used across model writes."""
+    return (body.get(key) or "").strip() or None
 
 
 # ─── service class ──────────────────────────────────────────────────────────
@@ -433,7 +440,9 @@ class ModelProviderService(BaseService):
                 "last_used_at": (
                     int(r.last_used_at.timestamp()) if r.last_used_at else None
                 ),
-                "meta_data_schema": (schema or {}).get(kind) if schema else None,
+                "meta_data_schema": (
+                    schema.get(kind) if isinstance(schema, dict) else None
+                ),
             }
 
         return {
@@ -894,9 +903,10 @@ class ModelProviderService(BaseService):
         record = Model(
             provider_id=prov_uuid,
             name=name,
-            display_name=(body.get("display_name") or "").strip() or None,
+            display_name=_optional_str(body, "display_name"),
             kind=kind,
-            description=(body.get("description") or "").strip() or None,
+            description=_optional_str(body, "description"),
+            base_url=_optional_str(body, "base_url"),
             is_active=bool(body.get("is_active", True)),
         )
         self.db.add(record)
@@ -936,15 +946,15 @@ class ModelProviderService(BaseService):
                     )
             record.name = new_name
         if "display_name" in body:
-            v = (body.get("display_name") or "").strip()
-            record.display_name = v or None
+            record.display_name = _optional_str(body, "display_name")
         if "kind" in body:
             record.kind = (
                 _validate_model_kind(body.get("kind"), required=False) or record.kind
             )
         if "description" in body:
-            v = (body.get("description") or "").strip()
-            record.description = v or None
+            record.description = _optional_str(body, "description")
+        if "base_url" in body:
+            record.base_url = _optional_str(body, "base_url")
         if "is_active" in body:
             record.is_active = bool(body["is_active"])
 
@@ -1030,7 +1040,11 @@ class ModelProviderService(BaseService):
                 "display_name": p.display_name,
                 "description": p.description,
                 "language_code": code,
-                "meta_data_schema": (p.meta_data_schema or {}).get("tts"),
+                "meta_data_schema": (
+                    p.meta_data_schema.get("tts")
+                    if isinstance(p.meta_data_schema, dict)
+                    else None
+                ),
             }
             for p, code in rows
         ]
