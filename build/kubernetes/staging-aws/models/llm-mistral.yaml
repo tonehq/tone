@@ -1,0 +1,113 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staging-llm-mistral-deployment
+  namespace: staging
+  labels:
+    app: staging-llm-mistral
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 1800
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: staging-llm-mistral
+  template:
+    metadata:
+      labels:
+        app: staging-llm-mistral
+    spec:
+      nodeSelector:
+        gpu: llm
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: vllm
+          image: vllm/vllm-openai:v0.11.0
+          args:
+            - --model
+            - mistralai/Mistral-Nemo-Instruct-2407
+            - --served-model-name
+            - mistral-nemo-12b
+            - --quantization
+            - fp8
+            - --tokenizer-mode
+            - mistral
+            - --config-format
+            - mistral
+            - --load-format
+            - mistral
+            - --max-model-len
+            - "32768"
+            - --gpu-memory-utilization
+            - "0.90"
+            - --enable-auto-tool-choice
+            - --tool-call-parser
+            - mistral
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8000"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token-secret
+                  key: HF_TOKEN
+            - name: HF_HOME
+              value: /cache/hf
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: cache
+              mountPath: /cache
+            - name: dshm
+              mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 15
+            failureThreshold: 120
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+      volumes:
+        - name: cache
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 4Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-llm-mistral-service
+  namespace: staging
+  labels:
+    app: staging-llm-mistral
+spec:
+  selector:
+    app: staging-llm-mistral
+  ports:
+    - port: 80
+      targetPort: 8000
+      protocol: TCP
+  type: ClusterIP

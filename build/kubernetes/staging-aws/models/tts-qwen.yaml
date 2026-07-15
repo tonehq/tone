@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staging-tts-qwen-deployment
+  namespace: staging
+  labels:
+    app: staging-tts-qwen
+spec:
+  replicas: 0
+  progressDeadlineSeconds: 1800
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: staging-tts-qwen
+  template:
+    metadata:
+      labels:
+        app: staging-tts-qwen
+    spec:
+      nodeSelector:
+        gpu: speech
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: vllm-omni
+          image: vllm/vllm-omni:latest
+          args:
+            - --model
+            - Qwen/Qwen3-TTS-12Hz-1.7B-Base
+            - --served-model-name
+            - qwen3-tts
+            - --max-model-len
+            - "8192"
+            - --gpu-memory-utilization
+            - "0.35"
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8000"
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token-secret
+                  key: HF_TOKEN
+            - name: HF_HOME
+              value: /cache/hf
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: cache
+              mountPath: /cache
+            - name: dshm
+              mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 15
+            failureThreshold: 80
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+      volumes:
+        - name: cache
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-tts-qwen-service
+  namespace: staging
+  labels:
+    app: staging-tts-qwen
+spec:
+  selector:
+    app: staging-tts-qwen
+  ports:
+    - port: 80
+      targetPort: 8000
+      protocol: TCP
+  type: ClusterIP

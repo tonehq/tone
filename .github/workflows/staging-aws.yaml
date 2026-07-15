@@ -49,20 +49,22 @@ jobs:
 
       - name: Substitute IMAGE_TAG in deployment manifests
         run: |
-          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging/api/deployment.yaml
-          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging/call/deployment.yaml
-          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging/worker/deployment.yaml
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging-aws/api/deployment.yaml
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging-aws/call/deployment.yaml
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging-aws/worker/deployment.yaml
 
       - name: Apply manifests
         run: |
-          kubectl apply -f build/kubernetes/staging/api/service.yaml
-          kubectl apply -f build/kubernetes/staging/api/deployment.yaml
-          kubectl apply -f build/kubernetes/staging/call/pdb.yaml
-          kubectl apply -f build/kubernetes/staging/call/service.yaml
-          kubectl apply -f build/kubernetes/staging/call/deployment.yaml
-          kubectl apply -f build/kubernetes/staging/call/pod-routing.yaml
-          kubectl apply -f build/kubernetes/staging/worker/rbac.yaml
-          kubectl apply -f build/kubernetes/staging/worker/deployment.yaml
+          kubectl apply -f build/kubernetes/staging-aws/api/service.yaml
+          kubectl apply -f build/kubernetes/staging-aws/api/deployment.yaml
+          kubectl apply -f build/kubernetes/staging-aws/api/ingress.yaml
+          kubectl apply -f build/kubernetes/staging-aws/call/pdb.yaml
+          kubectl apply -f build/kubernetes/staging-aws/call/service.yaml
+          kubectl apply -f build/kubernetes/staging-aws/call/deployment.yaml
+          kubectl apply -f build/kubernetes/staging-aws/call/pod-routing.yaml
+          kubectl apply -f build/kubernetes/staging-aws/call/ingress.yaml
+          kubectl apply -f build/kubernetes/staging-aws/worker/rbac.yaml
+          kubectl apply -f build/kubernetes/staging-aws/worker/deployment.yaml
 
       - name: Rollout restart deployments
         run: |
