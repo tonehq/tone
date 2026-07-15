@@ -32,6 +32,14 @@ ALLOWED_KEY_SORT_FIELDS = {
 }
 ALLOWED_MODEL_SORT_FIELDS = {"name", "kind", "is_active", "created_at", "updated_at"}
 ALLOWED_USAGE_SORT_FIELDS = {"display_name", "api_key_count", "last_used_at"}
+ALLOWED_PROVIDER_SORT_FIELDS = {
+    "display_name",
+    "slug",
+    "provider_id",
+    "is_active",
+    "created_at",
+    "updated_at",
+}
 
 
 # ─── module-level helpers (pure, no instance state) ─────────────────────────
@@ -298,12 +306,22 @@ class ModelProviderService(BaseService):
         return result
 
     def get_service_filter_values(self, column_name: str) -> dict:
-        """Distinct values for token-search autocomplete."""
-        base = self._usage_base_query()
+        """Distinct values for token-search autocomplete.
+
+        ``service_type`` stays scoped to the org's ApiKeys — an unconfigured
+        kind has nothing to filter to. ``name`` returns every active provider
+        in the catalog so the Model Providers page can search unconnected
+        providers too (the listing renders them via ``include_unconnected``)."""
         if column_name == "service_type":
+            base = self._usage_base_query()
             rows = base.with_entities(ApiKey.service_type).distinct().all()
         elif column_name == "name":
-            rows = base.with_entities(ModelProvider.display_name).distinct().all()
+            rows = (
+                self.db.query(ModelProvider.display_name)
+                .filter(ModelProvider.is_active.is_(True))
+                .distinct()
+                .all()
+            )
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -317,13 +335,20 @@ class ModelProviderService(BaseService):
     def list_services(self, body: dict) -> dict:
         """Aggregated list — one row per distinct (provider, service_type)
         the org has ≥1 ApiKey for. A Deepgram STT key and a Deepgram TTS key
-        therefore surface as two separate cards on the listing page."""
+        therefore surface as two separate cards on the listing page.
+
+        When ``include_unconnected`` is true, providers the org has NO ApiKey
+        for are appended as extra rows with ``service_type=None`` and zeroed
+        counts — used by the Model Providers page which surfaces the full
+        catalog (agent-form dropdowns still call the connection-scoped
+        endpoints and stay filtered to configured providers)."""
         page = max(int(body.get("page") or 1), 1)
         page_size = min(max(int(body.get("page_size") or 12), 1), 100)
         search = body.get("search")
         sort_by = body.get("sort_by")
         service_type = body.get("service_type")
         status_filter = body.get("status")
+        include_unconnected = bool(body.get("include_unconnected", False))
 
         api_key_count = func.count(ApiKey.id).label("api_key_count")
         active_api_key_count = func.count(
@@ -404,9 +429,77 @@ class ModelProviderService(BaseService):
             ApiKey.service_type.asc(),
         )
 
-        rows = q.offset((page - 1) * page_size).limit(page_size).all()
+        # Fetch strategy: when ``include_unconnected`` is false we keep the
+        # SQL-side pagination (unchanged behavior for every existing caller).
+        # When true we fetch the full connected list, union unconnected
+        # providers in Python, and paginate the combined result. The catalog
+        # is small (≤ a few hundred providers) so this is cheap and much
+        # simpler than a SQL-level UNION with correct pagination.
+        if include_unconnected:
+            connected_rows = q.all()
+        else:
+            connected_rows = q.offset((page - 1) * page_size).limit(page_size).all()
 
-        provider_ids = [r.provider_id for r in rows if r.provider_id]
+        # Providers the org has NO ApiKey against — only queried when
+        # ``include_unconnected`` is true AND no filter narrows the result to
+        # a specific service_type or key status (those filters don't apply to
+        # "not yet connected" cards, so we'd risk showing them under a filter
+        # they can't satisfy).
+        unconnected_providers: list[ModelProvider] = []
+        can_include_unconnected = (
+            include_unconnected
+            and (not service_type or service_type == "all")
+            and status_filter not in ("active", "inactive")
+        )
+        if can_include_unconnected:
+            connected_ids_subq = self.db.query(distinct(ApiKey.provider_id)).filter(
+                ApiKey.organization_id == self.org_id,
+                ApiKey.service_type.isnot(None),
+            )
+            uq = self.db.query(ModelProvider).filter(
+                ModelProvider.is_active.is_(True),
+                ~ModelProvider.id.in_(connected_ids_subq),
+            )
+            if search:
+                like = f"%{search}%"
+                uq = uq.filter(
+                    (ModelProvider.display_name.ilike(like))
+                    | (ModelProvider.slug.ilike(like))
+                )
+            # Only the "name" facet applies here — a service_type facet
+            # would exclude unconnected rows by definition.
+            if generic_filters:
+                name_only = [
+                    f for f in generic_filters if f.get("field") == "name"
+                ]
+                if name_only:
+                    uq = apply_filters(uq, name_only, self._usage_column_map())
+            unconnected_providers = uq.order_by(
+                ModelProvider.display_name.asc()
+            ).all()
+
+        # Combine and paginate when we're serving the unified list. Otherwise
+        # the SQL LIMIT above already gave us the right page.
+        if include_unconnected:
+            total = len(connected_rows) + len(unconnected_providers)
+            start = (page - 1) * page_size
+            end = start + page_size
+            connected_slice = connected_rows[start:end]
+            remaining = page_size - len(connected_slice)
+            unconnected_start = max(0, start - len(connected_rows))
+            unconnected_slice = (
+                unconnected_providers[
+                    unconnected_start : unconnected_start + remaining
+                ]
+                if remaining > 0
+                else []
+            )
+        else:
+            connected_slice = connected_rows
+            unconnected_slice = []
+
+        provider_ids = [r.provider_id for r in connected_slice if r.provider_id]
+        provider_ids.extend(p.id for p in unconnected_slice)
         model_count_map = self._model_count_by_provider_kind_map(provider_ids)
         default_map = self._default_keys_by_provider_kind_map(provider_ids)
 
@@ -445,8 +538,30 @@ class ModelProviderService(BaseService):
                 ),
             }
 
+        def _unconnected_to_dict(p: ModelProvider) -> dict:
+            pid = str(p.id)
+            return {
+                "id": f"{pid}:none",
+                "provider": {
+                    "id": pid,
+                    "slug": p.slug,
+                    "display_name": p.display_name,
+                    "description": p.description,
+                },
+                "service_type": None,
+                "api_key_count": 0,
+                "active_api_key_count": 0,
+                "default_api_key": None,
+                "model_count": 0,
+                "last_used_at": None,
+                "meta_data_schema": None,
+            }
+
+        items = [_row_to_dict(r) for r in connected_slice]
+        items.extend(_unconnected_to_dict(p) for p in unconnected_slice)
+
         return {
-            "items": [_row_to_dict(r) for r in rows],
+            "items": items,
             "total": int(total),
             "page": page,
             "page_size": page_size,
@@ -1109,3 +1224,225 @@ class ModelProviderService(BaseService):
             }
             for v in rows
         ]
+
+    # ─── provider CRUD (admin) ─────────────────────────────────────────────
+
+    def provider_response(self, provider: ModelProvider) -> dict:
+        """Public formatter for a ModelProvider row — used by the admin
+        create/update/list endpoints so responses stay in one place."""
+        return {
+            "id": str(provider.id),
+            "provider_id": provider.provider_id,
+            "slug": provider.slug,
+            "display_name": provider.display_name,
+            "description": provider.description,
+            "website_url": provider.website_url,
+            "is_active": bool(provider.is_active),
+            "meta_data_schema": provider.meta_data_schema,
+            "created_at": (
+                int(provider.created_at.timestamp()) if provider.created_at else None
+            ),
+            "updated_at": (
+                int(provider.updated_at.timestamp()) if provider.updated_at else None
+            ),
+        }
+
+    def _assert_provider_unique(
+        self,
+        *,
+        provider_id: str | None = None,
+        slug: str | None = None,
+        exclude_id: UUID | None = None,
+    ) -> None:
+        """Pre-check the provider_id and slug uniqueness so duplicates return
+        a clean 409 instead of a 500 IntegrityError from Postgres."""
+        for field, value in (("provider_id", provider_id), ("slug", slug)):
+            if not value:
+                continue
+            q = self.db.query(ModelProvider.id).filter(
+                getattr(ModelProvider, field) == value
+            )
+            if exclude_id is not None:
+                q = q.filter(ModelProvider.id != exclude_id)
+            if q.first():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"A provider with this {field} already exists.",
+                )
+
+    def list_providers(self, body: dict) -> dict:
+        """Admin listing of every ModelProvider in the catalog. Unlike
+        ``list_providers_catalog`` this ignores org scope and returns inactive
+        rows too so admins can manage them."""
+        page = max(int(body.get("page") or 1), 1)
+        page_size = min(max(int(body.get("page_size") or 20), 1), 100)
+        search = (body.get("search") or "").strip()
+        sort_by = body.get("sort_by")
+        is_active = body.get("is_active")
+
+        q = self.db.query(ModelProvider)
+        if search:
+            like = f"%{search}%"
+            q = q.filter(
+                or_(
+                    ModelProvider.display_name.ilike(like),
+                    ModelProvider.slug.ilike(like),
+                    ModelProvider.provider_id.ilike(like),
+                )
+            )
+        if is_active is True or is_active is False:
+            q = q.filter(ModelProvider.is_active.is_(bool(is_active)))
+
+        total = q.count()
+
+        order_by = ModelProvider.display_name.asc()
+        if sort_by:
+            d = sort_by.startswith("-")
+            f = sort_by.lstrip("-")
+            if f in ALLOWED_PROVIDER_SORT_FIELDS:
+                col = getattr(ModelProvider, f)
+                order_by = col.desc() if d else col.asc()
+        q = q.order_by(order_by)
+
+        rows = q.offset((page - 1) * page_size).limit(page_size).all()
+        return {
+            "items": [self.provider_response(p) for p in rows],
+            "total": int(total),
+            "page": page,
+            "page_size": page_size,
+        }
+
+    def get_provider(self, provider_id: str) -> ModelProvider:
+        prov_uuid = _parse_uuid(provider_id, field="provider id")
+        return self._provider_or_404(prov_uuid)
+
+    def create_provider(self, body: dict) -> ModelProvider:
+        provider_id_str = (body.get("provider_id") or "").strip()
+        slug = (body.get("slug") or "").strip()
+        display_name = (body.get("display_name") or "").strip()
+        if not provider_id_str:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="provider_id is required",
+            )
+        if not slug:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="slug is required"
+            )
+        if not display_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="display_name is required",
+            )
+
+        meta_data_schema = body.get("meta_data_schema")
+        if meta_data_schema is not None and not isinstance(meta_data_schema, dict):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="meta_data_schema must be a JSON object",
+            )
+
+        self._assert_provider_unique(provider_id=provider_id_str, slug=slug)
+
+        record = ModelProvider(
+            provider_id=provider_id_str,
+            slug=slug,
+            display_name=display_name,
+            description=_optional_str(body, "description"),
+            website_url=_optional_str(body, "website_url"),
+            is_active=bool(body.get("is_active", True)),
+            meta_data_schema=meta_data_schema,
+        )
+        self.db.add(record)
+        self.db.commit()
+        self.db.refresh(record)
+        return record
+
+    def update_provider(self, provider_id: str, body: dict) -> ModelProvider:
+        prov_uuid = _parse_uuid(provider_id, field="provider id")
+        record = self._provider_or_404(prov_uuid)
+
+        new_provider_id: str | None = None
+        new_slug: str | None = None
+
+        if "provider_id" in body:
+            candidate = (body.get("provider_id") or "").strip()
+            if not candidate:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="provider_id cannot be empty",
+                )
+            if candidate != record.provider_id:
+                new_provider_id = candidate
+
+        if "slug" in body:
+            candidate = (body.get("slug") or "").strip()
+            if not candidate:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="slug cannot be empty",
+                )
+            if candidate != record.slug:
+                new_slug = candidate
+
+        if new_provider_id or new_slug:
+            self._assert_provider_unique(
+                provider_id=new_provider_id,
+                slug=new_slug,
+                exclude_id=record.id,
+            )
+
+        if new_provider_id:
+            record.provider_id = new_provider_id
+        if new_slug:
+            record.slug = new_slug
+
+        if "display_name" in body:
+            candidate = (body.get("display_name") or "").strip()
+            if not candidate:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="display_name cannot be empty",
+                )
+            record.display_name = candidate
+        if "description" in body:
+            record.description = _optional_str(body, "description")
+        if "website_url" in body:
+            record.website_url = _optional_str(body, "website_url")
+        if "is_active" in body:
+            record.is_active = bool(body["is_active"])
+        if "meta_data_schema" in body:
+            value = body.get("meta_data_schema")
+            if value is not None and not isinstance(value, dict):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="meta_data_schema must be a JSON object",
+                )
+            record.meta_data_schema = value
+
+        self.db.commit()
+        self.db.refresh(record)
+        return record
+
+    def delete_provider(self, provider_id: str) -> dict:
+        """Hard-delete a ModelProvider. Blocks the delete if any org has an
+        ApiKey against this provider — deleting would orphan those credentials
+        and silently break the agents that depend on them."""
+        prov_uuid = _parse_uuid(provider_id, field="provider id")
+        record = self._provider_or_404(prov_uuid)
+
+        in_use = (
+            self.db.query(ApiKey.id).filter(ApiKey.provider_id == prov_uuid).first()
+        )
+        if in_use:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Cannot delete provider: one or more organizations have API "
+                    "keys configured for it. Remove those keys first."
+                ),
+            )
+
+        self.db.delete(record)
+        self.db.commit()
+        return {"ok": True}

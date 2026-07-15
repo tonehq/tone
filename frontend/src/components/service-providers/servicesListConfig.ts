@@ -15,7 +15,12 @@ export const servicesListConfig: FacetedListConfig<ProviderUsage> = {
   facetSections: [{ field: 'service_type', label: 'Type', titleCase: true }],
   defaultPageSize: 100,
   pageSizeOptions: [100],
-  fetchList: (q) => fetchFacetedList<ProviderUsage>(`${BASE}/list`, q),
+  // ``include_unconnected`` surfaces providers the org hasn't connected yet
+  // as "not connected" cards. The agent-form dropdowns (AiStep / VoiceStep)
+  // call ``listProviderCatalog(service_type)`` instead, which stays scoped
+  // to providers with an active ApiKey for that kind.
+  fetchList: (q) =>
+    fetchFacetedList<ProviderUsage>(`${BASE}/list`, q, { include_unconnected: true }),
   fetchFacets: (q) => fetchFacets(`${BASE}/facets`, q),
   fetchFilterValues: (field) => fetchFilterValues(`${BASE}/filter-values`, field),
 };
