@@ -306,12 +306,22 @@ class ModelProviderService(BaseService):
         return result
 
     def get_service_filter_values(self, column_name: str) -> dict:
-        """Distinct values for token-search autocomplete."""
-        base = self._usage_base_query()
+        """Distinct values for token-search autocomplete.
+
+        ``service_type`` stays scoped to the org's ApiKeys — an unconfigured
+        kind has nothing to filter to. ``name`` returns every active provider
+        in the catalog so the Model Providers page can search unconnected
+        providers too (the listing renders them via ``include_unconnected``)."""
         if column_name == "service_type":
+            base = self._usage_base_query()
             rows = base.with_entities(ApiKey.service_type).distinct().all()
         elif column_name == "name":
-            rows = base.with_entities(ModelProvider.display_name).distinct().all()
+            rows = (
+                self.db.query(ModelProvider.display_name)
+                .filter(ModelProvider.is_active.is_(True))
+                .distinct()
+                .all()
+            )
         else:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
