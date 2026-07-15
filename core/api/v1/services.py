@@ -2,10 +2,11 @@
 ``core/services/model_provider_service.py`` so the EE edition can share it
 without copy-paste drift."""
 
-from typing import Optional
+from typing import Any, Dict, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from core.api.v1.faceted_schemas import FacetsRequest
@@ -15,6 +16,39 @@ from core.services.model_provider_service import ModelProviderService
 from shared.config import settings
 
 router = APIRouter()
+
+
+# ─── request schemas ───────────────────────────────────────────────────────
+# Shared by ``core`` and ``ee`` — ee/api/v1/services.py imports these so the
+# two editions can't drift on the wire contract.
+
+
+class CreateModelProviderRequest(BaseModel):
+    provider_id: str = Field(..., min_length=1, max_length=50)
+    slug: str = Field(..., min_length=1, max_length=100)
+    display_name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    website_url: Optional[str] = Field(None, max_length=255)
+    is_active: bool = True
+    meta_data_schema: Optional[Dict[str, Any]] = None
+
+
+class UpdateModelProviderRequest(BaseModel):
+    provider_id: Optional[str] = Field(None, min_length=1, max_length=50)
+    slug: Optional[str] = Field(None, min_length=1, max_length=100)
+    display_name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+    website_url: Optional[str] = Field(None, max_length=255)
+    is_active: Optional[bool] = None
+    meta_data_schema: Optional[Dict[str, Any]] = None
+
+
+class ListModelProvidersRequest(BaseModel):
+    page: int = 1
+    page_size: int = 20
+    search: Optional[str] = None
+    sort_by: Optional[str] = None
+    is_active: Optional[bool] = None
 
 
 def _resolve_org_id(claims: JWTClaims) -> UUID:
@@ -121,6 +155,71 @@ def list_providers_catalog(
     db: Session = Depends(get_db),
 ):
     return _service(claims, db).list_providers_catalog(service_type=service_type)
+
+
+# ─── provider CRUD (admin) ─────────────────────────────────────────────────
+# `model_providers` is a global catalog shared across every tenant. Writes are
+# admin-gated so one org member can't rename or remove a definition that other
+# orgs depend on. Reads (get + admin list) stay authenticated but not
+# admin-gated where the UI needs them.
+
+
+@router.post("/providers/list_providers")
+def list_providers(
+    body: ListModelProvidersRequest = Body(default_factory=ListModelProvidersRequest),
+    claims: JWTClaims = Depends(require_admin_or_owner),
+    db: Session = Depends(get_db),
+):
+    return _service(claims, db).list_providers(body.model_dump(exclude_none=True))
+
+
+@router.post("/providers/create_provider", status_code=status.HTTP_201_CREATED)
+def create_provider(
+    body: CreateModelProviderRequest,
+    claims: JWTClaims = Depends(require_admin_or_owner),
+    db: Session = Depends(get_db),
+):
+    svc = _service(claims, db)
+    provider = svc.create_provider(body.model_dump(exclude_none=True))
+    return svc.provider_response(provider)
+
+
+@router.get("/providers/get_provider/{provider_id}")
+def get_provider(
+    provider_id: str,
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    svc = _service(claims, db)
+    provider = svc.get_provider(provider_id)
+    return svc.provider_response(provider)
+
+
+@router.put(
+    "/providers/update_provider/{provider_id}", status_code=status.HTTP_200_OK
+)
+def update_provider(
+    provider_id: str,
+    body: UpdateModelProviderRequest,
+    claims: JWTClaims = Depends(require_admin_or_owner),
+    db: Session = Depends(get_db),
+):
+    svc = _service(claims, db)
+    provider = svc.update_provider(
+        provider_id, body.model_dump(exclude_unset=True)
+    )
+    return svc.provider_response(provider)
+
+
+@router.delete(
+    "/providers/delete_provider/{provider_id}", status_code=status.HTTP_200_OK
+)
+def delete_provider(
+    provider_id: str,
+    claims: JWTClaims = Depends(require_admin_or_owner),
+    db: Session = Depends(get_db),
+):
+    return _service(claims, db).delete_provider(provider_id)
 
 
 # ─── per-provider drill-down ───────────────────────────────────────────────

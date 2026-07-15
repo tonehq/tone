@@ -8,13 +8,20 @@
 import type { FacetedFacetsQuery, FacetedListQuery, Facets } from '@/types/facetedList';
 import axios from '@/utils/axios';
 
-/** POST a faceted list query and normalize the envelope to `{ rows, total }`. */
+/** POST a faceted list query and normalize the envelope to `{ rows, total }`.
+ *
+ * ``extraBody`` merges extra fields into the request body (e.g. per-entity
+ * flags like ``include_unconnected``). Query fields always win over
+ * ``extraBody`` so callers can't accidentally clobber page/search/etc.
+ */
 export async function fetchFacetedList<T>(
   url: string,
   query: FacetedListQuery,
+  extraBody?: Record<string, unknown>,
 ): Promise<{ rows: T[]; total: number }> {
   // Entity list endpoints use `page` (not call-log's `page_no`).
   const body: Record<string, unknown> = {
+    ...(extraBody ?? {}),
     page: query.page_no,
     page_size: query.page_size,
   };

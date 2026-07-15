@@ -7,7 +7,7 @@ import type React from 'react';
 import CustomButton from '@/components/shared/CustomButton';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import type { ProviderUsage } from '@/types/service';
+import type { ProviderUsage, ServiceKind } from '@/types/service';
 import { cn } from '@/utils/cn';
 
 import ProviderLogo from './ProviderLogo';
@@ -27,6 +27,12 @@ interface ServiceCardProps {
 }
 
 export default function ServiceCard({ usage, onClick, onEdit, onDelete }: ServiceCardProps) {
+  // ``service_type === null`` means the org has no ApiKey for this provider
+  // yet (surfaced by the ``include_unconnected`` flag on list_services).
+  // These cards can't be edited or deleted — clicking navigates to the
+  // provider detail page where the user can add a key.
+  const isUnconnected = usage.service_type === null;
+
   const handleClick: React.MouseEventHandler<HTMLDivElement> = () => onClick(usage);
 
   const handleEdit: React.MouseEventHandler<HTMLButtonElement> = (e) => {
@@ -60,7 +66,7 @@ export default function ServiceCard({ usage, onClick, onEdit, onDelete }: Servic
         <div className="flex items-start gap-3">
           <ProviderLogo
             providerName={usage.provider.slug}
-            serviceType={usage.service_type}
+            serviceType={usage.service_type ?? undefined}
             className="size-11 shrink-0"
           />
           <div className="min-w-0 flex-1">
@@ -80,45 +86,61 @@ export default function ServiceCard({ usage, onClick, onEdit, onDelete }: Servic
             )}
           </div>
 
-          {/* hover actions — anchored top-right, no layout shift */}
+          {/* hover actions — anchored top-right, no layout shift. Pencil edits
+              the provider itself (works even on unconnected cards). The
+              delete button removes keys for (provider, kind), so it only
+              makes sense once the card is connected. */}
           <div className="absolute right-3 top-3 flex items-center gap-0.5 rounded-md bg-card/95 p-0.5 opacity-0 shadow-sm ring-1 ring-border/60 backdrop-blur transition-opacity group-hover:opacity-100">
             <CustomButton
               type="text"
               onClick={handleEdit}
-              aria-label="Edit service"
-              title="Edit"
+              aria-label="Edit provider"
+              title="Edit provider"
               className="!h-auto inline-flex size-7 cursor-pointer items-center justify-center rounded p-0 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               icon={<Pencil className="size-3.5" />}
             />
-            <CustomButton
-              type="text"
-              onClick={handleDelete}
-              aria-label="Delete service"
-              title="Delete"
-              className="!h-auto inline-flex size-7 cursor-pointer items-center justify-center rounded p-0 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              icon={<Trash2 className="size-3.5" />}
-            />
+            {!isUnconnected && (
+              <CustomButton
+                type="text"
+                onClick={handleDelete}
+                aria-label="Delete service"
+                title="Delete"
+                className="!h-auto inline-flex size-7 cursor-pointer items-center justify-center rounded p-0 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                icon={<Trash2 className="size-3.5" />}
+              />
+            )}
           </div>
         </div>
 
-        {/* type pill + default indicator */}
+        {/* type pill + default indicator (or "Not connected" for unconnected) */}
         <div className="flex flex-wrap items-center gap-2">
-          <Badge
-            className={cn(
-              'px-2 py-0 text-[10px] font-semibold uppercase tracking-wider',
-              TYPE_BADGE_STYLES[usage.service_type] ?? '',
-            )}
-          >
-            {usage.service_type}
-          </Badge>
-          {usage.default_api_key && (
-            <span
-              className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground"
-              title={`Default: ${usage.default_api_key.label ?? '—'}`}
+          {isUnconnected ? (
+            <Badge
+              variant="outline"
+              className="px-2 py-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground"
             >
-              <span className="size-1.5 rounded-full bg-emerald-500" />
-              Default
-            </span>
+              Not connected
+            </Badge>
+          ) : (
+            <>
+              <Badge
+                className={cn(
+                  'px-2 py-0 text-[10px] font-semibold uppercase tracking-wider',
+                  TYPE_BADGE_STYLES[usage.service_type as ServiceKind] ?? '',
+                )}
+              >
+                {usage.service_type}
+              </Badge>
+              {usage.default_api_key && (
+                <span
+                  className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground"
+                  title={`Default: ${usage.default_api_key.label ?? '—'}`}
+                >
+                  <span className="size-1.5 rounded-full bg-emerald-500" />
+                  Default
+                </span>
+              )}
+            </>
           )}
         </div>
 

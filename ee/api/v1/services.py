@@ -9,6 +9,11 @@ from fastapi import APIRouter, Body, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from core.api.v1.faceted_schemas import FacetsRequest
+from core.api.v1.services import (
+    CreateModelProviderRequest,
+    ListModelProvidersRequest,
+    UpdateModelProviderRequest,
+)
 from core.database.session import get_db
 from core.services.model_provider_service import ModelProviderService
 from ee.middleware.auth import (
@@ -120,6 +125,67 @@ def list_providers_catalog(
     db: Session = Depends(get_db),
 ):
     return _service(claims, db).list_providers_catalog(service_type=service_type)
+
+
+# ─── provider CRUD (admin) ─────────────────────────────────────────────────
+
+
+@router.post("/providers/list_providers")
+def list_providers(
+    body: ListModelProvidersRequest = Body(default_factory=ListModelProvidersRequest),
+    claims: EEJWTClaims = Depends(require_ee_admin_or_owner),
+    db: Session = Depends(get_db),
+):
+    return _service(claims, db).list_providers(body.model_dump(exclude_none=True))
+
+
+@router.post("/providers/create_provider", status_code=status.HTTP_201_CREATED)
+def create_provider(
+    body: CreateModelProviderRequest,
+    claims: EEJWTClaims = Depends(require_ee_admin_or_owner),
+    db: Session = Depends(get_db),
+):
+    svc = _service(claims, db)
+    provider = svc.create_provider(body.model_dump(exclude_none=True))
+    return svc.provider_response(provider)
+
+
+@router.get("/providers/get_provider/{provider_id}")
+def get_provider(
+    provider_id: str,
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    svc = _service(claims, db)
+    provider = svc.get_provider(provider_id)
+    return svc.provider_response(provider)
+
+
+@router.put(
+    "/providers/update_provider/{provider_id}", status_code=status.HTTP_200_OK
+)
+def update_provider(
+    provider_id: str,
+    body: UpdateModelProviderRequest,
+    claims: EEJWTClaims = Depends(require_ee_admin_or_owner),
+    db: Session = Depends(get_db),
+):
+    svc = _service(claims, db)
+    provider = svc.update_provider(
+        provider_id, body.model_dump(exclude_unset=True)
+    )
+    return svc.provider_response(provider)
+
+
+@router.delete(
+    "/providers/delete_provider/{provider_id}", status_code=status.HTTP_200_OK
+)
+def delete_provider(
+    provider_id: str,
+    claims: EEJWTClaims = Depends(require_ee_admin_or_owner),
+    db: Session = Depends(get_db),
+):
+    return _service(claims, db).delete_provider(provider_id)
 
 
 # ─── per-provider drill-down ───────────────────────────────────────────────

@@ -54,11 +54,15 @@ export interface ProviderCatalogItem {
  * ≥1 ApiKey for. A Deepgram STT key and a Deepgram TTS key therefore surface
  * as two separate cards. `id` is the composite `${providerId}:${serviceType}`
  * so React lists have a stable key.
+ *
+ * When the Model Providers page requests ``include_unconnected``, providers
+ * with no keys are surfaced with ``service_type: null`` and zeroed counts —
+ * the card should render a "not connected" state and skip edit/delete.
  */
 export interface ProviderUsage {
   id: string;
   provider: ServiceProviderRef;
-  service_type: ServiceKind;
+  service_type: ServiceKind | null;
   api_key_count: number;
   active_api_key_count: number;
   default_api_key: {
@@ -68,6 +72,33 @@ export interface ProviderUsage {
   } | null;
   model_count: number;
   last_used_at: number | null;
+}
+
+/**
+ * Global ModelProvider row (LLM/STT/TTS brand definition). Managed by admins
+ * via the admin CRUD endpoints — read-only for regular org members.
+ */
+export interface ModelProvider {
+  id: string;
+  provider_id: string;
+  slug: string;
+  display_name: string;
+  description: string | null;
+  website_url: string | null;
+  is_active: boolean;
+  meta_data_schema: Record<string, unknown> | null;
+  created_at: number | null;
+  updated_at: number | null;
+}
+
+export interface ModelProviderUpsertPayload {
+  provider_id: string;
+  slug: string;
+  display_name: string;
+  description?: string;
+  website_url?: string;
+  is_active?: boolean;
+  meta_data_schema?: Record<string, unknown> | null;
 }
 
 /** Read-only model from the global catalog (detail page Models panel). */
