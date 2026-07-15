@@ -13,10 +13,14 @@ from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
 from pipecat.services.llm_service import FunctionCallParams
 
+from core.config import settings
 from core.models.tool import Tool
 from core.models.agent_tool import AgentTool
 from core.utils.logging import truncate_for_log
 from core.utils.oauth_resolution import effective_of, stamp_effective
+
+# Placeholder caller number used by test/preview calls; Twilio rejects it.
+_PLACEHOLDER_CALLER_NUMBER = "+10000000000"
 
 
 def _resolve_connection_header(tool: Tool) -> Optional[Tuple[str, str]]:
@@ -379,10 +383,18 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
 
         arguments = params.arguments
         message = arguments.get("message", "")
-        logger.info("Built-in tool 'send_sms' called. Sending SMS to {}", caller_number)
+        logger.info("Built-in tool 'send_sms' called (caller_number={})", caller_number)
         _t_start = _time.monotonic()
         meta = tool.meta_data or {}
-        recipient = meta.get("to_number") or caller_number
+        recipient = (meta.get("to_number") or caller_number or "").strip()
+        if recipient in ("", _PLACEHOLDER_CALLER_NUMBER):
+            default_to = (settings.SEND_SMS_DEFAULT_TO_NUMBER or "").strip()
+            if default_to:
+                logger.info(
+                    "send_sms: recipient '{}' is empty/placeholder — using SEND_SMS_DEFAULT_TO_NUMBER '{}'",
+                    recipient or "(empty)", default_to,
+                )
+                recipient = default_to
         tool_call_entry = {
             "tool": "send_sms",
             "tool_type": "send_sms",
