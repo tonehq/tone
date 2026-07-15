@@ -260,22 +260,15 @@ def build_stt(spec: dict) -> Optional[Any]:
             if metadata.get("sample_rate") is not None:
                 nemotron_kwargs["sample_rate"] = metadata["sample_rate"]
             logger.debug("[STT {}] server: {} kwargs: {}", provider_name, server, nemotron_kwargs)
-            # All endpointing params must stay <= 0. riva.client only skips sending an
-            # EndpointingConfig when every one is <= 0; a single positive value (pipecat
-            # defaults stop_history=320) makes it CopyFrom a config with every other
-            # field at 0, wiping the NIM's tuned endpointing. Riva then streams interims
-            # but never emits a final, so no turn ever ends and the bot goes silent.
+            # Endpointing is left on pipecat's defaults (stop_history=320). Passing all
+            # params <= 0 makes riva.client send no EndpointingConfig at all, which
+            # disables Riva endpointing entirely — it then returns neither interims nor
+            # finals and the STT goes completely mute (verified on staging 2026-07-15).
             return NvidiaSTTService(
                 api_key=None,
                 server=server,
                 use_ssl=False,
                 model_function_map={"model_name": model or "nemotron-asr-streaming"},
-                start_history=-1,
-                start_threshold=-1.0,
-                stop_history=-1,
-                stop_threshold=-1.0,
-                stop_history_eou=-1,
-                stop_threshold_eou=-1.0,
                 **nemotron_kwargs,
             )
         if provider_name == "parakeet":
