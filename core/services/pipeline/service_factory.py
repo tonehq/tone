@@ -96,7 +96,7 @@ def build_llm(spec: dict) -> Optional[Any]:
             from pipecat.services.ollama.llm import OLLamaLLMService
             base_url = api_key if api_key else "http://localhost:11434/v1"
             return OLLamaLLMService(model=model or "llama2", base_url=base_url, params=build_input_params(OLLamaLLMService, metadata))
-        if provider_name in ["azure", "cerebras", "nvidia_nim", "fireworks", "together", "perplexity", "qwen", "deepseek", "mistral", "sambanova", "grok", "cohere", "gemma"]:
+        if provider_name in ["azure", "cerebras", "nvidia_nim", "fireworks", "together", "perplexity", "qwen", "deepseek", "mistral", "sambanova", "grok", "cohere", "gemma", "mistral-self-hosted"]:
             from pipecat.services.openai.llm import BaseOpenAILLMService
             base_url = model_meta.get("base_url") or metadata.get("base_url")
             default_models = {
@@ -113,6 +113,7 @@ def build_llm(spec: dict) -> Optional[Any]:
                 "grok": "grok-3",
                 "cohere": "command-a-03-2025",
                 "gemma": "gemma-2-2b-it",
+                "mistral-self-hosted": "mistral-nemo-12b",
             }
             default_base_urls = {
                 "cerebras": "https://api.cerebras.ai/v1",
@@ -127,6 +128,7 @@ def build_llm(spec: dict) -> Optional[Any]:
                 "grok": "https://api.x.ai/v1",
                 "cohere": "https://api.cohere.ai/compatibility/v1",
                 "gemma": "http://staging-llm-gemma-service.staging.svc.cluster.local/v1",
+                "mistral-self-hosted": "http://staging-llm-mistral-service.staging.svc.cluster.local/v1",
             }
             if not base_url:
                 base_url = default_base_urls.get(provider_name)
@@ -225,6 +227,31 @@ def build_stt(spec: dict) -> Optional[Any]:
             if metadata.get("sample_rate") is not None:
                 ws_kwargs["sample_rate"] = metadata["sample_rate"]
             return NvidiaWebSocketService(url=ws_url, trace_id=get_trace_id(), **ws_kwargs)
+        if provider_name == "nemotron-asr-self-hosted":
+            # Self-hosted Nemotron ASR on a Riva NIM — pipecat's first-party Riva
+            # gRPC client. Local deployments take a bare host:port, no SSL, no key.
+            from pipecat.services.nvidia.stt import NvidiaSTTService
+            server = (
+                model_meta.get("base_url")
+                or metadata.get("base_url")
+                or "staging-stt-nemotron-service.staging.svc.cluster.local:50051"
+            )
+            for scheme in ("http://", "https://", "grpc://", "grpcs://"):
+                if server.startswith(scheme):
+                    server = server[len(scheme):]
+                    break
+            server = server.strip().rstrip("/")
+            nemotron_kwargs = {}
+            if metadata.get("sample_rate") is not None:
+                nemotron_kwargs["sample_rate"] = metadata["sample_rate"]
+            logger.debug("[STT {}] server: {} kwargs: {}", provider_name, server, nemotron_kwargs)
+            return NvidiaSTTService(
+                api_key=None,
+                server=server,
+                use_ssl=False,
+                model_function_map={"model_name": model or "nemotron-asr-streaming"},
+                **nemotron_kwargs,
+            )
         if provider_name == "parakeet":
             from core.services.pipeline.parakeet_stt_service import ParakeetSTTService
             from core.logging import get_trace_id
@@ -706,6 +733,31 @@ def build_tts(spec: dict) -> Optional[Any]:
                 qwen_kwargs["sample_rate"] = metadata["sample_rate"]
             logger.debug("[TTS {}] qwen_kwargs: {}", provider_name, qwen_kwargs)
             return QwenWebSocketTTSService(url=ws_url, trace_id=get_trace_id(), **qwen_kwargs)
+
+        if provider_name == "qwen-tts-self-hosted":
+            # Self-hosted Qwen3-TTS on vLLM-Omni. Unlike the /ws/tts sidecars above,
+            # this speaks OpenAI's /v1/audio/speech and streams base64 PCM over SSE.
+            from core.services.pipeline.qwen_omni_tts_service import QwenOmniTTSService
+            from core.logging import get_trace_id
+            base_url = (
+                model_meta.get("base_url")
+                or metadata.get("base_url")
+                or "http://staging-tts-qwen-service.staging.svc.cluster.local/v1"
+            )
+            qwen_kwargs = {}
+            if tts_voice_id is not None:
+                qwen_kwargs["voice_id"] = tts_voice_id
+            if tts_language is not None:
+                qwen_kwargs["language"] = tts_language
+            if metadata.get("sample_rate") is not None:
+                qwen_kwargs["sample_rate"] = metadata["sample_rate"]
+            logger.debug("[TTS {}] qwen_kwargs: {}", provider_name, qwen_kwargs)
+            return QwenOmniTTSService(
+                base_url=base_url,
+                model=model or "qwen3-tts",
+                trace_id=get_trace_id(),
+                **qwen_kwargs,
+            )
 
         logger.warning("Unsupported TTS provider: {}", provider_name)
         return None
