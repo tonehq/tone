@@ -165,7 +165,7 @@ class PipecatPipelineRunner(PipelineRunner):
                         if call_log:
                             call_log_state["id"] = call_log.id
                             call_id_holder["id"] = str(call_log.id)
-                            logger.info("[TIMING] create_call_log thread (+%.3fs)", _time.monotonic() - _t)
+                            logger.info("[TIMING] create_call_log thread (+{:.3f}s)", _time.monotonic() - _t)
                         else:
                             logger.warning("create_call_log returned None (no channel resolved) — no call record created")
                 except Exception as e:
@@ -446,7 +446,7 @@ class PipecatPipelineRunner(PipelineRunner):
             async def on_participant_disconnected(transport, participant_id):
                 await _end_session(participant_id)
 
-        logger.info("[TIMING] runner setup complete, total: %.3fs — starting runner.run()", _time.monotonic() - _t_comp_start)
+        logger.info("[TIMING] runner setup complete, total: {:.3f}s — starting runner.run()", _time.monotonic() - _t_comp_start)
         runner = PipecatRunner(handle_sigint=getattr(runner_args, "handle_sigint", False))
         await runner.run(task)
 
