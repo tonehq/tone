@@ -226,8 +226,17 @@ export default function ApiKeyCreateDrawer({
     const filtered = form.service_type
       ? providers.filter((p) => p.kinds.includes(form.service_type as ServiceKind))
       : providers;
+    // When opened from the provider detail page we always want the locked
+    // provider to be pickable, even if it has no models yet for the chosen
+    // service_type (typical for a brand-new provider) — otherwise the
+    // disabled Select shows a blank label and the user can't tell which
+    // provider they're adding a key to.
+    if (lockedProviderId && !filtered.some((p) => p.id === lockedProviderId)) {
+      const locked = providers.find((p) => p.id === lockedProviderId);
+      if (locked) filtered.unshift(locked);
+    }
     return filtered.map((p) => ({ value: p.id, label: p.display_name }));
-  }, [providers, form.service_type]);
+  }, [providers, form.service_type, lockedProviderId]);
 
   const existingKeyOptions = useMemo(
     () =>
