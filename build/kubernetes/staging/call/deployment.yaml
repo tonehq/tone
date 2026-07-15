@@ -10,7 +10,7 @@ metadata:
 spec:
   serviceName: staging-tone-call-headless
   podManagementPolicy: Parallel
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: staging-tone-call-worker
