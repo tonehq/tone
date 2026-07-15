@@ -69,6 +69,13 @@ def build_llm(spec: dict) -> Optional[Any]:
     metadata = spec["metadata"]
     model_meta = spec["model_meta_data"]
 
+    logger.info(
+        "[LLM] building provider='{}' model='{}' base_url='{}'",
+        provider_name,
+        model,
+        model_meta.get("base_url") or metadata.get("base_url"),
+    )
+
     try:
         if provider_name == "openai":  # done
             from pipecat.services.openai.llm import OpenAILLMService
@@ -166,13 +173,13 @@ def build_llm(spec: dict) -> Optional[Any]:
                 voice_id=voice_id,
                 system_instruction=metadata.get("system_instruction"),
             )
-        logger.warning("No matching LLM provider for '%s'", provider_name)
+        logger.warning("No matching LLM provider for '{}'", provider_name)
         return None
     except ImportError:
-        logger.exception("LLM provider %s not available (ImportError)", provider_name)
+        logger.exception("LLM provider {} not available (ImportError)", provider_name)
         return None
     except Exception as e:
-        logger.exception("LLM provider %s failed to initialize: %s", provider_name, e)
+        logger.exception("LLM provider {} failed to initialize: {}", provider_name, e)
         return None
 
 
@@ -183,6 +190,14 @@ def build_stt(spec: dict) -> Optional[Any]:
     model = spec["model_name"]
     metadata = spec["metadata"]
     model_meta = spec["model_meta_data"]
+
+    logger.info(
+        "[STT] building provider='{}' model='{}' base_url='{}' sample_rate={}",
+        provider_name,
+        model,
+        model_meta.get("base_url") or metadata.get("base_url"),
+        metadata.get("sample_rate"),
+    )
 
     try:
         if provider_name == "deepgram":
@@ -429,6 +444,15 @@ def build_tts(spec: dict) -> Optional[Any]:
 
     tts_voice_id = metadata.get("voice_id")
     tts_language = metadata.get("language")
+
+    logger.info(
+        "[TTS] building provider='{}' model='{}' base_url='{}' voice_id='{}' language='{}'",
+        provider_name,
+        model,
+        model_meta.get("base_url") or metadata.get("base_url"),
+        tts_voice_id,
+        tts_language,
+    )
 
     # HTTP-based providers create their aiohttp session lazily, in their own branch
     # right before construction (so a failed import never leaks a session). `session`

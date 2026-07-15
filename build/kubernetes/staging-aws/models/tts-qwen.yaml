@@ -6,7 +6,7 @@ metadata:
   labels:
     app: staging-tts-qwen
 spec:
-  replicas: 0
+  replicas: 1
   progressDeadlineSeconds: 1800
   strategy:
     type: Recreate
@@ -27,13 +27,13 @@ spec:
       containers:
         - name: vllm-omni
           image: vllm/vllm-omni:latest
+          command: ["vllm", "serve"]
           args:
-            - --model
-            - Qwen/Qwen3-TTS-12Hz-1.7B-Base
+            - Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice
+            - --omni
             - --served-model-name
             - qwen3-tts
-            - --max-model-len
-            - "8192"
+            - --trust-remote-code
             - --gpu-memory-utilization
             - "0.35"
             - --host
