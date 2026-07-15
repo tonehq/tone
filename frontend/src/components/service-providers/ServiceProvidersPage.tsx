@@ -5,7 +5,11 @@ import { Plug, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 
-import { deleteProviderAtom, fetchServiceAtom, upsertServiceAtom } from '@/atoms/ServicesAtom';
+import {
+  deleteProviderAtom,
+  upsertModelProviderAtom,
+  upsertServiceAtom,
+} from '@/atoms/ServicesAtom';
 import {
   CustomButton,
   CustomModal,
@@ -15,13 +19,18 @@ import {
 } from '@/components/shared';
 import { servicesListConfig } from '@/components/service-providers/servicesListConfig';
 import { Badge } from '@/components/ui/badge';
-import { listProviderKeys } from '@/services/servicesService';
-import type { ProviderUsage, Service, ServiceUpsertPayload } from '@/types/service';
+import { getModelProvider } from '@/services/servicesService';
+import type {
+  ModelProvider,
+  ModelProviderUpsertPayload,
+  ProviderUsage,
+  ServiceUpsertPayload,
+} from '@/types/service';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
 import ApiKeyCreateDrawer from './api-key-create-drawer';
-import ApiKeyEditDrawer from './api-key-edit-drawer';
+import ModelProviderEditDrawer from './model-provider-edit-drawer';
 import ServiceGrid from './service-grid';
 import ServiceGridSkeleton from './service-grid-skeleton';
 
@@ -29,8 +38,8 @@ const noop = () => {};
 
 export default function ServiceProvidersPage() {
   const router = useRouter();
-  const [, fetchService] = useAtom(fetchServiceAtom);
   const [, upsertService] = useAtom(upsertServiceAtom);
+  const [, upsertModelProvider] = useAtom(upsertModelProviderAtom);
   const [, deleteProvider] = useAtom(deleteProviderAtom);
 
   const fl = useFacetedList(servicesListConfig);
@@ -38,7 +47,7 @@ export default function ServiceProvidersPage() {
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [editingService, setEditingService] = useState<Service | null>(null);
+  const [editingProvider, setEditingProvider] = useState<ModelProvider | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ProviderUsage | null>(null);
@@ -46,7 +55,13 @@ export default function ServiceProvidersPage() {
 
   const handleSelect = useCallback(
     (u: ProviderUsage) => {
-      router.push(`/settings/model-providers/${u.provider.id}/${u.service_type}`);
+      // Unconnected cards route to the provider-level detail page (no kind
+      // suffix) since there's no service_type context yet — the user picks a
+      // kind + adds a key there.
+      const target = u.service_type
+        ? `/settings/model-providers/${u.provider.id}/${u.service_type}`
+        : `/settings/model-providers/${u.provider.id}`;
+      router.push(target);
     },
     [router],
   );
@@ -55,46 +70,29 @@ export default function ServiceProvidersPage() {
     setCreateOpen(true);
   }, []);
 
-  const handleEdit = useCallback(
-    async (u: ProviderUsage) => {
-      // Open the drawer immediately with a loader, then resolve the key.
-      // Prefer the default key for this (provider, kind); fall back to the
-      // most recently updated key of that kind so the pencil always opens an
-      // editor instead of bouncing the user to the detail page.
-      setEditingService(null);
-      setEditOpen(true);
-      setEditLoading(true);
-      try {
-        let keyId = u.default_api_key?.id;
-        if (!keyId) {
-          const { rows } = await listProviderKeys(u.provider.id, {
-            page: 1,
-            page_size: 1,
-            service_type: u.service_type,
-            sort_by: '-updated_at',
-          });
-          keyId = rows[0]?.id;
-        }
-        if (!keyId) {
-          setEditOpen(false);
-          router.push(`/settings/model-providers/${u.provider.id}/${u.service_type}`);
-          return;
-        }
-        const svc = await fetchService(keyId);
-        setEditingService(svc);
-      } catch (err) {
-        setEditOpen(false);
-        handleApiError(err);
-      } finally {
-        setEditLoading(false);
-      }
-    },
-    [fetchService, router],
-  );
+  const handleEdit = useCallback(async (u: ProviderUsage) => {
+    // The listing edit is provider-scoped — API keys and models are edited
+    // from the provider detail page. Open the drawer immediately with a
+    // loader while we fetch the full ModelProvider row (the card only has
+    // slug/display_name/description; the drawer also needs website_url and
+    // is_active).
+    setEditingProvider(null);
+    setEditOpen(true);
+    setEditLoading(true);
+    try {
+      const provider = await getModelProvider(u.provider.id);
+      setEditingProvider(provider);
+    } catch (err) {
+      setEditOpen(false);
+      handleApiError(err);
+    } finally {
+      setEditLoading(false);
+    }
+  }, []);
 
   const handleEditClose = useCallback(() => {
     setEditOpen(false);
-    setEditingService(null);
+    setEditingProvider(null);
   }, []);
 
   const handleDeleteRequest = useCallback((u: ProviderUsage) => {
@@ -102,14 +100,15 @@ export default function ServiceProvidersPage() {
   }, []);
 
   const handleDeleteConfirm = useCallback(async () => {
-    if (!deleteTarget) return;
+    if (!deleteTarget || !deleteTarget.service_type) return;
+    const serviceType = deleteTarget.service_type;
     setIsDeleting(true);
     try {
       const { deleted } = await deleteProvider({
         providerId: deleteTarget.provider.id,
-        serviceType: deleteTarget.service_type,
+        serviceType,
       });
-      const typeLabel = deleteTarget.service_type.toUpperCase();
+      const typeLabel = serviceType.toUpperCase();
       showToast.success(
         `Removed ${deleted} key${deleted === 1 ? '' : 's'}`,
         `${deleteTarget.provider.display_name} · ${typeLabel} keys have been deleted.`,
@@ -140,14 +139,17 @@ export default function ServiceProvidersPage() {
     [upsertService, fl],
   );
 
-  const handleUpdate = useCallback(
-    async (payload: Partial<ServiceUpsertPayload>, id: string) => {
+  const handleUpdateProvider = useCallback(
+    async (providerId: string, payload: Partial<ModelProviderUpsertPayload>) => {
       setIsSaving(true);
       try {
-        await upsertService({ id, values: payload as ServiceUpsertPayload });
+        await upsertModelProvider({
+          providerId,
+          values: payload as ModelProviderUpsertPayload,
+        });
         showToast.success('Provider updated');
         setEditOpen(false);
-        setEditingService(null);
+        setEditingProvider(null);
         fl.refresh();
       } catch (err) {
         handleApiError(err);
@@ -155,7 +157,18 @@ export default function ServiceProvidersPage() {
         setIsSaving(false);
       }
     },
-    [upsertService, fl],
+    [upsertModelProvider, fl],
+  );
+
+  // Passed to ApiKeyCreateDrawer's "+ Create new provider" inline flow. The
+  // drawer creates the ModelProvider via this callback, then uses the returned
+  // id to create the ApiKey in the same submit gesture.
+  const handleInlineCreateProvider = useCallback(
+    async (payload: ModelProviderUpsertPayload): Promise<ModelProvider> => {
+      const created = await upsertModelProvider({ values: payload });
+      return created;
+    },
+    [upsertModelProvider],
   );
 
   const isInitialLoading = fl.listLoading && fl.rows.length === 0;
@@ -230,24 +243,25 @@ export default function ServiceProvidersPage() {
         onApply={fl.applyDrawer}
       />
 
-      {/* create drawer */}
+      {/* create drawer — pick from the catalog, or use the inline
+          "+ Create new provider" toggle to define a brand-new one in the
+          same submit. */}
       <ApiKeyCreateDrawer
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
+        onCreateProvider={handleInlineCreateProvider}
         isPending={isSaving}
       />
 
-      {/* edit drawer — opened from the listing where each card is a provider
-          connection, so the copy mirrors the "Add provider" button. */}
-      <ApiKeyEditDrawer
+      {/* edit drawer — provider-scoped only. API keys and models are edited
+          from the provider detail page (each has its own flow). */}
+      <ModelProviderEditDrawer
         open={editOpen}
-        editing={editingService}
+        editing={editingProvider}
         loading={editLoading}
-        title="Edit provider"
-        description="Update this provider connection. To rotate the secret, delete this key and add a new one."
         onClose={handleEditClose}
-        onSubmit={handleUpdate}
+        onSubmit={handleUpdateProvider}
         isPending={isSaving}
       />
 
@@ -258,7 +272,9 @@ export default function ServiceProvidersPage() {
         title="Delete provider keys?"
         description={
           deleteTarget
-            ? `This will permanently delete ${deleteTarget.api_key_count} ${deleteTarget.service_type.toUpperCase()} key${
+            ? `This will permanently delete ${deleteTarget.api_key_count} ${(
+                deleteTarget.service_type ?? ''
+              ).toUpperCase()} key${
                 deleteTarget.api_key_count === 1 ? '' : 's'
               } for ${deleteTarget.provider.display_name}. Agents using these credentials will stop working.`
             : ''

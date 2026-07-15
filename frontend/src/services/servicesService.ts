@@ -1,5 +1,7 @@
 import { pagedListRequest } from '@/services/listHelpers';
 import type {
+  ModelProvider,
+  ModelProviderUpsertPayload,
   ProviderCatalogItem,
   ProviderModel,
   ProviderUsage,
@@ -181,4 +183,52 @@ export async function updateProviderModel(
 
 export async function deleteProviderModel(providerId: string, modelId: string): Promise<void> {
   await axios.delete(`/services/providers/${providerId}/models/${modelId}`);
+}
+
+// ─── model provider CRUD (admin) ───────────────────────────────────────────
+// The provider catalog is global — writes are admin-gated on the backend.
+
+export interface ListModelProvidersParams {
+  page?: number;
+  page_size?: number;
+  search?: string;
+  sort_by?: string;
+  is_active?: boolean;
+}
+
+export async function listModelProviders(
+  params: ListModelProvidersParams = {},
+): Promise<{ rows: ModelProvider[]; total: number; page: number; page_size: number }> {
+  const body: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== '') body[k] = v;
+  }
+  return pagedListRequest<ModelProvider>('/services/providers/list_providers', body);
+}
+
+export async function createModelProvider(
+  payload: ModelProviderUpsertPayload,
+): Promise<ModelProvider> {
+  const { data } = await axios.post<ModelProvider>('/services/providers/create_provider', payload);
+  return data;
+}
+
+export async function getModelProvider(providerId: string): Promise<ModelProvider> {
+  const { data } = await axios.get<ModelProvider>(`/services/providers/get_provider/${providerId}`);
+  return data;
+}
+
+export async function updateModelProvider(
+  providerId: string,
+  payload: Partial<ModelProviderUpsertPayload>,
+): Promise<ModelProvider> {
+  const { data } = await axios.put<ModelProvider>(
+    `/services/providers/update_provider/${providerId}`,
+    payload,
+  );
+  return data;
+}
+
+export async function deleteModelProvider(providerId: string): Promise<void> {
+  await axios.delete(`/services/providers/delete_provider/${providerId}`);
 }
