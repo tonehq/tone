@@ -11,8 +11,8 @@ from core.models.channel import Channel
 from core.models.phone_number import PhoneNumber
 from core.models.upload import Upload
 from core.services.base import BaseService
-from core.services.ingestion_queue import enqueue_call_overlap_detection_sync
 from core.services.pod_registry_service import resolve_pod_id
+from core.services.post_call import PostCallHandler
 
 
 class CallLogService(BaseService):
@@ -159,13 +159,6 @@ class CallLogService(BaseService):
     # Complete / Fail / Delete
     # ------------------------------------------------------------------
 
-    def _enqueue_overlap_detection(self, call: Call) -> None:
-        """Fire-and-forget: never let a queue failure break call completion."""
-        try:
-            enqueue_call_overlap_detection_sync(call.id)
-        except Exception as e:
-            logger.error("Failed to enqueue call overlap detection for call {}: {}", call.id, e)
-
     def complete_call(
         self,
         call_log_id,
@@ -236,7 +229,7 @@ class CallLogService(BaseService):
             except Exception as e:
                 logger.error("Failed to persist tool_executions for call {}: {}", call.id, e)
 
-        self._enqueue_overlap_detection(call)
+        PostCallHandler().post_call(call)
 
         return call
 
@@ -252,7 +245,7 @@ class CallLogService(BaseService):
 
         self.db.commit()
 
-        self._enqueue_overlap_detection(call)
+        PostCallHandler().post_call(call)
 
         return call
 

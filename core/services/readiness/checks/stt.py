@@ -8,7 +8,6 @@ STT-specific twist over the shared shapes.
 
 from __future__ import annotations
 
-import asyncio
 from typing import ClassVar
 
 from core.services.readiness.base import (
@@ -68,6 +67,14 @@ class STTApiKeyDecryptsCheck(_STTMixin, ApiKeyDecryptsCheck):
 
 
 class STTProviderReachableCheck(DeepCheck):
+    """Instantiate the pipecat STT service to verify credentials + deps + config.
+
+    Constructor-only for now: pipecat STT services stream over WebSocket / gRPC,
+    and opening a real session just to verify auth is provider-specific and
+    expensive. Construction still catches bad keys, missing deps, and malformed
+    config — the same failure modes the deep check exists to surface.
+    """
+
     id: ClassVar[str] = "stt.provider_reachable"
     category: ClassVar[Category] = Category.STT
     severity: ClassVar[Severity] = Severity.WARNING
@@ -85,10 +92,12 @@ class STTProviderReachableCheck(DeepCheck):
         return "Provider or key not resolved (see shallow checks)."
 
     @with_retry()
-    @with_timeout(3.0)
+    @with_timeout(5.0)  # constructor may fetch remote config on some STT services
     async def run(self, ctx: CheckContext) -> CheckResult:
-        await asyncio.sleep(0)
-        return self._skip(
-            "Live STT provider probe not implemented yet — "
-            "structural checks passed."
+        from core.services.readiness.probes import probe_stt
+
+        result = await probe_stt(ctx)
+        return self._pass(result.message) if result.ok else self._fail(
+            result.message,
+            remediation="Verify the STT provider status and that the API key is valid.",
         )

@@ -6,7 +6,6 @@ Every shallow check here is a 5-line concrete subclass of a shape defined in
 
 from __future__ import annotations
 
-import asyncio
 from typing import ClassVar
 
 from core.services.readiness.base import (
@@ -70,12 +69,12 @@ class LLMProviderEnabledCheck(ProviderEnabledCheck):
 
 
 class LLMProviderReachableCheck(DeepCheck):
-    """Send a 1-token completion to the LLM to verify credentials + reachability.
+    """Fire a 1-token completion through the pipecat LLM service to verify
+    credentials + reachability + model availability.
 
-    Wraps the provider call in a 3-second timeout and one retry on transient
-    errors. Actual per-provider probe logic isn't implemented in v1 (the shallow
-    checks catch ~95% of real breakage); this returns ``skipped`` with a clear
-    reason so the UI can render the placeholder correctly.
+    Reuses ``service_factory.build_llm`` so the probe hits the exact same code
+    path a real call would use — no duplicated per-provider adapters. Wrapped
+    in a 3-second timeout and one retry on transient errors.
     """
 
     id: ClassVar[str] = "llm.provider_reachable"
@@ -89,14 +88,15 @@ class LLMProviderReachableCheck(DeepCheck):
         return "Provider or key not resolved (see shallow checks)."
 
     @with_retry()
-    @with_timeout(3.0)
+    @with_timeout(5.0)  # cold-start on some LLMs (Cohere, Groq spin-up) can exceed 3s
     async def run(self, ctx: CheckContext) -> CheckResult:
-        # Placeholder: per-provider probe adapters land in a follow-up. Doing
-        # nothing here is deliberately safe — the shallow LLM checks already
-        # cover the common failure modes, so a green shallow + skipped deep
-        # is still an actionable signal for the UI ("verified structurally").
-        await asyncio.sleep(0)
-        return self._skip(
-            "Live LLM provider probe not implemented yet — "
-            "structural checks passed."
+        from core.services.readiness.probes import probe_llm
+
+        result = await probe_llm(ctx)
+        return self._pass(result.message) if result.ok else self._fail(
+            result.message,
+            remediation=(
+                "Verify the provider status, that the API key is still valid, "
+                "and that the model name is current."
+            ),
         )

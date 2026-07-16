@@ -7,7 +7,6 @@ match the configured TTS model.
 
 from __future__ import annotations
 
-import asyncio
 from typing import ClassVar
 
 from core.services.readiness.base import (
@@ -138,6 +137,14 @@ class TTSVoiceModelMatchCheck(_TTSMixin, ShallowCheck):
 
 
 class TTSProviderReachableCheck(DeepCheck):
+    """Synthesise the word "test" through the pipecat TTS service.
+
+    ``TTSService.run_tts()`` is the standard pipecat TTS API — we iterate until
+    the first audio frame (or error), which proves the provider accepted the
+    request end-to-end. Works across every TTS provider without per-provider
+    code because it uses pipecat's universal streaming interface.
+    """
+
     id: ClassVar[str] = "tts.provider_reachable"
     category: ClassVar[Category] = Category.TTS
     severity: ClassVar[Severity] = Severity.WARNING
@@ -155,12 +162,17 @@ class TTSProviderReachableCheck(DeepCheck):
         return "Provider or key not resolved (see shallow checks)."
 
     @with_retry()
-    @with_timeout(3.0)
+    @with_timeout(5.0)  # TTS round-trip is a bit slower than an LLM 1-token
     async def run(self, ctx: CheckContext) -> CheckResult:
-        await asyncio.sleep(0)
-        return self._skip(
-            "Live TTS provider probe not implemented yet — "
-            "structural checks passed."
+        from core.services.readiness.probes import probe_tts
+
+        result = await probe_tts(ctx)
+        return self._pass(result.message) if result.ok else self._fail(
+            result.message,
+            remediation=(
+                "Verify the TTS provider status, the API key, and that the "
+                "selected voice still exists in the provider's catalog."
+            ),
         )
 
 
