@@ -1,0 +1,104 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staging-stt-nemotron-deployment
+  namespace: staging
+  labels:
+    app: staging-stt-nemotron
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 2400
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: staging-stt-nemotron
+  template:
+    metadata:
+      labels:
+        app: staging-stt-nemotron
+    spec:
+      nodeSelector:
+        gpu: speech
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      imagePullSecrets:
+        - name: ngc-secret
+      containers:
+        - name: nemotron-asr
+          image: nvcr.io/nim/nvidia/nemotron-asr-streaming:latest
+          env:
+            - name: NGC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ngc-api-key
+                  key: NGC_API_KEY
+            - name: NIM_TAGS_SELECTOR
+              value: type=multi
+            - name: NIM_HTTP_API_PORT
+              value: "9000"
+            - name: NIM_GRPC_API_PORT
+              value: "50051"
+            - name: NIM_CACHE_PATH
+              value: /opt/nim/.cache
+          ports:
+            - name: http
+              containerPort: 9000
+            - name: grpc
+              containerPort: 50051
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: nim-cache
+              mountPath: /opt/nim/.cache
+            - name: dshm
+              mountPath: /dev/shm
+          startupProbe:
+            httpGet:
+              path: /v1/health/ready
+              port: http
+            periodSeconds: 15
+            failureThreshold: 160
+          readinessProbe:
+            httpGet:
+              path: /v1/health/ready
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /v1/health/live
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+      volumes:
+        - name: nim-cache
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-stt-nemotron-service
+  namespace: staging
+  labels:
+    app: staging-stt-nemotron
+spec:
+  selector:
+    app: staging-stt-nemotron
+  ports:
+    - name: http
+      port: 9000
+      targetPort: 9000
+      protocol: TCP
+    - name: grpc
+      port: 50051
+      targetPort: 50051
+      protocol: TCP
+  type: ClusterIP
