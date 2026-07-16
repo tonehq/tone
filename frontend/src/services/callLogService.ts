@@ -3,6 +3,8 @@ import type {
   CallFacetsParams,
   CallLogQueryParams,
   CallLogRow,
+  MetricsSummary,
+  MetricsSummaryParams,
   ToolExecution,
   ToolExecutionStatus,
   ToolExecutionType,
@@ -21,6 +23,13 @@ export const getCallLogs = async (params: CallLogQueryParams) => {
 
 export const getCallFacets = async (params: CallFacetsParams): Promise<CallFacets> => {
   const res = await axiosInstance.post('/call-log/facets', params);
+  return res.data;
+};
+
+export const getCallMetricsSummary = async (
+  params: MetricsSummaryParams,
+): Promise<MetricsSummary> => {
+  const res = await axiosInstance.post('/call-log/metrics-summary', params);
   return res.data;
 };
 

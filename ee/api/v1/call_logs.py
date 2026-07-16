@@ -4,8 +4,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from core.api.v1.call_logs import FacetsRequest, ListCallsRequest
+from core.api.v1.call_logs import FacetsRequest, ListCallsRequest, MetricsSummaryRequest
 from core.database.session import get_db
+from core.services.call_metrics_analytics_service import CallMetricsAnalyticsService
 from core.services.call_service import CallService
 from core.services.tool_execution_service import ToolExecutionService
 from ee.middleware.auth import EEJWTClaims, require_ee_org_member
@@ -19,6 +20,10 @@ router = APIRouter()
 
 def _get_service(claims: EEJWTClaims, db: Session) -> CallService:
     return CallService(db, org_id=UUID(claims.org_id))
+
+
+def _get_analytics_service(claims: EEJWTClaims, db: Session) -> CallMetricsAnalyticsService:
+    return CallMetricsAnalyticsService(db, org_id=UUID(claims.org_id))
 
 
 # ---------------------------------------------------------------------------
@@ -60,6 +65,20 @@ def get_facets(
 ):
     filters = [f.model_dump() for f in body.filters] if body.filters else None
     return _get_service(claims, db).get_facets(
+        start_date_time=body.start_date_time,
+        end_date_time=body.end_date_time,
+        filters=filters,
+    )
+
+
+@router.post("/metrics-summary")
+def get_metrics_summary(
+    body: MetricsSummaryRequest,
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    filters = [f.model_dump() for f in body.filters] if body.filters else None
+    return _get_analytics_service(claims, db).summarize(
         start_date_time=body.start_date_time,
         end_date_time=body.end_date_time,
         filters=filters,

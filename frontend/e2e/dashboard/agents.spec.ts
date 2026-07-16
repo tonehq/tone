@@ -97,7 +97,10 @@ test.describe('Agents list page', () => {
 
   test.describe('Create entry', () => {
     test('AL-012 header Create Agent opens type-picker', async ({ page }) => {
-      await page.getByRole('button', { name: /create agent/i }).first().click();
+      await page
+        .getByRole('button', { name: /create agent/i })
+        .first()
+        .click();
       await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5_000 });
       // Close it — we're only testing that the modal opens here. The
       // navigation from there is covered by AC-001 (which lands on the
