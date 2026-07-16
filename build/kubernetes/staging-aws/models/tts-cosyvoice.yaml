@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: staging-tts-cosyvoice-deployment
+  namespace: staging
+  labels:
+    app: staging-tts-cosyvoice
+spec:
+  replicas: 1
+  progressDeadlineSeconds: 1800
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: staging-tts-cosyvoice
+  template:
+    metadata:
+      labels:
+        app: staging-tts-cosyvoice
+    spec:
+      nodeSelector:
+        gpu: speech
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+      containers:
+        - name: cosyvoice
+          image: podwide/cosyvoice:v1.0
+          command: ["bash", "-lc"]
+          args:
+            - |
+              set -e
+              cd /opt/CosyVoice/CosyVoice/runtime/python/fastapi
+              exec python3 server.py --port 8000 --model_dir iic/CosyVoice2-0.5B
+          env:
+            - name: MODELSCOPE_CACHE
+              value: /cache/modelscope
+            - name: PYTHONPATH
+              value: /opt/CosyVoice/CosyVoice:/opt/CosyVoice/CosyVoice/third_party/Matcha-TTS
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: cache
+              mountPath: /cache
+            - name: dshm
+              mountPath: /dev/shm
+          startupProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 15
+            failureThreshold: 80
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+      volumes:
+        - name: cache
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-tts-cosyvoice-service
+  namespace: staging
+  labels:
+    app: staging-tts-cosyvoice
+spec:
+  selector:
+    app: staging-tts-cosyvoice
+  ports:
+    - port: 80
+      targetPort: 8000
+      protocol: TCP
+  type: ClusterIP

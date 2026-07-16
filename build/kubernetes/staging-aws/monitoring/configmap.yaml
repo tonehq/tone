@@ -1,0 +1,124 @@
+# Grafana Alloy pipeline configuration (Alloy syntax / "River").
+#
+# Collects pod logs + node metrics from the EKS cluster and pushes them to
+# Grafana Cloud (Loki for logs, Prometheus for metrics). This is a raw-manifest
+# port of the Vultr Helm values at
+#   .claude/skills/provisioning-cluster/provisioning-vultr/templates/alloy-values.yaml
+#
+# Grafana Cloud credentials and the cluster label are injected from the
+# `grafana-cloud-credentials` Secret via environment variables, read here with
+# sys.env(...). Nothing sensitive lives in this ConfigMap.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alloy-config
+  namespace: monitoring
+data:
+  config.alloy: |
+    // ──── Kubernetes Discovery ────
+    discovery.kubernetes "pods" {
+      role = "pod"
+    }
+
+    // ──── Relabel: extract K8s metadata as labels ────
+    discovery.relabel "pod_labels" {
+      targets = discovery.kubernetes.pods.targets
+
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        target_label  = "namespace"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_name"]
+        target_label  = "pod"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_container_name"]
+        target_label  = "container"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app"]
+        target_label  = "app"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_environment"]
+        target_label  = "environment"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_component"]
+        target_label  = "component"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_node_name"]
+        target_label  = "node"
+      }
+    }
+
+    // ──── Log Collection from the Kubernetes API ────
+    loki.source.kubernetes "pod_logs" {
+      targets    = discovery.relabel.pod_labels.output
+      forward_to = [loki.process.filter.receiver]
+    }
+
+    // ──── Log Processing: add cluster label + drop health-check noise ────
+    loki.process "filter" {
+      stage.static_labels {
+        values = {
+          cluster = sys.env("CLUSTER_NAME"),
+        }
+      }
+
+      stage.drop {
+        expression          = "GET /health"
+        drop_counter_reason = "health_check"
+      }
+      stage.drop {
+        expression          = "GET /ready"
+        drop_counter_reason = "readiness_check"
+      }
+
+      forward_to = [loki.write.grafana_cloud.receiver]
+    }
+
+    // ──── Push logs to Grafana Cloud Loki ────
+    loki.write "grafana_cloud" {
+      endpoint {
+        url = sys.env("LOKI_URL")
+
+        basic_auth {
+          username = sys.env("LOKI_USER")
+          password = sys.env("GRAFANA_API_KEY")
+        }
+      }
+      external_labels = {
+        cluster = sys.env("CLUSTER_NAME"),
+      }
+    }
+
+    // ──── Node Metrics: embedded node_exporter ────
+    prometheus.exporter.unix "node" {
+      rootfs_path = "/host/root"
+      procfs_path = "/host/proc"
+      sysfs_path  = "/host/sys"
+    }
+
+    prometheus.scrape "node_metrics" {
+      targets         = prometheus.exporter.unix.node.targets
+      forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+      scrape_interval = "60s"
+    }
+
+    // ──── Push metrics to Grafana Cloud Prometheus ────
+    prometheus.remote_write "grafana_cloud" {
+      endpoint {
+        url = sys.env("PROM_URL")
+
+        basic_auth {
+          username = sys.env("PROM_USER")
+          password = sys.env("GRAFANA_API_KEY")
+        }
+      }
+      external_labels = {
+        cluster = sys.env("CLUSTER_NAME"),
+      }
+    }

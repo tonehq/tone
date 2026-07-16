@@ -62,6 +62,39 @@ def _sanitize_tool_schemas(tool_schemas):
     return cleaned
 
 
+def _spec_summary(spec: Any) -> str:
+    """Render a `{provider_name, model_name, ...}` spec as "provider/model" for logs."""
+    if not spec:
+        return "none"
+    return f"{spec.get('provider_name') or '?'}/{spec.get('model_name') or '?'}"
+
+
+def _build_service(kind: str, factory, spec: Any) -> Any:
+    """Build one pipeline service, logging which provider/model failed on error.
+
+    Without this, a bad provider name or missing API key surfaces as a bare
+    traceback from deep inside service_factory with no indication of which of the
+    three services (or which provider) actually blew up.
+    """
+    if not spec:
+        logger.debug("Pipeline service {} not configured — skipping", kind)
+        return None
+    started = _time.monotonic()
+    try:
+        service = factory(spec)
+    except Exception as e:
+        logger.exception(
+            "Pipeline service {} FAILED to build: spec={} err={}",
+            kind, _spec_summary(spec), e,
+        )
+        raise
+    logger.info(
+        "Pipeline service {} built: {} (+{:.3f}s)",
+        kind, _spec_summary(spec), _time.monotonic() - started,
+    )
+    return service
+
+
 def _build_service_categories(*, stt: Any, llm: Any, tts: Any) -> dict:
     """Map each built service instance's ``.name`` to its role category.
 
@@ -136,10 +169,17 @@ class PipecatPipelineBuilder(PipelineBuilder):
         from core.processors.duplicate_transcription_filter import DuplicateTranscriptionFilter
         from core.processors.transcription_timeout_turn_stop import TranscriptionTimeoutUserTurnStopStrategy
 
+        _t_build_start = _time.monotonic()
+        logger.info(
+            "Pipeline build START: agent={} s2s={} llm={} stt={} tts={}",
+            getattr(agent, "id", None), is_s2s,
+            _spec_summary(params.llm), _spec_summary(params.stt), _spec_summary(params.tts),
+        )
+
         # --- Build services from the resolved specs (plain dicts, no DB) ---
-        llm = build_llm(params.llm) if params.llm else None
-        stt = build_stt(params.stt) if (not is_s2s and params.stt) else None
-        tts = build_tts(params.tts) if (not is_s2s and params.tts) else None
+        llm = _build_service("llm", build_llm, params.llm)
+        stt = _build_service("stt", build_stt, None if is_s2s else params.stt)
+        tts = _build_service("tts", build_tts, None if is_s2s else params.tts)
 
         _t = _time.monotonic()
         rtvi = RTVIProcessor()
@@ -149,10 +189,20 @@ class PipecatPipelineBuilder(PipelineBuilder):
         doc_tools = None
         if agent:
             from core.services.document_tool_service import build_document_tool
-            doc_tools = build_document_tool(
-                llm, agent.id, agent.organization_id, params.kb,
-                tool_call_entries=tool_call_entries, current_turn=current_turn,
-            )
+            try:
+                doc_tools = build_document_tool(
+                    llm, agent.id, agent.organization_id, params.kb,
+                    tool_call_entries=tool_call_entries, current_turn=current_turn,
+                )
+                logger.info(
+                    "Document tool built for agent {}: {} tool(s), kb_configured={}",
+                    agent.id,
+                    len(doc_tools.standard_tools) if doc_tools else 0,
+                    bool(params.kb),
+                )
+            except Exception as e:
+                logger.exception("Document tool build FAILED for agent {}: {}", agent.id, e)
+                raise
 
         # Custom + built-in tools, rebuilt from the cached tool dicts (no DB query).
         custom_tools_schema = None
@@ -165,33 +215,41 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 logger.info("Building {} cached tools for agent {}", len(custom_tools), agent.id)
                 custom_tools_schema = build_custom_tool_schemas(custom_tools)
                 for tool in custom_tools:
-                    # Only "custom" tools are customer webhooks; everything else
-                    # (google_calendar, send_sms, …) is a built-in whose tool_type IS
-                    # the specific type. google_calendar needs org_id for its OAuth
-                    # lookup. (The old code routed identically: tool_type != "custom".)
-                    if tool.tool_type != "custom":
-                        handler = create_built_in_tool_handler(
-                            tool, from_number, org_id=agent.organization_id,
-                            tool_call_entries=tool_call_entries,
-                            current_turn=current_turn,
-                            tool_dedup=tool_dedup,
+                    try:
+                        # Only "custom" tools are customer webhooks; everything else
+                        # (google_calendar, send_sms, …) is a built-in whose tool_type IS
+                        # the specific type. google_calendar needs org_id for its OAuth
+                        # lookup. (The old code routed identically: tool_type != "custom".)
+                        if tool.tool_type != "custom":
+                            handler = create_built_in_tool_handler(
+                                tool, from_number, org_id=agent.organization_id,
+                                tool_call_entries=tool_call_entries,
+                                current_turn=current_turn,
+                                tool_dedup=tool_dedup,
+                            )
+                        else:
+                            handler = create_custom_tool_handler(
+                                tool,
+                                tool_call_entries=tool_call_entries,
+                                current_turn=current_turn,
+                            )
+                        # Register under the SAME sanitized name used in the schema so the
+                        # model's tool call (e.g. "calender_tool") maps back to this handler.
+                        fn_name = sanitize_tool_name(tool.name)
+                        llm.register_function(fn_name, handler)
+                        logger.info("Registered {} tool handler: {} (fn name: {})", tool.tool_type, tool.name, fn_name)
+                    except Exception as e:
+                        logger.exception(
+                            "Tool handler registration FAILED: name={} type={} agent={} err={}",
+                            getattr(tool, "name", "?"), getattr(tool, "tool_type", "?"), agent.id, e,
                         )
-                    else:
-                        handler = create_custom_tool_handler(
-                            tool,
-                            tool_call_entries=tool_call_entries,
-                            current_turn=current_turn,
-                        )
-                    # Register under the SAME sanitized name used in the schema so the
-                    # model's tool call (e.g. "calender_tool") maps back to this handler.
-                    fn_name = sanitize_tool_name(tool.name)
-                    llm.register_function(fn_name, handler)
-                    logger.info("Registered {} tool handler: {} (fn name: {})", tool.tool_type, tool.name, fn_name)
+                        raise
 
         # MCP tools: connect to the agent's linked MCP servers and register their tools.
         # register_mcp_tools is async (network I/O), which is why build() is async.
         mcp_tools_schema = None
         if agent:
+            _t_mcp = _time.monotonic()
             try:
                 from core.services.mcp_tool_service import register_mcp_tools
                 mcp_tools_schema = await register_mcp_tools(
@@ -200,8 +258,18 @@ class PipecatPipelineBuilder(PipelineBuilder):
                     current_turn=current_turn,
                     tool_dedup=tool_dedup,
                 )
+                logger.info(
+                    "MCP tools registered for agent {}: {} tool(s) (+{:.3f}s)",
+                    agent.id,
+                    len(mcp_tools_schema.standard_tools) if mcp_tools_schema else 0,
+                    _time.monotonic() - _t_mcp,
+                )
             except Exception as e:
-                logger.warning("MCP tools unavailable, disabled: {}", e)
+                logger.warning(
+                    "MCP tools unavailable for agent {}, DISABLED after {:.3f}s: {}",
+                    agent.id, _time.monotonic() - _t_mcp, e,
+                )
+                logger.opt(exception=True).debug("MCP registration traceback for agent {}", agent.id)
 
         # Built-in end_call tool — always-on for every agent. The single,
         # canonical path for ending a call (mandatory two-step confirmation
@@ -222,6 +290,7 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 ),
             )
             end_call_registered = True
+            logger.info("Registered built-in end_call tool for agent {}", agent.id)
 
         # Combine doc tools, custom tools, MCP tools, and built-in tools into one ToolsSchema
         all_tool_schemas = []
@@ -282,7 +351,7 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 transport.output(),
                 assistant_aggregator,
             ]
-            logger.info("[TIMING] S2S pipeline processors created (+%.3fs)", _time.monotonic() - _t)
+            logger.info("[TIMING] S2S pipeline processors created (+{:.3f}s)", _time.monotonic() - _t)
         else:
             # Standard pipeline: STT -> LLM -> TTS
             context = LLMContext(messages, combined_tools)
@@ -320,7 +389,7 @@ class PipecatPipelineBuilder(PipelineBuilder):
             # tool with a mandatory two-step confirmation (see END_CALL_SYSTEM_PROMPT).
             # The agent_config.end_call_message column is preserved for
             # backwards compatibility but no longer takes effect.
-            logger.info("[TIMING] context + aggregators + processors created (+%.3fs)", _time.monotonic() - _t)
+            logger.info("[TIMING] context + aggregators + processors created (+{:.3f}s)", _time.monotonic() - _t)
 
             # VADSpeakingTimeout caps a stuck VAD "speaking" segment (8s) so
             # segmented STTs flush and turn-stop strategies can fire; the
@@ -389,6 +458,12 @@ class PipecatPipelineBuilder(PipelineBuilder):
         if audio_buffer:
             pipeline_processors.append(audio_buffer)
 
+        logger.info(
+            "Pipeline processor chain ({}): {}",
+            len(pipeline_processors),
+            " -> ".join(getattr(p, "name", None) or type(p).__name__ for p in pipeline_processors),
+        )
+
         _t = _time.monotonic()
         pipeline = Pipeline(pipeline_processors)
 
@@ -424,7 +499,12 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 turn_observer,
             ],
         )
-        logger.info("[TIMING] Pipeline + PipelineTask created (+%.3fs)", _time.monotonic() - _t)
+        logger.info("[TIMING] Pipeline + PipelineTask created (+{:.3f}s)", _time.monotonic() - _t)
+        logger.info(
+            "Pipeline build COMPLETE: agent={} s2s={} processors={} tts_sample_rate={} total={:.3f}s",
+            getattr(agent, "id", None), is_s2s, len(pipeline_processors),
+            tts_sample_rate, _time.monotonic() - _t_build_start,
+        )
 
         return BuildResult(
             pipeline=pipeline,

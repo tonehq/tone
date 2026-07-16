@@ -69,6 +69,13 @@ def build_llm(spec: dict) -> Optional[Any]:
     metadata = spec["metadata"]
     model_meta = spec["model_meta_data"]
 
+    logger.info(
+        "[LLM] building provider='{}' model='{}' base_url='{}'",
+        provider_name,
+        model,
+        (model_meta or {}).get("base_url") or (metadata or {}).get("base_url"),
+    )
+
     try:
         if provider_name == "openai":  # done
             from pipecat.services.openai.llm import OpenAILLMService
@@ -96,7 +103,7 @@ def build_llm(spec: dict) -> Optional[Any]:
             from pipecat.services.ollama.llm import OLLamaLLMService
             base_url = api_key if api_key else "http://localhost:11434/v1"
             return OLLamaLLMService(model=model or "llama2", base_url=base_url, params=build_input_params(OLLamaLLMService, metadata))
-        if provider_name in ["azure", "cerebras", "nvidia_nim", "fireworks", "together", "perplexity", "qwen", "deepseek", "mistral", "sambanova", "grok", "cohere", "gemma"]:
+        if provider_name in ["azure", "cerebras", "nvidia_nim", "fireworks", "together", "perplexity", "qwen", "deepseek", "mistral", "sambanova", "grok", "cohere", "gemma", "mistral-self-hosted"]:
             from pipecat.services.openai.llm import BaseOpenAILLMService
             base_url = model_meta.get("base_url") or metadata.get("base_url")
             default_models = {
@@ -113,6 +120,7 @@ def build_llm(spec: dict) -> Optional[Any]:
                 "grok": "grok-3",
                 "cohere": "command-a-03-2025",
                 "gemma": "gemma-2-2b-it",
+                "mistral-self-hosted": "mistral-nemo-12b",
             }
             default_base_urls = {
                 "cerebras": "https://api.cerebras.ai/v1",
@@ -127,6 +135,7 @@ def build_llm(spec: dict) -> Optional[Any]:
                 "grok": "https://api.x.ai/v1",
                 "cohere": "https://api.cohere.ai/compatibility/v1",
                 "gemma": "http://staging-llm-gemma-service.staging.svc.cluster.local/v1",
+                "mistral-self-hosted": "http://staging-llm-mistral-service.staging.svc.cluster.local/v1",
             }
             if not base_url:
                 base_url = default_base_urls.get(provider_name)
@@ -164,13 +173,13 @@ def build_llm(spec: dict) -> Optional[Any]:
                 voice_id=voice_id,
                 system_instruction=metadata.get("system_instruction"),
             )
-        logger.warning("No matching LLM provider for '%s'", provider_name)
+        logger.warning("No matching LLM provider for '{}'", provider_name)
         return None
     except ImportError:
-        logger.exception("LLM provider %s not available (ImportError)", provider_name)
+        logger.exception("LLM provider {} not available (ImportError)", provider_name)
         return None
     except Exception as e:
-        logger.exception("LLM provider %s failed to initialize: %s", provider_name, e)
+        logger.exception("LLM provider {} failed to initialize: {}", provider_name, e)
         return None
 
 
@@ -181,6 +190,14 @@ def build_stt(spec: dict) -> Optional[Any]:
     model = spec["model_name"]
     metadata = spec["metadata"]
     model_meta = spec["model_meta_data"]
+
+    logger.info(
+        "[STT] building provider='{}' model='{}' base_url='{}' sample_rate={}",
+        provider_name,
+        model,
+        (model_meta or {}).get("base_url") or (metadata or {}).get("base_url"),
+        (metadata or {}).get("sample_rate"),
+    )
 
     try:
         if provider_name == "deepgram":
@@ -225,6 +242,35 @@ def build_stt(spec: dict) -> Optional[Any]:
             if metadata.get("sample_rate") is not None:
                 ws_kwargs["sample_rate"] = metadata["sample_rate"]
             return NvidiaWebSocketService(url=ws_url, trace_id=get_trace_id(), **ws_kwargs)
+        if provider_name == "nemotron-asr-self-hosted":
+            # Self-hosted Nemotron ASR on a Riva NIM — pipecat's first-party Riva
+            # gRPC client. Local deployments take a bare host:port, no SSL, no key.
+            from pipecat.services.nvidia.stt import NvidiaSTTService
+            server = (
+                model_meta.get("base_url")
+                or metadata.get("base_url")
+                or "staging-stt-nemotron-service.staging.svc.cluster.local:50051"
+            )
+            for scheme in ("http://", "https://", "grpc://", "grpcs://"):
+                if server.startswith(scheme):
+                    server = server[len(scheme):]
+                    break
+            server = server.strip().rstrip("/")
+            nemotron_kwargs = {}
+            if metadata.get("sample_rate") is not None:
+                nemotron_kwargs["sample_rate"] = metadata["sample_rate"]
+            logger.debug("[STT {}] server: {} kwargs: {}", provider_name, server, nemotron_kwargs)
+            # Endpointing is left on pipecat's defaults (stop_history=320). Passing all
+            # params <= 0 makes riva.client send no EndpointingConfig at all, which
+            # disables Riva endpointing entirely — it then returns neither interims nor
+            # finals and the STT goes completely mute (verified on staging 2026-07-15).
+            return NvidiaSTTService(
+                api_key=None,
+                server=server,
+                use_ssl=False,
+                model_function_map={"model_name": model or "nemotron-asr-streaming"},
+                **nemotron_kwargs,
+            )
         if provider_name == "parakeet":
             from core.services.pipeline.parakeet_stt_service import ParakeetSTTService
             from core.logging import get_trace_id
@@ -402,6 +448,15 @@ def build_tts(spec: dict) -> Optional[Any]:
 
     tts_voice_id = metadata.get("voice_id")
     tts_language = metadata.get("language")
+
+    logger.info(
+        "[TTS] building provider='{}' model='{}' base_url='{}' voice_id='{}' language='{}'",
+        provider_name,
+        model,
+        (model_meta or {}).get("base_url") or (metadata or {}).get("base_url"),
+        tts_voice_id,
+        tts_language,
+    )
 
     # HTTP-based providers create their aiohttp session lazily, in their own branch
     # right before construction (so a failed import never leaks a session). `session`
@@ -706,6 +761,31 @@ def build_tts(spec: dict) -> Optional[Any]:
                 qwen_kwargs["sample_rate"] = metadata["sample_rate"]
             logger.debug("[TTS {}] qwen_kwargs: {}", provider_name, qwen_kwargs)
             return QwenWebSocketTTSService(url=ws_url, trace_id=get_trace_id(), **qwen_kwargs)
+
+        if provider_name == "qwen-tts-self-hosted":
+            # Self-hosted Qwen3-TTS on vLLM-Omni. Unlike the /ws/tts sidecars above,
+            # this speaks OpenAI's /v1/audio/speech and streams base64 PCM over SSE.
+            from core.services.pipeline.qwen_omni_tts_service import QwenOmniTTSService
+            from core.logging import get_trace_id
+            base_url = (
+                model_meta.get("base_url")
+                or metadata.get("base_url")
+                or "http://staging-tts-qwen-service.staging.svc.cluster.local/v1"
+            )
+            qwen_kwargs = {}
+            if tts_voice_id is not None:
+                qwen_kwargs["voice_id"] = tts_voice_id
+            if tts_language is not None:
+                qwen_kwargs["language"] = tts_language
+            if metadata.get("sample_rate") is not None:
+                qwen_kwargs["sample_rate"] = metadata["sample_rate"]
+            logger.debug("[TTS {}] qwen_kwargs: {}", provider_name, qwen_kwargs)
+            return QwenOmniTTSService(
+                base_url=base_url,
+                model=model or "qwen3-tts",
+                trace_id=get_trace_id(),
+                **qwen_kwargs,
+            )
 
         logger.warning("Unsupported TTS provider: {}", provider_name)
         return None
