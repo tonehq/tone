@@ -54,6 +54,17 @@ class PipecatPipelineRunner(PipelineRunner):
         provider_call_id = _provider_call_id(call_data)
         from_number = call_data.get("from", "")
         to_number = call_data.get("to", "")
+        # Outbound calls (see OutboundCallService): the `calls` row was created at
+        # request time and is threaded back here via the TwiML <Parameter> tags
+        # (promoted onto body in TelephonyTransport.build). When present, the call
+        # log is UPDATED in place rather than inserted.
+        direction = body.get("direction")
+        scheduled_call_id = body.get("scheduled_call_id")
+        if direction == "outbound":
+            logger.info(
+                "[outbound] pipeline run for outbound call agent={} from={} to={} sid={} scheduled_call_id={}",
+                getattr(agent, "id", None), from_number, to_number, provider_call_id, scheduled_call_id,
+            )
 
         # Call-lifecycle state (owned by the runner; captured by event handler closures)
         call_log_state = {"id": None, "done": False}
@@ -161,6 +172,8 @@ class PipecatPipelineRunner(PipelineRunner):
                             trace_id=_call_trace_id if _call_trace_id != "none" else None,
                             pipeline_config=pipeline_snapshot,
                             started_at=call_started_at,
+                            direction=direction,
+                            scheduled_call_id=scheduled_call_id,
                         )
                         if call_log:
                             call_log_state["id"] = call_log.id

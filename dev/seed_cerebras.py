@@ -11,24 +11,19 @@ entry from ``dev/dev-data.json`` so the source of truth stays in one place.
 
 import json
 import os
-import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-
-def _slugify(text):
-    text = text.lower().strip()
-    text = re.sub(r"[^\w\s-]", "", text)
-    text = re.sub(r"[\s_]+", "-", text)
-    text = re.sub(r"-+", "-", text)
-    return text.strip("-")
 
 
 def main():
     from core.database.session import get_db_script
     from core.models.model import Model
     from core.models.model_provider import ModelProvider
+
+    # Reuse the single slug implementation from dev/seed.py (imported lazily so this
+    # standalone seeder stays light and the slug logic lives in one place).
+    from dev.seed import _slugify
 
     data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dev-data.json")
     with open(data_path) as f:
