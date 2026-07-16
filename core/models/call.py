@@ -36,6 +36,7 @@ class Call(OrgScopedModel):
     pod_id = Column(UUID(as_uuid=True), ForeignKey("pods.id", ondelete="SET NULL"), nullable=True, index=True)
     metadata_ = Column("metadata", JSONB, nullable=True)
     pipeline_config = Column(JSONB, nullable=True)
+    overlapped_calls = Column(JSONB, nullable=False, server_default="[]")
 
     pod = relationship("Pod", back_populates="calls")
 

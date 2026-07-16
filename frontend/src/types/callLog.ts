@@ -269,3 +269,52 @@ export interface CallFacetsState {
   facets: CallFacets;
   loading: boolean;
 }
+
+// -----------------------------------------------------------------------------
+// Metrics summary (POST /call-log/metrics-summary) — 2-step nested aggregation
+// over the same filter scope the table is showing. See backend
+// ``CallMetricsAnalyticsService`` for the math.
+// -----------------------------------------------------------------------------
+
+/** Aggregate stats over a list of per-call values (rowKey => this block). */
+export interface MetricsSummaryStatBlock {
+  avg: number | null;
+  p50: number | null;
+  p99: number | null;
+}
+
+export interface MetricsSummarySeries {
+  unit: 'ms' | 's';
+  /** Number of calls that contributed at least one positive sample to this series. */
+  call_sample_count: number;
+  /**
+   * 3×3 grid keyed as ``per_call[rowStat][colStat]``.
+   *   row = the per-call stat computed first (over that call's turn samples)
+   *   col = the across-call aggregate then applied to the list of per-call stats
+   * e.g. ``per_call.p99.p50`` = median of the per-call p99s ("typical call's worst turn").
+   */
+  per_call: {
+    avg: MetricsSummaryStatBlock;
+    p50: MetricsSummaryStatBlock;
+    p99: MetricsSummaryStatBlock;
+  };
+}
+
+export type MetricsSummarySeriesKey = 'llm_ttfb' | 'stt_ttfb' | 'tts_ttfb' | 'end_to_end_latency';
+
+export interface MetricsSummary {
+  call_count: number;
+  calls_with_metrics: number;
+  series: Record<MetricsSummarySeriesKey, MetricsSummarySeries>;
+}
+
+export interface MetricsSummaryParams {
+  start_date_time?: string;
+  end_date_time?: string;
+  filters?: CallLogFilterParam[];
+}
+
+export interface MetricsSummaryState {
+  data: MetricsSummary | null;
+  loading: boolean;
+}
