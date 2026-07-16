@@ -31,7 +31,7 @@ from core.api.v1 import webrtc
 if _LOAD_FULL_API:
     from core.api.v1 import (
         auth, users, organizations, agent_configs, channels, oauth,
-        agents, mcp_servers, services, tools, dashboard,
+        agents, agent_readiness, mcp_servers, services, tools, dashboard,
         call_logs, call_metrics, sessions, workflows, audit_logs,
         app_integrations, outbound_calls,
     )
@@ -108,6 +108,7 @@ if ee_enabled:
         from ee.api.v1 import channels as ee_channels
         from ee.api.v1 import oauth as ee_oauth
         from ee.api.v1 import agents as ee_agents
+        from ee.api.v1 import agent_readiness as ee_agent_readiness
         from ee.api.v1 import mcp_servers as ee_mcp_servers
         from ee.api.v1 import app_integrations as ee_app_integrations
         from ee.api.v1 import services as ee_services
@@ -126,6 +127,7 @@ if ee_enabled:
         from ee.api.v1 import knowledge_base as ee_knowledge_base
         api_v1.include_router(ee_knowledge_base.router, prefix="/knowledge-base", tags=["knowledge-base"])
         api_v1.include_router(ee_agents.router, prefix="/agent", tags=["agent"])
+        api_v1.include_router(ee_agent_readiness.router, prefix="/agent", tags=["agent-readiness"])
         api_v1.include_router(ee_mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
         api_v1.include_router(ee_app_integrations.router, prefix="/app-integration", tags=["app-integration"])
         api_v1.include_router(ee_services.router, prefix="/services", tags=["services"])
@@ -151,6 +153,7 @@ else:
         api_v1.include_router(oauth.router, prefix="/oauth", tags=["oauth"])
         api_v1.include_router(knowledge_base.router, prefix="/knowledge-base", tags=["knowledge-base"])
         api_v1.include_router(agents.router, prefix="/agent", tags=["agent"])
+        api_v1.include_router(agent_readiness.router, prefix="/agent", tags=["agent-readiness"])
         api_v1.include_router(mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
         api_v1.include_router(app_integrations.router, prefix="/app-integration", tags=["app-integration"])
         api_v1.include_router(services.router, prefix="/services", tags=["services"])

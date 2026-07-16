@@ -1,10 +1,12 @@
-import { getCallFacets, getCallLogs } from '@/services/callLogService';
+import { getCallFacets, getCallLogs, getCallMetricsSummary } from '@/services/callLogService';
 import type {
   CallFacetsParams,
   CallFacetsState,
   CallLogQueryParams,
   CallLogRow,
   CallLogsState,
+  MetricsSummaryParams,
+  MetricsSummaryState,
 } from '@/types/callLog';
 import { atom } from 'jotai';
 
@@ -29,6 +31,25 @@ export const fetchCallFacets = atom(null, async (_get, set, params: CallFacetsPa
     throw err;
   }
 });
+
+export const callMetricsSummaryAtom = atom<MetricsSummaryState>({
+  data: null,
+  loading: false,
+});
+
+export const fetchCallMetricsSummary = atom(
+  null,
+  async (_get, set, params: MetricsSummaryParams) => {
+    set(callMetricsSummaryAtom, (prev) => ({ ...prev, loading: true }));
+    try {
+      const data = await getCallMetricsSummary(params);
+      set(callMetricsSummaryAtom, { data, loading: false });
+    } catch (err) {
+      set(callMetricsSummaryAtom, (prev) => ({ ...prev, loading: false }));
+      throw err;
+    }
+  },
+);
 
 export const fetchCallLogs = atom(null, async (_get, set, params: CallLogQueryParams) => {
   set(callLogsAtom, (prev) => ({ ...prev, loading: true }));

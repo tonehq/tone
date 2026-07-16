@@ -32,6 +32,13 @@ def sync_pods_and_nodes_task(timestamp: int) -> None:
     sync_pods_and_nodes()
 
 
+@app.task(name="detect_call_overlaps", queue="call_overlaps")
+def detect_call_overlaps_task(call_id: str) -> None:
+    from core.jobs.call_overlap import detect_call_overlaps
+
+    detect_call_overlaps(call_id=call_id)
+
+
 async def _defer_ingestion(upload_id, org_id, delete_existing: bool) -> int:
     async with app.open_async():
         return await ingest_upload.defer_async(
@@ -126,3 +133,15 @@ def cancel_outbound_job(job_id: int) -> bool:
     except Exception as exc:  # noqa: BLE001
         logger.warning("[outbound] cancel_outbound_job failed job_id={} err={}", job_id, exc)
         return False
+
+
+async def enqueue_call_overlap_detection(call_id) -> int:
+    async with app.open_async():
+        return await detect_call_overlaps_task.defer_async(call_id=str(call_id))
+
+
+def enqueue_call_overlap_detection_sync(call_id) -> int:
+    """Sync counterpart for callers inside a sync service method
+    (e.g. ``CallLogService.complete_call``)."""
+    with app.open():
+        return detect_call_overlaps_task.defer(call_id=str(call_id))

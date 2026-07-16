@@ -322,6 +322,34 @@ class CallService(BaseService):
 
         return result
 
+    def filtered_calls_query(
+        self,
+        start_date_time: Optional[str] = None,
+        end_date_time: Optional[str] = None,
+        filters: Optional[List[Dict[str, Any]]] = None,
+    ) -> Query:
+        """Base query for calls matching the given filter scope.
+
+        Same joins + predicates used by :meth:`get_calls` and :meth:`get_facets`
+        (Call ⨝ Agent ⨝ Channel, 1:1 outerjoin on CallMetrics, date range +
+        ``_apply_filters``) — minus pagination, sort and the phone-number
+        alias. Analytics endpoints call this to iterate the filtered set
+        without paging, adding their own ``with_entities(...)`` projection.
+        Keeping the scope in one place means ``/list``, ``/facets`` and any
+        aggregate endpoint always agree on which calls are "in scope".
+        """
+        query = (
+            self.query(Call)
+            .join(Agent, Call.agent_id == Agent.id)
+            .join(Channel, Call.channel_id == Channel.id)
+            .outerjoin(CallMetrics, CallMetrics.call_id == Call.id)
+        )
+        if start_date_time is not None:
+            query = query.filter(Call.started_at >= start_date_time)
+        if end_date_time is not None:
+            query = query.filter(Call.started_at <= end_date_time)
+        return self._apply_filters(query, filters, column_map=self._filter_column_map())
+
     def _response_columns(self, from_pn) -> List[Any]:
         """Labeled columns fetched alongside Call for /list and /get.
 

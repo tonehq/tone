@@ -7,6 +7,8 @@ import { agentsListConfig } from '@/components/agents/agentsListConfig';
 import CloneAgentModal from '@/components/agents/CloneAgentModal';
 import CreateAgentModal from '@/components/agents/CreateAgentModal';
 import NewOutboundCallModal from '@/components/outbound-calls/NewOutboundCallModal';
+import AgentReadinessCell from '@/components/agents/readiness/AgentReadinessCell';
+import ReadinessDrawer from '@/components/agents/readiness/ReadinessDrawer';
 import {
   CustomButton,
   CustomTable,
@@ -36,6 +38,10 @@ const AgentListPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [cloneTarget, setCloneTarget] = useState<ApiAgent | null>(null);
   const [makeCallAgentId, setMakeCallAgentId] = useState<string | null>(null);
+  /** Agent whose readiness drawer is currently open. Null = closed. Kept at
+   * page level so one drawer instance serves every row (cheaper than one
+   * drawer per cell). */
+  const [readinessTarget, setReadinessTarget] = useState<string | null>(null);
 
   const handleEdit = useCallback(
     (row: ApiAgent) => {
@@ -106,6 +112,13 @@ const AgentListPage: React.FC = () => {
       dataIndex: 'agent_type',
       sorter: true,
       render: (_value, record) => <AgentTypeBadge agentType={record.agent_type} />,
+    },
+    {
+      key: 'readiness',
+      title: 'Readiness',
+      render: (_value, record) => (
+        <AgentReadinessCell agentId={record.id} onOpen={(agentId) => setReadinessTarget(agentId)} />
+      ),
     },
     {
       key: 'phone_number',
@@ -257,6 +270,13 @@ const AgentListPage: React.FC = () => {
         onClose={() => setMakeCallAgentId(null)}
         defaultAgentId={makeCallAgentId ?? undefined}
         lockAgent
+      />
+
+      <ReadinessDrawer
+        open={readinessTarget !== null}
+        onClose={() => setReadinessTarget(null)}
+        agentId={readinessTarget}
+        trigger="list_page"
       />
     </div>
   );

@@ -12,6 +12,7 @@ from core.models.phone_number import PhoneNumber
 from core.models.upload import Upload
 from core.services.base import BaseService
 from core.services.pod_registry_service import resolve_pod_id
+from core.services.post_call import PostCallHandler
 
 
 class CallLogService(BaseService):
@@ -254,6 +255,8 @@ class CallLogService(BaseService):
             except Exception as e:
                 logger.error("Failed to persist tool_executions for call {}: {}", call.id, e)
 
+        PostCallHandler().post_call(call)
+
         return call
 
     def fail_call(self, call_log_id) -> Optional[Call]:
@@ -267,6 +270,9 @@ class CallLogService(BaseService):
         call.metadata_ = metadata
 
         self.db.commit()
+
+        PostCallHandler().post_call(call)
+
         return call
 
     def delete_call(self, call_log_id) -> None:

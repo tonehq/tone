@@ -172,11 +172,14 @@ export const updateAgentVersion = async (
 export const switchActiveAgentVersion = async (
   agentId: string,
   configId: string,
+  /** Set true after the user has explicitly confirmed publishing over
+   * warnings. Blockers always reject regardless of this flag. */
+  forceWarnings = false,
 ): Promise<AgentDetail> => {
   const res = await axiosInstance.post<AgentDetail>(
     '/agent/switch_active_version',
     { config_id: configId },
-    { params: { agent_id: agentId } },
+    { params: { agent_id: agentId, force_warnings: forceWarnings } },
   );
   return res.data;
 };
