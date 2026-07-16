@@ -11,23 +11,15 @@ from shared.config import settings
 router = APIRouter()
 
 
-async def _resolve_stream(request: Request, tag: str):
-    host = request.url.hostname or "localhost"
-    ws_url = f"wss://{host}/ws"
+def _pinned_ws_url(default_ws_url: str, tag: str):
+    """Resolve the media-stream WebSocket URL, honoring pod pinning.
 
-    from_number = ""
-    to_number = ""
-    try:
-        if request.method == "POST":
-            form = await request.form()
-            from_number = (form.get("From") or "").strip()
-            to_number = (form.get("To") or "").strip()
-        else:
-            from_number = (request.query_params.get("From") or "").strip()
-            to_number = (request.query_params.get("To") or "").strip()
-    except Exception:
-        pass
-
+    Returns ``(ws_url, pod_name, pod_ordinal, node_name)`` — the pinned pod URL when
+    pinning is enabled and succeeds, otherwise ``default_ws_url``. Shared by the
+    inbound ``/twiml`` and outbound ``/twiml/outbound`` endpoints so both dial the
+    same pinned voice pod at answer time.
+    """
+    ws_url = default_ws_url
     pod_name = None
     pod_ordinal = None
     node_name = None
@@ -46,6 +38,26 @@ async def _resolve_stream(request: Request, tag: str):
                 ws_url = pinned_url
         except Exception as exc:
             logger.warning("[{}] pod pinning failed, falling back to /ws: {}", tag, exc)
+    return ws_url, pod_name, pod_ordinal, node_name
+
+
+async def _resolve_stream(request: Request, tag: str):
+    default_ws_url = f"wss://{request.url.hostname or 'localhost'}/ws"
+
+    from_number = ""
+    to_number = ""
+    try:
+        if request.method == "POST":
+            form = await request.form()
+            from_number = (form.get("From") or "").strip()
+            to_number = (form.get("To") or "").strip()
+        else:
+            from_number = (request.query_params.get("From") or "").strip()
+            to_number = (request.query_params.get("To") or "").strip()
+    except Exception:
+        pass
+
+    ws_url, pod_name, pod_ordinal, node_name = _pinned_ws_url(default_ws_url, tag)
 
     logger.info(
         "[{}] REQUEST from={} to={} pod={} ordinal={} node={} pod_url={}",
@@ -101,3 +113,78 @@ async def telnyx_texml(request: Request) -> Response:
         from_number, to_number, pod_name, node_name, ws_url,
     )
     return Response(content=xml, media_type="application/xml")
+
+
+_HANGUP_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>'
+
+
+@router.post("/twiml/outbound")
+@router.get("/twiml/outbound")
+async def twiml_outbound(request: Request) -> Response:
+    """Answer TwiML for an outbound call. Twilio fetches this when the callee answers.
+    All routing context is supplied by the caller in the query string (no DB row needed),
+    so this works for both immediate calls and dispatched scheduled calls."""
+    from core.services.call_engines import get_call_engine
+
+    qp = request.query_params
+    agent_id = (qp.get("agent_id") or "").strip()
+    from_number = (qp.get("from") or "").strip()
+    to_number = (qp.get("to") or "").strip()
+    scheduled_call_id = (qp.get("scheduled_call_id") or "").strip()
+    if not agent_id:
+        logger.warning("[/twiml/outbound] missing agent_id")
+        return Response(content=_HANGUP_TWIML, media_type="application/xml")
+
+    default_ws_url = f"wss://{request.url.hostname or 'localhost'}/ws"
+    ws_url, pod_name, pod_ordinal, node_name = _pinned_ws_url(default_ws_url, "/twiml/outbound")
+    params = {
+        "from": from_number,
+        "to": to_number,
+        "agent_id": agent_id,
+        "direction": "outbound",
+    }
+    if scheduled_call_id:
+        params["scheduled_call_id"] = scheduled_call_id
+    xml = get_call_engine("twilio").generate_twiml(ws_url, params)
+
+    logger.info(
+        "[/twiml/outbound] RESPONSE agent={} to={} scheduled_call_id={} pod={} node={} handshake_url={}",
+        agent_id, to_number, scheduled_call_id, pod_name, node_name, ws_url,
+    )
+    return Response(content=xml, media_type="application/xml")
+
+
+@router.post("/twilio/outbound-status")
+async def twilio_outbound_status(request: Request) -> Response:
+    """Twilio status callback for a SCHEDULED outbound call (immediate calls carry no
+    scheduled_call_id and set no callback). Advances the scheduled_calls row's status.
+    Always returns 204 so Twilio doesn't retry-storm on our internal errors.
+
+    Auth: deliberately unauthenticated, consistent with the inbound /twiml webhook and
+    the rest of the telephony callbacks (no X-Twilio-Signature validation anywhere yet).
+    Abuse surface is bounded: handle_status_callback cross-checks the posted CallSid
+    against the row's stored provider_call_sid and only advances status monotonically, so
+    a spoofed callback can neither regress a call nor act without knowing the real SID.
+    If we adopt signature validation, do it uniformly across all telephony webhooks."""
+    from core.models.scheduled_call import ScheduledCall
+    from core.services.outbound_call_service import OutboundCallService
+
+    scheduled_call_id = (request.query_params.get("scheduled_call_id") or "").strip()
+    try:
+        form = await request.form()
+        form_dict = {k: form.get(k) for k in ("CallSid", "CallStatus", "CallDuration", "To", "From")}
+        logger.info(
+            "[/twilio/outbound-status] scheduled_call_id={} sid={} status={}",
+            scheduled_call_id, form_dict.get("CallSid"), form_dict.get("CallStatus"),
+        )
+        if scheduled_call_id:
+            with get_db_context() as db:
+                sc = db.query(ScheduledCall).filter(ScheduledCall.id == scheduled_call_id).first()
+                if sc is not None:
+                    OutboundCallService(db, org_id=sc.organization_id).handle_status_callback(
+                        scheduled_call_id, form_dict
+                    )
+    except Exception as exc:  # noqa: BLE001 — never surface errors to Twilio
+        logger.error("[/twilio/outbound-status] error scheduled_call_id={} err={}", scheduled_call_id, exc)
+
+    return Response(status_code=204)

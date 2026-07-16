@@ -16,7 +16,10 @@ class Call(OrgScopedModel):
         ForeignKey("agent_configs.id", ondelete="SET NULL"),
         nullable=True,
     )
-    channel_id = Column(UUID(as_uuid=True), ForeignKey("channels.id", ondelete="RESTRICT"), nullable=False)
+    # Nullable at the schema level, but every real call log sets it: a `calls` row is
+    # only created once the media stream connects (inbound and outbound alike), at which
+    # point the channel is resolved. Unconnected outbound attempts live in scheduled_calls.
+    channel_id = Column(UUID(as_uuid=True), ForeignKey("channels.id", ondelete="RESTRICT"), nullable=True)
     direction = Column(String(10), nullable=False)  # inbound | outbound
     from_phone_number_id = Column(UUID(as_uuid=True), ForeignKey("phone_numbers.id", ondelete="SET NULL"), nullable=True)
     to_phone_number_id = Column(UUID(as_uuid=True), ForeignKey("phone_numbers.id", ondelete="SET NULL"), nullable=True)
@@ -28,7 +31,10 @@ class Call(OrgScopedModel):
     provider_call_id = Column(String(120), nullable=True)
     # Correlates this call to its server logs (format: {short_uuid}-{agent_id}-{call_id}).
     trace_id = Column(String(120), nullable=True, index=True)
-    started_at = Column(DateTime(timezone=True), nullable=False)
+    # Nullable at the schema level for historical reasons; in practice it is always set
+    # when the media stream starts (which is also when the row is created). Unconnected
+    # outbound attempts never reach this table — they live in scheduled_calls.
+    started_at = Column(DateTime(timezone=True), nullable=True)
     ended_at = Column(DateTime(timezone=True), nullable=True)
     duration_seconds = Column(Integer, nullable=True)
     recording_upload_id = Column(UUID(as_uuid=True), ForeignKey("uploads.id", ondelete="SET NULL"), nullable=True)

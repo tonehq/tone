@@ -33,7 +33,7 @@ if _LOAD_FULL_API:
         auth, users, organizations, agent_configs, channels, oauth,
         agents, mcp_servers, services, tools, dashboard,
         call_logs, call_metrics, sessions, workflows, audit_logs,
-        app_integrations,
+        app_integrations, outbound_calls,
     )
 from core.middleware.request_context import RequestContextMiddleware
 from core.api.telephony_routes import router as telephony_router
@@ -135,6 +135,7 @@ if ee_enabled:
         api_v1.include_router(ee_call_metrics.router, prefix="/call-metrics", tags=["call-metrics"])
         api_v1.include_router(workflows.router, prefix="/workflow", tags=["workflow"])
         api_v1.include_router(audit_logs.router, prefix="/audit-log", tags=["audit-log"])
+        api_v1.include_router(outbound_calls.router, prefix="/outbound-call", tags=["outbound-call"])
     # webrtc is always mounted — needed on call pods for WebRTC signaling.
     api_v1.include_router(webrtc.router, prefix="/webrtc", tags=["webrtc"])
     print("EE edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
@@ -159,6 +160,7 @@ else:
         api_v1.include_router(call_metrics.router, prefix="/call-metrics", tags=["call-metrics"])
         api_v1.include_router(workflows.router, prefix="/workflow", tags=["workflow"])
         api_v1.include_router(audit_logs.router, prefix="/audit-log", tags=["audit-log"])
+        api_v1.include_router(outbound_calls.router, prefix="/outbound-call", tags=["outbound-call"])
     # webrtc is always mounted — needed on call pods for WebRTC signaling.
     api_v1.include_router(webrtc.router, prefix="/webrtc", tags=["webrtc"])
     print("Core edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
