@@ -140,7 +140,16 @@ def build_llm(spec: dict) -> Optional[Any]:
             if not base_url:
                 base_url = default_base_urls.get(provider_name)
             default_model = default_models.get(provider_name, "gpt-4o")
-            return BaseOpenAILLMService(api_key=api_key, model=model or default_model, base_url=base_url, params=build_input_params(BaseOpenAILLMService, metadata))
+            llm_cls = BaseOpenAILLMService
+            if provider_name == "mistral-self-hosted":
+                # vLLM in `--tokenizer-mode mistral` validates message order with
+                # mistral_common, which 400s on the tool -> user sequence pipecat
+                # produces when the bot is interrupted mid tool call.
+                from core.services.pipeline.mistral_self_hosted_llm_service import (
+                    MistralSelfHostedLLMService,
+                )
+                llm_cls = MistralSelfHostedLLMService
+            return llm_cls(api_key=api_key, model=model or default_model, base_url=base_url, params=build_input_params(BaseOpenAILLMService, metadata))
         if provider_name == "openai_realtime":
             from pipecat.services.openai.realtime.events import (
                 AudioConfiguration, AudioInput, AudioOutput,
