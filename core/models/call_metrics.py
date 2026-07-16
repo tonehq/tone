@@ -29,4 +29,15 @@ class CallMetrics(OrgScopedModel):
     # time from the raw arrays above. Read path prefers this over recomputing.
     computed_stats = Column(JSONB, nullable=True)
 
+    # Per-call, per-series 3×3 stat blocks materialized by the post-call
+    # ``compute_call_metrics_aggregates`` job. Each stores
+    # ``{"unit": ..., "avg": {...}, "p50": {...}, "p99": {...}}``.
+    # Read path (``CallMetricsAnalyticsService.summarize``) reads these
+    # directly and falls back to inline compute from ``turn_metrics`` when
+    # a row was written before the job ran.
+    llm_series_stats = Column(JSONB, nullable=True)
+    stt_series_stats = Column(JSONB, nullable=True)
+    tts_series_stats = Column(JSONB, nullable=True)
+    end_to_end_series_stats = Column(JSONB, nullable=True)
+
     call = relationship("Call", back_populates="metrics_record")

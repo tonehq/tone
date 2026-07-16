@@ -39,6 +39,13 @@ def detect_call_overlaps_task(call_id: str) -> None:
     detect_call_overlaps(call_id=call_id)
 
 
+@app.task(name="compute_call_metrics_aggregates", queue="call_metrics")
+def compute_call_metrics_aggregates_task(call_id: str) -> None:
+    from core.jobs.call_metrics_aggregates import compute_call_metrics_aggregates
+
+    compute_call_metrics_aggregates(call_id=call_id)
+
+
 async def _defer_ingestion(upload_id, org_id, delete_existing: bool) -> int:
     async with app.open_async():
         return await ingest_upload.defer_async(
@@ -145,3 +152,15 @@ def enqueue_call_overlap_detection_sync(call_id) -> int:
     (e.g. ``CallLogService.complete_call``)."""
     with app.open():
         return detect_call_overlaps_task.defer(call_id=str(call_id))
+
+
+async def enqueue_compute_call_metrics_aggregates(call_id) -> int:
+    async with app.open_async():
+        return await compute_call_metrics_aggregates_task.defer_async(call_id=str(call_id))
+
+
+def enqueue_compute_call_metrics_aggregates_sync(call_id) -> int:
+    """Sync counterpart mirroring ``enqueue_consolidate_call_metrics_sync`` —
+    called from ``PostCallHandler`` which runs inside the sync completion
+    path."""
+    with app.open():
