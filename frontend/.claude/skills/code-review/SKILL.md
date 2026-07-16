@@ -2,12 +2,12 @@
 name: code-review
 description: Use this skill when the user asks to "review my changes", "code review", "review before commit", "/code-review", or wants SOLID, security, performance, accessibility, or error handling analysis on current git changes. Accepts an optional base branch argument (defaults to main).
 argument-hint: '[base-branch]'
-allowed-tools: Bash, Read
+allowed-tools: Bash, Read, Edit, Write
 license: proprietary
 compatibility: Requires git. Designed for Claude Code in a Next.js (App Router) project.
 metadata:
   author: tonehq
-  version: '1.1.0'
+  version: '1.2.0'
   category: code-quality
   tags: code-review, solid, security, performance, react, nextjs, accessibility, core-web-vitals
 ---
@@ -195,6 +195,37 @@ After presenting findings, ask:
 4. No changes — review complete
 
 **Do NOT implement any changes until the user explicitly chooses an option.**
+
+---
+
+## Step 7 — Commit the applied fixes
+
+Only after fixes have been applied in Step 6 (options 1–3), post a commit so the review
+result is captured:
+
+```bash
+git branch --show-current   # confirm we are NOT on the default branch (dev/main/master)
+git add <only the files changed by the applied fixes>
+git commit
+```
+
+Rules:
+
+- **Only run this when fixes were actually applied.** Option 4 (no changes) → no commit.
+- **Never commit on the default branch.** If `git branch --show-current` is `dev`, `main`,
+  or `master`, stop and tell the user to switch to a `feature/staging/<name>` or
+  `bugfix/staging/<name>` branch first (team workflow).
+- **Stage only the files the fixes touched** — never `git add -A`. Leave unrelated
+  working-tree changes alone.
+- **Never push.** Pushing / opening PRs stays a manual step per the team merge flow.
+- Use a conventional-commit subject describing the fixes (e.g.
+  `fix(<area>): address code-review findings`) and end the message body with:
+
+  ```
+  Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+  ```
+
+- Report the resulting commit hash back to the user.
 
 ---
 

@@ -89,11 +89,28 @@ class TelephonyTransport(CallTransport):
         if from_number or to_number:
             logger.info(f"Call from: {from_number} to: {to_number}")
 
-        # Make call metadata available to run_bot() and the runner (call-log creation
-        # reads call_data/transport_type from runner_args.body). Mutate in place — this
-        # is the same body object run_bot() later reads.
+        # Outbound calls carry agent_id/direction/scheduled_call_id as TwiML
+        # <Parameter> tags, which land in call_data["body"]. Promote them to the top
+        # level of runner_args.body so get_agent_for_call resolves by agent_id and the
+        # runner threads direction/scheduled_call_id into create_call_log — no change to
+        # the inbound path (params absent → no-op).
+        custom_params = call_data.get("body") or {} if isinstance(call_data, dict) else {}
         if getattr(runner_args, "body", None) is None:
             runner_args.body = {}
+        for _key in ("agent_id", "direction", "scheduled_call_id"):
+            _val = custom_params.get(_key)
+            if _val and not runner_args.body.get(_key):
+                runner_args.body[_key] = _val
+        if custom_params.get("direction") == "outbound":
+            logger.info(
+                "Outbound call params promoted: agent_id={} scheduled_call_id={}",
+                custom_params.get("agent_id"), custom_params.get("scheduled_call_id"),
+            )
+
+        # Make call metadata available to run_bot() and the runner (call-log creation
+        # reads call_data/transport_type from runner_args.body). Mutate in place — this
+        # is the same body object run_bot() later reads. (The promotion block above
+        # already ensured runner_args.body is non-None.)
         runner_args.body["call_data"] = call_data
         runner_args.body["transport_type"] = transport_type
 
