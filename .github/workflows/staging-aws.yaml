@@ -47,6 +47,20 @@ jobs:
       - name: Create namespace
         run: kubectl create namespace staging --dry-run=client -o yaml | kubectl apply -f -
 
+      - name: Create monitoring namespace
+        run: kubectl apply -f build/kubernetes/staging-aws/monitoring/namespace.yaml
+
+      - name: Create Grafana Cloud credentials secret
+        run: |
+          kubectl create secret generic grafana-cloud-credentials \
+            --namespace=monitoring \
+            --from-literal=loki-url="${{ secrets.GRAFANA_LOKI_URL }}" \
+            --from-literal=loki-user="${{ secrets.GRAFANA_LOKI_USER }}" \
+            --from-literal=prom-url="${{ secrets.GRAFANA_PROM_URL }}" \
+            --from-literal=prom-user="${{ secrets.GRAFANA_PROM_USER }}" \
+            --from-literal=api-key="${{ secrets.GRAFANA_CLOUD_API_KEY }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       - name: Substitute IMAGE_TAG in deployment manifests
         run: |
           sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging-aws/api/deployment.yaml
@@ -65,6 +79,9 @@ jobs:
           kubectl apply -f build/kubernetes/staging-aws/call/ingress.yaml
           kubectl apply -f build/kubernetes/staging-aws/worker/rbac.yaml
           kubectl apply -f build/kubernetes/staging-aws/worker/deployment.yaml
+          kubectl apply -f build/kubernetes/staging-aws/monitoring/rbac.yaml
+          kubectl apply -f build/kubernetes/staging-aws/monitoring/configmap.yaml
+          kubectl apply -f build/kubernetes/staging-aws/monitoring/daemonset.yaml
 
       - name: Rollout restart deployments
         run: |
