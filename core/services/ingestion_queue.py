@@ -65,6 +65,20 @@ def execute_outbound_call(scheduled_call_id: str, org_id: str) -> None:
         OutboundCallService(db, org_id=_UUID(org_id)).dispatch_scheduled_call(_UUID(scheduled_call_id))
 
 
+@app.periodic(cron="* * * * *")
+@app.task(name="reconcile_outbound_calls", queue="outbound_calls")
+def reconcile_outbound_calls(timestamp: int) -> None:
+    """Safety net for scheduled calls that were persisted but never enqueued (e.g. the API
+    died between committing the rows and deferring their jobs). Re-enqueues them so they
+    can't be stranded as 'scheduled' forever. Idempotent — see
+    ``reconcile_orphaned_scheduled_calls``."""
+    from core.database.session import get_db_context
+    from core.services.outbound_call_service import OutboundCallService
+
+    with get_db_context() as db:
+        OutboundCallService(db).reconcile_orphaned_scheduled_calls()
+
+
 def enqueue_outbound_calls_batch(items):
     """Defer one or many scheduled outbound calls over a single Procrastinate connection.
 

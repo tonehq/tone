@@ -26,6 +26,9 @@ def make_db(by_model=None):
     def _query(model):
         qm = MagicMock()
         qm.filter.return_value = qm
+        qm.order_by.return_value = qm
+        qm.limit.return_value = qm
+        qm.offset.return_value = qm
         qm.first.return_value = by_model.get(model)
         qm.update.return_value = by_model.get((model, "update"), 1)
         qm.all.return_value = by_model.get((model, "all"), [])
@@ -199,3 +202,26 @@ class TestCreateCallLogOutboundInsert:
         added = db.add.call_args.args[0]
         assert added.direction == "outbound"
         link.assert_called_once()  # scheduled call linked to the new log
+
+
+class TestReconcileOrphans:
+    def test_dispatches_due_orphans_inline(self):
+        # An orphan: committed 'scheduled' but never got a queue job.
+        sc = SimpleNamespace(
+            id=uuid4(), organization_id=uuid4(), scheduled_at=None,
+            queue_job_id=None, status="scheduled",
+        )
+        db = make_db({(ScheduledCall, "all"): [sc]})
+        svc = OutboundCallService(db, org_id=uuid4())
+        with patch.object(svc, "dispatch_scheduled_call") as disp:
+            n = svc.reconcile_orphaned_scheduled_calls()
+        assert n == 1
+        # Recovered by dispatching inline (no Procrastinate re-entry from the worker).
+        disp.assert_called_once_with(sc.id)
+
+    def test_no_orphans_is_noop(self):
+        svc = OutboundCallService(make_db(), org_id=uuid4())
+        with patch.object(svc, "dispatch_scheduled_call") as disp:
+            n = svc.reconcile_orphaned_scheduled_calls()
+        assert n == 0
+        disp.assert_not_called()

@@ -62,6 +62,10 @@ _TWILIO_STATUS_MAP = {
 # number of concurrent warm threads so a burst of dials can't exhaust the DB pool.
 _PREWARM_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="prewarm")
 
+# How long a 'scheduled' row may sit with no queue job before reconcile re-enqueues it.
+# Longer than the enqueue round-trip so we never race a batch that's mid-creation.
+_ORPHAN_GRACE = timedelta(minutes=2)
+
 
 class OutboundCallService(BaseService):
     def __init__(self, db: Session, user_id=None, org_id=None):
@@ -360,6 +364,49 @@ class OutboundCallService(BaseService):
         # Warm the pipeline config cache while it rings so the voice pod cache-hits on answer.
         self._prewarm_pipeline(sc.agent_id, sc.organization_id)
         return sc
+
+    def reconcile_orphaned_scheduled_calls(self, limit: int = 50) -> int:
+        """Recover 'scheduled' rows that were persisted but never got a Procrastinate job
+        (``queue_job_id IS NULL``) — e.g. the API process died between committing the rows
+        and deferring their jobs. Without this they would never dial and never reach a
+        terminal state, and the list page would poll them as live forever.
+
+        Dispatches any that are now DUE inline (the same sync path the worker runs), rather
+        than re-deferring — deferring would mean re-entering the Procrastinate app from
+        inside the worker, which shares this process's already-open pool and is unsafe. A
+        future-dated orphan is left until it comes due, then picked up by a later run.
+
+        System task: scans across orgs (unscoped query), and ``dispatch_scheduled_call``
+        keys off each row's own org/provider. Only touches rows older than ``_ORPHAN_GRACE``
+        so a batch that is merely mid-creation isn't disturbed. Idempotent: the dispatch
+        claim guards against double-dial, and a dispatched row is no longer 'scheduled'.
+        Returns the count dispatched."""
+        now = datetime.now(timezone.utc)
+        cutoff = now - _ORPHAN_GRACE
+        orphans = (
+            self.db.query(ScheduledCall)
+            .filter(
+                ScheduledCall.status == "scheduled",
+                ScheduledCall.queue_job_id.is_(None),
+                ScheduledCall.created_at <= cutoff,
+                ScheduledCall.scheduled_at <= now,
+            )
+            .order_by(ScheduledCall.scheduled_at.asc())
+            .limit(limit)
+            .all()
+        )
+        if not orphans:
+            return 0
+
+        dispatched = 0
+        for sc in orphans:
+            try:
+                self.dispatch_scheduled_call(sc.id)
+                dispatched += 1
+            except Exception as exc:  # noqa: BLE001
+                logger.error("[outbound] reconcile dispatch failed id={} err={}", sc.id, exc)
+        logger.warning("[outbound] reconciled {} orphaned scheduled call(s)", dispatched)
+        return dispatched
 
     # ---------------------------------------------------------- status webhook
 
