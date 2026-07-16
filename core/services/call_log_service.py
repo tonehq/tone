@@ -70,7 +70,19 @@ class CallLogService(BaseService):
         pipeline_config: Optional[dict] = None,
         started_at: Optional[datetime] = None,
         agent_config_id: Optional[UUID] = None,
+        direction: Optional[str] = None,
+        scheduled_call_id=None,
     ) -> Call:
+        # Both inbound and outbound calls are logged the same way: a row is INSERTed
+        # here when the media stream connects. Outbound just carries direction="outbound"
+        # (threaded from the TwiML <Parameter> tags). Scheduled outbound calls also carry
+        # scheduled_call_id so we can link the log back to the scheduled_calls row.
+        if direction == "outbound":
+            logger.info(
+                "[outbound] media connected — creating call log agent={} sid={} from={} to={} scheduled_call_id={}",
+                agent_id, provider_call_id, from_number, to_number, scheduled_call_id,
+            )
+
         # Deduplicate
         if provider_call_id:
             existing = (
@@ -91,7 +103,10 @@ class CallLogService(BaseService):
             logger.warning("No channel found for agent_id={}, cannot create call record", agent_id)
             return None
 
-        direction = "outbound" if transport_type == "outbound" else "inbound"
+        # Direction is threaded explicitly for outbound (from the promoted TwiML params);
+        # inbound omits it. transport_type is a provider slug ('twilio'/'telnyx'), never a
+        # direction, so anything without an explicit direction is inbound.
+        direction = direction or "inbound"
 
         try:
             pod_id = resolve_pod_id(self.db)
@@ -123,6 +138,17 @@ class CallLogService(BaseService):
         self.db.add(call)
         self.db.commit()
         self.db.refresh(call)
+
+        # Link a dispatched scheduled call back to the log it produced. Wrapped so a
+        # linking failure never breaks call-log creation.
+        if scheduled_call_id:
+            try:
+                from core.services.outbound_call_service import OutboundCallService
+
+                OutboundCallService(self.db, org_id=organization_id).link_call(scheduled_call_id, call.id)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("[outbound] failed to link scheduled call {}: {}", scheduled_call_id, exc)
+
         return call
 
     # ------------------------------------------------------------------

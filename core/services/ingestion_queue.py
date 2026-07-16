@@ -54,6 +54,87 @@ async def enqueue_reprocess(upload_id, org_id) -> int:
     return await _defer_ingestion(upload_id, org_id, True)
 
 
+@app.task(name="execute_outbound_call", queue="outbound_calls")
+def execute_outbound_call(scheduled_call_id: str, org_id: str) -> None:
+    """Dispatch a scheduled outbound call when its ``schedule_at`` fires.
+
+    Idempotent: ``dispatch_scheduled_call`` atomically claims ``scheduled -> processing``
+    and is a no-op if the row was already canceled or dispatched, so a re-delivered job
+    never double-dials.
+    """
+    from uuid import UUID as _UUID
+
+    from core.database.session import get_db_context
+    from core.services.outbound_call_service import OutboundCallService
+
+    logger.info("[outbound] worker dispatching scheduled call id={} org={}", scheduled_call_id, org_id)
+    with get_db_context() as db:
+        OutboundCallService(db, org_id=_UUID(org_id)).dispatch_scheduled_call(_UUID(scheduled_call_id))
+
+
+@app.periodic(cron="* * * * *")
+@app.task(name="reconcile_outbound_calls", queue="outbound_calls")
+def reconcile_outbound_calls(timestamp: int) -> None:
+    """Safety net for scheduled calls that were persisted but never enqueued (e.g. the API
+    died between committing the rows and deferring their jobs). Re-enqueues them so they
+    can't be stranded as 'scheduled' forever. Idempotent — see
+    ``reconcile_orphaned_scheduled_calls``."""
+    from core.database.session import get_db_context
+    from core.services.outbound_call_service import OutboundCallService
+
+    with get_db_context() as db:
+        OutboundCallService(db).reconcile_orphaned_scheduled_calls()
+
+
+def enqueue_outbound_calls_batch(items):
+    """Defer one or many scheduled outbound calls over a single Procrastinate connection.
+
+    ``items`` is a sequence of ``(scheduled_call_id, org_id, schedule_at)`` tuples. Opens
+    the app once and defers every job inside it, instead of a connect/defer/close cycle
+    per row — so a bulk batch (up to ``MAX_BULK``) doesn't churn connections. Sync-friendly
+    (runs its own loop) so the API route (a sync ``def`` in the threadpool) can call it.
+
+    Returns a list of ``(job_id, error)`` tuples aligned to ``items``: ``job_id`` is the
+    Procrastinate job id on success (store it to allow cancellation), or ``None`` with a
+    string ``error`` when that row failed to enqueue. Failures are isolated per row so one
+    bad defer doesn't drop the rest of the batch.
+    """
+    import asyncio
+
+    items = list(items)
+
+    async def _defer_all():
+        results = []
+        async with app.open_async():
+            for scheduled_call_id, org_id, schedule_at in items:
+                try:
+                    job_id = await execute_outbound_call.configure(schedule_at=schedule_at).defer_async(
+                        scheduled_call_id=str(scheduled_call_id), org_id=str(org_id)
+                    )
+                    results.append((job_id, None))
+                except Exception as exc:  # noqa: BLE001
+                    results.append((None, str(exc)))
+        return results
+
+    return asyncio.run(_defer_all())
+
+
+def cancel_outbound_job(job_id: int) -> bool:
+    """Best-effort cancel of a deferred outbound-dial job. The ``dial`` claim guard is
+    the real safety net, so a failure here is logged and swallowed."""
+    import asyncio
+
+    async def _cancel() -> bool:
+        async with app.open_async():
+            return await app.job_manager.cancel_job_by_id_async(job_id)
+
+    try:
+        return asyncio.run(_cancel())
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[outbound] cancel_outbound_job failed job_id={} err={}", job_id, exc)
+        return False
+
+
 async def enqueue_call_overlap_detection(call_id) -> int:
     async with app.open_async():
         return await detect_call_overlaps_task.defer_async(call_id=str(call_id))

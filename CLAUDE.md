@@ -106,6 +106,22 @@ The `pipecat/` directory is a custom fork (`tonehq/pipecat`) of the Pipecat AI f
 - **Other UI:** Prefer shared components (`CustomModal`, `CustomTable`, `TextInput`, `SelectInput`, `CustomTab`, `CustomLink`, etc.) over raw `@/components/ui/*` or native elements. Use `@/components/ui/*` only when building or composing shared components.
 - See `.cursor/rules/shared-components.mdc` for full rule and exceptions.
 
+## Code Review Rules
+
+Before reviewing any diff, writing new code, or opening a PR, follow the repo's code-review
+rulebook in `docs/code-review/`. These rules are mandatory for all agents:
+
+- `docs/code-review/README.md` — shared philosophy, severity labels (`[blocker]`/`[should]`/`[nit]`/`[question]`/`[praise]`), universal checklist, and the DRY/reuse doctrine (rule of three; extract by responsibility, not shape).
+- `docs/code-review/frontend-nextjs-typescript.md` — Next.js 15 / React 19 / TypeScript rules.
+- `docs/code-review/backend-python-fastapi.md` — FastAPI / SQLAlchemy 2.0 / Alembic rules.
+
+Do not comment on style the linter/formatter already fixes (ESLint+Prettier on FE, Ruff on BE) —
+focus on correctness, security, design, and tests. Always-check blockers:
+- **FE:** no type-erasing `any`/`!`; correct `useEffect` deps (`exhaustive-deps` is OFF — the reviewer is the guard); stable list keys; no secrets in the client bundle; server state in TanStack Query; buttons use `CustomButton` and prefer shared components.
+- **BE:** every route has the right auth guard; **every query is tenant/org-scoped** (no IDOR); no raw/interpolated SQL; schema changes ship a safe Alembic migration; secrets stay AES-encrypted and are never logged; no blocking I/O in async paths; logic lives in a `BaseService`, not routers.
+
+New behavior needs tests; bug fixes need a regression test.
+
 
 ##SKILLS:
 

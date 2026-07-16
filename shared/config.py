@@ -59,6 +59,13 @@ class Settings:
         self.CALL_SERVER_HOST: str = get_secret("CALL_SERVER_HOST", "")
         self.CALL_WORKER_PREFIX: str = get_secret("CALL_WORKER_PREFIX", "staging-tone-call-worker")
         self.POD_SYNC_NAMESPACE: str = get_secret("POD_SYNC_NAMESPACE", "staging")
+
+        # Public base URL (scheme + host, no /api/v1) that Twilio can reach for
+        # outbound-call TwiML + status callbacks. Root-mounted telephony routes hang
+        # off this (e.g. {BASE_CALL_URL}/twiml/outbound). Required for outbound dialing;
+        # scheduled dials run in the worker with no request context to derive it from.
+        # Locally: an ngrok URL. Prod: the public API host.
+        self.BASE_CALL_URL: str = get_secret("BASE_CALL_URL", "").rstrip("/")
         
 
         self.APPLICATION_URL: str = get_secret("APPLICATION_URL", "http://localhost:3000")
