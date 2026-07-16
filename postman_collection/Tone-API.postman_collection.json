@@ -4696,7 +4696,7 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/v1/agent/switch_active_version?agent_id={{agent_id}}",
+              "raw": "{{base_url}}/api/v1/agent/switch_active_version?agent_id={{agent_id}}&force_warnings=false",
               "host": [
                 "{{base_url}}"
               ],
@@ -4710,6 +4710,11 @@
                 {
                   "key": "agent_id",
                   "value": "{{agent_id}}"
+                },
+                {
+                  "key": "force_warnings",
+                  "value": "false",
+                  "description": "Set to `true` after the user has explicitly confirmed publishing over warnings. Blockers always reject regardless of this flag."
                 }
               ]
             },
@@ -4721,7 +4726,8 @@
                   "language": "json"
                 }
               }
-            }
+            },
+            "description": "**Readiness gate**: this endpoint runs `ReadinessService.gate_publish()` before flipping the FK.\n- Blockers \u2192 400 with `detail.reason = readiness_blocked` (report attached)\n- Warnings-only \u2192 400 with `detail.reason = readiness_warnings` unless `force_warnings=true`"
           },
           "response": [
             {
@@ -4855,6 +4861,30 @@
                 }
               ],
               "body": "{\"detail\": [{\"type\": \"missing\", \"loc\": [\"query\", \"agent_id\"], \"msg\": \"Field required\", \"input\": null}]}"
+            },
+            {
+              "name": "400 Readiness blocked (blockers present)",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"detail\": {\n    \"reason\": \"readiness_blocked\",\n    \"message\": \"2 blocker(s) prevent publishing this version.\",\n    \"report\": {\n      \"agent_id\": \"{{agent_id}}\",\n      \"config_id\": \"550e8400-e29b-41d4-a716-4466554400aa\",\n      \"depth\": \"shallow\",\n      \"overall_status\": \"not_ready\",\n      \"summary\": {\n        \"blockers\": 2,\n        \"warnings\": 0,\n        \"info\": 0,\n        \"passed\": 15,\n        \"skipped\": 6\n      },\n      \"checks\": [\n        {\n          \"check_id\": \"llm.provider_configured\",\n          \"category\": \"llm\",\n          \"severity\": \"blocker\",\n          \"status\": \"pass\",\n          \"message\": \"LLM provider: OpenAI\",\n          \"remediation\": null,\n          \"deep_link\": null,\n          \"resource_ref\": null,\n          \"skip_reason\": null\n        },\n        {\n          \"check_id\": \"llm.api_key_decrypts\",\n          \"category\": \"llm\",\n          \"severity\": \"blocker\",\n          \"status\": \"pass\",\n          \"message\": \"LLM API key decrypts successfully.\",\n          \"remediation\": null,\n          \"deep_link\": null,\n          \"resource_ref\": null,\n          \"skip_reason\": null\n        },\n        {\n          \"check_id\": \"tts.voice_model_match\",\n          \"category\": \"tts\",\n          \"severity\": \"warning\",\n          \"status\": \"fail\",\n          \"message\": \"Selected voice belongs to a different TTS model than the one configured.\",\n          \"remediation\": \"Re-select a voice after switching TTS models to keep audio quality consistent.\",\n          \"deep_link\": null,\n          \"resource_ref\": {\n            \"type\": \"voice\",\n            \"id\": \"voice-uuid\"\n          },\n          \"skip_reason\": null\n        },\n        {\n          \"check_id\": \"stt.provider_configured\",\n          \"category\": \"stt\",\n          \"severity\": \"blocker\",\n          \"status\": \"skipped\",\n          \"message\": \"Speech-to-speech mode \\u2014 STT is handled by the LLM.\",\n          \"remediation\": null,\n          \"deep_link\": null,\n          \"resource_ref\": null,\n          \"skip_reason\": \"Speech-to-speech mode \\u2014 STT is handled by the LLM.\"\n        }\n      ],\n      \"generated_at\": \"2026-07-16T14:32:11.482103+00:00\"\n    }\n  }\n}"
+            },
+            {
+              "name": "400 Readiness warnings (retry with force_warnings=true)",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"detail\": {\n    \"reason\": \"readiness_warnings\",\n    \"message\": \"1 warning(s) present. Re-submit with force_warnings=true to publish anyway.\",\n    \"report\": {\n      \"agent_id\": \"{{agent_id}}\",\n      \"config_id\": \"550e8400-e29b-41d4-a716-4466554400aa\",\n      \"depth\": \"shallow\",\n      \"overall_status\": \"ready_with_warnings\",\n      \"summary\": {\n        \"blockers\": 0,\n        \"warnings\": 1,\n        \"info\": 0,\n        \"passed\": 17,\n        \"skipped\": 5\n      },\n      \"checks\": [\n        {\n          \"check_id\": \"llm.provider_configured\",\n          \"category\": \"llm\",\n          \"severity\": \"blocker\",\n          \"status\": \"pass\",\n          \"message\": \"LLM provider: OpenAI\",\n          \"remediation\": null,\n          \"deep_link\": null,\n          \"resource_ref\": null,\n          \"skip_reason\": null\n        },\n        {\n          \"check_id\": \"llm.api_key_decrypts\",\n          \"category\": \"llm\",\n          \"severity\": \"blocker\",\n          \"status\": \"pass\",\n          \"message\": \"LLM API key decrypts successfully.\",\n          \"remediation\": null,\n          \"deep_link\": null,\n          \"resource_ref\": null,\n          \"skip_reason\": null\n        },\n        {\n          \"check_id\": \"tts.voice_model_match\",\n          \"category\": \"tts\",\n          \"severity\": \"warning\",\n          \"status\": \"fail\",\n          \"message\": \"Selected voice belongs to a different TTS model than the one configured.\",\n          \"remediation\": \"Re-select a voice after switching TTS models to keep audio quality consistent.\",\n          \"deep_link\": null,\n          \"resource_ref\": {\n            \"type\": \"voice\",\n            \"id\": \"voice-uuid\"\n          },\n          \"skip_reason\": null\n        },\n        {\n          \"check_id\": \"stt.provider_configured\",\n          \"category\": \"stt\",\n          \"severity\": \"blocker\",\n          \"status\": \"skipped\",\n          \"message\": \"Speech-to-speech mode \\u2014 STT is handled by the LLM.\",\n          \"remediation\": null,\n          \"deep_link\": null,\n          \"resource_ref\": null,\n          \"skip_reason\": \"Speech-to-speech mode \\u2014 STT is handled by the LLM.\"\n        }\n      ],\n      \"generated_at\": \"2026-07-16T14:32:11.482103+00:00\"\n    }\n  }\n}"
             }
           ]
         },
@@ -5634,6 +5664,218 @@
               "code": 401,
               "status": "Unauthorized",
               "body": "{\"detail\": \"Not authenticated\"}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Agent Readiness",
+      "description": "Pre-flight readiness checks for voice agents.\n\n**Shallow** (structural, DB-only) runs on every editor render / list badge / save.\n\n**Deep** (live provider probes) runs only on explicit user action (\"Run deep test\" button, Publish gate). Rate-limited to 1/min per agent.\n\nResults are persisted to `agent_readiness_snapshots` and appended to `agent_readiness_events` for audit.",
+      "item": [
+        {
+          "name": "POST /agent/{agent_id}/readiness",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/agent/{{agent_id}}/readiness",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "agent",
+                "{{agent_id}}",
+                "readiness"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"depth\": \"shallow\",\n  \"config_id\": null,\n  \"trigger\": \"editor_load\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Runs a readiness check for the agent.\n\n**depth**: `shallow` (DB reads only \u2014 fast, safe on every render) or `deep` (also probes live providers; rate-limited to 1/min per agent).\n\n**config_id** (optional): pin the check to a specific config version. Omit to use the agent's active/published config.\n\n**trigger** (optional): free-form analytics label \u2014 e.g. `editor_load`, `field_change`, `publish_gate`, `test_button`, `list_page`.\n\nReturns a full `ReadinessReport` (overall status + counts + per-check rows). Deep responses may return 429 if rate-limited."
+          },
+          "response": [
+            {
+              "name": "200 Shallow report (ready with warnings)",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"agent_id\": \"{{agent_id}}\",\n  \"config_id\": \"550e8400-e29b-41d4-a716-4466554400aa\",\n  \"depth\": \"shallow\",\n  \"overall_status\": \"ready_with_warnings\",\n  \"summary\": {\n    \"blockers\": 0,\n    \"warnings\": 1,\n    \"info\": 0,\n    \"passed\": 17,\n    \"skipped\": 5\n  },\n  \"checks\": [\n    {\n      \"check_id\": \"llm.provider_configured\",\n      \"category\": \"llm\",\n      \"severity\": \"blocker\",\n      \"status\": \"pass\",\n      \"message\": \"LLM provider: OpenAI\",\n      \"remediation\": null,\n      \"deep_link\": null,\n      \"resource_ref\": null,\n      \"skip_reason\": null\n    },\n    {\n      \"check_id\": \"llm.api_key_decrypts\",\n      \"category\": \"llm\",\n      \"severity\": \"blocker\",\n      \"status\": \"pass\",\n      \"message\": \"LLM API key decrypts successfully.\",\n      \"remediation\": null,\n      \"deep_link\": null,\n      \"resource_ref\": null,\n      \"skip_reason\": null\n    },\n    {\n      \"check_id\": \"tts.voice_model_match\",\n      \"category\": \"tts\",\n      \"severity\": \"warning\",\n      \"status\": \"fail\",\n      \"message\": \"Selected voice belongs to a different TTS model than the one configured.\",\n      \"remediation\": \"Re-select a voice after switching TTS models to keep audio quality consistent.\",\n      \"deep_link\": null,\n      \"resource_ref\": {\n        \"type\": \"voice\",\n        \"id\": \"voice-uuid\"\n      },\n      \"skip_reason\": null\n    },\n    {\n      \"check_id\": \"stt.provider_configured\",\n      \"category\": \"stt\",\n      \"severity\": \"blocker\",\n      \"status\": \"skipped\",\n      \"message\": \"Speech-to-speech mode \\u2014 STT is handled by the LLM.\",\n      \"remediation\": null,\n      \"deep_link\": null,\n      \"resource_ref\": null,\n      \"skip_reason\": \"Speech-to-speech mode \\u2014 STT is handled by the LLM.\"\n    }\n  ],\n  \"generated_at\": \"2026-07-16T14:32:11.482103+00:00\"\n}"
+            },
+            {
+              "name": "200 Deep report (skipped placeholder probes)",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"agent_id\": \"{{agent_id}}\",\n  \"config_id\": \"550e8400-e29b-41d4-a716-4466554400aa\",\n  \"depth\": \"deep\",\n  \"overall_status\": \"ready_with_warnings\",\n  \"summary\": {\n    \"blockers\": 0,\n    \"warnings\": 0,\n    \"info\": 0,\n    \"passed\": 17,\n    \"skipped\": 6\n  },\n  \"checks\": [\n    {\n      \"check_id\": \"llm.provider_configured\",\n      \"category\": \"llm\",\n      \"severity\": \"blocker\",\n      \"status\": \"pass\",\n      \"message\": \"LLM provider: OpenAI\",\n      \"remediation\": null,\n      \"deep_link\": null,\n      \"resource_ref\": null,\n      \"skip_reason\": null\n    },\n    {\n      \"check_id\": \"llm.api_key_decrypts\",\n      \"category\": \"llm\",\n      \"severity\": \"blocker\",\n      \"status\": \"pass\",\n      \"message\": \"LLM API key decrypts successfully.\",\n      \"remediation\": null,\n      \"deep_link\": null,\n      \"resource_ref\": null,\n      \"skip_reason\": null\n    },\n    {\n      \"check_id\": \"tts.voice_model_match\",\n      \"category\": \"tts\",\n      \"severity\": \"warning\",\n      \"status\": \"fail\",\n      \"message\": \"Selected voice belongs to a different TTS model than the one configured.\",\n      \"remediation\": \"Re-select a voice after switching TTS models to keep audio quality consistent.\",\n      \"deep_link\": null,\n      \"resource_ref\": {\n        \"type\": \"voice\",\n        \"id\": \"voice-uuid\"\n      },\n      \"skip_reason\": null\n    },\n    {\n      \"check_id\": \"stt.provider_configured\",\n      \"category\": \"stt\",\n      \"severity\": \"blocker\",\n      \"status\": \"skipped\",\n      \"message\": \"Speech-to-speech mode \\u2014 STT is handled by the LLM.\",\n      \"remediation\": null,\n      \"deep_link\": null,\n      \"resource_ref\": null,\n      \"skip_reason\": \"Speech-to-speech mode \\u2014 STT is handled by the LLM.\"\n    }\n  ],\n  \"generated_at\": \"2026-07-16T14:32:11.482103+00:00\"\n}"
+            },
+            {
+              "name": "422 Invalid depth",
+              "code": 422,
+              "status": "Unprocessable Entity",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"detail\": [\n    {\n      \"loc\": [\n        \"body\",\n        \"depth\"\n      ],\n      \"msg\": \"value is not a valid enumeration member; permitted: 'shallow', 'deep'\",\n      \"type\": \"type_error.enum\"\n    }\n  ]\n}"
+            },
+            {
+              "name": "404 Agent not found",
+              "code": 404,
+              "status": "Not Found",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"detail\": \"Agent not found\"\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"detail\": \"Could not validate credentials\"\n}"
+            },
+            {
+              "name": "429 Deep rate-limited",
+              "code": 429,
+              "status": "Too Many Requests",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"detail\": \"Deep readiness check rate-limited. Please wait a minute and try again.\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "GET /agent/{agent_id}/readiness/summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/agent/{{agent_id}}/readiness/summary?trigger=list_page",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "agent",
+                "{{agent_id}}",
+                "readiness",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "config_id",
+                  "value": "",
+                  "disabled": true,
+                  "description": "Optional \u2014 pin to a specific config version"
+                },
+                {
+                  "key": "trigger",
+                  "value": "list_page",
+                  "description": "Analytics label (list_page / editor_load / publish_gate / ...)"
+                }
+              ]
+            },
+            "description": "Cheap Shallow badge shape for the agent list page. Returns overall status + blocker / warning / info counts. Always Shallow \u2014 no deep probes."
+          },
+          "response": [
+            {
+              "name": "200 Success",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"agent_id\": \"{{agent_id}}\",\n  \"config_id\": \"550e8400-e29b-41d4-a716-4466554400aa\",\n  \"overall_status\": \"ready_with_warnings\",\n  \"blocker_count\": 0,\n  \"warning_count\": 1,\n  \"info_count\": 0\n}"
+            },
+            {
+              "name": "200 Ready (nothing to fix)",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"agent_id\": \"{{agent_id}}\",\n  \"config_id\": \"550e8400-e29b-41d4-a716-4466554400aa\",\n  \"overall_status\": \"ready\",\n  \"blocker_count\": 0,\n  \"warning_count\": 0,\n  \"info_count\": 0\n}"
+            },
+            {
+              "name": "200 Not ready (blockers)",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"agent_id\": \"{{agent_id}}\",\n  \"config_id\": \"550e8400-e29b-41d4-a716-4466554400aa\",\n  \"overall_status\": \"not_ready\",\n  \"blocker_count\": 3,\n  \"warning_count\": 1,\n  \"info_count\": 0\n}"
+            },
+            {
+              "name": "404 Agent not found",
+              "code": 404,
+              "status": "Not Found",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"detail\": \"Agent not found\"\n}"
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"detail\": \"Could not validate credentials\"\n}"
             }
           ]
         }

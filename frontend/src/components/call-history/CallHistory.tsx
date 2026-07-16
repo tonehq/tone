@@ -1,6 +1,12 @@
 'use client';
 
-import callLogsAtom, { callFacetsAtom, fetchCallFacets, fetchCallLogs } from '@/atoms/CallLogAtom';
+import callLogsAtom, {
+  callFacetsAtom,
+  callMetricsSummaryAtom,
+  fetchCallFacets,
+  fetchCallLogs,
+  fetchCallMetricsSummary,
+} from '@/atoms/CallLogAtom';
 import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 import {
   CustomButton,
@@ -27,10 +33,11 @@ import type {
 import { formatDuration, formatTimestamp, getBrowserTimeZone } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { useAtom } from 'jotai';
-import { Columns3, Phone, SlidersHorizontal, X } from 'lucide-react';
+import { BarChart3, Columns3, Phone, SlidersHorizontal, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import CallHistoryMetricsStrip from './CallHistoryMetricsStrip';
 import { getDisplayDurationSeconds } from './callDuration';
 import { getCallStatusLabel, getCallStatusTone } from './callStatus';
 import { formatAudioMs } from './metrics/utils';
@@ -126,6 +133,9 @@ const CallHistory: React.FC = () => {
   const [, doFetchCallLogs] = useAtom(fetchCallLogs);
   const [facetsState] = useAtom(callFacetsAtom);
   const [, doFetchCallFacets] = useAtom(fetchCallFacets);
+  const [metricsSummaryState] = useAtom(callMetricsSummaryAtom);
+  const [, doFetchCallMetricsSummary] = useAtom(fetchCallMetricsSummary);
+  const [metricsStripVisible, setMetricsStripVisible] = useState(false);
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -340,6 +350,21 @@ const CallHistory: React.FC = () => {
     setPage(1);
   }, []);
 
+  // Reuses the exact filter scope the table is showing (facetParams already
+  // omits pagination + sort), so the aggregates the strip renders can never
+  // disagree with the visible row set. Show first, fetch second — the strip
+  // renders its own loading state.
+  const handleShowMetrics = useCallback(() => {
+    setMetricsStripVisible(true);
+    doFetchCallMetricsSummary({
+      start_date_time: facetParams.start_date_time,
+      end_date_time: facetParams.end_date_time,
+      filters: facetParams.filters,
+    }).catch(handleApiError);
+  }, [facetParams, doFetchCallMetricsSummary]);
+
+  const handleHideMetrics = useCallback(() => setMetricsStripVisible(false), []);
+
   // Sticky class pins the agent column on the left while the inner columns
   // scroll horizontally.
   const STICKY_LEFT = 'sticky left-0 z-[1] bg-card border-r border-border';
@@ -500,6 +525,15 @@ const CallHistory: React.FC = () => {
         />
         <div className="mx-0.5 hidden h-6 w-px shrink-0 bg-border sm:block" />
         <div className="flex items-center gap-2">
+          <CustomButton
+            type="default"
+            size="sm"
+            icon={<BarChart3 className="size-4" />}
+            onClick={handleShowMetrics}
+            aria-label="Show aggregated metrics for filtered calls"
+          >
+            Show Metrics
+          </CustomButton>
           <CustomPopover
             open={columnFilterOpen}
             onOpenChange={setColumnFilterOpen}
@@ -596,6 +630,14 @@ const CallHistory: React.FC = () => {
           </CustomButton>
         </div>
       </div>
+
+      {metricsStripVisible && (
+        <CallHistoryMetricsStrip
+          data={metricsSummaryState.data}
+          loading={metricsSummaryState.loading}
+          onDismiss={handleHideMetrics}
+        />
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col">
         <CustomTable

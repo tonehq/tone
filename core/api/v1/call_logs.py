@@ -7,6 +7,7 @@ from uuid import UUID
 
 from core.database.session import get_db
 from core.middleware.auth import JWTClaims, require_org_member
+from core.services.call_metrics_analytics_service import CallMetricsAnalyticsService
 from core.services.call_service import CallService
 from core.services.tool_execution_service import ToolExecutionService
 from shared.config import settings
@@ -88,6 +89,35 @@ def get_facets(
 ):
     filters = [f.model_dump() for f in body.filters] if body.filters else None
     return _get_service(claims, db).get_facets(
+        start_date_time=body.start_date_time,
+        end_date_time=body.end_date_time,
+        filters=filters,
+    )
+
+
+class MetricsSummaryRequest(BaseModel):
+    """Same filter shape as :class:`FacetsRequest` — kept as a separate schema
+    so the two endpoints can evolve independently (e.g. metrics may later
+    add grouping params without touching /facets)."""
+
+    start_date_time: Optional[str] = None
+    end_date_time: Optional[str] = None
+    filters: Optional[List[CallFilterParam]] = None
+
+
+def _get_analytics_service(claims: JWTClaims, db: Session) -> CallMetricsAnalyticsService:
+    org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
+    return CallMetricsAnalyticsService(db, org_id=org_id)
+
+
+@router.post("/metrics-summary")
+def get_metrics_summary(
+    body: MetricsSummaryRequest,
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    filters = [f.model_dump() for f in body.filters] if body.filters else None
+    return _get_analytics_service(claims, db).summarize(
         start_date_time=body.start_date_time,
         end_date_time=body.end_date_time,
         filters=filters,

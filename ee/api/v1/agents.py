@@ -221,12 +221,33 @@ def update_version(
 
 
 @router.post("/switch_active_version")
-def switch_active_version(
+async def switch_active_version(
     body: SwitchActiveVersionRequest,
     agent_id: str = Query(..., description="The agent ID to switch live version for"),
+    force_warnings: bool = Query(
+        False,
+        description=(
+            "Publish even if the readiness check reports warnings (blockers "
+            "always prevent publish). Use only after the user has confirmed."
+        ),
+    ),
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
+    # Publish gate: verify the target version is safe to promote before we
+    # flip the FK. Raises HTTPException(400) on blockers or unforced warnings,
+    # which happens before any DB write so the transaction stays clean.
+    from core.services.readiness import ReadinessService
+
+    readiness = ReadinessService(
+        db,
+        user_id=UUID(claims.user_id) if claims.user_id else None,
+        org_id=UUID(claims.org_id),
+    )
+    await readiness.gate_publish(
+        agent_id, body.config_id, force_warnings=force_warnings
+    )
+
     svc = _get_service(claims, db)
     agent = svc.switch_active_version(agent_id, body.config_id)
     return svc.agent_response(agent)
