@@ -173,9 +173,9 @@ test.describe('Model Providers — detail page', () => {
       await page.reload();
       await gotoKeysTab(page);
       await page.locator('tbody tr').filter({ hasText: fixtureLabel }).first().click();
-      await expect(
-        page.getByRole('dialog').locator('textarea#description').first(),
-      ).toHaveValue(newDescription);
+      await expect(page.getByRole('dialog').locator('textarea#description').first()).toHaveValue(
+        newDescription,
+      );
       await page.keyboard.press('Escape');
     });
 
@@ -236,9 +236,9 @@ test.describe('Model Providers — detail page', () => {
         await page.reload();
         await gotoKeysTab(page);
         await page.locator('tbody tr').filter({ hasText: label }).first().click();
-        await expect(
-          page.getByRole('dialog').locator('textarea#description').first(),
-        ).toHaveValue(description2);
+        await expect(page.getByRole('dialog').locator('textarea#description').first()).toHaveValue(
+          description2,
+        );
         await page.keyboard.press('Escape');
       } finally {
         await deleteApiKeyViaUI(page, {

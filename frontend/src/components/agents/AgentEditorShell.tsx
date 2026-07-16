@@ -2,7 +2,7 @@
 
 import { useAtom } from 'jotai';
 import { isEqual } from 'lodash';
-import { ArrowLeft, Phone, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, Beaker, Phone, Sparkles, Trash2 } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FormProvider, useForm, useWatch } from 'react-hook-form';
@@ -17,6 +17,7 @@ import {
   updateAgentAtom,
   updateAgentVersionAtom,
 } from '@/atoms/AgentsAtom';
+import { fetchAgentReadinessSummaryAtom } from '@/atoms/ReadinessAtom';
 import { AgentEditorProvider } from '@/components/agents/AgentEditorContext';
 import AgentSaveActions, { type AgentSaveAction } from '@/components/agents/AgentSaveActions';
 import AgentVersionSelector from '@/components/agents/AgentVersionSelector';
@@ -24,6 +25,9 @@ import CreateVersionModal, {
   type CreateVersionSelection,
 } from '@/components/agents/CreateVersionModal';
 import PublishVersionConfirmModal from '@/components/agents/PublishVersionConfirmModal';
+import ReadinessBadge from '@/components/agents/readiness/ReadinessBadge';
+import ReadinessConfirmDialog from '@/components/agents/readiness/ReadinessConfirmDialog';
+import ReadinessDrawer from '@/components/agents/readiness/ReadinessDrawer';
 import SaveAsTemplateModal from '@/components/agents/SaveAsTemplateModal';
 import { AgentFormNavProvider } from '@/components/agents/agent-form/AgentFormNav';
 import { buildAgentNav } from '@/components/agents/agent-form/sectionNav';
@@ -39,6 +43,7 @@ import type {
   AgentFormState,
   UpdateAgentPayload,
 } from '@/types/agent';
+import type { PublishGateErrorDetail, ReadinessReport, ReadinessSummary } from '@/types/readiness';
 import {
   agentDetailToFormState,
   defaultFormState,
@@ -90,6 +95,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   const [, createAgentVersion] = useAtom(createAgentVersionAtom);
   const [, switchActiveAgentVersion] = useAtom(switchActiveAgentVersionAtom);
   const [, deleteAgentVersion] = useAtom(deleteAgentVersionAtom);
+  const [, fetchReadinessSummary] = useAtom(fetchAgentReadinessSummaryAtom);
 
   const { sidebarCollapsed, toggleSidebar } = useNavigation();
 
@@ -105,6 +111,16 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   const [detail, setDetail] = useState<AgentDetail | null>(null);
   /** Which version is loaded in the form. Null until the agent has loaded. */
   const [viewedConfigId, setViewedConfigId] = useState<string | null>(null);
+  const [readinessDrawerOpen, setReadinessDrawerOpen] = useState(false);
+  const [readinessSummary, setReadinessSummary] = useState<ReadinessSummary | null>(null);
+  const [readinessLoading, setReadinessLoading] = useState(false);
+  /** Bump to force the summary effect to re-run (after save / publish / etc.). */
+  const [readinessRefreshKey, setReadinessRefreshKey] = useState(0);
+  const bumpReadiness = useCallback(() => setReadinessRefreshKey((k) => k + 1), []);
+  /** Publish attempted with warnings — parent surfaces a confirm dialog and
+   * retries with `force_warnings=true` when the user opts in. */
+  const [pendingWarningsReport, setPendingWarningsReport] = useState<ReadinessReport | null>(null);
+  const [pendingWarningsConfigId, setPendingWarningsConfigId] = useState<string | null>(null);
 
   const methods = useForm<AgentFormState>({
     defaultValues: defaultFormState(agentType),
@@ -234,6 +250,35 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
       cancelled = true;
     };
   }, [agentId, applyDetail, fetchAgent, isEditMode, router]);
+
+  // ─── readiness summary (drives header pill) ───────────────────────────────
+  // Refetches when the agent id, the currently-loaded config id, or the
+  // explicit bump key change. Edit-based freshness on the backend means the
+  // majority of calls short-circuit against a stored snapshot — cheap.
+  useEffect(() => {
+    if (!isEditMode || !agentId) return;
+    const loadedConfigId = detail?.config?.id ?? undefined;
+    let cancelled = false;
+    setReadinessLoading(true);
+    (async () => {
+      try {
+        const summary = await fetchReadinessSummary({
+          agentId,
+          configId: loadedConfigId,
+          trigger: 'editor_load',
+        });
+        if (!cancelled) setReadinessSummary(summary);
+      } catch {
+        // Non-critical UI — never toast; badge falls back to the "error" pill.
+        if (!cancelled) setReadinessSummary(null);
+      } finally {
+        if (!cancelled) setReadinessLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditMode, agentId, detail?.config?.id, readinessRefreshKey, fetchReadinessSummary]);
 
   /** Version number of the currently-viewed version (the chip selection). */
   const viewedVersionNum = useMemo(
@@ -367,6 +412,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
         },
       });
       applyDetail(updated);
+      bumpReadiness();
       showToast.success(
         'Changes saved',
         updated.config?.version != null ? `v${updated.config.version} was updated.` : undefined,
@@ -381,6 +427,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     applyDetail,
     applyServerValidation,
     basePath,
+    bumpReadiness,
     createAgent,
     detail,
     isEditMode,
@@ -413,6 +460,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
         // new draft — a confusing mismatch when the user is about to edit.
         const newConfigId = updated.config?.id ?? null;
         if (newConfigId) setViewedConfigId(newConfigId);
+        bumpReadiness();
         setCreateVersionOpen(false);
         showToast.success(
           'Version created',
@@ -426,7 +474,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
         setCreatingVersion(false);
       }
     },
-    [agentId, applyDetail, createAgentVersion],
+    [agentId, applyDetail, bumpReadiness, createAgentVersion],
   );
 
   const handleViewVersion = useCallback(
@@ -453,31 +501,64 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   );
 
   const handlePublish = useCallback(
-    async (configId: string) => {
+    async (configId: string, forceWarnings = false) => {
       if (!agentId || !configId) return;
       setPublishing(true);
       try {
-        const updated = await switchActiveAgentVersion({ agentId, configId });
+        const updated = await switchActiveAgentVersion({
+          agentId,
+          configId,
+          forceWarnings,
+        });
         applyDetail(updated);
         // Chip follows the published version once promotion succeeds — so the
         // user lands on the version they just made live.
         setViewedConfigId(updated.config?.id ?? configId);
+        bumpReadiness();
         const v = updated.versions?.find((row) => row.id === configId)?.version;
         showToast.success(
           'Version published',
           v != null ? `v${v} is now serving calls.` : undefined,
         );
         setPublishOpen(false);
+        setPendingWarningsReport(null);
+        setPendingWarningsConfigId(null);
       } catch (err) {
-        // Leave the modal open on error — the user can immediately retry or
-        // cancel without losing the dialog context.
-        handleApiError(err);
+        // Readiness-gate rejection carries a structured detail payload —
+        // interpret it here so the UI can either surface an explicit
+        // confirmation dialog (warnings) or a hard error toast (blockers).
+        const gate = extractGateDetail(err);
+        if (gate?.reason === 'readiness_warnings') {
+          setPendingWarningsReport(gate.report);
+          setPendingWarningsConfigId(configId);
+        } else if (gate?.reason === 'readiness_blocked') {
+          bumpReadiness(); // refresh badge so the user sees the fresh blockers
+          showToast.error(
+            'Cannot publish',
+            gate.message ??
+              'This version has blockers. Open the readiness drawer to see what to fix.',
+          );
+        } else {
+          // Leave the modal open on generic errors — the user can retry
+          // without losing the version-selector context.
+          handleApiError(err);
+        }
       } finally {
         setPublishing(false);
       }
     },
-    [agentId, applyDetail, switchActiveAgentVersion],
+    [agentId, applyDetail, bumpReadiness, switchActiveAgentVersion],
   );
+
+  const handleConfirmPublishWithWarnings = useCallback(async () => {
+    if (!pendingWarningsConfigId) return;
+    await handlePublish(pendingWarningsConfigId, true);
+  }, [handlePublish, pendingWarningsConfigId]);
+
+  const handleDismissWarningsDialog = useCallback(() => {
+    setPendingWarningsReport(null);
+    setPendingWarningsConfigId(null);
+  }, []);
 
   const handleDeleteVersion = useCallback(
     async (configId: string) => {
@@ -492,11 +573,12 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
         if (configId === viewedConfigId) {
           setViewedConfigId(refreshed.config?.id ?? null);
         }
+        bumpReadiness();
       } catch (err) {
         handleApiError(err);
       }
     },
-    [agentId, applyDetail, deleteAgentVersion, fetchAgent, viewedConfigId],
+    [agentId, applyDetail, bumpReadiness, deleteAgentVersion, fetchAgent, viewedConfigId],
   );
 
   const handleConfirmDelete = useCallback(async () => {
@@ -738,6 +820,33 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
+                  {isEditMode && (
+                    <ReadinessBadge
+                      status={
+                        readinessLoading && !readinessSummary
+                          ? 'loading'
+                          : readinessSummary
+                            ? readinessSummary.overall_status
+                            : 'error'
+                      }
+                      blockerCount={readinessSummary?.blocker_count ?? 0}
+                      warningCount={readinessSummary?.warning_count ?? 0}
+                      size="md"
+                      onClick={() => setReadinessDrawerOpen(true)}
+                      aria-label="Open agent readiness"
+                    />
+                  )}
+                  {isEditMode && (
+                    <CustomButton
+                      type="text"
+                      size="sm"
+                      icon={<Beaker className="size-4" />}
+                      onClick={() => setReadinessDrawerOpen(true)}
+                      className="h-8 text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
+                    >
+                      Test
+                    </CustomButton>
+                  )}
                   {isEditMode && versions.length > 0 && (
                     <AgentVersionSelector
                       versions={versions}
@@ -821,10 +930,11 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
               onClose={() => {
                 if (!publishing) setPublishOpen(false);
               }}
-              onConfirm={handlePublish}
+              onConfirm={(configId) => handlePublish(configId)}
               versions={versions}
               publishedVersionId={publishedVersion?.id ?? null}
               loading={publishing}
+              agentId={agentId}
             />
 
             <CreateVersionModal
@@ -844,11 +954,40 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
               agent={saveTemplateTarget}
               onClose={() => setSaveTemplateOpen(false)}
             />
+
+            {isEditMode && agentId && (
+              <ReadinessDrawer
+                open={readinessDrawerOpen}
+                onClose={() => setReadinessDrawerOpen(false)}
+                agentId={agentId}
+                configId={detail?.config?.id ?? null}
+                trigger="editor_load"
+              />
+            )}
+
+            <ReadinessConfirmDialog
+              open={pendingWarningsReport !== null}
+              onClose={handleDismissWarningsDialog}
+              report={pendingWarningsReport}
+              onConfirm={handleConfirmPublishWithWarnings}
+              loading={publishing}
+            />
           </div>
         </AgentEditorProvider>
       </AgentFormNavProvider>
     </FormProvider>
   );
+}
+
+/** Peek at an Axios error and return the backend's readiness-gate detail if
+ * present. Returns null for non-gate errors (network, 500, etc.) so the caller
+ * can fall back to the generic error toast. */
+function extractGateDetail(err: unknown): PublishGateErrorDetail | null {
+  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+  if (!detail || typeof detail !== 'object') return null;
+  const reason = (detail as { reason?: unknown }).reason;
+  if (reason !== 'readiness_blocked' && reason !== 'readiness_warnings') return null;
+  return detail as PublishGateErrorDetail;
 }
 
 /** Primary rail slot — guarded return to the agents list. */
