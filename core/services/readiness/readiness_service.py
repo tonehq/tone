@@ -19,7 +19,7 @@ return it directly — never re-running the runner when nothing has changed.
 from __future__ import annotations
 
 import time
-from typing import List, Optional
+from typing import List, Optional, Set
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -41,6 +41,7 @@ from core.services.readiness.persistence import ReadinessPersistence
 from core.services.readiness.rate_limiter import RateLimiter
 from core.services.readiness.runner import Runner
 from core.services.readiness.schemas import (
+    Category,
     CheckResult,
     Depth,
     OverallStatus,
@@ -70,6 +71,7 @@ class ReadinessService(BaseService):
         config_id: Optional[str] = None,
         *,
         trigger: str = TRIGGER_API,
+        deep_categories: Optional[Set[Category]] = None,
     ) -> ReadinessReport:
         """Run a readiness check for one agent + (optionally explicit) config.
 
@@ -78,10 +80,25 @@ class ReadinessService(BaseService):
         2. If a stored snapshot exists with a matching stamp → return it.
         3. Shallow: run + persist + return.
         4. Deep: rate-limit, coalesce, cache-in-memory, run + persist + return.
+
+        ``deep_categories`` is only meaningful when ``depth=DEEP`` and switches
+        the runner to a **targeted deep** — only the listed categories are
+        actually probed live; other deep checks return SKIPPED. Targeted deep
+        deliberately bypasses the snapshot fast-path AND the persistence write
+        so a partial-scan result never masquerades as a full deep for the
+        publish gate. It also skips the rate limiter / coalesce cache because
+        each targeted run has a different "shape" — those safeguards protect
+        full-deep runs, not user-driven save-time probes.
         """
         agent = self._require_agent(agent_id)
         stamp, resolved_config = self._compute_stamp(agent)
         effective_config_id = self._effective_config_id(config_id, resolved_config)
+
+        # Targeted deep bypasses all caches + persistence — see docstring.
+        if depth == Depth.DEEP and deep_categories is not None:
+            return await self._run(
+                agent, config_id, Depth.DEEP, deep_categories=deep_categories
+            )
 
         fresh = self._read_fresh_snapshot(agent.id, effective_config_id, depth, stamp)
         if fresh is not None:
@@ -346,12 +363,17 @@ class ReadinessService(BaseService):
         return report
 
     async def _run(
-        self, agent: Agent, config_id: Optional[str], depth: Depth
+        self,
+        agent: Agent,
+        config_id: Optional[str],
+        depth: Depth,
+        *,
+        deep_categories: Optional[Set[Category]] = None,
     ) -> ReadinessReport:
         builder = ContextBuilder(self.db, self.org_id)
         config = builder.resolve_config(agent, config_id=config_id)
         ctx = builder.build(agent, config, depth)
-        return await Runner().run(ctx)
+        return await Runner().run(ctx, deep_categories=deep_categories)
 
 
 # ── module-private helpers ─────────────────────────────────────────────────

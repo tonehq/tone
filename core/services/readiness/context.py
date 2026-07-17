@@ -44,6 +44,7 @@ from core.services.pipeline.service_resolver import (
 from core.services.readiness.base import CheckContext, ServiceSpec
 from core.services.readiness.schemas import Depth
 from core.utils.encryption import decrypt
+from core.utils.oauth_resolution import stamp_effective
 
 
 class ContextBuilder:
@@ -212,8 +213,13 @@ class ContextBuilder:
         )
 
     def _fetch_linked_tools(self, agent_id: UUID, config_id: UUID) -> List[Tool]:
-        return (
-            self.db.query(Tool)
+        # Selects the per-version override alongside the Tool row and stamps the
+        # winner on `.effective_oauth_connection_id` — same shape the runtime
+        # loader (`custom_tool_service.get_custom_tools_for_agent`) produces, so
+        # the OAuth resolver in deep checks reads the same connection the
+        # pipeline would at call time.
+        rows = (
+            self.db.query(Tool, AgentTool.oauth_connection_id)
             .join(AgentTool, AgentTool.tool_id == Tool.id)
             .filter(
                 AgentTool.agent_id == agent_id,
@@ -221,6 +227,11 @@ class ContextBuilder:
             )
             .all()
         )
+        tools: List[Tool] = []
+        for tool, link_oauth in rows:
+            stamp_effective(tool, link_oauth)
+            tools.append(tool)
+        return tools
 
     def _fetch_linked_knowledge_bases(
         self, agent_id: UUID, config_id: UUID

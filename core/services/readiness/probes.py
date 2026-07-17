@@ -37,12 +37,30 @@ these; individual services never know about them.
 
 from __future__ import annotations
 
+import audioop
 import inspect
 import uuid
+import wave
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from functools import lru_cache
+from importlib.resources import files
+from typing import Any, Dict, Optional, Tuple
 
 from loguru import logger
+
+
+# ── Probe payloads (fixed constants — see plan for rationale) ────────────────
+# Kept module-level so all three probe functions read from ONE source of truth.
+# Changing them is a one-line edit; no per-provider text lives in this file.
+
+_LLM_PROBE_PROMPT = "Reply with the single word OK."
+_TTS_PROBE_TEXT = "This is a readiness test."
+
+# Bundled STT audio asset — native rate the WAV is encoded at. Resampled per
+# provider at probe time via `audioop.ratecv` when the STT service is
+# configured for a different rate.
+_STT_PROBE_SAMPLE_RATE = 16000
+_STT_PROBE_ASSET = "probe_sample.wav"
 
 
 @dataclass
@@ -142,19 +160,19 @@ async def probe_llm(ctx) -> ProbeResult:
             if completions and hasattr(completions, "create"):
                 await completions.create(
                     model=model,
-                    messages=[{"role": "user", "content": "ping"}],
+                    messages=[{"role": "user", "content": _LLM_PROBE_PROMPT}],
                     max_tokens=1,
                 )
-                return ProbeResult(True, f"{provider} responded to a 1-token completion.")
+                return ProbeResult(True, f"{provider} responded to a sentence prompt.")
 
         # Anthropic native SDK
         if provider == "anthropic" and hasattr(client, "messages"):
             await client.messages.create(
                 model=model or "claude-haiku-4-5-20251001",
                 max_tokens=1,
-                messages=[{"role": "user", "content": "ping"}],
+                messages=[{"role": "user", "content": _LLM_PROBE_PROMPT}],
             )
-            return ProbeResult(True, f"anthropic responded to a 1-token completion.")
+            return ProbeResult(True, "anthropic responded to a sentence prompt.")
 
         # Google Gemini (google-genai SDK)
         if provider == "google" and hasattr(client, "models"):
@@ -163,10 +181,10 @@ async def probe_llm(ctx) -> ProbeResult:
             if aio_models and hasattr(aio_models, "generate_content"):
                 await aio_models.generate_content(
                     model=model or "gemini-2.5-flash",
-                    contents="ping",
+                    contents=_LLM_PROBE_PROMPT,
                     config={"max_output_tokens": 1},
                 )
-                return ProbeResult(True, f"google gemini responded to a 1-token completion.")
+                return ProbeResult(True, "google gemini responded to a sentence prompt.")
     except Exception as exc:  # noqa: BLE001
         logger.exception("[readiness] {} LLM live probe failed", provider)
         return ProbeResult(False, _summarise_error(provider, exc))
@@ -181,11 +199,14 @@ async def probe_llm(ctx) -> ProbeResult:
 
 
 async def probe_stt(ctx) -> ProbeResult:
-    """Stream ~0.5s of PCM silence through pipecat's ``run_stt`` and confirm the
-    provider accepts the audio (any yielded frame means auth passed).
+    """Stream ~5-7s of real recorded speech through pipecat's ``run_stt`` and
+    confirm the provider returns a non-empty transcript.
 
     Works across every pipecat STT provider because ``STTService.run_stt(audio)``
-    is the standard interface — WebSocket, gRPC, HTTP, they all implement it.
+    is the standard interface. When the bundled audio asset is unavailable
+    (fresh clone before someone commits the WAV), we fall back to a 0.5s
+    silence probe — enough to prove auth + session but not transcription
+    quality — and say so in the message so the caller isn't misled.
     """
     from core.services.pipeline import service_factory
 
@@ -211,37 +232,32 @@ async def probe_stt(ctx) -> ProbeResult:
             f"{provider}: STT client constructed (this provider doesn't expose run_stt for a live probe).",
         )
 
-    sample_rate = int((ctx.stt.settings or {}).get("sample_rate") or 16000)
-    # 0.5s of PCM16 silence at the configured sample rate.
-    silence = b"\x00\x00" * (sample_rate // 2)
+    target_rate = int((ctx.stt.settings or {}).get("sample_rate") or _STT_PROBE_SAMPLE_RATE)
+    audio_bytes, using_real_audio = _load_stt_audio(target_rate)
+
+    # Lazy import — pipecat is heavy and this module is imported at API startup.
+    try:
+        from pipecat.frames.frames import (
+            InterimTranscriptionFrame,
+            TranscriptionFrame,
+        )
+        _transcript_types: Tuple[type, ...] = (TranscriptionFrame, InterimTranscriptionFrame)
+    except Exception:  # noqa: BLE001
+        _transcript_types = ()
 
     try:
-        # Some STT services require lifecycle setup (start frame) before accepting
-        # audio; try to run without it first, and if it fails suggestively, retry
-        # with a minimal StartFrame. Most WebSocket-based services connect on first
-        # ``run_stt`` call, which is what we want.
+        transcript_text: Optional[str] = None
         got_any = False
-        gen = service.run_stt(silence)
-        # Consume up to 2 frames or hit an exception — we only need one signal.
-        for _ in range(2):
-            try:
-                frame = await gen.__anext__()
-            except StopAsyncIteration:
-                break
+        async for frame in service.run_stt(audio_bytes):
             got_any = True
-            if frame is not None:
+            if frame is None:
+                continue
+            # Providers vary in which frame type carries the final vs interim
+            # text — accept either, since both prove the model decoded speech.
+            text = _extract_transcript_text(frame, _transcript_types)
+            if text:
+                transcript_text = text
                 break
-        try:
-            await gen.aclose()
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("[readiness] {} STT probe generator close failed: {}", provider, exc)
-        if got_any:
-            return ProbeResult(True, f"{provider} STT accepted a probe audio frame.")
-        # No frames but no error either — auth likely passed, just no output on silence.
-        return ProbeResult(
-            True,
-            f"{provider} STT accepted the request (no interim frame on silence, which is normal).",
-        )
     except Exception as exc:  # noqa: BLE001
         logger.exception("[readiness] {} STT live probe failed", provider)
         return ProbeResult(False, _summarise_error(provider, exc))
@@ -257,6 +273,100 @@ async def probe_stt(ctx) -> ProbeResult:
                     break
         except Exception as exc:  # noqa: BLE001
             logger.debug("[readiness] {} STT probe cleanup failed: {}", provider, exc)
+
+    if transcript_text:
+        snippet = transcript_text.strip().replace("\n", " ")[:60]
+        return ProbeResult(True, f"{provider} STT transcribed: '{snippet}'")
+
+    if not using_real_audio:
+        # No transcript expected — the WAV asset wasn't available so we sent
+        # silence. Auth + session are still verified.
+        return ProbeResult(
+            True,
+            f"{provider} STT accepted the request (bundled probe WAV missing — silence-only probe).",
+        )
+
+    if got_any:
+        # We got frames but none carried transcribed text within the window —
+        # likely a provider that only emits finals after the whole session
+        # closes, or a language-mismatch that produced empty text.
+        return ProbeResult(
+            False,
+            f"{provider} STT returned frames but no transcript text — check language/model settings.",
+        )
+    return ProbeResult(
+        False, f"{provider} STT returned no frames for the probe audio."
+    )
+
+
+# ── STT audio helpers ────────────────────────────────────────────────────────
+
+
+@lru_cache(maxsize=1)
+def _load_probe_pcm16() -> Optional[Tuple[bytes, int]]:
+    """Read the bundled PCM16 mono WAV once. Returns ``(pcm_bytes, sample_rate)``
+    or ``None`` when the asset is missing/invalid — callers handle the fallback.
+
+    Cached because the file is small and re-reading on every probe is wasteful.
+    Uses stdlib ``wave`` + ``importlib.resources`` so the asset stays inside the
+    package and works both from source and from a wheel install.
+    """
+    try:
+        asset = files("core.services.readiness.assets") / _STT_PROBE_ASSET
+    except (ModuleNotFoundError, FileNotFoundError):
+        return None
+    try:
+        with asset.open("rb") as raw:
+            with wave.open(raw, "rb") as wav:
+                if wav.getnchannels() != 1 or wav.getsampwidth() != 2:
+                    logger.warning(
+                        "[readiness] STT probe asset must be mono PCM16; "
+                        "got channels={}, sampwidth={}",
+                        wav.getnchannels(),
+                        wav.getsampwidth(),
+                    )
+                    return None
+                return wav.readframes(wav.getnframes()), wav.getframerate()
+    except (FileNotFoundError, OSError, wave.Error) as exc:
+        logger.debug("[readiness] STT probe asset unavailable: {}", exc)
+        return None
+
+
+def _load_stt_audio(target_rate: int) -> Tuple[bytes, bool]:
+    """Return ``(pcm_bytes, using_real_audio)`` for the STT probe.
+
+    Prefers the bundled WAV, resampled to ``target_rate`` via stdlib
+    ``audioop.ratecv``. Falls back to 0.5s of PCM16 silence at ``target_rate``
+    when the asset isn't committed yet — the second-return-value tells the
+    caller whether transcription is a valid expectation.
+    """
+    loaded = _load_probe_pcm16()
+    if loaded is None:
+        silence = b"\x00\x00" * (target_rate // 2)
+        return silence, False
+    pcm, native_rate = loaded
+    if target_rate == native_rate:
+        return pcm, True
+    # ``ratecv`` needs an opaque state on first call; None is the seed.
+    converted, _ = audioop.ratecv(pcm, 2, 1, native_rate, target_rate, None)
+    return converted, True
+
+
+def _extract_transcript_text(frame, transcript_types: Tuple[type, ...]) -> Optional[str]:
+    """Pull a non-empty ``.text`` out of a pipecat transcript frame, if present.
+
+    Matches on ``TranscriptionFrame`` / ``InterimTranscriptionFrame`` via
+    ``isinstance`` when the types are importable, else falls back to duck-typing
+    on the ``.text`` attribute. Both paths ignore whitespace-only strings so a
+    provider that emits `" "` between real chunks isn't treated as a transcript.
+    """
+    if transcript_types and isinstance(frame, transcript_types):
+        text = getattr(frame, "text", None)
+    else:
+        text = getattr(frame, "text", None) if hasattr(frame, "text") else None
+    if isinstance(text, str) and text.strip():
+        return text
+    return None
 
 
 # ── TTS probe (universal — pipecat's run_tts) ────────────────────────────────
@@ -310,7 +420,7 @@ async def probe_tts(ctx) -> ProbeResult:
 
     got_audio = False
     try:
-        async for frame in service.run_tts("test", **run_tts_kwargs):
+        async for frame in service.run_tts(_TTS_PROBE_TEXT, **run_tts_kwargs):
             if TTSAudioRawFrame is not None and isinstance(frame, TTSAudioRawFrame):
                 got_audio = True
                 break
@@ -331,7 +441,7 @@ async def probe_tts(ctx) -> ProbeResult:
             logger.debug("[readiness] {} TTS probe session close failed: {}", provider, exc)
 
     if got_audio:
-        return ProbeResult(True, f"{provider} synthesised a test phrase.")
+        return ProbeResult(True, f"{provider} synthesised a sentence.")
     return ProbeResult(
         True,
         f"{provider} accepted the request (no audio frame observed within probe budget).",

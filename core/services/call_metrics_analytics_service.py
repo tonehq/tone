@@ -4,10 +4,13 @@ Given the same filter scope the user is looking at (date range + facets),
 compute a **two-step** aggregation for each of four series:
 
 1. **Per-call stats** — for each call in scope, take that call's own
-   ``computed_stats.<series>_series_stats`` block (pre-computed at call-end
-   by ``ComputeCallAggregatesAction``) and pick the canonical per-call
-   scalar for each row: ``block[<row>]["avg"]`` — the avg-across-turns
-   of the per-turn ``<row>`` stat.
+   ``call_metrics.<series>_series_stats`` block (pre-computed at
+   call-end by ``ComputeCallAggregatesAction``) and pick the diagonal
+   ``block[<row>][<row>]`` as the canonical per-call scalar for that
+   row — the ``<row>``-across-turns of the per-turn ``<row>`` stat. In
+   the single-sample-per-turn case (the common case), this collapses to
+   ``<row>`` over the call's per-turn headline values, matching what
+   the pre-refactor endpoint reported.
 2. **Across-call stats** — take each of the three per-call series (list
    of per-call avgs, list of per-call p50s, list of per-call p99s) and
    compute ``avg``, ``p50``, ``p99`` over that list.
@@ -148,17 +151,21 @@ def _summarize_series(
 ) -> Dict[str, Any]:
     """Across-call roll-up for one series.
 
-    For each per-call block, pick ``block[<row>]["avg"]`` — the avg-across-
-    turns of the per-turn ``<row>`` stat — as the canonical per-call scalar
-    for that row. Then, for each column (``avg``/``p50``/``p99``), reduce
-    the list of per-call scalars into the response value.
+    Frontend contract (see ``callLog.ts::MetricsSummarySeries``):
+    ``per_call[R][C] = C-across-calls applied to the list of per-call R``.
+    So we need one "per-call R" scalar per call before applying C.
 
-    Choice of "avg" as the across-turn reducer (rather than the diagonal
-    ``block[<row>][<row>]``): using a single, consistent reducer keeps the
-    per-call scalar interpretable — "the typical per-turn <row> for this
-    call". The alternative would compound percentiles (e.g. p99 of per-turn
-    p99), which is very noisy at typical turn counts. For single-sample
-    turns (the common case) every choice collapses to the same number.
+    The per-call block is a 3×3 grid: ``block[outer][inner]`` = ``inner``
+    applied across turns to per-turn ``outer``. The **diagonal**
+    ``block[R][R]`` is the natural per-call R: for each turn compute R
+    over that turn's samples, then take R over the resulting per-turn
+    values. In the common single-sample-per-turn case (where a turn's
+    ``*_ttfb_all`` reduces to its scalar headline), the diagonal collapses
+    to ``R(turn_scalars)`` — exactly what the pre-change endpoint reported
+    when it read ``llm_ttfb``/``stt_ttfb``/``tts_ttfb``/``end_to_end``
+    directly. Off-diagonal cells would break that equivalence: e.g. reading
+    ``block[R]["avg"]`` makes every row collapse to the call's mean in the
+    single-sample case, which is a real regression against the old numbers.
 
     A call whose block is missing this series (``None``) contributes
     nothing; ``call_sample_count`` reflects only calls that did.
@@ -175,7 +182,7 @@ def _summarize_series(
             row = series_block.get(row_name)
             if not row:
                 continue
-            value = row.get("avg")
+            value = row.get(row_name)
             if value is not None:
                 per_call_stats[row_name].append(value)
 
