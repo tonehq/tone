@@ -164,3 +164,4 @@ def enqueue_compute_call_metrics_aggregates_sync(call_id) -> int:
     called from ``PostCallHandler`` which runs inside the sync completion
     path."""
     with app.open():
+        return compute_call_metrics_aggregates_task.defer(call_id=str(call_id))
