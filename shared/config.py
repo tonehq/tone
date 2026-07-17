@@ -147,21 +147,15 @@ class Settings:
 
         # Per-call sync tuning. No enable/disable flag — the post-call action is
         # always wired; loki_read_configured() alone gates it.
-        # Loki stream selector for the per-call log fetch. The trace_id line
-        # filter does the real per-call scoping; this selector just narrows the
-        # streams. Default is env-agnostic — Alloy labels tone pods with
-        # component={call,api,worker}, so {component=~"call|api"} matches the
-        # call + api pods in every environment. Override with a full LogQL
-        # selector via LOKI_SYNC_STREAM_SELECTOR, or a single workload via
-        # LOKI_SYNC_APP_LABEL (builds {app="<value>"}). NOTE: there is no
-        # app="tone" label — app values are the workload names
-        # (e.g. staging-tone-call-worker), which is why the old default matched
+        # Loki stream selector for the per-call log fetch — the trace_id line
+        # filter does the real per-call scoping; this just narrows the streams.
+        # Set LOKI_SYNC_APP_LABEL to a single workload (builds {app="<value>"}),
+        # e.g. staging-tone-call-worker. Left blank, the query falls back to the
+        # env-agnostic {component=~"call|api"} (Alloy labels tone pods with
+        # component={call,api,worker}). NOTE: there is no app="tone" label — app
+        # values are the workload names, which is why the old default matched
         # nothing.
-        _loki_app_label = get_secret("LOKI_SYNC_APP_LABEL", "").strip()
-        self.LOKI_SYNC_STREAM_SELECTOR: str = (
-            get_secret("LOKI_SYNC_STREAM_SELECTOR", "").strip()
-            or (f'{{app="{_loki_app_label}"}}' if _loki_app_label else '{component=~"call|api"}')
-        )
+        self.LOKI_SYNC_APP_LABEL: str = get_secret("LOKI_SYNC_APP_LABEL", "").strip()
         self.LOKI_SYNC_DELAY_SECONDS: int = int(get_secret("LOKI_SYNC_DELAY_SECONDS", "120"))
         self.LOKI_SYNC_PRE_BUFFER_SECONDS: int = int(get_secret("LOKI_SYNC_PRE_BUFFER_SECONDS", "30"))
         self.LOKI_SYNC_POST_BUFFER_SECONDS: int = int(get_secret("LOKI_SYNC_POST_BUFFER_SECONDS", "60"))
