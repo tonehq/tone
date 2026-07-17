@@ -40,6 +40,7 @@ async def check_readiness(
         depth=body.depth,
         config_id=body.config_id,
         trigger=body.trigger or "api",
+        deep_categories=set(body.categories) if body.categories is not None else None,
     )
 
 

@@ -162,7 +162,10 @@ class TTSProviderReachableCheck(DeepCheck):
         return "Provider or key not resolved (see shallow checks)."
 
     @with_retry()
-    @with_timeout(5.0)  # TTS round-trip is a bit slower than an LLM 1-token
+    # Sentence synthesis + first-audio consumption; a bit more forgiving than
+    # the old one-word probe so slower providers (ElevenLabs streaming, etc.)
+    # aren't false-flagged.
+    @with_timeout(8.0)
     async def run(self, ctx: CheckContext) -> CheckResult:
         from core.services.readiness.probes import probe_tts
 

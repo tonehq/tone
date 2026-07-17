@@ -11,7 +11,7 @@ The publish gate is not exposed as its own endpoint — it's called from inside
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -22,6 +22,7 @@ from core.database.session import get_db
 from core.middleware.auth import JWTClaims, require_org_member
 from core.services.readiness import ReadinessService
 from core.services.readiness.schemas import (
+    Category,
     Depth,
     ReadinessReport,
     ReadinessSummary,
@@ -39,6 +40,13 @@ class ReadinessRequest(BaseModel):
     # analytics can slice audits by trigger. Not enforced against an enum so
     # the frontend can evolve trigger names independently.
     trigger: Optional[str] = None
+    # Optional targeted-deep filter: when set alongside ``depth=deep``, only
+    # deep checks in these categories run live; other deep checks return
+    # SKIPPED. Used by the save flow to probe only the resources the user
+    # actually touched. Ignored when ``depth=shallow``. Empty list is treated
+    # as "no categories" — every deep check is skipped, effectively equivalent
+    # to a shallow run.
+    categories: Optional[List[Category]] = None
 
 
 def _get_service(claims: JWTClaims, db: Session) -> ReadinessService:
@@ -67,6 +75,7 @@ async def check_readiness(
         depth=body.depth,
         config_id=body.config_id,
         trigger=body.trigger or "api",
+        deep_categories=set(body.categories) if body.categories is not None else None,
     )
 
 

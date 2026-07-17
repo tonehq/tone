@@ -92,7 +92,10 @@ class STTProviderReachableCheck(DeepCheck):
         return "Provider or key not resolved (see shallow checks)."
 
     @with_retry()
-    @with_timeout(5.0)  # constructor may fetch remote config on some STT services
+    # Real-audio probe: WS handshake + ~7s of speech + provider decode. 15s
+    # gives the slower providers (Whisper, some AWS regions) headroom without
+    # blocking the readiness report on a genuinely stuck session.
+    @with_timeout(15.0)
     async def run(self, ctx: CheckContext) -> CheckResult:
         from core.services.readiness.probes import probe_stt
 
