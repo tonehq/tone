@@ -178,7 +178,15 @@ class Settings:
 
         # Per-call sync tuning. No enable/disable flag — the post-call action is
         # always wired; loki_read_configured() alone gates it.
-        self.LOKI_SYNC_APP_LABEL: str = get_secret("LOKI_SYNC_APP_LABEL", "tone")
+        # Loki stream selector for the per-call log fetch — the trace_id line
+        # filter does the real per-call scoping; this just narrows the streams.
+        # Set LOKI_SYNC_APP_LABEL to a single workload (builds {app="<value>"}),
+        # e.g. staging-tone-call-worker. Left blank, the query falls back to the
+        # env-agnostic {component=~"call|api"} (Alloy labels tone pods with
+        # component={call,api,worker}). NOTE: there is no app="tone" label — app
+        # values are the workload names, which is why the old default matched
+        # nothing.
+        self.LOKI_SYNC_APP_LABEL: str = get_secret("LOKI_SYNC_APP_LABEL", "").strip()
         self.LOKI_SYNC_DELAY_SECONDS: int = int(get_secret("LOKI_SYNC_DELAY_SECONDS", "120"))
         self.LOKI_SYNC_PRE_BUFFER_SECONDS: int = int(get_secret("LOKI_SYNC_PRE_BUFFER_SECONDS", "30"))
         self.LOKI_SYNC_POST_BUFFER_SECONDS: int = int(get_secret("LOKI_SYNC_POST_BUFFER_SECONDS", "60"))

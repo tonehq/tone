@@ -107,7 +107,12 @@ class PipelineLogSyncService(BaseService):
         # the fully-rendered trace_id before storing, so foreign lines aren't
         # misattributed to this call.
         call_uuid = call.trace_id.split("-", 1)[0]
-        query = f'{{app="{settings.LOKI_SYNC_APP_LABEL}"}} |= "trace_id={call_uuid}"'
+        selector = (
+            f'{{app="{settings.LOKI_SYNC_APP_LABEL}"}}'
+            if settings.LOKI_SYNC_APP_LABEL
+            else '{component=~"call|api"}'
+        )
+        query = f'{selector} |= "trace_id={call_uuid}"'
 
         client = LokiClient()
         result = SyncResult(window_start=start_dt, window_end=end_dt)
