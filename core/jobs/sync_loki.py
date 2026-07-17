@@ -10,11 +10,12 @@ from core.services.pipeline_log_sync_service import PipelineLogSyncService
 
 
 def sync_call_logs(call_id: str) -> None:
-    """Read a finished call's log lines from Loki into ``pipeline_logs``.
+    """Read a finished call's log lines from Loki into ``call_pipeline_logs``.
 
     Runs inside the ``sync_loki_logs`` procrastinate task, deferred with a delay
     after the call ends so Loki has ingested the call's teardown lines. Idempotent
-    (fingerprint dedup), so task-level retries are safe. A missing call is a no-op
+    (the array is rebuilt from the same window and replaced), so task-level
+    retries are safe. A missing call is a no-op
     (it may have been deleted between defer and run)."""
     with get_db_context() as db:
         call = db.query(Call).filter(Call.id == UUID(call_id)).first()
@@ -23,6 +24,6 @@ def sync_call_logs(call_id: str) -> None:
             return
         result = PipelineLogSyncService(db, org_id=call.organization_id).sync_call(call)
     logger.info(
-        "[loki_sync] job done call={} inserted={} skipped_dup={} fetched={}",
-        call_id, result.inserted, result.skipped, result.fetched,
+        "[loki_sync] job done call={} fetched={} stored={}",
+        call_id, result.fetched, result.stored,
     )
