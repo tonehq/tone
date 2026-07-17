@@ -120,6 +120,56 @@ class TestNoDataCases:
         assert result["end_to_end_series_stats"] is None
 
 
+class TestAnalyticsReader:
+    """Pin the diagonal reader — regression guard for the "collapse to mean" bug.
+
+    Frontend contract: ``per_call[R][C]`` = C-across-calls of per-call R.
+    The reader must therefore pull ``block[R][R]`` (diagonal), not ``block[R]["avg"]``
+    or any other off-diagonal cell. In the single-sample-per-turn case
+    (headline-value only), this collapses to R over the call's turn scalars —
+    the same number the pre-refactor endpoint reported.
+    """
+
+    def _summarize(self, per_call_blocks, stats_key, unit):
+        from core.services.call_metrics_analytics_service import _summarize_series
+        return _summarize_series(per_call_blocks, stats_key=stats_key, unit=unit)
+
+    def _blocks_from(self, turns):
+        return compute_series_stats(turns)
+
+    def test_single_sample_per_turn_matches_old_semantics(self):
+        # Two "calls" with single-sample-per-turn arrays. Old endpoint would have
+        # computed R over the flat list of turn scalars per call.
+        call_a = self._blocks_from([
+            {"llm_ttfb_all": [0.100]},
+            {"llm_ttfb_all": [0.300]},
+        ])
+        call_b = self._blocks_from([
+            {"llm_ttfb_all": [0.200]},
+            {"llm_ttfb_all": [0.400]},
+        ])
+        out = self._summarize([call_a, call_b], stats_key="llm_series_stats", unit="ms")
+
+        # Old per-call "avg" = mean of turn samples: call_a=200, call_b=300
+        # Old per-call "p50" = median: call_a=200, call_b=300
+        # Old per-call "p99" = p99: call_a=100+200*0.99=298, call_b=200+200*0.99=398
+        # Across-call avg / p50 / p99 of each per-call list:
+        #   avg-row: [200,300] → avg=250,  p50=250,  p99=299
+        #   p50-row: [200,300] → avg=250,  p50=250,  p99=299
+        #   p99-row: [298,398] → avg=348,  p50=348,  p99=397
+        _approx(out["per_call"]["avg"]["avg"], 250)
+        _approx(out["per_call"]["avg"]["p50"], 250)
+        _approx(out["per_call"]["p50"]["avg"], 250)  # would be 250 for any correct reducer
+        _approx(out["per_call"]["p99"]["avg"], 348)  # ← THIS is the bug pin: would be 250 with the "avg" cell reducer
+        _approx(out["per_call"]["p99"]["p99"], 397)
+
+    def test_empty_scope_still_reports_unit(self):
+        out = self._summarize([], stats_key="llm_series_stats", unit="ms")
+        assert out["unit"] == "ms"
+        assert out["call_sample_count"] == 0
+        assert out["per_call"]["avg"]["avg"] is None
+
+
 class TestMalformedInput:
     def test_non_dict_turn_ignored(self):
         turns = ["not-a-turn", None, {"llm_ttfb_all": [0.1]}]

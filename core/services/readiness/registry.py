@@ -62,7 +62,12 @@ def _build_registry() -> List[BaseCheck]:
         llm.LLMProviderReachableCheck(),
         stt.STTProviderReachableCheck(),
         tts.TTSProviderReachableCheck(),
+        # MCP: order matters — L4 HTTP probe first so an unreachable server
+        # attributes to `http_reachable`, not to a confusing handshake failure.
+        mcp_servers.McpServerHttpReachableCheck(),
         mcp_servers.McpServerReachableCheck(),
+        # Tools: live GET probe. Non-GET tools are skipped inside the check.
+        tools.ToolReachableCheck(),
     ]
 
 

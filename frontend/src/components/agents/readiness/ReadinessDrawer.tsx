@@ -25,12 +25,23 @@ interface ReadinessDrawerProps {
   /** Optional label describing where the drawer was opened from; forwarded as
    * the readiness `trigger` string for analytics. */
   trigger?: ReadinessTrigger | string;
+  /** Report supplied by the parent (typically the freshest targeted-deep
+   * result from a save). When present, the drawer renders it on open instead
+   * of firing its own shallow fetch — keeps the drawer and the header badge
+   * in agreement. */
+  initialReport?: ReadinessReport | null;
+  /** Lets the drawer inform the parent when the report changes (Refresh /
+   * Run deep test) so the badge and the drawer stay in sync afterwards. */
+  onReportChange?: (report: ReadinessReport | null) => void;
 }
 
 /**
- * Right-side drawer holding the full readiness report. Fetches a fresh
- * Shallow report on open; user can escalate to Deep via the "Test agent"
- * button. Deep-links inside failing rows navigate the user to the fix page.
+ * Right-side drawer holding the full readiness report. Renders any
+ * ``initialReport`` supplied by the parent on open (so the badge and the
+ * drawer never disagree); falls back to a fresh Shallow fetch when the
+ * parent has nothing to hand off. User can escalate to Deep via the "Run
+ * deep test" button. Deep-links inside failing rows navigate the user to
+ * the fix page.
  */
 export default function ReadinessDrawer({
   open,
@@ -38,6 +49,8 @@ export default function ReadinessDrawer({
   agentId,
   configId,
   trigger = 'editor_load',
+  initialReport = null,
+  onReportChange,
 }: ReadinessDrawerProps) {
   const router = useRouter();
   const [, runReadiness] = useAtom(fetchAgentReadinessAtom);
@@ -45,6 +58,17 @@ export default function ReadinessDrawer({
   const [report, setReport] = useState<ReadinessReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [deepRunning, setDeepRunning] = useState(false);
+
+  /** Single point where local report state changes, so parent notification
+   * stays consistent across all update paths (initial-adopt / refresh /
+   * deep-test / close-clear). */
+  const applyReport = useCallback(
+    (next: ReadinessReport | null) => {
+      setReport(next);
+      onReportChange?.(next);
+    },
+    [onReportChange],
+  );
 
   const load = useCallback(
     async (depth: 'shallow' | 'deep', why: ReadinessTrigger | string = trigger) => {
@@ -59,7 +83,7 @@ export default function ReadinessDrawer({
           configId: configId ?? undefined,
           trigger: why,
         });
-        setReport(next);
+        applyReport(next);
       } catch (err) {
         // 429 = deep rate-limit → soft toast, don't wipe the drawer.
         const status = (err as { response?: { status?: number } })?.response?.status;
@@ -76,18 +100,25 @@ export default function ReadinessDrawer({
         else setLoading(false);
       }
     },
-    [agentId, configId, runReadiness, trigger],
+    [agentId, applyReport, configId, runReadiness, trigger],
   );
 
-  // Load Shallow on open; clear on close so re-opening for another agent
-  // doesn't flash a stale report.
+  // Open: adopt the parent-provided report when present (matches the badge);
+  // else fetch a fresh Shallow report. Close: clear ONLY local state so the
+  // parent keeps its report for the next open; if we nulled the parent too,
+  // close-and-reopen would lose the deep report from a preceding save and
+  // fall back to a shallow refetch that disagrees with the badge again.
   useEffect(() => {
     if (open && agentId) {
-      void load('shallow');
+      if (initialReport) {
+        setReport(initialReport);
+      } else {
+        void load('shallow');
+      }
       return;
     }
     if (!open) setReport(null);
-  }, [open, agentId, configId, load]);
+  }, [open, agentId, configId, load, initialReport]);
 
   const handleFix = useCallback(
     (check: ReadinessCheckResult) => {

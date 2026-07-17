@@ -13,7 +13,7 @@ new module — this file stays a pure orchestrator.
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Set
 from uuid import UUID
 
 import anyio
@@ -22,6 +22,7 @@ from loguru import logger
 from core.services.readiness.base import BaseCheck, CheckContext
 from core.services.readiness.registry import get_checks
 from core.services.readiness.schemas import (
+    Category,
     CheckResult,
     Depth,
     OverallStatus,
@@ -34,9 +35,25 @@ from core.services.readiness.schemas import (
 class Runner:
     """Executes a set of checks against a pre-built context and aggregates."""
 
-    async def run(self, ctx: CheckContext) -> ReadinessReport:
+    async def run(
+        self,
+        ctx: CheckContext,
+        *,
+        deep_categories: Optional[Set[Category]] = None,
+    ) -> ReadinessReport:
+        """Run readiness against ``ctx``.
+
+        ``deep_categories`` is meaningful only when ``ctx.depth == DEEP``:
+
+        * ``None`` (default) — every deep check runs (the existing full-deep
+          behavior; used by publish gate and the manual "Test" button).
+        * ``set(...)`` — only deep checks whose ``category`` is in the set run;
+          other deep checks return ``SKIPPED`` with a clear reason. Shallow
+          checks always run either way. Used by the save flow to probe only
+          the resources the user actually touched.
+        """
         checks = get_checks(ctx.depth)
-        results = await self._execute_all(checks, ctx)
+        results = await self._execute_all(checks, ctx, deep_categories=deep_categories)
         return self._aggregate(
             results,
             depth=ctx.depth,
@@ -47,13 +64,28 @@ class Runner:
     # ── execution ──────────────────────────────────────────────────────────
 
     async def _execute_all(
-        self, checks: List[BaseCheck], ctx: CheckContext
+        self,
+        checks: List[BaseCheck],
+        ctx: CheckContext,
+        *,
+        deep_categories: Optional[Set[Category]] = None,
     ) -> List[CheckResult]:
         """Run every check concurrently. A single check crashing does not abort
         the report — its slot returns a FAIL result explaining the crash so ops
         can find it in the response instead of a swallowed 500."""
 
         async def run_one(check: BaseCheck) -> CheckResult:
+            # Targeted-deep filter: shallow checks always run; deep checks
+            # outside the requested category set short-circuit to SKIPPED so
+            # the report shape stays identical to a full-deep run.
+            if (
+                deep_categories is not None
+                and check.depth == Depth.DEEP
+                and check.category not in deep_categories
+            ):
+                return check._skip(
+                    f"Not re-probed on this save ({check.category.value} unchanged)."
+                )
             if not check.applies(ctx):
                 return check._skip(check.skip_reason(ctx))
             try:
