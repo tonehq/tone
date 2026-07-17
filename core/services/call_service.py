@@ -576,5 +576,6 @@ class CallService(BaseService):
             "ended_reason_detail": metadata.get("ended_reason_detail"),
             "served_by": served_by,
             "pipeline_config": call.pipeline_config,
+            "consolidated_transcript": call.consolidated_transcript,
             "metrics": metrics,
         }

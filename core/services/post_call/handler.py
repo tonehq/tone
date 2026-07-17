@@ -5,6 +5,7 @@ from loguru import logger
 from core.models.call import Call
 from core.services.post_call.actions import (
     ComputeCallAggregatesAction,
+    ConsolidateTranscriptAction,
     OverlapDetectionAction,
     PostCallAction,
 )
@@ -24,6 +25,7 @@ class PostCallHandler:
     def _default_actions() -> List[PostCallAction]:
         return [
             OverlapDetectionAction(),
+            ConsolidateTranscriptAction(),
             ComputeCallAggregatesAction(),
         ]
 
