@@ -110,16 +110,16 @@ class SubprocessBotManager:
                 await cls._cleanup(proc)
             return True
 
-        except Exception as e:
+        except Exception:
             # Clean up the warm worker process if it was acquired but failed
             # to launch (e.g. _wait_for_signal timed out). Without this, the
             # orphaned process could keep running in the background.
             if proc:
                 try:
                     await cls._cleanup(proc)
-                except Exception:
-                    pass
-            logger.warning("Warm pool launch failed, falling back to cold spawn: %s", e)
+                except Exception as cleanup_exc:
+                    logger.debug("Warm worker cleanup after failed launch errored: {}", cleanup_exc)
+            logger.exception("Warm pool launch failed, falling back to cold spawn")
             return False
 
     @classmethod

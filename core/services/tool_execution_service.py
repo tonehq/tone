@@ -80,8 +80,8 @@ class ToolExecutionService(BaseService):
         for entry in entries:
             try:
                 rows.append(self._row_from_entry(call_id, agent_id, entry))
-            except Exception as e:
-                logger.error("Skipping malformed tool_call entry {}: {}", entry, e)
+            except Exception:
+                logger.exception("Skipping malformed tool_call entry {}", entry)
 
         if not rows:
             return 0

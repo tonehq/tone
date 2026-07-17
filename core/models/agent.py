@@ -20,5 +20,9 @@ class Agent(OrgScopedModel):
     published_config_id = Column(UUID(as_uuid=True), ForeignKey("agent_configs.id", ondelete="SET NULL", use_alter=True), nullable=True)
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
+    # Per-agent log level (TRACE/DEBUG/INFO/…). NULL = inherit the organization's
+    # level, then the env baseline. Resolved by core/services/log_level_resolver.py
+    # and applied to this agent's call subprocess. Most specific override wins.
+    log_level = Column(String(20), nullable=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     archived_at = Column(DateTime(timezone=True), nullable=True)

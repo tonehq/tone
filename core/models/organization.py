@@ -30,6 +30,10 @@ class Organization(Base):
     settings = Column(JSONB, nullable=True, default=dict)
     metadata_ = Column("metadata", JSONB, nullable=True, default=dict)
 
+    # Per-org log level (TRACE/DEBUG/INFO/…). NULL = inherit the env baseline.
+    # An agent's own log_level overrides this. See core/services/log_level_resolver.py.
+    log_level = Column(String(20), nullable=True)
+
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
         DateTime(timezone=True),

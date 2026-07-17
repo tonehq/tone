@@ -21,7 +21,7 @@ try:
     import websockets
     from websockets.asyncio.client import connect as websocket_connect
 except ModuleNotFoundError as e:
-    logger.error(f"Exception: {e}")
+    logger.exception("Granite websocket STT import failed")
     logger.error("To use the Granite websocket STT, you need to `pip install websockets`.")
     raise Exception(f"Missing module: {e}")
 
@@ -132,8 +132,8 @@ class GraniteWebSocketSTTService(WebsocketSTTService):
         if self._websocket and self._websocket.state is State.OPEN:
             try:
                 await self._websocket.send("eof")
-            except websockets.exceptions.ConnectionClosed:
-                pass
+            except websockets.exceptions.ConnectionClosed as exc:
+                logger.debug("{} websocket already closed sending eof: {}", self, exc)
 
     def _get_websocket(self):
         if self._websocket:

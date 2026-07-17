@@ -36,8 +36,8 @@ def _pinned_ws_url(default_ws_url: str, tag: str):
                     node_name = pod.node.name if pod.node is not None else None
             if pinned_url:
                 ws_url = pinned_url
-        except Exception as exc:
-            logger.warning("[{}] pod pinning failed, falling back to /ws: {}", tag, exc)
+        except Exception:
+            logger.exception("[{}] pod pinning failed, falling back to /ws", tag)
     return ws_url, pod_name, pod_ordinal, node_name
 
 
@@ -55,7 +55,9 @@ async def _resolve_stream(request: Request, tag: str):
             from_number = (request.query_params.get("From") or "").strip()
             to_number = (request.query_params.get("To") or "").strip()
     except Exception:
-        pass
+        # Non-fatal: a malformed form/query just means no from/to to log; the
+        # call still proceeds. Capture the traceback rather than swallowing silently.
+        logger.exception("[{}] failed to parse From/To from request", tag)
 
     ws_url, pod_name, pod_ordinal, node_name = _pinned_ws_url(default_ws_url, tag)
 
@@ -69,50 +71,58 @@ async def _resolve_stream(request: Request, tag: str):
 @router.post("/twiml")
 @router.get("/twiml")
 async def twiml(request: Request) -> Response:
-    ws_url, from_number, to_number, pod_name, node_name = await _resolve_stream(request, "/twiml")
+    try:
+        ws_url, from_number, to_number, pod_name, node_name = await _resolve_stream(request, "/twiml")
 
-    params_xml = ""
-    if from_number:
-        params_xml += f'<Parameter name="from" value="{_xml_escape(from_number)}" />'
-    if to_number:
-        params_xml += f'<Parameter name="to" value="{_xml_escape(to_number)}" />'
+        params_xml = ""
+        if from_number:
+            params_xml += f'<Parameter name="from" value="{_xml_escape(from_number)}" />'
+        if to_number:
+            params_xml += f'<Parameter name="to" value="{_xml_escape(to_number)}" />'
 
-    xml = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        '<Response>'
-        '<Connect>'
-        f'<Stream url="{ws_url}">{params_xml}</Stream>'
-        '</Connect>'
-        '</Response>'
-    )
+        xml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Response>'
+            '<Connect>'
+            f'<Stream url="{ws_url}">{params_xml}</Stream>'
+            '</Connect>'
+            '</Response>'
+        )
 
-    logger.info(
-        "[/twiml] RESPONSE from={} to={} pod={} node={} handshake_url={}",
-        from_number, to_number, pod_name, node_name, ws_url,
-    )
-    return Response(content=xml, media_type="application/xml")
+        logger.info(
+            "[inbound] /twiml RESPONSE from={} to={} pod={} node={} handshake_url={}",
+            from_number, to_number, pod_name, node_name, ws_url,
+        )
+        return Response(content=xml, media_type="application/xml")
+    except Exception:
+        logger.exception("[inbound] /twiml failed to build stream response — returning hangup")
+        return Response(content=_HANGUP_TWIML, media_type="application/xml")
 
 
 @router.post("/telnyx/texml")
 @router.get("/telnyx/texml")
 async def telnyx_texml(request: Request) -> Response:
-    ws_url, from_number, to_number, pod_name, node_name = await _resolve_stream(request, "/telnyx/texml")
+    try:
+        ws_url, from_number, to_number, pod_name, node_name = await _resolve_stream(request, "/telnyx/texml")
 
-    xml = (
-        '<?xml version="1.0" encoding="UTF-8"?>'
-        '<Response>'
-        '<Connect>'
-        f'<Stream url="{ws_url}" bidirectionalMode="rtp"></Stream>'
-        '</Connect>'
-        '<Pause length="40"/>'
-        '</Response>'
-    )
+        xml = (
+            '<?xml version="1.0" encoding="UTF-8"?>'
+            '<Response>'
+            '<Connect>'
+            f'<Stream url="{ws_url}" bidirectionalMode="rtp"></Stream>'
+            '</Connect>'
+            '<Pause length="40"/>'
+            '</Response>'
+        )
 
-    logger.info(
-        "[/telnyx/texml] RESPONSE from={} to={} pod={} node={} handshake_url={}",
-        from_number, to_number, pod_name, node_name, ws_url,
-    )
-    return Response(content=xml, media_type="application/xml")
+        logger.info(
+            "[inbound] /telnyx/texml RESPONSE from={} to={} pod={} node={} handshake_url={}",
+            from_number, to_number, pod_name, node_name, ws_url,
+        )
+        return Response(content=xml, media_type="application/xml")
+    except Exception:
+        logger.exception("[inbound] /telnyx/texml failed to build stream response — returning hangup")
+        return Response(content=_HANGUP_TWIML, media_type="application/xml")
 
 
 _HANGUP_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>'
@@ -184,7 +194,7 @@ async def twilio_outbound_status(request: Request) -> Response:
                     OutboundCallService(db, org_id=sc.organization_id).handle_status_callback(
                         scheduled_call_id, form_dict
                     )
-    except Exception as exc:  # noqa: BLE001 — never surface errors to Twilio
-        logger.error("[/twilio/outbound-status] error scheduled_call_id={} err={}", scheduled_call_id, exc)
+    except Exception:  # noqa: BLE001 — never surface errors to Twilio
+        logger.exception("[/twilio/outbound-status] error scheduled_call_id={}", scheduled_call_id)
 
     return Response(status_code=204)

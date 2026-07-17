@@ -6,7 +6,6 @@ import secrets
 import time
 import uuid as uuid_lib
 from uuid import UUID
-import traceback
 
 from fastapi import HTTPException, status
 from loguru import logger
@@ -286,7 +285,7 @@ class AgentService(BaseService):
             # All steps succeeded — commit the entire transaction atomically
             self.db.commit()
         except IntegrityError as e:
-            print(traceback.format_exc())
+            logger.exception("[agent] upsert_agent IntegrityError — rolling back")
             self.db.rollback()
             detail = _agent_unique_constraint_detail(e)
             raise HTTPException(
@@ -294,11 +293,11 @@ class AgentService(BaseService):
                 detail=detail,
             ) from e
         except HTTPException:
-            print(traceback.format_exc())
+            logger.exception("[agent] upsert_agent HTTPException — rolling back and re-raising")
             self.db.rollback()
             raise
         except Exception:
-            print(traceback.format_exc())
+            logger.exception("[agent] upsert_agent failed — rolling back and re-raising")
             self.db.rollback()
             raise
 

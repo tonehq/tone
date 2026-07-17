@@ -24,6 +24,7 @@ import time as _time
 from typing import Any, Optional, Tuple
 from uuid import UUID
 
+from cryptography.fernet import InvalidToken
 from loguru import logger
 from sqlalchemy.orm import Session
 
@@ -203,8 +204,11 @@ def _build_service_specs(
             return None
         try:
             return decrypt(ak.encrypted_key)
-        except Exception as e:
-            logger.warning("[resolver] decrypt failed for api_key {}: {}", ak.id, e)
+        except InvalidToken:
+            logger.exception("[resolver] decrypt failed (invalid token/rotated key) for api_key {}", ak.id)
+            return None
+        except Exception:
+            logger.exception("[resolver] decrypt failed for api_key {}", ak.id)
             return None
 
     # Filter settings to only the params the chosen model actually supports, so stale
@@ -411,7 +415,13 @@ def _kv_to_dict(rows, decrypt: bool) -> dict:
             try:
                 from core.utils.encryption import decrypt as _dec
                 v = _dec(v)
+            except InvalidToken:
+                # Bad/rotated ciphertext for this custom var — skip it (non-fatal),
+                # but surface the traceback so a rotated key is diagnosable.
+                logger.exception("[resolver] decrypt failed for custom var key={} — skipping", k)
+                continue
             except Exception:
+                logger.exception("[resolver] unexpected error decrypting custom var key={} — skipping", k)
                 continue
         out[k] = v
     return out
@@ -771,8 +781,8 @@ def load_agent_service_config(
             api_request_tools = _build_api_request_tools(graph, api_fn_names)
             workflow_graph = graph
             workflow_fn_names = api_fn_names
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("[workflow] failed to load workflow for agent={}: {}", agent_id, exc)
+    except Exception:  # noqa: BLE001
+        logger.exception("[workflow] failed to load workflow for agent={} — continuing without workflow", agent_id)
         workflow_prompt = None
         workflow_greeting = None
         api_request_tools = []

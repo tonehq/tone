@@ -111,17 +111,18 @@ def _install_mcp_call_logging(llm, server_name: str, server_id=None, tool_call_e
 
                 try:
                     params.result_callback = logging_cb
-                except Exception:
+                except Exception as exc:
                     # FunctionCallParams not mutable on this version — still log the call above.
+                    logger.debug("FunctionCallParams.result_callback not mutable: {}", exc)
                     pass
 
             try:
                 return await handler(params)
             except Exception as exc:
                 dur = round((time.monotonic() - started) * 1000)
-                logger.error(
-                    "❌ MCP tool error ✕ server='{}' tool='{}' ({}ms): {}",
-                    server_name, fn, dur, exc,
+                logger.exception(
+                    "❌ MCP tool error ✕ server='{}' tool='{}' ({}ms)",
+                    server_name, fn, dur,
                 )
                 entry["status"] = "error"
                 entry["error"] = str(exc)
@@ -274,7 +275,8 @@ async def _filter_invalid_mcp_tool_schemas(mcp_client) -> tuple:
     for tool in getattr(available, "tools", []) or []:
         try:
             has_bad, bad_refs = _schema_has_unresolved_refs(tool.inputSchema or {})
-        except Exception:
+        except Exception as exc:
+            logger.debug("Schema validation skipped for MCP tool '{}': {}", tool.name, exc)
             kept.add(tool.name)
             continue
         if has_bad:
@@ -285,10 +287,9 @@ async def _filter_invalid_mcp_tool_schemas(mcp_client) -> tuple:
     if dropped:
         try:
             mcp_client._tools_filter = kept
-        except Exception as e:
-            logger.warning(
-                "Could not apply tools_filter to MCPClient (pipecat API may have changed): {}",
-                e,
+        except Exception:
+            logger.exception(
+                "Could not apply tools_filter to MCPClient (pipecat API may have changed)",
             )
             return None, dropped
 
@@ -377,10 +378,10 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, current
                                 "reconnect it in Integrations settings",
                                 server.name, oauth_connection_id,
                             )
-                except Exception as e:
-                    logger.error(
-                        "MCP server '{}': failed to resolve OAuth access token: {}",
-                        server.name, str(e),
+                except Exception:
+                    logger.exception(
+                        "MCP server '{}': failed to resolve OAuth access token",
+                        server.name,
                     )
 
             if not headers:
@@ -476,8 +477,8 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, current
                 MCP_REGISTER_TIMEOUT_S, server.name, server.server_url,
             )
             continue
-        except Exception as e:
-            logger.error("Failed to connect to MCP server '{}': {}", server.name, str(e))
+        except Exception:
+            logger.exception("Failed to connect to MCP server '{}'", server.name)
             continue
 
     if all_tool_schemas:

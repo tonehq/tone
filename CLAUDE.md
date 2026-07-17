@@ -99,6 +99,7 @@ The `pipecat/` directory is a custom fork (`tonehq/pipecat`) of the Pipecat AI f
 - **Multi-tenancy:** Core edition defaults to single-tenant (`IS_MULTI_TENANT=false`, all users share `DEFAULT_ORG_ID`)
 - **DB models:** UUID primary keys alongside integer IDs; JSONB columns for flexible metadata/settings
 - **Config:** Settings loaded from Infisical (if `USE_INFISICAL=true`) or `.env` with fallback defaults
+- **Logging & observability:** Use the shared loguru `logger`. Every error-handling `except` must capture a full traceback via `logger.exception(...)` (never message-only `logger.error("...", e)` or `print`); expected control-flow `except`s (parse fallbacks, cache miss, optional import, hot-loop/per-frame) use `logger.debug`; never silently swallow and never swallow `asyncio.CancelledError`. Prefix logs with a context tag (`[bot]`, `[inbound]`, `[outbound]`, service name); correlate by the per-call `trace_id`. Never call `logger.add/remove/configure` outside `core/logging.py` (it owns the single sink; pipecat shares the same loguru singleton). Per-call verbosity is DB-driven — `agent.log_level > organization.log_level > env LOG_LEVEL > INFO`, resolved only in `core/services/log_level_resolver.py` and applied by `run_bot` via `setup_logging(level=...)`; never read the `log_level` columns directly. Full reference: `docs/LOGGING_OBSERVABILITY.md`.
 
 ### Frontend: shared components
 
@@ -118,7 +119,7 @@ rulebook in `docs/code-review/`. These rules are mandatory for all agents:
 Do not comment on style the linter/formatter already fixes (ESLint+Prettier on FE, Ruff on BE) —
 focus on correctness, security, design, and tests. Always-check blockers:
 - **FE:** no type-erasing `any`/`!`; correct `useEffect` deps (`exhaustive-deps` is OFF — the reviewer is the guard); stable list keys; no secrets in the client bundle; server state in TanStack Query; buttons use `CustomButton` and prefer shared components.
-- **BE:** every route has the right auth guard; **every query is tenant/org-scoped** (no IDOR); no raw/interpolated SQL; schema changes ship a safe Alembic migration; secrets stay AES-encrypted and are never logged; no blocking I/O in async paths; logic lives in a `BaseService`, not routers.
+- **BE:** every route has the right auth guard; **every query is tenant/org-scoped** (no IDOR); no raw/interpolated SQL; schema changes ship a safe Alembic migration; secrets stay AES-encrypted and are never logged; no blocking I/O in async paths; logic lives in a `BaseService`, not routers; **every `except` logs a full traceback (`logger.exception`) — no silent swallow, no message-only error log, `CancelledError` never dropped** (see Logging & observability above).
 
 New behavior needs tests; bug fixes need a regression test.
 
