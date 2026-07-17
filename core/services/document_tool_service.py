@@ -18,6 +18,11 @@ from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
 from pipecat.services.llm_service import FunctionCallParams
 
+from core.services.pipeline.tool_call_timing import (
+    ToolCallTimer,
+    finalize_and_record,
+)
+
 DEFAULT_TOP_K = 8
 
 
@@ -52,7 +57,7 @@ def get_document_tool_schema(document_names: List[str]) -> ToolsSchema:
     return ToolsSchema(standard_tools=[function_schema])
 
 
-def create_document_handler(agent_id: int, org_id: Any, api_key: str, upload_ids: List, top_k: int = DEFAULT_TOP_K, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None):
+def create_document_handler(agent_id: int, org_id: Any, api_key: str, upload_ids: List, top_k: int = DEFAULT_TOP_K, tool_call_entries: Optional[list] = None, tool_request_ts: Optional[dict] = None, current_turn: Optional[dict] = None):
     """Create the handler function for read_document tool calls.
 
     Args:
@@ -81,12 +86,14 @@ def create_document_handler(agent_id: int, org_id: Any, api_key: str, upload_ids
         query = params.arguments.get("query", "")
         logger.info("read_document called: query='{}' agent_id={}", query, agent_id)
         _t_start = _time.monotonic()
+        timer = ToolCallTimer.start(params, tool_request_ts)
         tool_call_entry = {
             "tool": "read_document",
             "tool_type": "read_document",
             "arguments": {"query": query},
             "timestamp": int(_time.time()),
             "turn": current_turn["number"] if current_turn else None,
+            **timer.initial_fields(),
         }
 
         try:
@@ -103,8 +110,7 @@ def create_document_handler(agent_id: int, org_id: Any, api_key: str, upload_ids
                 tool_call_entry["chunks_returned"] = 0
                 tool_call_entry["status_code"] = 200
                 tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
-                if tool_call_entries is not None:
-                    tool_call_entries.append(tool_call_entry)
+                finalize_and_record(tool_call_entry, timer, tool_call_entries)
                 await params.result_callback("No relevant content found in the documents.")
                 return
 
@@ -116,8 +122,7 @@ def create_document_handler(agent_id: int, org_id: Any, api_key: str, upload_ids
             tool_call_entry["chunks_returned"] = len(results)
             tool_call_entry["status_code"] = 200
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
-            if tool_call_entries is not None:
-                tool_call_entries.append(tool_call_entry)
+            finalize_and_record(tool_call_entry, timer, tool_call_entries)
 
             await params.result_callback(result)
 
@@ -126,8 +131,7 @@ def create_document_handler(agent_id: int, org_id: Any, api_key: str, upload_ids
             tool_call_entry["result"] = f"error: {str(e)}"
             tool_call_entry["status_code"] = 500
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
-            if tool_call_entries is not None:
-                tool_call_entries.append(tool_call_entry)
+            finalize_and_record(tool_call_entry, timer, tool_call_entries)
             await params.result_callback(f"Error searching documents: {str(e)}")
 
     return handle_read_document
@@ -244,7 +248,8 @@ def get_kb_document_names(agent_id: int) -> Optional[dict]:
 
 def build_document_tool(
     llm: Any, agent_id: int, org_id: Any, kb: Optional[dict],
-    tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None,
+    tool_call_entries: Optional[list] = None, tool_request_ts: Optional[dict] = None,
+    current_turn: Optional[dict] = None,
 ) -> Optional[ToolsSchema]:
     """Build + register the read_document tool from the cached `kb` dict (no KB DB query).
 
@@ -264,14 +269,24 @@ def build_document_tool(
         return None
 
     tools_schema = get_document_tool_schema(doc_names)
-    handler = create_document_handler(agent_id, org_id, api_key, upload_ids, tool_call_entries=tool_call_entries, current_turn=current_turn)
+    handler = create_document_handler(
+        agent_id, org_id, api_key, upload_ids,
+        tool_call_entries=tool_call_entries,
+        tool_request_ts=tool_request_ts,
+        current_turn=current_turn,
+    )
     llm.register_function("read_document", handler)
     logger.info("Registered read_document tool for agent {} with docs: {}", agent_id, doc_names)
     return tools_schema
 
 
-def register_document_tool(llm: Any, agent_id: int, org_id: Any, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None) -> Optional[ToolsSchema]:
+def register_document_tool(llm: Any, agent_id: int, org_id: Any, tool_call_entries: Optional[list] = None, tool_request_ts: Optional[dict] = None, current_turn: Optional[dict] = None) -> Optional[ToolsSchema]:
     """Back-compat entry point: fetch the agent's KB docs from the DB, then build the tool.
     New callers should cache `get_kb_document_names()` and call `build_document_tool()`."""
     kb = get_kb_document_names(agent_id)
-    return build_document_tool(llm, agent_id, org_id, kb, tool_call_entries=tool_call_entries, current_turn=current_turn)
+    return build_document_tool(
+        llm, agent_id, org_id, kb,
+        tool_call_entries=tool_call_entries,
+        tool_request_ts=tool_request_ts,
+        current_turn=current_turn,
+    )
