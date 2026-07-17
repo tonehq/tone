@@ -19,6 +19,10 @@ from loguru import logger
 
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
 
+from core.services.pipeline.tool_call_timing import (
+    ToolCallTimer,
+    finalize_and_record,
+)
 from core.utils.logging import truncate_for_log
 from core.utils.tool_idempotency import booking_signature, is_cacheable_result
 
@@ -28,7 +32,7 @@ from core.utils.tool_idempotency import booking_signature, is_cacheable_result
 MCP_REGISTER_TIMEOUT_S = 60.0
 
 
-def _install_mcp_call_logging(llm, server_name: str, server_id=None, tool_call_entries=None, current_turn=None, tool_dedup=None):
+def _install_mcp_call_logging(llm, server_name: str, server_id=None, tool_call_entries=None, tool_request_ts=None, current_turn=None, tool_dedup=None):
     """Wrap ``llm.register_function`` so each MCP tool registered through it logs, at call time,
     its server + tool name, the arguments passed in, and the output returned (plus duration) —
     and, when ``tool_call_entries`` is provided, appends a structured entry so the invocation is
@@ -47,6 +51,7 @@ def _install_mcp_call_logging(llm, server_name: str, server_id=None, tool_call_e
             fn = getattr(params, "function_name", name)
             arguments = getattr(params, "arguments", {})
             started = time.monotonic()
+            timer = ToolCallTimer.start(params, tool_request_ts)
             logger.info(
                 "🔧 MCP tool call → server='{}' tool='{}' args={}",
                 server_name, fn, truncate_for_log(arguments),
@@ -57,7 +62,8 @@ def _install_mcp_call_logging(llm, server_name: str, server_id=None, tool_call_e
             # "started") and appended now so the call is persisted even if its
             # result is never delivered — e.g. a barge-in interruption discards it
             # ("tool_call_id is not running") or it completes after call shutdown.
-            # The same dict is updated in place on result/error.
+            # The same dict is updated in place on result/error; timer.finish stamps
+            # completed_at without re-appending (entry is already in the sink).
             entry = {
                 "tool": fn,
                 "tool_type": "mcp",
@@ -67,6 +73,7 @@ def _install_mcp_call_logging(llm, server_name: str, server_id=None, tool_call_e
                 "timestamp": int(time.time()),
                 "turn": current_turn["number"] if current_turn else None,
                 "status": "started",
+                **timer.initial_fields(),
             }
             if tool_call_entries is not None:
                 tool_call_entries.append(entry)
@@ -90,6 +97,7 @@ def _install_mcp_call_logging(llm, server_name: str, server_id=None, tool_call_e
                 entry["status"] = "duplicate_suppressed"
                 entry["status_code"] = 200
                 entry["duration_ms"] = dur
+                finalize_and_record(entry, timer, None)
                 if original_cb is not None:
                     await original_cb(cached)
                 return
@@ -105,6 +113,7 @@ def _install_mcp_call_logging(llm, server_name: str, server_id=None, tool_call_e
                     entry["status"] = "success"
                     entry["status_code"] = 200
                     entry["duration_ms"] = dur
+                    finalize_and_record(entry, timer, None)
                     if sig is not None and tool_dedup is not None and is_cacheable_result(result):
                         tool_dedup[sig] = result
                     return await original_cb(result, *cb_args, **cb_kwargs)
@@ -128,6 +137,7 @@ def _install_mcp_call_logging(llm, server_name: str, server_id=None, tool_call_e
                 entry["error"] = str(exc)
                 entry["status_code"] = 500
                 entry["duration_ms"] = dur
+                finalize_and_record(entry, timer, None)
                 raise
 
         return original_register(name, logged_handler, *args, **kwargs)
@@ -296,7 +306,7 @@ async def _filter_invalid_mcp_tool_schemas(mcp_client) -> tuple:
     return kept, dropped
 
 
-async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, current_turn=None, tool_dedup=None) -> Optional[ToolsSchema]:
+async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, tool_request_ts=None, current_turn=None, tool_dedup=None) -> Optional[ToolsSchema]:
     """Connect to all MCP servers linked to an agent and register their tools with the LLM.
 
     Args:
@@ -304,6 +314,8 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, current
         agent_id: The agent ID to fetch MCP servers for.
         tool_call_entries: Optional shared list each MCP invocation is appended to,
             so it's persisted to the tool_executions table at call completion.
+        tool_request_ts: Optional runner-owned ``{tool_call_id: llm_requested_at}``
+            map, populated by ToolCallRequestObserver on FunctionCallInProgressFrame.
         current_turn: Optional dict carrying the live conversation turn number.
         tool_dedup: Optional shared dict (per-call) used to suppress duplicate
             create-type tool calls (e.g. clickup_create_task fired twice).
@@ -448,6 +460,7 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, current
             restore_logging = _install_mcp_call_logging(
                 llm, server.name, server_id=server.id,
                 tool_call_entries=tool_call_entries,
+                tool_request_ts=tool_request_ts,
                 current_turn=current_turn, tool_dedup=tool_dedup,
             )
             try:

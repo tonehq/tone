@@ -182,6 +182,12 @@ class McpServerReachableCheck(DeepCheck):
                 # MCP handshake below would pass and only the actual tool call
                 # would fail. Validate scopes up-front (in-memory, no I/O) so
                 # the revocation surfaces here instead of mid-conversation.
+                # Same reasoning for the wrong-provider case (e.g. Google
+                # Calendar OAuth linked to a HubSpot MCP) — save-time validation
+                # catches new configs, this catches rows persisted before it existed.
+                svc._validate_oauth_provider_match(
+                    server.app_integration_id, server.oauth_connection_id
+                )
                 svc._validate_oauth_scopes(server.oauth_connection_id)
                 # Mirror the runtime path (McpServerService.discover_tools):
                 # decrypt the stored auth_config, then layer the custom

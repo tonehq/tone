@@ -16,6 +16,10 @@ from pipecat.services.llm_service import FunctionCallParams
 from core.config import settings
 from core.models.tool import Tool
 from core.models.agent_tool import AgentTool
+from core.services.pipeline.tool_call_timing import (
+    ToolCallTimer,
+    finalize_and_record,
+)
 from core.utils.logging import truncate_for_log
 from core.utils.oauth_resolution import effective_of, stamp_effective
 
@@ -218,7 +222,7 @@ def _interp(text, ctx: dict):
     return substitute_variables(text, ctx) or ""
 
 
-def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None):
+def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = None, tool_request_ts: Optional[dict] = None, current_turn: Optional[dict] = None):
     """Create a handler function for a custom tool that calls the customer's webhook.
 
     Also powers workflow **API Request** nodes: if the tool object carries ``headers``
@@ -231,6 +235,7 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
         arguments = params.arguments
         logger.info("Custom tool '{}' called with args: {}", tool.name, arguments)
         _t_start = _time.monotonic()
+        timer = ToolCallTimer.start(params, tool_request_ts)
         tool_call_entry = {
             "tool": tool.name,
             "tool_type": tool.tool_type,
@@ -238,6 +243,7 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
             "arguments": arguments,
             "timestamp": int(_time.time()),
             "turn": current_turn["number"] if current_turn else None,
+            **timer.initial_fields(),
         }
 
         try:
@@ -335,8 +341,7 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
             tool_call_entry["result"] = "success"
             tool_call_entry["status_code"] = response.status_code
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
-            if tool_call_entries is not None:
-                tool_call_entries.append(tool_call_entry)
+            finalize_and_record(tool_call_entry, timer, tool_call_entries)
 
             await params.result_callback(result_text)
 
@@ -344,27 +349,25 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
             logger.warning("Custom tool '{}' timed out", tool.name)
             tool_call_entry["result"] = "error: timeout"
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
-            if tool_call_entries is not None:
-                tool_call_entries.append(tool_call_entry)
+            finalize_and_record(tool_call_entry, timer, tool_call_entries)
             await params.result_callback("The request timed out. Please tell the caller and continue.")
         except Exception as e:
             logger.exception("Custom tool '{}' failed", tool.name)
             tool_call_entry["result"] = f"error: {str(e)}"
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
-            if tool_call_entries is not None:
-                tool_call_entries.append(tool_call_entry)
+            finalize_and_record(tool_call_entry, timer, tool_call_entries)
             await params.result_callback(f"The request could not be completed: {str(e)}")
 
     return handle_tool_call
 
 
-def create_built_in_tool_handler(tool: Tool, caller_number: str, org_id=None, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None, tool_dedup: Optional[dict] = None) -> Callable:
+def create_built_in_tool_handler(tool: Tool, caller_number: str, org_id=None, tool_call_entries: Optional[list] = None, tool_request_ts: Optional[dict] = None, current_turn: Optional[dict] = None, tool_dedup: Optional[dict] = None) -> Callable:
     """Create a handler for a built-in tool based on tool_type."""
 
     if tool.tool_type == "send_sms":
-        return _create_send_sms_handler(tool, caller_number, tool_call_entries=tool_call_entries, current_turn=current_turn)
+        return _create_send_sms_handler(tool, caller_number, tool_call_entries=tool_call_entries, tool_request_ts=tool_request_ts, current_turn=current_turn)
     elif tool.tool_type == "google_calendar":
-        return _create_google_calendar_handler(tool, org_id=org_id, tool_call_entries=tool_call_entries, current_turn=current_turn, tool_dedup=tool_dedup)
+        return _create_google_calendar_handler(tool, org_id=org_id, tool_call_entries=tool_call_entries, tool_request_ts=tool_request_ts, current_turn=current_turn, tool_dedup=tool_dedup)
 
     # Fallback: unknown built-in tool type
     async def noop_handler(params: FunctionCallParams) -> None:
@@ -374,7 +377,7 @@ def create_built_in_tool_handler(tool: Tool, caller_number: str, org_id=None, to
     return noop_handler
 
 
-def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None) -> Callable:
+def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: Optional[list] = None, tool_request_ts: Optional[dict] = None, current_turn: Optional[dict] = None) -> Callable:
     """Create a handler that sends an SMS via Twilio."""
 
     async def handle_send_sms(params: FunctionCallParams) -> None:
@@ -384,6 +387,7 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
         message = arguments.get("message", "")
         logger.info("Built-in tool 'send_sms' called (caller_number={})", caller_number)
         _t_start = _time.monotonic()
+        timer = ToolCallTimer.start(params, tool_request_ts)
         meta = tool.meta_data or {}
         recipient = (meta.get("to_number") or caller_number or "").strip()
         if recipient in ("", _PLACEHOLDER_CALLER_NUMBER):
@@ -401,6 +405,7 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
             "arguments": {"message": message, "to": recipient},
             "timestamp": int(_time.time()),
             "turn": current_turn["number"] if current_turn else None,
+            **timer.initial_fields(),
         }
 
         auth = tool.auth_config or {}
@@ -412,8 +417,7 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
             logger.error("send_sms tool missing Twilio credentials in auth_config or from_number in meta_data")
             tool_call_entry["result"] = "error: missing Twilio credentials"
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
-            if tool_call_entries is not None:
-                tool_call_entries.append(tool_call_entry)
+            finalize_and_record(tool_call_entry, timer, tool_call_entries)
             await params.result_callback("Error: SMS tool is not configured. Missing Twilio credentials.")
             return
 
@@ -421,8 +425,7 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
             logger.error("send_sms tool: no recipient phone number available")
             tool_call_entry["result"] = "error: no recipient number"
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
-            if tool_call_entries is not None:
-                tool_call_entries.append(tool_call_entry)
+            finalize_and_record(tool_call_entry, timer, tool_call_entries)
             await params.result_callback("Error: No recipient phone number is available for this call.")
             return
 
@@ -444,8 +447,7 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
                 tool_call_entry["result"] = "success"
                 tool_call_entry["status_code"] = response.status_code
                 tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
-                if tool_call_entries is not None:
-                    tool_call_entries.append(tool_call_entry)
+                finalize_and_record(tool_call_entry, timer, tool_call_entries)
                 await params.result_callback("SMS sent successfully.")
             else:
                 error_detail = response.text
@@ -453,22 +455,20 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
                 tool_call_entry["result"] = f"error: status {response.status_code}"
                 tool_call_entry["status_code"] = response.status_code
                 tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
-                if tool_call_entries is not None:
-                    tool_call_entries.append(tool_call_entry)
+                finalize_and_record(tool_call_entry, timer, tool_call_entries)
                 await params.result_callback(f"Failed to send SMS: {error_detail}")
 
         except Exception as e:
             logger.exception("send_sms tool failed")
             tool_call_entry["result"] = f"error: {str(e)}"
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
-            if tool_call_entries is not None:
-                tool_call_entries.append(tool_call_entry)
+            finalize_and_record(tool_call_entry, timer, tool_call_entries)
             await params.result_callback(f"Error sending SMS: {str(e)}")
 
     return handle_send_sms
 
 
-def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: Optional[list] = None, current_turn: Optional[dict] = None, tool_dedup: Optional[dict] = None) -> Callable:
+def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: Optional[list] = None, tool_request_ts: Optional[dict] = None, current_turn: Optional[dict] = None, tool_dedup: Optional[dict] = None) -> Callable:
     """Create a handler that creates/checks events via Google Calendar API."""
 
     async def handle_google_calendar(params: FunctionCallParams) -> None:
@@ -479,6 +479,7 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
         action = arguments.get("action", "create_event")
         logger.info("Built-in tool 'google_calendar' called with action='{}', args={}", action, arguments)
         _t_start = _time.monotonic()
+        timer = ToolCallTimer.start(params, tool_request_ts)
         tool_call_entry = {
             "tool": "google_calendar",
             "tool_type": "google_calendar",
@@ -486,13 +487,13 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
             "arguments": {"action": action, **{k: v for k, v in arguments.items() if k != "action"}},
             "timestamp": int(_time.time()),
             "turn": current_turn["number"] if current_turn else None,
+            **timer.initial_fields(),
         }
 
         def _log_tool_call(result_str, duration_ms=None):
             tool_call_entry["result"] = result_str
             tool_call_entry["duration_ms"] = duration_ms or round((_time.monotonic() - _t_start) * 1000)
-            if tool_call_entries is not None:
-                tool_call_entries.append(tool_call_entry)
+            finalize_and_record(tool_call_entry, timer, tool_call_entries)
 
         # In-call idempotency: suppress a duplicate create_event (e.g. a barge-in
         # discarded the first result and the LLM re-issued the booking) so we don't
