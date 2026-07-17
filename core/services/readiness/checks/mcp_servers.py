@@ -101,6 +101,7 @@ class McpServerHttpReachableCheck(DeepCheck):
             build_auth_headers,
             headers_from_meta,
         )
+        from core.utils.oauth_resolution import effective_of
 
         svc = McpServerService(ctx.db, org_id=ctx.org_id)
         failed: List[str] = []
@@ -120,12 +121,15 @@ class McpServerHttpReachableCheck(DeepCheck):
                     # Mirror the runtime request shape: static auth_config
                     # headers, plus custom meta_data headers, plus the
                     # OAuth-connection-resolved Authorization header.
+                    # OAuth id resolution: agent-version override wins over the
+                    # entity-level default — same precedence the pipeline uses.
+                    effective_oauth_id = effective_of(server)
                     headers = {
                         **build_auth_headers(
                             server.auth_config, auth_type=server.auth_type
                         ),
                         **headers_from_meta(server.meta_data),
-                        **svc._resolve_oauth_headers(server.oauth_connection_id),
+                        **svc._resolve_oauth_headers(effective_oauth_id),
                     }
                     await client.get(url, headers=headers)
                 except httpx.RequestError as exc:
@@ -172,11 +176,17 @@ class McpServerReachableCheck(DeepCheck):
             headers_from_meta,
         )
         from core.services.tool_service import decrypt_auth_config
+        from core.utils.oauth_resolution import effective_of
 
         svc = McpServerService(ctx.db, org_id=ctx.org_id)
         failed: List[str] = []
         for server in ctx.mcp_servers:
             try:
+                # Agent-version override wins over entity default — same
+                # precedence the pipeline reads via ``effective_of``. Reading
+                # ``server.oauth_connection_id`` directly would validate the
+                # wrong connection when an agent config overrides it.
+                effective_oauth_id = effective_of(server)
                 # A linked OAuth connection whose scopes were revoked in the
                 # provider's dashboard still resolves to a valid token — the
                 # MCP handshake below would pass and only the actual tool call
@@ -186,9 +196,9 @@ class McpServerReachableCheck(DeepCheck):
                 # Calendar OAuth linked to a HubSpot MCP) — save-time validation
                 # catches new configs, this catches rows persisted before it existed.
                 svc._validate_oauth_provider_match(
-                    server.app_integration_id, server.oauth_connection_id
+                    server.app_integration_id, effective_oauth_id
                 )
-                svc._validate_oauth_scopes(server.oauth_connection_id)
+                svc._validate_oauth_scopes(effective_oauth_id)
                 # Mirror the runtime path (McpServerService.discover_tools):
                 # decrypt the stored auth_config, then layer the custom
                 # meta_data headers and the OAuth-connection-resolved
@@ -196,7 +206,7 @@ class McpServerReachableCheck(DeepCheck):
                 decrypted_auth = decrypt_auth_config(server.auth_config)
                 extra_headers = {
                     **headers_from_meta(server.meta_data),
-                    **svc._resolve_oauth_headers(server.oauth_connection_id),
+                    **svc._resolve_oauth_headers(effective_oauth_id),
                 }
                 await svc.validate_mcp_connection(
                     server_url=server.server_url,

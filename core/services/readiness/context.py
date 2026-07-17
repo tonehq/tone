@@ -297,8 +297,13 @@ class ContextBuilder:
     def _fetch_linked_mcp_servers(
         self, agent_id: UUID, config_id: UUID
     ) -> List[McpServer]:
-        return (
-            self.db.query(McpServer)
+        # Select the per-version OAuth override alongside the McpServer row and
+        # stamp the winner onto ``server.effective_oauth_connection_id`` — same
+        # shape ``mcp_tool_service._fetch_agent_mcp_servers`` produces at runtime,
+        # so the OAuth resolver in deep checks reads the same connection the
+        # pipeline would at call time (agent-link override → entity default).
+        rows = (
+            self.db.query(McpServer, AgentMcpServer.oauth_connection_id)
             .join(AgentMcpServer, AgentMcpServer.mcp_server_id == McpServer.id)
             .filter(
                 AgentMcpServer.agent_id == agent_id,
@@ -306,6 +311,11 @@ class ContextBuilder:
             )
             .all()
         )
+        servers: List[McpServer] = []
+        for server, link_oauth in rows:
+            stamp_effective(server, link_oauth)
+            servers.append(server)
+        return servers
 
     # ── per-service spec builder ───────────────────────────────────────────
 
