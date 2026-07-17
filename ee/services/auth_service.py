@@ -137,12 +137,38 @@ class EEAuthService(AuthService):
             role=member.role,
             session_id=session_id,
         )
-        return {
+        result: Dict[str, Any] = {
             "access_token": access_token,
             "token_type": "bearer",
             "organization": org.to_dict(),
             "role": member.role,
         }
+
+        # Re-mint the refresh token too, carrying the NEW org, and move the
+        # session row onto it. Without this the refresh token keeps the old
+        # org and a silent ``/auth/refresh`` would snap the user back to their
+        # previous org. Skipped for pre-session (jti-less) tokens.
+        from core.services.session_service import SessionService  # local import
+
+        session_service = SessionService(self.db)
+        session = session_service.get_session(session_id) if session_id else None
+        if session is not None:
+            refresh_token = jwt_manager.create_refresh_token(
+                user_id=str(user.id),
+                email=user.email,
+                session_id=session_id,
+                family=session.refresh_token_family,
+                org_id=str(org.id),
+            )
+            session_service.rotate_for_org_switch(
+                session_id=session_id,
+                new_refresh_token=refresh_token,
+                organization_id=org.id,
+            )
+            self.db.commit()
+            result["refresh_token"] = refresh_token
+
+        return result
 
     # ── Organization details ─────────────────────────────────────────
 

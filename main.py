@@ -76,12 +76,16 @@ edition = "enterprise" if ee_enabled else "core"
 
 app = FastAPI(title=f"Tone API - {edition.title()}", version="1.0.0")
 
+# Cookie-based auth means requests are credentialed, and browsers reject
+# `Allow-Origin: *` with credentials — so we reflect an explicit allow-list
+# (exact origins for local dev + a regex for every *.trytone.ai subdomain).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ALLOW_ORIGINS,
+    allow_origin_regex=settings.CORS_ALLOW_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*", "Authorization", "tenant_id", "Content-Type"],
 )
 app.add_middleware(RequestContextMiddleware)
 
@@ -89,7 +93,8 @@ api_v1 = FastAPI()
 
 api_v1.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.CORS_ALLOW_ORIGINS,
+    allow_origin_regex=settings.CORS_ALLOW_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*", "Authorization", "tenant_id", "Content-Type"],

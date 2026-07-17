@@ -238,20 +238,32 @@ async def probe_stt(ctx) -> ProbeResult:
     # Lazy import — pipecat is heavy and this module is imported at API startup.
     try:
         from pipecat.frames.frames import (
+            ErrorFrame,
             InterimTranscriptionFrame,
             TranscriptionFrame,
         )
         _transcript_types: Tuple[type, ...] = (TranscriptionFrame, InterimTranscriptionFrame)
+        _error_frame_type: Optional[type] = ErrorFrame
     except Exception:  # noqa: BLE001
         _transcript_types = ()
+        _error_frame_type = None
 
     try:
         transcript_text: Optional[str] = None
+        error_from_stream: Optional[str] = None
         got_any = False
         async for frame in service.run_stt(audio_bytes):
             got_any = True
             if frame is None:
                 continue
+            # WS-based STT providers signal auth/quota failures via ErrorFrame
+            # inside the stream, not by raising. Catch it here or we'd end up
+            # in the "returned frames but no transcript" branch below and mis-
+            # report a real failure as a soft ambiguity.
+            err = _extract_error_frame_message(frame, _error_frame_type)
+            if err:
+                error_from_stream = err
+                break
             # Providers vary in which frame type carries the final vs interim
             # text — accept either, since both prove the model decoded speech.
             text = _extract_transcript_text(frame, _transcript_types)
@@ -273,6 +285,12 @@ async def probe_stt(ctx) -> ProbeResult:
                     break
         except Exception as exc:  # noqa: BLE001
             logger.debug("[readiness] {} STT probe cleanup failed: {}", provider, exc)
+
+    if error_from_stream:
+        # The provider streamed an ErrorFrame — auth failure, quota exhausted,
+        # WS handshake rejected. Runtime pipelines log these; readiness must
+        # elevate to a FAIL so the badge reflects reality.
+        return ProbeResult(False, f"{provider} STT error: {error_from_stream[:180]}")
 
     if transcript_text:
         snippet = transcript_text.strip().replace("\n", " ")[:60]
@@ -369,6 +387,28 @@ def _extract_transcript_text(frame, transcript_types: Tuple[type, ...]) -> Optio
     return None
 
 
+def _extract_error_frame_message(frame, error_frame_type) -> Optional[str]:
+    """Return the error message when ``frame`` is a pipecat ``ErrorFrame``.
+
+    Pipecat WebSocket-based providers (Fish Audio TTS, Deepgram STT, ElevenLabs,
+    etc.) don't raise Python exceptions on connection failure — they push an
+    ``ErrorFrame`` into the frame stream. Runtime pipelines log these and keep
+    going; the readiness probes need to catch them explicitly, otherwise a 402
+    / 401 / model-not-found quietly yields "no audio observed" (or "no frames")
+    and the probe silently PASSes.
+
+    Duck-typed fallback: when the ``ErrorFrame`` type couldn't be imported we
+    still detect any frame whose class name ends in ``ErrorFrame`` and carries
+    an ``.error`` attribute.
+    """
+    if error_frame_type is not None and isinstance(frame, error_frame_type):
+        return str(getattr(frame, "error", "") or "provider emitted an error frame")
+    cls_name = type(frame).__name__
+    if cls_name.endswith("ErrorFrame") and hasattr(frame, "error"):
+        return str(getattr(frame, "error", "") or "provider emitted an error frame")
+    return None
+
+
 # ── TTS probe (universal — pipecat's run_tts) ────────────────────────────────
 
 
@@ -396,9 +436,16 @@ async def probe_tts(ctx) -> ProbeResult:
         )
 
     try:
-        from pipecat.frames.frames import TTSAudioRawFrame  # local — pipecat is heavy
+        # Local imports — pipecat is heavy and we don't want to pay for it
+        # at module load. ``ErrorFrame`` is the critical addition: pipecat
+        # WS-based TTS services (Fish Audio, ElevenLabs, etc.) push it into
+        # the stream on connection failure (402, 401) instead of raising, and
+        # without checking for it here the probe silently PASSes.
+        from pipecat.frames.frames import ErrorFrame, TTSAudioRawFrame
+        _error_frame_type: Optional[type] = ErrorFrame
     except Exception:  # noqa: BLE001
         TTSAudioRawFrame = None  # type: ignore
+        _error_frame_type = None
 
     # Some pipecat TTS services (e.g. Cartesia) override run_tts to require a
     # ``context_id`` for turn tracking. Inspect the signature so we can supply
@@ -419,8 +466,13 @@ async def probe_tts(ctx) -> ProbeResult:
         pass
 
     got_audio = False
+    error_from_stream: Optional[str] = None
     try:
         async for frame in service.run_tts(_TTS_PROBE_TEXT, **run_tts_kwargs):
+            err = _extract_error_frame_message(frame, _error_frame_type)
+            if err:
+                error_from_stream = err
+                break
             if TTSAudioRawFrame is not None and isinstance(frame, TTSAudioRawFrame):
                 got_audio = True
                 break
@@ -440,11 +492,20 @@ async def probe_tts(ctx) -> ProbeResult:
         except Exception as exc:  # noqa: BLE001
             logger.debug("[readiness] {} TTS probe session close failed: {}", provider, exc)
 
+    if error_from_stream:
+        # WS providers (Fish, ElevenLabs, etc.) surface 402/401/quota errors
+        # here rather than raising — must FAIL so the badge doesn't lie.
+        return ProbeResult(False, f"{provider} TTS error: {error_from_stream[:180]}")
     if got_audio:
         return ProbeResult(True, f"{provider} synthesised a sentence.")
+    # Real sentence probe: a healthy TTS must emit at least one audio frame.
+    # Historically this branch soft-passed with "accepted the request" — that
+    # let broken providers (mid-session auth failures, silent WS drops) go
+    # undetected. Flipping to FAIL matches the strict-transcript rule STT
+    # uses and the user's expectation for the new deep tests.
     return ProbeResult(
-        True,
-        f"{provider} accepted the request (no audio frame observed within probe budget).",
+        False,
+        f"{provider} TTS returned no audio for the probe sentence — provider likely rejected the request.",
     )
 
 

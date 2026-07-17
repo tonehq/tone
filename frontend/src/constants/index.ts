@@ -11,7 +11,13 @@ export const FIREBASE_SIGNUP = '/auth/signup_with_firebase';
 export const ROUTE_LOGIN = '/login';
 export const ROUTE_HOME = '/home';
 
-export const BACKEND_URL = `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/v1`;
+// When the dev API proxy is enabled the browser talks to the Next.js origin
+// (relative URL) so the httpOnly auth cookie is same-origin; otherwise it hits
+// the API host directly (prod: shared *.trytone.ai parent domain).
+export const BACKEND_URL =
+  process.env.NEXT_PUBLIC_USE_API_PROXY === 'true'
+    ? '/api/v1'
+    : `${process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000'}/api/v1`;
 
 // Grafana Loki logs link (Call History → per-call logs). Environment-specific: the base
 // host and the Loki "app" label differ between staging and production.

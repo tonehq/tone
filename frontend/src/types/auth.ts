@@ -31,7 +31,9 @@ export interface UserOrganization {
 }
 
 export interface AuthLoginResponse {
-  access_token: string;
+  // Tokens now ride in httpOnly cookies, not the JSON body — these remain
+  // optional only for backward-compatibility with older/non-cookie clients.
+  access_token?: string;
   refresh_token?: string;
   token_type?: string;
   expires_in?: number;

@@ -141,6 +141,35 @@ class SessionService(BaseService):
         self.db.flush()
         return session
 
+    def rotate_for_org_switch(
+        self,
+        *,
+        session_id: UUIDLike,
+        new_refresh_token: str,
+        organization_id: Optional[UUIDLike],
+        device: Optional[DeviceContext] = None,
+    ) -> Optional[UserSession]:
+        """Move a live session onto a new org and store a freshly-minted
+        refresh-token hash, without requiring the old refresh token.
+
+        Used by the org-switch flow: the caller is already authenticated via
+        its access token (and membership is verified upstream), so — unlike
+        ``rotate_session`` — there is no presented-token check. Returns the
+        updated session, or ``None`` if it is unknown / revoked / expired.
+        """
+        sid = coerce_uuid(session_id)
+        if not sid:
+            return None
+        session = self.db.query(UserSession).filter(UserSession.id == sid).first()
+        if not session or session.revoked_at is not None or session.expires_at <= utcnow():
+            return None
+        session.refresh_token_hash = hash_token(new_refresh_token)
+        session.organization_id = coerce_uuid(organization_id)
+        session.last_used_at = utcnow()
+        _apply_device(session, device)
+        self.db.flush()
+        return session
+
     # ── revocation ──
 
     def revoke_session(self, session: UserSession, reason: str) -> None:

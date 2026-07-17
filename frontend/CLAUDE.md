@@ -299,10 +299,10 @@ Applies **solid-checklist.md** in full — SRP, OCP, LSP, ISP, DIP, code smells,
 Applies **security-checklist.md** in full — XSS, injection, SSRF, AuthN/AuthZ, secrets, runtime risks, race conditions, data integrity.
 
 - **This project critical paths**:
-  - Every new route under `src/app/(dashboard)/` must be covered by the `tone_access_token` check in `src/middleware.ts`. Verify new routes are not excluded accidentally.
-  - The Axios instance in `src/utils/axios.ts` injects `tenant_id` and `Authorization` on every request. Do not bypass it by creating a second Axios instance or using `fetch` directly without these headers.
-  - Roles and identity must come from the `login_data` cookie (read via `AuthAtom.tsx`) — never from query params or request body fields.
-  - Firebase token must never be logged or stored outside of the `tone_access_token` cookie.
+  - Every new route under `src/app/(dashboard)/` must be covered by the `access_token` httpOnly-cookie presence check in `src/middleware.ts`. Verify new routes are not excluded accidentally by the matcher.
+  - The Axios instance in `src/utils/axios.ts` uses `withCredentials: true` so the httpOnly auth cookies are sent automatically, and injects the `tenant_id` hint header. Do not bypass it by creating a second Axios instance or using `fetch` directly without `credentials: 'include'`.
+  - Roles and identity must come from the `login_data` payload in localStorage (readable UI state) or the `/auth/me` API — never decoded from the token (it's an httpOnly cookie JS cannot read) and never from query params or request body fields.
+  - The access/refresh JWTs live ONLY in httpOnly cookies — never store them in localStorage/sessionStorage or log them.
 
 #### 6. Performance
 
@@ -392,24 +392,24 @@ The app requires `NEXT_PUBLIC_BACKEND_URL` to be set (see `src/urls.ts`). This i
 - `src/app/page.tsx` — redirects `/` to `/home`
 - `src/app/(dashboard)/` — route group for all authenticated pages (agents, home, settings, phone-numbers); shares a sidebar layout via `(dashboard)/layout.tsx`
 - `src/app/auth/` — public auth pages (login, signup, forgot password, reset password). All auth forms use react-hook-form + Zod for validation (see below).
-- `src/middleware.ts` — enforces auth by checking the `tone_access_token` cookie; unauthenticated requests redirect to `/auth/login?redirect=<path>`
+- `src/middleware.ts` — server-side auth guard: checks for the `access_token` httpOnly cookie (readable by middleware, not by browser JS); unauthenticated requests redirect to `/login?next=<path>`
 
 **Page pattern**: Pages under `(dashboard)` are thin wrappers that import and render a component from `src/components/`. All the actual UI logic lives in components.
 
 **State management**: [Jotai](https://jotai.org/). Atoms live in `src/atoms/`:
 
 - `AgentsAtom.tsx` — agent list state with a write-only `fetchAgentList` atom
-- `AuthAtom.tsx` — user auth state, logout, and `getCurrentUserAtom` that reads from the `login_data` cookie
+- `AuthAtom.tsx` — user auth state, logout, and `getCurrentUserAtom` that reads from the `login_data` payload in localStorage
 - `SettingsAtom.tsx` — organization members and invitations using `jotai/utils` `loadable` for async data with refresh counters
 
 Write-only atoms (e.g., `atom(null, async (_get, set, payload) => {...})`) are the pattern for async actions that update state.
 
 **API layer**: `src/services/` contains service functions that call `src/utils/axios.ts`. The Axios instance:
 
-- Sets base URL from `NEXT_PUBLIC_BACKEND_URL`
-- Injects `tenant_id` header (from `org_tenant_id` cookie) and `Authorization: Bearer <token>` (from `tone_access_token` cookie) on every request
+- Sets base URL from `NEXT_PUBLIC_BACKEND_URL` (or a relative `/api/v1` when `NEXT_PUBLIC_USE_API_PROXY=true` routes through the Next.js dev proxy — see `next.config.ts` `rewrites`)
+- Uses `withCredentials: true` so the browser attaches the httpOnly `access_token` / `refresh_token` cookies automatically; injects only the non-sensitive `tenant_id` hint header (from `active_org_id` in localStorage). On a 401 it silently calls `/auth/refresh` (cookie-based) once and retries.
 
-**Authentication**: Firebase is used alongside JWT. Auth state is persisted in cookies (`tone_access_token`, `org_tenant_id`, `login_data`). Constants for cookie key names are in `src/constants/index.ts`.
+**Authentication**: JWT access + refresh tokens stored in **httpOnly cookies** (set/cleared by the backend on login / refresh / logout / org-switch), so JS never touches them and XSS can't exfiltrate a session. The readable `login_data` payload + `active_org_id` in localStorage are non-sensitive UI state only. Route protection is server-side in `src/middleware.ts`. Org switching goes through `POST /auth/switch_organization`, which re-mints both cookies with the (membership-verified) new org. Constants for storage keys are in `src/constants/index.ts`. (No Firebase.)
 
 **UI**: shadcn/ui primitives in `src/components/ui/` styled with Tailwind v4 and theme tokens from `src/app/globals.css` (CSS variables for color, radius, etc.). The root font is **Geist Sans** (loaded via `next/font` in `src/app/layout.tsx`, exposed as `--font-geist-sans` and bound to Tailwind's `font-sans`); `font-mono` resolves to Geist Mono. Dark mode is handled by `next-themes`. Use **lucide-react** for icons (or `src/components/icons/` for brand marks). The codebase is MUI-free — do not introduce `@mui/*` or `@emotion/*` packages.
 

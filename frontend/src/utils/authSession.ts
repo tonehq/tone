@@ -1,36 +1,21 @@
-import { ACCESS_TOKEN, LOGIN_DATA, ROUTE_LOGIN, TENANT_ID } from '@/constants';
+import { LOGIN_DATA, ROUTE_LOGIN, TENANT_ID } from '@/constants';
 import { showToast } from '@/utils/toast';
 
-export const REFRESH_TOKEN = 'refresh_token';
 const USER_ID = 'user_id';
-const REDIRECT_QUERY_PARAM = 'redirect';
+// Must match the query param the login page reads (`?next=`) and the one the
+// Next.js middleware sets, so forced-logout returns the user to where they were.
+const REDIRECT_QUERY_PARAM = 'next';
 
 const isBrowser = () => typeof window !== 'undefined';
 
-export function getAccessToken(): string | null {
-  return isBrowser() ? localStorage.getItem(ACCESS_TOKEN) : null;
-}
-
-export function getRefreshToken(): string | null {
-  return isBrowser() ? localStorage.getItem(REFRESH_TOKEN) : null;
-}
-
-export function setTokens({
-  accessToken,
-  refreshToken,
-}: {
-  accessToken: string;
-  refreshToken?: string | null;
-}) {
-  if (!isBrowser()) return;
-  localStorage.setItem(ACCESS_TOKEN, accessToken);
-  if (refreshToken) localStorage.setItem(REFRESH_TOKEN, refreshToken);
-}
-
+/**
+ * Clears the JS-readable session state (user profile, active org). The access
+ * and refresh tokens themselves live in httpOnly cookies that JS cannot touch;
+ * those are cleared server-side by the `/auth/logout` endpoint (manual logout)
+ * or simply expire.
+ */
 export function clearAuthStorage() {
   if (!isBrowser()) return;
-  localStorage.removeItem(ACCESS_TOKEN);
-  localStorage.removeItem(REFRESH_TOKEN);
   localStorage.removeItem(TENANT_ID);
   localStorage.removeItem(LOGIN_DATA);
   localStorage.removeItem(USER_ID);
