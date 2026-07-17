@@ -43,6 +43,10 @@ class Call(OrgScopedModel):
     metadata_ = Column("metadata", JSONB, nullable=True)
     pipeline_config = Column(JSONB, nullable=True)
     overlapped_calls = Column(JSONB, nullable=False, server_default="[]")
+    # Derived per-turn view merging transcript + tool_executions + turn latency
+    # (see ConsolidatedTranscriptService). Written by the ``consolidate_transcript``
+    # post-call action; safe to recompute at any time.
+    consolidated_transcript = Column(JSONB, nullable=True)
 
     pod = relationship("Pod", back_populates="calls")
 

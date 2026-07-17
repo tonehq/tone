@@ -3,7 +3,12 @@ from typing import List, Optional
 from loguru import logger
 
 from core.models.call import Call
-from core.services.post_call.actions import OverlapDetectionAction, PostCallAction
+from core.services.post_call.actions import (
+    ComputeCallAggregatesAction,
+    ConsolidateTranscriptAction,
+    OverlapDetectionAction,
+    PostCallAction,
+)
 
 
 class PostCallHandler:
@@ -18,7 +23,11 @@ class PostCallHandler:
 
     @staticmethod
     def _default_actions() -> List[PostCallAction]:
-        return [OverlapDetectionAction()]
+        return [
+            OverlapDetectionAction(),
+            ConsolidateTranscriptAction(),
+            ComputeCallAggregatesAction(),
+        ]
 
     def post_call(self, call: Call) -> None:
         for action in self._actions:

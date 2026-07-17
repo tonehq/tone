@@ -246,6 +246,10 @@ class PipecatPipelineRunner(PipelineRunner):
                     "role": "user",
                     "text": message.content,
                     "timestamp": message.timestamp,
+                    # Snapshot the live turn number so downstream consolidation can
+                    # join transcript rows to tool_executions and turn_metrics on
+                    # the same key (see ConsolidatedTranscriptService).
+                    "turn_number": current_turn.get("number"),
                 })
 
             @build.assistant_aggregator.event_handler("on_assistant_turn_stopped")
@@ -256,6 +260,7 @@ class PipecatPipelineRunner(PipelineRunner):
                     "role": "assistant",
                     "text": message.content,
                     "timestamp": message.timestamp,
+                    "turn_number": current_turn.get("number"),
                 })
 
         # Turn tracking — the same events drive (a) the simple ``turns``

@@ -178,6 +178,14 @@ export interface CallLogRow {
    * it reflects what the call actually used — not the agent's current config.
    */
   pipeline_config: PipelineConfigSnapshot | null;
+  /**
+   * Per-turn consolidated view produced by ``ConsolidatedMetricsService`` — a
+   * flat array of turn dicts merging transcript + tool executions + per-turn
+   * end-to-end latency. Stored on its own ``calls.consolidated_transcript``
+   * column. Null on active calls and on older calls whose background action
+   * hasn't run yet; the Consolidated tab polls for it in that case.
+   */
+  consolidated_transcript?: ConsolidatedTurn[] | null;
 }
 
 export type ToolExecutionStatus = 'success' | 'error';
@@ -226,6 +234,25 @@ export interface ToolExecution {
   mcp_server_url?: string | null;
   mcp_server_transport?: string | null;
   mcp_server_is_active?: boolean | null;
+}
+
+/**
+ * One turn as emitted by `ConsolidatedMetricsService`. Merges the transcript
+ * text for both roles, the ordered list of tool invocations that ran during
+ * the turn, and the end-to-end user↔bot latency in ms. The turn dropping
+ * happens on the backend, so every turn here has at least one non-empty axis.
+ *
+ * `tool_calls` is `ToolExecution[]` because the backend re-emits the full
+ * `ToolExecution.to_dict()` payload — same shape the /tool-executions
+ * endpoint returns — so the UI can reuse the existing helpers.
+ */
+export interface ConsolidatedTurn {
+  turn_number: number;
+  user_speech: string | null;
+  bot_speech: string | null;
+  tool_calls: ToolExecution[];
+  /** End-to-end wall-clock latency for the turn, in milliseconds. */
+  user_bot_latency_ms: number | null;
 }
 
 export interface CallLogsState {

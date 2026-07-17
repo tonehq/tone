@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import { CALL_DETAIL_SECTION_KEYS, DEFAULT_CALL_DETAIL_SECTION } from '../callDetailNav';
 import { useCallDetail } from '../CallDetailContext';
 import CallConfigurationsSection from './CallConfigurationsSection';
+import ConsolidatedSection from './ConsolidatedSection';
 import MetricsSection from './MetricsSection';
 import ToolsMcpSection from './ToolsMcpSection';
 import TranscriptionRecordingsSection from './TranscriptionRecordingsSection';
@@ -43,6 +44,8 @@ const CallDetailSectionBody: React.FC<CallDetailSectionBodyProps> = ({ section, 
   switch (section) {
     case 'transcription':
       return <TranscriptionRecordingsSection callLog={callLog} />;
+    case 'consolidated':
+      return <ConsolidatedSection callLog={callLog} />;
     case 'metrics':
       return <MetricsSection callLog={callLog} />;
     case 'tools-mcp':
