@@ -56,14 +56,14 @@ class ReadinessPersistence:
                 duration_ms=duration_ms,
                 error=error,
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception:  # noqa: BLE001
             # Storage is best-effort. Rollback our writes so any wider
             # transaction (e.g. the request-scoped session) stays clean.
-            logger.warning("[readiness] persistence failed: {}", exc)
+            logger.exception("[readiness] persistence failed")
             try:
                 self.db.rollback()
             except Exception:  # noqa: BLE001
-                logger.warning("[readiness] rollback after failed persist also failed")
+                logger.exception("[readiness] rollback after failed persist also failed")
 
     # ── internals ──────────────────────────────────────────────────────────
 

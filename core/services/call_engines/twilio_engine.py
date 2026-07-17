@@ -89,7 +89,17 @@ class TwilioCallEngine(CallEngine):
             "[outbound] dialing agent={} from={} to={} scheduled_call_id={} twiml_url={}",
             agent_id, from_number, to_number, scheduled_call_id, twiml_url,
         )
-        call = self._get_client().calls.create(**create_kwargs)
+        try:
+            call = self._get_client().calls.create(**create_kwargs)
+        except TwilioRestException:
+            # Log with Twilio-specific context at the SDK boundary, then re-raise —
+            # callers (_dial_now / dispatch_scheduled_call) own the outcome (HTTP 502 /
+            # mark scheduled call failed).
+            logger.exception(
+                "[outbound] twilio calls.create failed agent={} to={} scheduled_call_id={}",
+                agent_id, to_number, scheduled_call_id,
+            )
+            raise
         status = getattr(call, "status", None) or "queued"
         logger.info(
             "[outbound] twilio call created sid={} status={} scheduled_call_id={}",
@@ -102,8 +112,12 @@ class TwilioCallEngine(CallEngine):
             self._get_client().calls(call_id).update(status="completed")
             logger.info("[outbound] end_call hung up sid={}", call_id)
             return True
-        except TwilioRestException as e:
-            logger.warning("[outbound] end_call failed sid={} err={}", call_id, e)
+        except TwilioRestException:
+            logger.exception("[outbound] end_call failed sid={}", call_id)
+            return False
+        except Exception:
+            # Best-effort hangup — never raise out of end_call, but capture why.
+            logger.exception("[outbound] end_call unexpected error sid={}", call_id)
             return False
 
     def get_call_status(self, call_id: str) -> Dict[str, Any]:

@@ -5,7 +5,6 @@ import logging
 import time
 import uuid as uuid_lib
 from uuid import UUID
-import traceback
 
 from fastapi import HTTPException, status
 
@@ -182,8 +181,7 @@ class AgentConfigService(BaseService):
                 auto_commit=auto_commit,
             )
         except IntegrityError as e:
-            print(traceback.format_exc())
-            logger.error(
+            logger.exception(
                 "UPSERT_DEBUG IntegrityError: %s | orig=%s | pgcode=%s",
                 str(e), getattr(e, "orig", None),
                 getattr(getattr(e, "orig", None), "pgcode", None),

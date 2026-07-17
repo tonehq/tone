@@ -53,12 +53,11 @@ def _resolve_connection_header(tool: Tool) -> Optional[Tuple[str, str]]:
             svc = OAuthService(db, org_id=tool.organization_id)
             connection = svc.get_connection(oauth_id)
             return svc.resolve_connection_auth_header(connection)
-    except Exception as exc:
-        logger.warning(
-            "Custom tool '{}' connection credential resolution failed ({}); falling back to "
+    except Exception:
+        logger.exception(
+            "Custom tool '{}' connection credential resolution failed; falling back to "
             "inline credentials so the request still goes out",
             tool.name,
-            exc,
         )
         return None
 
@@ -349,7 +348,7 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
                 tool_call_entries.append(tool_call_entry)
             await params.result_callback("The request timed out. Please tell the caller and continue.")
         except Exception as e:
-            logger.error("Custom tool '{}' failed: {}", tool.name, e)
+            logger.exception("Custom tool '{}' failed", tool.name)
             tool_call_entry["result"] = f"error: {str(e)}"
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
             if tool_call_entries is not None:
@@ -459,7 +458,7 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
                 await params.result_callback(f"Failed to send SMS: {error_detail}")
 
         except Exception as e:
-            logger.error("send_sms tool failed: {}", e)
+            logger.exception("send_sms tool failed")
             tool_call_entry["result"] = f"error: {str(e)}"
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
             if tool_call_entries is not None:
@@ -556,7 +555,7 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
                 await params.result_callback(f"Google Calendar is not available right now. Reason: {e.detail}")
             return
         except Exception as e:
-            logger.error("google_calendar: unexpected error getting access token: {}", e)
+            logger.exception("google_calendar: unexpected error getting access token")
             _log_tool_call(f"error: {str(e)}")
             await params.result_callback("Google Calendar is temporarily unavailable. Please try again later.")
             return
@@ -592,7 +591,7 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
             _log_tool_call("error: timeout")
             await params.result_callback("Google Calendar is taking too long to respond. Please try again.")
         except Exception as e:
-            logger.error("google_calendar tool failed: {}", e)
+            logger.exception("google_calendar tool failed")
             _log_tool_call(f"error: {str(e)}")
             await params.result_callback(f"Something went wrong with Google Calendar. Please try again later.")
 

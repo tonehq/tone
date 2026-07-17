@@ -53,8 +53,8 @@ def build_input_params(service_class, metadata: dict):
         return input_params_class()
     try:
         return input_params_class(**filtered)
-    except Exception as e:
-        logger.warning(f"Failed to build InputParams for {service_class.__name__}: {e}")
+    except Exception:
+        logger.exception(f"Failed to build InputParams for {service_class.__name__}")
         return input_params_class()
 
 
@@ -424,8 +424,8 @@ def build_stt(spec: dict) -> Optional[Any]:
             return SambaNovaSTTService(api_key=api_key, model=model or "Whisper-Large-v3", **sn_kwargs)
         logger.warning("Unsupported STT provider: {}", provider_name)
         return None
-    except ImportError as e:
-        logger.warning("STT provider {} not available: {}", provider_name, e)
+    except ImportError:
+        logger.exception("STT provider {} not available (ImportError)", provider_name)
         return None
     except Exception as e:
         logger.exception("STT provider {} failed to initialize: {}", provider_name, e)
@@ -798,8 +798,8 @@ def build_tts(spec: dict) -> Optional[Any]:
 
         logger.warning("Unsupported TTS provider: {}", provider_name)
         return None
-    except ImportError as e:
-        logger.warning("TTS provider {} not available (ImportError): {}", provider_name, e)
+    except ImportError:
+        logger.exception("TTS provider {} not available (ImportError)", provider_name)
         _close_unused_session(session)
         return None
     except Exception as e:

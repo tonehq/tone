@@ -182,7 +182,7 @@ class PipecatPipelineRunner(PipelineRunner):
                         else:
                             logger.warning("create_call_log returned None (no channel resolved) — no call record created")
                 except Exception as e:
-                    logger.error("Failed to create call log: {}", e)
+                    logger.exception("Failed to create call log")
                 finally:
                     loop.call_soon_threadsafe(call_log_ready.set)
 
@@ -325,7 +325,7 @@ class PipecatPipelineRunner(PipelineRunner):
                     recording_seconds = int(recording_seconds_exact)
                     logger.info("Encoded call recording: {} ({:.1f}s, {} bytes)", file_name, recording_seconds_exact, len(audio_bytes))
                 except Exception as e:
-                    logger.error("Failed to encode call recording: {}", e)
+                    logger.exception("Failed to encode call recording")
 
                 # Upload to Cloudflare R2 and update DB
                 if call_log_id:
@@ -351,7 +351,7 @@ class PipecatPipelineRunner(PipelineRunner):
                                 upload_id = upload.id
                             logger.info("Audio uploaded to R2: key={} upload_id={}", r2_object_key, upload_id)
                         except Exception as e:
-                            logger.error("Failed to upload audio to R2: {}", e)
+                            logger.exception("Failed to upload audio to R2")
 
                     try:
                         transcript_data = transcript_entries if transcript_entries else None
@@ -379,7 +379,7 @@ class PipecatPipelineRunner(PipelineRunner):
                             end_reason_holder.get("reason"),
                         )
                     except Exception as e:
-                        logger.error("Failed to complete call log in on_audio_data: {}", e)
+                        logger.exception("Failed to complete call log in on_audio_data")
                         log_call_event(
                             EVENT_CALL_ENDED_ERROR,
                             call_id=str(call_log_id) if call_log_id else None,
@@ -461,7 +461,25 @@ class PipecatPipelineRunner(PipelineRunner):
 
         logger.info("[TIMING] runner setup complete, total: {:.3f}s — starting runner.run()", _time.monotonic() - _t_comp_start)
         runner = PipecatRunner(handle_sigint=getattr(runner_args, "handle_sigint", False))
-        await runner.run(task)
+        try:
+            await runner.run(task)
+        except asyncio.CancelledError:
+            # Normal call teardown — the task is cancelled on hangup. Never swallow:
+            # pipecat's cancel path depends on it propagating.
+            raise
+        except Exception:
+            # The pipeline itself died (STT/LLM/TTS failure, transport error, …).
+            # Log the full traceback and mark the call failed so it isn't left
+            # dangling as "in progress", then re-raise for the caller's cleanup.
+            logger.exception("[runner] pipeline run failed — marking call failed")
+            call_log_id = await _get_call_log_id()
+            if call_log_id:
+                try:
+                    with get_db_context() as db:
+                        CallLogService(db).fail_call(call_log_id)
+                except Exception:
+                    logger.exception("[runner] fail_call failed for call_log_id={}", call_log_id)
+            raise
 
         # Fallback: if on_audio_data didn't update DB (e.g. no audio captured),
         # update the call log here with whatever we have.
@@ -477,7 +495,7 @@ class PipecatPipelineRunner(PipelineRunner):
                     with get_db_context() as db:
                         CallLogService(db).delete_call(call_log_id)
                 except Exception as e:
-                    logger.error("Failed to delete short call_log id={}: {}", call_log_id, e)
+                    logger.exception("Failed to delete short call_log id={}", call_log_id)
             else:
                 logger.info("on_audio_data did not complete DB update, running fallback for call_log_id={}", call_log_id)
                 try:
@@ -499,7 +517,7 @@ class PipecatPipelineRunner(PipelineRunner):
                         call_log_id, end_reason_holder.get("reason"),
                     )
                 except Exception as e:
-                    logger.error("Failed to complete call log id={}: {}", call_log_id, e)
+                    logger.exception("Failed to complete call log id={}", call_log_id)
                     log_call_event(
                         EVENT_CALL_ENDED_ERROR,
                         call_id=str(call_log_id) if call_log_id else None,

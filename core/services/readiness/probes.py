@@ -107,6 +107,7 @@ async def probe_llm(ctx) -> ProbeResult:
     try:
         service = service_factory.build_llm(spec)
     except Exception as exc:  # noqa: BLE001
+        logger.exception("[readiness] {} LLM client construction failed", provider)
         return ProbeResult(False, f"Could not construct {provider} client: {exc}")
     if service is None:
         return ProbeResult(False, f"No pipecat client available for provider '{provider}'.")
@@ -167,6 +168,7 @@ async def probe_llm(ctx) -> ProbeResult:
                 )
                 return ProbeResult(True, f"google gemini responded to a 1-token completion.")
     except Exception as exc:  # noqa: BLE001
+        logger.exception("[readiness] {} LLM live probe failed", provider)
         return ProbeResult(False, _summarise_error(provider, exc))
 
     # Fallback — client exists but shape didn't match any known family.
@@ -196,6 +198,7 @@ async def probe_stt(ctx) -> ProbeResult:
     try:
         service = service_factory.build_stt(spec)
     except Exception as exc:  # noqa: BLE001
+        logger.exception("[readiness] {} STT client construction failed", provider)
         return ProbeResult(False, f"Could not construct {provider} STT client: {exc}")
     if service is None:
         return ProbeResult(
@@ -230,8 +233,8 @@ async def probe_stt(ctx) -> ProbeResult:
                 break
         try:
             await gen.aclose()
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[readiness] {} STT probe generator close failed: {}", provider, exc)
         if got_any:
             return ProbeResult(True, f"{provider} STT accepted a probe audio frame.")
         # No frames but no error either — auth likely passed, just no output on silence.
@@ -240,6 +243,7 @@ async def probe_stt(ctx) -> ProbeResult:
             f"{provider} STT accepted the request (no interim frame on silence, which is normal).",
         )
     except Exception as exc:  # noqa: BLE001
+        logger.exception("[readiness] {} STT live probe failed", provider)
         return ProbeResult(False, _summarise_error(provider, exc))
     finally:
         # Best-effort cleanup — most WS-based STTs open an aiohttp session.
@@ -251,8 +255,8 @@ async def probe_stt(ctx) -> ProbeResult:
                     if inspect.iscoroutine(result):
                         await result
                     break
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[readiness] {} STT probe cleanup failed: {}", provider, exc)
 
 
 # ── TTS probe (universal — pipecat's run_tts) ────────────────────────────────
@@ -274,6 +278,7 @@ async def probe_tts(ctx) -> ProbeResult:
     try:
         service = service_factory.build_tts(spec)
     except Exception as exc:  # noqa: BLE001
+        logger.exception("[readiness] {} TTS client construction failed", provider)
         return ProbeResult(False, f"Could not construct {provider} TTS client: {exc}")
     if service is None:
         return ProbeResult(
@@ -313,6 +318,7 @@ async def probe_tts(ctx) -> ProbeResult:
                 got_audio = True
                 break
     except Exception as exc:  # noqa: BLE001
+        logger.exception("[readiness] {} TTS live probe failed", provider)
         return ProbeResult(False, _summarise_error(provider, exc))
     finally:
         try:
@@ -321,8 +327,8 @@ async def probe_tts(ctx) -> ProbeResult:
             )
             if session and not session.closed:
                 await session.close()
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("[readiness] {} TTS probe session close failed: {}", provider, exc)
 
     if got_audio:
         return ProbeResult(True, f"{provider} synthesised a test phrase.")

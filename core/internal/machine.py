@@ -2,6 +2,8 @@ import hashlib
 import platform
 import uuid
 
+from loguru import logger
+
 
 def get_machine_id() -> str:
     try:
@@ -9,13 +11,13 @@ def get_machine_id() -> str:
             try:
                 with open("/etc/machine-id", "r") as f:
                     return f.read().strip()
-            except:
-                pass
+            except Exception:
+                logger.debug("Failed to read /etc/machine-id; trying dbus machine-id")
             try:
                 with open("/var/lib/dbus/machine-id", "r") as f:
                     return f.read().strip()
-            except:
-                pass
+            except Exception:
+                logger.debug("Failed to read /var/lib/dbus/machine-id; falling back")
 
         elif platform.system() == "Darwin":
             try:
@@ -28,8 +30,8 @@ def get_machine_id() -> str:
                 for line in result.stdout.split("\n"):
                     if "IOPlatformUUID" in line:
                         return line.split('"')[-2]
-            except:
-                pass
+            except Exception:
+                logger.debug("Failed to read IOPlatformUUID; falling back")
 
         elif platform.system() == "Windows":
             try:
@@ -42,12 +44,13 @@ def get_machine_id() -> str:
                 lines = result.stdout.strip().split("\n")
                 if len(lines) > 1:
                     return lines[1].strip()
-            except:
-                pass
+            except Exception:
+                logger.debug("Failed to read Windows csproduct UUID; falling back")
 
         return str(uuid.getnode())
 
-    except:
+    except Exception:
+        logger.exception("Failed to determine machine id; falling back to uuid.getnode()")
         return str(uuid.getnode())
 
 
