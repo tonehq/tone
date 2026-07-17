@@ -7,7 +7,7 @@ metadata:
     app: staging-tts-cosyvoice
 spec:
   replicas: 1
-  progressDeadlineSeconds: 1800
+  progressDeadlineSeconds: 2400
   strategy:
     type: Recreate
   selector:
@@ -26,46 +26,38 @@ spec:
           effect: NoSchedule
       containers:
         - name: cosyvoice
-          image: podwide/cosyvoice:v1.0
-          command: ["bash", "-lc"]
-          args:
-            - |
-              set -e
-              cd /opt/CosyVoice/CosyVoice/runtime/python/fastapi
-              exec python3 server.py --port 8000 --model_dir iic/CosyVoice2-0.5B
-          env:
-            - name: MODELSCOPE_CACHE
-              value: /cache/modelscope
-            - name: PYTHONPATH
-              value: /opt/CosyVoice/CosyVoice:/opt/CosyVoice/CosyVoice/third_party/Matcha-TTS
+          image: neosun/cosyvoice:latest
           ports:
             - name: http
-              containerPort: 8000
+              containerPort: 8188
           resources:
             limits:
               nvidia.com/gpu: 1
           volumeMounts:
-            - name: cache
-              mountPath: /cache
+            - name: voices
+              mountPath: /data/voices
             - name: dshm
               mountPath: /dev/shm
           startupProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: http
             periodSeconds: 15
-            failureThreshold: 80
+            failureThreshold: 120
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: http
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: http
             periodSeconds: 20
             failureThreshold: 3
       volumes:
-        - name: cache
+        - name: voices
           emptyDir: {}
         - name: dshm
           emptyDir:
@@ -84,6 +76,6 @@ spec:
     app: staging-tts-cosyvoice
   ports:
     - port: 80
-      targetPort: 8000
+      targetPort: 8188
       protocol: TCP
   type: ClusterIP
