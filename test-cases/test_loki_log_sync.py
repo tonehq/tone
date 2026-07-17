@@ -1,10 +1,11 @@
 """Hermetic unit tests for the per-call Loki -> Postgres log sync.
 
 No live database, no network: the Loki HTTP layer is stubbed (fake httpx.Client)
-and the DB insert is simulated with a fingerprint set that mimics the real
-UNIQUE-constraint dedup. Covers the parser, fingerprint, LokiClient retry/backoff,
-the sync service (insert + idempotent re-run + short-circuits + pagination + clock
-skew), and the post-call action enqueue guard.
+and the DB upsert is simulated by capturing the wholesale ``logs`` array written
+per call (mimicking the real ``on_conflict(call_id) do update`` replace). Covers
+the parser, fingerprint, LokiClient retry/backoff, the sync service (array build
++ idempotent re-run + short-circuits + pagination + clock skew), and the
+post-call action enqueue guard.
 """
 from __future__ import annotations
 
@@ -161,16 +162,16 @@ def test_query_range_401_is_non_retryable(fake_httpx):
 # ── PipelineLogSyncService ───────────────────────────────────────────────────
 
 class _FakeDB:
-    """DB stand-in that mimics the fingerprint UNIQUE dedup across runs."""
+    """Captures the wholesale ``logs`` array written per call (upsert-replace)."""
 
     def __init__(self):
-        self.stored_fingerprints: set[str] = set()
-        self.inserted_rows: list[dict] = []
+        self.stored: dict = {}    # call_id -> list[entry] (the row's logs array)
+        self.upserts: list = []   # (call, entries) per _upsert_call
 
 
 def _stub_service(monkeypatch, db, pages):
     """Return a service whose LokiClient yields ``pages`` (list of line-lists) and
-    whose _insert simulates on_conflict_do_nothing against ``db``."""
+    whose _upsert_call replaces the call's stored array against ``db``."""
     monkeypatch.setattr(settings, "loki_read_configured", lambda: True)
     monkeypatch.setattr(settings, "LOKI_SYNC_PAGE_LIMIT", 2)
 
@@ -185,14 +186,13 @@ def _stub_service(monkeypatch, db, pages):
         "core.services.pipeline_log_sync_service.LokiClient", _StubClient
     )
 
-    def fake_insert(self, rows):
-        new = [r for r in rows if r["fingerprint"] not in db.stored_fingerprints]
-        for r in new:
-            db.stored_fingerprints.add(r["fingerprint"])
-            db.inserted_rows.append(r)
-        return len(new)
+    def fake_upsert(self, call, entries):
+        # Wholesale replace — exactly what on_conflict(call_id) do update does.
+        db.stored[call.id] = list(entries)
+        db.upserts.append((call, list(entries)))
+        return len(entries)
 
-    monkeypatch.setattr(PipelineLogSyncService, "_insert", fake_insert)
+    monkeypatch.setattr(PipelineLogSyncService, "_upsert_call", fake_upsert)
     return PipelineLogSyncService(SimpleNamespace(), org_id=uuid.uuid4())
 
 
@@ -222,7 +222,7 @@ def _window_ns(offset: int = 0) -> int:
     return int((datetime.now(timezone.utc) - timedelta(seconds=60)).timestamp() * 1_000_000_000) + offset
 
 
-def test_sync_inserts_and_stamps_from_call(monkeypatch):
+def test_sync_builds_array_and_stamps_from_call(monkeypatch):
     db = _FakeDB()
     call = _make_call()
     svc = _stub_service(
@@ -232,16 +232,22 @@ def test_sync_inserts_and_stamps_from_call(monkeypatch):
 
     result = svc.sync_call(call)
 
-    assert result.inserted == 3
-    assert result.skipped == 0
+    assert result.stored == 3
     assert result.pages == 2  # full first page forces a second fetch
-    # Identity columns are stamped from the Call, not parsed.
-    for row in db.inserted_rows:
-        assert row["call_id"] == call.id
-        assert row["organization_id"] == call.organization_id
-        assert row["agent_id"] == call.agent_id
-        assert row["trace_id"] == call.trace_id
-        assert row["fingerprint"]
+
+    entries = db.stored[call.id]
+    # One row per call: all lines land in a single time-ordered array.
+    assert [e["raw_line"] for e in entries] == ["a", "b", "c"]
+    assert [e["ts_ns"] for e in entries] == sorted(e["ts_ns"] for e in entries)
+    # Entry shape — identity is NOT repeated per line; it lives on the row.
+    for e in entries:
+        assert set(e) == {"ts", "ts_ns", "level", "logger_name", "message", "raw_line"}
+    # Identity stamped from the Call onto the row (via _upsert_call).
+    upsert_call, _ = db.upserts[-1]
+    assert upsert_call.id == call.id
+    assert upsert_call.organization_id == call.organization_id
+    assert upsert_call.agent_id == call.agent_id
+    assert upsert_call.trace_id == call.trace_id
 
 
 def test_sync_is_idempotent_on_rerun(monkeypatch):
@@ -249,13 +255,14 @@ def test_sync_is_idempotent_on_rerun(monkeypatch):
     call = _make_call()
     pages = [[_line(_window_ns(1), "a"), _line(_window_ns(2), "b")], [_line(_window_ns(3), "c")]]
     svc1 = _stub_service(monkeypatch, db, pages=[list(p) for p in pages])
-    assert svc1.sync_call(call).inserted == 3
+    assert svc1.sync_call(call).stored == 3
 
-    # Second run against the same fingerprint store: nothing new.
+    # Second run re-reads the same window and replaces the array wholesale:
+    # the stored row still has exactly the same 3 lines, never 6.
     svc2 = _stub_service(monkeypatch, db, pages=[list(p) for p in pages])
     second = svc2.sync_call(call)
-    assert second.inserted == 0
-    assert second.skipped == 3
+    assert second.stored == 3
+    assert [e["raw_line"] for e in db.stored[call.id]] == ["a", "b", "c"]
 
 
 def test_sync_short_circuits_when_not_configured(monkeypatch):
@@ -263,14 +270,14 @@ def test_sync_short_circuits_when_not_configured(monkeypatch):
     svc = PipelineLogSyncService(SimpleNamespace(), org_id=uuid.uuid4())
     result = svc.sync_call(_make_call())
     assert result.configured is False
-    assert result.inserted == 0
+    assert result.stored == 0
 
 
 def test_sync_short_circuits_without_trace_id(monkeypatch):
     monkeypatch.setattr(settings, "loki_read_configured", lambda: True)
     svc = PipelineLogSyncService(SimpleNamespace(), org_id=uuid.uuid4())
     result = svc.sync_call(_make_call(trace_id=None))
-    assert result.inserted == 0
+    assert result.stored == 0
     assert "trace_id" in result.message
 
 
@@ -294,8 +301,8 @@ def test_sync_drops_foreign_prefix_collision(monkeypatch):
 
     result = svc.sync_call(call)
 
-    assert result.inserted == 1
-    assert [r["raw_line"] for r in db.inserted_rows] == [ours]
+    assert result.stored == 1
+    assert [e["raw_line"] for e in db.stored[call.id]] == [ours]
 
 
 def test_sync_keeps_early_prefix_only_lines(monkeypatch):
@@ -311,8 +318,8 @@ def test_sync_keeps_early_prefix_only_lines(monkeypatch):
 
     result = svc.sync_call(call)
 
-    assert result.inserted == 1
-    assert db.inserted_rows[0]["raw_line"] == early
+    assert result.stored == 1
+    assert db.stored[call.id][0]["raw_line"] == early
 
 
 def test_sync_clamps_future_ended_at(monkeypatch):
