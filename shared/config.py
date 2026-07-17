@@ -122,4 +122,47 @@ class Settings:
 
         self.SEND_SMS_DEFAULT_TO_NUMBER: str = get_secret("SEND_SMS_DEFAULT_TO_NUMBER", "")
 
+        # ── Grafana Loki (log egress + per-call read-back) ──────────────────
+        # LOKI_URL/LOKI_USER/GRAFANA_API_KEY are the same secrets the Alloy
+        # DaemonSet uses to PUSH logs to Grafana Cloud (see the monitoring
+        # manifests). We surface them here so the per-call log sync can READ a
+        # finished call's lines back out of Loki. All blank in local dev, which
+        # makes loki_read_configured() False and the sync a safe no-op.
+        self.LOKI_URL: str = get_secret("LOKI_URL", "")  # push endpoint (…/loki/api/v1/push)
+        self.LOKI_USER: str = get_secret("LOKI_USER", "")
+        self.GRAFANA_API_KEY: str = get_secret("GRAFANA_API_KEY", "")
+
+        # Query endpoint for reading logs back. Defaults to deriving from the
+        # push URL (swap the trailing /push for /query_range) so a single
+        # LOKI_URL secret configures both directions; override explicitly when
+        # the Grafana Cloud query host differs from the push host.
+        self.LOKI_QUERY_URL: str = (
+            get_secret("LOKI_QUERY_URL", "")
+            or (self.LOKI_URL.replace("/loki/api/v1/push", "/loki/api/v1/query_range") if self.LOKI_URL else "")
+        )
+        # Read creds default to the push creds; override if a dedicated
+        # read-scoped (logs:read) token is provisioned.
+        self.LOKI_QUERY_USER: str = get_secret("LOKI_QUERY_USER", "") or self.LOKI_USER
+        self.LOKI_QUERY_TOKEN: str = get_secret("LOKI_QUERY_TOKEN", "") or self.GRAFANA_API_KEY
+
+        # Per-call sync tuning. No enable/disable flag — the post-call action is
+        # always wired; loki_read_configured() alone gates it.
+        self.LOKI_SYNC_APP_LABEL: str = get_secret("LOKI_SYNC_APP_LABEL", "tone")
+        self.LOKI_SYNC_DELAY_SECONDS: int = int(get_secret("LOKI_SYNC_DELAY_SECONDS", "120"))
+        self.LOKI_SYNC_PRE_BUFFER_SECONDS: int = int(get_secret("LOKI_SYNC_PRE_BUFFER_SECONDS", "30"))
+        self.LOKI_SYNC_POST_BUFFER_SECONDS: int = int(get_secret("LOKI_SYNC_POST_BUFFER_SECONDS", "60"))
+        self.LOKI_SYNC_PAGE_LIMIT: int = int(get_secret("LOKI_SYNC_PAGE_LIMIT", "5000"))
+        self.LOKI_SYNC_MAX_PAGES: int = int(get_secret("LOKI_SYNC_MAX_PAGES", "50"))
+        self.LOKI_SYNC_HTTP_TIMEOUT: int = int(get_secret("LOKI_SYNC_HTTP_TIMEOUT", "30"))
+        self.LOKI_SYNC_MAX_RETRIES: int = int(get_secret("LOKI_SYNC_MAX_RETRIES", "5"))
+
+    def loki_read_configured(self) -> bool:
+        """True only when we have enough to read a call's logs back from Loki.
+
+        The single guard for the whole feature: when False (e.g. local dev with
+        no Loki secrets), the post-call action, worker job and manual endpoint
+        all no-op instead of erroring."""
+        return bool(self.LOKI_QUERY_URL and self.LOKI_QUERY_TOKEN)
+
+
 settings = Settings()

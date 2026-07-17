@@ -12,8 +12,11 @@ Revises: a8a6d8cdfae3
 Create Date: 2026-07-17 00:00:00.000000
 
 """
+import logging
+
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 revision = 'e1f2a3b4c5d6'
@@ -21,12 +24,25 @@ down_revision = 'a8a6d8cdfae3'
 branch_labels = None
 depends_on = None
 
+logger = logging.getLogger("alembic.runtime.migration")
+
+
+def _has_column(table: str, column: str) -> bool:
+    return any(c["name"] == column for c in inspect(op.get_bind()).get_columns(table))
+
 
 def upgrade() -> None:
-    op.add_column('organizations', sa.Column('log_level', sa.String(length=20), nullable=True))
-    op.add_column('agents', sa.Column('log_level', sa.String(length=20), nullable=True))
+    # Idempotent: on some environments these columns were added out-of-band
+    # (the DB has them but this revision was never stamped), so a plain
+    # add_column raises DuplicateColumn and blocks every later migration.
+    for table in ("organizations", "agents"):
+        if _has_column(table, "log_level"):
+            logger.info("[e1f2a3b4c5d6] %s.log_level already exists — skipping add", table)
+            continue
+        op.add_column(table, sa.Column("log_level", sa.String(length=20), nullable=True))
 
 
 def downgrade() -> None:
-    op.drop_column('agents', 'log_level')
-    op.drop_column('organizations', 'log_level')
+    for table in ("agents", "organizations"):
+        if _has_column(table, "log_level"):
+            op.drop_column(table, "log_level")
