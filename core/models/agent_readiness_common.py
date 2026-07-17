@@ -64,11 +64,26 @@ class ReadinessRowMixin:
         nullable=True,
     )
     duration_ms = Column(Integer, nullable=True)
+    # Wall-clock start of the run. Together with ``computed_at`` (end) this
+    # gives the drawer a "started at → finished at" pair without deriving one
+    # from the other via ``duration_ms``.
+    started_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
     computed_at = Column(
         DateTime(timezone=True),
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
+    # Per-agent run counter, monotonically increasing across all configs and
+    # depths. Snapshot rows always carry the *latest* run number (row is
+    # UPSERTed); event rows form the full 1..N sequence. UI can read
+    # snapshot.run_number for a "Run #10" badge without a subquery.
+    run_number = Column(Integer, nullable=False, default=1)
+    # Optional human-readable label for the run. Nullable; no writers yet.
+    name = Column(String(255), nullable=True)
     # The freshness key. Reused from `compute_agent_cache_version` in the
     # pipeline resolver — a snapshot with a matching stamp is definitionally
     # still valid (nothing the check depends on has changed).

@@ -19,39 +19,6 @@ except ImportError:  # older pipecat — set_model_name() + run_tts(text)
 
 _CHUNK_BYTES = 4800
 
-_SPEED_WORDS = {
-    "very_slow": 0.6, "very slow": 0.6, "slowest": 0.6,
-    "slow": 0.8,
-    "normal": 1.0, "medium": 1.0, "default": 1.0, "standard": 1.0,
-    "fast": 1.2,
-    "very_fast": 1.5, "very fast": 1.5, "fastest": 1.5,
-}
-
-
-def _coerce_speed(value) -> float:
-    """Map the agent's `speed` setting to the float the server requires.
-
-    The UI stores words ("normal"), the API validates a float and 422s on a string.
-    Anything unparseable falls back to 1.0 rather than failing the call.
-    """
-    if value is None:
-        return 1.0
-    if isinstance(value, bool):
-        return 1.0
-    if isinstance(value, (int, float)):
-        speed = float(value)
-    else:
-        text = str(value).strip().lower()
-        if text in _SPEED_WORDS:
-            speed = _SPEED_WORDS[text]
-        else:
-            try:
-                speed = float(text)
-            except ValueError:
-                logger.warning("CosyVoice: unknown speed {!r}, using 1.0", value)
-                return 1.0
-    return min(max(speed, 0.5), 2.0)
-
 
 class CosyVoiceTTSService(TTSService):
     """Self-hosted Fun-CosyVoice3 served by the neosun/cosyvoice FastAPI image.
@@ -91,7 +58,7 @@ class CosyVoiceTTSService(TTSService):
         self._base_url = (base_url or "").rstrip("/")
         self._voice_id = voice_id
         self._model = model
-        self._speed = _coerce_speed(speed)
+        self._speed = speed
         self._instruct = instruct
         self._trace_id = trace_id
         self._apply_model_name(model)

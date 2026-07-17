@@ -69,12 +69,13 @@ class LLMProviderEnabledCheck(ProviderEnabledCheck):
 
 
 class LLMProviderReachableCheck(DeepCheck):
-    """Fire a 1-token completion through the pipecat LLM service to verify
-    credentials + reachability + model availability.
+    """Feed a one-message ``LLMContextFrame`` through the pipecat LLM pipeline
+    and consume the first ``LLMTextFrame`` (or ``LLMFullResponseEndFrame``).
 
-    Reuses ``service_factory.build_llm`` so the probe hits the exact same code
-    path a real call would use — no duplicated per-provider adapters. Wrapped
-    in a 3-second timeout and one retry on transient errors.
+    Same frame flow the runtime uses (see ``core/services/pipeline/runner/
+    pipecat.py``), so this exercises the full pipecat ``LLMService`` wrapper —
+    not just the raw provider SDK. Cost is bounded by max_completion_tokens=16
+    in the probe. Wrapped in a 12s timeout and one retry on transient errors.
     """
 
     id: ClassVar[str] = "llm.provider_reachable"
@@ -88,7 +89,11 @@ class LLMProviderReachableCheck(DeepCheck):
         return "Provider or key not resolved (see shallow checks)."
 
     @with_retry()
-    @with_timeout(5.0)  # cold-start on some LLMs (Cohere, Groq spin-up) can exceed 3s
+    # Pipeline harness (PipelineTask start + provider HTTP/WS handshake) +
+    # first-token streaming. Slower LLMs (Cohere/Groq cold, Anthropic on a
+    # heavy Claude model) can take 4-8s cold; 12s keeps headroom without
+    # false-flagging.
+    @with_timeout(12.0)
     async def run(self, ctx: CheckContext) -> CheckResult:
         from core.services.readiness.probes import probe_llm
 

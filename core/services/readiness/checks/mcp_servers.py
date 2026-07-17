@@ -96,8 +96,13 @@ class McpServerHttpReachableCheck(DeepCheck):
 
     @with_timeout(_PROBE_TIMEOUT_S)
     async def run(self, ctx: CheckContext) -> CheckResult:
-        from core.services.mcp_server_service import build_auth_headers
+        from core.services.mcp_server_service import (
+            McpServerService,
+            build_auth_headers,
+            headers_from_meta,
+        )
 
+        svc = McpServerService(ctx.db, org_id=ctx.org_id)
         failed: List[str] = []
         first_failed_id: str | None = None
 
@@ -112,15 +117,22 @@ class McpServerHttpReachableCheck(DeepCheck):
                         first_failed_id = str(server.id)
                     continue
                 try:
-                    headers = build_auth_headers(
-                        server.auth_config, auth_type=server.auth_type
-                    )
+                    # Mirror the runtime request shape: static auth_config
+                    # headers, plus custom meta_data headers, plus the
+                    # OAuth-connection-resolved Authorization header.
+                    headers = {
+                        **build_auth_headers(
+                            server.auth_config, auth_type=server.auth_type
+                        ),
+                        **headers_from_meta(server.meta_data),
+                        **svc._resolve_oauth_headers(server.oauth_connection_id),
+                    }
                     await client.get(url, headers=headers)
                 except httpx.RequestError as exc:
                     failed.append(f"'{server.name}': unreachable ({exc.__class__.__name__})")
                     if first_failed_id is None:
                         first_failed_id = str(server.id)
-                except Exception as exc:  # noqa: BLE001 — header build / decrypt
+                except Exception as exc:  # noqa: BLE001 — header build / decrypt / OAuth resolve
                     failed.append(f"'{server.name}': {exc}")
                     if first_failed_id is None:
                         first_failed_id = str(server.id)
@@ -155,16 +167,36 @@ class McpServerReachableCheck(DeepCheck):
     async def run(self, ctx: CheckContext) -> CheckResult:
         from fastapi import HTTPException
 
-        from core.services.mcp_server_service import McpServerService
+        from core.services.mcp_server_service import (
+            McpServerService,
+            headers_from_meta,
+        )
+        from core.services.tool_service import decrypt_auth_config
 
         svc = McpServerService(ctx.db, org_id=ctx.org_id)
         failed: List[str] = []
         for server in ctx.mcp_servers:
             try:
+                # A linked OAuth connection whose scopes were revoked in the
+                # provider's dashboard still resolves to a valid token — the
+                # MCP handshake below would pass and only the actual tool call
+                # would fail. Validate scopes up-front (in-memory, no I/O) so
+                # the revocation surfaces here instead of mid-conversation.
+                svc._validate_oauth_scopes(server.oauth_connection_id)
+                # Mirror the runtime path (McpServerService.discover_tools):
+                # decrypt the stored auth_config, then layer the custom
+                # meta_data headers and the OAuth-connection-resolved
+                # Authorization header on top via ``extra_headers``.
+                decrypted_auth = decrypt_auth_config(server.auth_config)
+                extra_headers = {
+                    **headers_from_meta(server.meta_data),
+                    **svc._resolve_oauth_headers(server.oauth_connection_id),
+                }
                 await svc.validate_mcp_connection(
                     server_url=server.server_url,
                     transport_type=server.transport_type,
-                    auth_config=server.auth_config,
+                    auth_config=decrypted_auth,
+                    extra_headers=extra_headers,
                     auth_type=server.auth_type,
                 )
             except HTTPException as exc:
