@@ -1,4 +1,14 @@
-import { Book, Bot, Cpu, LayoutGrid, MessageSquare, Radio, Volume2, Wrench } from 'lucide-react';
+import {
+  Book,
+  Bot,
+  Clock,
+  Cpu,
+  LayoutGrid,
+  MessageSquare,
+  Radio,
+  Volume2,
+  Wrench,
+} from 'lucide-react';
 
 import type { SidebarNavGroup } from '@/components/layout/SidebarShell';
 
@@ -25,7 +35,11 @@ export const AGENT_SECTIONS: AgentSection[] = [
   { key: 'tools', label: 'Tools & MCP', icon: Wrench },
   { key: 'knowledge', label: 'Knowledge', icon: Book },
   { key: 'channels', label: 'Channels', icon: Radio },
+  { key: 'call-history', label: 'Call History', icon: Clock },
 ];
+
+/** Sections shown only for a saved agent (edit mode) — omitted while creating. */
+const EDIT_ONLY_SECTION_KEYS = new Set<string>(['call-history']);
 
 export const AGENT_SECTION_KEYS = AGENT_SECTIONS.map((s) => s.key);
 
@@ -42,6 +56,7 @@ export function buildAgentNav(basePath: string, mode: 'edit' | 'create'): Sideba
     items.push({ label: 'Overview', href: `${basePath}/overview`, icon: LayoutGrid });
   }
   for (const s of AGENT_SECTIONS) {
+    if (mode === 'create' && EDIT_ONLY_SECTION_KEYS.has(s.key)) continue;
     items.push({ label: s.label, href: `${basePath}/${s.key}`, icon: s.icon });
   }
   return [{ heading: null, items }];
