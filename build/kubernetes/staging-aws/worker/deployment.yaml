@@ -36,7 +36,7 @@ spec:
             - "--app=core.services.ingestion_queue.app"
             - worker
             - "--name=$(POD_NAME)"
-            - "--queues=ingestion,pod_sync,outbound_calls,call_overlaps,call_transcripts,call_metrics"
+            - "--queues=ingestion,pod_sync,outbound_calls,call_overlaps,call_transcripts,call_metrics,log_sync"
             - "--concurrency=1"
             - "--no-listen-notify"
             - "--fetch-job-polling-interval=5"
