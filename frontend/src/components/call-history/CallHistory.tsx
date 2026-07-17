@@ -34,7 +34,7 @@ import { formatDuration, formatTimestamp, getBrowserTimeZone } from '@/utils/dat
 import { handleApiError } from '@/utils/helpers';
 import { useAtom } from 'jotai';
 import { BarChart3, Columns3, Phone, SlidersHorizontal, X } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import CallHistoryMetricsStrip from './CallHistoryMetricsStrip';
@@ -127,8 +127,13 @@ function summarizeMetrics(metrics: CallLogRow['metrics']) {
   return { avgLatencyS, totalTokens, totalChars, totalSttAudioMs, turnCount };
 }
 
-const CallHistory: React.FC = () => {
+// When `agentId` is set the component runs in "embedded" (agent-scoped) mode:
+// a non-removable `agent_id` filter is injected into every request, and the
+// redundant Agent column + Agent facet are hidden. Absent it, behavior is
+// identical to the global Call History page.
+const CallHistory: React.FC<{ agentId?: string }> = ({ agentId }) => {
   const router = useRouter();
+  const pathname = usePathname();
   const [data] = useAtom(callLogsAtom);
   const [, doFetchCallLogs] = useAtom(fetchCallLogs);
   const [facetsState] = useAtom(callFacetsAtom);
@@ -201,6 +206,21 @@ const CallHistory: React.FC = () => {
   // date range, status and agent live in the toolbar with their own indicators.
   const drawerFilterCount = useMemo(() => countDrawerFilters(filterState), [filterState]);
 
+  // Embedded mode hides the Agent facet (rows are all the same agent, and it
+  // must not offer a way to view another agent). These drive the token search,
+  // the drawer, and the two-way token↔facet sync so they stay consistent.
+  const facetSections = useMemo(
+    () =>
+      agentId
+        ? DRAWER_FACET_SECTIONS.filter((s) => s.field !== 'agent_name')
+        : DRAWER_FACET_SECTIONS,
+    [agentId],
+  );
+  const tokenFields = useMemo<TokenSearchField[]>(
+    () => (agentId ? TOKEN_FIELDS.filter((f) => f.key !== 'agent_name') : TOKEN_FIELDS),
+    [agentId],
+  );
+
   // Filter predicates derived purely from filterState. All facet selections
   // (toolbar status/agent + drawer direction/channel/models, kept in sync with
   // the token search) become one `in` filter per field; turns/latency become
@@ -208,6 +228,12 @@ const CallHistory: React.FC = () => {
   // stays stable across page and sort changes (it doesn't depend on either).
   const filters = useMemo<CallLogFilterParam[]>(() => {
     const out: CallLogFilterParam[] = [];
+
+    // Embedded mode: scope every request (list, facets, metrics) to this agent.
+    // Server-enforced and combined with the org scope, so it holds even if the
+    // client is tampered with. `agent_id` maps to `Agent.id` in the backend
+    // filter map (distinct from the display-only `agent_name` facet).
+    if (agentId) out.push({ field: 'agent_id', operator: 'in', value: [agentId] });
 
     for (const [field, vals] of Object.entries(filterState.facets)) {
       if (vals?.length) out.push({ field, operator: 'in', value: vals });
@@ -236,7 +262,7 @@ const CallHistory: React.FC = () => {
     }
 
     return out;
-  }, [filterState]);
+  }, [filterState, agentId]);
 
   // Build the list query: filters + date range (start/end) + pagination + sort.
   const params = useMemo<CallLogQueryParams>(() => {
@@ -309,11 +335,11 @@ const CallHistory: React.FC = () => {
   // leaving the toolbar-only status/agent facets untouched.
   const searchTokens = useMemo<SearchToken[]>(() => {
     const out: SearchToken[] = [];
-    for (const s of DRAWER_FACET_SECTIONS) {
+    for (const s of facetSections) {
       for (const v of filterState.facets[s.field] ?? []) out.push({ field: s.field, value: v });
     }
     return out;
-  }, [filterState.facets]);
+  }, [filterState.facets, facetSections]);
 
   const handleSearchTokensChange = useCallback((next: SearchToken[]) => {
     setFilterState((prev) => {
@@ -485,37 +511,47 @@ const CallHistory: React.FC = () => {
     },
   ];
 
+  // Embedded mode drops the Agent column — every row is the same agent, so it's
+  // noise. (It's pinned via ALWAYS_VISIBLE_COLUMN_KEYS, so filter it out here
+  // rather than through the column-visibility popover.)
+  const scopedColumns = agentId ? columns.filter((c) => c.key !== 'agent_name') : columns;
+
   const visibleColumns =
     visibleColumnKeys === 'all'
-      ? columns
-      : columns.filter(
+      ? scopedColumns
+      : scopedColumns.filter(
           (c) =>
             ALWAYS_VISIBLE_COLUMN_KEYS.has(String(c.key)) || visibleColumnKeys.has(String(c.key)),
         );
 
   return (
     <div className="animate-page flex h-full flex-col gap-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Call History</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            View and filter your voice agent call logs
-          </p>
-        </div>
-        {!data.loading && (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1 text-[13px] text-muted-foreground">
-            <Phone className="size-3.5" />
-            <span className="font-semibold tabular-nums text-foreground">
-              {data.total.toLocaleString()}
+      {/* Embedded mode: the tab is already labeled "Call History" and lives in
+          the agent editor, so drop the whole page header — heading, subtitle,
+          and the call-count pill — and lead straight into the toolbar. */}
+      {!agentId && (
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Call History</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              View and filter your voice agent call logs
+            </p>
+          </div>
+          {!data.loading && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1 text-[13px] text-muted-foreground">
+              <Phone className="size-3.5" />
+              <span className="font-semibold tabular-nums text-foreground">
+                {data.total.toLocaleString()}
+              </span>
+              {data.total === 1 ? 'call' : 'calls'}
             </span>
-            {data.total === 1 ? 'call' : 'calls'}
-          </span>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <TokenSearchBar
-          fields={TOKEN_FIELDS}
+          fields={tokenFields}
           value={searchTokens}
           onChange={handleSearchTokensChange}
           onClear={handleClearAll}
@@ -645,7 +681,17 @@ const CallHistory: React.FC = () => {
           dataSource={data.callLogs}
           rowKey="id"
           loading={data.loading}
-          onRowClick={(record) => router.push(`/call-history/${record.id}`)}
+          onRowClick={(record) =>
+            // Embedded (agent-scoped) mode tags the detail URL with the current
+            // agent Call History path so its back link returns here instead of
+            // the global call history. `pathname` is query-free, so this can't
+            // smuggle another `from`.
+            router.push(
+              agentId
+                ? `/call-history/${record.id}?from=${encodeURIComponent(pathname)}`
+                : `/call-history/${record.id}`,
+            )
+          }
           onSortChange={handleSortChange}
           pagination={{
             current: page,
@@ -685,6 +731,7 @@ const CallHistory: React.FC = () => {
         facets={facetsState.facets}
         facetsLoading={facetsState.loading}
         onApply={handleApplyFilters}
+        facetSections={facetSections}
       />
     </div>
   );

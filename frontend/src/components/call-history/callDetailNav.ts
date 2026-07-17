@@ -25,13 +25,17 @@ export const CALL_DETAIL_SECTION_KEYS = CALL_DETAIL_SECTIONS.map((s) => s.key);
 
 export const DEFAULT_CALL_DETAIL_SECTION = 'transcription';
 
-export function buildCallDetailNav(basePath: string): SidebarNavGroup[] {
+// `search` (e.g. "?from=%2Fagents%2F…") is appended to every section href so
+// the origin the user came from survives tab switches inside the detail view —
+// otherwise clicking Metrics would drop the `from` param and the back link
+// would revert to the global call history.
+export function buildCallDetailNav(basePath: string, search = ''): SidebarNavGroup[] {
   return [
     {
       heading: null,
       items: CALL_DETAIL_SECTIONS.map((s) => ({
         label: s.label,
-        href: `${basePath}/${s.key}`,
+        href: `${basePath}/${s.key}${search}`,
         icon: s.icon,
       })),
     },

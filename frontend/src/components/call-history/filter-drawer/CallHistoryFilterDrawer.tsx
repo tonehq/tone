@@ -24,6 +24,7 @@ const CallHistoryFilterDrawer: React.FC<CallHistoryFilterDrawerProps> = ({
   facets,
   facetsLoading,
   onApply,
+  facetSections = DRAWER_FACET_SECTIONS,
 }) => {
   const [draft, setDraft] = useState<CallFilterState>(value);
 
@@ -91,7 +92,7 @@ const CallHistoryFilterDrawer: React.FC<CallHistoryFilterDrawerProps> = ({
           />
         </FilterSection>
 
-        {DRAWER_FACET_SECTIONS.map((s) => (
+        {facetSections.map((s) => (
           <FacetSection
             key={s.field}
             field={s.field}

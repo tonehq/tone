@@ -59,4 +59,7 @@ export interface CallHistoryFilterDrawerProps {
   facets: CallFacets;
   facetsLoading: boolean;
   onApply: (next: CallFilterState) => void;
+  /** Facet sections to render. Defaults to every section (`DRAWER_FACET_SECTIONS`);
+   * embedded (agent-scoped) usage omits the Agent facet. */
+  facetSections?: FacetSectionConfig[];
 }
