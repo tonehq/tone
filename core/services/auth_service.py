@@ -108,6 +108,38 @@ class AuthService(BaseService):
         role = member.role if member else user.role
         return org_obj, org_id, role
 
+    def _resolve_refresh_org_role(
+        self,
+        user: User,
+        requested_org_id: Optional[str],
+    ) -> Tuple[Optional[Organization], Optional[str], Optional[str]]:
+        """Org/role for a token rotation.
+
+        Preserves the org the incoming refresh token was minted for (e.g. the
+        org the user switched into) as long as they are still a member of it —
+        so a silent ``/auth/refresh`` does not revert them to their default
+        org. Falls back to the default membership when the requested org is
+        absent or membership has since been revoked.
+        """
+        if requested_org_id:
+            oid = _user_uuid(requested_org_id)
+            member = (
+                self.db.query(Member)
+                .filter(Member.user_id == user.id, Member.organization_id == oid)
+                .first()
+                if oid
+                else None
+            )
+            if member:
+                org_obj = (
+                    self.db.query(Organization)
+                    .filter(Organization.id == oid)
+                    .first()
+                )
+                if org_obj:
+                    return org_obj, str(org_obj.id), member.role
+        return self._resolve_member_org_role(user)
+
     def _token_response(
         self,
         user: User,
@@ -527,7 +559,9 @@ class AuthService(BaseService):
                 detail="User not found or inactive",
             )
 
-        org_obj, org_id, role = self._resolve_member_org_role(user)
+        # Keep the org the token was minted for (e.g. after an org switch)
+        # instead of always reverting to the default membership.
+        org_obj, org_id, role = self._resolve_refresh_org_role(user, payload.get("org_id"))
 
         new_access_token = jwt_manager.create_access_token(
             user_id=str(user.id),

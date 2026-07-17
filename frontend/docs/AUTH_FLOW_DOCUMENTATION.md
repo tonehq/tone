@@ -7,6 +7,38 @@
 
 ---
 
+## ⚠️ UPDATE — httpOnly-cookie token storage (supersedes the token-management sections below)
+
+Tokens were migrated **out of `localStorage` into httpOnly cookies**. Where any section
+below describes reading/writing `access_token`/`refresh_token` in `localStorage` or attaching
+an `Authorization: Bearer` header, treat it as **superseded** by the following:
+
+- **Token storage:** access + refresh JWTs live in **httpOnly cookies** (`access_token`,
+  `refresh_token`) set by the backend on login / signup / signin-code / accept-invite /
+  refresh / **org-switch**, and cleared on logout. JS cannot read them. `localStorage` holds
+  only non-sensitive UI state: `login_data` (profile/org payload) and `active_org_id`.
+- **Requests:** the Axios instance (`src/utils/axios.ts`) uses `withCredentials: true` — the
+  browser attaches the cookies automatically. No `Authorization` header. It still sends the
+  `tenant_id` hint header from `active_org_id`. A 401 triggers one silent, cookie-based
+  `POST /auth/refresh` then retries.
+- **Route protection:** enforced **server-side** in `src/middleware.ts` by checking the
+  `access_token` cookie's presence (the cookie carries session-length max-age; the JWT inside
+  is short-lived and rotated by silent refresh). Redirects to `/login?next=<path>`. The old
+  client-side `localStorage` token checks in `(dashboard)/layout.tsx` and `page.tsx` are gone.
+- **Role/identity:** come from the `login_data` payload or `/auth/me` — never decoded from the
+  token (unreadable) .
+- **Org switch:** the sidebar calls `POST /auth/switch_organization`; the backend verifies
+  membership and re-mints **both** cookies with the new org so a silent refresh doesn't revert.
+- **Logout:** `POST /auth/logout` (no body — refresh token read from cookie) revokes the
+  session and clears both cookies; the client clears `login_data`/`active_org_id`.
+- **Local dev:** set `NEXT_PUBLIC_USE_API_PROXY=true` so the browser talks only to the Next.js
+  origin (`/api/*` is proxied to the backend via `next.config.ts` rewrites) and the cookie is
+  same-origin. In prod the frontend + API share `*.trytone.ai` (cookie `Domain=.trytone.ai`).
+
+The page-flow, form-validation, and error-handling sections below remain accurate.
+
+---
+
 ## Table of Contents
 
 1. [Navigation & Routing](#1-navigation--routing)

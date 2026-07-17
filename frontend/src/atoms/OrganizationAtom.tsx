@@ -5,7 +5,6 @@ import {
   switchOrganization,
   updateOrganization,
 } from '@/services/organizationService';
-import { setToken } from '@/services/auth/helper';
 import { useAuthStore } from '@/stores/auth';
 import type { OrganizationListItem, OrganizationUpdatePayload } from '@/types/organization';
 import { atom } from 'jotai';
@@ -58,14 +57,13 @@ export const deleteOrganizationAtom = atom(null, async (_get, set, orgId: string
 });
 
 export const switchOrganizationAtom = atom(null, async (_get, _set, orgId: string) => {
-  const res = await switchOrganization(orgId);
-  // Backend returns { access_token, organization: { id, name, slug }, role }.
-  // Normalize into the shape setToken expects (organizations array).
-  const tokenData = {
-    ...res,
-    organizations: res.organization ? [res.organization] : [],
-  };
-  await setToken(tokenData);
+  // The backend verifies membership and sets fresh httpOnly cookies whose
+  // access + refresh tokens both carry the new org (so a silent refresh won't
+  // revert it). No tokens come back in the body for JS to store.
+  await switchOrganization(orgId);
+  // Persist the active org so post-reload hydration resolves the right tenant
+  // and per-org role from the membership list.
+  useAuthStore.getState().setActiveOrgId(orgId);
   window.location.reload();
 });
 
