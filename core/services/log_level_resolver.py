@@ -31,6 +31,7 @@ def _is_transient(obj) -> bool:
     try:
         return bool(sa_inspect(obj).transient)
     except Exception:
+        logger.debug("[log-level] transient inspection failed; assuming DB-backed agent")
         return False
 
 

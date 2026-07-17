@@ -8,6 +8,7 @@ from core.services.post_call.actions import (
     ConsolidateTranscriptAction,
     OverlapDetectionAction,
     PostCallAction,
+    SyncLokiLogsAction,
 )
 
 
@@ -27,6 +28,7 @@ class PostCallHandler:
             OverlapDetectionAction(),
             ConsolidateTranscriptAction(),
             ComputeCallAggregatesAction(),
+            SyncLokiLogsAction(),
         ]
 
     def post_call(self, call: Call) -> None:

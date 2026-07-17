@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from uuid import UUID
@@ -9,6 +9,11 @@ from core.database.session import get_db
 from core.middleware.auth import JWTClaims, require_org_member
 from core.services.call_metrics_analytics_service import CallMetricsAnalyticsService
 from core.services.call_service import CallService
+from core.services.loki_client import LokiError
+from core.services.pipeline_log_sync_service import (
+    PipelineLogSyncService,
+    sync_result_payload,
+)
 from core.services.tool_execution_service import ToolExecutionService
 from shared.config import settings
 
@@ -150,6 +155,54 @@ def get_call_tool_executions(
         call_id=call_id,
         status=status,
         tool_type=tool_type,
+    )
+
+
+def _org_id(claims: JWTClaims) -> UUID:
+    return UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
+
+
+def _parse_call_id(call_id: str) -> UUID:
+    try:
+        return UUID(call_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid call_id")
+
+
+@router.post("/{call_id}/sync-logs", status_code=status.HTTP_200_OK)
+def sync_call_logs(
+    call_id: str,
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Read this call's log lines back from Loki into ``pipeline_logs`` (inline).
+
+    The on-demand trigger for the per-call log store — same service the
+    ``sync_loki_logs`` post-call action runs. Idempotent: a re-run inserts 0 and
+    reports all skipped (fingerprint dedup)."""
+    svc = PipelineLogSyncService(db, org_id=_org_id(claims))
+    try:
+        result = svc.sync_call_by_id(_parse_call_id(call_id))
+    except LokiError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Loki query failed: {exc}")
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Call not found")
+    return sync_result_payload(result)
+
+
+@router.get("/{call_id}/logs")
+def list_call_logs(
+    call_id: str,
+    limit: int = Query(1000, ge=1, le=5000),
+    offset: int = Query(0, ge=0),
+    level: Optional[str] = Query(None, description="Filter by log level, e.g. ERROR"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Per-call log viewer feed: stored lines for a call, oldest first. Org-scoped
+    — a cross-org ``call_id`` returns an empty page."""
+    return PipelineLogSyncService(db, org_id=_org_id(claims)).list_for_call(
+        _parse_call_id(call_id), limit=limit, offset=offset, level=level
     )
 
 
