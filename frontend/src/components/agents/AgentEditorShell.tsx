@@ -795,6 +795,10 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   // providers mounted so the agent's unsaved state survives the round-trip and
   // returning to a section counts as internal navigation (no discard prompt).
   const isBuilderRoute = /\/workflow\/[^/]+$/.test(pathname);
+  // Call History hosts the full call-log table + filter toolbar — it needs the
+  // entire content width. The form sections (Basics, Prompt, …) stay in the
+  // narrow, centered max-w-3xl column that reads better for forms.
+  const isWideSection = /\/call-history$/.test(pathname);
   if (isBuilderRoute) {
     return (
       <FormProvider {...methods}>
@@ -989,7 +993,14 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
                 {loading ? (
                   <AppLoader className="h-full" />
                 ) : (
-                  <div className="mx-auto h-full max-w-3xl">{children}</div>
+                  <div
+                    className={cn(
+                      'mx-auto h-full',
+                      isWideSection ? 'w-full max-w-none' : 'max-w-3xl',
+                    )}
+                  >
+                    {children}
+                  </div>
                 )}
               </main>
             </div>

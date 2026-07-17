@@ -6,13 +6,11 @@ import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 import { agentsListConfig } from '@/components/agents/agentsListConfig';
 import CloneAgentModal from '@/components/agents/CloneAgentModal';
 import CreateAgentModal from '@/components/agents/CreateAgentModal';
-import NewOutboundCallModal from '@/components/outbound-calls/NewOutboundCallModal';
 import AgentReadinessCell from '@/components/agents/readiness/AgentReadinessCell';
 import ReadinessDrawer from '@/components/agents/readiness/ReadinessDrawer';
 import {
   CustomButton,
   CustomTable,
-  CustomTooltip,
   FacetFilterBar,
   FacetFilterDrawer,
   PhoneNumberDisplay,
@@ -25,7 +23,7 @@ import { formatDate } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtom } from 'jotai';
-import { Bot, PhoneOutgoing, Plus } from 'lucide-react';
+import { Bot, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 
@@ -37,7 +35,6 @@ const AgentListPage: React.FC = () => {
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [cloneTarget, setCloneTarget] = useState<ApiAgent | null>(null);
-  const [makeCallAgentId, setMakeCallAgentId] = useState<string | null>(null);
   /** Agent whose readiness drawer is currently open. Null = closed. Kept at
    * page level so one drawer instance serves every row (cheaper than one
    * drawer per cell). */
@@ -152,32 +149,16 @@ const AgentListPage: React.FC = () => {
       key: 'actions',
       title: '',
       align: 'right',
-      render: (_value, record) => {
-        const type = (record.agent_type ?? 'inbound').toString().toLowerCase();
-        const canCall = type === 'outbound' || type === 'both';
-        return (
-          <div className="flex items-center justify-end gap-1">
-            {canCall && (
-              <CustomTooltip content="Make a call">
-                <CustomButton
-                  type="text"
-                  icon={<PhoneOutgoing className="size-3.5" />}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMakeCallAgentId(record.id);
-                  }}
-                />
-              </CustomTooltip>
-            )}
-            <AgentActionMenu
-              agentName={record.name}
-              onEdit={() => handleEdit(record)}
-              onDelete={() => handleDelete(record.id)}
-              onClone={() => handleClone(record)}
-            />
-          </div>
-        );
-      },
+      render: (_value, record) => (
+        <div className="flex items-center justify-end gap-1">
+          <AgentActionMenu
+            agentName={record.name}
+            onEdit={() => handleEdit(record)}
+            onDelete={() => handleDelete(record.id)}
+            onClone={() => handleClone(record)}
+          />
+        </div>
+      ),
     },
   ];
 
@@ -263,13 +244,6 @@ const AgentListPage: React.FC = () => {
         agent={cloneTarget}
         onClose={() => setCloneTarget(null)}
         onCloned={() => fl.refresh()}
-      />
-
-      <NewOutboundCallModal
-        open={!!makeCallAgentId}
-        onClose={() => setMakeCallAgentId(null)}
-        defaultAgentId={makeCallAgentId ?? undefined}
-        lockAgent
       />
 
       <ReadinessDrawer

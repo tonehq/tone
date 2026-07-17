@@ -145,6 +145,23 @@ infisical run --projectId "$INFISICAL_PROJECT_ID" --env="$INFISICAL_ENV" -- \
 cd frontend && npm run dev
 ```
 
+> **Local development: use `--env=local`, not `--env=staging`.** The auth token
+> rides in an httpOnly cookie whose `Domain`/`Secure` attributes come from
+> Infisical. Deployed envs set `COOKIE_DOMAIN=.trytone.ai` and `COOKIE_SECURE=true`,
+> which a browser **cannot store for `http://localhost`** — so login succeeds (200)
+> but the cookie is dropped, `middleware.ts` sees no session, and every route
+> bounces back to `/login?next=…`. The `local` Infisical environment overrides
+> these for local dev (`COOKIE_DOMAIN=localhost`, `COOKIE_SECURE=false`, `ENV=local`,
+> `CORS_ALLOW_ORIGINS=http://localhost:3000`):
+>
+> ```bash
+> infisical run --projectId "$INFISICAL_PROJECT_ID" --env=local -- \
+>     uvicorn main:app --reload --host 0.0.0.0 --port 8000
+> ```
+>
+> If you previously logged in against staging secrets, clear existing `localhost`
+> cookies before retrying — a stale `Secure`/`.trytone.ai` cookie can linger.
+
 #### Option B — Manual setup
 
 Prefer to run each step yourself? Follow the manual backend and frontend steps below.
