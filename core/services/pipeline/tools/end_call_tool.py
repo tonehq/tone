@@ -28,6 +28,10 @@ from core.services.pipeline.call_end_events import (
     REASON_LLM_END_CALL,
     log_call_event,
 )
+from core.services.pipeline.tool_call_timing import (
+    ToolCallTimer,
+    finalize_and_record,
+)
 
 
 # Regex describing the phrasings the LLM uses to ask "may I end the call?".
@@ -296,6 +300,7 @@ def inject_end_call_instructions(messages: List[dict]) -> List[dict]:
 def create_end_call_handler(
     *,
     tool_call_entries: Optional[list] = None,
+    tool_request_ts: Optional[dict] = None,
     current_turn: Optional[dict] = None,
     end_reason_holder: Optional[dict] = None,
     call_id_holder: Optional[dict] = None,
@@ -329,6 +334,7 @@ def create_end_call_handler(
     async def handle_end_call(params: FunctionCallParams) -> None:
         reason = (params.arguments or {}).get("reason", "unspecified")
         _t_start = _time.monotonic()
+        timer = ToolCallTimer.start(params, tool_request_ts)
 
         entry = {
             "tool": END_CALL_TOOL_NAME,
@@ -336,6 +342,7 @@ def create_end_call_handler(
             "arguments": {"reason": reason},
             "timestamp": int(_time.time()),
             "turn": current_turn["number"] if current_turn else None,
+            **timer.initial_fields(),
         }
 
         if state["fired"]:
@@ -344,8 +351,7 @@ def create_end_call_handler(
             )
             entry["result"] = "ignored: already ending"
             entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
-            if tool_call_entries is not None:
-                tool_call_entries.append(entry)
+            finalize_and_record(entry, timer, tool_call_entries)
             await params.result_callback("Call is already ending.")
             return
 
@@ -365,8 +371,7 @@ def create_end_call_handler(
             )
             entry["result"] = "blocked: missing confirmation"
             entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
-            if tool_call_entries is not None:
-                tool_call_entries.append(entry)
+            finalize_and_record(entry, timer, tool_call_entries)
             await params.result_callback(_BLOCKED_LLM_MESSAGE)
             return
 
@@ -396,8 +401,7 @@ def create_end_call_handler(
             entry["result"] = f"error: {e}"
 
         entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
-        if tool_call_entries is not None:
-            tool_call_entries.append(entry)
+        finalize_and_record(entry, timer, tool_call_entries)
 
         await params.result_callback("Call ending now.")
 

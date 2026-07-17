@@ -127,6 +127,11 @@ class PipecatPipelineBuilder(PipelineBuilder):
         # (bumped by the runner's ``on_turn_started``); ``tool_dedup`` is the
         # per-call idempotency cache shared across MCP and built-in handlers.
         tool_call_entries: Any = None,
+        # Runner-owned {tool_call_id: llm_requested_at datetime}. Populated by
+        # ToolCallRequestObserver on FunctionCallInProgressFrame; consumed by
+        # every tool handler via ToolCallTimer so each tool_executions row
+        # captures the LLM-request → invoked → completed lifecycle.
+        tool_request_ts: Any = None,
         current_turn: Any = None,
         tool_dedup: Any = None,
         # Runner-owned dict for attributing why the call ended
@@ -192,7 +197,9 @@ class PipecatPipelineBuilder(PipelineBuilder):
             try:
                 doc_tools = build_document_tool(
                     llm, agent.id, agent.organization_id, params.kb,
-                    tool_call_entries=tool_call_entries, current_turn=current_turn,
+                    tool_call_entries=tool_call_entries,
+                    tool_request_ts=tool_request_ts,
+                    current_turn=current_turn,
                 )
                 logger.info(
                     "Document tool built for agent {}: {} tool(s), kb_configured={}",
@@ -224,6 +231,7 @@ class PipecatPipelineBuilder(PipelineBuilder):
                             handler = create_built_in_tool_handler(
                                 tool, from_number, org_id=agent.organization_id,
                                 tool_call_entries=tool_call_entries,
+                                tool_request_ts=tool_request_ts,
                                 current_turn=current_turn,
                                 tool_dedup=tool_dedup,
                             )
@@ -231,6 +239,7 @@ class PipecatPipelineBuilder(PipelineBuilder):
                             handler = create_custom_tool_handler(
                                 tool,
                                 tool_call_entries=tool_call_entries,
+                                tool_request_ts=tool_request_ts,
                                 current_turn=current_turn,
                             )
                         # Register under the SAME sanitized name used in the schema so the
@@ -255,6 +264,7 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 mcp_tools_schema = await register_mcp_tools(
                     llm, agent.id,
                     tool_call_entries=tool_call_entries,
+                    tool_request_ts=tool_request_ts,
                     current_turn=current_turn,
                     tool_dedup=tool_dedup,
                 )
@@ -283,6 +293,7 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 END_CALL_TOOL_NAME,
                 create_end_call_handler(
                     tool_call_entries=tool_call_entries,
+                    tool_request_ts=tool_request_ts,
                     current_turn=current_turn,
                     end_reason_holder=end_reason_holder,
                     call_id_holder=call_id_holder,
@@ -471,11 +482,16 @@ class PipecatPipelineBuilder(PipelineBuilder):
         from pipecat.observers.loggers.metrics_log_observer import MetricsLogObserver
         from pipecat.observers.turn_tracking_observer import TurnTrackingObserver
 
+        from core.observers.tool_call_request_observer import ToolCallRequestObserver
         from core.observers.user_bot_latency_observer import UserBotLatencyObserver
 
         metrics_observer = MetricsLogObserver()
         latency_observer = UserBotLatencyObserver()
         turn_observer = TurnTrackingObserver()
+        # Only attach when the runner wired the map (older callers may not).
+        tool_call_request_observer = (
+            ToolCallRequestObserver(tool_request_ts) if tool_request_ts is not None else None
+        )
 
         # Use the TTS service's native sample rate so the output transport tags audio
         # frames correctly for the serializer (e.g. Hume @ 48 kHz). S2S models output
@@ -493,10 +509,13 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 audio_out_sample_rate=tts_sample_rate,
             ),
             observers=[
-                RTVIObserver(rtvi),
-                metrics_observer,
-                latency_observer,
-                turn_observer,
+                obs for obs in (
+                    RTVIObserver(rtvi),
+                    metrics_observer,
+                    latency_observer,
+                    turn_observer,
+                    tool_call_request_observer,
+                ) if obs is not None
             ],
         )
         logger.info("[TIMING] Pipeline + PipelineTask created (+{:.3f}s)", _time.monotonic() - _t)

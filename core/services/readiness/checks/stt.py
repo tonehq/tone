@@ -77,7 +77,11 @@ class STTProviderReachableCheck(DeepCheck):
 
     id: ClassVar[str] = "stt.provider_reachable"
     category: ClassVar[Category] = Category.STT
-    severity: ClassVar[Severity] = Severity.WARNING
+    # BLOCKER: a wrong/revoked STT API key or unreachable provider means the
+    # agent has no transcript source. WARNING would let the overall verdict
+    # settle at READY_WITH_WARNINGS (see runner._aggregate) which the UI
+    # treats as ready.
+    severity: ClassVar[Severity] = Severity.BLOCKER
 
     def applies(self, ctx: CheckContext) -> bool:
         return (

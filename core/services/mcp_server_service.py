@@ -290,8 +290,17 @@ class McpServerService(BaseService):
                 update_data["auth_type"] = self._validate_auth_type(update_data["auth_type"])
 
             # Resolve the effective OAuth connection (incoming value wins, else the stored one)
-            # and block the update early if it lacks the provider's required scopes.
+            # and block the update early if it lacks the provider's required scopes or points at
+            # a different provider than the MCP server itself (e.g. Google Calendar OAuth linked
+            # to a HubSpot MCP).
             effective_oauth_id = update_data.get("oauth_connection_id", existing.oauth_connection_id)
+            effective_app_integration_id = update_data.get(
+                "app_integration_id", existing.app_integration_id
+            )
+            if "oauth_connection_id" in update_data or "app_integration_id" in update_data:
+                self._validate_oauth_provider_match(
+                    effective_app_integration_id, effective_oauth_id
+                )
             if "oauth_connection_id" in update_data:
                 self._validate_oauth_scopes(effective_oauth_id)
 
@@ -354,8 +363,11 @@ class McpServerService(BaseService):
         self._validate_transport_type(transport_type)
         auth_type = self._validate_auth_type(data.get("auth_type"))
 
-        # Block creation early if a linked OAuth connection lacks required scopes.
+        # Block creation early if a linked OAuth connection is wrong-provider (e.g. Google
+        # Calendar OAuth attached to a HubSpot MCP) or lacks required scopes.
         oauth_connection_id = data.get("oauth_connection_id")
+        app_integration_id = data.get("app_integration_id")
+        self._validate_oauth_provider_match(app_integration_id, oauth_connection_id)
         self._validate_oauth_scopes(oauth_connection_id)
 
         # Validate connection before persisting (inject custom headers + OAuth bearer when linked).
@@ -692,6 +704,50 @@ class McpServerService(BaseService):
         svc = OAuthService(self.db, org_id=self.org_id)
         connection = svc.get_connection(oauth_connection_id)
         svc.raise_if_missing_scopes(svc.validate_connection_for_provider(connection))
+
+    def _validate_oauth_provider_match(
+        self, app_integration_id, oauth_connection_id
+    ) -> None:
+        """Block config when the linked OAuth connection is for a different
+        provider than the MCP server itself.
+
+        e.g. a Google Calendar connection linked to a HubSpot MCP would
+        trivially pass every other check (the token refreshes, the connection's
+        own scopes are present) but the HubSpot server rejects every request
+        at call time. Compare ``app_integration_id`` on both sides and fail
+        fast at save time so the bad config never persists.
+
+        No-op when either side lacks an ``app_integration_id`` — generic /
+        custom MCP servers outside the app catalog can still link an arbitrary
+        connection, matching the pre-existing behavior.
+        """
+        if not oauth_connection_id or not app_integration_id:
+            return
+        from core.models.app_integration import AppIntegration
+        from core.services.oauth_service import OAuthService
+
+        svc = OAuthService(self.db, org_id=self.org_id)
+        connection = svc.get_connection(oauth_connection_id)
+        if not connection.app_integration_id:
+            return
+        if str(connection.app_integration_id) == str(app_integration_id):
+            return
+        server_app = self.query(AppIntegration).filter(
+            AppIntegration.id == app_integration_id
+        ).first()
+        conn_app = self.query(AppIntegration).filter(
+            AppIntegration.id == connection.app_integration_id
+        ).first()
+        server_name = server_app.display_name if server_app else "this MCP server"
+        conn_name = conn_app.display_name if conn_app else "a different provider"
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"The linked OAuth connection is for {conn_name} but this "
+                f"MCP server is for {server_name}. Link a {server_name} "
+                f"connection instead."
+            ),
+        )
 
     async def validate_mcp_connection(
         self,

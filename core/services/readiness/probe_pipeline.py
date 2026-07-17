@@ -109,11 +109,18 @@ async def probe_in_pipeline(
     # we can concurrently feed input frames and watch the capture queue.
 
     async def _feed_after_start():
-        # Small warm-up so StartFrame propagates through the service and any
-        # per-service setup (WebSocket connect) has a chance to complete
-        # before we push data. 100 ms is enough for HTTP; WS providers need
-        # more slack but their own connect logic accommodates queued frames.
-        await asyncio.sleep(0.1)
+        # Warm-up so StartFrame propagates through the service and any
+        # per-service setup (WebSocket connect, aiohttp session, remote
+        # session token) has a chance to complete before we push data.
+        # 100 ms used to be enough for HTTP-only providers but WS-STT / WS-TTS
+        # handshakes (Deepgram, AssemblyAI, ElevenLabs streaming) routinely
+        # take 150-250ms under load, and a frame pushed before the handshake
+        # completes gets dropped silently — producing a "no transcript" /
+        # "no audio" timeout on a HEALTHY provider. 300ms fits comfortably
+        # under every probe's outer timeout budget (10s / 18s / 12s) and
+        # matches what the runtime effectively gets from real transport
+        # setup latency.
+        await asyncio.sleep(0.3)
         for f in input_frames:
             await task.queue_frame(f)
 
@@ -122,6 +129,7 @@ async def probe_in_pipeline(
 
     target_frame: Optional[object] = None
     error_msg: Optional[str] = None
+    runner_exc: Optional[BaseException] = None
     deadline = time.monotonic() + timeout_s
 
     try:
@@ -129,10 +137,27 @@ async def probe_in_pipeline(
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 break
+            # Short-circuit when the runner died before emitting any frame
+            # (e.g. provider raised AuthenticationError inside the LLM
+            # service). Without this the caller would wait the full budget
+            # and see a misleading "no target frame" timeout instead of the
+            # real auth failure.
+            if runner_task.done():
+                try:
+                    runner_exc = runner_task.exception()
+                except (asyncio.CancelledError, asyncio.InvalidStateError):
+                    runner_exc = None
+                if runner_exc is not None:
+                    break
             try:
-                frame = await asyncio.wait_for(frames_out.get(), timeout=remaining)
+                # Cap the per-tick wait so a dead runner is noticed within
+                # ~0.5s instead of hanging on ``frames_out.get()`` for the
+                # full timeout budget.
+                frame = await asyncio.wait_for(
+                    frames_out.get(), timeout=min(remaining, 0.5)
+                )
             except asyncio.TimeoutError:
-                break
+                continue
             # ErrorFrame short-circuit: no point waiting the full budget when
             # the provider already told us it failed (auth, quota, WS reject).
             if isinstance(frame, ErrorFrame):
@@ -142,18 +167,39 @@ async def probe_in_pipeline(
                 target_frame = frame
                 break
     finally:
-        await asyncio.shield(_teardown(task, runner_task, feeder_task, provider))
+        # ``_teardown`` returns the runner's stored exception (if any) so we
+        # can classify it via ``_summarise_error`` upstream. Assigning the
+        # awaited result inside ``finally`` is safe — shield protects it
+        # from an outer cancel.
+        teardown_exc = await asyncio.shield(
+            _teardown(task, runner_task, feeder_task, provider)
+        )
+        if runner_exc is None:
+            runner_exc = teardown_exc
 
     if target_frame is not None:
         return True, target_frame, None
-    return False, None, error_msg or f"no target frame observed within {timeout_s:.0f}s"
+    if error_msg:
+        return False, None, error_msg
+    if runner_exc is not None:
+        # Surface the provider's real exception. ``_summarise_error`` in
+        # probes.py buckets this into auth / quota / rate-limit / etc.
+        return False, None, str(runner_exc)
+    return False, None, f"no target frame observed within {timeout_s:.0f}s"
 
 
-async def _teardown(task, runner_task: asyncio.Task, feeder_task: asyncio.Task, provider: str) -> None:
+async def _teardown(
+    task, runner_task: asyncio.Task, feeder_task: asyncio.Task, provider: str
+) -> Optional[BaseException]:
     """Cancel the runner, drain the feeder, close the task — best-effort but
     never re-raises. WS providers occasionally hang on close; we bound the
     join with a hard cap so a stuck provider doesn't stall the whole
     readiness report.
+
+    Returns the runner task's stored exception (if any) so the caller can
+    surface a real auth / quota / rate-limit message instead of a generic
+    "no target frame" timeout. Returns ``None`` when the runner completed
+    cleanly or was cancelled.
     """
     # Kill the feeder first — it's the only thing that could still be queuing
     # data into a task we're about to cancel.
@@ -172,3 +218,13 @@ async def _teardown(task, runner_task: asyncio.Task, feeder_task: asyncio.Task, 
         runner_task.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await runner_task
+
+    # Extract the runner's exception without re-raising. A cancelled task
+    # has no exception in the sense we care about; an unfinished task can't
+    # be queried yet — return None in both cases.
+    if runner_task.done() and not runner_task.cancelled():
+        try:
+            return runner_task.exception()
+        except (asyncio.CancelledError, asyncio.InvalidStateError):
+            return None
+    return None
