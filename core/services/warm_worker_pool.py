@@ -99,8 +99,8 @@ class WarmWorkerPool:
         for _ in range(count):
             try:
                 await self._spawn_warm_worker()
-            except Exception as e:
-                logger.warning("WarmWorkerPool: failed to replenish worker: %s", e)
+            except Exception:
+                logger.exception("WarmWorkerPool: failed to replenish worker")
 
     async def _spawn_warm_worker(self):
         """Spawn a single warm worker subprocess that imports everything and waits."""

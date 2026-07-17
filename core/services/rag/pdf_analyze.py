@@ -17,7 +17,8 @@ KEEP_BLOCKERS = True
 def _table_html(table) -> str:
     try:
         rows = table.extract()
-    except Exception:
+    except Exception as exc:
+        logger.debug("[pdf-analyze] table extraction failed: {}", exc)
         return ""
     parts = ["<table>"]
     for row in rows:
@@ -36,7 +37,8 @@ def _image_data_uri(page, img) -> str:
         buf = io.BytesIO()
         pil.save(buf, format="PNG")
         return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
-    except Exception:
+    except Exception as exc:
+        logger.debug("[pdf-analyze] image render failed: {}", exc)
         return ""
 
 
@@ -204,6 +206,7 @@ def analyze_pdf(pdf_path: str, html_path: str) -> AnalyzeResult:
                 ]
                 lines = _reconstruct_lines(kept)
             except Exception:
+                logger.exception("[pdf-analyze] failed to extract page {}; skipping its content", page_number)
                 lines = []
                 image_tops = []
                 table_tops = []
@@ -244,8 +247,8 @@ def analyze_pdf(pdf_path: str, html_path: str) -> AnalyzeResult:
 
             try:
                 page.flush_cache()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("[pdf-analyze] page.flush_cache failed: {}", exc)
 
             if page_number % 25 == 0 or page_number == total:
                 logger.info(

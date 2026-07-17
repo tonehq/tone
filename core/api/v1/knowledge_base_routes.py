@@ -22,6 +22,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from loguru import logger
 from sqlalchemy.orm import Session
 
 from core.api.v1.faceted_schemas import FacetsRequest
@@ -68,7 +69,8 @@ def _signed_url(file_path: str | None, r2: R2StorageService | None = None) -> st
         return None
     try:
         return (r2 or R2StorageService()).generate_presigned_url(file_path)
-    except Exception:
+    except Exception as exc:
+        logger.debug("Failed to generate presigned URL for {}: {}", file_path, exc)
         return None
 
 
@@ -293,11 +295,12 @@ def build_knowledge_base_router(
         except Exception:
             # DB write failed after the blob landed in R2 — clean up so we don't
             # leak orphan objects. R2 delete is best-effort.
+            logger.exception("KB upload DB write failed; rolling back and cleaning up R2 blob")
             db.rollback()
             try:
                 r2.delete_file(object_key)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Best-effort R2 cleanup failed for {}: {}", object_key, exc)
             raise
 
         job_id = await enqueue_upload(upload.id, org_id)
@@ -394,8 +397,8 @@ def build_knowledge_base_router(
         if old_path and old_path != new_object_key:
             try:
                 R2StorageService().delete_file(old_path)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Best-effort delete of old R2 blob {} failed: {}", old_path, exc)
 
         job_id = await enqueue_reprocess(upload.id, org_id)
         db.query(KnowledgeBase).filter(
@@ -483,8 +486,8 @@ def build_knowledge_base_router(
         if file_path:
             try:
                 R2StorageService().delete_file(file_path)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Best-effort R2 delete of {} failed: {}", file_path, exc)
 
         return {"ok": True}
 

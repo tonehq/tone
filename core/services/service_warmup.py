@@ -79,8 +79,8 @@ def _preload_silero_vad() -> Optional[Any]:
             )
         )
         return _silero_vad_analyzer
-    except Exception as e:
-        logger.warning(f"[warmup] Silero VAD preload failed: {e}")
+    except Exception:
+        logger.exception("[warmup] Silero VAD preload failed")
         return None
 
 
@@ -98,8 +98,8 @@ def _preload_silero_vad_phone() -> Optional[Any]:
             )
         )
         return _silero_vad_analyzer_phone
-    except Exception as e:
-        logger.warning(f"[warmup] Silero VAD (phone) preload failed: {e}")
+    except Exception:
+        logger.exception("[warmup] Silero VAD (phone) preload failed")
         return None
 
 
@@ -113,8 +113,8 @@ def _preload_smart_turn() -> Optional[Any]:
             params=SmartTurnParams(stop_secs=0.4),
         )
         return _smart_turn_analyzer
-    except Exception as e:
-        logger.warning(f"[warmup] Smart Turn preload failed: {e}")
+    except Exception:
+        logger.exception("[warmup] Smart Turn preload failed")
         return None
 
 
@@ -177,8 +177,8 @@ def build_rnnoise_filter() -> Optional[RNNoiseFilter]:
         return None
     try:
         return RNNoiseFilter(resampler_quality="QQ")
-    except Exception as e:
-        logger.warning(f"[transport] failed to build RNNoise filter: {e}")
+    except Exception:
+        logger.exception("[transport] failed to build RNNoise filter")
         return None
 
 

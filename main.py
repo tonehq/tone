@@ -4,6 +4,8 @@ import os
 from core.logging import setup_logging
 setup_logging()
 
+from loguru import logger
+
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -33,7 +35,7 @@ if _LOAD_FULL_API:
         auth, users, organizations, agent_configs, channels, oauth,
         agents, agent_readiness, mcp_servers, services, tools, dashboard,
         call_logs, call_metrics, sessions, workflows, audit_logs,
-        app_integrations, outbound_calls,
+        app_integrations, outbound_calls, admin,
     )
 from core.middleware.request_context import RequestContextMiddleware
 from core.api.telephony_routes import router as telephony_router
@@ -138,6 +140,7 @@ if ee_enabled:
         api_v1.include_router(workflows.router, prefix="/workflow", tags=["workflow"])
         api_v1.include_router(audit_logs.router, prefix="/audit-log", tags=["audit-log"])
         api_v1.include_router(outbound_calls.router, prefix="/outbound-call", tags=["outbound-call"])
+        api_v1.include_router(admin.router, prefix="/admin", tags=["admin"])
     # webrtc is always mounted — needed on call pods for WebRTC signaling.
     api_v1.include_router(webrtc.router, prefix="/webrtc", tags=["webrtc"])
     print("EE edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
@@ -164,6 +167,7 @@ else:
         api_v1.include_router(workflows.router, prefix="/workflow", tags=["workflow"])
         api_v1.include_router(audit_logs.router, prefix="/audit-log", tags=["audit-log"])
         api_v1.include_router(outbound_calls.router, prefix="/outbound-call", tags=["outbound-call"])
+        api_v1.include_router(admin.router, prefix="/admin", tags=["admin"])
     # webrtc is always mounted — needed on call pods for WebRTC signaling.
     api_v1.include_router(webrtc.router, prefix="/webrtc", tags=["webrtc"])
     print("Core edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
@@ -262,24 +266,28 @@ app.include_router(monitoring_router)
 @app.websocket("/ws")
 async def ws_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
+    logger.info("[inbound] /ws connection accepted from {}", getattr(websocket.client, "host", "?"))
     runner_args = WebSocketRunnerArguments(websocket=websocket, body={})
     try:
         active_calls_inc()
     except Exception:
-        pass
+        logger.debug("[inbound] active_calls_inc failed (metric only)")
     try:
         await bot(runner_args)
-    except Exception as exc:
-        print(f"[/ws] bot crashed: {exc}")
+    except Exception:
+        # The bot's own outer handler already logs the traceback; this is the
+        # transport-boundary backstop so a /ws crash is never silent.
+        logger.exception("[inbound] /ws bot crashed")
     finally:
         try:
             active_calls_dec()
         except Exception:
-            pass
+            logger.debug("[inbound] active_calls_dec failed (metric only)")
         try:
             await websocket.close()
         except Exception:
-            pass
+            logger.debug("[inbound] /ws close failed")
+        logger.info("[inbound] /ws connection closed")
 
 
 if __name__ == "__main__":

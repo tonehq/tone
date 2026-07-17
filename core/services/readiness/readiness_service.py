@@ -228,10 +228,10 @@ class ReadinessService(BaseService):
             base_stamp, config = compute_agent_cache_version(
                 self.db, agent, org_id=self.org_id
             )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "[readiness] dependency stamp computation failed for agent {}: {}",
-                agent.id, exc,
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "[readiness] dependency stamp computation failed for agent {}",
+                agent.id,
             )
             return None, get_active_agent_config(self.db, agent)
 
@@ -264,10 +264,10 @@ class ReadinessService(BaseService):
             count, max_ts = row
             ts = max_ts.isoformat() if max_ts is not None else "none"
             return f"phones:{count or 0}:{ts}"
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "[readiness] phone stamp computation failed for agent {}: {}",
-                agent_id, exc,
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "[readiness] phone stamp computation failed for agent {}",
+                agent_id,
             )
             # Deterministic sentinel — different from any real stamp so the
             # fast-path misses when we can't confidently reproduce state.

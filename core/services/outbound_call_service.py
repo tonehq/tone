@@ -110,8 +110,8 @@ class OutboundCallService(BaseService):
                     if agent is not None:
                         load_agent_service_config(db, agent, transport_type="twilio", org_id=org_id)
                         logger.info("[outbound] prewarmed pipeline config cache agent={}", agent_id)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("[outbound] pipeline prewarm failed agent={} err={}", agent_id, exc)
+            except Exception:  # noqa: BLE001
+                logger.exception("[outbound] pipeline prewarm failed agent={}", agent_id)
 
         # Submit to a bounded pool rather than spawning a raw thread per dial — under a
         # burst of scheduled dispatches, one thread (and pooled DB session) per call would
@@ -229,6 +229,7 @@ class OutboundCallService(BaseService):
     def _dial_now(self, agent, from_number, to_number, invalid) -> Dict[str, Any]:
         # No calls row is created here — the call log is written by the pipeline
         # (create_call_log) when the media stream connects.
+        logger.info("[outbound] placing immediate call agent={} from={} to={}", agent.id, from_number, to_number)
         base = self._public_base()
         engine = get_call_engine("twilio", org_id=self.org_id)
         try:
@@ -239,7 +240,7 @@ class OutboundCallService(BaseService):
                 callback_base_url=base,
             )
         except Exception as exc:  # noqa: BLE001
-            logger.error("[outbound] immediate dial failed agent={} to={} err={}", agent.id, to_number, exc)
+            logger.exception("[outbound] immediate dial failed agent={} to={}", agent.id, to_number)
             raise HTTPException(status_code=502, detail=f"Failed to place call: {exc}")
 
         logger.info("[outbound] immediate call placed agent={} to={} sid={}", agent.id, to_number, info.call_id)
@@ -353,7 +354,7 @@ class OutboundCallService(BaseService):
             sc.status = "failed"
             sc.error = str(exc)[:500]
             self.db.commit()
-            logger.error("[outbound] dispatch dial failed id={} err={}", scheduled_call_id, exc)
+            logger.exception("[outbound] dispatch dial failed id={}", scheduled_call_id)
             return sc
 
         sc.provider_call_sid = info.call_id
@@ -403,8 +404,8 @@ class OutboundCallService(BaseService):
             try:
                 self.dispatch_scheduled_call(sc.id)
                 dispatched += 1
-            except Exception as exc:  # noqa: BLE001
-                logger.error("[outbound] reconcile dispatch failed id={} err={}", sc.id, exc)
+            except Exception:  # noqa: BLE001
+                logger.exception("[outbound] reconcile dispatch failed id={}", sc.id)
         logger.warning("[outbound] reconciled {} orphaned scheduled call(s)", dispatched)
         return dispatched
 

@@ -109,7 +109,8 @@ class PipeWebSocket:
                 logger.warning("PipeWebSocket: unknown frame type %d", frame_type)
                 self._connected = False
                 return {"type": "websocket.disconnect"}
-        except (asyncio.IncompleteReadError, ConnectionError, OSError):
+        except (asyncio.IncompleteReadError, ConnectionError, OSError) as exc:
+            logger.debug("PipeWebSocket receive ended (pipe closed): {}", exc)
             self._connected = False
             return {"type": "websocket.disconnect"}
 
@@ -119,7 +120,8 @@ class PipeWebSocket:
             return
         try:
             await self._write_frame(FrameType.TEXT, data.encode("utf-8"))
-        except (ConnectionError, OSError, BrokenPipeError):
+        except (ConnectionError, OSError, BrokenPipeError) as exc:
+            logger.debug("PipeWebSocket send_text failed (pipe closed): {}", exc)
             self._connected = False
 
     async def send_bytes(self, data: bytes):
@@ -128,7 +130,8 @@ class PipeWebSocket:
             return
         try:
             await self._write_frame(FrameType.BINARY, data)
-        except (ConnectionError, OSError, BrokenPipeError):
+        except (ConnectionError, OSError, BrokenPipeError) as exc:
+            logger.debug("PipeWebSocket send_bytes failed (pipe closed): {}", exc)
             self._connected = False
 
     async def close(self):
@@ -138,8 +141,8 @@ class PipeWebSocket:
         self._connected = False
         try:
             await self._write_frame(FrameType.DISCONNECT, b"")
-        except (ConnectionError, OSError, BrokenPipeError):
-            pass
+        except (ConnectionError, OSError, BrokenPipeError) as exc:
+            logger.debug("PipeWebSocket close: disconnect frame not sent (pipe closed): {}", exc)
 
     async def _write_frame(self, frame_type: FrameType, data: bytes):
         """Write a framed message to the IPC pipe (thread-safe)."""

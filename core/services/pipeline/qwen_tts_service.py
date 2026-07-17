@@ -43,7 +43,7 @@ try:
     from websockets.asyncio.client import connect as websocket_connect
     from websockets.protocol import State
 except ModuleNotFoundError as e:
-    logger.error(f"Exception: {e}")
+    logger.exception("Qwen websocket TTS import failed")
     logger.error("In order to use Qwen websocket TTS, you need to `pip install websockets`.")
     raise Exception(f"Missing module: {e}")
 
@@ -138,8 +138,8 @@ class QwenWebSocketTTSService(TTSService):
             if self._websocket and self._websocket.state is State.OPEN:
                 logger.debug(f"{self} disconnecting from Qwen TTS WebSocket")
                 await self._websocket.close()
-        except Exception as e:
-            logger.warning(f"{self} error closing websocket: {e}")
+        except Exception:
+            logger.exception(f"{self} error closing websocket")
         finally:
             self._websocket = None
 
