@@ -53,6 +53,13 @@ def compute_call_metrics_aggregates_task(call_id: str) -> None:
     compute_call_metrics_aggregates(call_id=call_id)
 
 
+@app.task(name="sync_loki_logs", queue="log_sync", retry=3)
+def sync_loki_logs_task(call_id: str) -> None:
+    from core.jobs.sync_loki import sync_call_logs
+
+    sync_call_logs(call_id=call_id)
+
+
 async def _defer_ingestion(upload_id, org_id, delete_existing: bool) -> int:
     async with app.open_async():
         return await ingest_upload.defer_async(
@@ -187,3 +194,20 @@ def enqueue_compute_call_metrics_aggregates_sync(call_id) -> int:
     path."""
     with app.open():
         return compute_call_metrics_aggregates_task.defer(call_id=str(call_id))
+
+
+async def enqueue_loki_log_sync(call_id, *, delay_seconds: int = 0) -> int:
+    async with app.open_async():
+        return await sync_loki_logs_task.configure(
+            schedule_in={"seconds": delay_seconds}
+        ).defer_async(call_id=str(call_id))
+
+
+def enqueue_loki_log_sync_sync(call_id, *, delay_seconds: int = 0) -> int:
+    """Sync counterpart for the ``sync_loki_logs`` post-call action (runs inside
+    the sync completion path). ``delay_seconds`` defers the job so Loki has time
+    to ingest the call's teardown lines before we read them back."""
+    with app.open():
+        return sync_loki_logs_task.configure(
+            schedule_in={"seconds": delay_seconds}
+        ).defer(call_id=str(call_id))
