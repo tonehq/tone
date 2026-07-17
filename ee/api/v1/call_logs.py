@@ -131,7 +131,7 @@ def sync_call_logs(
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    """Read this call's log lines back from Loki into ``pipeline_logs`` (inline).
+    """Read this call's log lines back from Loki into ``call_pipeline_logs`` (inline).
     Idempotent — see the OSS twin in ``core/api/v1/call_logs.py``."""
     svc = PipelineLogSyncService(db, org_id=UUID(claims.org_id))
     try:

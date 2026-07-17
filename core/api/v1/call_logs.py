@@ -175,11 +175,11 @@ def sync_call_logs(
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    """Read this call's log lines back from Loki into ``pipeline_logs`` (inline).
+    """Read this call's log lines back from Loki into ``call_pipeline_logs`` (inline).
 
     The on-demand trigger for the per-call log store — same service the
-    ``sync_loki_logs`` post-call action runs. Idempotent: a re-run inserts 0 and
-    reports all skipped (fingerprint dedup)."""
+    ``sync_loki_logs`` post-call action runs. Idempotent: a re-run re-reads the
+    same window and replaces the call's stored log array wholesale."""
     svc = PipelineLogSyncService(db, org_id=_org_id(claims))
     try:
         result = svc.sync_call_by_id(_parse_call_id(call_id))

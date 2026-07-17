@@ -1,10 +1,13 @@
-"""Read one finished call's log lines back from Loki into ``pipeline_logs``.
+"""Read one finished call's log lines back from Loki into ``call_pipeline_logs``.
 
 The service behind both the ``sync_loki_logs`` post-call action and the manual
 ``POST /call-log/{call_id}/sync-logs`` endpoint. Scoped to a single call, so the
-time window is bounded and known up front; a deterministic ``fingerprint`` unique
-index makes every re-run idempotent (post-call action + manual re-sync + task
-retry + concurrent runs all converge on the same rows).
+time window is bounded and known up front. All of the call's lines are stored as
+a single ``logs`` JSON array on ONE row keyed by ``call_id``; every re-run
+re-reads the same bounded window, rebuilds the same de-duplicated, time-ordered
+array and upserts it (``on_conflict(call_id) do update``), so the post-call
+action, a manual re-sync, task retries and concurrent runs all converge on one
+row with the same contents.
 """
 from __future__ import annotations
 
@@ -17,7 +20,7 @@ from loguru import logger
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.models.call import Call
-from core.models.log_entry import PipelineLog
+from core.models.log_entry import CallPipelineLog
 from core.services.base import BaseService
 from core.services.loki_client import LokiClient
 from core.services.log_parser import extract_trace_id, fingerprint, parse_line
@@ -29,8 +32,7 @@ class SyncResult:
     """Outcome of a per-call sync — returned by the endpoint and logged by the job."""
 
     fetched: int = 0          # total lines returned by Loki (incl. page overlap)
-    inserted: int = 0         # rows newly written this run
-    skipped: int = 0          # unique rows already present (fingerprint dedup)
+    stored: int = 0           # unique lines in the stored array after this run
     pages: int = 0
     truncated: bool = False   # hit MAX_PAGES with more lines likely remaining
     window_start: Optional[datetime] = None
@@ -58,28 +60,28 @@ class PipelineLogSyncService(BaseService):
     ) -> dict:
         """Return stored log lines for a call, oldest first, for the viewer.
 
+        Reads the single ``call_pipeline_logs`` row and slices its ``logs`` array.
         Org-scoped via ``BaseService.query`` so a cross-org ``call_id`` returns an
         empty page rather than leaking another tenant's logs."""
-        base = self.query(PipelineLog).filter(PipelineLog.call_id == call_id)
+        row = self.query(CallPipelineLog).filter(CallPipelineLog.call_id == call_id).first()
+        entries: List[dict] = list(row.logs) if row and row.logs else []
         if level:
-            base = base.filter(PipelineLog.level == level.upper())
-        total = base.count()
-        rows = (
-            base.order_by(PipelineLog.ts.asc(), PipelineLog.ts_ns.asc())
-            .offset(max(offset, 0))
-            .limit(max(min(limit, 5000), 1))
-            .all()
-        )
+            lvl = level.upper()
+            entries = [e for e in entries if (e.get("level") or "").upper() == lvl]
+        total = len(entries)
+        lo = max(offset, 0)
+        hi = lo + max(min(limit, 5000), 1)
         return {
             "call_id": str(call_id),
             "total": total,
             "limit": limit,
             "offset": offset,
-            "items": [_row_payload(r) for r in rows],
+            "items": [_entry_payload(e) for e in entries[lo:hi]],
         }
 
     def sync_call(self, call: Call) -> SyncResult:
-        """Fetch ``call``'s Loki lines within its (buffered) time window and store them.
+        """Fetch ``call``'s Loki lines within its (buffered) time window and store them
+        as a single time-ordered array on one row.
 
         Safe no-op (returns zeros, never raises) when Loki read creds are absent
         or the call never got a ``trace_id``. Loki transport errors DO propagate
@@ -103,8 +105,8 @@ class PipelineLogSyncService(BaseService):
         # present on EVERY line (including early ones logged before the agent/call
         # id are known), so it's the fetch key — filtering on the full trace_id
         # would drop those setup lines. The prefix is only 8 hex chars, so a
-        # different call can share it; _rows_for_page disambiguates client-side by
-        # the fully-rendered trace_id before storing, so foreign lines aren't
+        # different call can share it; _entries_for_page disambiguates client-side
+        # by the fully-rendered trace_id before storing, so foreign lines aren't
         # misattributed to this call.
         call_uuid = call.trace_id.split("-", 1)[0]
         selector = (
@@ -117,6 +119,7 @@ class PipelineLogSyncService(BaseService):
         client = LokiClient()
         result = SyncResult(window_start=start_dt, window_end=end_dt)
         seen_fingerprints: set[str] = set()
+        entries: List[dict] = []
         cursor = start_ns
 
         for page in range(settings.LOKI_SYNC_MAX_PAGES):
@@ -128,11 +131,8 @@ class PipelineLogSyncService(BaseService):
                 break
             result.fetched += len(lines)
 
-            rows, max_ts = self._rows_for_page(call, lines, seen_fingerprints)
-            if rows:
-                inserted = self._insert(rows)
-                result.inserted += inserted
-                result.skipped += len(rows) - inserted
+            page_entries, max_ts = self._entries_for_page(call, lines, seen_fingerprints)
+            entries.extend(page_entries)
 
             # Last (partial) page → done.
             if len(lines) < settings.LOKI_SYNC_PAGE_LIMIT:
@@ -148,10 +148,15 @@ class PipelineLogSyncService(BaseService):
             # Exhausted MAX_PAGES with full pages throughout — more may remain.
             result.truncated = True
 
+        # Oldest first — pages come forward-ordered but sort defensively so a
+        # boundary overlap or out-of-order stream can't scramble the viewer.
+        entries.sort(key=lambda e: e["ts_ns"])
+        result.stored = self._upsert_call(call, entries)
+
         logger.info(
-            "[loki_sync] call={} window=[{} → {}] pages={} fetched={} inserted={} skipped_dup={} truncated={}",
+            "[loki_sync] call={} window=[{} → {}] pages={} fetched={} stored={} truncated={}",
             call.id, start_dt.isoformat(), end_dt.isoformat(),
-            result.pages, result.fetched, result.inserted, result.skipped, result.truncated,
+            result.pages, result.fetched, result.stored, result.truncated,
         )
         return result
 
@@ -174,11 +179,13 @@ class PipelineLogSyncService(BaseService):
             end_dt = start_dt + timedelta(seconds=settings.LOKI_SYNC_POST_BUFFER_SECONDS)
         return start_dt, end_dt
 
-    def _rows_for_page(self, call: Call, lines, seen: set) -> tuple[List[dict], int]:
-        """Build stamped row dicts for a page, deduping within-run by fingerprint.
+    def _entries_for_page(self, call: Call, lines, seen: set) -> tuple[List[dict], int]:
+        """Build JSON-safe log entries for a page, deduping within-run by fingerprint.
 
-        Returns the rows plus the max ts_ns seen (the pagination cursor)."""
-        rows: List[dict] = []
+        Returns the entries plus the max ts_ns seen (the pagination cursor). Each
+        entry is ``{ts, ts_ns, level, logger_name, message, raw_line}`` — identity
+        (call/org/agent/trace) is not repeated per line; it lives on the row."""
+        entries: List[dict] = []
         max_ts = 0
         for ln in lines:
             # max_ts advances over every fetched line (incl. dropped foreign ones)
@@ -186,8 +193,8 @@ class PipelineLogSyncService(BaseService):
             if ln.ts_ns > max_ts:
                 max_ts = ln.ts_ns
             # The prefix filter can match a different call that shares our 8-char
-            # short-uuid prefix; drop those instead of stamping them with this
-            # call's id. Lines with no parseable token are kept (never dropped).
+            # short-uuid prefix; drop those instead of attributing them to this
+            # call. Lines with no parseable token are kept (never dropped).
             if not _trace_belongs(extract_trace_id(ln.line), call.trace_id):
                 continue
             fp = fingerprint(ln.ts_ns, ln.labels, ln.line)
@@ -195,34 +202,48 @@ class PipelineLogSyncService(BaseService):
                 continue
             seen.add(fp)
             parsed = parse_line(ln.line)
-            rows.append(
+            entries.append(
                 {
-                    "id": uuid.uuid4(),
-                    # Stamped from the Call → reliable, tenant-scoped viewer queries.
-                    "organization_id": call.organization_id,
-                    "call_id": call.id,
-                    "agent_id": call.agent_id,
-                    "trace_id": call.trace_id,
-                    "ts": _from_ns(ln.ts_ns),
+                    "ts": _from_ns(ln.ts_ns).isoformat(),
                     "ts_ns": ln.ts_ns,
                     "level": parsed["level"],
                     "logger_name": parsed["logger_name"],
                     "message": parsed["message"],
                     "raw_line": ln.line,
-                    "labels": ln.labels or None,
-                    "fingerprint": fp,
                 }
             )
-        return rows, max_ts
+        return entries, max_ts
 
-    def _insert(self, rows: List[dict]) -> int:
-        """Idempotent bulk insert; returns the count of rows actually written."""
-        stmt = pg_insert(PipelineLog).values(rows).on_conflict_do_nothing(
-            index_elements=["fingerprint"]
+    def _upsert_call(self, call: Call, entries: List[dict]) -> int:
+        """Replace the call's stored log array in one idempotent upsert.
+
+        One row per call (``call_id`` UNIQUE): insert it or overwrite ``logs``
+        wholesale. Because ``entries`` is the full, deduped window every run, a
+        re-sync / retry / concurrent run converges on the same array — last write
+        wins with an equivalent value. Returns the stored line count."""
+        now = datetime.now(timezone.utc)
+        values = {
+            "id": uuid.uuid4(),
+            "organization_id": call.organization_id,
+            "call_id": call.id,
+            "agent_id": call.agent_id,
+            "trace_id": call.trace_id,
+            "logs": entries,
+            "synced_at": now,
+        }
+        stmt = pg_insert(CallPipelineLog).values(**values).on_conflict_do_update(
+            index_elements=["call_id"],
+            set_={
+                "logs": entries,
+                "agent_id": call.agent_id,
+                "trace_id": call.trace_id,
+                "synced_at": now,
+                "updated_at": now,
+            },
         )
-        result = self.db.execute(stmt)
+        self.db.execute(stmt)
         self.db.commit()
-        return result.rowcount or 0
+        return len(entries)
 
 
 def _trace_belongs(token: Optional[str], full_trace_id: str) -> bool:
@@ -253,8 +274,7 @@ def sync_result_payload(result: SyncResult) -> dict:
     """JSON-safe payload for the manual sync endpoint."""
     return {
         "fetched": result.fetched,
-        "inserted": result.inserted,
-        "skipped": result.skipped,
+        "stored": result.stored,
         "pages": result.pages,
         "truncated": result.truncated,
         "configured": result.configured,
@@ -264,12 +284,12 @@ def sync_result_payload(result: SyncResult) -> dict:
     }
 
 
-def _row_payload(row: PipelineLog) -> dict:
+def _entry_payload(entry: dict) -> dict:
+    """Viewer-facing shape for one stored log entry."""
     return {
-        "id": str(row.id),
-        "ts": row.ts.isoformat() if row.ts else None,
-        "level": row.level,
-        "logger_name": row.logger_name,
-        "message": row.message,
-        "raw_line": row.raw_line,
+        "ts": entry.get("ts"),
+        "level": entry.get("level"),
+        "logger_name": entry.get("logger_name"),
+        "message": entry.get("message"),
+        "raw_line": entry.get("raw_line"),
     }

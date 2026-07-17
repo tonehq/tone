@@ -7,7 +7,7 @@ from shared.config import settings
 
 
 class SyncLokiLogsAction(PostCallAction):
-    """Read the just-ended call's log lines back from Loki into ``pipeline_logs``.
+    """Read the just-ended call's log lines back from Loki into ``call_pipeline_logs``.
 
     No enable/disable flag — always wired. Safe no-op when Loki read creds are
     absent (local dev) or the call never got a ``trace_id``, so nothing to fetch.
