@@ -796,6 +796,33 @@ def build_tts(spec: dict) -> Optional[Any]:
                 **qwen_kwargs,
             )
 
+        if provider_name == "cosyvoice":
+            # Self-hosted Fun-CosyVoice3 (neosun/cosyvoice FastAPI image). Unlike the
+            # vLLM-Omni TTS above it takes no `stream` or `language` field and returns
+            # the whole utterance as raw 24kHz PCM in one response.
+            from core.services.pipeline.cosyvoice_tts_service import CosyVoiceTTSService
+            from core.logging import get_trace_id
+            base_url = (
+                model_meta.get("base_url")
+                or metadata.get("base_url")
+                or "http://staging-tts-cosyvoice-service.staging.svc.cluster.local/v1"
+            )
+            cosy_kwargs = {}
+            if metadata.get("sample_rate") is not None:
+                cosy_kwargs["sample_rate"] = metadata["sample_rate"]
+            if metadata.get("speed") is not None:
+                cosy_kwargs["speed"] = metadata["speed"]
+            if metadata.get("instruct") is not None:
+                cosy_kwargs["instruct"] = metadata["instruct"]
+            logger.debug("[TTS {}] voice_id={} kwargs={}", provider_name, tts_voice_id, cosy_kwargs)
+            return CosyVoiceTTSService(
+                base_url=base_url,
+                voice_id=tts_voice_id,
+                model=model or "cosyvoice-v3",
+                trace_id=get_trace_id(),
+                **cosy_kwargs,
+            )
+
         logger.warning("Unsupported TTS provider: {}", provider_name)
         return None
     except ImportError:
