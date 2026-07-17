@@ -78,6 +78,10 @@ class PipecatPipelineRunner(PipelineRunner):
         # (mutated in ``on_turn_started``); ``tool_dedup`` is the per-call
         # idempotency cache shared across handlers.
         tool_call_entries: list[dict] = []
+        # Per-call {tool_call_id: llm_requested_at datetime}. Populated by
+        # ToolCallRequestObserver on FunctionCallInProgressFrame; popped by each
+        # handler via ToolCallTimer. Bounded by in-flight tool calls.
+        tool_request_ts: dict = {}
         current_turn: dict = {"number": 0}
         tool_dedup: dict = {}
         call_log_updated = {"done": False}
@@ -206,6 +210,7 @@ class PipecatPipelineRunner(PipelineRunner):
             from_number=from_number,
             prompt_context=prompt_context,
             tool_call_entries=tool_call_entries,
+            tool_request_ts=tool_request_ts,
             current_turn=current_turn,
             tool_dedup=tool_dedup,
             end_reason_holder=end_reason_holder,

@@ -88,6 +88,48 @@ class ToolService(BaseService):
             svc.validate_scopes(connection, get_provider_scopes(self.db, self.org_id, provider))
         )
 
+    def _validate_oauth_provider_match(
+        self, app_integration_id, oauth_connection_id
+    ) -> None:
+        """Block config when the linked OAuth connection is for a different
+        provider than the tool itself.
+
+        Built-in tools already get this indirectly via ``_validate_oauth_scopes``
+        (a Google Calendar connection lacks the HubSpot scopes required by a
+        HubSpot tool_type), but that path is a no-op for custom tools since
+        ``provider_for_tool_type("custom")`` returns ``None``. Cross-checking
+        ``app_integration_id`` catches the custom-tool case and reinforces the
+        built-in path.
+
+        No-op when either side lacks an ``app_integration_id``.
+        """
+        if not oauth_connection_id or not app_integration_id:
+            return
+        from core.models.app_integration import AppIntegration
+        from core.services.oauth_service import OAuthService
+
+        svc = OAuthService(self.db, org_id=self.org_id)
+        connection = svc.get_connection(oauth_connection_id)
+        if not connection.app_integration_id:
+            return
+        if str(connection.app_integration_id) == str(app_integration_id):
+            return
+        tool_app = self.query(AppIntegration).filter(
+            AppIntegration.id == app_integration_id
+        ).first()
+        conn_app = self.query(AppIntegration).filter(
+            AppIntegration.id == connection.app_integration_id
+        ).first()
+        tool_name = tool_app.display_name if tool_app else "this tool"
+        conn_name = conn_app.display_name if conn_app else "a different provider"
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"The linked OAuth connection is for {conn_name} but this "
+                f"tool is for {tool_name}. Link a {tool_name} connection instead."
+            ),
+        )
+
     def _check_duplicate_name(self, name: str, exclude_id=None) -> None:
         """Raise 409 if a tool with the same name already exists in this org."""
         query = self.query(Tool).filter(Tool.name == name, Tool.tool_type != 'mcp')
@@ -151,6 +193,14 @@ class ToolService(BaseService):
                 update_data = {k: v for k, v in data.items() if k != "id"}
             if update_data.get("oauth_connection_id"):
                 self._validate_oauth_connection(update_data["oauth_connection_id"])
+                # Effective app_integration_id: incoming value wins, else the stored one —
+                # matches the effective-oauth resolution pattern.
+                effective_app_integration_id = update_data.get(
+                    "app_integration_id", existing.app_integration_id
+                )
+                self._validate_oauth_provider_match(
+                    effective_app_integration_id, update_data["oauth_connection_id"]
+                )
                 self._validate_oauth_scopes(
                     existing.tool_type, update_data["oauth_connection_id"]
                 )
@@ -182,6 +232,9 @@ class ToolService(BaseService):
         self._check_duplicate_name(data["name"])
         if data.get("oauth_connection_id"):
             self._validate_oauth_connection(data["oauth_connection_id"])
+            self._validate_oauth_provider_match(
+                data.get("app_integration_id"), data["oauth_connection_id"]
+            )
             self._validate_oauth_scopes(
                 data.get("tool_type", "custom"), data["oauth_connection_id"]
             )

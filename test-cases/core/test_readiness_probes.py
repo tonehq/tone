@@ -449,13 +449,16 @@ class TestMcpServerHttpReachable:
     def _make_server(self, url="https://mcp.example.com"):
         return SimpleNamespace(
             id="s1", name="MCP", server_url=url, transport_type="sse",
-            auth_type="none", auth_config={},
+            auth_type="none", auth_config={}, meta_data=None,
+            oauth_connection_id=None, app_integration_id=None,
         )
 
     def _run(self, mocked_client_ctx):
         from core.services.readiness.checks.mcp_servers import McpServerHttpReachableCheck
         check = McpServerHttpReachableCheck()
-        ctx = SimpleNamespace(mcp_servers=[self._make_server()])
+        ctx = SimpleNamespace(
+            mcp_servers=[self._make_server()], db=None, org_id=None,
+        )
 
         with patch("httpx.AsyncClient", return_value=mocked_client_ctx):
             return asyncio.run(check.run(ctx))
@@ -482,3 +485,113 @@ class TestMcpServerHttpReachable:
         result = self._run(self._client_ctx(exc=httpx.ConnectError("dns fail")))
         assert result.status.value == "fail"
         assert "unreachable" in result.message.lower()
+
+
+# ─── Regression tests for the five gaps fixed in this session ────────────────
+
+
+class TestReadinessGapsRegression:
+    """Guards the five gap-fixes: BLOCKER severity on provider-reachable
+    checks, S2S LLM applies-gate + defensive probe_llm guard, probe_stt
+    hard-fail on missing WAV, runner-exception surfacing in probe_in_pipeline,
+    and credential-shaped 400 classification in _summarise_error."""
+
+    def test_provider_reachable_checks_are_blocker_severity(self):
+        from core.services.readiness.checks.llm import LLMProviderReachableCheck
+        from core.services.readiness.checks.stt import STTProviderReachableCheck
+        from core.services.readiness.checks.tts import TTSProviderReachableCheck
+        from core.services.readiness.schemas import Severity
+        assert LLMProviderReachableCheck.severity == Severity.BLOCKER
+        assert STTProviderReachableCheck.severity == Severity.BLOCKER
+        assert TTSProviderReachableCheck.severity == Severity.BLOCKER
+
+    def test_llm_provider_reachable_skips_when_s2s(self):
+        from core.services.readiness.checks.llm import LLMProviderReachableCheck
+        check = LLMProviderReachableCheck()
+        ctx = SimpleNamespace(
+            is_s2s=True,
+            llm=SimpleNamespace(
+                provider=SimpleNamespace(slug="openai_realtime"),
+                decrypted_key="k",
+            ),
+        )
+        assert check.applies(ctx) is False
+        assert "audio session" in check.skip_reason(ctx).lower()
+
+    def test_probe_llm_defensively_fails_on_s2s_provider(self):
+        from core.services.readiness import probes
+        ctx = _fake_spec_ctx("llm")
+        ctx.llm.provider = SimpleNamespace(slug="openai_realtime")
+        with patch.object(probes, "_build_spec", return_value={
+            "provider_name": "openai_realtime", "api_key": "k",
+            "model_name": "m", "metadata": {}, "model_meta_data": {},
+        }):
+            from core.services.pipeline import service_factory
+            with patch.object(service_factory, "build_llm", return_value=MagicMock()):
+                result = asyncio.run(probes.probe_llm(ctx))
+        assert result.ok is False
+        assert "audio session" in result.message.lower()
+
+    def test_probe_stt_fails_when_bundled_wav_missing(self):
+        from core.services.readiness import probes
+        ctx = _fake_spec_ctx("stt")
+        with patch.object(probes, "_build_spec", return_value={
+            "provider_name": "fake_stt", "api_key": "k", "model_name": "m",
+            "metadata": {}, "model_meta_data": {},
+        }):
+            from core.services.pipeline import service_factory
+            with patch.object(service_factory, "build_stt", return_value=MagicMock()), \
+                 patch.object(probes, "_load_probe_pcm16", return_value=None), \
+                 patch(
+                     "core.services.readiness.probe_pipeline.probe_in_pipeline",
+                     new=AsyncMock(return_value=(False, None, None)),
+                 ):
+                result = asyncio.run(probes.probe_stt(ctx))
+        assert result.ok is False
+        lower = result.message.lower()
+        assert "bundled probe wav missing" in lower or "probe unavailable" in lower
+
+    def test_probe_in_pipeline_surfaces_runner_exception(self):
+        from core.services.readiness import probe_pipeline
+        from pipecat.frames.frames import EndFrame, TTSSpeakFrame
+        from pipecat.pipeline.task import PipelineParams
+
+        async def _raise(self, task):
+            raise RuntimeError("invalid api key")
+
+        with patch(
+            "pipecat.pipeline.runner.PipelineRunner.run",
+            new=_raise,
+        ):
+            ok, frame, err_msg = asyncio.run(probe_pipeline.probe_in_pipeline(
+                MagicMock(),
+                [TTSSpeakFrame(text="hi"), EndFrame()],
+                lambda f: False,
+                params=PipelineParams(enable_metrics=False),
+                timeout_s=2.0,
+                provider="fake",
+            ))
+        assert ok is False
+        assert frame is None
+        assert err_msg is not None
+        assert "invalid api key" in err_msg.lower()
+        assert "no target frame observed" not in err_msg.lower()
+
+    def test_summarise_error_classifies_credential_shaped_400s_as_auth(self):
+        from core.services.readiness.probes import _summarise_error
+
+        anthropic_msg = _summarise_error("anthropic", Exception("Bad credentials for request"))
+        assert "rejected the api key" in anthropic_msg.lower()
+
+        google_msg = _summarise_error(
+            "google", Exception("API key not valid. Please pass a valid API key.")
+        )
+        assert "rejected the api key" in google_msg.lower()
+
+        openai_exc = type("E", (Exception,), {"status_code": 401})("unauthorized")
+        openai_msg = _summarise_error("openai", openai_exc)
+        assert "rejected the api key" in openai_msg.lower()
+
+        # Sanity: quota phrasing still routes to the credit bucket.
+        groq_msg = _summarise_error("groq", Exception("You exceeded your current quota"))
+        assert "credit" in groq_msg.lower() or "quota" in groq_msg.lower()

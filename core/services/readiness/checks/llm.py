@@ -80,12 +80,28 @@ class LLMProviderReachableCheck(DeepCheck):
 
     id: ClassVar[str] = "llm.provider_reachable"
     category: ClassVar[Category] = Category.LLM
-    severity: ClassVar[Severity] = Severity.WARNING
+    # BLOCKER: a wrong/revoked API key or unreachable provider means the agent
+    # cannot take a call. Anything less than BLOCKER lets the overall verdict
+    # settle at READY_WITH_WARNINGS (see runner._aggregate), which the UI
+    # renders as green — a bad key would silently pass the readiness gate.
+    severity: ClassVar[Severity] = Severity.BLOCKER
 
     def applies(self, ctx: CheckContext) -> bool:
-        return ctx.llm.provider is not None and ctx.llm.decrypted_key is not None
+        # S2S LLMs (openai_realtime, gemini_live) can't be live-probed without
+        # opening a real audio session; skip cleanly instead of returning a
+        # false PASS from the probe. Same pattern the STT/TTS deep checks use.
+        return (
+            not ctx.is_s2s
+            and ctx.llm.provider is not None
+            and ctx.llm.decrypted_key is not None
+        )
 
     def skip_reason(self, ctx: CheckContext) -> str:
+        if ctx.is_s2s:
+            return (
+                "Speech-to-speech LLM — live probe requires an audio session "
+                "and is skipped by design."
+            )
         return "Provider or key not resolved (see shallow checks)."
 
     @with_retry()

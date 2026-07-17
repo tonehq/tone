@@ -49,6 +49,12 @@ class ToolExecution(OrgScopedModel):
     turn_number = Column(Integer, nullable=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Lifecycle timestamps (all UTC). ``started_at`` above is kept for backward
+    # compatibility with older readers and is dual-written alongside ``invoked_at``.
+    llm_requested_at = Column(DateTime(timezone=True), nullable=True)
+    invoked_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
     meta_data = Column(JSONB, nullable=True, default=dict)  # catch-all for extra fields
 
     def to_dict(self) -> dict:
@@ -69,6 +75,9 @@ class ToolExecution(OrgScopedModel):
             "duration_ms": self.duration_ms,
             "turn_number": self.turn_number,
             "started_at": self.started_at.isoformat() if self.started_at else None,
+            "llm_requested_at": self.llm_requested_at.isoformat() if self.llm_requested_at else None,
+            "invoked_at": self.invoked_at.isoformat() if self.invoked_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "meta_data": self.meta_data or {},
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

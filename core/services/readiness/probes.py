@@ -141,13 +141,14 @@ async def probe_llm(ctx) -> ProbeResult:
     if service is None:
         return ProbeResult(False, f"No pipecat client available for provider '{provider}'.")
 
-    # S2S — the LLM service consumes audio frames, not text; probing needs a
-    # real audio session which we don't spin up here. Construction alone
-    # validated auth/deps/config.
+    # S2S LLMs are gated OUT at the check's ``applies()`` level (see
+    # LLMProviderReachableCheck), so we should never reach here with one.
+    # Guard defensively — returning a False PASS here would re-open the
+    # silent-pass bug we just fixed.
     if provider in _S2S_LLM:
         return ProbeResult(
-            True,
-            f"{provider}: S2S service constructed (live probe requires an audio session).",
+            False,
+            f"{provider}: S2S LLM cannot be live-probed without an audio session.",
         )
 
     from pipecat.frames.frames import (
@@ -253,16 +254,27 @@ async def probe_stt(ctx) -> ProbeResult:
 
     # Feed the service inside a minimal pipecat pipeline — same
     # PipelineTask + StartFrame + lifecycle as production, minus the
-    # transport. Streaming STTs need the ``UserStoppedSpeakingFrame``
-    # signal to finalise; without it they buffer audio and never emit a
-    # final transcript. This is the difference that made every WS-STT
-    # ("returned frames but no transcript") look broken in older probes.
+    # transport.
+    #
+    # Frame classes MATTER here. Pipecat's ``STTService`` base handles
+    # ``VADUserStartedSpeakingFrame`` / ``VADUserStoppedSpeakingFrame``
+    # (see ``pipecat/services/stt_service.py:267-271``). The runtime
+    # transport (``pipecat/transports/base_input.py:394-396``) emits those
+    # VAD-prefixed classes, not the plain ``UserStartedSpeakingFrame`` /
+    # ``UserStoppedSpeakingFrame`` — those two are separate SystemFrame
+    # subclasses (no inheritance relationship), so ``isinstance`` checks in
+    # the STT base don't match them. Sending the plain ones here made
+    # streaming STTs (Deepgram, AssemblyAI, Soniox) never call
+    # ``_handle_vad_user_stopped_speaking`` → never finalise → probe times
+    # out on a HEALTHY provider. Using the VAD classes mirrors what the
+    # transport does and is what every STT service is written to consume.
     from pipecat.frames.frames import (
         EndFrame,
         InputAudioRawFrame,
         InterimTranscriptionFrame,
         TranscriptionFrame,
-        UserStoppedSpeakingFrame,
+        VADUserStartedSpeakingFrame,
+        VADUserStoppedSpeakingFrame,
     )
     from pipecat.pipeline.task import PipelineParams
     from core.services.readiness.probe_pipeline import probe_in_pipeline
@@ -274,8 +286,15 @@ async def probe_stt(ctx) -> ProbeResult:
         return False
 
     input_frames = [
+        # Start the "user turn" — resets TTFB tracking, kicks metrics, and
+        # tells segmented STTs to begin buffering. Without this, some
+        # services never see a turn boundary and silently discard audio.
+        VADUserStartedSpeakingFrame(),
         InputAudioRawFrame(audio=audio_bytes, sample_rate=target_rate, num_channels=1),
-        UserStoppedSpeakingFrame(),
+        # Stop the turn — triggers ``request_finalize()`` on streaming STTs
+        # (Deepgram: connection.finalize; AssemblyAI: force_endpoint) so the
+        # provider flushes buffered audio and emits its final transcript.
+        VADUserStoppedSpeakingFrame(),
         EndFrame(),
     ]
     params = PipelineParams(
@@ -306,11 +325,15 @@ async def probe_stt(ctx) -> ProbeResult:
         return ProbeResult(False, f"{provider} STT error: {err_msg[:180]}")
 
     if not using_real_audio:
-        # No transcript expected — the WAV asset wasn't committed. Auth +
-        # session are still verified through the pipeline lifecycle.
+        # Silence-only probe cannot prove the provider actually works — a
+        # broken key would accept a WebSocket open and never emit anything,
+        # yielding a "successful" no-frame session indistinguishable from a
+        # healthy one. Fail hard so the deploy is fixed (WAV missing from
+        # the image) instead of silently passing every STT readiness check.
         return ProbeResult(
-            True,
-            f"{provider} STT accepted the request (bundled probe WAV missing — silence-only probe).",
+            False,
+            f"{provider} STT probe unavailable: bundled probe WAV missing — "
+            f"redeploy with core/services/readiness/assets/probe_sample.wav.",
         )
 
     return ProbeResult(
@@ -734,7 +757,22 @@ def _summarise_error(provider: str, exc: BaseException) -> str:
     lower = msg.lower()
     status = getattr(exc, "status_code", None) or getattr(exc, "http_status", None)
 
-    if status in (401, 403) or "unauthorized" in lower or "invalid api key" in lower:
+    # Auth failure — 401/403 are the canonical statuses, but providers ship
+    # plenty of variants that don't set a status attribute the SDK surfaces
+    # (some raise plain ``ValueError``, some wrap in provider-specific
+    # exception classes with only a text body). Match on the most common
+    # credential phrasings so a wrong key doesn't fall through to the
+    # generic "[provider_error]" bucket where the UI can't render it as an
+    # auth issue.
+    auth_hints = (
+        "unauthorized", "invalid api key", "invalid_api_key",
+        "invalid token", "invalid_token", "incorrect api key",
+        "authentication failed", "authentication_error",
+        "bad credentials", "invalid credentials", "credentials are not valid",
+        "api key not valid", "not authenticated", "missing api key",
+        "forbidden", "access denied", "permission denied",
+    )
+    if status in (401, 403) or any(h in lower for h in auth_hints):
         return f"{provider} rejected the API key — it may be revoked or wrong."
     if status == 404 or "model not found" in lower or "does not exist" in lower:
         return f"{provider} says the model doesn't exist (maybe deprecated)."

@@ -147,7 +147,10 @@ class TTSProviderReachableCheck(DeepCheck):
 
     id: ClassVar[str] = "tts.provider_reachable"
     category: ClassVar[Category] = Category.TTS
-    severity: ClassVar[Severity] = Severity.WARNING
+    # BLOCKER: a wrong/revoked TTS API key or unreachable provider means the
+    # agent cannot speak. WARNING would let the overall verdict settle at
+    # READY_WITH_WARNINGS (see runner._aggregate) which the UI treats as ready.
+    severity: ClassVar[Severity] = Severity.BLOCKER
 
     def applies(self, ctx: CheckContext) -> bool:
         return (

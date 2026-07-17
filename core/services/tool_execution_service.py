@@ -60,7 +60,27 @@ _MAPPED_KEYS = {
     "tool", "tool_type", "server", "arguments", "result", "output",
     "status", "error", "status_code", "duration_ms", "turn", "timestamp",
     "tool_id", "mcp_server_id",
+    "llm_requested_at", "invoked_at", "completed_at",
 }
+
+
+def _parse_iso_utc(value: Any) -> Optional[datetime]:
+    """Parse an ISO-8601 string (as emitted by ToolCallTimer) into a UTC datetime.
+
+    Returns None on any parse failure so a malformed timestamp can never block
+    the write path — the row is persisted without that column set.
+    """
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        # ``fromisoformat`` handles both "+00:00" and Python-emitted "+00:00"
+        # offsets. If the input carries no tz, coerce to UTC.
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
 
 
 class ToolExecutionService(BaseService):
@@ -178,6 +198,12 @@ class ToolExecutionService(BaseService):
             except (ValueError, OSError, TypeError):
                 started_at = None
 
+        # Lifecycle timestamps stamped by ToolCallTimer in each handler.
+        # All three are optional so pre-migration entries still write.
+        llm_requested_at = _parse_iso_utc(entry.get("llm_requested_at"))
+        invoked_at = _parse_iso_utc(entry.get("invoked_at"))
+        completed_at = _parse_iso_utc(entry.get("completed_at"))
+
         meta = {k: v for k, v in entry.items() if k not in _MAPPED_KEYS}
 
         return ToolExecution(
@@ -197,5 +223,8 @@ class ToolExecutionService(BaseService):
             duration_ms=entry.get("duration_ms"),
             turn_number=entry.get("turn"),
             started_at=started_at,
+            llm_requested_at=llm_requested_at,
+            invoked_at=invoked_at,
+            completed_at=completed_at,
             meta_data=_json_safe(meta) if meta else None,
         )

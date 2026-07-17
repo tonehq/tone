@@ -42,6 +42,7 @@ class PipelineBuilder:
         from_number: str = "",
         prompt_context: Optional[dict] = None,
         tool_call_entries: Optional[list] = None,
+        tool_request_ts: Optional[dict] = None,
         current_turn: Optional[dict] = None,
         tool_dedup: Optional[dict] = None,
         end_reason_holder: Optional[dict] = None,
