@@ -134,10 +134,11 @@ def main():
         os.close(ipc_write_fd)
         return
 
-    # Re-resolve the log level now that a real call has arrived, so a warm worker
-    # spawned (possibly long ago) at one level honors any live override in effect
-    # for *this* call — the zero-dropped-call escalation path.
-    setup_logging()
+    # The per-call log level (agent > org > env) is applied downstream in run_bot
+    # (core/bot.py) via resolve_call_log_level once the agent is resolved, so a warm
+    # worker that sat idle across a live override still honors it for *this* call —
+    # the zero-dropped-call escalation path. No re-resolve is needed here: the env
+    # baseline set at spawn (above) hasn't changed.
 
     # --- Phase 4: Run bot with pipe IPC (no FastAPI/uvicorn needed) ---
     asyncio.run(
