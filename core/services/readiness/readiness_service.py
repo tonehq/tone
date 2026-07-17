@@ -19,6 +19,7 @@ return it directly — never re-running the runner when nothing has changed.
 from __future__ import annotations
 
 import time
+from datetime import datetime, timezone
 from typing import List, Optional, Set
 from uuid import UUID
 
@@ -344,10 +345,19 @@ class ReadinessService(BaseService):
         dependency_stamp: Optional[str],
     ) -> ReadinessReport:
         """Compute a fresh report, persist it, and return it. Timing is
-        captured for the ``duration_ms`` column."""
+        captured for the ``duration_ms`` column, and ``started_at`` /
+        ``run_number`` are stamped at persist time so both snapshot and event
+        rows carry identical provenance."""
+        started_wall = datetime.now(timezone.utc)
         started = time.monotonic()
         report = await self._run(agent, config_id, depth)
         duration_ms = int((time.monotonic() - started) * 1000)
+
+        # Stamp provenance on the in-memory report so the API response carries
+        # the same fields the stored row will, without a follow-up DB read.
+        run_number = self._next_run_number(agent.id)
+        report.started_at = started_wall.isoformat()
+        report.run_number = run_number
 
         # Persistence is fire-and-forget from the caller's perspective — a
         # persistence failure logs a warning inside ``.record()`` but never
@@ -359,8 +369,26 @@ class ReadinessService(BaseService):
                 triggered_by_user_id=self.user_id,
                 dependency_stamp=dependency_stamp,
                 duration_ms=duration_ms,
+                started_at=started_wall,
+                run_number=run_number,
             )
         return report
+
+    def _next_run_number(self, agent_id: UUID) -> int:
+        """Return the next run-number for this agent.
+
+        Reads the highest ``run_number`` stored in the append-only event log
+        and adds one. Rate limiter + coalesce cache prevent concurrent
+        readiness runs for the same agent, so ``MAX + 1`` is race-free in
+        practice. Falls back to 1 for the very first run.
+        """
+        from core.models.agent_readiness_event import AgentReadinessEvent
+
+        current = self.db.execute(
+            select(func.max(AgentReadinessEvent.run_number))
+            .where(AgentReadinessEvent.agent_id == agent_id)
+        ).scalar()
+        return (current or 0) + 1
 
     async def _run(
         self,
@@ -403,4 +431,6 @@ def _snapshot_to_report(row: AgentReadinessSnapshot) -> ReadinessReport:
         },
         checks=checks,
         generated_at=row.computed_at.isoformat() if row.computed_at else "",
+        started_at=row.started_at.isoformat() if row.started_at else None,
+        run_number=row.run_number,
     )

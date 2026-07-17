@@ -100,6 +100,11 @@ class CheckContext:
     tools: List[Any] = field(default_factory=list)
     knowledge_bases: List[Any] = field(default_factory=list)
     mcp_servers: List[Any] = field(default_factory=list)
+    # Telephony channels linked to the agent (via AgentChannel). Independent
+    # of ``phone_numbers`` — an outbound-only agent typically has a channel
+    # but no assigned number, and the transport-credits deep check still
+    # needs to probe that channel's account balance.
+    channels: List[Any] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
