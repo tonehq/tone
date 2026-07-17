@@ -12,17 +12,13 @@ these; individual services never know about them.
 
 ## Provider coverage per service type
 
-- **LLM** — dispatched by provider family so every pipecat LLM has a real
-  live probe path where possible:
-    - OpenAI-compatible (~17 providers routed through ``BaseOpenAILLMService``:
-      openai, groq, openrouter, cerebras, together, fireworks, perplexity,
-      qwen, deepseek, mistral, sambanova, grok, cohere, gemma, azure,
-      nvidia_nim, mistral-self-hosted, ollama) → 1-token ``chat.completions.create``.
-    - Anthropic native → ``messages.create`` with max_tokens=1.
-    - Google Gemini → ``models.generate_content`` with max_output_tokens=1.
-    - AWS Bedrock → constructor-only (needs boto3-specific handling).
-    - S2S (openai_realtime, gemini_live) → constructor-only (real probe
-      requires opening an audio session).
+- **LLM** — every non-S2S pipecat LLM (OpenAI-compat family, Anthropic,
+  Google Gemini, AWS Bedrock) accepts ``LLMContextFrame`` through
+  ``LLMService.process_frame``. We feed one via the shared pipeline harness,
+  cap the response with ``LLMUpdateSettingsFrame`` (max_completion_tokens=16
+  covers OpenAI reasoning models too), and wait for the first ``LLMTextFrame``
+  or ``LLMFullResponseEndFrame``. S2S (openai_realtime, gemini_live) still
+  skips the live probe — the frame flow needs a real audio session.
 
 - **STT** — every pipecat STT service inherits ``STTService.run_stt(audio)``.
   We stream ~0.5s of PCM silence at the configured sample rate and consume
@@ -39,6 +35,7 @@ from __future__ import annotations
 
 import audioop
 import inspect
+import io
 import uuid
 import wave
 from dataclasses import dataclass
@@ -47,6 +44,19 @@ from importlib.resources import files
 from typing import Any, Dict, Optional, Tuple
 
 from loguru import logger
+
+
+# pipecat STT service classes that upload a full audio file (multipart HTTP)
+# instead of streaming raw PCM over a WebSocket. Matched by ``type().__name__``
+# because pipecat's module paths vary and duck-typing is more resilient than
+# an isinstance check across many optional-import paths. Add a class here when
+# a new HTTP-batch STT provider is wired in.
+_HTTP_STT_SERVICE_CLASSES = frozenset({
+    "OpenAISTTService",       # Whisper via /audio/transcriptions
+    "GroqSTTService",         # Whisper-family via /audio/transcriptions
+    "SarvamHttpSTTService",   # Sarvam HTTP endpoint
+    "ElevenLabsSTTService",   # ElevenLabs speech-to-text is HTTP
+})
 
 
 # ── Probe payloads (fixed constants — see plan for rationale) ────────────────
@@ -71,17 +81,10 @@ class ProbeResult:
     message: str
 
 
-# ── LLM provider families (kept in sync with service_factory.build_llm) ──────
-
-# Any of these are constructed via BaseOpenAILLMService (or subclass) and expose
-# ``._client`` as an AsyncOpenAI-compatible instance we can call directly.
-_OPENAI_COMPAT_LLM = frozenset({
-    "openai", "groq", "openrouter", "azure", "cerebras", "nvidia_nim",
-    "fireworks", "together", "perplexity", "qwen", "deepseek", "mistral",
-    "sambanova", "grok", "cohere", "gemma", "mistral-self-hosted", "ollama",
-})
-# Speech-to-speech LLMs — no HTTP text-in/text-out path; probing requires an
-# actual audio session which we don't want to spin up for a readiness check.
+# Speech-to-speech LLMs — probing requires an actual audio session which we
+# don't want to spin up for a readiness check. The pipecat pipeline path is
+# skipped for these; construction alone still validates most of the auth
+# surface.
 _S2S_LLM = frozenset({"openai_realtime", "gemini_live"})
 
 
@@ -112,7 +115,16 @@ def _build_spec(leg_spec, provider) -> Optional[Dict[str, Any]]:
 
 
 async def probe_llm(ctx) -> ProbeResult:
-    """Fire the smallest possible LLM call through the pipecat service."""
+    """Run a one-message inference through the pipecat LLM pipeline.
+
+    Same frame flow as production: ``LLMContextFrame(context=LLMContext([user
+    msg])) -> service -> LLMFullResponseStartFrame + LLMTextFrame(s) +
+    LLMFullResponseEndFrame``. Waiting on ``LLMTextFrame`` proves the provider
+    accepted the request AND the pipecat ``LLMService`` wrapper streams
+    tokens correctly — the wrapper is the thing that would silently break if
+    a provider tweaks their stream format, and it's exactly what runs on a
+    real call.
+    """
     from core.services.pipeline import service_factory
 
     spec = _build_spec(ctx.llm, ctx.llm.provider)
@@ -120,7 +132,6 @@ async def probe_llm(ctx) -> ProbeResult:
         return ProbeResult(False, "LLM spec incomplete — check shallow config first.")
 
     provider = spec["provider_name"]
-    model = spec["model_name"]
 
     try:
         service = service_factory.build_llm(spec)
@@ -130,68 +141,79 @@ async def probe_llm(ctx) -> ProbeResult:
     if service is None:
         return ProbeResult(False, f"No pipecat client available for provider '{provider}'.")
 
-    # S2S — no simple text-in/text-out probe possible.
+    # S2S — the LLM service consumes audio frames, not text; probing needs a
+    # real audio session which we don't spin up here. Construction alone
+    # validated auth/deps/config.
     if provider in _S2S_LLM:
         return ProbeResult(
             True,
             f"{provider}: S2S service constructed (live probe requires an audio session).",
         )
 
-    # AWS Bedrock uses boto3; the pipecat service constructs the boto3 client
-    # eagerly, so a successful construction already validates most of the auth
-    # surface. A real probe would need ``bedrock-runtime.invoke_model`` which
-    # is model-specific — deferred.
-    if provider == "aws_bedrock":
-        return ProbeResult(
-            True,
-            "aws_bedrock: boto3 client constructed (deep probe deferred — model-specific).",
-        )
+    from pipecat.frames.frames import (
+        EndFrame,
+        LLMContextFrame,
+        LLMFullResponseEndFrame,
+        LLMTextFrame,
+        LLMUpdateSettingsFrame,
+    )
+    from pipecat.pipeline.task import PipelineParams
+    from pipecat.processors.aggregators.llm_context import LLMContext
+    from core.services.readiness.probe_pipeline import probe_in_pipeline
 
-    client = getattr(service, "_client", None) or getattr(service, "client", None)
-    if client is None:
-        return ProbeResult(
-            True, f"{provider}: service constructed (no client attribute for live probe)."
-        )
+    def _is_llm_response(frame) -> bool:
+        # An LLMTextFrame with any non-empty text is unambiguous proof the
+        # provider streamed a token through the pipecat wrapper.
+        if isinstance(frame, LLMTextFrame):
+            return bool((getattr(frame, "text", "") or "").strip())
+        # LLMFullResponseEndFrame covers edge cases where a provider closes the
+        # response without emitting visible text (e.g. all tokens spent on
+        # reasoning within our tiny budget). The auth/wrapper path is still
+        # proven; we just can't quote a snippet.
+        return isinstance(frame, LLMFullResponseEndFrame)
+
+    llm_context = LLMContext(messages=[{"role": "user", "content": _LLM_PROBE_PROMPT}])
+    # Cap generation cost. max_completion_tokens covers OpenAI reasoning
+    # models (gpt-5, o1/o3/o4); max_tokens covers the older OpenAI-compat +
+    # Anthropic + Google path. Pipecat's LLM services drop NOT_GIVEN keys, so
+    # sending both is safe — whichever the provider honours wins.
+    input_frames = [
+        LLMUpdateSettingsFrame(settings={"max_tokens": 16, "max_completion_tokens": 16}),
+        LLMContextFrame(context=llm_context),
+        EndFrame(),
+    ]
+    params = PipelineParams(
+        audio_in_sample_rate=16000,
+        audio_out_sample_rate=24000,
+        enable_metrics=False,
+    )
 
     try:
-        # OpenAI-compatible family — the vast majority of Tone's LLMs.
-        if provider in _OPENAI_COMPAT_LLM:
-            completions = getattr(getattr(client, "chat", None), "completions", None)
-            if completions and hasattr(completions, "create"):
-                await completions.create(
-                    model=model,
-                    messages=[{"role": "user", "content": _LLM_PROBE_PROMPT}],
-                    max_tokens=1,
-                )
-                return ProbeResult(True, f"{provider} responded to a sentence prompt.")
-
-        # Anthropic native SDK
-        if provider == "anthropic" and hasattr(client, "messages"):
-            await client.messages.create(
-                model=model or "claude-haiku-4-5-20251001",
-                max_tokens=1,
-                messages=[{"role": "user", "content": _LLM_PROBE_PROMPT}],
-            )
-            return ProbeResult(True, "anthropic responded to a sentence prompt.")
-
-        # Google Gemini (google-genai SDK)
-        if provider == "google" and hasattr(client, "models"):
-            # google-genai's Client.models.generate_content is sync; use aio helper.
-            aio_models = getattr(getattr(client, "aio", None), "models", None)
-            if aio_models and hasattr(aio_models, "generate_content"):
-                await aio_models.generate_content(
-                    model=model or "gemini-2.5-flash",
-                    contents=_LLM_PROBE_PROMPT,
-                    config={"max_output_tokens": 1},
-                )
-                return ProbeResult(True, "google gemini responded to a sentence prompt.")
+        ok, frame, err_msg = await probe_in_pipeline(
+            service,
+            input_frames,
+            _is_llm_response,
+            params=params,
+            timeout_s=10.0,   # under the check's 12s wrapper — leave room for teardown
+            provider=provider,
+        )
     except Exception as exc:  # noqa: BLE001
-        logger.exception("[readiness] {} LLM live probe failed", provider)
+        logger.exception("[readiness] {} LLM pipeline harness raised", provider)
         return ProbeResult(False, _summarise_error(provider, exc))
 
-    # Fallback — client exists but shape didn't match any known family.
+    if ok and isinstance(frame, LLMTextFrame):
+        snippet = (getattr(frame, "text", "") or "").strip().replace("\n", " ")[:60]
+        return ProbeResult(True, f"{provider} LLM responded: '{snippet}'")
+    if ok:
+        # Response end without visible text — still a valid pipeline round-trip.
+        return ProbeResult(
+            True, f"{provider} LLM completed the round-trip (no visible text within budget)."
+        )
+    if err_msg:
+        return ProbeResult(False, f"{provider} LLM error: {err_msg[:180]}")
     return ProbeResult(
-        True, f"{provider}: service constructed (no live probe implemented for this shape)."
+        False,
+        f"{provider} LLM returned no response frame within budget — check model/key/quota.",
     )
 
 
@@ -226,94 +248,74 @@ async def probe_stt(ctx) -> ProbeResult:
             False, f"No pipecat client available for STT provider '{provider}'."
         )
 
-    if not hasattr(service, "run_stt"):
-        return ProbeResult(
-            True,
-            f"{provider}: STT client constructed (this provider doesn't expose run_stt for a live probe).",
-        )
-
     target_rate = int((ctx.stt.settings or {}).get("sample_rate") or _STT_PROBE_SAMPLE_RATE)
-    audio_bytes, using_real_audio = _load_stt_audio(target_rate)
+    audio_bytes, using_real_audio = _load_stt_audio(target_rate, service)
 
-    # Lazy import — pipecat is heavy and this module is imported at API startup.
+    # Feed the service inside a minimal pipecat pipeline — same
+    # PipelineTask + StartFrame + lifecycle as production, minus the
+    # transport. Streaming STTs need the ``UserStoppedSpeakingFrame``
+    # signal to finalise; without it they buffer audio and never emit a
+    # final transcript. This is the difference that made every WS-STT
+    # ("returned frames but no transcript") look broken in older probes.
+    from pipecat.frames.frames import (
+        EndFrame,
+        InputAudioRawFrame,
+        InterimTranscriptionFrame,
+        TranscriptionFrame,
+        UserStoppedSpeakingFrame,
+    )
+    from pipecat.pipeline.task import PipelineParams
+    from core.services.readiness.probe_pipeline import probe_in_pipeline
+
+    def _is_transcript(frame) -> bool:
+        if isinstance(frame, (TranscriptionFrame, InterimTranscriptionFrame)):
+            text = (getattr(frame, "text", "") or "").strip()
+            return bool(text)
+        return False
+
+    input_frames = [
+        InputAudioRawFrame(audio=audio_bytes, sample_rate=target_rate, num_channels=1),
+        UserStoppedSpeakingFrame(),
+        EndFrame(),
+    ]
+    params = PipelineParams(
+        audio_in_sample_rate=target_rate,
+        audio_out_sample_rate=24000,
+        enable_metrics=False,
+    )
+
     try:
-        from pipecat.frames.frames import (
-            ErrorFrame,
-            InterimTranscriptionFrame,
-            TranscriptionFrame,
+        ok, frame, err_msg = await probe_in_pipeline(
+            service,
+            input_frames,
+            _is_transcript,
+            params=params,
+            timeout_s=18.0,   # under the check's 20s wrapper — leave room for teardown
+            provider=provider,
         )
-        _transcript_types: Tuple[type, ...] = (TranscriptionFrame, InterimTranscriptionFrame)
-        _error_frame_type: Optional[type] = ErrorFrame
-    except Exception:  # noqa: BLE001
-        _transcript_types = ()
-        _error_frame_type = None
-
-    try:
-        transcript_text: Optional[str] = None
-        error_from_stream: Optional[str] = None
-        got_any = False
-        async for frame in service.run_stt(audio_bytes):
-            got_any = True
-            if frame is None:
-                continue
-            # WS-based STT providers signal auth/quota failures via ErrorFrame
-            # inside the stream, not by raising. Catch it here or we'd end up
-            # in the "returned frames but no transcript" branch below and mis-
-            # report a real failure as a soft ambiguity.
-            err = _extract_error_frame_message(frame, _error_frame_type)
-            if err:
-                error_from_stream = err
-                break
-            # Providers vary in which frame type carries the final vs interim
-            # text — accept either, since both prove the model decoded speech.
-            text = _extract_transcript_text(frame, _transcript_types)
-            if text:
-                transcript_text = text
-                break
     except Exception as exc:  # noqa: BLE001
-        logger.exception("[readiness] {} STT live probe failed", provider)
+        logger.exception("[readiness] {} STT pipeline harness raised", provider)
         return ProbeResult(False, _summarise_error(provider, exc))
-    finally:
-        # Best-effort cleanup — most WS-based STTs open an aiohttp session.
-        try:
-            for attr in ("stop", "cleanup", "close"):
-                fn = getattr(service, attr, None)
-                if fn and callable(fn):
-                    result = fn()
-                    if inspect.iscoroutine(result):
-                        await result
-                    break
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("[readiness] {} STT probe cleanup failed: {}", provider, exc)
 
-    if error_from_stream:
-        # The provider streamed an ErrorFrame — auth failure, quota exhausted,
-        # WS handshake rejected. Runtime pipelines log these; readiness must
-        # elevate to a FAIL so the badge reflects reality.
-        return ProbeResult(False, f"{provider} STT error: {error_from_stream[:180]}")
-
-    if transcript_text:
-        snippet = transcript_text.strip().replace("\n", " ")[:60]
+    if ok and frame is not None:
+        text = (getattr(frame, "text", "") or "").strip().replace("\n", " ")
+        snippet = text[:60]
         return ProbeResult(True, f"{provider} STT transcribed: '{snippet}'")
 
+    if err_msg:
+        return ProbeResult(False, f"{provider} STT error: {err_msg[:180]}")
+
     if not using_real_audio:
-        # No transcript expected — the WAV asset wasn't available so we sent
-        # silence. Auth + session are still verified.
+        # No transcript expected — the WAV asset wasn't committed. Auth +
+        # session are still verified through the pipeline lifecycle.
         return ProbeResult(
             True,
             f"{provider} STT accepted the request (bundled probe WAV missing — silence-only probe).",
         )
 
-    if got_any:
-        # We got frames but none carried transcribed text within the window —
-        # likely a provider that only emits finals after the whole session
-        # closes, or a language-mismatch that produced empty text.
-        return ProbeResult(
-            False,
-            f"{provider} STT returned frames but no transcript text — check language/model settings.",
-        )
     return ProbeResult(
-        False, f"{provider} STT returned no frames for the probe audio."
+        False,
+        f"{provider} STT returned no transcript within budget — check language/model settings.",
     )
 
 
@@ -321,48 +323,74 @@ async def probe_stt(ctx) -> ProbeResult:
 
 
 @lru_cache(maxsize=1)
-def _load_probe_pcm16() -> Optional[Tuple[bytes, int]]:
-    """Read the bundled PCM16 mono WAV once. Returns ``(pcm_bytes, sample_rate)``
-    or ``None`` when the asset is missing/invalid — callers handle the fallback.
+def _load_probe_pcm16() -> Optional[Tuple[bytes, int, bytes]]:
+    """Read the bundled PCM16 mono WAV once.
+
+    Returns ``(pcm_bytes, sample_rate, full_wav_bytes)`` or ``None``:
+
+    * ``pcm_bytes`` — headerless PCM frames, what streaming STTs (Deepgram,
+      AssemblyAI, Sarvam, Soniox, …) expect on their persistent WebSocket.
+    * ``sample_rate`` — native rate of the asset (16 kHz).
+    * ``full_wav_bytes`` — the whole file including the RIFF header, what
+      HTTP-batch STTs (OpenAI Whisper, Groq, …) expect as a multipart upload
+      payload. Reading it once here avoids a second disk hit per probe.
 
     Cached because the file is small and re-reading on every probe is wasteful.
-    Uses stdlib ``wave`` + ``importlib.resources`` so the asset stays inside the
-    package and works both from source and from a wheel install.
     """
     try:
         asset = files("core.services.readiness.assets") / _STT_PROBE_ASSET
     except (ModuleNotFoundError, FileNotFoundError):
         return None
     try:
-        with asset.open("rb") as raw:
-            with wave.open(raw, "rb") as wav:
-                if wav.getnchannels() != 1 or wav.getsampwidth() != 2:
-                    logger.warning(
-                        "[readiness] STT probe asset must be mono PCM16; "
-                        "got channels={}, sampwidth={}",
-                        wav.getnchannels(),
-                        wav.getsampwidth(),
-                    )
-                    return None
-                return wav.readframes(wav.getnframes()), wav.getframerate()
-    except (FileNotFoundError, OSError, wave.Error) as exc:
+        raw_bytes = asset.read_bytes()
+    except (FileNotFoundError, OSError) as exc:
         logger.debug("[readiness] STT probe asset unavailable: {}", exc)
+        return None
+    try:
+        with wave.open(io.BytesIO(raw_bytes), "rb") as wav:
+            if wav.getnchannels() != 1 or wav.getsampwidth() != 2:
+                logger.warning(
+                    "[readiness] STT probe asset must be mono PCM16; "
+                    "got channels={}, sampwidth={}",
+                    wav.getnchannels(),
+                    wav.getsampwidth(),
+                )
+                return None
+            return wav.readframes(wav.getnframes()), wav.getframerate(), raw_bytes
+    except wave.Error as exc:
+        logger.debug("[readiness] STT probe asset invalid WAV: {}", exc)
         return None
 
 
-def _load_stt_audio(target_rate: int) -> Tuple[bytes, bool]:
-    """Return ``(pcm_bytes, using_real_audio)`` for the STT probe.
+def _load_stt_audio(target_rate: int, service) -> Tuple[bytes, bool]:
+    """Return ``(audio_bytes, using_real_audio)`` for the STT probe.
 
-    Prefers the bundled WAV, resampled to ``target_rate`` via stdlib
-    ``audioop.ratecv``. Falls back to 0.5s of PCM16 silence at ``target_rate``
-    when the asset isn't committed yet — the second-return-value tells the
-    caller whether transcription is a valid expectation.
+    Dispatch is by service class:
+
+    * **HTTP-batch STTs** (Whisper family: OpenAI, Groq, some ElevenLabs) —
+      return the full WAV file bytes (RIFF header + PCM). Their ``run_stt``
+      uploads the payload as a file to ``/audio/transcriptions``; raw PCM
+      without a container gets rejected as "could not decode".
+    * **Streaming STTs** (Deepgram, AssemblyAI, Soniox, Gladia, …) — return
+      headerless PCM at ``target_rate``, resampled from the asset's native
+      16 kHz via stdlib ``audioop.ratecv`` when the rates differ. Their
+      persistent WebSocket expects raw PCM chunks.
+
+    Falls back to 0.5s of silence when the WAV asset isn't committed yet;
+    the ``using_real_audio`` flag tells the caller whether to expect a
+    transcript at all.
     """
     loaded = _load_probe_pcm16()
     if loaded is None:
         silence = b"\x00\x00" * (target_rate // 2)
         return silence, False
-    pcm, native_rate = loaded
+    pcm, native_rate, full_wav = loaded
+
+    if type(service).__name__ in _HTTP_STT_SERVICE_CLASSES:
+        # HTTP services parse the WAV header themselves + resample internally
+        # if needed — don't touch the buffer.
+        return full_wav, True
+
     if target_rate == native_rate:
         return pcm, True
     # ``ratecv`` needs an opaque state on first call; None is the seed.
@@ -435,78 +463,266 @@ async def probe_tts(ctx) -> ProbeResult:
             False, f"No pipecat client available for TTS provider '{provider}'."
         )
 
-    try:
-        # Local imports — pipecat is heavy and we don't want to pay for it
-        # at module load. ``ErrorFrame`` is the critical addition: pipecat
-        # WS-based TTS services (Fish Audio, ElevenLabs, etc.) push it into
-        # the stream on connection failure (402, 401) instead of raising, and
-        # without checking for it here the probe silently PASSes.
-        from pipecat.frames.frames import ErrorFrame, TTSAudioRawFrame
-        _error_frame_type: Optional[type] = ErrorFrame
-    except Exception:  # noqa: BLE001
-        TTSAudioRawFrame = None  # type: ignore
-        _error_frame_type = None
+    # Feed the service through a minimal pipecat pipeline. Runtime uses
+    # exactly this frame flow for the first-message greeting (see
+    # ``core/services/pipeline/runner/pipecat.py`` — ``task.queue_frame(
+    # TTSSpeakFrame(text=first_message_text))``). Using it here means every
+    # TTS service that works in production works in the probe — WS lifecycle,
+    # StartFrame setup, TaskManager, all provided by ``PipelineTask``.
+    from pipecat.frames.frames import EndFrame, TTSAudioRawFrame, TTSSpeakFrame
+    from pipecat.pipeline.task import PipelineParams
+    from core.services.readiness.probe_pipeline import probe_in_pipeline
 
-    # Some pipecat TTS services (e.g. Cartesia) override run_tts to require a
-    # ``context_id`` for turn tracking. Inspect the signature so we can supply
-    # dummy IDs without hard-coding per-provider branches.
-    run_tts_kwargs: Dict[str, Any] = {}
-    try:
-        sig = inspect.signature(service.run_tts)
-        for name, param in sig.parameters.items():
-            if name in ("self", "text"):
-                continue
-            if param.default is inspect.Parameter.empty and param.kind in (
-                inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                inspect.Parameter.KEYWORD_ONLY,
-            ):
-                if name in ("context_id", "turn_id"):
-                    run_tts_kwargs[name] = str(uuid.uuid4())
-    except (ValueError, TypeError):
-        pass
+    def _is_audio(frame) -> bool:
+        if isinstance(frame, TTSAudioRawFrame) and getattr(frame, "audio", None):
+            return True
+        # Some providers wrap audio in their own subclass; duck-type as a
+        # safety net so we don't miss real synth.
+        audio = getattr(frame, "audio", None)
+        return bool(audio) and hasattr(frame, "sample_rate")
 
-    got_audio = False
-    error_from_stream: Optional[str] = None
+    input_frames = [TTSSpeakFrame(text=_TTS_PROBE_TEXT), EndFrame()]
+    params = PipelineParams(
+        audio_in_sample_rate=16000,
+        audio_out_sample_rate=int(
+            (ctx.tts.settings or {}).get("sample_rate") or 24000
+        ),
+        enable_metrics=False,
+    )
+
     try:
-        async for frame in service.run_tts(_TTS_PROBE_TEXT, **run_tts_kwargs):
-            err = _extract_error_frame_message(frame, _error_frame_type)
-            if err:
-                error_from_stream = err
-                break
-            if TTSAudioRawFrame is not None and isinstance(frame, TTSAudioRawFrame):
-                got_audio = True
-                break
-            if hasattr(frame, "audio") and getattr(frame, "audio", None):
-                got_audio = True
-                break
+        ok, frame, err_msg = await probe_in_pipeline(
+            service,
+            input_frames,
+            _is_audio,
+            params=params,
+            timeout_s=10.0,   # under the check's 12s wrapper — leave room for teardown
+            provider=provider,
+        )
     except Exception as exc:  # noqa: BLE001
-        logger.exception("[readiness] {} TTS live probe failed", provider)
+        logger.exception("[readiness] {} TTS pipeline harness raised", provider)
         return ProbeResult(False, _summarise_error(provider, exc))
-    finally:
-        try:
-            session = getattr(service, "_aiohttp_session", None) or getattr(
-                service, "aiohttp_session", None
-            )
-            if session and not session.closed:
-                await session.close()
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("[readiness] {} TTS probe session close failed: {}", provider, exc)
 
-    if error_from_stream:
-        # WS providers (Fish, ElevenLabs, etc.) surface 402/401/quota errors
-        # here rather than raising — must FAIL so the badge doesn't lie.
-        return ProbeResult(False, f"{provider} TTS error: {error_from_stream[:180]}")
-    if got_audio:
+    if ok:
         return ProbeResult(True, f"{provider} synthesised a sentence.")
-    # Real sentence probe: a healthy TTS must emit at least one audio frame.
-    # Historically this branch soft-passed with "accepted the request" — that
-    # let broken providers (mid-session auth failures, silent WS drops) go
-    # undetected. Flipping to FAIL matches the strict-transcript rule STT
-    # uses and the user's expectation for the new deep tests.
+    if err_msg:
+        return ProbeResult(False, f"{provider} TTS error: {err_msg[:180]}")
+    # A healthy TTS must emit at least one audio frame for a real sentence.
     return ProbeResult(
         False,
         f"{provider} TTS returned no audio for the probe sentence — provider likely rejected the request.",
     )
+
+
+# ── Transport probe (telephony account balance / credit) ─────────────────────
+#
+# One dispatcher, one branch per provider. Every telephony provider we
+# support exposes a small, cheap "account status / balance" endpoint that
+# (a) fails fast with 401/403 on a revoked or wrong credential, and
+# (b) returns a balance we can inspect to decide "out of credit". Rather
+# than duplicate per-provider adapters (like the LLM probe does for
+# OpenAI-family vs Anthropic vs Google), the shape is uniform enough to
+# keep as one function that switches on ``channel_type``. Add a provider
+# by adding one branch.
+#
+# Provider reference:
+# * Twilio  — GET /2010-04-01/Accounts/{sid}/Balance.json  (Basic sid:token)
+# * Telnyx  — GET /v2/balance                              (Bearer api_key)
+# * Plivo   — GET /v1/Account/{auth_id}/                   (Basic auth_id:token)
+# * Exotel  — GET /v1/Accounts/{sid}/Balance.json          (Basic key:token,
+#             subdomain configurable, e.g. api.exotel.com / @sg.exotel.com)
+
+
+_TRANSPORT_PROBE_TIMEOUT = 6.0
+
+# Below this native-currency balance, we report the account as effectively
+# out of credit. Sub-1 balances can't fund even a minute of talk time on any
+# of the four providers, so this floor holds regardless of currency (USD,
+# EUR, INR). If a provider ever needs a different threshold, add a per-
+# provider override next to that provider's probe function.
+_LOW_BALANCE_FLOOR = 1.0
+
+
+async def probe_transport(
+    client, channel_config: Dict[str, Any], channel_type: str
+) -> ProbeResult:
+    """Hit the provider's account endpoint to verify credentials + credit.
+
+    Takes a caller-owned ``httpx.AsyncClient`` so a check probing several
+    channels reuses one connection pool — same pattern as ``ToolReachableCheck``
+    and ``McpServerHttpReachableCheck``. ``channel_config`` is the decrypted
+    ``Channel.encrypted_config`` dict — the same shape the transport
+    serializers consume at call time. Returns a ``ProbeResult`` where
+    ``ok=False`` means a real call would fail (bad credential, suspended
+    account, empty balance, or unreachable API).
+    """
+    import httpx
+
+    slug = (channel_type or "").strip().lower()
+    cfg = channel_config or {}
+
+    try:
+        if slug == "twilio":
+            return await _probe_twilio(client, cfg)
+        if slug == "telnyx":
+            return await _probe_telnyx(client, cfg)
+        if slug == "plivo":
+            return await _probe_plivo(client, cfg)
+        if slug == "exotel":
+            return await _probe_exotel(client, cfg)
+    except httpx.HTTPError as exc:
+        logger.warning("[readiness] {} transport probe network error: {}", slug, exc)
+        return ProbeResult(False, _summarise_error(slug, exc))
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("[readiness] {} transport probe unexpected error", slug)
+        return ProbeResult(False, _summarise_error(slug, exc))
+
+    return ProbeResult(
+        True,
+        f"{slug or 'transport'}: no credit probe implemented for this channel type.",
+    )
+
+
+async def _probe_twilio(client, cfg: Dict[str, Any]) -> ProbeResult:
+    account_sid = (cfg.get("account_sid") or "").strip()
+    auth_token = (cfg.get("auth_token") or "").strip()
+    if not account_sid or not auth_token:
+        return ProbeResult(False, "twilio: account_sid / auth_token missing on the channel.")
+    resp = await client.get(
+        f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Balance.json",
+        auth=(account_sid, auth_token),
+    )
+    if resp.status_code in (401, 403):
+        return ProbeResult(False, "twilio rejected the credentials — account_sid / auth_token invalid.")
+    if resp.status_code >= 400:
+        return ProbeResult(False, _summarise_http("twilio", resp))
+    balance, currency = _parse_amount(resp, "balance", "currency")
+    if balance is not None and balance < _LOW_BALANCE_FLOOR:
+        return ProbeResult(
+            False,
+            f"twilio account balance is {balance:.2f} {currency or ''} — top up before making calls.",
+        )
+    return ProbeResult(True, _balance_ok_message("twilio", balance, currency))
+
+
+async def _probe_telnyx(client, cfg: Dict[str, Any]) -> ProbeResult:
+    api_key = (cfg.get("api_key") or "").strip()
+    if not api_key:
+        return ProbeResult(False, "telnyx: api_key missing on the channel.")
+    resp = await client.get(
+        "https://api.telnyx.com/v2/balance",
+        headers={"Authorization": f"Bearer {api_key}"},
+    )
+    if resp.status_code in (401, 403):
+        return ProbeResult(False, "telnyx rejected the credentials — api_key invalid.")
+    if resp.status_code >= 400:
+        return ProbeResult(False, _summarise_http("telnyx", resp))
+    data = _json_or_empty(resp).get("data") or {}
+    balance = _to_float(data.get("balance") or data.get("available_credit"))
+    currency = data.get("currency")
+    if balance is not None and balance < _LOW_BALANCE_FLOOR:
+        return ProbeResult(
+            False,
+            f"telnyx account balance is {balance:.2f} {currency or ''} — top up before making calls.",
+        )
+    return ProbeResult(True, _balance_ok_message("telnyx", balance, currency))
+
+
+async def _probe_plivo(client, cfg: Dict[str, Any]) -> ProbeResult:
+    auth_id = (cfg.get("auth_id") or "").strip()
+    auth_token = (cfg.get("auth_token") or "").strip()
+    if not auth_id or not auth_token:
+        return ProbeResult(False, "plivo: auth_id / auth_token missing on the channel.")
+    resp = await client.get(
+        f"https://api.plivo.com/v1/Account/{auth_id}/",
+        auth=(auth_id, auth_token),
+    )
+    if resp.status_code in (401, 403):
+        return ProbeResult(False, "plivo rejected the credentials — auth_id / auth_token invalid.")
+    if resp.status_code >= 400:
+        return ProbeResult(False, _summarise_http("plivo", resp))
+    data = _json_or_empty(resp)
+    # Plivo reports credits in USD by convention (no currency field on this endpoint).
+    balance = _to_float(data.get("cash_credits") or data.get("credit_limit"))
+    if balance is not None and balance < _LOW_BALANCE_FLOOR:
+        return ProbeResult(
+            False,
+            f"plivo cash credits are {balance:.2f} USD — top up before making calls.",
+        )
+    return ProbeResult(True, _balance_ok_message("plivo", balance, "USD"))
+
+
+async def _probe_exotel(client, cfg: Dict[str, Any]) -> ProbeResult:
+    # Exotel uses (api_key, api_token) as HTTP Basic and (account_sid,
+    # subdomain) to route the request. ``subdomain`` defaults to the primary
+    # region so accounts on regional shards (e.g. ``sg.exotel.com``) can
+    # override without a code change.
+    api_key = (cfg.get("api_key") or "").strip()
+    api_token = (cfg.get("api_token") or "").strip()
+    account_sid = (cfg.get("account_sid") or cfg.get("sid") or "").strip()
+    subdomain = (cfg.get("subdomain") or "api.exotel.com").strip()
+    if not api_key or not api_token or not account_sid:
+        return ProbeResult(
+            False,
+            "exotel: api_key / api_token / account_sid missing on the channel.",
+        )
+    resp = await client.get(
+        f"https://{subdomain}/v1/Accounts/{account_sid}/Balance.json",
+        auth=(api_key, api_token),
+    )
+    if resp.status_code in (401, 403):
+        return ProbeResult(False, "exotel rejected the credentials — api_key / api_token invalid.")
+    if resp.status_code >= 400:
+        return ProbeResult(False, _summarise_http("exotel", resp))
+    # Exotel wraps the payload as ``{"Balance": {"Balance": "10.00", ...}}``.
+    body = _json_or_empty(resp)
+    payload = body.get("Balance") if isinstance(body.get("Balance"), dict) else body
+    balance = _to_float(payload.get("Balance") or payload.get("balance"))
+    currency = payload.get("Currency") or payload.get("currency")
+    if balance is not None and balance < _LOW_BALANCE_FLOOR:
+        return ProbeResult(
+            False,
+            f"exotel account balance is {balance:.2f} {currency or ''} — top up before making calls.",
+        )
+    return ProbeResult(True, _balance_ok_message("exotel", balance, currency))
+
+
+def _json_or_empty(resp) -> Dict[str, Any]:
+    try:
+        data = resp.json()
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _parse_amount(resp, balance_key: str, currency_key: str) -> Tuple[Optional[float], Optional[str]]:
+    data = _json_or_empty(resp)
+    return _to_float(data.get(balance_key)), data.get(currency_key)
+
+
+def _to_float(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _balance_ok_message(provider: str, balance: Optional[float], currency: Optional[str]) -> str:
+    if balance is None:
+        return f"{provider}: credentials valid (balance not reported by API)."
+    return f"{provider}: credentials valid, balance {balance:.2f} {currency or ''}".rstrip()
+
+
+def _summarise_http(provider: str, resp) -> str:
+    """Turn a non-2xx transport response into a one-liner via the shared
+    summariser. Attaches ``status_code`` to a plain ``Exception`` so the
+    credit-hint / 5xx buckets in ``_summarise_error`` fire uniformly for
+    transport, LLM, STT, and TTS."""
+    exc = Exception(f"HTTP {resp.status_code}: {resp.text[:180]}")
+    exc.status_code = resp.status_code  # type: ignore[attr-defined]
+    return _summarise_error(provider, exc)
 
 
 # ── error summariser ─────────────────────────────────────────────────────────
@@ -524,7 +740,35 @@ def _summarise_error(provider: str, exc: BaseException) -> str:
         return f"{provider} says the model doesn't exist (maybe deprecated)."
     if status == 429 or "rate limit" in lower or "too many requests" in lower:
         return f"{provider} rate-limited this test — retry in a minute."
+    # Credit / quota exhaustion — providers spell this many ways and it's a
+    # common real-world cause of "readiness was green yesterday, calls fail
+    # today". Explicit bucket so the drawer shows a clear billing signal
+    # instead of the raw provider JSON. Deepseek returns HTTP 402; Anthropic
+    # returns HTTP 400 with a text hint; OpenAI/Groq return 429 with a
+    # "quota" keyword; some newer providers use "credit"/"balance"/"payment".
+    credit_hints = (
+        "insufficient balance", "credit balance", "credit_balance",
+        "insufficient_quota", "quota exceeded", "exceeded your current quota",
+        "payment required", "billing",
+    )
+    if status == 402 or any(h in lower for h in credit_hints):
+        return (
+            f"{provider} account is out of credit / quota — top up billing "
+            f"with the provider, then re-run."
+        )
     if status and status >= 500:
         return f"{provider} returned {status} — provider outage or transient error."
+    # Framework-side quirks — pipecat / tone internals rather than a provider
+    # health issue. Prefix with a marker so the UI can style these as
+    # "please file a bug" instead of "please fix your provider account".
+    # Add new patterns here as they're observed in live sweeps.
+    framework_bug_patterns = (
+        "range() arg 3 must not be zero",              # OpenAI TTS chunk-size default
+        "invalid value: integer `0`",                  # Deepgram TTS query-param default
+        "taskmanager is not initialized",              # Should not fire post-harness
+    )
+    if any(p in lower for p in framework_bug_patterns):
+        logger.warning("[readiness] {} framework-bug pattern in probe error: {}", provider, exc)
+        return f"[framework_bug] {provider} probe failed: {msg[:180]}"
     logger.warning("[readiness] {} probe error: {}", provider, exc)
-    return f"{provider} probe failed: {msg[:180]}"
+    return f"[provider_error] {provider} probe failed: {msg[:180]}"

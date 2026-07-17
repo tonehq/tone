@@ -37,6 +37,7 @@ class Category(str, Enum):
     STT = "stt"
     TTS = "tts"
     PHONE = "phone"
+    TRANSPORT = "transport"
     TOOLS = "tools"
     KNOWLEDGE_BASES = "knowledge_bases"
     MCP_SERVERS = "mcp_servers"
@@ -94,6 +95,9 @@ class ReadinessSummary(BaseModel):
     blocker_count: int
     warning_count: int
     info_count: int = 0
+    # Per-agent monotonically increasing run counter (1 on first run). Powers
+    # the "Run #10" badge in list views without an extra query.
+    run_number: Optional[int] = None
 
 
 class ReadinessReport(BaseModel):
@@ -115,6 +119,12 @@ class ReadinessReport(BaseModel):
     generated_at: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
+    # Wall-clock start of the run (ISO-8601). ``generated_at`` remains the
+    # completion timestamp so the pair "started → finished" is renderable
+    # without any client-side derivation from ``duration_ms``.
+    started_at: Optional[str] = None
+    # Per-agent monotonically increasing run counter — see ReadinessSummary.
+    run_number: Optional[int] = None
 
     def to_summary(self) -> ReadinessSummary:
         return ReadinessSummary(
@@ -124,4 +134,5 @@ class ReadinessReport(BaseModel):
             blocker_count=self.summary.get("blockers", 0),
             warning_count=self.summary.get("warnings", 0),
             info_count=self.summary.get("info", 0),
+            run_number=self.run_number,
         )

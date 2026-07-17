@@ -162,10 +162,11 @@ class TTSProviderReachableCheck(DeepCheck):
         return "Provider or key not resolved (see shallow checks)."
 
     @with_retry()
-    # Sentence synthesis + first-audio consumption; a bit more forgiving than
-    # the old one-word probe so slower providers (ElevenLabs streaming, etc.)
-    # aren't false-flagged.
-    @with_timeout(8.0)
+    # Pipeline harness (PipelineTask start + WS handshake) + sentence
+    # synthesis + first-audio consumption. Slower WS TTSs (ElevenLabs, LMNT,
+    # Cartesia streaming) can take 4–8s cold; 12s keeps us honest without
+    # false-flagging them.
+    @with_timeout(12.0)
     async def run(self, ctx: CheckContext) -> CheckResult:
         from core.services.readiness.probes import probe_tts
 
