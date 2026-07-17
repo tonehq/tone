@@ -81,8 +81,8 @@ class MailService:
             result = resend.Emails.send(params)
             return result
 
-        except Exception as e:
-            logger.error(f"An error occurred while sending email: {e}")
+        except Exception:
+            logger.exception("An error occurred while sending email")
             return None
 
     def send_forgot_password_email(self, to: str, verification_url: str):
@@ -96,8 +96,8 @@ class MailService:
             result = resend.Emails.send(params)
             return result
 
-        except Exception as e:
-            logger.error(f"An error occurred while sending email: {e}")
+        except Exception:
+            logger.exception("An error occurred while sending email")
             return None
 
     def send_signin_code_email(self, to: str, code: str, username: str = "User"):
@@ -172,8 +172,8 @@ class MailService:
             result = resend.Emails.send(params)
             return result
 
-        except Exception as e:
-            logger.error(f"An error occurred while sending email: {e}")
+        except Exception:
+            logger.exception("An error occurred while sending email")
             return None
 
     def send_invite_email(self, to: str, invite_url: str, inviter_name: str = "Your team"):
@@ -249,6 +249,6 @@ class MailService:
             result = resend.Emails.send(params)
             return result
 
-        except Exception as e:
-            logger.error(f"An error occurred while sending email: {e}")
+        except Exception:
+            logger.exception("An error occurred while sending email")
             return None

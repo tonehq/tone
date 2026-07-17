@@ -5,6 +5,8 @@ from typing import Optional, Dict, List, Any
 from dataclasses import dataclass
 from enum import Enum
 
+from loguru import logger
+
 try:
     from cryptography.hazmat.primitives import serialization
     from cryptography.exceptions import InvalidSignature
@@ -72,6 +74,7 @@ class LicenseValidator:
                     except InvalidSignature:
                         return None
                     except Exception:
+                        logger.exception("Unexpected error during license signature verification")
                         pass
  
             return payload

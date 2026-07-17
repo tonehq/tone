@@ -39,6 +39,7 @@ def _reconstruct_agent(agent_data: dict):
         status=agent_data.get("status"),
         agent_type=AgentType[agent_data["agent_type"]] if agent_data.get("agent_type") else None,
         meta_data=agent_data.get("meta_data"),
+        log_level=agent_data.get("log_level"),
         created_at=agent_data.get("created_at"),
         updated_at=agent_data.get("updated_at"),
     )
@@ -73,6 +74,7 @@ async def _async_main(bot_fn, WSRunnerArgs, agent, agent_id, transport_type, cal
         call_id=provider_call_id(call_data),
         external=call_data.get("_trace_id"),
     )
+
     try:
         body = {
             "call_data": call_data,

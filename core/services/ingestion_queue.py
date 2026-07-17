@@ -127,6 +127,9 @@ def enqueue_outbound_calls_batch(items):
                     )
                     results.append((job_id, None))
                 except Exception as exc:  # noqa: BLE001
+                    # Per-item: one bad defer must not drop the rest of the batch.
+                    # Capture the error for the caller and log the traceback.
+                    logger.exception("[outbound] defer failed for scheduled_call_id={}", scheduled_call_id)
                     results.append((None, str(exc)))
         return results
 
@@ -144,8 +147,8 @@ def cancel_outbound_job(job_id: int) -> bool:
 
     try:
         return asyncio.run(_cancel())
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("[outbound] cancel_outbound_job failed job_id={} err={}", job_id, exc)
+    except Exception:  # noqa: BLE001
+        logger.exception("[outbound] cancel_outbound_job failed job_id={}", job_id)
         return False
 
 

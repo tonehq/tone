@@ -4,6 +4,70 @@ from contextvars import ContextVar
 
 from loguru import logger
 
+# ---------------------------------------------------------------------------
+# Log level: resolution + sink application
+# ---------------------------------------------------------------------------
+# Every process boots at a baseline level (resolve_level: settings.LOG_LEVEL env
+# > INFO default). For CALLS a finer level can be set per organization / per agent
+# in the DB (agents.log_level > organizations.log_level > env baseline): the
+# call-pod parent resolves that hierarchy — see core/services/log_level_resolver.py
+# — and injects the level into the call subprocess, which applies it in
+# setup_logging(level=...). This module stays free of DB/Redis so it is safe to
+# import at the very top of every process.
+_DEFAULT_LEVEL = "INFO"
+# loguru's built-in severities. We only advertise INFO/DEBUG/TRACE to operators,
+# but accept the full set so a deliberate WARNING/ERROR is honored.
+_VALID_LEVELS = {"TRACE", "DEBUG", "INFO", "SUCCESS", "WARNING", "ERROR", "CRITICAL"}
+
+# The level currently applied to this process's sink (None until setup_logging runs).
+_current_level: "str | None" = None
+
+_LOG_FORMAT = (
+    "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | "
+    "{name}:{function}:{line} | "
+    "trace_id={extra[trace_id]} | {message}"
+)
+
+
+def _normalize_level(level) -> "str | None":
+    """Upper-case and validate a level name; return None for blank/invalid input."""
+    if not level:
+        return None
+    lvl = str(level).strip().upper()
+    return lvl if lvl in _VALID_LEVELS else None
+
+
+def resolve_level() -> "tuple[str, str]":
+    """Process baseline level and its source: settings.LOG_LEVEL env > INFO default.
+
+    Never raises. Per-call org/agent overrides are resolved separately by the
+    call-pod parent (core/services/log_level_resolver.py) and injected into the
+    subprocess; this function is the baseline for long-lived processes."""
+    try:
+        from shared.config import settings
+
+        env_level = _normalize_level(getattr(settings, "LOG_LEVEL", None))
+    except Exception:
+        env_level = None
+    if env_level:
+        return env_level, "env"
+    return _DEFAULT_LEVEL, "default"
+
+
+def get_applied_level() -> "str | None":
+    """The level actually applied to this process's sink (None before setup)."""
+    return _current_level
+
+
+def _apply_sink(level: str) -> None:
+    """Replace the stderr sink at the given level, preserving the trace patcher."""
+    global _current_level
+    logger.remove()
+    logger.add(sys.stderr, format=_LOG_FORMAT, level=level)
+    logger.configure(extra={"trace_id": "none"}, patcher=_trace_patcher)
+    _current_level = level
+
+
 # Per-call observability context. The trace_id has the structure
 # "{short_uuid}-{agent_id}-{call_id}" and is rendered from these component
 # contextvars, so the value is correct in every async task (contextvars propagate
@@ -18,30 +82,30 @@ _call_id_var: ContextVar[str] = ContextVar("trace_call_id", default="0")
 _trace_id_var: ContextVar[str] = ContextVar("trace_id", default="none")
 
 
-def setup_logging():
-    """Configure loguru with trace_id support. Call once at app startup."""
-    logger.remove()
+def _trace_patcher(record):
+    # Stamp every record with the current call's trace_id. Wrapped so logging
+    # can never raise into the caller; leaves non-call/global logs as "none".
+    try:
+        tid = _trace_id_var.get()
+        if tid and tid != "none":
+            record["extra"]["trace_id"] = tid
+    except Exception:
+        pass
 
-    def _trace_patcher(record):
-        # Stamp every record with the current call's trace_id. Wrapped so logging
-        # can never raise into the caller; leaves non-call/global logs as "none".
-        try:
-            tid = _trace_id_var.get()
-            if tid and tid != "none":
-                record["extra"]["trace_id"] = tid
-        except Exception:
-            pass
 
-    logger.add(
-        sys.stderr,
-        format=(
-            "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | "
-            "{name}:{function}:{line} | "
-            "trace_id={extra[trace_id]} | {message}"
-        ),
-        level="DEBUG",
-    )
-    logger.configure(extra={"trace_id": "none"}, patcher=_trace_patcher)
+def setup_logging(level: "str | None" = None) -> str:
+    """Configure loguru with trace_id support. Call once at process startup.
+
+    Level resolution: an explicit ``level`` arg wins; otherwise resolve_level()
+    applies the settings.LOG_LEVEL env > INFO default baseline. Runs in every
+    process. For call subprocesses the parent passes the DB-resolved org/agent
+    level as ``level`` (see core/services/log_level_resolver.py), so every new
+    call honors the current DB level without a restart. Returns the applied level."""
+    resolved = _normalize_level(level)
+    if resolved is None:
+        resolved, _ = resolve_level()
+    _apply_sink(resolved)
+    return resolved
 
 
 def _render_trace() -> str:

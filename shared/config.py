@@ -85,6 +85,12 @@ class Settings:
         # Redis
         self.REDIS_URL: str = get_secret("REDIS_URL", "redis://localhost:6379/0")
 
+        # Logging. LOG_LEVEL is the baseline level every process boots at. For calls,
+        # a finer level can be set per organization / per agent in the DB
+        # (agents.log_level > organizations.log_level > this env baseline) — resolved by
+        # core/services/log_level_resolver.py. Blank/invalid falls back to INFO.
+        self.LOG_LEVEL: str = get_secret("LOG_LEVEL", "INFO")
+
         # Cloudflare R2 storage
         self.R2_ACCESS_KEY_ID: str = get_secret("R2_ACCESS_KEY_ID", "")
         self.R2_SECRET_ACCESS_KEY: str = get_secret("R2_SECRET_ACCESS_KEY", "")

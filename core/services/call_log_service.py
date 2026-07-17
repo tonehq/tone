@@ -110,8 +110,8 @@ class CallLogService(BaseService):
 
         try:
             pod_id = resolve_pod_id(self.db)
-        except Exception as exc:
-            logger.warning("resolve_pod_id failed, creating call without pod attribution: {}", exc)
+        except Exception:
+            logger.exception("resolve_pod_id failed, creating call without pod attribution")
             self.db.rollback()
             pod_id = None
 
@@ -146,8 +146,8 @@ class CallLogService(BaseService):
                 from core.services.outbound_call_service import OutboundCallService
 
                 OutboundCallService(self.db, org_id=organization_id).link_call(scheduled_call_id, call.id)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("[outbound] failed to link scheduled call {}: {}", scheduled_call_id, exc)
+            except Exception:  # noqa: BLE001
+                logger.exception("[outbound] failed to link scheduled call {}", scheduled_call_id)
 
         return call
 
@@ -240,8 +240,8 @@ class CallLogService(BaseService):
                 CallMetricsService(self.db, org_id=call.organization_id).upsert_for_call(
                     call.id, call.organization_id, metrics
                 )
-            except Exception as e:
-                logger.error("Failed to persist call_metrics for call {}: {}", call.id, e)
+            except Exception:
+                logger.exception("Failed to persist call_metrics for call {}", call.id)
 
         # Additionally persist each tool/MCP invocation as a queryable row.
         # Wrapped so a persistence failure never breaks call completion.
@@ -252,8 +252,8 @@ class CallLogService(BaseService):
                     self.db, org_id=call.organization_id
                 ).record_executions(call.id, call.agent_id, tool_calls)
                 logger.info("Persisted {} tool_executions for call {}", count, call.id)
-            except Exception as e:
-                logger.error("Failed to persist tool_executions for call {}: {}", call.id, e)
+            except Exception:
+                logger.exception("Failed to persist tool_executions for call {}", call.id)
 
         PostCallHandler().post_call(call)
 

@@ -37,6 +37,7 @@ def _reconstruct_agent(agent_data: dict):
         status=agent_data.get("status"),
         agent_type=AgentType[agent_data["agent_type"]] if agent_data.get("agent_type") else None,
         meta_data=agent_data.get("meta_data"),
+        log_level=agent_data.get("log_level"),
         created_at=agent_data.get("created_at"),
         updated_at=agent_data.get("updated_at"),
     )
@@ -80,6 +81,12 @@ def main():
     # --- Redirect stdout to stderr FIRST, save original fd for IPC ---
     from core.services.pipe_ipc import setup_subprocess_ipc, signal_pipe_ready, read_stdin_line
     ipc_write_fd = setup_subprocess_ipc()
+
+    # Configure loguru (trace_id format + resolved level) for this subprocess.
+    # Resolved again at call time below, since a warm worker sits idle between
+    # spawn and its call and the level may have been flipped in the meantime.
+    from core.logging import setup_logging
+    setup_logging()
 
     # --- Phase 1: Heavy imports upfront ---
     _t = _time.monotonic()
@@ -126,6 +133,12 @@ def main():
         logger.error("Agent not found: %s — warm worker exiting", agent_id)
         os.close(ipc_write_fd)
         return
+
+    # The per-call log level (agent > org > env) is applied downstream in run_bot
+    # (core/bot.py) via resolve_call_log_level once the agent is resolved, so a warm
+    # worker that sat idle across a live override still honors it for *this* call —
+    # the zero-dropped-call escalation path. No re-resolve is needed here: the env
+    # baseline set at spawn (above) hasn't changed.
 
     # --- Phase 4: Run bot with pipe IPC (no FastAPI/uvicorn needed) ---
     asyncio.run(
