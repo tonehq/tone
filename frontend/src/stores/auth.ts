@@ -1,20 +1,7 @@
 import { create } from 'zustand';
 
-import { ACCESS_TOKEN, LOGIN_DATA, TENANT_ID } from '@/constants';
+import { LOGIN_DATA, TENANT_ID } from '@/constants';
 import type { AuthLoginResponse, Organization, User, UserOrganization } from '@/types/auth';
-import { decodeJWT } from '@/utils/jwt';
-
-function readRoleFromToken(token: string | null): string | null {
-  if (!token) return null;
-  try {
-    const claims = decodeJWT(token);
-    return (claims?.role as string) || null;
-  } catch {
-    return null;
-  }
-}
-
-const REFRESH_TOKEN = 'refresh_token';
 
 interface AuthState {
   user: User | null;
@@ -41,6 +28,17 @@ function readJSON<T>(key: string): T | null {
   } catch {
     return null;
   }
+}
+
+// Persist the membership list into the readable login_data payload so a page
+// reload rebuilds the workspace switcher from localStorage instantly, instead
+// of showing "one workspace" until the async fetch returns. The login response
+// itself does not carry the full org list — it's fetched after login.
+function persistOrganizations(orgs: UserOrganization[]) {
+  if (typeof window === 'undefined') return;
+  const loginData = readJSON<AuthLoginResponse>(LOGIN_DATA);
+  if (!loginData) return;
+  localStorage.setItem(LOGIN_DATA, JSON.stringify({ ...loginData, organizations: orgs }));
 }
 
 // Build a clean Organization + User pair from the active membership. The
@@ -71,7 +69,6 @@ function bootstrap() {
     };
   }
   const loginData = readJSON<AuthLoginResponse>(LOGIN_DATA);
-  const token = localStorage.getItem(ACCESS_TOKEN);
   const activeOrgId = localStorage.getItem(TENANT_ID);
 
   // Prefer the new tone-test shape (user + organization objects).
@@ -107,17 +104,22 @@ function bootstrap() {
   }
 
   // Role is contextual to the active membership — fall back to the login
-  // payload / token claims when no membership row carried one.
+  // payload when no membership row carried one. (The JWT is now an httpOnly
+  // cookie JS can't read, so role always comes from the login response body.)
   if (user && !user.role) {
-    user.role = (loginData?.role as string) ?? readRoleFromToken(token) ?? null;
+    user.role = (loginData?.role as string) ?? null;
   }
 
+  // The tokens live in httpOnly cookies; the presence of the readable
+  // login_data payload is our client-side signal that a session exists. The
+  // authoritative gate is the server-side Next.js middleware (which reads the
+  // cookie) plus per-request 401 handling.
   return {
     user,
     organization,
     organizations,
     activeOrgId: activeOrgId || organization?.id || null,
-    isAuthenticated: !!token,
+    isAuthenticated: !!loginData,
   };
 }
 
@@ -137,8 +139,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
   setLoginResponse: (data) => {
     if (typeof window !== 'undefined') {
-      if (data.access_token) localStorage.setItem(ACCESS_TOKEN, data.access_token);
-      if (data.refresh_token) localStorage.setItem(REFRESH_TOKEN, data.refresh_token);
+      // Tokens are set as httpOnly cookies by the server; we persist only the
+      // non-sensitive profile/org payload for UI hydration.
       localStorage.setItem(LOGIN_DATA, JSON.stringify(data));
       if (data.user_id != null) localStorage.setItem('user_id', String(data.user_id));
       else if (data.user?.id != null) localStorage.setItem('user_id', String(data.user.id));
@@ -173,7 +175,10 @@ export const useAuthStore = create<AuthState>((set) => ({
         : null,
     }));
   },
-  setOrganizations: (orgs) =>
+  setOrganizations: (orgs) => {
+    // Cache the list so a reload hydrates the switcher without waiting for the
+    // async fetch (the login response doesn't include it).
+    persistOrganizations(orgs);
     set((s) => {
       // The full membership list arrives async (DashboardLayout fetches it
       // after bootstrap), so this is our first chance to reconcile the
@@ -187,11 +192,12 @@ export const useAuthStore = create<AuthState>((set) => ({
         organization: reconciled.organization,
         user: reconciled.user,
       };
-    }),
+    });
+  },
   clearAuth: () => {
     if (typeof window !== 'undefined') {
-      localStorage.removeItem(ACCESS_TOKEN);
-      localStorage.removeItem(REFRESH_TOKEN);
+      // Only readable state — the httpOnly token cookies are cleared by the
+      // backend `/auth/logout` call in the logout flow.
       localStorage.removeItem(TENANT_ID);
       localStorage.removeItem(LOGIN_DATA);
       localStorage.removeItem('user_id');
@@ -205,5 +211,3 @@ export const useAuthStore = create<AuthState>((set) => ({
     });
   },
 }));
-
-export { REFRESH_TOKEN };

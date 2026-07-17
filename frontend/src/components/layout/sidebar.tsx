@@ -29,7 +29,9 @@ import {
 } from '@/components/ui/primitives';
 import { useNavigation } from '@/contexts/navigation';
 import { cn } from '@/lib/utils';
+import { switchOrganization } from '@/services/organizationService';
 import { useAuthStore } from '@/stores/auth';
+import { handleApiError } from '@/utils/helpers';
 
 const NAV_SECTIONS: SidebarNavGroup[] = [
   {
@@ -111,15 +113,22 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
                 <CustomButton
                   key={org.id}
                   type="text"
-                  onClick={() => {
+                  onClick={async () => {
                     if (String(org.id) === String(activeOrgId ?? organization?.id)) {
                       return;
                     }
-                    setActiveOrgId(String(org.id));
-                    // Reload so the new tenant_id header is picked up
-                    // by every in-flight & queued request.
-                    if (typeof window !== 'undefined') {
-                      window.location.reload();
+                    try {
+                      // Membership-verified switch: the server sets fresh
+                      // httpOnly cookies whose tokens carry the new org.
+                      await switchOrganization(String(org.id));
+                      setActiveOrgId(String(org.id));
+                      // Reload so the new session context is picked up by every
+                      // in-flight & queued request.
+                      if (typeof window !== 'undefined') {
+                        window.location.reload();
+                      }
+                    } catch (err) {
+                      handleApiError(err);
                     }
                   }}
                   className={cn(

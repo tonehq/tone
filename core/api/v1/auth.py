@@ -1,13 +1,16 @@
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
 from core.database.session import get_db
 from core.middleware.auth import (
     JWTClaims,
+    REFRESH_COOKIE,
+    clear_auth_cookies,
     get_jwt_claims,
     get_optional_jwt_claims,
+    set_cookies_and_strip,
 )
 from core.services.auth_service import AuthService
 from core.utils.device import extract_device_context
@@ -21,6 +24,7 @@ router = APIRouter()
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
 def signup(
     request: Request,
+    response: Response,
     user_data: Dict[str, Any] = Body(...),
     db: Session = Depends(get_db),
 ):
@@ -46,7 +50,7 @@ def signup(
             detail="first_name is required",
         )
 
-    return AuthService(db).signup_v2(
+    result = AuthService(db).signup_v2(
         email=email,
         password=password,
         first_name=first_name,
@@ -54,11 +58,13 @@ def signup(
         organization_name=organization_name,
         device=extract_device_context(request),
     )
+    return set_cookies_and_strip(response, result)
 
 
 @router.post("/login")
 def login(
     request: Request,
+    response: Response,
     login_data: Dict[str, str] = Body(...),
     db: Session = Depends(get_db),
 ):
@@ -69,7 +75,8 @@ def login(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email and password are required",
         )
-    return AuthService(db).login_v2(email, password, device=extract_device_context(request))
+    result = AuthService(db).login_v2(email, password, device=extract_device_context(request))
+    return set_cookies_and_strip(response, result)
 
 
 @router.post("/signin-code/request")
@@ -85,6 +92,7 @@ def request_signin_code(body: Dict[str, str] = Body(...), db: Session = Depends(
 @router.post("/signin-code/verify")
 def verify_signin_code(
     request: Request,
+    response: Response,
     body: Dict[str, str] = Body(...),
     db: Session = Depends(get_db),
 ):
@@ -95,29 +103,42 @@ def verify_signin_code(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="email and code are required",
         )
-    return AuthService(db).verify_signin_code(
+    result = AuthService(db).verify_signin_code(
         email, code, device=extract_device_context(request),
     )
+    return set_cookies_and_strip(response, result)
 
 
 @router.post("/refresh")
 def refresh(
     request: Request,
-    body: Dict[str, str] = Body(...),
+    response: Response,
+    body: Dict[str, str] = Body(default={}),
     db: Session = Depends(get_db),
 ):
-    refresh_token = body.get("refresh_token")
+    # Prefer the httpOnly refresh cookie; fall back to a body token for
+    # non-browser clients and the pre-cookie migration window.
+    refresh_token = request.cookies.get(REFRESH_COOKIE) or (body or {}).get("refresh_token")
     if not refresh_token:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="refresh_token is required",
         )
-    return AuthService(db).refresh_tokens(refresh_token, device=extract_device_context(request))
+    result = AuthService(db).refresh_tokens(refresh_token, device=extract_device_context(request))
+    return set_cookies_and_strip(response, result)
 
 
 @router.post("/logout")
-def logout(body: Dict[str, Any] = Body(default={}), db: Session = Depends(get_db)):
-    return AuthService(db).logout(refresh_token=body.get("refresh_token"))
+def logout(
+    request: Request,
+    response: Response,
+    body: Dict[str, Any] = Body(default={}),
+    db: Session = Depends(get_db),
+):
+    refresh_token = request.cookies.get(REFRESH_COOKIE) or (body or {}).get("refresh_token")
+    result = AuthService(db).logout(refresh_token=refresh_token)
+    clear_auth_cookies(response)
+    return result
 
 
 @router.post("/verify-email")
@@ -193,6 +214,7 @@ def validate_invitation(token: str = Query(...), db: Session = Depends(get_db)):
 @router.post("/accept-invitation")
 def accept_invitation(
     request: Request,
+    response: Response,
     body: Dict[str, Any] = Body(...),
     db: Session = Depends(get_db),
     claims: Optional[JWTClaims] = Depends(get_optional_jwt_claims),
@@ -202,7 +224,7 @@ def accept_invitation(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="token is required"
         )
-    return AuthService(db).accept_invitation_by_token(
+    result = AuthService(db).accept_invitation_by_token(
         token=token,
         password=body.get("password"),
         first_name=body.get("first_name"),
@@ -210,6 +232,7 @@ def accept_invitation(
         current_user_id=claims.user_id if claims else None,
         device=extract_device_context(request),
     )
+    return set_cookies_and_strip(response, result)
 
 
 # ── Legacy aliases (kept for older clients) ────────────────────────────

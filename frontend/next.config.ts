@@ -22,6 +22,16 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  // Local-dev cookie proxy. Set NEXT_PUBLIC_USE_API_PROXY=true so the browser
+  // only ever talks to the Next.js origin — the httpOnly auth cookie becomes
+  // host-only on :3000 and the middleware can read it. In prod the frontend and
+  // API share a parent domain (*.trytone.ai) so no proxy is needed (leave it
+  // unset and point NEXT_PUBLIC_BACKEND_URL at the API host).
+  async rewrites() {
+    if (process.env.NEXT_PUBLIC_USE_API_PROXY !== 'true') return [];
+    const backend = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+    return [{ source: '/api/:path*', destination: `${backend}/api/:path*` }];
+  },
   async redirects() {
     return [
       { source: '/auth/login', destination: '/login', permanent: false },
