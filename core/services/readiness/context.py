@@ -25,11 +25,13 @@ from loguru import logger
 from sqlalchemy.orm import Session
 
 from core.models.agent import Agent
+from core.models.agent_channel import AgentChannel
 from core.models.agent_config import AgentConfig
 from core.models.agent_knowledge_base import AgentKnowledgeBase
 from core.models.agent_mcp_server import AgentMcpServer
 from core.models.agent_tool import AgentTool
 from core.models.api_key import ApiKey
+from core.models.channel import Channel
 from core.models.knowledge_base import KnowledgeBase
 from core.models.mcp_server import McpServer
 from core.models.model import Model
@@ -147,6 +149,7 @@ class ContextBuilder:
             tools=self._fetch_linked_tools(agent.id, config.id),
             knowledge_bases=self._fetch_linked_knowledge_bases(agent.id, config.id),
             mcp_servers=self._fetch_linked_mcp_servers(agent.id, config.id),
+            channels=self._fetch_linked_channels(agent.id),
         )
 
     # ── batched loaders ────────────────────────────────────────────────────
@@ -211,6 +214,48 @@ class ContextBuilder:
             )
             .all()
         )
+
+    def _fetch_linked_channels(self, agent_id: UUID) -> List[Channel]:
+        """Return telephony ``Channel`` rows linked to the agent.
+
+        Two linkage paths in the schema, both authoritative:
+
+        * ``AgentChannel(agent_id, channel_id)`` — direct link, used by
+          outbound-only agents that own a channel but no assigned number.
+        * ``PhoneNumber(agent_id, channel_id)`` — the number-owns-channel
+          path, which is how every inbound agent in prod currently links.
+
+        Union both and dedupe by ``channel.id`` so the transport-credit
+        probe fires regardless of which shape the agent uses. Non-telephony
+        types (``daily``, ``websocket``, ``livekit``) are excluded — they
+        have no provider-side balance / credit surface to probe.
+        """
+        telephony_types = ("twilio", "telnyx", "plivo", "exotel")
+
+        via_agent_channel = (
+            self.db.query(Channel)
+            .join(AgentChannel, AgentChannel.channel_id == Channel.id)
+            .filter(
+                AgentChannel.agent_id == agent_id,
+                AgentChannel.organization_id == self.org_id,
+                Channel.organization_id == self.org_id,
+                Channel.channel_type.in_(telephony_types),
+            )
+        )
+        via_phone_number = (
+            self.db.query(Channel)
+            .join(PhoneNumber, PhoneNumber.channel_id == Channel.id)
+            .filter(
+                PhoneNumber.agent_id == agent_id,
+                PhoneNumber.organization_id == self.org_id,
+                Channel.organization_id == self.org_id,
+                Channel.channel_type.in_(telephony_types),
+            )
+        )
+        seen: Dict[UUID, Channel] = {}
+        for row in via_agent_channel.all() + via_phone_number.all():
+            seen.setdefault(row.id, row)
+        return list(seen.values())
 
     def _fetch_linked_tools(self, agent_id: UUID, config_id: UUID) -> List[Tool]:
         # Selects the per-version override alongside the Tool row and stamps the

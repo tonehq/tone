@@ -44,9 +44,15 @@ class ReadinessPersistence:
         dependency_stamp: str,
         duration_ms: Optional[int] = None,
         error: Optional[str] = None,
+        started_at: Optional[datetime] = None,
+        run_number: int = 1,
     ) -> None:
         """Persist ``report`` to both tables. Swallows failures with a warning
-        log — never raises to the caller."""
+        log — never raises to the caller.
+
+        ``started_at`` and ``run_number`` are stamped by the caller so both
+        snapshot and event rows share identical provenance in one transaction.
+        """
         try:
             self._write(
                 report=report,
@@ -55,6 +61,8 @@ class ReadinessPersistence:
                 dependency_stamp=dependency_stamp,
                 duration_ms=duration_ms,
                 error=error,
+                started_at=started_at or datetime.now(timezone.utc),
+                run_number=run_number,
             )
         except Exception:  # noqa: BLE001
             # Storage is best-effort. Rollback our writes so any wider
@@ -76,6 +84,8 @@ class ReadinessPersistence:
         dependency_stamp: str,
         duration_ms: Optional[int],
         error: Optional[str],
+        started_at: datetime,
+        run_number: int,
     ) -> None:
         row = self._row_from_report(
             report=report,
@@ -84,6 +94,8 @@ class ReadinessPersistence:
             dependency_stamp=dependency_stamp,
             duration_ms=duration_ms,
             error=error,
+            started_at=started_at,
+            run_number=run_number,
         )
 
         # UPSERT the snapshot on (agent_id, config_id, depth). Every field
@@ -118,6 +130,8 @@ class ReadinessPersistence:
         dependency_stamp: str,
         duration_ms: Optional[int],
         error: Optional[str],
+        started_at: datetime,
+        run_number: int,
     ) -> Dict[str, Any]:
         """Flatten a ``ReadinessReport`` into a dict of row values, ready for
         both the UPSERT and the INSERT. Kept as pure data so tests can assert
@@ -137,7 +151,9 @@ class ReadinessPersistence:
             "trigger": trigger,
             "triggered_by_user_id": triggered_by_user_id,
             "duration_ms": duration_ms,
+            "started_at": started_at,
             "computed_at": _parse_iso(report.generated_at),
+            "run_number": run_number,
             "dependency_stamp": dependency_stamp,
             "error": error,
         }

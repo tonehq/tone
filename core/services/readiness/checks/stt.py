@@ -92,10 +92,11 @@ class STTProviderReachableCheck(DeepCheck):
         return "Provider or key not resolved (see shallow checks)."
 
     @with_retry()
-    # Real-audio probe: WS handshake + ~7s of speech + provider decode. 15s
-    # gives the slower providers (Whisper, some AWS regions) headroom without
-    # blocking the readiness report on a genuinely stuck session.
-    @with_timeout(15.0)
+    # Pipeline harness adds ~2–4s for PipelineTask lifecycle (StartFrame,
+    # WS handshake, TaskManager setup) on top of the real-audio probe. 20s
+    # gives slow WS-STTs (Deepgram/AssemblyAI in cold regions) headroom
+    # without blocking the readiness report on a stuck session.
+    @with_timeout(20.0)
     async def run(self, ctx: CheckContext) -> CheckResult:
         from core.services.readiness.probes import probe_stt
 

@@ -113,20 +113,41 @@ class TestStttAudioLoader:
         loaded = _load_probe_pcm16()
         # If a maintainer removes the WAV, this test tells them clearly.
         assert loaded is not None, "probe_sample.wav missing from assets/"
-        pcm, rate = loaded
+        pcm, rate, full_wav = loaded
         assert rate == 16000
+        # Full WAV must be strictly larger than raw PCM (the RIFF header).
+        assert len(full_wav) > len(pcm) >= 100_000
         # Duration must stay within the 5-10s window the STT probe expects.
         duration_s = len(pcm) / (rate * 2)
         assert 5.0 <= duration_s <= 10.0, f"WAV duration {duration_s:.2f}s outside 5-10s window"
 
     def test_resample_to_different_rate(self):
+        """Streaming services get resampled headerless PCM."""
         from core.services.readiness.probes import _load_stt_audio
-        pcm_16k, real_16k = _load_stt_audio(16000)
-        pcm_8k, real_8k = _load_stt_audio(8000)
+
+        class FakeStreamingSTT:  # Class name NOT in _HTTP_STT_SERVICE_CLASSES
+            pass
+
+        stub = FakeStreamingSTT()
+        pcm_16k, real_16k = _load_stt_audio(16000, stub)
+        pcm_8k, real_8k = _load_stt_audio(8000, stub)
         assert real_16k and real_8k, "using_real_audio flag should be True when WAV present"
         # 8kHz is half of 16kHz → resampled buffer is roughly half the byte count.
         ratio = len(pcm_8k) / len(pcm_16k)
         assert 0.45 < ratio < 0.55, f"8kHz resample ratio {ratio:.2f} not ~0.5"
+
+    def test_http_service_gets_full_wav(self):
+        """Whisper-family HTTP services need the full WAV file with header —
+        raw PCM without a container gets rejected as "could not decode"."""
+        from core.services.readiness.probes import _load_stt_audio
+
+        class OpenAISTTService:  # Name matches _HTTP_STT_SERVICE_CLASSES
+            pass
+
+        stub = OpenAISTTService()
+        blob, real = _load_stt_audio(16000, stub)
+        assert real is True
+        assert blob[:4] == b"RIFF", "HTTP STTs must receive the WAV RIFF header"
 
     def test_silence_fallback_when_asset_missing(self):
         """When _load_probe_pcm16 returns None, we fall back to silence
@@ -134,7 +155,7 @@ class TestStttAudioLoader:
         assert on transcription."""
         from core.services.readiness.probes import _load_stt_audio
         with patch("core.services.readiness.probes._load_probe_pcm16", return_value=None):
-            pcm, real = _load_stt_audio(16000)
+            pcm, real = _load_stt_audio(16000, object())
             assert real is False
             assert pcm == b"\x00\x00" * 8000  # 0.5s of PCM16 silence
 

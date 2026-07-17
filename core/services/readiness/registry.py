@@ -62,6 +62,10 @@ def _build_registry() -> List[BaseCheck]:
         llm.LLMProviderReachableCheck(),
         stt.STTProviderReachableCheck(),
         tts.TTSProviderReachableCheck(),
+        # Transport (Twilio / Telnyx / Plivo / Exotel): hits the provider
+        # account/balance endpoint to catch revoked credentials + credit
+        # exhaustion — the two failure modes the shallow phone check misses.
+        phone.TransportCreditsReachableCheck(),
         # MCP: order matters — L4 HTTP probe first so an unreachable server
         # attributes to `http_reachable`, not to a confusing handshake failure.
         mcp_servers.McpServerHttpReachableCheck(),
