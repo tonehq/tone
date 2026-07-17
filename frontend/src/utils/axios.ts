@@ -1,26 +1,39 @@
 import Axios, { AxiosError, AxiosRequestConfig } from 'axios';
 
 import { BACKEND_URL, TENANT_ID } from '@/constants';
-import {
-  endSession,
-  getAccessToken,
-  getRefreshToken,
-  markAuthHandled,
-  setTokens,
-} from '@/utils/authSession';
+import { endSession, markAuthHandled } from '@/utils/authSession';
 
 interface RetriableRequestConfig extends AxiosRequestConfig {
   _retry?: boolean;
 }
 
+// Pre-auth endpoints: a 401 here is a credential/token error, not an expired
+// session, so it must NOT trigger the silent-refresh flow.
+const NON_REFRESHABLE_PREFIXES = [
+  '/auth/login',
+  '/auth/signup',
+  '/auth/refresh',
+  '/auth/signin-code',
+  '/auth/forgot-password',
+  '/auth/forget-password',
+  '/auth/reset-password',
+  '/auth/verify-email',
+  '/auth/accept-invitation',
+  '/auth/validate-invitation',
+];
+
 const axiosInstance = Axios.create({
   baseURL: BACKEND_URL,
   headers: { 'Content-Type': 'application/json' },
+  // Access + refresh JWTs live in httpOnly cookies; withCredentials makes the
+  // browser attach them (and store rotated ones) on every cross-origin call.
+  withCredentials: true,
 });
 
 axiosInstance.interceptors.request.use((config) => {
-  const token = getAccessToken();
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  // No Authorization header — the token rides in the httpOnly cookie. We only
+  // attach the non-sensitive active-org hint so the backend can scope the
+  // tenant (it re-verifies membership before honouring it).
   if (typeof window !== 'undefined') {
     const tenantId = localStorage.getItem(TENANT_ID);
     if (tenantId) config.headers['tenant_id'] = tenantId;
@@ -29,17 +42,17 @@ axiosInstance.interceptors.request.use((config) => {
 });
 
 interface QueueEntry {
-  resolve: (token: string) => void;
+  resolve: () => void;
   reject: (err: unknown) => void;
 }
 
 let isRefreshing = false;
 let queue: QueueEntry[] = [];
 
-function resolveQueue(token: string) {
+function resolveQueue() {
   const pending = queue;
   queue = [];
-  pending.forEach(({ resolve }) => resolve(token));
+  pending.forEach(({ resolve }) => resolve());
 }
 
 function rejectQueue(error: unknown) {
@@ -48,34 +61,29 @@ function rejectQueue(error: unknown) {
   pending.forEach(({ reject }) => reject(error));
 }
 
-function enqueueRefreshWaiter(): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
+function enqueueRefreshWaiter(): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
     queue.push({ resolve, reject });
   });
 }
 
 /**
  * Called from the manual logout flow so any requests waiting on an in-flight
- * refresh don't hang after storage is cleared. Safe to call at any time.
+ * refresh don't hang after the session ends. Safe to call at any time.
  */
 export function abortAuthRefresh(error?: unknown) {
   rejectQueue(error ?? new Error('Auth session ended'));
   isRefreshing = false;
 }
 
-async function refreshAccessToken(refreshToken: string): Promise<string> {
-  const { data } = await Axios.post(`${BACKEND_URL}/auth/refresh`, {
-    refresh_token: refreshToken,
-  });
-  const newAccess = data?.access_token as string | undefined;
-  if (!newAccess) throw new Error('No access_token in refresh response');
-  setTokens({ accessToken: newAccess, refreshToken: data?.refresh_token ?? null });
-  return newAccess;
+async function refreshSession(): Promise<void> {
+  // The refresh token is an httpOnly cookie — nothing to send in the body. The
+  // backend reads it from the cookie and sets a rotated cookie pair on the
+  // response; there are no tokens for JS to store.
+  await Axios.post(`${BACKEND_URL}/auth/refresh`, {}, { withCredentials: true });
 }
 
-function retryWithToken(config: RetriableRequestConfig, token: string) {
-  config.headers = config.headers || {};
-  (config.headers as Record<string, string>).Authorization = `Bearer ${token}`;
+function retryOriginal(config: RetriableRequestConfig) {
   config._retry = true;
   return axiosInstance(config);
 }
@@ -86,17 +94,19 @@ axiosInstance.interceptors.response.use(
     const original = (error.config || {}) as RetriableRequestConfig;
     const status = error.response?.status;
 
-    // Only skip the refresh dance for the refresh endpoint itself — any other
-    // /auth/* call (e.g. /auth/change-password) must still be eligible for a
-    // silent token refresh.
-    const isRefreshRoute =
-      typeof original.url === 'string' && original.url.startsWith('/auth/refresh');
+    // A 401 from a pre-auth endpoint (login, signup, refresh, code/reset flows)
+    // means bad credentials or an invalid token — NOT an expired session — so it
+    // must surface to the caller instead of triggering a silent refresh (which
+    // would fail and needlessly tear the session down). Authenticated /auth/*
+    // calls (change-password, me, switch_organization) stay refreshable.
+    const url = typeof original.url === 'string' ? original.url : '';
+    const skipRefresh = NON_REFRESHABLE_PREFIXES.some((p) => url.startsWith(p));
 
-    if (status !== 401 || isRefreshRoute) {
+    if (status !== 401 || skipRefresh) {
       return Promise.reject(error);
     }
 
-    // Second 401 after we already retried with a fresh token means the new
+    // Second 401 after we already retried with a fresh cookie means the new
     // token was also rejected — the session is unusable, log the user out
     // instead of surfacing a raw error.
     if (original._retry) {
@@ -108,16 +118,10 @@ axiosInstance.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    const refreshToken = getRefreshToken();
-    if (!refreshToken) {
-      endSession({ reason: 'expired' });
-      return Promise.reject(markAuthHandled(error));
-    }
-
     if (isRefreshing) {
       try {
-        const token = await enqueueRefreshWaiter();
-        return retryWithToken(original, token);
+        await enqueueRefreshWaiter();
+        return retryOriginal(original);
       } catch (waiterErr) {
         return Promise.reject(waiterErr);
       }
@@ -125,9 +129,9 @@ axiosInstance.interceptors.response.use(
 
     isRefreshing = true;
     try {
-      const newAccess = await refreshAccessToken(refreshToken);
-      resolveQueue(newAccess);
-      return retryWithToken(original, newAccess);
+      await refreshSession();
+      resolveQueue();
+      return retryOriginal(original);
     } catch (refreshErr) {
       const handledErr = markAuthHandled(refreshErr);
       rejectQueue(handledErr);

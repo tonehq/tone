@@ -55,6 +55,37 @@ class Settings:
 
         self.ENVIRONMENT: str = get_secret("ENV", "development")
 
+        # ── Auth cookies (httpOnly access/refresh token transport) ──────────
+        # Tokens ride in httpOnly cookies instead of JS-readable storage so an
+        # XSS hole can't exfiltrate a session. In prod the frontend + API share
+        # a parent domain (e.g. app.trytone.ai + api.trytone.ai), so setting
+        # COOKIE_DOMAIN=.trytone.ai scopes one cookie to both. Left blank the
+        # cookie is host-only (correct for a single-origin dev proxy).
+        _cookie_env = self.ENVIRONMENT.lower()
+        _cookie_is_local = _cookie_env in ("development", "dev", "local", "test")
+        self.COOKIE_DOMAIN: str = get_secret("COOKIE_DOMAIN", "")
+        self.COOKIE_SECURE: bool = get_secret(
+            "COOKIE_SECURE", "false" if _cookie_is_local else "true"
+        ).lower() == "true"
+        # One of "lax" | "strict" | "none". "none" REQUIRES COOKIE_SECURE=true.
+        self.COOKIE_SAMESITE: str = get_secret("COOKIE_SAMESITE", "lax").lower()
+
+        # ── CORS (credentialed requests can't use a wildcard origin) ────────
+        # Browsers reject `Access-Control-Allow-Origin: *` together with
+        # credentials, so we reflect an explicit allow-list. CORS_ALLOW_ORIGINS
+        # is an exact comma-separated list (local dev); CORS_ALLOW_ORIGIN_REGEX
+        # covers every *.trytone.ai subdomain in deployed envs.
+        self.CORS_ALLOW_ORIGINS: list = [
+            o.strip()
+            for o in get_secret(
+                "CORS_ALLOW_ORIGINS", "http://localhost:3000,http://localhost:3001"
+            ).split(",")
+            if o.strip()
+        ]
+        self.CORS_ALLOW_ORIGIN_REGEX: str = get_secret(
+            "CORS_ALLOW_ORIGIN_REGEX", r"https://([a-z0-9-]+\.)*trytone\.ai"
+        )
+
         self.POD_PINNING_ENABLED: bool = get_secret("POD_PINNING_ENABLED", "false").lower() == "true"
         self.CALL_SERVER_HOST: str = get_secret("CALL_SERVER_HOST", "")
         self.CALL_WORKER_PREFIX: str = get_secret("CALL_WORKER_PREFIX", "staging-tone-call-worker")

@@ -1,5 +1,5 @@
 from datetime import timedelta
-from fastapi import HTTPException, status, Depends
+from fastapi import HTTPException, status, Depends, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, Dict, Any, Union
 from uuid import UUID
@@ -14,6 +14,99 @@ from core.internal.capabilities import is_ee_enabled
 
 
 security = HTTPBearer()
+
+# ── httpOnly auth-cookie transport ──────────────────────────────────────
+# Access/refresh JWTs live in httpOnly cookies (unreadable by JS) instead of
+# localStorage. The access cookie is sent on every request (path=/); the
+# refresh cookie is scoped to the auth routes so it isn't attached to normal
+# API traffic. Attributes come from settings so dev (host-only, insecure) and
+# prod (.trytone.ai, secure) differ only by config.
+ACCESS_COOKIE = "access_token"
+REFRESH_COOKIE = "refresh_token"
+# Both cookies are set site-wide (Path=/). Scoping the refresh cookie to the
+# auth routes was a minor hardening, but a path-scoped Set-Cookie is fragile
+# behind the Next.js dev proxy (the site-wide access cookie survives while the
+# scoped refresh cookie gets dropped — e.g. on org-switch). Keeping them
+# symmetric makes set/rotate/clear behave identically. Still httpOnly + Secure.
+REFRESH_COOKIE_PATH = "/"
+
+
+def _cookie_attrs() -> Dict[str, Any]:
+    return {
+        "httponly": True,
+        "secure": settings.COOKIE_SECURE,
+        "samesite": settings.COOKIE_SAMESITE,
+        "domain": settings.COOKIE_DOMAIN or None,
+    }
+
+
+def set_auth_cookies(
+    response: Response,
+    access_token: str,
+    refresh_token: Optional[str] = None,
+) -> None:
+    """Attach the access (and optionally refresh) JWT as httpOnly cookies.
+
+    Both cookies are given the *session* (refresh-token) lifetime, not the
+    short access-token TTL. The access JWT inside still expires quickly and is
+    rotated by silent ``/auth/refresh``; keeping the cookie alive for the whole
+    session means the Next.js middleware's presence-check and the silent
+    refresh keep working after the JWT expires — otherwise the user would be
+    bounced to /login every time the access token lapsed.
+    """
+    attrs = _cookie_attrs()
+    session_max_age = settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400
+    response.set_cookie(
+        key=ACCESS_COOKIE,
+        value=access_token,
+        max_age=session_max_age,
+        path="/",
+        **attrs,
+    )
+    if refresh_token is not None:
+        response.set_cookie(
+            key=REFRESH_COOKIE,
+            value=refresh_token,
+            max_age=session_max_age,
+            path=REFRESH_COOKIE_PATH,
+            **attrs,
+        )
+
+
+def clear_auth_cookies(response: Response) -> None:
+    """Expire both auth cookies (used on logout). Attributes must match the
+    ones used to set them or the browser keeps the cookie."""
+    domain = settings.COOKIE_DOMAIN or None
+    response.delete_cookie(
+        key=ACCESS_COOKIE, path="/", domain=domain,
+        secure=settings.COOKIE_SECURE, httponly=True, samesite=settings.COOKIE_SAMESITE,
+    )
+    response.delete_cookie(
+        key=REFRESH_COOKIE, path=REFRESH_COOKIE_PATH, domain=domain,
+        secure=settings.COOKIE_SECURE, httponly=True, samesite=settings.COOKIE_SAMESITE,
+    )
+
+
+def set_cookies_and_strip(response: Response, result: Dict[str, Any]) -> Dict[str, Any]:
+    """Move any tokens in an auth-service result dict into httpOnly cookies and
+    drop them from the JSON body. No-op when the result carries no access token
+    (e.g. signup pending email verification, invite-accept without auto-login)."""
+    if isinstance(result, dict) and result.get("access_token"):
+        set_auth_cookies(response, result["access_token"], result.get("refresh_token"))
+        return {k: v for k, v in result.items() if k not in ("access_token", "refresh_token")}
+    return result
+
+
+def get_bearer_or_cookie_token(request: Request) -> Optional[str]:
+    """Extract the access token from the ``Authorization: Bearer`` header if
+    present, else from the httpOnly access cookie. Header support is kept so
+    non-browser API clients (and the migration window) keep working."""
+    auth_header = request.headers.get("Authorization") or request.headers.get("authorization")
+    if auth_header:
+        scheme, _, credentials = auth_header.partition(" ")
+        if scheme.lower() == "bearer" and credentials:
+            return credentials.strip()
+    return request.cookies.get(ACCESS_COOKIE)
 
 class JWTClaims(BaseModel):
     user_id: str
@@ -197,10 +290,16 @@ def _enforce_active_session(claims: JWTClaims, db) -> None:
 
 
 def get_jwt_claims(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
     db=Depends(get_db),
 ) -> JWTClaims:
-    claims = jwt_manager.verify_token(credentials)
+    token = get_bearer_or_cookie_token(request)
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+    claims = jwt_manager.decode_token(token)
     if is_ee_enabled() and claims.org_id:
         org_id = claims.org_id
     else:
@@ -211,12 +310,13 @@ def get_jwt_claims(
 
 
 def get_optional_jwt_claims(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(HTTPBearer(auto_error=False)),
+    request: Request,
     db=Depends(get_db),
 ) -> Optional[JWTClaims]:
-    if not credentials:
+    token = get_bearer_or_cookie_token(request)
+    if not token:
         return None
-    claims = jwt_manager.verify_token(credentials)
+    claims = jwt_manager.decode_token(token)
     _enforce_active_session(claims, db)
     return claims
 

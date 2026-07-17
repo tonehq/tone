@@ -2,10 +2,15 @@ from typing import Any, Dict, Optional
 from uuid import UUID
 
 from fastapi import (APIRouter, Body, Depends, Header, HTTPException, Query,
-                     Request, status)
+                     Request, Response, status)
 from sqlalchemy.orm import Session
 
 from core.database.session import get_db
+from core.middleware.auth import (
+    REFRESH_COOKIE,
+    clear_auth_cookies,
+    set_cookies_and_strip,
+)
 from core.utils.device import extract_device_context
 from ee.middleware.auth import (
     EEJWTClaims,
@@ -20,6 +25,7 @@ router = APIRouter()
 @router.post("/signup", status_code=status.HTTP_201_CREATED)
 def signup(
     request: Request,
+    response: Response,
     user_data: Dict[str, Any] = Body(...),
     db: Session = Depends(get_db),
 ):
@@ -40,7 +46,7 @@ def signup(
 
     # Prefer the v2 shape when first/last name are supplied (new auth UI).
     if first_name and last_name:
-        return EEAuthService(db).signup_v2(
+        result = EEAuthService(db).signup_v2(
             email=email,
             password=password,
             first_name=first_name,
@@ -48,9 +54,12 @@ def signup(
             organization_name=organization_name,
             device=device,
         )
-
-    profile = user_data.get("profile") or {}
-    return EEAuthService(db).signup(email, password, username or None, profile, organization_name)
+    else:
+        profile = user_data.get("profile") or {}
+        result = EEAuthService(db).signup(
+            email, password, username or None, profile, organization_name
+        )
+    return set_cookies_and_strip(response, result)
 
 
 @router.get("/check_organization_exists")
@@ -102,6 +111,7 @@ def verify_user_email(
 @router.post("/login")
 def login(
     request: Request,
+    response: Response,
     login_data: Dict[str, str] = Body(...),
     db: Session = Depends(get_db),
 ):
@@ -114,7 +124,8 @@ def login(
             detail="Email and password are required",
         )
 
-    return EEAuthService(db).login_v2(email, password, device=extract_device_context(request))
+    result = EEAuthService(db).login_v2(email, password, device=extract_device_context(request))
+    return set_cookies_and_strip(response, result)
 
 
 @router.post("/signin-code/request")
@@ -130,6 +141,7 @@ def request_signin_code(body: Dict[str, str] = Body(...), db: Session = Depends(
 @router.post("/signin-code/verify")
 def verify_signin_code(
     request: Request,
+    response: Response,
     body: Dict[str, str] = Body(...),
     db: Session = Depends(get_db),
 ):
@@ -140,29 +152,40 @@ def verify_signin_code(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="email and code are required",
         )
-    return EEAuthService(db).verify_signin_code(
+    result = EEAuthService(db).verify_signin_code(
         email, code, device=extract_device_context(request),
     )
+    return set_cookies_and_strip(response, result)
 
 
 @router.post("/refresh")
 def refresh(
     request: Request,
-    body: Dict[str, str] = Body(...),
+    response: Response,
+    body: Dict[str, str] = Body(default={}),
     db: Session = Depends(get_db),
 ):
-    refresh_token = body.get("refresh_token")
+    refresh_token = request.cookies.get(REFRESH_COOKIE) or (body or {}).get("refresh_token")
     if not refresh_token:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="refresh_token is required",
         )
-    return EEAuthService(db).refresh_tokens(refresh_token, device=extract_device_context(request))
+    result = EEAuthService(db).refresh_tokens(refresh_token, device=extract_device_context(request))
+    return set_cookies_and_strip(response, result)
 
 
 @router.post("/logout")
-def logout(body: Dict[str, Any] = Body(default={}), db: Session = Depends(get_db)):
-    return EEAuthService(db).logout(refresh_token=body.get("refresh_token"))
+def logout(
+    request: Request,
+    response: Response,
+    body: Dict[str, Any] = Body(default={}),
+    db: Session = Depends(get_db),
+):
+    refresh_token = request.cookies.get(REFRESH_COOKIE) or (body or {}).get("refresh_token")
+    result = EEAuthService(db).logout(refresh_token=refresh_token)
+    clear_auth_cookies(response)
+    return result
 
 
 @router.post("/verify-email")
@@ -229,6 +252,7 @@ def validate_invitation(token: str = Query(...), db: Session = Depends(get_db)):
 @router.post("/accept-invitation")
 def accept_invitation(
     request: Request,
+    response: Response,
     body: Dict[str, Any] = Body(...),
     db: Session = Depends(get_db),
     claims: Optional[EEJWTClaims] = Depends(get_optional_ee_jwt_claims),
@@ -238,7 +262,7 @@ def accept_invitation(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="token is required"
         )
-    return EEAuthService(db).accept_invitation_by_token(
+    result = EEAuthService(db).accept_invitation_by_token(
         token=token,
         password=body.get("password"),
         first_name=body.get("first_name"),
@@ -246,6 +270,7 @@ def accept_invitation(
         current_user_id=claims.user_id if claims else None,
         device=extract_device_context(request),
     )
+    return set_cookies_and_strip(response, result)
 
 
 @router.get("/forget-password")
@@ -265,6 +290,7 @@ def accept_forgot_password(
 
 @router.post("/switch_organization")
 def switch_organization(
+    response: Response,
     org_data: Dict[str, str] = Body(...),
     claims: EEJWTClaims = Depends(get_ee_jwt_claims),
     db: Session = Depends(get_db)
@@ -277,6 +303,9 @@ def switch_organization(
             detail="Organization ID is required"
         )
 
-    return EEAuthService(db).switch_organization(
+    # Re-mints BOTH access + refresh tokens with the (membership-verified) new
+    # org so the switch survives a silent cookie refresh (see EEAuthService).
+    result = EEAuthService(db).switch_organization(
         claims.user_id, UUID(org_id), session_id=claims.jti,
     )
+    return set_cookies_and_strip(response, result)
