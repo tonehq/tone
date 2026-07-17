@@ -2,6 +2,7 @@ import { atom } from 'jotai';
 
 import { getAgentReadiness, getAgentReadinessSummary } from '@/services/readinessService';
 import type {
+  ReadinessCategory,
   ReadinessDepth,
   ReadinessReport,
   ReadinessSummary,
@@ -26,9 +27,12 @@ export const fetchAgentReadinessAtom = atom(
       depth: ReadinessDepth;
       configId?: string;
       trigger?: ReadinessTrigger | string;
+      /** Targeted-deep filter — only probes these categories live when `depth`
+       * is `'deep'`. Ignored when `depth` is `'shallow'`. */
+      categories?: ReadinessCategory[];
     },
   ): Promise<ReadinessReport> =>
-    getAgentReadiness(args.agentId, args.depth, args.configId, args.trigger),
+    getAgentReadiness(args.agentId, args.depth, args.configId, args.trigger, args.categories),
 );
 
 export const fetchAgentReadinessSummaryAtom = atom(

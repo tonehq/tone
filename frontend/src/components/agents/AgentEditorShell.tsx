@@ -17,7 +17,7 @@ import {
   updateAgentAtom,
   updateAgentVersionAtom,
 } from '@/atoms/AgentsAtom';
-import { fetchAgentReadinessSummaryAtom } from '@/atoms/ReadinessAtom';
+import { fetchAgentReadinessAtom, fetchAgentReadinessSummaryAtom } from '@/atoms/ReadinessAtom';
 import { AgentEditorProvider } from '@/components/agents/AgentEditorContext';
 import AgentSaveActions, { type AgentSaveAction } from '@/components/agents/AgentSaveActions';
 import AgentVersionSelector from '@/components/agents/AgentVersionSelector';
@@ -49,6 +49,8 @@ import {
   defaultFormState,
   formStateToCreatePayload,
 } from '@/utils/agentFormUtils';
+import { categoriesToProbeOnSave } from '@/utils/agentReadinessDiff';
+import { mergeReadinessReports, reportToSummary } from '@/services/readinessService';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
@@ -96,6 +98,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   const [, switchActiveAgentVersion] = useAtom(switchActiveAgentVersionAtom);
   const [, deleteAgentVersion] = useAtom(deleteAgentVersionAtom);
   const [, fetchReadinessSummary] = useAtom(fetchAgentReadinessSummaryAtom);
+  const [, fetchReadinessReport] = useAtom(fetchAgentReadinessAtom);
 
   const { sidebarCollapsed, toggleSidebar } = useNavigation();
 
@@ -113,10 +116,32 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   const [viewedConfigId, setViewedConfigId] = useState<string | null>(null);
   const [readinessDrawerOpen, setReadinessDrawerOpen] = useState(false);
   const [readinessSummary, setReadinessSummary] = useState<ReadinessSummary | null>(null);
+  /** Last full readiness report we have on hand — deep (from a targeted-deep
+   * on save) OR a manual "Run deep test" from the drawer. Kept on the parent
+   * so the drawer opens on the SAME data the badge is derived from; without
+   * this shared state, the drawer's own shallow fetch would race and
+   * disagree with the badge (e.g. badge shows a `tools.reachable` warning
+   * that the drawer's shallow refetch can't see). Cleared whenever the
+   * viewed config changes so the drawer never renders a stale report from
+   * another version. */
+  const [readinessReport, setReadinessReport] = useState<ReadinessReport | null>(null);
+  /** Mirrors ``readinessReport`` so ``refreshReadinessAfterSave`` — a
+   * ``useCallback`` we want to keep stable — can read the latest report
+   * (needed to merge successive targeted-deep runs) without listing report
+   * state in its deps and getting recreated every render. */
+  const readinessReportRef = useRef<ReadinessReport | null>(null);
+  useEffect(() => {
+    readinessReportRef.current = readinessReport;
+  }, [readinessReport]);
   const [readinessLoading, setReadinessLoading] = useState(false);
   /** Bump to force the summary effect to re-run (after save / publish / etc.). */
   const [readinessRefreshKey, setReadinessRefreshKey] = useState(0);
   const bumpReadiness = useCallback(() => setReadinessRefreshKey((k) => k + 1), []);
+  /** Set true immediately after a targeted-deep save lands so the shallow
+   * readiness effect can skip its next run — otherwise a slower shallow
+   * response overwrites the fresh deep summary and the badge silently drops
+   * the warning we just surfaced. Reset by the effect after it skips once. */
+  const skipNextShallowRef = useRef(false);
   /** Publish attempted with warnings — parent surfaces a confirm dialog and
    * retries with `force_warnings=true` when the user opts in. */
   const [pendingWarningsReport, setPendingWarningsReport] = useState<ReadinessReport | null>(null);
@@ -255,8 +280,18 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   // Refetches when the agent id, the currently-loaded config id, or the
   // explicit bump key change. Edit-based freshness on the backend means the
   // majority of calls short-circuit against a stored snapshot — cheap.
+  //
+  // Race protection: after a save runs a targeted-deep probe (see
+  // `refreshReadinessAfterSave`) we already have the freshest, most-detailed
+  // report in state. The subsequent `detail.config.id` change would fire this
+  // effect and clobber it with a shallow re-read. The `skipNextShallowRef`
+  // guard skips exactly one fire so the deep result stays visible.
   useEffect(() => {
     if (!isEditMode || !agentId) return;
+    if (skipNextShallowRef.current) {
+      skipNextShallowRef.current = false;
+      return;
+    }
     const loadedConfigId = detail?.config?.id ?? undefined;
     let cancelled = false;
     setReadinessLoading(true);
@@ -267,7 +302,12 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
           configId: loadedConfigId,
           trigger: 'editor_load',
         });
-        if (!cancelled) setReadinessSummary(summary);
+        if (cancelled) return;
+        setReadinessSummary(summary);
+        // Shallow fetches only return a summary, not a full report. Drop any
+        // stale full report so the drawer refetches instead of rendering an
+        // older deep report against a possibly-newer config.
+        setReadinessReport(null);
       } catch {
         // Non-critical UI — never toast; badge falls back to the "error" pill.
         if (!cancelled) setReadinessSummary(null);
@@ -327,6 +367,60 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
       return true;
     },
     [basePath, methods, router],
+  );
+
+  /** Refresh the readiness badge after a save.
+   *
+   * If any resource-owning category (LLM/STT/TTS/tools/MCP/KB/phone) changed
+   * we fire a **targeted deep** probe — live-checks only those categories and
+   * skips the others as SKIPPED. Prompt-only edits (or anything that touches
+   * no resource category) fall back to the shallow bump path so we don't
+   * burn provider tokens on non-actionable saves.
+   *
+   * Fire-and-forget by design: 429s, network flakes, or backend errors
+   * silently degrade to a shallow refresh — the save UX must never wait on
+   * or fail because of readiness. */
+  const refreshReadinessAfterSave = useCallback(
+    (prev: AgentFormState, next: AgentFormState, configId: string | null | undefined) => {
+      const changed = categoriesToProbeOnSave(prev, next);
+      if (changed.length === 0 || !configId) {
+        bumpReadiness();
+        return;
+      }
+      // Suppress the next shallow-effect fire so it doesn't overwrite the
+      // richer deep report we're about to install. The ref is armed BEFORE
+      // the fetch so it survives the intermediate `applyDetail` → config-id
+      // change that would otherwise trigger the effect.
+      skipNextShallowRef.current = true;
+      void (async () => {
+        try {
+          const report = await fetchReadinessReport({
+            agentId: agentId!,
+            depth: 'deep',
+            configId,
+            trigger: 'field_change',
+            categories: changed,
+          });
+          // Merge with the previous report so categories we didn't just
+          // re-probe (SKIPPED because unchanged) keep their last-known real
+          // status — otherwise a second consecutive save on a different
+          // category would silently drop the previous save's warnings from
+          // the badge and the drawer.
+          const merged = mergeReadinessReports(readinessReportRef.current, report);
+          // Both the badge (summary) and the drawer (full report) render off
+          // the same landed data — no drift between "warning shown above" and
+          // "no warning shown inside".
+          setReadinessSummary(reportToSummary(merged));
+          setReadinessReport(merged);
+        } catch {
+          // Deep failed — let the shallow effect run so the badge still
+          // refreshes off the DB fast-path.
+          skipNextShallowRef.current = false;
+          bumpReadiness();
+        }
+      })();
+    },
+    [agentId, bumpReadiness, fetchReadinessReport],
   );
 
   // ─── save / delete / publish / create-version ─────────────────────────────
@@ -412,7 +506,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
         },
       });
       applyDetail(updated);
-      bumpReadiness();
+      refreshReadinessAfterSave(baseline, values, updated.config?.id ?? null);
       showToast.success(
         'Changes saved',
         updated.config?.version != null ? `v${updated.config.version} was updated.` : undefined,
@@ -427,11 +521,11 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     applyDetail,
     applyServerValidation,
     basePath,
-    bumpReadiness,
     createAgent,
     detail,
     isEditMode,
     methods,
+    refreshReadinessAfterSave,
     router,
     updateAgent,
     updateAgentVersion,
@@ -962,6 +1056,8 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
                 agentId={agentId}
                 configId={detail?.config?.id ?? null}
                 trigger="editor_load"
+                initialReport={readinessReport}
+                onReportChange={setReadinessReport}
               />
             )}
 
