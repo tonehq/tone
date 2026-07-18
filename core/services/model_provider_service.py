@@ -815,6 +815,12 @@ class ModelProviderService(BaseService):
 
         providers = q.order_by(ModelProvider.display_name.asc()).all()
         kinds_map = self._provider_kinds_map([p.id for p in providers])
+        # In the agent-creation flow the caller asks for one service type at a
+        # time (LLM / STT / TTS). Only return providers that actually offer a
+        # model of that kind — otherwise every provider shows up in every
+        # dropdown.
+        if service_type:
+            providers = [p for p in providers if service_type in kinds_map.get(str(p.id), [])]
         return [
             {
                 "id": str(p.id),

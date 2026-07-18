@@ -48,7 +48,15 @@ export function toolTypeChipClasses(type: ToolExecution['tool_type']): string {
   }
 }
 
-/** Tailwind classes + label for the success/error pill. */
+/** Tailwind classes + label for the lifecycle status pill.
+ *
+ *  Covers the full LLM proposal lifecycle:
+ *  - `proposed`  — LLM asked for the tool but no handler ran. Amber, so users
+ *                  can tell a hallucinated tool name apart from a successful run.
+ *  - `cancelled` — proposed and dispatched, but killed mid-execution (barge-in).
+ *                  Muted grey — expected during natural conversation flow.
+ *  - `success`   — handler completed cleanly. Emerald.
+ *  - `error`     — handler ran but returned/raised an error. Rose. */
 export function statusPill(status: ToolExecution['status']): { label: string; className: string } {
   if (status === 'success') {
     return {
@@ -60,6 +68,18 @@ export function statusPill(status: ToolExecution['status']): { label: string; cl
     return {
       label: 'Error',
       className: 'bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300',
+    };
+  }
+  if (status === 'proposed') {
+    return {
+      label: 'Proposed',
+      className: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
+    };
+  }
+  if (status === 'cancelled') {
+    return {
+      label: 'Cancelled',
+      className: 'bg-slate-100 text-slate-700 dark:bg-slate-500/15 dark:text-slate-300',
     };
   }
   return {
@@ -117,11 +137,20 @@ export function formatStartedAt(iso: string | null): string {
   return d.toLocaleTimeString();
 }
 
-/** Aggregate counts/avg for the summary tiles above the table. */
+/** Aggregate counts/avg for the summary tiles above the table.
+ *
+ *  `total` is the count of *all* LLM-proposed tool calls (every row). `executed`
+ *  is the subset that actually ran (`success` + `error`). `notExecuted` is
+ *  `proposed` + `cancelled` — LLM asked but the handler never returned. This
+ *  split matches the four lifecycle statuses `ToolExecution.status` can take. */
 export interface ToolExecutionSummary {
   total: number;
+  executed: number;
+  notExecuted: number;
   success: number;
   errors: number;
+  proposed: number;
+  cancelled: number;
   avgDurationMs: number | null;
 }
 
@@ -129,12 +158,28 @@ export function summarize(rows: ToolExecution[]): ToolExecutionSummary {
   const total = rows.length;
   let success = 0;
   let errors = 0;
+  let proposed = 0;
+  let cancelled = 0;
   let durationSum = 0;
   let durationCount = 0;
 
   for (const row of rows) {
-    if (row.status === 'success') success += 1;
-    else if (row.status === 'error') errors += 1;
+    switch (row.status) {
+      case 'success':
+        success += 1;
+        break;
+      case 'error':
+        errors += 1;
+        break;
+      case 'proposed':
+        proposed += 1;
+        break;
+      case 'cancelled':
+        cancelled += 1;
+        break;
+      default:
+        break;
+    }
     if (typeof row.duration_ms === 'number') {
       durationSum += row.duration_ms;
       durationCount += 1;
@@ -143,8 +188,12 @@ export function summarize(rows: ToolExecution[]): ToolExecutionSummary {
 
   return {
     total,
+    executed: success + errors,
+    notExecuted: proposed + cancelled,
     success,
     errors,
+    proposed,
+    cancelled,
     avgDurationMs: durationCount > 0 ? Math.round(durationSum / durationCount) : null,
   };
 }
@@ -167,4 +216,6 @@ export const STATUS_FILTER_OPTIONS: ReadonlyArray<{
   { key: 'all', label: 'All statuses' },
   { key: 'success', label: 'Success only' },
   { key: 'error', label: 'Errors only' },
+  { key: 'proposed', label: 'Proposed only' },
+  { key: 'cancelled', label: 'Cancelled only' },
 ];
