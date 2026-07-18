@@ -22,7 +22,7 @@ still runs, just that tool call won't work.
 
 from __future__ import annotations
 
-from typing import ClassVar, List, Optional, Tuple
+from typing import Any, ClassVar, Iterable, List, Optional, Tuple
 from urllib.parse import urlparse
 
 import httpx
@@ -34,6 +34,7 @@ from core.services.readiness.base import (
     ShallowCheck,
     with_timeout,
 )
+from core.services.readiness.checks._oauth_expiry import OAuthTokenExpiryShallowCheck
 from core.services.readiness.schemas import (
     Category,
     CheckResult,
@@ -102,6 +103,27 @@ class ToolsUsableCheck(ShallowCheck):
                 remediation="Open the Tools tab and fix or detach them.",
             )
         return self._pass(f"{len(ctx.tools)} tool(s) attached.")
+
+
+class ToolOAuthTokenValidCheck(OAuthTokenExpiryShallowCheck):
+    """Warn when any attached tool's linked OAuth token has expired.
+
+    Applies to both custom OAuth-authed tools and built-ins that carry an
+    ``oauth_connection_id`` (google_calendar, hubspot, …). Complements
+    ``ToolReachableCheck`` (deep) by surfacing the same failure without
+    a network call — see ``_oauth_expiry.py`` for the shared logic.
+    """
+
+    id: ClassVar[str] = "tools.oauth_token_valid"
+    category: ClassVar[Category] = Category.TOOLS
+    severity: ClassVar[Severity] = Severity.WARNING
+    resource_type_ref: ClassVar[str] = "tool"
+    resource_display: ClassVar[str] = "tool"
+
+    def _resources(self, ctx: CheckContext) -> Iterable[Any]:
+        # Inactive tools won't be called, and MCP-sourced tools are covered
+        # by the MCP-side check — no need to warn twice.
+        return [t for t in ctx.tools if t.is_active and t.tool_type != "mcp"]
 
 
 class ToolReachableCheck(DeepCheck):

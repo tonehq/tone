@@ -17,7 +17,7 @@ question:
 
 from __future__ import annotations
 
-from typing import ClassVar, List
+from typing import Any, ClassVar, Iterable, List
 
 import httpx
 
@@ -27,6 +27,7 @@ from core.services.readiness.base import (
     ShallowCheck,
     with_timeout,
 )
+from core.services.readiness.checks._oauth_expiry import OAuthTokenExpiryShallowCheck
 from core.services.readiness.schemas import (
     Category,
     CheckResult,
@@ -68,6 +69,27 @@ class McpServersConfiguredCheck(ShallowCheck):
                 ),
             )
         return self._pass(f"{len(ctx.mcp_servers)} MCP server(s) attached.")
+
+
+class McpServerOAuthTokenValidCheck(OAuthTokenExpiryShallowCheck):
+    """Warn when any attached MCP server's linked OAuth token has expired.
+
+    Distinct from the reachable-deep check so the failure is visible in
+    the agent-list badge (shallow-only) and doesn't wait for the Deep
+    rate limiter to release. See ``_oauth_expiry.py`` for the shared logic.
+    """
+
+    id: ClassVar[str] = "mcp_servers.oauth_token_valid"
+    category: ClassVar[Category] = Category.MCP_SERVERS
+    severity: ClassVar[Severity] = Severity.WARNING
+    resource_type_ref: ClassVar[str] = "mcp_server"
+    resource_display: ClassVar[str] = "MCP server"
+
+    def _resources(self, ctx: CheckContext) -> Iterable[Any]:
+        # Inactive servers won't be called, so an expired token on one is
+        # noise — ``McpServersConfiguredCheck`` already flags the inactive
+        # state separately.
+        return [s for s in ctx.mcp_servers if s.is_active]
 
 
 class McpServerHttpReachableCheck(DeepCheck):
