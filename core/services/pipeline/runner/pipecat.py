@@ -79,8 +79,9 @@ class PipecatPipelineRunner(PipelineRunner):
         # idempotency cache shared across handlers.
         tool_call_entries: list[dict] = []
         # Per-call {tool_call_id: llm_requested_at datetime}. Populated by
-        # ToolCallRequestObserver on FunctionCallInProgressFrame; popped by each
-        # handler via ToolCallTimer. Bounded by in-flight tool calls.
+        # LlmRequestStamper's register_function wrapper at handler dispatch;
+        # popped by each handler via ToolCallTimer. Bounded by in-flight
+        # tool calls.
         tool_request_ts: dict = {}
         current_turn: dict = {"number": 0}
         tool_dedup: dict = {}
