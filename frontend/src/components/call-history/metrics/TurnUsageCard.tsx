@@ -2,6 +2,7 @@
 
 import type { CallMetricsTurnMetric } from '@/types/callLog';
 import { cn } from '@/utils/cn';
+import type React from 'react';
 
 import { turnHasAnyMeasurement } from './utils';
 
@@ -65,6 +66,17 @@ interface TurnUsageTableProps<T> {
    * Returning `undefined` renders just the value with no sub-line.
    */
   cellSubtext?: (call: T) => string | undefined;
+  /**
+   * Optional override for the trailing rowSpan column. Defaults to a `Total`
+   * column that sums the row's per-call values. Provide `{ header, render }` to
+   * replace both the header label and the cell contents — e.g. for the
+   * end-to-end latency table where "Total" duplicates the single per-turn
+   * value, this is used to swap in an executed tool-call count instead.
+   */
+  totalColumn?: {
+    header: string;
+    render: (row: PerTurnUsageRow<T>) => React.ReactNode;
+  };
 }
 
 /**
@@ -80,6 +92,7 @@ export function TurnUsageTable<T>({
   columnHeader,
   format,
   cellSubtext,
+  totalColumn,
 }: TurnUsageTableProps<T>) {
   if (rows.length === 0) {
     return <p className="text-sm text-muted-foreground">No data</p>;
@@ -111,7 +124,7 @@ export function TurnUsageTable<T>({
               scope="col"
               className="px-3 py-2 text-center text-xs font-medium uppercase tracking-wide text-muted-foreground"
             >
-              Total
+              {totalColumn?.header ?? 'Total'}
             </th>
           </tr>
         </thead>
@@ -156,7 +169,9 @@ export function TurnUsageTable<T>({
                       rowSpan={callCount}
                       className="border-l border-border bg-muted/30 px-3 py-2 text-center align-middle text-base font-semibold tabular-nums text-foreground"
                     >
-                      {row.total > 0 ? (
+                      {totalColumn ? (
+                        totalColumn.render(row)
+                      ) : row.total > 0 ? (
                         format(row.total)
                       ) : (
                         <span className="text-muted-foreground">—</span>
