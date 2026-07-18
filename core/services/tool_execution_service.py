@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Any, List, Optional
 
 from loguru import logger
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from core.models.mcp_server import McpServer
@@ -20,8 +21,9 @@ from core.services.base import BaseService
 
 # Status / type values that are valid filter inputs from the API. Anything
 # outside these lists is treated as "no filter" so the endpoint can't be used
-# to probe arbitrary column values.
-_VALID_STATUSES = {"success", "error"}
+# to probe arbitrary column values. ``proposed`` / ``cancelled`` capture LLM
+# proposals that never ran (unregistered tool name / user interrupted).
+_VALID_STATUSES = {"proposed", "cancelled", "success", "error"}
 _VALID_TOOL_TYPES = {"custom", "send_sms", "google_calendar", "read_document", "mcp", "built_in"}
 
 # Hard cap on rows returned by ``list_for_call`` — a sane call rarely has >50
@@ -59,8 +61,8 @@ def _json_safe(value: Any) -> Any:
 _MAPPED_KEYS = {
     "tool", "tool_type", "server", "arguments", "result", "output",
     "status", "error", "status_code", "duration_ms", "turn", "timestamp",
-    "tool_id", "mcp_server_id",
-    "llm_requested_at", "invoked_at", "completed_at",
+    "tool_id", "mcp_server_id", "tool_call_id",
+    "proposed_at", "llm_requested_at", "invoked_at", "completed_at",
 }
 
 
@@ -150,8 +152,13 @@ class ToolExecutionService(BaseService):
         if tool_type in _VALID_TOOL_TYPES:
             q = q.filter(ToolExecution.tool_type == tool_type)
 
+        # COALESCE keeps proposal-only rows (no ``started_at``) chronologically
+        # ordered against executed rows via their ``proposed_at`` stamp.
+        lifecycle_ts = func.coalesce(
+            ToolExecution.started_at, ToolExecution.proposed_at,
+        )
         rows = (
-            q.order_by(ToolExecution.started_at.asc().nulls_last(), ToolExecution.id.asc())
+            q.order_by(lifecycle_ts.asc().nulls_last(), ToolExecution.id.asc())
             .limit(_LIST_HARD_LIMIT)
             .all()
         )
@@ -198,8 +205,10 @@ class ToolExecutionService(BaseService):
             except (ValueError, OSError, TypeError):
                 started_at = None
 
-        # Lifecycle timestamps stamped by ToolCallTimer in each handler.
-        # All three are optional so pre-migration entries still write.
+        # Lifecycle timestamps stamped by ToolCallTimer in each handler and by
+        # ToolCallProposalObserver for the LLM-proposal boundary. Each column
+        # is optional so pre-migration / proposal-only entries still write.
+        proposed_at = _parse_iso_utc(entry.get("proposed_at"))
         llm_requested_at = _parse_iso_utc(entry.get("llm_requested_at"))
         invoked_at = _parse_iso_utc(entry.get("invoked_at"))
         completed_at = _parse_iso_utc(entry.get("completed_at"))
@@ -215,6 +224,7 @@ class ToolExecutionService(BaseService):
             mcp_server_name=entry.get("server"),
             tool_id=entry.get("tool_id"),
             mcp_server_id=entry.get("mcp_server_id"),
+            tool_call_id=entry.get("tool_call_id"),
             arguments=_json_safe(entry.get("arguments")),
             result=_json_safe(result),
             status=status,
@@ -223,6 +233,7 @@ class ToolExecutionService(BaseService):
             duration_ms=entry.get("duration_ms"),
             turn_number=entry.get("turn"),
             started_at=started_at,
+            proposed_at=proposed_at,
             llm_requested_at=llm_requested_at,
             invoked_at=invoked_at,
             completed_at=completed_at,
