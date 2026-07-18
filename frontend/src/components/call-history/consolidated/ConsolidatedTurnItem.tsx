@@ -113,6 +113,7 @@ function ChatBubble({ role, text }: ChatBubbleProps) {
             : 'rounded-br-sm bg-primary/10 text-foreground dark:bg-primary/20',
         )}
       >
+        <p className="mb-0.5 text-xs font-medium opacity-70">{isUser ? 'User' : 'Assistant'}</p>
         <p className="whitespace-pre-wrap">{text}</p>
       </div>
     </div>
