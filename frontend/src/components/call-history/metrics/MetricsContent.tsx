@@ -1,7 +1,7 @@
 'use client';
 
 import { CustomButton } from '@/components/shared';
-import type { CallMetrics } from '@/types/callLog';
+import type { CallMetrics, ToolExecution } from '@/types/callLog';
 import { cn } from '@/utils/cn';
 import {
   AudioLines,
@@ -51,10 +51,14 @@ function CollapseToolbar() {
 
 interface MetricsContentProps {
   metrics: CallMetrics;
+  /** Tool executions for this call — sourced from `/tool-executions`. Used by
+   *  the End-to-End per-Turn table to show the count of executed (success/error)
+   *  tool calls per turn. */
+  toolExecutions?: ToolExecution[];
   className?: string;
 }
 
-const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, className }) => {
+const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, toolExecutions, className }) => {
   // Defensive shims — the type declares each as a non-null array, but legacy
   // backend rows / partial ingestion can deliver `null`. Coerce once at the
   // top so every downstream `.reduce`/`.map`/`.filter` is safe.
@@ -137,7 +141,9 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, className }) =
 
         {hasLatency && (
           <MetricsCategory title="Latency">
-            {hasTurnMetrics && <TurnLatencySection turns={turnMetrics} />}
+            {hasTurnMetrics && (
+              <TurnLatencySection turns={turnMetrics} toolExecutions={toolExecutions} />
+            )}
             {hasTurnMetrics && <PerTurnCallsSection turns={turnMetrics} />}
             {hasProcessing && <ProcessingTimesSection processing={processingList} />}
           </MetricsCategory>
