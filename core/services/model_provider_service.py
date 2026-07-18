@@ -811,16 +811,7 @@ class ModelProviderService(BaseService):
     def list_providers_catalog(self, service_type: str | None = None) -> list[dict]:
         service_type = _validate_service_type(service_type, required=False)
 
-        q = self.db.query(ModelProvider).filter(ModelProvider.is_active.is_(True))
-
-        if service_type:
-            # Narrow to providers that actually offer this kind of model,
-            # regardless of whether the org has an API key configured.
-            provider_ids_with_kind = self.db.query(distinct(Model.provider_id)).filter(
-                Model.kind == service_type,
-                Model.is_active.is_(True),
-            )
-            q = q.filter(ModelProvider.id.in_(provider_ids_with_kind))
+        q = self.db.query(ModelProvider)
 
         providers = q.order_by(ModelProvider.display_name.asc()).all()
         kinds_map = self._provider_kinds_map([p.id for p in providers])
