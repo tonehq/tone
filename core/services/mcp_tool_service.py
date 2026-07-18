@@ -315,7 +315,8 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, tool_re
         tool_call_entries: Optional shared list each MCP invocation is appended to,
             so it's persisted to the tool_executions table at call completion.
         tool_request_ts: Optional runner-owned ``{tool_call_id: llm_requested_at}``
-            map, populated by ToolCallRequestObserver on FunctionCallInProgressFrame.
+            map, populated by LlmRequestStamper's register_function wrapper on
+            handler dispatch.
         current_turn: Optional dict carrying the live conversation turn number.
         tool_dedup: Optional shared dict (per-call) used to suppress duplicate
             create-type tool calls (e.g. clickup_create_task fired twice).
