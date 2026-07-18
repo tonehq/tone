@@ -1,19 +1,53 @@
 'use client';
 
+import { CustomButton } from '@/components/shared';
 import type { CallMetrics } from '@/types/callLog';
 import { cn } from '@/utils/cn';
-import { AudioLines, BrainCircuit, Gauge, MessageSquare, Mic } from 'lucide-react';
+import {
+  AudioLines,
+  BrainCircuit,
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Gauge,
+  MessageSquare,
+  Mic,
+} from 'lucide-react';
 import React, { useMemo } from 'react';
 
 import { LLMUsageSection } from './LLMUsageSection';
 import { MetricsCategory } from './MetricsCategory';
+import { MetricsCollapseProvider, useMetricsCollapse } from './MetricsCollapseContext';
 import { PerTurnCallsSection } from './PerTurnCallsSection';
 import { ProcessingTimesSection } from './ProcessingTimesSection';
 import { StatCard } from './StatCard';
 import { STTUsageSection } from './STTUsageSection';
 import { TTSUsageSection } from './TTSUsageSection';
 import { TurnLatencySection } from './TurnLatencySection';
-import { formatAudioMs } from './utils';
+import { formatAudioMs, formatMs } from './utils';
+
+function CollapseToolbar() {
+  const { expandAll, collapseAll } = useMetricsCollapse();
+  return (
+    <div className="flex items-center justify-end gap-2">
+      <CustomButton
+        type="text"
+        size="sm"
+        icon={<ChevronsUpDown className="size-4" />}
+        onClick={expandAll}
+      >
+        Expand all
+      </CustomButton>
+      <CustomButton
+        type="text"
+        size="sm"
+        icon={<ChevronsDownUp className="size-4" />}
+        onClick={collapseAll}
+      >
+        Collapse all
+      </CustomButton>
+    </div>
+  );
+}
 
 interface MetricsContentProps {
   metrics: CallMetrics;
@@ -57,79 +91,85 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, className }) =
   const hasUsage = llmUsage.length > 0 || ttsUsage.length > 0 || sttUsage.length > 0;
   const llmModels = [...new Set(llmUsage.map((u) => u.model))].join(', ');
 
+  const showCollapseToolbar = hasLatency || hasUsage;
+
   return (
-    <div className={cn('flex flex-col gap-8', className)}>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatCard
-          icon={Gauge}
-          label="Avg Latency"
-          value={overview.avgLatency != null ? `${overview.avgLatency.toFixed(1)}s` : '-'}
-          sub="User to bot"
-          color="bg-violet-500"
-        />
-        <StatCard
-          icon={MessageSquare}
-          label="Turns"
-          value={String(overview.totalTurns)}
-          color="bg-blue-500"
-        />
-        <StatCard
-          icon={BrainCircuit}
-          label="LLM Tokens"
-          value={overview.totalTokens.toLocaleString()}
-          sub={llmUsage.length > 0 ? llmModels : undefined}
-          color="bg-emerald-500"
-        />
-        <StatCard
-          icon={Mic}
-          label="TTS Characters"
-          value={overview.totalChars.toLocaleString()}
-          sub={ttsUsage.length > 0 ? ttsUsage[0].model : undefined}
-          color="bg-amber-500"
-        />
-        <StatCard
-          icon={AudioLines}
-          label="STT Audio"
-          value={formatAudioMs(overview.totalSttAudioMs)}
-          sub={sttUsage.length > 0 ? (sttUsage[0].model ?? undefined) : undefined}
-          color="bg-cyan-500"
-        />
+    <MetricsCollapseProvider>
+      <div className={cn('flex flex-col gap-8', className)}>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <StatCard
+            icon={Gauge}
+            label="Avg Latency"
+            value={overview.avgLatency != null ? formatMs(overview.avgLatency) : '-'}
+            sub="User to bot"
+            color="bg-violet-500"
+          />
+          <StatCard
+            icon={MessageSquare}
+            label="Turns"
+            value={String(overview.totalTurns)}
+            color="bg-blue-500"
+          />
+          <StatCard
+            icon={BrainCircuit}
+            label="LLM Tokens"
+            value={overview.totalTokens.toLocaleString()}
+            sub={llmUsage.length > 0 ? llmModels : undefined}
+            color="bg-emerald-500"
+          />
+          <StatCard
+            icon={Mic}
+            label="TTS Characters"
+            value={overview.totalChars.toLocaleString()}
+            sub={ttsUsage.length > 0 ? ttsUsage[0].model : undefined}
+            color="bg-amber-500"
+          />
+          <StatCard
+            icon={AudioLines}
+            label="STT Audio"
+            value={formatAudioMs(overview.totalSttAudioMs)}
+            sub={sttUsage.length > 0 ? (sttUsage[0].model ?? undefined) : undefined}
+            color="bg-cyan-500"
+          />
+        </div>
+
+        {showCollapseToolbar && <CollapseToolbar />}
+
+        {hasLatency && (
+          <MetricsCategory title="Latency">
+            {hasTurnMetrics && <TurnLatencySection turns={turnMetrics} />}
+            {hasTurnMetrics && <PerTurnCallsSection turns={turnMetrics} />}
+            {hasProcessing && <ProcessingTimesSection processing={processingList} />}
+          </MetricsCategory>
+        )}
+
+        {hasUsage && (
+          <MetricsCategory title="Usage">
+            {llmUsage.length > 0 && (
+              <LLMUsageSection
+                llmUsage={llmUsage}
+                totalTokens={overview.totalTokens}
+                turns={turnMetrics}
+              />
+            )}
+            {ttsUsage.length > 0 && (
+              <TTSUsageSection
+                ttsUsage={ttsUsage}
+                totalChars={overview.totalChars}
+                turns={turnMetrics}
+              />
+            )}
+            {sttUsage.length > 0 && (
+              <STTUsageSection
+                sttUsage={sttUsage}
+                totalAudioMs={overview.totalSttAudioMs}
+                turns={turnMetrics}
+              />
+            )}
+          </MetricsCategory>
+        )}
       </div>
-
-      {hasLatency && (
-        <MetricsCategory title="Latency">
-          {hasTurnMetrics && <TurnLatencySection turns={turnMetrics} />}
-          {hasTurnMetrics && <PerTurnCallsSection turns={turnMetrics} />}
-          {hasProcessing && <ProcessingTimesSection processing={processingList} />}
-        </MetricsCategory>
-      )}
-
-      {hasUsage && (
-        <MetricsCategory title="Usage">
-          {llmUsage.length > 0 && (
-            <LLMUsageSection
-              llmUsage={llmUsage}
-              totalTokens={overview.totalTokens}
-              turns={turnMetrics}
-            />
-          )}
-          {ttsUsage.length > 0 && (
-            <TTSUsageSection
-              ttsUsage={ttsUsage}
-              totalChars={overview.totalChars}
-              turns={turnMetrics}
-            />
-          )}
-          {sttUsage.length > 0 && (
-            <STTUsageSection
-              sttUsage={sttUsage}
-              totalAudioMs={overview.totalSttAudioMs}
-              turns={turnMetrics}
-            />
-          )}
-        </MetricsCategory>
-      )}
-    </div>
+    </MetricsCollapseProvider>
   );
 };
 

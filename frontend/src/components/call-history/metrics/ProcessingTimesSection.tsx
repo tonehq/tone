@@ -2,9 +2,12 @@
 
 import type { CallMetricsProcessing } from '@/types/callLog';
 import { Clock } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
+import { CollapsibleCard } from './CollapsibleCard';
 import { MetricsDataTable, type MetricsTableColumn } from './MetricsDataTable';
 import { SectionHeader } from './SectionHeader';
+import { SortToggle, type SortDirection } from './SortToggle';
 import { useChartTableView } from './useChartTableView';
 import { formatMs, groupByProcessor } from './utils';
 
@@ -71,32 +74,41 @@ function ProcessingChart({ rows }: ProcessingChartProps) {
 export function ProcessingTimesSection({ processing }: ProcessingTimesSectionProps) {
   const significant = processing.filter((p) => p.model && p.value > 0);
   const { view, toggle } = useChartTableView('table', 'Processing times view');
+  const [sort, setSort] = useState<SortDirection>('natural');
+
+  const rows = useMemo<ProcessorRow[]>(() => {
+    const grouped = groupByProcessor(significant);
+    const base: ProcessorRow[] = Object.entries(grouped).map(([processor, data]) => {
+      const total = data.entries.reduce((s, v) => s + v, 0);
+      return {
+        processor,
+        model: data.model,
+        avg: total / data.entries.length,
+        total,
+        calls: data.entries.length,
+      };
+    });
+    if (sort === 'natural') return base;
+    return [...base].sort((a, b) => (sort === 'asc' ? a.avg - b.avg : b.avg - a.avg));
+  }, [significant, sort]);
 
   if (significant.length === 0) return null;
 
-  const grouped = groupByProcessor(significant);
-  const rows: ProcessorRow[] = Object.entries(grouped).map(([processor, data]) => {
-    const total = data.entries.reduce((s, v) => s + v, 0);
-    return {
-      processor,
-      model: data.model,
-      avg: total / data.entries.length,
-      total,
-      calls: data.entries.length,
-    };
-  });
-
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <SectionHeader icon={Clock} title="Processing Times" />
-        {toggle}
-      </div>
+    <CollapsibleCard
+      title={<SectionHeader icon={Clock} title="Processing Times" />}
+      actions={
+        <>
+          <SortToggle value={sort} onChange={setSort} label="Sort processors by avg" />
+          {toggle}
+        </>
+      }
+    >
       {view === 'chart' ? (
         <ProcessingChart rows={rows} />
       ) : (
         <MetricsDataTable columns={TABLE_COLUMNS} rows={rows} getRowKey={(row) => row.processor} />
       )}
-    </div>
+    </CollapsibleCard>
   );
 }

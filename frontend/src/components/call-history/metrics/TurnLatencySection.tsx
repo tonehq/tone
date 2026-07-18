@@ -2,9 +2,12 @@
 
 import type { CallMetricsTurnMetric } from '@/types/callLog';
 import { LineChart } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
+import { CollapsibleCard } from './CollapsibleCard';
 import { LatencyStatChips, useLatencyStats } from './LatencyStatChips';
 import { SectionHeader } from './SectionHeader';
+import { SortToggle, type SortDirection } from './SortToggle';
 import { StackedCallsBarChart } from './StackedCallsBarChart';
 import { type PerTurnUsageRow, TurnUsageTable } from './TurnUsageCard';
 import { useChartTableView } from './useChartTableView';
@@ -13,8 +16,6 @@ import { formatMs, turnHasAnyMeasurement } from './utils';
 interface TurnLatencySectionProps {
   turns: CallMetricsTurnMetric[];
 }
-
-const formatSeconds = (v: number) => `${v.toFixed(2)}s`;
 
 /**
  * Drop placeholder zeros and nulls. Pipecat emits 0.0 only for cases where
@@ -89,7 +90,7 @@ export function TurnLatencySection({ turns }: TurnLatencySectionProps) {
       key: 'end_to_end',
       title: 'End-to-End Latency per Turn',
       subtitle: 'User stopped → bot started speaking',
-      format: formatSeconds,
+      format: formatMs,
       stacks: sorted.map((t) => cleanSamples([t.end_to_end])),
     },
   ];
@@ -123,7 +124,7 @@ interface TurnMetricCardProps {
   turnLabels: string[];
 }
 
-/** Single per-metric card: chart/table toggle + stat reference lines. */
+/** Single per-metric card: chart/table toggle + stat reference lines + sort. */
 function TurnMetricCard({
   seriesKey,
   title,
@@ -132,12 +133,30 @@ function TurnMetricCard({
   stacks,
   turnLabels,
 }: TurnMetricCardProps) {
+  const { view, toggle: viewToggle } = useChartTableView('chart', `${title} view`);
+  const [sort, setSort] = useState<SortDirection>('natural');
+
+  // Reorder stacks / labels together by per-turn total. Natural order is the
+  // upstream-sorted (turn-number) sequence — no work needed.
+  const { stacks: displayStacks, turnLabels: displayLabels } = useMemo(() => {
+    if (sort === 'natural') return { stacks, turnLabels };
+    const totals = stacks.map((s) => s.reduce((acc, v) => acc + v, 0));
+    const order = totals
+      .map((total, i) => ({ total, i }))
+      .sort((a, b) => (sort === 'asc' ? a.total - b.total : b.total - a.total));
+    return {
+      stacks: order.map((o) => stacks[o.i]),
+      turnLabels: order.map((o) => turnLabels[o.i]),
+    };
+  }, [stacks, turnLabels, sort]);
+
   // Stats reflect what the bar visually represents: the per-turn TOTAL
   // (sum of all per-call values inside the turn). Turns with no measurement
   // are excluded so a placeholder zero doesn't drag the avg / min down.
-  const turnTotals = stacks.map((s) => s.reduce((acc, v) => acc + v, 0)).filter((v) => v > 0);
+  const turnTotals = displayStacks
+    .map((s) => s.reduce((acc, v) => acc + v, 0))
+    .filter((v) => v > 0);
   const { stats, sampleCount, visible, toggle, buildReferenceLines } = useLatencyStats(turnTotals);
-  const { view, toggle: viewToggle } = useChartTableView('chart', `${title} view`);
 
   const referenceLines = buildReferenceLines(format);
 
@@ -145,8 +164,8 @@ function TurnMetricCard({
   // use — Turn (rowSpan) | <metric> | Total (rowSpan), with one row per
   // call inside the turn. `calls` and `values` both carry the raw number;
   // there's no per-call metadata for TTFB so no cell subtext.
-  const tableRows: PerTurnUsageRow<number>[] = stacks.map((segments, i) => ({
-    turnLabel: turnLabels[i],
+  const tableRows: PerTurnUsageRow<number>[] = displayStacks.map((segments, i) => ({
+    turnLabel: displayLabels[i],
     calls: segments,
     values: segments,
     total: segments.reduce((acc, v) => acc + v, 0),
@@ -154,20 +173,23 @@ function TurnMetricCard({
   const tableColumnHeader = title.replace(' per Turn', '');
 
   return (
-    <div className="rounded-lg border border-border p-3">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div>
-          <span className="text-sm font-medium text-foreground">{title}</span>
-          <span className="ml-2 text-xs text-muted-foreground">{subtitle}</span>
-        </div>
-        <div className="flex items-center gap-2">
+    <CollapsibleCard
+      title={title}
+      subtitle={subtitle}
+      actions={
+        <>
           <span className="text-xs text-muted-foreground">
             {sampleCount} of {stacks.length} turn{stacks.length !== 1 ? 's' : ''}
           </span>
+          <SortToggle
+            value={sort}
+            onChange={setSort}
+            label={`Sort order for ${tableColumnHeader}`}
+          />
           {viewToggle}
-        </div>
-      </div>
-
+        </>
+      }
+    >
       {view === 'chart' ? (
         <>
           <LatencyStatChips
@@ -179,16 +201,16 @@ function TurnMetricCard({
             ariaLabel={`Toggle reference lines for ${seriesKey}`}
           />
           <StackedCallsBarChart
-            stacks={stacks}
+            stacks={displayStacks}
             formatValue={format}
             xAxisLabel="Turn"
-            xLabels={turnLabels}
+            xLabels={displayLabels}
             referenceLines={referenceLines}
           />
         </>
       ) : (
         <TurnUsageTable rows={tableRows} columnHeader={tableColumnHeader} format={format} />
       )}
-    </div>
+    </CollapsibleCard>
   );
 }

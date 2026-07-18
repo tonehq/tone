@@ -3,8 +3,11 @@
 import type { CallMetricsTurnMetric } from '@/types/callLog';
 import { cn } from '@/utils/cn';
 import { BarChart3 } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
+import { CollapsibleCard } from './CollapsibleCard';
 import { SectionHeader } from './SectionHeader';
+import { SortToggle, type SortDirection } from './SortToggle';
 import {
   StackedTurnLatencyChart,
   type StackedSeriesDatum,
@@ -120,26 +123,50 @@ const formatCell = (v: number | null) =>
  */
 export function PerTurnCallsSection({ turns }: PerTurnCallsSectionProps) {
   const { view, toggle } = useChartTableView('chart', 'Service latency view');
-
-  if (turns.length === 0) return null;
+  const [sort, setSort] = useState<SortDirection>('natural');
 
   // Same filter as TurnLatencySection's cards above — real turns only
   // (pipecat counts from 1; turn 0 is an internal pre-turn bucket) AND must
   // have at least one measurement. Includes greeting and final partial turn.
-  const sorted = [...turns]
-    .sort((a, b) => a.turn - b.turn)
-    .filter((t) => t.turn >= 1 && turnHasAnyMeasurement(t));
+  const sortedByTurn = useMemo(
+    () =>
+      [...turns]
+        .sort((a, b) => a.turn - b.turn)
+        .filter((t) => t.turn >= 1 && turnHasAnyMeasurement(t)),
+    [turns],
+  );
+
+  // Reorder turns by total LLM+STT+TTS TTFB when the user picks asc/desc.
+  // Both the chart bars and the grouped table rows share this ordering so
+  // switching views keeps the visual sequence stable.
+  const sorted = useMemo(() => {
+    if (sort === 'natural') return sortedByTurn;
+    const totalOf = (t: CallMetricsTurnMetric): number => {
+      const sum = (arr: readonly (number | null)[] | null | undefined) =>
+        (arr ?? []).reduce<number>((acc, v) => (v != null && v > 0 ? acc + v : acc), 0);
+      return sum(t.llm_ttfb_all) + sum(t.stt_ttfb_all) + sum(t.tts_ttfb_all);
+    };
+    return [...sortedByTurn].sort((a, b) =>
+      sort === 'asc' ? totalOf(a) - totalOf(b) : totalOf(b) - totalOf(a),
+    );
+  }, [sortedByTurn, sort]);
+
+  if (turns.length === 0) return null;
   const rows = buildRows(sorted);
   const chartData = buildChartData(sorted);
   if (rows.length === 0 && chartData.length === 0) return null;
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <SectionHeader icon={BarChart3} title="LLM / STT / TTS per Turn" />
-        {toggle}
-      </div>
-      <p className="text-xs text-muted-foreground">
+    <CollapsibleCard
+      title={<SectionHeader icon={BarChart3} title="LLM / STT / TTS per Turn" />}
+      actions={
+        <>
+          <SortToggle value={sort} onChange={setSort} label="Sort order for per-turn latency" />
+          {toggle}
+        </>
+      }
+    >
+      <p className="mb-3 text-xs text-muted-foreground">
         {view === 'chart'
           ? 'One bar per turn. Each bar stacks the first TTFB for LLM, STT, and TTS — the colored segments show each service’s share of the bar.'
           : 'Per-call rows grouped under each turn. Service columns show the individual call’s TTFB; Total Latency sums all per-call TTFBs for that turn.'}
@@ -220,6 +247,6 @@ export function PerTurnCallsSection({ turns }: PerTurnCallsSectionProps) {
           </table>
         </div>
       )}
-    </div>
+    </CollapsibleCard>
   );
 }
