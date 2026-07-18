@@ -27,6 +27,7 @@ from typing import Dict, List, Optional
 from uuid import UUID
 
 from loguru import logger
+from sqlalchemy import func
 
 from core.models.call import Call
 from core.models.call_metrics import CallMetrics
@@ -121,17 +122,22 @@ class ConsolidatedTranscriptService(BaseService):
         return transcript if isinstance(transcript, list) else []
 
     def _load_tool_executions(self, call_id: UUID) -> List[ToolExecution]:
-        """All tool_executions for the call, ordered by invocation time.
+        """All tool_executions for the call, ordered by lifecycle time.
 
-        Ordering matches ``ToolExecutionService.list_for_call`` so a UI that
-        renders tool_calls[] gets them in the same sequence the agent invoked
-        them. Org scoping comes from ``BaseService.query``.
+        Uses ``COALESCE(started_at, proposed_at)`` so proposal-only rows
+        (LLM proposed the tool but the pipeline never dispatched it) still
+        interleave chronologically alongside executed rows — a proposal that
+        happened between two executions doesn't get pushed to the tail.
+        Org scoping comes from ``BaseService.query``.
         """
+        lifecycle_ts = func.coalesce(
+            ToolExecution.started_at, ToolExecution.proposed_at,
+        )
         return (
             self.query(ToolExecution)
             .filter(ToolExecution.call_id == call_id)
             .order_by(
-                ToolExecution.started_at.asc().nulls_last(),
+                lifecycle_ts.asc().nulls_last(),
                 ToolExecution.id.asc(),
             )
             .all()

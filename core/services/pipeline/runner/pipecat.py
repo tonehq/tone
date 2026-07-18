@@ -22,6 +22,7 @@ from core.services.pipeline.call_end_events import (
     log_call_event,
 )
 from core.services.pipeline.runner.base import PipelineRunner
+from core.services.pipeline.tool_call_timing import merge_and_synthesize
 
 
 class PipecatPipelineRunner(PipelineRunner):
@@ -83,6 +84,12 @@ class PipecatPipelineRunner(PipelineRunner):
         # popped by each handler via ToolCallTimer. Bounded by in-flight
         # tool calls.
         tool_request_ts: dict = {}
+        # Per-call {tool_call_id: proposal record}. Populated by
+        # ToolCallProposalObserver on FunctionCallsStartedFrame (with
+        # proposed_at + arguments) and enriched on FunctionCallCancelFrame.
+        # Consumed at call completion so every LLM proposal — including ones
+        # that never actually executed — persists as a tool_executions row.
+        tool_proposals: dict = {}
         current_turn: dict = {"number": 0}
         tool_dedup: dict = {}
         call_log_updated = {"done": False}
@@ -212,6 +219,7 @@ class PipecatPipelineRunner(PipelineRunner):
             prompt_context=prompt_context,
             tool_call_entries=tool_call_entries,
             tool_request_ts=tool_request_ts,
+            tool_proposals=tool_proposals,
             current_turn=current_turn,
             tool_dedup=tool_dedup,
             end_reason_holder=end_reason_holder,
@@ -368,6 +376,9 @@ class PipecatPipelineRunner(PipelineRunner):
                         transcript_data = transcript_entries if transcript_entries else None
 
                         collected_metrics = _assemble_metrics()
+                        merged_tool_entries = merge_and_synthesize(
+                            tool_call_entries, tool_proposals,
+                        )
                         with get_db_context() as db:
                             CallLogService(db).complete_call(
                                 call_log_id=call_log_id,
@@ -375,7 +386,7 @@ class PipecatPipelineRunner(PipelineRunner):
                                 upload_id=upload_id,
                                 transcript=transcript_data,
                                 metrics=collected_metrics,
-                                tool_calls=tool_call_entries or None,
+                                tool_calls=merged_tool_entries or None,
                                 recording_duration_seconds=recording_seconds,
                                 ended_reason=end_reason_holder.get("reason"),
                                 ended_reason_detail=end_reason_holder.get("detail"),
@@ -513,13 +524,16 @@ class PipecatPipelineRunner(PipelineRunner):
                     transcript_data = transcript_entries if transcript_entries else None
 
                     collected_metrics = _assemble_metrics()
+                    merged_tool_entries = merge_and_synthesize(
+                        tool_call_entries, tool_proposals,
+                    )
                     with get_db_context() as db:
                         CallLogService(db).complete_call(
                             call_log_id=call_log_id,
                             audio_file_path=None,
                             transcript=transcript_data,
                             metrics=collected_metrics,
-                            tool_calls=tool_call_entries or None,
+                            tool_calls=merged_tool_entries or None,
                             ended_reason=end_reason_holder.get("reason"),
                             ended_reason_detail=end_reason_holder.get("detail"),
                         )

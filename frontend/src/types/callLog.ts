@@ -188,7 +188,16 @@ export interface CallLogRow {
   consolidated_transcript?: ConsolidatedTurn[] | null;
 }
 
-export type ToolExecutionStatus = 'success' | 'error';
+/**
+ * Full lifecycle of a tool call for a single LLM decision:
+ *  - `proposed`  → LLM emitted a call for this tool but the pipeline never
+ *                  dispatched a handler (usually an unregistered tool name).
+ *  - `cancelled` → proposed and dispatched, but killed mid-execution
+ *                  (typically a user barge-in).
+ *  - `success`   → handler ran to completion without error.
+ *  - `error`     → handler ran but returned or raised an error.
+ */
+export type ToolExecutionStatus = 'proposed' | 'cancelled' | 'success' | 'error';
 
 export type ToolExecutionType =
   | 'custom'
@@ -212,6 +221,12 @@ export interface ToolExecution {
   mcp_server_name: string | null;
   tool_id: string | null;
   mcp_server_id: string | null;
+  /**
+   * Pipecat's correlation id for the LLM proposal. Joins a proposed-only row
+   * to any downstream execution row(s) for the same LLM decision. Null on
+   * pre-migration rows.
+   */
+  tool_call_id: string | null;
   arguments: unknown;
   result: unknown;
   status: ToolExecutionStatus | string | null;
@@ -220,6 +235,13 @@ export interface ToolExecution {
   duration_ms: number | null;
   turn_number: number | null;
   started_at: string | null;
+  /**
+   * ISO-8601 timestamp of when the LLM emitted this tool call
+   * (`FunctionCallsStartedFrame`). Populated for every proposal, even ones
+   * that never actually executed. Null on rows persisted before the proposal
+   * observer existed.
+   */
+  proposed_at: string | null;
   meta_data: Record<string, unknown> | null;
   created_at: string | null;
   updated_at: string | null;

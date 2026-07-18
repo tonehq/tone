@@ -133,6 +133,13 @@ class PipecatPipelineBuilder(PipelineBuilder):
         # tool_executions row captures the LLM-request → invoked → completed
         # lifecycle.
         tool_request_ts: Any = None,
+        # Runner-owned {tool_call_id: proposal record}. Populated by
+        # ToolCallProposalObserver on FunctionCallsStartedFrame (and enriched
+        # on FunctionCallCancelFrame). Consumed at call completion to attribute
+        # ``proposed_at`` to executed rows AND synthesise rows for LLM
+        # proposals that never actually executed (unregistered tool name,
+        # user-interrupted before dispatch).
+        tool_proposals: Any = None,
         current_turn: Any = None,
         tool_dedup: Any = None,
         # Runner-owned dict for attributing why the call ended
@@ -492,11 +499,20 @@ class PipecatPipelineBuilder(PipelineBuilder):
         from pipecat.observers.loggers.metrics_log_observer import MetricsLogObserver
         from pipecat.observers.turn_tracking_observer import TurnTrackingObserver
 
+        from core.observers.tool_call_proposal_observer import ToolCallProposalObserver
         from core.observers.user_bot_latency_observer import UserBotLatencyObserver
 
         metrics_observer = MetricsLogObserver()
         latency_observer = UserBotLatencyObserver()
         turn_observer = TurnTrackingObserver()
+        # Only attach when the runner wired the map (older callers may not).
+        # ``llm_requested_at`` is captured by LlmRequestStamper (installed on
+        # the LLM above) — no observer needed for that timestamp any more.
+        tool_call_proposal_observer = (
+            ToolCallProposalObserver(tool_proposals, current_turn)
+            if tool_proposals is not None
+            else None
+        )
 
         # Use the TTS service's native sample rate so the output transport tags audio
         # frames correctly for the serializer (e.g. Hume @ 48 kHz). S2S models output
@@ -514,10 +530,13 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 audio_out_sample_rate=tts_sample_rate,
             ),
             observers=[
-                RTVIObserver(rtvi),
-                metrics_observer,
-                latency_observer,
-                turn_observer,
+                obs for obs in (
+                    RTVIObserver(rtvi),
+                    metrics_observer,
+                    latency_observer,
+                    turn_observer,
+                    tool_call_proposal_observer,
+                ) if obs is not None
             ],
         )
         logger.info("[TIMING] Pipeline + PipelineTask created (+{:.3f}s)", _time.monotonic() - _t)
