@@ -1,18 +1,40 @@
 'use client';
 
-import { GitBranchPlus, LayoutTemplate, Loader2, Radio, Save } from 'lucide-react';
+import {
+  Beaker,
+  GitBranchPlus,
+  LayoutTemplate,
+  Loader2,
+  MoreVertical,
+  Radio,
+  Save,
+  Trash2,
+} from 'lucide-react';
 
 import { CustomButton, CustomTooltip } from '@/components/shared';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
-export type AgentSaveAction = 'save' | 'publish' | 'create-version' | 'save-as-template';
+export type AgentSaveAction =
+  | 'save'
+  | 'publish'
+  | 'create-version'
+  | 'save-as-template'
+  | 'test'
+  | 'delete';
 
 interface AgentSaveActionsProps {
   /** `create` mode shows a single "Create agent" button. `edit` mode shows
-   *  Save + Create version + Save as template + Publish as distinct top-level
-   *  buttons. */
+   *  Save as the only top-level button and moves Test, Create version, Save as
+   *  template, Publish, and Delete into a three-dot overflow menu. */
   mode: 'create' | 'edit';
   /** True when at least one draft (non-published) version exists. Drives
-   *  whether the Publish toolbar button is enabled — clicking opens a picker
+   *  whether the Publish menu item is enabled — clicking opens a picker
    *  the user uses to choose which draft to promote. */
   canPublish: boolean;
   saving: boolean;
@@ -24,17 +46,17 @@ interface AgentSaveActionsProps {
 }
 
 const ICON_CLASS = 'size-3.5';
+const MENU_ICON_CLASS = 'size-4';
 const SPINNER = <Loader2 className={`${ICON_CLASS} animate-spin`} />;
 
 /**
  * Primary action area for the agent editor toolbar.
  *
  * - **create** mode: one "Create agent" button.
- * - **edit** mode: four buttons — **Save** (mutates the loaded version in
- *   place), **Create version** (opens a dialog to copy from or start fresh),
- *   **Save as template** (opens a dialog to snapshot the live config as a
- *   reusable template), and **Publish** (opens the version picker modal).
- *   Publish is disabled when there are no drafts to promote.
+ * - **edit** mode: **Save** stays as a visible button; **Test**, **Create
+ *   version**, **Save as template**, **Publish**, and **Delete** live in a
+ *   three-dot overflow menu anchored to the right corner. Publish is disabled
+ *   when there are no drafts to promote.
  */
 export default function AgentSaveActions({
   mode,
@@ -65,8 +87,18 @@ export default function AgentSaveActions({
   const publishDisabled = busy || !canPublish;
   const publishTooltip = !canPublish ? 'No drafts to publish — create a version first.' : null;
 
+  const menuTrigger = (
+    <CustomButton
+      type="default"
+      size="sm"
+      icon={<MoreVertical className={MENU_ICON_CLASS} />}
+      aria-label="More agent actions"
+      className="h-8 w-8 p-0"
+    />
+  );
+
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-3">
       <CustomButton
         type="default"
         size="sm"
@@ -78,67 +110,67 @@ export default function AgentSaveActions({
       >
         Save
       </CustomButton>
-      <CustomButton
-        type="default"
-        size="sm"
-        icon={creatingVersion ? SPINNER : <GitBranchPlus className={ICON_CLASS} />}
-        onClick={() => onAction('create-version')}
-        loading={creatingVersion}
-        disabled={busy}
-        className="h-8"
-      >
-        Create version
-      </CustomButton>
-      <CustomButton
-        type="default"
-        size="sm"
-        icon={<LayoutTemplate className={ICON_CLASS} />}
-        onClick={() => onAction('save-as-template')}
-        disabled={busy}
-        className="h-8"
-      >
-        Save as template
-      </CustomButton>
-      <PublishButton
-        publishing={publishing}
-        disabled={publishDisabled}
-        tooltip={publishTooltip}
-        onClick={() => onAction('publish')}
-      />
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>{menuTrigger}</DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuItem onSelect={() => onAction('test')}>
+            <Beaker className={MENU_ICON_CLASS} />
+            Test
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={busy} onSelect={() => onAction('create-version')}>
+            {creatingVersion ? (
+              <Loader2 className={`${MENU_ICON_CLASS} animate-spin`} />
+            ) : (
+              <GitBranchPlus className={MENU_ICON_CLASS} />
+            )}
+            Create version
+          </DropdownMenuItem>
+          <DropdownMenuItem disabled={busy} onSelect={() => onAction('save-as-template')}>
+            <LayoutTemplate className={MENU_ICON_CLASS} />
+            Save as template
+          </DropdownMenuItem>
+          <PublishMenuItem
+            disabled={publishDisabled}
+            publishing={publishing}
+            tooltip={publishTooltip}
+            onSelect={() => onAction('publish')}
+          />
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onSelect={() => onAction('delete')}>
+            <Trash2 className={MENU_ICON_CLASS} />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }
 
-interface PublishButtonProps {
-  publishing: boolean;
+interface PublishMenuItemProps {
   disabled: boolean;
+  publishing: boolean;
   tooltip: string | null;
-  onClick: () => void;
+  onSelect: () => void;
 }
 
-/** Publish button extracted so the tooltip-vs-bare-button branch stays local
- *  to the one place that needs it. */
-function PublishButton({ publishing, disabled, tooltip, onClick }: PublishButtonProps) {
-  const button = (
-    <CustomButton
-      type="primary"
-      size="sm"
-      icon={publishing ? SPINNER : <Radio className={ICON_CLASS} />}
-      onClick={onClick}
-      loading={publishing}
-      disabled={disabled}
-      className="h-8"
-    >
+/** Publish row extracted so the disabled-tooltip branch stays local. Radix
+ *  disabled menu items ignore pointer events, so we wrap in a tooltip trigger
+ *  span to still surface the "no drafts" hint on hover. */
+function PublishMenuItem({ disabled, publishing, tooltip, onSelect }: PublishMenuItemProps) {
+  const item = (
+    <DropdownMenuItem disabled={disabled} onSelect={onSelect}>
+      {publishing ? (
+        <Loader2 className={`${MENU_ICON_CLASS} animate-spin`} />
+      ) : (
+        <Radio className={MENU_ICON_CLASS} />
+      )}
       Publish
-    </CustomButton>
+    </DropdownMenuItem>
   );
-
-  // Radix tooltips don't surface for disabled buttons because pointer events
-  // are off — wrap in a span so the trigger still receives hover.
-  if (!tooltip) return button;
+  if (!tooltip) return item;
   return (
     <CustomTooltip content={tooltip}>
-      <span className="inline-flex">{button}</span>
+      <span className="inline-flex w-full">{item}</span>
     </CustomTooltip>
   );
 }
