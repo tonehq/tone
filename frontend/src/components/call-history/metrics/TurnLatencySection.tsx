@@ -1,8 +1,8 @@
 'use client';
 
-import type { CallMetricsTurnMetric } from '@/types/callLog';
+import type { CallMetricsTurnMetric, ToolExecution } from '@/types/callLog';
 import { LineChart } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 
 import { CollapsibleCard } from './CollapsibleCard';
 import { LatencyStatChips, useLatencyStats } from './LatencyStatChips';
@@ -15,6 +15,27 @@ import { formatMs, turnHasAnyMeasurement } from './utils';
 
 interface TurnLatencySectionProps {
   turns: CallMetricsTurnMetric[];
+  /** Full tool_executions list for this call. Used only by the end-to-end card
+   *  to render an "Executed Tool Calls" column per turn. */
+  toolExecutions?: ToolExecution[];
+}
+
+/**
+ * Count executed tool calls per turn — "executed" = the pipeline actually
+ * dispatched and ran the handler, i.e. status ∈ {`success`, `error`}. Excludes
+ * `proposed` (LLM emitted but never dispatched) and `cancelled` (killed
+ * mid-execution, neither pass nor fail).
+ */
+function buildExecutedToolCallsByTurn(
+  toolExecutions: ToolExecution[] | undefined,
+): Map<number, number> {
+  const byTurn = new Map<number, number>();
+  for (const tc of toolExecutions ?? []) {
+    if (tc.turn_number == null) continue;
+    if (tc.status !== 'success' && tc.status !== 'error') continue;
+    byTurn.set(tc.turn_number, (byTurn.get(tc.turn_number) ?? 0) + 1);
+  }
+  return byTurn;
 }
 
 /**
@@ -45,7 +66,7 @@ interface MetricSeries {
  * is one value per turn (the wall-clock user→bot gap), so its "stack" is a
  * single segment per turn.
  */
-export function TurnLatencySection({ turns }: TurnLatencySectionProps) {
+export function TurnLatencySection({ turns, toolExecutions }: TurnLatencySectionProps) {
   if (turns.length === 0) return null;
 
   // Keep any real conversational turn (pipecat numbers them starting at 1)
@@ -95,6 +116,16 @@ export function TurnLatencySection({ turns }: TurnLatencySectionProps) {
     },
   ];
 
+  // Precompute per-turn executed tool-call counts once — only the end-to-end
+  // card uses them (its "Total" column duplicates the latency value, so we
+  // repurpose it to surface tool activity per turn).
+  const executedByTurn = buildExecutedToolCallsByTurn(toolExecutions);
+  const executedForTurnLabel = (label: string): number => {
+    const turnNum = Number(label);
+    if (!Number.isFinite(turnNum)) return 0;
+    return executedByTurn.get(turnNum) ?? 0;
+  };
+
   return (
     <div className="space-y-3">
       <SectionHeader icon={LineChart} title="Latency per Turn" />
@@ -108,6 +139,17 @@ export function TurnLatencySection({ turns }: TurnLatencySectionProps) {
             format={s.format}
             stacks={s.stacks}
             turnLabels={turnLabels}
+            totalColumnOverride={
+              s.key === 'end_to_end'
+                ? {
+                    header: 'Tool Calls',
+                    render: (row) => {
+                      const count = executedForTurnLabel(row.turnLabel);
+                      return count > 0 ? count : <span className="text-muted-foreground">0</span>;
+                    },
+                  }
+                : undefined
+            }
           />
         ))}
       </div>
@@ -122,6 +164,12 @@ interface TurnMetricCardProps {
   format: (v: number) => string;
   stacks: number[][];
   turnLabels: string[];
+  /** Optional trailing-column override for this card's table view. When
+   *  omitted the shared `Total` column is rendered. */
+  totalColumnOverride?: {
+    header: string;
+    render: (row: PerTurnUsageRow<number>) => ReactNode;
+  };
 }
 
 /** Single per-metric card: chart/table toggle + stat reference lines + sort. */
@@ -132,6 +180,7 @@ function TurnMetricCard({
   format,
   stacks,
   turnLabels,
+  totalColumnOverride,
 }: TurnMetricCardProps) {
   const { view, toggle: viewToggle } = useChartTableView('chart', `${title} view`);
   const [sort, setSort] = useState<SortDirection>('natural');
@@ -209,7 +258,12 @@ function TurnMetricCard({
           />
         </>
       ) : (
-        <TurnUsageTable rows={tableRows} columnHeader={tableColumnHeader} format={format} />
+        <TurnUsageTable
+          rows={tableRows}
+          columnHeader={tableColumnHeader}
+          format={format}
+          totalColumn={totalColumnOverride}
+        />
       )}
     </CollapsibleCard>
   );

@@ -3,11 +3,13 @@
 import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
 import { CustomTooltip, PhoneNumberDisplay } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
-import type { CallLogRow } from '@/types/callLog';
+import { getCallToolExecutions } from '@/services/callLogService';
+import type { CallLogRow, ToolExecution } from '@/types/callLog';
 import { cn } from '@/utils/cn';
 import { formatDuration, formatTimeOnly } from '@/utils/date';
-import { ArrowRight, Clock, Phone, Radio, Server } from 'lucide-react';
-import React from 'react';
+import { handleApiError } from '@/utils/helpers';
+import { ArrowRight, Clock, Phone, Radio, Wrench } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 
 import { getDisplayDurationSeconds } from './callDuration';
 import { getCallStatusLabel, getCallStatusTone } from './callStatus';
@@ -76,15 +78,32 @@ const CallSummaryCard: React.FC<CallSummaryCardProps> = ({ callLog }) => {
   const hasTimes = !!startedAt || !!endedAt;
   const hasDetails = hasPhones || !!callLog.channel_type || hasTimes;
 
-  const servedBy = callLog.served_by;
-  const servedByTooltip = servedBy
-    ? [servedBy.node, servedBy.environment].filter(Boolean).join(' · ') || 'Served by pod'
-    : '';
+  // Count executed tool calls (status ∈ {success, error}). Sourced from the
+  // dedicated `/tool-executions` endpoint — `callLog.tool_calls` is a legacy
+  // metadata blob that is often empty and would silently show 0.
+  const [toolExecutions, setToolExecutions] = useState<ToolExecution[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    getCallToolExecutions(callLog.id)
+      .then((data) => {
+        if (!cancelled) setToolExecutions(data);
+      })
+      .catch((err) => {
+        if (!cancelled) handleApiError(err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [callLog.id]);
+  const executedToolCallCount = toolExecutions.reduce(
+    (acc, tc) => (tc.status === 'success' || tc.status === 'error' ? acc + 1 : acc),
+    0,
+  );
 
   return (
     <section
       aria-label="Call summary"
-      className="shrink-0 border-b border-border/60 bg-muted px-5 py-3 lg:px-8"
+      className="shrink-0 border-b border-border/60 bg-muted px-5 py-5 lg:px-8"
     >
       <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-2">
         {/* ── State group ───────────────────────────────────────────── */}
@@ -142,11 +161,9 @@ const CallSummaryCard: React.FC<CallSummaryCardProps> = ({ callLog }) => {
           </InfoChip>
         )}
 
-        {servedBy?.pod && (
-          <InfoChip icon={Server} tooltip={servedByTooltip}>
-            {servedBy.pod}
-          </InfoChip>
-        )}
+        <InfoChip icon={Wrench} tooltip="Executed tool calls (excludes proposed-only)">
+          {executedToolCallCount}
+        </InfoChip>
       </div>
     </section>
   );
