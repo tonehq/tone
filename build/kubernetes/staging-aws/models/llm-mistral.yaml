@@ -17,6 +17,10 @@ spec:
     metadata:
       labels:
         app: staging-llm-mistral
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: /metrics
     spec:
       nodeSelector:
         gpu: llm
