@@ -2,11 +2,13 @@
 
 import type { CallMetricsLLMUsage, CallMetricsTurnMetric } from '@/types/callLog';
 import { BrainCircuit } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import { AxisBarChart } from './AxisBarChart';
+import { CollapsibleCard } from './CollapsibleCard';
 import { MetricsDataTable, type MetricsTableColumn } from './MetricsDataTable';
 import { SectionHeader } from './SectionHeader';
+import { SortToggle, type SortDirection } from './SortToggle';
 import { StackedCallsBarChart } from './StackedCallsBarChart';
 import { buildPerTurnUsageRows, TurnUsageTable } from './TurnUsageCard';
 import { useChartTableView } from './useChartTableView';
@@ -50,16 +52,11 @@ function llmCellSubtext(call: CallMetricsLLMUsage): string {
 
 /** Legacy file-local chart of per-call total tokens — rendered for calls
  *  recorded before per-call usage was being persisted into `turn_metrics`. */
-function LLMTokensPerCallChart({ llmUsage }: { llmUsage: CallMetricsLLMUsage[] }) {
-  const tokenCounts = llmUsage.map((u) => u.total_tokens);
+function LLMTokensPerCallChart({ values }: { values: number[] }) {
   return (
     <>
       <p className="mb-2 text-xs text-muted-foreground">Tokens per call</p>
-      <AxisBarChart
-        values={tokenCounts}
-        formatValue={(v) => v.toLocaleString()}
-        xAxisLabel="Call"
-      />
+      <AxisBarChart values={values} formatValue={(v) => v.toLocaleString()} xAxisLabel="Call" />
     </>
   );
 }
@@ -69,6 +66,7 @@ export function LLMUsageSection({ llmUsage, totalTokens, turns }: LLMUsageSectio
   const totalCompletion = llmUsage.reduce((s, u) => s + u.completion_tokens, 0);
   const hasMultiple = llmUsage.length > 1;
   const { view, toggle } = useChartTableView('chart', 'LLM usage view');
+  const [sort, setSort] = useState<SortDirection>('natural');
 
   // Per-turn rows from `turn_metrics.llm_usage_all`. When present, the
   // chart and table switch to a turn-aligned, stacked-by-call view (one
@@ -80,31 +78,51 @@ export function LLMUsageSection({ llmUsage, totalTokens, turns }: LLMUsageSectio
       (t) => t.llm_usage_all,
       (c) => c.total_tokens,
     );
+    const displayRows =
+      sort === 'natural'
+        ? rows
+        : [...rows].sort((a, b) => (sort === 'asc' ? a.total - b.total : b.total - a.total));
     return {
-      rows,
+      rows: displayRows,
       hasAny,
       // Turns with at least one LLM call vs. total turns rendered — keeps
       // the header label aligned with the `X of Y turns` shown by the
       // Latency cards.
-      sampleCount: rows.filter((r) => r.total > 0).length,
-      stacks: rows.map((r) => r.values),
-      turnLabels: rows.map((r) => r.turnLabel),
+      sampleCount: displayRows.filter((r) => r.total > 0).length,
+      stacks: displayRows.map((r) => r.values),
+      turnLabels: displayRows.map((r) => r.turnLabel),
     };
-  }, [turns]);
+  }, [turns, sort]);
   const { rows: perTurnRows, hasAny: hasPerTurnUsage } = perTurn;
 
+  // Sorted per-call token counts for the legacy chart. Table view already
+  // shows the raw ordered rows and matches the ordering when sorted.
+  const legacyValues = useMemo(() => {
+    const values = llmUsage.map((u) => u.total_tokens);
+    if (sort === 'natural') return values;
+    return [...values].sort((a, b) => (sort === 'asc' ? a - b : b - a));
+  }, [llmUsage, sort]);
+
+  const showSort = hasPerTurnUsage || hasMultiple;
+
   return (
-    <div className="space-y-3">
-      <SectionHeader icon={BrainCircuit} title="LLM Usage" />
-      <div className="rounded-lg border border-border p-3">
-        <div className="mb-2 flex items-center justify-end gap-2">
+    <CollapsibleCard
+      title={<SectionHeader icon={BrainCircuit} title="LLM Usage" />}
+      actions={
+        <>
           <span className="text-xs text-muted-foreground">
             {hasPerTurnUsage
               ? `${perTurn.sampleCount} of ${perTurnRows.length} turn${perTurnRows.length !== 1 ? 's' : ''}`
               : `${llmUsage.length} call${llmUsage.length !== 1 ? 's' : ''}`}
           </span>
-          {(hasPerTurnUsage || hasMultiple) && toggle}
-        </div>
+          {showSort && (
+            <SortToggle value={sort} onChange={setSort} label="Sort LLM usage by total" />
+          )}
+          {showSort && toggle}
+        </>
+      }
+    >
+      <div>
         <div className="flex gap-4">
           <div className="flex-1">
             <p className="text-xs text-muted-foreground">Prompt</p>
@@ -160,13 +178,13 @@ export function LLMUsageSection({ llmUsage, totalTokens, turns }: LLMUsageSectio
                 />
               )
             ) : view === 'chart' ? (
-              <LLMTokensPerCallChart llmUsage={llmUsage} />
+              <LLMTokensPerCallChart values={legacyValues} />
             ) : (
               <MetricsDataTable columns={LLM_TABLE_COLUMNS} rows={llmUsage} />
             )}
           </div>
         )}
       </div>
-    </div>
+    </CollapsibleCard>
   );
 }
