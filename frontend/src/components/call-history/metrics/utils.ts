@@ -62,12 +62,12 @@ export function computeMedian(values: number[]): number {
 export function computePercentile(values: number[], q: number): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
-  if (sorted.length === 1) return sorted[0];
+  if (sorted.length === 1) return Math.round(sorted[0] * 1000) / 1000;
   const rank = q * (sorted.length - 1);
   const lo = Math.floor(rank);
   const hi = Math.min(lo + 1, sorted.length - 1);
   const frac = rank - lo;
-  return sorted[lo] + (sorted[hi] - sorted[lo]) * frac;
+  return Math.round((sorted[lo] + (sorted[hi] - sorted[lo]) * frac) * 1000) / 1000;
 }
 
 export interface LatencyTone {
