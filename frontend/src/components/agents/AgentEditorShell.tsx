@@ -2,7 +2,7 @@
 
 import { useAtom } from 'jotai';
 import { isEqual } from 'lodash';
-import { ArrowLeft, Beaker, Phone, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, Phone, Sparkles } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FormProvider, useForm, useWatch } from 'react-hook-form';
@@ -784,6 +784,14 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
         setSaveTemplateOpen(true);
         return;
       }
+      if (action === 'test') {
+        setReadinessDrawerOpen(true);
+        return;
+      }
+      if (action === 'delete') {
+        setDeleteOpen(true);
+        return;
+      }
       void handleSave();
     },
     [guardedAction, handleSave],
@@ -879,7 +887,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
               {/* Save-bar header */}
               <header
                 className={cn(
-                  'relative flex shrink-0 items-center gap-3 overflow-hidden border-b border-border/60 px-5 py-3',
+                  'relative flex shrink-0 items-center gap-3 overflow-hidden border-b border-border/60 px-5 py-5',
                   HEADER_TINT[agentType],
                 )}
               >
@@ -917,7 +925,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
                     {isEditMode ? 'Editing agent configuration' : 'Set up a new voice agent'}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-1.5">
+                <div className="flex shrink-0 items-center gap-4">
                   {isEditMode && (
                     <ReadinessBadge
                       status={
@@ -934,17 +942,6 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
                       aria-label="Open agent readiness"
                     />
                   )}
-                  {isEditMode && (
-                    <CustomButton
-                      type="text"
-                      size="sm"
-                      icon={<Beaker className="size-4" />}
-                      onClick={() => setReadinessDrawerOpen(true)}
-                      className="h-8 text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground"
-                    >
-                      Test
-                    </CustomButton>
-                  )}
                   {isEditMode && versions.length > 0 && (
                     <AgentVersionSelector
                       versions={versions}
@@ -953,17 +950,6 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
                       onDelete={handleDeleteVersion}
                       disabled={loading || saving || publishing}
                     />
-                  )}
-                  {isEditMode && (
-                    <CustomButton
-                      type="text"
-                      size="sm"
-                      icon={<Trash2 className="size-4" />}
-                      onClick={() => setDeleteOpen(true)}
-                      className="h-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                    >
-                      Delete
-                    </CustomButton>
                   )}
                   <AgentSaveActions
                     mode={isEditMode ? 'edit' : 'create'}
