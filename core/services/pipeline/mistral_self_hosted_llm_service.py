@@ -2,6 +2,7 @@ from typing import Any, Optional
 
 from loguru import logger
 
+from core.logging import get_trace_id
 from pipecat.services.openai.llm import BaseOpenAILLMService
 
 
@@ -66,6 +67,9 @@ class MistralSelfHostedLLMService(BaseOpenAILLMService):
 
     def build_chat_completion_params(self, params_from_context) -> dict:
         params = super().build_chat_completion_params(params_from_context)
+        trace_id = get_trace_id()
+        if trace_id and trace_id != "none":
+            params["extra_headers"] = {"X-Request-Id": trace_id}
         messages = params.get("messages")
         if not messages:
             return params
