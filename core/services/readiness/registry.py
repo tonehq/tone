@@ -55,8 +55,14 @@ def _build_registry() -> List[BaseCheck]:
 
         # ── Attached resources (per-item WARNINGs; agent still runs) ─────
         tools.ToolsUsableCheck(),
+        # OAuth-expiry shallow checks: pure-DB read of ``token_expiry`` from
+        # the linked ``OAuthConnection``. Cheap enough for the agent-list
+        # badge; complements the reachable-deep checks that would otherwise
+        # be the only place expiry surfaces.
+        tools.ToolOAuthTokenValidCheck(),
         knowledge_bases.KnowledgeBasesReadyCheck(),
         mcp_servers.McpServersConfiguredCheck(),
+        mcp_servers.McpServerOAuthTokenValidCheck(),
 
         # ── Deep checks (live provider / server probes) ──────────────────
         llm.LLMProviderReachableCheck(),
