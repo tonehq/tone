@@ -9,10 +9,21 @@ import {
   toolTypeChipClasses,
   toolTypeLabel,
 } from '@/components/call-history/tools-mcp/helpers';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ToolExecution } from '@/types/callLog';
 import { cn } from '@/utils/cn';
 import { ChevronDown, ChevronRight, Wrench } from 'lucide-react';
 import React, { useState } from 'react';
+
+function formatTimestampMs(ts: string | null): string {
+  if (!ts) return '-';
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return '-';
+  const date = d.toLocaleDateString();
+  const time = d.toLocaleTimeString(undefined, { hour12: false });
+  const ms = String(d.getMilliseconds()).padStart(3, '0');
+  return `${date}, ${time}.${ms}`;
+}
 
 interface ConsolidatedToolCallRowProps {
   tool: ToolExecution;
@@ -55,9 +66,30 @@ const ConsolidatedToolCallRow: React.FC<ConsolidatedToolCallRowProps> = ({ tool 
         <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', status.className)}>
           {status.label}
         </span>
-        <span className={cn('ml-auto text-xs tabular-nums', durationToneClass(duration.tone))}>
-          {duration.text}
-        </span>
+        <TooltipProvider delayDuration={150}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                className={cn(
+                  'ml-auto cursor-pointer text-xs tabular-nums',
+                  durationToneClass(duration.tone),
+                )}
+              >
+                {duration.text}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="left" className="px-3 py-2">
+              <div className="grid grid-cols-[auto_auto] gap-x-3 gap-y-1 text-[11px]">
+                <span className="text-background/70">Proposed at</span>
+                <span className="tabular-nums">{formatTimestampMs(tool.proposed_at)}</span>
+                <span className="text-background/70">Invoked at</span>
+                <span className="tabular-nums">{formatTimestampMs(tool.invoked_at)}</span>
+                <span className="text-background/70">Completed at</span>
+                <span className="tabular-nums">{formatTimestampMs(tool.completed_at)}</span>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       {(hasArgs || hasResult || hasError) && (
