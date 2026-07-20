@@ -1,3 +1,38 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vllm-logging-config
+  namespace: staging
+  labels:
+    app: staging-llm-mistral
+data:
+  logging_config.json: |
+    {
+      "version": 1,
+      "disable_existing_loggers": false,
+      "formatters": {
+        "json": {
+          "class": "pythonjsonlogger.jsonlogger.JsonFormatter",
+          "format": "%(levelname)s %(asctime)s %(name)s %(filename)s %(lineno)d %(message)s"
+        }
+      },
+      "handlers": {
+        "vllm": {
+          "class": "logging.StreamHandler",
+          "formatter": "json",
+          "level": "INFO",
+          "stream": "ext://sys.stdout"
+        }
+      },
+      "loggers": {
+        "vllm": {
+          "handlers": ["vllm"],
+          "level": "INFO",
+          "propagate": false
+        }
+      }
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -60,6 +95,8 @@ spec:
               value: /cache/hf
             - name: VLLM_LOGGING_LEVEL
               value: INFO
+            - name: VLLM_LOGGING_CONFIG_PATH
+              value: /etc/vllm/logging_config.json
           ports:
             - name: http
               containerPort: 8000
@@ -71,6 +108,9 @@ spec:
               mountPath: /cache
             - name: dshm
               mountPath: /dev/shm
+            - name: logging-config
+              mountPath: /etc/vllm
+              readOnly: true
           startupProbe:
             httpGet:
               path: /health
@@ -96,6 +136,9 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 4Gi
+        - name: logging-config
+          configMap:
+            name: vllm-logging-config
 ---
 apiVersion: v1
 kind: Service
