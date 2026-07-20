@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import React, { useMemo } from 'react';
 
+import { EndToEndLatencyPercentileSection } from './EndToEndLatencyPercentileSection';
 import { LLMUsageSection } from './LLMUsageSection';
 import { MetricsCategory } from './MetricsCategory';
 import { MetricsCollapseProvider, useMetricsCollapse } from './MetricsCollapseContext';
@@ -91,7 +92,7 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, toolExecutions
 
   const hasProcessing = processingList.some((p) => p.model && p.value > 0);
   const hasTurnMetrics = turnMetrics.length > 0;
-  const hasLatency = hasTurnMetrics || hasProcessing;
+  const hasLatency = hasTurnMetrics || hasProcessing || userBotLatency.length > 0;
   const hasUsage = llmUsage.length > 0 || ttsUsage.length > 0 || sttUsage.length > 0;
   const llmModels = [...new Set(llmUsage.map((u) => u.model))].join(', ');
 
@@ -144,6 +145,7 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, toolExecutions
             {hasTurnMetrics && (
               <TurnLatencySection turns={turnMetrics} toolExecutions={toolExecutions} />
             )}
+            <EndToEndLatencyPercentileSection latencies={userBotLatency.map((l) => l.latency)} />
             {hasTurnMetrics && <PerTurnCallsSection turns={turnMetrics} />}
             {hasProcessing && <ProcessingTimesSection processing={processingList} />}
           </MetricsCategory>
