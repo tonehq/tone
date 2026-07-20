@@ -18,6 +18,7 @@ export type ScheduledCallStatus =
   | 'scheduled'
   | 'processing'
   | 'dispatched'
+  | 'in_progress'
   | 'completed'
   | 'busy'
   | 'no_answer'
@@ -28,6 +29,9 @@ export interface ScheduledCallRow {
   id: string;
   agent_id: string;
   agent_name: string | null;
+  contact_id: string | null;
+  contact_name: string | null;
+  contact_phone_number: string | null;
   status: ScheduledCallStatus | null;
   from_number: string | null;
   to_number: string | null;

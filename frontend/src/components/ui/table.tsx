@@ -26,9 +26,18 @@ function alignClass(align?: 'left' | 'center' | 'right') {
 /*  Base primitives (shadcn)                                                  */
 /* -------------------------------------------------------------------------- */
 
-function Table({ className, ...props }: React.ComponentProps<'table'>) {
+function Table({
+  className,
+  fill = false,
+  ...props
+}: React.ComponentProps<'table'> & { fill?: boolean }) {
   return (
-    <div data-slot="table-container" className="relative w-full overflow-auto">
+    <div
+      data-slot="table-container"
+      // `fill` opts a table into growing to fill a flex-column parent; off by default so
+      // ordinary tables don't flex-grow (a layout-shift risk) inside such parents.
+      className={cn('relative w-full overflow-auto', fill && 'min-h-0 flex-1')}
+    >
       <table
         data-slot="table"
         className={cn('w-full caption-bottom text-sm', className)}
@@ -132,6 +141,10 @@ interface DataTableProps<TData> {
   onRowClick?: (record: TData, index: number) => void;
   getRowKey?: (record: TData) => string | number;
   density?: TableDensity;
+  /** Tag each body row with `group` so cells can reveal content on `group-hover`. */
+  groupRows?: boolean;
+  /** Let the scroll container grow to fill a flex-column parent (sticky header + internal scroll). */
+  fill?: boolean;
 }
 
 function DataTableInner<TData>(
@@ -144,6 +157,8 @@ function DataTableInner<TData>(
     onRowClick,
     getRowKey,
     density = 'cozy',
+    groupRows = false,
+    fill = false,
   }: DataTableProps<TData>,
   _ref: React.Ref<HTMLTableElement>,
 ) {
@@ -153,15 +168,24 @@ function DataTableInner<TData>(
   const visibleColumns = table.getVisibleLeafColumns();
 
   return (
-    <Table>
+    <Table fill={fill}>
       <TableHeader className="sticky top-0 z-10 bg-card">
         <TableRow className="border-b border-border bg-muted/40 hover:bg-muted/40">
           {headerGroup.headers.map((header) => {
             const meta = header.column.columnDef.meta;
             const canSort = header.column.getCanSort();
+            const sorted = header.column.getIsSorted();
+            const ariaSort = canSort
+              ? sorted === 'asc'
+                ? 'ascending'
+                : sorted === 'desc'
+                  ? 'descending'
+                  : 'none'
+              : undefined;
             return (
               <TableHead
                 key={header.id}
+                aria-sort={ariaSort}
                 className={cn(
                   'h-11 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground',
                   alignClass(meta?.align),
@@ -222,7 +246,8 @@ function DataTableInner<TData>(
             <TableRow
               key={getRowKey ? getRowKey(row.original) : row.id}
               className={cn(
-                'border-b border-border/50 transition-colors hover:bg-muted/20',
+                'border-b border-border/50 transition-colors hover:bg-muted/40',
+                groupRows && 'group',
                 onRowClick && 'cursor-pointer',
               )}
               onClick={

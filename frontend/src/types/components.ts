@@ -62,6 +62,18 @@ export interface CustomTableProps<TRow> {
   title?: React.ReactNode;
   /** Description displayed under the title. */
   description?: React.ReactNode;
+  /**
+   * Make the table card grow to fill its parent's height (`flex-1 min-h-0`) so the
+   * body scrolls internally and pagination stays pinned to the card bottom. The parent
+   * must be a `flex flex-col` with a bounded height. Defaults to `false` (auto height).
+   */
+  fillHeight?: boolean;
+  /**
+   * Tag each body row with the `group` class so per-cell content can reveal on
+   * `group-hover` / `group-focus-within` (e.g. hover-revealed row actions). Optional,
+   * back-compatible; defaults to `false`.
+   */
+  groupRows?: boolean;
 }
 
 export interface TextInputBaseProps extends Omit<React.ComponentProps<'input'>, 'size'> {
@@ -334,6 +346,22 @@ export interface DateRangePickerProps {
   placeholder?: string;
   /** Show the relative-range preset rail (Last 15m / 30m / 1h / 24h / 7d). */
   presets?: boolean;
+  align?: 'start' | 'center' | 'end';
+  className?: string;
+  triggerClassName?: string;
+  disabled?: boolean;
+}
+
+/** A single instant + the IANA zone it was picked in. `value` is a UTC ISO string. */
+export interface DateTimeValue {
+  value: string | null;
+  timeZone: string;
+}
+
+export interface DateTimePickerProps {
+  value?: DateTimeValue;
+  onChange?: (value: DateTimeValue) => void;
+  placeholder?: string;
   align?: 'start' | 'center' | 'end';
   className?: string;
   triggerClassName?: string;
