@@ -8,6 +8,10 @@ admin/owner access, force_warnings gate behaviour.
 """
 
 import uuid
+from datetime import datetime, timezone
+
+import pytest
+from fastapi import HTTPException
 
 
 # ─── Helpers ───
@@ -77,6 +81,17 @@ class TestPostReadiness:
             json={"depth": "shallow", "trigger": "test_button"},
         )
         assert resp.status_code == 200
+
+    def test_force_deep_accepted(self, client_as_member):
+        """`force` (used by the Run-deep-test button to always append a new
+        history event) is accepted alongside depth=deep."""
+        agent = _create_agent(client_as_member)
+        resp = client_as_member.post(
+            f"/api/v1/agent/{agent['id']}/readiness",
+            json={"depth": "deep", "force": True},
+        )
+        # 200 on success; 429 if the rate limiter fires from a prior deep run.
+        assert resp.status_code in (200, 429)
 
     def test_with_explicit_config_id(self, client_as_member):
         """Caller can request a specific config version to check."""
@@ -386,3 +401,206 @@ class TestSwitchActiveVersionForceWarnings:
             json={"config_id": _SENTINEL_UUID},
         )
         assert resp.status_code in (401, 403)
+
+
+# ─── GET /api/v1/agent/{agent_id}/readiness/runs ───
+
+class TestListReadinessRuns:
+    """Tests for GET /api/v1/agent/{agent_id}/readiness/runs (run-history list)."""
+
+    def test_empty_history_returns_list(self, client_as_member):
+        """A fresh agent has no deep runs yet → an empty items list, not a 404."""
+        agent = _create_agent(client_as_member)
+        resp = client_as_member.get(f"/api/v1/agent/{agent['id']}/readiness/runs")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "items" in data
+        assert isinstance(data["items"], list)
+
+    def test_limit_below_min_rejected(self, client_as_member):
+        agent = _create_agent(client_as_member)
+        resp = client_as_member.get(f"/api/v1/agent/{agent['id']}/readiness/runs?limit=0")
+        assert resp.status_code == 422
+
+    def test_limit_above_max_rejected(self, client_as_member):
+        agent = _create_agent(client_as_member)
+        resp = client_as_member.get(f"/api/v1/agent/{agent['id']}/readiness/runs?limit=101")
+        assert resp.status_code == 422
+
+    def test_limit_within_range_accepted(self, client_as_member):
+        agent = _create_agent(client_as_member)
+        resp = client_as_member.get(f"/api/v1/agent/{agent['id']}/readiness/runs?limit=5")
+        assert resp.status_code == 200
+
+    def test_unknown_agent(self, client_as_member):
+        resp = client_as_member.get(f"/api/v1/agent/{_SENTINEL_UUID}/readiness/runs")
+        assert resp.status_code == 404
+
+    def test_as_admin(self, client_as_admin):
+        agent = _create_agent(client_as_admin)
+        resp = client_as_admin.get(f"/api/v1/agent/{agent['id']}/readiness/runs")
+        assert resp.status_code == 200
+
+    def test_as_owner(self, client_as_owner):
+        agent = _create_agent(client_as_owner)
+        resp = client_as_owner.get(f"/api/v1/agent/{agent['id']}/readiness/runs")
+        assert resp.status_code == 200
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.get(f"/api/v1/agent/{_SENTINEL_UUID}/readiness/runs")
+        assert resp.status_code in (401, 403)
+
+
+# ─── GET /api/v1/agent/{agent_id}/readiness/runs/{run_number} ───
+
+class TestGetReadinessRun:
+    """Tests for GET /api/v1/agent/{agent_id}/readiness/runs/{run_number}."""
+
+    def test_unknown_run_returns_404(self, client_as_member):
+        agent = _create_agent(client_as_member)
+        resp = client_as_member.get(f"/api/v1/agent/{agent['id']}/readiness/runs/999")
+        assert resp.status_code == 404
+
+    def test_unknown_agent_returns_404(self, client_as_member):
+        resp = client_as_member.get(f"/api/v1/agent/{_SENTINEL_UUID}/readiness/runs/1")
+        assert resp.status_code == 404
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.get(f"/api/v1/agent/{_SENTINEL_UUID}/readiness/runs/1")
+        assert resp.status_code in (401, 403)
+
+
+# ─── ReadinessService.list_runs / get_run — seeded, deterministic ───
+
+def _seed_event(db, *, org_id, agent_id, run_number, depth, checks=None):
+    """Insert one AgentReadinessEvent row directly so run-history behaviour can
+    be asserted deterministically (deep runs are rate-limited + probe live
+    providers, so driving them through the API is flaky)."""
+    from core.models.agent_readiness_event import AgentReadinessEvent
+
+    now = datetime.now(timezone.utc)
+    row = AgentReadinessEvent(
+        organization_id=org_id,
+        agent_id=agent_id,
+        config_id=None,
+        depth=depth,
+        overall_status="ready",
+        counts={"blockers": 0, "warnings": 0, "info": 0, "passed": 1, "skipped": 0},
+        checks=checks if checks is not None else [],
+        trigger="test_button" if depth == "deep" else "editor_load",
+        triggered_by_user_id=None,
+        duration_ms=12,
+        started_at=now,
+        computed_at=now,
+        run_number=run_number,
+        dependency_stamp="seed-stamp",
+        error=None,
+    )
+    db.add(row)
+    return row
+
+
+class TestReadinessRunsService:
+    """Direct service-level tests for the run-history query logic."""
+
+    def _agent_and_service(self, db_session, client_as_member):
+        from core.models.agent import Agent
+        from core.services.readiness import ReadinessService
+
+        agent = _create_agent(client_as_member)
+        agent_row = (
+            db_session.query(Agent).filter(Agent.id == uuid.UUID(agent["id"])).first()
+        )
+        assert agent_row is not None
+        org_id = agent_row.organization_id
+        svc = ReadinessService(db_session, user_id=None, org_id=org_id)
+        return agent, agent_row, org_id, svc
+
+    def test_list_runs_deep_only_descending_no_checks(self, db_session, client_as_member):
+        agent, agent_row, org_id, svc = self._agent_and_service(db_session, client_as_member)
+        # Interleave a shallow run between two deep runs.
+        _seed_event(db_session, org_id=org_id, agent_id=agent_row.id, run_number=1, depth="shallow")
+        _seed_event(db_session, org_id=org_id, agent_id=agent_row.id, run_number=2, depth="deep")
+        _seed_event(db_session, org_id=org_id, agent_id=agent_row.id, run_number=3, depth="deep")
+        db_session.flush()
+
+        result = svc.list_runs(agent["id"], limit=20)
+        run_numbers = [item.run_number for item in result.items]
+        # Deep runs only (shallow #1 excluded), newest first.
+        assert run_numbers == [3, 2]
+        # Metadata only — no heavy checks blob on list items.
+        for item in result.items:
+            assert "checks" not in item.model_dump()
+            assert item.depth.value == "deep"
+
+    def test_list_runs_respects_limit(self, db_session, client_as_member):
+        agent, agent_row, org_id, svc = self._agent_and_service(db_session, client_as_member)
+        _seed_event(db_session, org_id=org_id, agent_id=agent_row.id, run_number=2, depth="deep")
+        _seed_event(db_session, org_id=org_id, agent_id=agent_row.id, run_number=3, depth="deep")
+        db_session.flush()
+
+        result = svc.list_runs(agent["id"], limit=1)
+        assert len(result.items) == 1
+        assert result.items[0].run_number == 3
+
+    def test_get_run_returns_full_report_with_checks(self, db_session, client_as_member):
+        agent, agent_row, org_id, svc = self._agent_and_service(db_session, client_as_member)
+        checks = [
+            {
+                "check_id": "llm.provider",
+                "category": "llm",
+                "severity": "info",
+                "status": "pass",
+                "message": "LLM provider configured",
+            }
+        ]
+        _seed_event(
+            db_session,
+            org_id=org_id,
+            agent_id=agent_row.id,
+            run_number=7,
+            depth="deep",
+            checks=checks,
+        )
+        db_session.flush()
+
+        report = svc.get_run(agent["id"], 7)
+        assert report.run_number == 7
+        assert report.depth.value == "deep"
+        assert len(report.checks) == 1
+        assert report.checks[0].check_id == "llm.provider"
+
+    def test_get_run_unknown_raises_404(self, db_session, client_as_member):
+        agent, _agent_row, _org_id, svc = self._agent_and_service(db_session, client_as_member)
+        with pytest.raises(HTTPException) as exc:
+            svc.get_run(agent["id"], 999)
+        assert exc.value.status_code == 404
+
+    def test_get_run_shallow_run_not_found(self, db_session, client_as_member):
+        """get_run is deep-only (mirrors list_runs) — a shallow run's number,
+        which never appears in the dropdown, must 404 rather than return it."""
+        agent, agent_row, org_id, svc = self._agent_and_service(db_session, client_as_member)
+        _seed_event(db_session, org_id=org_id, agent_id=agent_row.id, run_number=4, depth="shallow")
+        db_session.flush()
+        with pytest.raises(HTTPException) as exc:
+            svc.get_run(agent["id"], 4)
+        assert exc.value.status_code == 404
+
+    def test_list_runs_skips_unmappable_row(self, db_session, client_as_member):
+        """One legacy/partial event row with an out-of-enum overall_status must
+        be skipped, not 500 the whole history list."""
+        agent, agent_row, org_id, svc = self._agent_and_service(db_session, client_as_member)
+        good = _seed_event(
+            db_session, org_id=org_id, agent_id=agent_row.id, run_number=6, depth="deep"
+        )
+        bad = _seed_event(
+            db_session, org_id=org_id, agent_id=agent_row.id, run_number=5, depth="deep"
+        )
+        # Corrupt the enum-backed column to a value outside OverallStatus.
+        bad.overall_status = "some_retired_status"
+        db_session.flush()
+
+        result = svc.list_runs(agent["id"], limit=20)
+        run_numbers = [item.run_number for item in result.items]
+        assert run_numbers == [6]  # bad row (5) skipped, good row (6) survives
+        assert good.run_number == 6

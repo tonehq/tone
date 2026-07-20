@@ -114,7 +114,11 @@ const AgentListPage: React.FC = () => {
       key: 'readiness',
       title: 'Readiness',
       render: (_value, record) => (
-        <AgentReadinessCell agentId={record.id} onOpen={(agentId) => setReadinessTarget(agentId)} />
+        <AgentReadinessCell
+          agentId={record.id}
+          readiness={record.readiness}
+          onOpen={(agentId) => setReadinessTarget(agentId)}
+        />
       ),
     },
     {

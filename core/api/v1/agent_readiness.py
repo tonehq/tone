@@ -25,6 +25,7 @@ from core.services.readiness.schemas import (
     Category,
     Depth,
     ReadinessReport,
+    ReadinessRunList,
     ReadinessSummary,
 )
 from shared.config import settings
@@ -47,6 +48,11 @@ class ReadinessRequest(BaseModel):
     # as "no categories" — every deep check is skipped, effectively equivalent
     # to a shallow run.
     categories: Optional[List[Category]] = None
+    # When true, bypass the read-through snapshot/coalesce caches and always run
+    # + persist a fresh event. Set by the "Run deep test" button so each explicit
+    # run appears as a new entry in the run-history list. Ignored for targeted
+    # deep (categories) which already bypasses caches.
+    force: bool = False
 
 
 def _get_service(claims: JWTClaims, db: Session) -> ReadinessService:
@@ -76,6 +82,7 @@ async def check_readiness(
         config_id=body.config_id,
         trigger=body.trigger or "api",
         deep_categories=set(body.categories) if body.categories is not None else None,
+        force=body.force,
     )
 
 
@@ -92,3 +99,31 @@ async def readiness_summary(
     return await svc.summary(
         agent_id, config_id=config_id, trigger=trigger or "list_page"
     )
+
+
+@router.get("/{agent_id}/readiness/runs", response_model=ReadinessRunList)
+async def list_readiness_runs(
+    agent_id: str,
+    limit: int = Query(20, ge=1, le=100, description="Max runs to return"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+) -> ReadinessRunList:
+    """List past deep readiness runs (newest first) for the run-history dropdown.
+
+    Metadata only — no per-check detail. Fetch a single run's full report via
+    the ``/runs/{run_number}`` route below.
+    """
+    svc = _get_service(claims, db)
+    return svc.list_runs(agent_id, limit=limit)
+
+
+@router.get("/{agent_id}/readiness/runs/{run_number}", response_model=ReadinessReport)
+async def get_readiness_run(
+    agent_id: str,
+    run_number: int,
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+) -> ReadinessReport:
+    """Return the full stored report (with checks) for one past run."""
+    svc = _get_service(claims, db)
+    return svc.get_run(agent_id, run_number)

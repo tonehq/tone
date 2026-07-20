@@ -59,6 +59,14 @@ class TestPostReadiness:
         assert resp.status_code == 200
         assert resp.json()["depth"] == "shallow"
 
+    def test_force_deep_accepted(self, client_as_member):
+        agent = _create_agent(client_as_member)
+        resp = client_as_member.post(
+            f"/api/v1/agent/{agent['id']}/readiness",
+            json={"depth": "deep", "force": True},
+        )
+        assert resp.status_code in (200, 429)
+
     def test_explicit_deep(self, client_as_member):
         agent = _create_agent(client_as_member)
         resp = client_as_member.post(
@@ -298,4 +306,65 @@ class TestSwitchActiveVersionForceWarnings:
             f"?agent_id={_SENTINEL_UUID}&force_warnings=true",
             json={"config_id": _SENTINEL_UUID},
         )
+        assert resp.status_code in (401, 403)
+
+
+# ─── GET /api/v1/agent/{agent_id}/readiness/runs ───
+
+class TestListReadinessRuns:
+    """Tests for GET /api/v1/agent/{agent_id}/readiness/runs (EE edition)."""
+
+    def test_empty_history_returns_list(self, client_as_member):
+        agent = _create_agent(client_as_member)
+        resp = client_as_member.get(f"/api/v1/agent/{agent['id']}/readiness/runs")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "items" in data
+        assert isinstance(data["items"], list)
+
+    def test_limit_below_min_rejected(self, client_as_member):
+        agent = _create_agent(client_as_member)
+        resp = client_as_member.get(f"/api/v1/agent/{agent['id']}/readiness/runs?limit=0")
+        assert resp.status_code == 422
+
+    def test_limit_above_max_rejected(self, client_as_member):
+        agent = _create_agent(client_as_member)
+        resp = client_as_member.get(f"/api/v1/agent/{agent['id']}/readiness/runs?limit=101")
+        assert resp.status_code == 422
+
+    def test_limit_within_range_accepted(self, client_as_member):
+        agent = _create_agent(client_as_member)
+        resp = client_as_member.get(f"/api/v1/agent/{agent['id']}/readiness/runs?limit=5")
+        assert resp.status_code == 200
+
+    def test_unknown_agent(self, client_as_member):
+        resp = client_as_member.get(f"/api/v1/agent/{_SENTINEL_UUID}/readiness/runs")
+        assert resp.status_code == 404
+
+    def test_as_admin(self, client_as_admin):
+        agent = _create_agent(client_as_admin)
+        resp = client_as_admin.get(f"/api/v1/agent/{agent['id']}/readiness/runs")
+        assert resp.status_code == 200
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.get(f"/api/v1/agent/{_SENTINEL_UUID}/readiness/runs")
+        assert resp.status_code in (401, 403)
+
+
+# ─── GET /api/v1/agent/{agent_id}/readiness/runs/{run_number} ───
+
+class TestGetReadinessRun:
+    """Tests for GET /api/v1/agent/{agent_id}/readiness/runs/{run_number} (EE)."""
+
+    def test_unknown_run_returns_404(self, client_as_member):
+        agent = _create_agent(client_as_member)
+        resp = client_as_member.get(f"/api/v1/agent/{agent['id']}/readiness/runs/999")
+        assert resp.status_code == 404
+
+    def test_unknown_agent_returns_404(self, client_as_member):
+        resp = client_as_member.get(f"/api/v1/agent/{_SENTINEL_UUID}/readiness/runs/1")
+        assert resp.status_code == 404
+
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.get(f"/api/v1/agent/{_SENTINEL_UUID}/readiness/runs/1")
         assert resp.status_code in (401, 403)

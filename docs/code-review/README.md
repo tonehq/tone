@@ -55,6 +55,8 @@ spend review cycles on style a tool can fix.**
 - [ ] Single responsibility — a function/component/service does one thing.
 - [ ] Public surface is minimal — export only what callers need.
 - [ ] Names say what, not how; no misleading names.
+- [ ] No magic constants or pure helper functions inlined in a component/module — they
+      live in a dedicated constants file and a helper/util file (see DRY doctrine).
 
 **Tests**
 - [ ] New behavior has tests. Bug fixes have a regression test that fails without the fix.
@@ -99,6 +101,13 @@ Reuse is a review priority in this repo, but **premature abstraction is a defect
   - BE: shared logic → a service extending `BaseService`; shared helpers → `core/utils`;
     shared schemas → Pydantic models reused across routers.
 - **A helper with more than ~3 config flags is a smell.** Split it.
+- **Don't inline constants or pure helper functions in a component.** Magic strings/numbers
+  and stateless helpers (label maps, formatters, sentinel values, `countLabel`-style
+  utilities) belong in a **dedicated constants file** and a **helper/util file** — not at the
+  top or bottom of the component that first used them. Co-locate feature-specific ones beside
+  the feature (e.g. `readinessConstants.ts` / `readinessHelpers.ts`); promote to `@/utils`
+  (FE) or `core/utils` (BE) once a second feature needs them (rule of three). This keeps
+  components JSX-only and the logic reusable + unit-testable.
 
 ## Author's pre-flight (run before requesting review)
 

@@ -1,3 +1,5 @@
+import type { ReadinessOverallStatus } from '@/types/readiness';
+
 export type AgentType = 'inbound' | 'outbound' | 'both';
 
 export type AgentStatus = 'active' | 'inactive' | 'draft';
@@ -171,6 +173,18 @@ export interface AgentDetail {
   versions?: AgentVersionSummary[];
 }
 
+/** Last-known readiness attached to each list row by POST /agent/list. Read
+ * from the stored snapshot (no recompute), so it can lag the editor until a
+ * fresh check runs. Null when the agent has no stored run yet. */
+export interface AgentListReadiness {
+  overall_status: ReadinessOverallStatus;
+  blocker_count: number;
+  warning_count: number;
+  info_count: number;
+  run_number: number | null;
+  computed_at: string | null;
+}
+
 /** Lightweight listing row (POST /agent/list). `phone_number` is the legacy
  * shape returned by the list endpoint — kept as-is for now. */
 export interface AgentListItem {
@@ -181,6 +195,7 @@ export interface AgentListItem {
   agent_type: AgentDirection;
   is_active: boolean;
   phone_number: { type: string; no: string }[];
+  readiness: AgentListReadiness | null;
   created_at: number;
   updated_at: number;
 }
