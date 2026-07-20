@@ -269,6 +269,35 @@ def seed_member(db, user, org):
     return member
 
 
+def seed_contact_directory(db, org_id, user_id, name="Global"):
+    """Create the default per-org ContactDirectory (``name='Global'``) via
+    the shared ``ContactDirectoryService`` — which also provisions the
+    directory's default CSV datasource. Idempotent: returns the existing
+    row if one already exists with the same ``(organization_id, name)``.
+
+    The service commits its own transaction, so any pending user / org /
+    member rows in the caller's session get flushed and persisted here.
+    Callers can still issue a final ``db.commit()`` — it will be a no-op.
+    """
+    from core.models.contact_directory import ContactDirectory
+    from core.services.contacts.contact_directory_service import ContactDirectoryService
+
+    existing = (
+        db.query(ContactDirectory)
+        .filter(
+            ContactDirectory.organization_id == org_id,
+            ContactDirectory.name == name,
+            ContactDirectory.deleted_at.is_(None),
+        )
+        .first()
+    )
+    if existing:
+        return existing
+
+    service = ContactDirectoryService(db, user_id=user_id, org_id=org_id)
+    return service.create_directory(name=name)
+
+
 def seed_from_configs(db, org_name, email, password):
     """
     Seed user, org, member, providers, models, API keys, voices, and tools.
@@ -304,6 +333,7 @@ def seed_from_configs(db, org_name, email, password):
         "api_keys_created": 0,
         "api_keys_none": 0,
         "tools_created": 0,
+        "contact_directory_created": False,
     }
 
     # Load all provider configs from JSON
@@ -573,6 +603,12 @@ def seed_from_configs(db, org_name, email, password):
     #     db.add(tool)
     #     stats["tools_created"] += 1
 
+    # --- Phase 7: Default 'Global' contact directory ---
+    # ContactDirectoryService commits its own transaction, so this also
+    # persists everything above; the final db.commit() is then a no-op.
+    seed_contact_directory(db, org_id, user.id)
+    stats["contact_directory_created"] = True
+
     db.commit()
     return stats
 
@@ -635,6 +671,7 @@ def main():
         print(f"   Model Languages:  {stats['model_languages_created']} created, {stats['model_languages_skipped']} already existed")
         print(f"   API keys:         {stats['api_keys_created']} created, {stats['api_keys_none']} no env key")
         print(f"   Tools:            {stats['tools_created']} created")
+        print(f"   Contact Directory: {'created' if stats['contact_directory_created'] else 'skipped'} (Global)")
 
         # Chain the standalone seeders so a single ``python dev/seed.py`` run
         # leaves the deployment fully seeded. They open their own DB sessions
