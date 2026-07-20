@@ -2,6 +2,7 @@ from typing import Any, Optional
 
 from loguru import logger
 
+from core.logging import get_trace_id
 from pipecat.services.openai.llm import BaseOpenAILLMService
 
 
@@ -9,6 +10,28 @@ def _role_of(message: Any) -> Optional[str]:
     if isinstance(message, dict):
         return message.get("role")
     return getattr(message, "role", None)
+
+
+def strip_assistant_content_with_tools(messages: list) -> list:
+    """Drop `content` from an assistant message that also carries `tool_calls`.
+
+    mistral_common (>= 1.8.6) rejects an assistant message with BOTH content and
+    tool_calls (`InvalidAssistantMessageException: Assistant message must have either
+    content or tool_calls, but not both`). Pipecat produces exactly that when the model
+    speaks text and calls a tool in the same turn. The canonical Mistral tool-call turn
+    is tool_calls only, so we drop the content — the only form the validator accepts.
+    """
+    out = []
+    for message in messages:
+        if (
+            isinstance(message, dict)
+            and message.get("role") == "assistant"
+            and message.get("tool_calls")
+            and "content" in message
+        ):
+            message = {k: v for k, v in message.items() if k != "content"}
+        out.append(message)
+    return out
 
 
 def repair_tool_role_order(messages: list) -> list:
@@ -44,15 +67,13 @@ class MistralSelfHostedLLMService(BaseOpenAILLMService):
 
     def build_chat_completion_params(self, params_from_context) -> dict:
         params = super().build_chat_completion_params(params_from_context)
+        trace_id = get_trace_id()
+        if trace_id and trace_id != "none":
+            params["extra_headers"] = {"X-Request-Id": trace_id}
         messages = params.get("messages")
         if not messages:
             return params
-        repaired = repair_tool_role_order(messages)
-        if len(repaired) != len(messages):
-            logger.debug(
-                "{}: repaired mistral message order, inserted {} assistant turn(s) after tool results",
-                self,
-                len(repaired) - len(messages),
-            )
-            params["messages"] = repaired
+        params["messages"] = repair_tool_role_order(
+            strip_assistant_content_with_tools(messages)
+        )
         return params

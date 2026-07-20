@@ -39,6 +39,10 @@ spec:
           env:
             - name: CLUSTER_NAME
               value: "tone-staging-aws"
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
             - name: LOKI_URL
               valueFrom:
                 secretKeyRef:
