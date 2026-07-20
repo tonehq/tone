@@ -577,9 +577,16 @@ def seed_from_configs(db, org_name, email, password):
     return stats
 
 
-def _run_chained_seeder(label: str, module_path: str) -> None:
+def _run_chained_seeder(label: str, module_path: str, kwargs: dict | None = None) -> None:
     """Run a standalone seeder script (e.g. ``dev.seed_app_integrations``) as
     part of the main seed flow.
+
+    Args:
+        label: Human-readable name for log lines.
+        module_path: Dotted import path (e.g. ``dev.seed_app_integrations``).
+        kwargs: Optional kwargs to forward to the module's ``main()`` — used
+            by ``dev/seed_org.py`` to pass ``org_id=<new org>`` so the seeder
+            only touches the new org instead of scanning every org.
 
     The chained scripts call ``sys.exit(1)`` on internal errors — we catch
     ``SystemExit`` so a failure there only skips that step instead of aborting
@@ -591,7 +598,7 @@ def _run_chained_seeder(label: str, module_path: str) -> None:
         import importlib
 
         module = importlib.import_module(module_path)
-        module.main()
+        module.main(**(kwargs or {}))
     except SystemExit as exc:
         print(f"   ⚠ {label} seeder exited (code={exc.code}); continuing.")
     except Exception as exc:
