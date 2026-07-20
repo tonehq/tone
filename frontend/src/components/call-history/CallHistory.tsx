@@ -85,6 +85,7 @@ const COLUMN_GROUPS: Array<{
       { key: 'duration_seconds', label: 'Duration' },
       { key: 'from_number', label: 'From' },
       { key: 'to_number', label: 'To' },
+      { key: 'provider_call_id', label: 'Call SID' },
       { key: 'started_at', label: 'Started At' },
       { key: 'ended_at', label: 'Ended At' },
     ],
@@ -446,6 +447,15 @@ const CallHistory: React.FC<{ agentId?: string }> = ({ agentId }) => {
       render: (value) => {
         const num = value as string | null;
         return num ? <PhoneNumberDisplay phoneNumber={num} flagSize="sm" /> : '-';
+      },
+    },
+    {
+      key: 'provider_call_id',
+      title: 'Call SID',
+      dataIndex: 'provider_call_id',
+      render: (value) => {
+        const sid = value as string | null;
+        return sid ? <span className="font-mono text-xs text-muted-foreground">{sid}</span> : '-';
       },
     },
     {

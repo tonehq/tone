@@ -1,13 +1,22 @@
 'use client';
 
-import { MessageCircle, Power, User2 } from 'lucide-react';
+import { MessageCircle, PhoneCall, Power, User2 } from 'lucide-react';
 import { Controller, useFormContext } from 'react-hook-form';
 
 import SectionCard, { ACCENTS } from '@/components/agents/agent-form/SectionCard';
-import { TextAreaField, TextInput } from '@/components/shared';
+import { CheckboxField, TextAreaField, TextInput } from '@/components/shared';
 import { Switch } from '@/components/ui/switch';
-import type { AgentFormState } from '@/types/agent';
+import type { AgentDirection, AgentFormState } from '@/types/agent';
 import { cn } from '@/utils/cn';
+
+/** Two booleans → the persisted agent_type. Returns null when neither is set, so the
+ *  caller can block clearing both (at least one call mode is required). */
+function deriveAgentType(inbound: boolean, outbound: boolean): AgentDirection | null {
+  if (inbound && outbound) return 'both';
+  if (inbound) return 'inbound';
+  if (outbound) return 'outbound';
+  return null;
+}
 
 export default function BasicsStep() {
   const { control } = useFormContext<AgentFormState>();
@@ -63,6 +72,46 @@ export default function BasicsStep() {
           helperText="Message sent at the end of a conversation."
         />
       </SectionCard>
+
+      <Controller
+        name="agent_type"
+        control={control}
+        render={({ field }) => {
+          const value = (field.value as AgentDirection) ?? 'inbound';
+          const inbound = value === 'inbound' || value === 'both';
+          const outbound = value === 'outbound' || value === 'both';
+          return (
+            <SectionCard
+              icon={<PhoneCall className="size-3.5" strokeWidth={2.25} />}
+              iconClassName={ACCENTS.indigo}
+              title="Call mode"
+              description="Which call directions this agent handles. Outbound (or Both) unlocks scheduling calls to contacts."
+            >
+              <div className="flex flex-col gap-3">
+                <CheckboxField
+                  id="agent-mode-inbound"
+                  label="Inbound — answers incoming calls"
+                  checked={inbound}
+                  onCheckedChange={(v) => {
+                    const next = deriveAgentType(!!v, outbound);
+                    if (next) field.onChange(next);
+                  }}
+                />
+                <CheckboxField
+                  id="agent-mode-outbound"
+                  label="Outbound — places calls to contacts"
+                  checked={outbound}
+                  onCheckedChange={(v) => {
+                    const next = deriveAgentType(inbound, !!v);
+                    if (next) field.onChange(next);
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">At least one call mode is required.</p>
+              </div>
+            </SectionCard>
+          );
+        }}
+      />
 
       <Controller
         name="is_active"

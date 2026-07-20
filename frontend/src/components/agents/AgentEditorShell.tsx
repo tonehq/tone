@@ -202,7 +202,14 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     [guardedAction, isInternalNav, router],
   );
   const navContextValue = useMemo(() => ({ safeNavigate }), [safeNavigate]);
-  const navGroups = useMemo(() => buildAgentNav(basePath, mode), [basePath, mode]);
+  // Gate call-mode-specific sections (e.g. Contacts) on the LIVE form value so
+  // the rail updates the moment the user toggles outbound in Basics; fall back
+  // to the URL-derived direction before the form has hydrated.
+  const callMode = (watchedValues.agent_type as AgentDirection | undefined) ?? agentType;
+  const navGroups = useMemo(
+    () => buildAgentNav(basePath, mode, callMode),
+    [basePath, mode, callMode],
+  );
   const flatItems = useMemo(() => navGroups.flatMap((g) => g.items), [navGroups]);
 
   /** Push a freshly-loaded AgentDetail into local state + the RHF form.
@@ -812,10 +819,10 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   // providers mounted so the agent's unsaved state survives the round-trip and
   // returning to a section counts as internal navigation (no discard prompt).
   const isBuilderRoute = /\/workflow\/[^/]+$/.test(pathname);
-  // Call History hosts the full call-log table + filter toolbar — it needs the
+  // Call History and Contacts host full-width tables + toolbars — they need the
   // entire content width. The form sections (Basics, Prompt, …) stay in the
   // narrow, centered max-w-3xl column that reads better for forms.
-  const isWideSection = /\/call-history$/.test(pathname);
+  const isWideSection = /\/(call-history|contacts)$/.test(pathname);
   if (isBuilderRoute) {
     return (
       <FormProvider {...methods}>

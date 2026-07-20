@@ -19,7 +19,7 @@ return it directly — never re-running the runner when nothing has changed.
 from __future__ import annotations
 
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Set, Union
 from uuid import UUID
 
@@ -57,6 +57,20 @@ from core.services.readiness.schemas import (
 # Process-wide singletons — see docstring above.
 _deep_cache = DeepCheckCache(ttl_seconds=300)
 _rate_limiter = RateLimiter(max_per_window=1, window_seconds=60)
+
+# Wall-clock TTL for the persisted Deep-snapshot fast-path.
+#
+# The ``dependency_stamp`` invalidates a stored snapshot on every DB edit
+# tracked by ``compute_agent_cache_version``, but it has no way to notice
+# *out-of-band* drift — an OAuth token silently expiring, a provider
+# revoking an API key, a telephony account running out of credit. Without
+# a time cap, the last passing Deep snapshot can be replayed for weeks
+# while the agent is actually broken.
+#
+# 300s matches the in-memory ``DeepCheckCache`` TTL above so both cache
+# layers share a single freshness window: within 5 minutes of any external
+# drift the runner re-executes live, bringing the failure into the report.
+_DEEP_SNAPSHOT_TTL_SECONDS = 300
 
 
 # Canonical trigger strings. Free-form so callers can pass anything, but
@@ -440,6 +454,8 @@ class ReadinessService(BaseService):
         row = q.order_by(AgentReadinessSnapshot.computed_at.desc()).first()
         if row is None:
             return None
+        if depth == Depth.DEEP and _deep_snapshot_expired(row):
+            return None
         return _row_to_report(row)
 
     async def _run_and_persist(
@@ -510,6 +526,19 @@ class ReadinessService(BaseService):
 
 
 # ── module-private helpers ─────────────────────────────────────────────────
+
+
+def _deep_snapshot_expired(row: AgentReadinessSnapshot) -> bool:
+    """True when a stored Deep snapshot is older than the wall-clock TTL.
+
+    A missing ``computed_at`` is defensively treated as expired — that would
+    only happen for hand-inserted rows, and we'd rather re-run than serve a
+    snapshot with no provenance.
+    """
+    if row.computed_at is None:
+        return True
+    age = datetime.now(timezone.utc) - row.computed_at
+    return age > timedelta(seconds=_DEEP_SNAPSHOT_TTL_SECONDS)
 
 
 def _counts_from_row(row: Union[AgentReadinessSnapshot, AgentReadinessEvent]) -> Dict[str, int]:

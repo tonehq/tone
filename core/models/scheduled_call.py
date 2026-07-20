@@ -18,6 +18,9 @@ class ScheduledCall(OrgScopedModel):
 
     agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="RESTRICT"), nullable=False)
     channel_id = Column(UUID(as_uuid=True), ForeignKey("channels.id", ondelete="SET NULL"), nullable=True)
+    # The contact this call targets, when scheduled from the Contacts page. SET NULL so
+    # deleting a contact doesn't cascade-delete its scheduled-call history.
+    contact_id = Column(UUID(as_uuid=True), ForeignKey("contacts.id", ondelete="SET NULL"), nullable=True, index=True)
     from_number = Column(String(20), nullable=False)
     to_number = Column(String(20), nullable=False)
     scheduled_at = Column(DateTime(timezone=True), nullable=False, index=True)

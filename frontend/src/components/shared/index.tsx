@@ -1,6 +1,7 @@
 import ActionMenu from './ActionMenu';
 import AppLoader from './AppLoader';
 import CheckboxField from './CheckboxField';
+import CollapsibleSection from './CollapsibleSection';
 import CustomButton from './CustomButton';
 import CustomCard from './CustomCard';
 import CustomDrawer from './CustomDrawer';
@@ -11,6 +12,7 @@ import CustomTab from './CustomTab';
 import CustomTable from './CustomTable';
 import CustomTooltip from './CustomTooltip';
 import DateRangePicker from './DateRangePicker';
+import DateTimePicker from './DateTimePicker';
 import Divider from './Divider';
 import ErrorBoundary from './ErrorBoundary';
 import Form from './Form';
@@ -39,6 +41,8 @@ export type {
   CustomTableProps,
   DateRangePickerProps,
   DateRangeValue,
+  DateTimePickerProps,
+  DateTimeValue,
   FormCheckboxFieldProps,
   FormMultiSelectFieldProps,
   FormRadioGroupFieldProps,
@@ -60,6 +64,7 @@ export type {
   TokenSearchBarProps,
   TokenSearchField,
 } from '@/types/components';
+export type { CollapsibleSectionProps } from './CollapsibleSection';
 export type { CustomCardProps } from './CustomCard';
 export type { SearchableSelectOption } from './SearchableSelect';
 export type { TabItem } from './CustomTab';
@@ -80,6 +85,7 @@ export {
   ActionMenu,
   AppLoader,
   CheckboxField,
+  CollapsibleSection,
   CustomButton,
   CustomCard,
   CustomDrawer,
@@ -90,6 +96,7 @@ export {
   CustomTable,
   CustomTooltip,
   DateRangePicker,
+  DateTimePicker,
   Divider,
   ErrorBoundary,
   Form,

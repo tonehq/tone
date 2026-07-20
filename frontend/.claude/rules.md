@@ -332,3 +332,37 @@ Use a **55% / 40%** left-right split with a gap between label and control:
 | Form row description | `text-[13px] leading-relaxed text-muted-foreground` |
 | Page heading         | `text-lg font-semibold text-foreground`             |
 | Banner/alert text    | `text-[13px]`                                       |
+
+---
+
+## 13. Reuse & the service layer — single source of truth (mandatory)
+
+The same functionality must have **exactly one implementation** that every caller uses. If a behavior is (or will be) invoked from more than one place — another page, component, hook, atom, or test — it MUST be a shared function, not copy-pasted. Before writing new logic, search for an existing shared piece and extend it; when a second call site appears, extract rather than duplicate.
+
+### Where shared logic lives
+
+| Kind of logic                                        | Put it in                                     | Never do this                                              |
+| ---------------------------------------------------- | --------------------------------------------- | --------------------------------------------------------- |
+| Reusable UI element                                  | `src/components/shared/` (barrel-exported)    | Re-implement a shared component inline per page            |
+| Cross-page domain UI                                 | `src/components/<domain>/shared/`             | Copy a table/modal/form into a second feature             |
+| Stateful reusable behavior                           | `src/hooks/`                                  | Duplicate the same `useState`/`useEffect` block per page  |
+| Pure helpers (format/validate/transform)             | `src/lib/` or `src/utils/`                    | Inline the same date/string/number logic in many files    |
+| **All HTTP / server calls**                          | `src/services/` or `src/lib/api/` hooks       | Call `axios`/`fetch` directly from a component             |
+| Client state + side effects                          | Jotai atoms (`src/atoms/`)                    | Fire service calls from render or duplicate write logic    |
+
+### Rules
+
+1. **API/service layer is mandatory.** Every backend call goes through a service function (`src/services/`) or a `src/lib/api` query/mutation hook — never a raw `axios`/`fetch` in a component or page. One client wrapper per endpoint; every caller reuses it (see the Contacts `lib/api/*` clients and `usePaginatedList` for the pattern).
+2. **Components stay thin.** Components render + wire events; side effects go through Jotai write atoms; data-shaping/validation lives in a hook/util/schema. No business logic embedded in a component that a second component would need to copy.
+3. **Factor out on the 2nd–3rd occurrence.** Extract by **responsibility**, not by superficial shape. If two spots do the same job, they call one function; if they merely look similar but mean different things, keep them separate.
+4. **Extend, don't fork.** Need a variant? Add a prop/param to the shared function. Do not clone-and-tweak it into a near-duplicate.
+5. **Register new shared pieces** so they get reused: barrel-export shared components from `@/components/shared`, document shared UI in `docs/shared-components.md`, and list reusable domain hooks/clients in the "Contacts Directories — reusable components/hooks" section of `CLAUDE.md`.
+
+### Code review must flag (blocker)
+
+- Any **raw `fetch`/`axios`** in a component/page instead of a service or `lib/api` hook.
+- **Duplicated logic** — the same functionality re-implemented in a second call site instead of calling the existing shared function/hook/service/component.
+- A new component/hook/util that **rebuilds something a shared piece already provides** — the fix is "call the shared one", not "copy it here".
+- Business logic living **inside a component** that belongs in a hook/util/service/atom.
+
+The fix for all of the above is always *reuse the single implementation*, never *duplicate it*.

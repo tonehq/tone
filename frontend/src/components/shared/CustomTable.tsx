@@ -75,6 +75,8 @@ function CustomTableInner<TRow>({
   title,
   description,
   initialSort = null,
+  fillHeight = false,
+  groupRows = false,
 }: CustomTableProps<TRow>) {
   const [sorting, setSorting] = useState<SortingState>(() => {
     if (!initialSort) return [];
@@ -233,7 +235,7 @@ function CustomTableInner<TRow>({
     !!description;
 
   return (
-    <div className={cn('flex flex-col gap-4 min-h-0', className)}>
+    <div className={cn('flex flex-col gap-4 min-h-0', fillHeight && 'h-full flex-1', className)}>
       {(title || description) && (
         <div className="flex flex-col gap-1">
           {title && <h3 className="text-base font-semibold tracking-tight">{title}</h3>}
@@ -333,7 +335,12 @@ function CustomTableInner<TRow>({
         </div>
       )}
 
-      <div className="flex flex-col min-h-0 overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+      <div
+        className={cn(
+          'flex flex-col min-h-0 overflow-hidden rounded-xl border border-border bg-card shadow-sm',
+          fillHeight && 'flex-1',
+        )}
+      >
         <DataTable
           table={table}
           rows={paginatedRows}
@@ -343,6 +350,8 @@ function CustomTableInner<TRow>({
           onRowClick={onRowClick}
           getRowKey={getRowKey}
           density={density}
+          groupRows={groupRows}
+          fill={fillHeight}
         />
 
         {paginationEnabled && !loading && processedRows.length > 0 && (

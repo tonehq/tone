@@ -46,6 +46,15 @@ from core.models.tool import Tool
 from core.models.node import Node
 from core.models.pod import Pod
 
+# Contacts (dial targets grouped into user-created directories)
+from core.models.contact_schema import ContactSchema
+from core.models.schema_field import SchemaField
+from core.models.contact_directory import ContactDirectory
+from core.models.datasource import Datasource
+from core.models.contact_sync import ContactSync
+from core.models.contact import Contact
+from core.models.agent_contact import AgentContact
+
 # Calls & Metrics
 from core.models.call import Call
 from core.models.call_metrics import CallMetrics

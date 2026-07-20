@@ -1,7 +1,7 @@
 'use client';
 
 import { CustomButton } from '@/components/shared';
-import type { CallMetrics } from '@/types/callLog';
+import type { CallMetrics, ToolExecution } from '@/types/callLog';
 import { cn } from '@/utils/cn';
 import {
   AudioLines,
@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import React, { useMemo } from 'react';
 
+import { EndToEndLatencyPercentileSection } from './EndToEndLatencyPercentileSection';
 import { LLMUsageSection } from './LLMUsageSection';
 import { MetricsCategory } from './MetricsCategory';
 import { MetricsCollapseProvider, useMetricsCollapse } from './MetricsCollapseContext';
@@ -51,10 +52,14 @@ function CollapseToolbar() {
 
 interface MetricsContentProps {
   metrics: CallMetrics;
+  /** Tool executions for this call — sourced from `/tool-executions`. Used by
+   *  the End-to-End per-Turn table to show the count of executed (success/error)
+   *  tool calls per turn. */
+  toolExecutions?: ToolExecution[];
   className?: string;
 }
 
-const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, className }) => {
+const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, toolExecutions, className }) => {
   // Defensive shims — the type declares each as a non-null array, but legacy
   // backend rows / partial ingestion can deliver `null`. Coerce once at the
   // top so every downstream `.reduce`/`.map`/`.filter` is safe.
@@ -87,7 +92,7 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, className }) =
 
   const hasProcessing = processingList.some((p) => p.model && p.value > 0);
   const hasTurnMetrics = turnMetrics.length > 0;
-  const hasLatency = hasTurnMetrics || hasProcessing;
+  const hasLatency = hasTurnMetrics || hasProcessing || userBotLatency.length > 0;
   const hasUsage = llmUsage.length > 0 || ttsUsage.length > 0 || sttUsage.length > 0;
   const llmModels = [...new Set(llmUsage.map((u) => u.model))].join(', ');
 
@@ -137,7 +142,10 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, className }) =
 
         {hasLatency && (
           <MetricsCategory title="Latency">
-            {hasTurnMetrics && <TurnLatencySection turns={turnMetrics} />}
+            {hasTurnMetrics && (
+              <TurnLatencySection turns={turnMetrics} toolExecutions={toolExecutions} />
+            )}
+            <EndToEndLatencyPercentileSection latencies={userBotLatency.map((l) => l.latency)} />
             {hasTurnMetrics && <PerTurnCallsSection turns={turnMetrics} />}
             {hasProcessing && <ProcessingTimesSection processing={processingList} />}
           </MetricsCategory>

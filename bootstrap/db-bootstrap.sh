@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # db-bootstrap.sh — Initialize the Tone database (migrations + seed data)
 #
-# Usage:
-#   ./db-bootstrap.sh
+# To run:
+#   # 1. Local (.env DATABASE_URL)
+#   ./bootstrap/db-bootstrap.sh
+#
+#   # 2. With Infisical (DATABASE_URL injected from Infisical)
+#   infisical run --projectId "$INFISICAL_PROJECT_ID" --env="$INFISICAL_ENV" -- \
+#       ./bootstrap/db-bootstrap.sh
 #
 # Prerequisites:
 #   - Python virtualenv activated with dependencies already installed
@@ -12,7 +17,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT"
 
 # ── Step 1: Run Alembic migrations ──────────────────────────────────
 # Applies all migration scripts in alembic/versions/ to create the full
