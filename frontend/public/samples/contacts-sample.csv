@@ -1,0 +1,4 @@
+name,phone_number,external_id,scheduled_at,company,notes
+Jane Doe,+14155550123,cust-001,2026-08-01T15:30:00Z,Acme Inc,Prefers afternoon calls
+John Smith,+14155550124,cust-002,,Globex,Follow up on demo
+Maria Garcia,+442071838750,cust-003,2026-08-02T09:00:00+00:00,Initech,VIP account

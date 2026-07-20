@@ -78,6 +78,17 @@ spend review cycles on style a tool can fix.**
 
 Reuse is a review priority in this repo, but **premature abstraction is a defect too.**
 
+- **Single source of truth (blocker-class).** A given piece of functionality has exactly
+  one implementation, and every call site — another router, a worker, a CLI, a test, a
+  second page — goes through it. If a PR re-implements or copy-pastes behavior that an
+  existing service/helper/hook already provides, that's a `[blocker]`/`[should]`: the fix
+  is "call the shared function," not "duplicate it here." Before approving new logic, ask
+  "does this already exist, and will it be needed elsewhere?" — if yes, it belongs in a
+  shared service (`BaseService`) / `core/services/common` / `core/utils` (BE) or
+  `@/components/shared` / `@/hooks` / `@/lib` / `@/utils` / `@/services` (FE).
+- **Logic goes through the service layer, always.** Routers/controllers and components stay
+  thin; domain logic lives in a service so it is reusable and testable from anywhere. Flag
+  any business logic, raw query, or multi-model rule that sits in a router or component.
 - **Rule of three.** Two occurrences → leave it. Three → extract a shared helper/component/service.
 - **Extract by responsibility, not by shape.** Two blocks that *look* similar but change for
   *different reasons* should stay separate. Coupling them creates a helper with five boolean

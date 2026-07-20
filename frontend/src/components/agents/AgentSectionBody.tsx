@@ -11,6 +11,7 @@ import PromptStep from '@/components/agents/agent-form/steps/PromptStep';
 import ToolsMcpStep from '@/components/agents/agent-form/steps/ToolsMcpStep';
 import VoiceStep from '@/components/agents/agent-form/steps/VoiceStep';
 import ChannelsStep from '@/components/agents/agent-form/steps/ChannelsStep';
+import ContactsStep from '@/components/agents/agent-form/steps/ContactsStep';
 import CallHistoryStep from '@/components/agents/agent-form/steps/CallHistoryStep';
 
 // Maps a URL section segment to its body. Shared by the edit and create
@@ -35,8 +36,11 @@ export default function AgentSectionBody({
     section === 'tools' ||
     section === 'knowledge' ||
     section === 'channels';
-  // Overview and Call History only exist for a saved agent (edit mode).
-  const known = isStep || ((section === 'overview' || section === 'call-history') && !!agentId);
+  // Overview, Call History, and Contacts only exist for a saved agent (edit
+  // mode) — Contacts (C-5) needs a persisted agent_id to assign against.
+  const known =
+    isStep ||
+    ((section === 'overview' || section === 'call-history' || section === 'contacts') && !!agentId);
 
   // Bad/unknown section in the URL → bounce to a sensible default.
   useEffect(() => {
@@ -64,6 +68,8 @@ export default function AgentSectionBody({
       return <KnowledgePhoneStep agentId={agentId} />;
     case 'channels':
       return <ChannelsStep />;
+    case 'contacts':
+      return <ContactsStep agentId={agentId} />;
     case 'call-history':
       return <CallHistoryStep agentId={agentId} />;
     default:

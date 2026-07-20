@@ -35,7 +35,9 @@ if _LOAD_FULL_API:
         auth, users, organizations, agent_configs, channels, oauth,
         agents, agent_readiness, mcp_servers, services, tools, dashboard,
         call_logs, call_metrics, sessions, workflows, audit_logs,
-        app_integrations, outbound_calls, admin,
+        app_integrations, outbound_calls, admin, contacts,
+        contact_directories, contact_datasources, contact_schemas,
+        contact_syncs, agent_contacts,
     )
 from core.middleware.request_context import RequestContextMiddleware
 from core.api.telephony_routes import router as telephony_router
@@ -145,6 +147,16 @@ if ee_enabled:
         api_v1.include_router(workflows.router, prefix="/workflow", tags=["workflow"])
         api_v1.include_router(audit_logs.router, prefix="/audit-log", tags=["audit-log"])
         api_v1.include_router(outbound_calls.router, prefix="/outbound-call", tags=["outbound-call"])
+        # Contact Directories module: contacts.router carries full paths
+        # (/contact-directories/{id}/contacts/*, /contacts/{id}, /contact/schedule-calls)
+        # so it mounts at the api-v1 root; the resource routers set their own prefixes.
+        api_v1.include_router(contacts.router, tags=["contact"])
+        api_v1.include_router(contact_directories.router, prefix="/contact-directories", tags=["contact-directory"])
+        api_v1.include_router(contact_datasources.router, prefix="/contact-datasources", tags=["contact-datasource"])
+        api_v1.include_router(contact_schemas.router, tags=["contact-schema"])
+        api_v1.include_router(contact_schemas.field_router, tags=["contact-schema"])
+        api_v1.include_router(contact_syncs.router, prefix="/contact-syncs", tags=["contact-sync"])
+        api_v1.include_router(agent_contacts.router, prefix="/agents", tags=["agent-contacts"])
         api_v1.include_router(admin.router, prefix="/admin", tags=["admin"])
     # webrtc is always mounted — needed on call pods for WebRTC signaling.
     api_v1.include_router(webrtc.router, prefix="/webrtc", tags=["webrtc"])
@@ -172,6 +184,16 @@ else:
         api_v1.include_router(workflows.router, prefix="/workflow", tags=["workflow"])
         api_v1.include_router(audit_logs.router, prefix="/audit-log", tags=["audit-log"])
         api_v1.include_router(outbound_calls.router, prefix="/outbound-call", tags=["outbound-call"])
+        # Contact Directories module: contacts.router carries full paths
+        # (/contact-directories/{id}/contacts/*, /contacts/{id}, /contact/schedule-calls)
+        # so it mounts at the api-v1 root; the resource routers set their own prefixes.
+        api_v1.include_router(contacts.router, tags=["contact"])
+        api_v1.include_router(contact_directories.router, prefix="/contact-directories", tags=["contact-directory"])
+        api_v1.include_router(contact_datasources.router, prefix="/contact-datasources", tags=["contact-datasource"])
+        api_v1.include_router(contact_schemas.router, tags=["contact-schema"])
+        api_v1.include_router(contact_schemas.field_router, tags=["contact-schema"])
+        api_v1.include_router(contact_syncs.router, prefix="/contact-syncs", tags=["contact-sync"])
+        api_v1.include_router(agent_contacts.router, prefix="/agents", tags=["agent-contacts"])
         api_v1.include_router(admin.router, prefix="/admin", tags=["admin"])
     # webrtc is always mounted — needed on call pods for WebRTC signaling.
     api_v1.include_router(webrtc.router, prefix="/webrtc", tags=["webrtc"])

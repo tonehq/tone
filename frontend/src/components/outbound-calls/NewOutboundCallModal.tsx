@@ -5,20 +5,22 @@ import {
   CheckboxField,
   CustomButton,
   CustomModal,
+  DateTimePicker,
   SelectInput,
   TextAreaField,
-  TextInput,
 } from '@/components/shared';
 import { listAgents } from '@/services/agentsService';
 import { getChannelsByType, listChannelPhoneNumbers } from '@/services/channelService';
 import type { CreateOutboundCallPayload } from '@/types/outboundCall';
+import { getBrowserTimeZone } from '@/utils/date';
+import { triggerCsvDownload } from '@/utils/download';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useSetAtom } from 'jotai';
 import { Download, Upload } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { Controller, useForm } from 'react-hook-form';
 
 interface Option {
   value: string;
@@ -69,19 +71,6 @@ function parseNumbers(text: string): string[] {
   return out;
 }
 
-/** Download a sample CSV so users know the expected format (one E.164 number per row). */
-function downloadSampleCsv(): void {
-  const csv = ['phone_number', '+14155550123', '+14155550124', '+442071838750'].join('\n');
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'outbound-numbers-sample.csv';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
 export default function NewOutboundCallModal({
   open,
   onClose,
@@ -111,7 +100,7 @@ export default function NewOutboundCallModal({
   const scheduleOn = watch('schedule');
   const numbersText = watch('to_numbers_text');
   const numberCount = useMemo(() => parseNumbers(numbersText).length, [numbersText]);
-  const nowLocal = useMemo(() => new Date().toISOString().slice(0, 16), []);
+  const browserTz = useMemo(() => getBrowserTimeZone(), []);
 
   useEffect(() => {
     if (!open) return;
@@ -290,7 +279,12 @@ export default function NewOutboundCallModal({
               <CustomButton
                 type="text"
                 icon={<Download className="size-3.5" />}
-                onClick={downloadSampleCsv}
+                onClick={() =>
+                  triggerCsvDownload(
+                    'outbound-numbers-sample.csv',
+                    ['phone_number', '+14155550123', '+14155550124', '+442071838750'].join('\n'),
+                  )
+                }
               >
                 Sample CSV
               </CustomButton>
@@ -327,14 +321,29 @@ export default function NewOutboundCallModal({
         </div>
         <CheckboxField id="schedule" control={control} label="Schedule for later" />
         {scheduleOn && (
-          <TextInput
+          <Controller
             name="scheduled_at"
             control={control}
-            type="datetime-local"
-            label="Scheduled time"
-            isRequired
-            min={nowLocal}
-            rules={{ required: 'Pick a time in the future' }}
+            rules={{
+              required: 'Pick a time in the future',
+              validate: (v: string) =>
+                (!!v && new Date(v).getTime() > Date.now()) || 'Pick a time in the future',
+            }}
+            render={({ field, fieldState }) => (
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium">
+                  Scheduled time <span className="text-destructive">*</span>
+                </label>
+                <DateTimePicker
+                  value={{ value: field.value || null, timeZone: browserTz }}
+                  onChange={(v) => field.onChange(v.value ?? '')}
+                  placeholder="Pick a date & time"
+                />
+                {fieldState.error && (
+                  <span className="text-xs text-destructive">{fieldState.error.message}</span>
+                )}
+              </div>
+            )}
           />
         )}
       </form>

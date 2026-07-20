@@ -95,6 +95,7 @@ function DashboardShell({ children }: { children: React.ReactNode }) {
   // sidebar/chrome while inside them.
   const isFocused =
     pathname.startsWith('/settings') ||
+    pathname.startsWith('/contacts') ||
     pathname.startsWith('/agents/create') ||
     pathname.startsWith('/agents/edit') ||
     /^\/workflows\/[^/]+/.test(pathname) ||

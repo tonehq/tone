@@ -161,6 +161,14 @@ Formatting is tool-enforced (Ruff/formatter). **Review the substance below, not 
 
 ## 11. Structure, naming & reuse
 
+- `[blocker]` **Single source of truth.** The same functionality has one implementation and every
+  caller (router, worker, CLI, test) invokes it. A PR that re-implements or copy-pastes logic an
+  existing service/helper already provides must call the shared function instead — flag the
+  duplication and point to the canonical one. New logic that will be needed from more than one place
+  is written as a shared service method / `core/services/common` / `core/utils` helper from the start.
+- `[blocker]` **All business logic runs through the service layer.** Routers stay thin (parse →
+  authorize → call service → shape response); domain rules, multi-model operations, and queries live
+  in a `BaseService`, callable from anywhere. (Reinforces §1.)
 - `[should]` Shared logic → a service method or `core/utils` helper, reused across routers — not
   copy-pasted between endpoints (rule of three).
 - `[should]` Functions do one thing; a service method spanning fetch + transform + external call +
@@ -171,6 +179,7 @@ Formatting is tool-enforced (Ruff/formatter). **Review the substance below, not 
 ## Quick reviewer checklist (BE)
 
 - [ ] Router is thin; logic in a `BaseService`; models stay data-only.
+- [ ] **No duplicated logic — same functionality is one shared service/helper, called everywhere (not re-implemented per endpoint).**
 - [ ] Every route has the right auth guard; **every query is org/tenant-scoped**.
 - [ ] AuthZ checks the specific object (no IDOR), not just the role.
 - [ ] No raw/interpolated SQL; no N+1; queries paginated; transactions atomic.
