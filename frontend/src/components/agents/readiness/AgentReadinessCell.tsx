@@ -1,66 +1,45 @@
 'use client';
 
-import { useAtom } from 'jotai';
-import { useEffect, useState } from 'react';
-
-import { fetchAgentReadinessSummaryAtom } from '@/atoms/ReadinessAtom';
-import type { ReadinessSummary } from '@/types/readiness';
+import type { AgentListReadiness } from '@/types/agent';
 
 import ReadinessBadge from './ReadinessBadge';
 
 interface AgentReadinessCellProps {
   agentId: string;
-  /** Click handler — receives the summary in case the parent wants to open a
+  /** Last-known readiness for this row, supplied by the list API. Null when the
+   * agent has no stored run yet — the badge then shows "unavailable" until the
+   * user opens the drawer (which computes a fresh check). */
+  readiness: AgentListReadiness | null;
+  /** Click handler — receives the row's readiness so the parent can open a
    * drawer scoped to this agent. */
-  onOpen?: (agentId: string, summary: ReadinessSummary | null) => void;
+  onOpen?: (agentId: string, readiness: AgentListReadiness | null) => void;
 }
 
 /**
- * One row in the agent list table. Fetches its own Shallow summary lazily so
- * the table can render immediately and populate rows as their responses come
- * in — avoiding a blocking bulk fetch. Non-critical UI: any failure just
- * shows an "unavailable" pill, never a toast.
+ * One row in the agent list table. Renders the readiness badge straight from
+ * the list-API payload — no per-row fetch. This replaces the old N+1 where
+ * every row fired its own `/readiness/summary` request. The value is
+ * last-known state (read from the stored snapshot, not recomputed); the editor
+ * drawer refreshes it live when opened.
  */
-export default function AgentReadinessCell({ agentId, onOpen }: AgentReadinessCellProps) {
-  const [, fetchSummary] = useAtom(fetchAgentReadinessSummaryAtom);
-  const [summary, setSummary] = useState<ReadinessSummary | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(false);
-    (async () => {
-      try {
-        const next = await fetchSummary({ agentId, trigger: 'list_page' });
-        if (!cancelled) setSummary(next);
-      } catch {
-        if (!cancelled) setError(true);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [agentId, fetchSummary]);
-
-  const status = loading && !summary ? 'loading' : error ? 'error' : summary?.overall_status;
-
+export default function AgentReadinessCell({
+  agentId,
+  readiness,
+  onOpen,
+}: AgentReadinessCellProps) {
   return (
     <ReadinessBadge
-      status={status ?? 'error'}
-      blockerCount={summary?.blocker_count ?? 0}
-      warningCount={summary?.warning_count ?? 0}
+      status={readiness?.overall_status ?? 'error'}
+      blockerCount={readiness?.blocker_count ?? 0}
+      warningCount={readiness?.warning_count ?? 0}
       size="sm"
       onClick={
         onOpen
           ? (e) => {
-              // Stop propagation so the surrounding row-click (which opens
-              // the editor) doesn't fire in addition to the drawer.
+              // Stop propagation so the surrounding row-click (which opens the
+              // editor) doesn't fire in addition to the drawer.
               e.stopPropagation();
-              onOpen(agentId, summary);
+              onOpen(agentId, readiness);
             }
           : undefined
       }

@@ -100,6 +100,36 @@ class ReadinessSummary(BaseModel):
     run_number: Optional[int] = None
 
 
+class ReadinessRunListItem(BaseModel):
+    """One row in the readiness run-history dropdown.
+
+    Metadata only — deliberately omits the heavy ``checks`` blob. The dropdown
+    renders off these fields; selecting a row fetches the full report (with
+    ``checks``) via ``GET /agent/{id}/readiness/runs/{run_number}``.
+    """
+
+    run_number: int
+    depth: Depth
+    overall_status: OverallStatus
+    config_id: Optional[str] = None
+    trigger: str
+    blocker_count: int = 0
+    warning_count: int = 0
+    info_count: int = 0
+    passed_count: int = 0
+    skipped_count: int = 0
+    started_at: Optional[str] = None
+    # Completion timestamp (ISO-8601) — the dropdown's primary label.
+    computed_at: str
+    duration_ms: Optional[int] = None
+
+
+class ReadinessRunList(BaseModel):
+    """Response for ``GET /agent/{id}/readiness/runs`` — newest run first."""
+
+    items: List[ReadinessRunListItem] = Field(default_factory=list)
+
+
 class ReadinessReport(BaseModel):
     """Full report returned by ``POST /agent/{id}/readiness``.
 
