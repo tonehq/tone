@@ -97,10 +97,14 @@ class STTProviderReachableCheck(DeepCheck):
 
     @with_retry()
     # Pipeline harness adds ~2–4s for PipelineTask lifecycle (StartFrame,
-    # WS handshake, TaskManager setup) on top of the real-audio probe. 20s
-    # gives slow WS-STTs (Deepgram/AssemblyAI in cold regions) headroom
-    # without blocking the readiness report on a stuck session.
-    @with_timeout(20.0)
+    # WS handshake, TaskManager setup) on top of the real-audio probe.
+    # Cold WS-STTs (Deepgram / AssemblyAI / Sarvam / Soniox in fresh
+    # regions) can take 15-22s to complete first-handshake + final
+    # transcript; 30s keeps headroom without false-flagging a healthy
+    # provider. Must stay strictly greater than the probe's internal 25s
+    # timeout (see probes.probe_stt) so the harness has room to tear down
+    # cleanly on timeout.
+    @with_timeout(30.0)
     async def run(self, ctx: CheckContext) -> CheckResult:
         from core.services.readiness.probes import probe_stt
 

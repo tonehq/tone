@@ -269,6 +269,89 @@ def seed_member(db, user, org):
     return member
 
 
+def load_template_seed_data():
+    """Load agent-config template definitions from ``dev-templates.json``.
+
+    Kept as a separate file (rather than a new key in ``dev-data.json``)
+    so template edits don't force a diff on the very large provider/model
+    catalogue and vice versa.
+    """
+    data_path = os.path.join(os.path.dirname(__file__), "dev-templates.json")
+    if not os.path.exists(data_path):
+        return {}
+    with open(data_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+# ── Whitelist: only these fields from dev-templates.json flow into the
+#    AgentService call. Guards against typos and future JSON drift silently
+#    injecting unknown kwargs into the service signature.
+#    ``description`` in the JSON is a human-only note and is intentionally
+#    dropped — there's no column to persist it to.
+_TEMPLATE_JSON_FIELDS = (
+    "mode",
+    "system_prompt_template",
+    "first_message",
+    "end_call_message",
+    "conversation_history_token_limit",
+    "llm_settings",
+    "voice_settings",
+    "stt_settings",
+    "conversation_settings",
+)
+
+
+def seed_agent_templates(db, org_id, user_id):
+    """Seed default standalone agent-config templates for a single org.
+
+    Reads ``dev/dev-templates.json`` and calls
+    ``AgentService.create_standalone_template`` for each entry — the
+    service enforces validation and inserts a row with ``agent_id=NULL``,
+    ``is_template=True`` (allowed by the CHECK constraint
+    ``ck_agent_configs_agent_required_unless_template``).
+
+    Idempotent per (organization_id, name): if a template with the same
+    ``name`` already exists for the org (either seeded or user-created via
+    ``save_as_template``), it is left untouched.
+
+    Returns a stats dict for the CLI summary.
+    """
+    from core.models.agent_config import AgentConfig
+    from core.services.agent_service import AgentService
+
+    stats = {"created": 0, "skipped": 0}
+
+    payload = load_template_seed_data()
+    templates = payload.get("agent_config_templates") or []
+    if not templates:
+        return stats
+
+    existing_names = {
+        row.name
+        for row in db.query(AgentConfig.name).filter(
+            AgentConfig.organization_id == org_id,
+            AgentConfig.is_template.is_(True),
+            AgentConfig.deleted_at.is_(None),
+        )
+        if row.name
+    }
+
+    service = AgentService(db, user_id=user_id, org_id=org_id)
+    for entry in templates:
+        name = (entry.get("name") or "").strip()
+        if not name:
+            continue
+        if name in existing_names:
+            stats["skipped"] += 1
+            continue
+
+        kwargs = {k: entry.get(k) for k in _TEMPLATE_JSON_FIELDS if k in entry}
+        service.create_standalone_template(name=name, user_id=user_id, **kwargs)
+        stats["created"] += 1
+
+    return stats
+
+
 def seed_contact_directory(db, org_id, user_id, name="Global"):
     """Create the default per-org ContactDirectory (``name='Global'``) via
     the shared ``ContactDirectoryService`` — which also provisions the
@@ -334,6 +417,8 @@ def seed_from_configs(db, org_name, email, password):
         "api_keys_none": 0,
         "tools_created": 0,
         "contact_directory_created": False,
+        "agent_templates_created": 0,
+        "agent_templates_skipped": 0,
     }
 
     # Load all provider configs from JSON
@@ -609,6 +694,11 @@ def seed_from_configs(db, org_name, email, password):
     seed_contact_directory(db, org_id, user.id)
     stats["contact_directory_created"] = True
 
+    # --- Phase 8: Default agent-config templates (dev/dev-templates.json) ---
+    tpl_stats = seed_agent_templates(db, org_id, user.id)
+    stats["agent_templates_created"] = tpl_stats["created"]
+    stats["agent_templates_skipped"] = tpl_stats["skipped"]
+
     db.commit()
     return stats
 
@@ -672,6 +762,10 @@ def main():
         print(f"   API keys:         {stats['api_keys_created']} created, {stats['api_keys_none']} no env key")
         print(f"   Tools:            {stats['tools_created']} created")
         print(f"   Contact Directory: {'created' if stats['contact_directory_created'] else 'skipped'} (Global)")
+        print(
+            f"   Agent Templates:  {stats['agent_templates_created']} created, "
+            f"{stats['agent_templates_skipped']} already existed"
+        )
 
         # Chain the standalone seeders so a single ``python dev/seed.py`` run
         # leaves the deployment fully seeded. They open their own DB sessions

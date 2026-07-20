@@ -1,0 +1,74 @@
+{
+  "agent_config_templates": [
+    {
+      "name": "Customer Support Agent",
+      "description": "General-purpose inbound support agent that answers product questions and triages issues.",
+      "mode": "prompt",
+      "first_message": "Hi, thanks for calling support. How can I help you today?",
+      "end_call_message": "Thanks for calling. Have a great day!",
+      "system_prompt_template": "You are a friendly, patient customer-support agent. Listen carefully, keep answers concise, and offer to escalate to a human when the caller asks or when you're unsure. Never invent product details you don't know.",
+      "conversation_history_token_limit": 4000,
+      "llm_settings": {
+        "temperature": 0.4,
+        "max_tokens": 400
+      },
+      "voice_settings": {
+        "speed": 1.0,
+        "stability": 0.6
+      },
+      "stt_settings": {
+        "interim_results": true
+      },
+      "conversation_settings": {
+        "allow_interruptions": true,
+        "silence_timeout_ms": 1500
+      }
+    },
+    {
+      "name": "Appointment Booking Agent",
+      "description": "Outbound / inbound agent that qualifies the caller and books an appointment.",
+      "mode": "prompt",
+      "first_message": "Hello! I can help you schedule an appointment. What day works best for you?",
+      "end_call_message": "Your appointment is booked. We'll send a confirmation shortly. Goodbye!",
+      "system_prompt_template": "You are a booking assistant. Collect (a) preferred date, (b) preferred time window, (c) caller's name and contact number. Confirm the details back to the caller before ending the call. Never book outside business hours (09:00–18:00 local time).",
+      "conversation_history_token_limit": 4000,
+      "llm_settings": {
+        "temperature": 0.3,
+        "max_tokens": 300
+      },
+      "voice_settings": {
+        "speed": 1.0
+      },
+      "stt_settings": {
+        "interim_results": true
+      },
+      "conversation_settings": {
+        "allow_interruptions": true,
+        "silence_timeout_ms": 1500
+      }
+    },
+    {
+      "name": "Lead Qualification Agent",
+      "description": "Outbound sales agent that qualifies inbound leads against BANT criteria.",
+      "mode": "prompt",
+      "first_message": "Hi, this is calling on behalf of the sales team. Do you have a moment to chat about your requirements?",
+      "end_call_message": "Thanks for your time. Someone from the team will follow up shortly. Goodbye!",
+      "system_prompt_template": "You are a sales-development representative qualifying a lead. Politely gather (Budget, Authority, Need, Timeline). If the caller declines to answer any question, move on gracefully. Never pressure the caller or make pricing claims you are not certain about.",
+      "conversation_history_token_limit": 4000,
+      "llm_settings": {
+        "temperature": 0.5,
+        "max_tokens": 350
+      },
+      "voice_settings": {
+        "speed": 1.0
+      },
+      "stt_settings": {
+        "interim_results": true
+      },
+      "conversation_settings": {
+        "allow_interruptions": true,
+        "silence_timeout_ms": 1500
+      }
+    }
+  ]
+}
