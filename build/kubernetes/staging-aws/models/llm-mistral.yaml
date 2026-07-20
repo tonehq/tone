@@ -17,6 +17,10 @@ spec:
     metadata:
       labels:
         app: staging-llm-mistral
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: /metrics
     spec:
       nodeSelector:
         gpu: llm
@@ -34,12 +38,6 @@ spec:
             - mistral-nemo-12b
             - --quantization
             - fp8
-            - --tokenizer-mode
-            - mistral
-            - --config-format
-            - mistral
-            - --load-format
-            - mistral
             - --max-model-len
             - "32768"
             - --gpu-memory-utilization
@@ -47,6 +45,7 @@ spec:
             - --enable-auto-tool-choice
             - --tool-call-parser
             - mistral
+            - --enable-log-requests
             - --host
             - 0.0.0.0
             - --port
@@ -59,6 +58,8 @@ spec:
                   key: HF_TOKEN
             - name: HF_HOME
               value: /cache/hf
+            - name: VLLM_LOGGING_LEVEL
+              value: INFO
           ports:
             - name: http
               containerPort: 8000
