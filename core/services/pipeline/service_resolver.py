@@ -542,13 +542,14 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
     scalar subqueries in a single round-trip) — far cheaper than a full resolve, and keeps
     call-setup latency low even on a remote DB.
     """
-    from sqlalchemy import func, select
+    from sqlalchemy import func, or_, select
 
     from core.models.agent_knowledge_base import AgentKnowledgeBase
     from core.models.agent_mcp_server import AgentMcpServer
     from core.models.knowledge_base import KnowledgeBase
     from core.models.mcp_server import McpServer
     from core.models.agent_tool import AgentTool
+    from core.models.oauth_connection import OAuthConnection
     from core.models.tool import Tool
     from core.models.upload import Upload
 
@@ -642,6 +643,57 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
         .where(*_mcp_where).scalar_subquery()
     )
 
+    # OAuth-connection freshness for tool + MCP linked connections.
+    #
+    # A silently-expired OAuth token doesn't touch any of the rows the other
+    # segments hash (Tool/McpServer/AgentTool/AgentMcpServer) — the drift
+    # lives entirely on ``OAuthConnection``. Without this segment a stale
+    # readiness snapshot from before the expiry replays as PASS until an
+    # unrelated config edit bumps the stamp. Including
+    # ``MAX(OAuthConnection.updated_at)`` catches every refresh
+    # (``OAuthService.update_tokens`` bumps updated_at) and every reconnect
+    # (row replaced / re-authorised), which are the two moments where the
+    # readiness snapshot must be invalidated.
+    #
+    # Both linkage paths participate: the entity default
+    # (``Tool.oauth_connection_id`` / ``McpServer.oauth_connection_id``) and
+    # the agent-version override (``AgentTool.oauth_connection_id`` /
+    # ``AgentMcpServer.oauth_connection_id``, resolved with COALESCE so the
+    # override wins). Raw ``token_expiry`` deliberately NOT included — it
+    # would churn every second and thrash the pipeline payload cache; the
+    # 5-minute Deep-snapshot TTL in ``ReadinessService`` handles time-based
+    # drift, this segment handles refresh + reconnect only.
+    _tool_oauth_ids_sq = (
+        select(func.coalesce(AgentTool.oauth_connection_id, Tool.oauth_connection_id))
+        .select_from(AgentTool)
+        .join(Tool, Tool.id == AgentTool.tool_id)
+        .where(
+            AgentTool.agent_id == agent_id,
+            AgentTool.agent_config_id == config_id,
+        )
+    )
+    _mcp_oauth_ids_sq = (
+        select(func.coalesce(AgentMcpServer.oauth_connection_id, McpServer.oauth_connection_id))
+        .select_from(AgentMcpServer)
+        .join(McpServer, McpServer.id == AgentMcpServer.mcp_server_id)
+        .where(
+            AgentMcpServer.agent_id == agent_id,
+            AgentMcpServer.agent_config_id == config_id,
+        )
+    )
+    _oauth_where = (
+        or_(
+            OAuthConnection.id.in_(_tool_oauth_ids_sq),
+            OAuthConnection.id.in_(_mcp_oauth_ids_sq),
+        ),
+    )
+    oauth_cnt_sq = (
+        select(func.count(OAuthConnection.id)).where(*_oauth_where).scalar_subquery()
+    )
+    oauth_max_sq = (
+        select(func.max(OAuthConnection.updated_at)).where(*_oauth_where).scalar_subquery()
+    )
+
     # Workflow assignment: the assigned workflow's working-version id + updated_at are
     # folded into the SAME combined query (as scalar subqueries) so re-assigning or
     # editing the workflow invalidates the cache without a second per-call round-trip.
@@ -664,12 +716,14 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
     (
         prov_max, model_max, voice_ts, key_count, key_max,
         tool_count, tool_link_max, tool_max, kb_count, kb_link_max, kb_max,
-        mcp_count, mcp_link_max, mcp_max, wf_ver_id, wf_ver_ts,
+        mcp_count, mcp_link_max, mcp_max, oauth_count, oauth_max,
+        wf_ver_id, wf_ver_ts,
     ) = db.execute(
         select(
             prov_sq, model_sq, voice_sq, key_cnt_sq, key_max_sq,
             tool_cnt_sq, tool_link_sq, tool_max_sq, kb_cnt_sq, kb_link_sq, kb_max_sq,
-            mcp_cnt_sq, mcp_link_sq, mcp_max_sq, wf_id_sq, wf_ts_sq,
+            mcp_cnt_sq, mcp_link_sq, mcp_max_sq, oauth_cnt_sq, oauth_max_sq,
+            wf_id_sq, wf_ts_sq,
         )
     ).one()
 
@@ -687,7 +741,12 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
     ref_ids = ":".join(
         str(ids[k]) for k in ("llm_pid", "llm_mid", "stt_pid", "stt_mid", "tts_pid", "tts_mid")
     )
-    version = "|".join([
+    # Emit the OAuth segment only when the agent actually references at least
+    # one OAuth connection. Agents with no OAuth-linked tools or MCPs keep the
+    # pre-``oauth:`` stamp format, so their existing readiness snapshots and
+    # pipeline-payload cache entries stay valid across the deploy of this
+    # change — no one-time full-resolve stampede on first visit.
+    parts = [
         f"fmt:{PAYLOAD_FORMAT_VERSION}",
         f"cfg:{config.id}:{_s(config.updated_at)}",
         f"ids:{ref_ids}:{voice_uuid}",
@@ -698,8 +757,11 @@ def compute_agent_cache_version(db: Session, agent: Any, org_id=None) -> Tuple[O
         f"tools:{tool_count}:{_s(tool_link_max)}:{_s(tool_max)}",
         f"kb:{kb_count}:{_s(kb_link_max)}:{_s(kb_max)}",
         f"mcp:{mcp_count}:{_s(mcp_link_max)}:{_s(mcp_max)}",
-        f"wf:{mode}:{workflow_id}:{wf_stamp}",
-    ])
+    ]
+    if oauth_count:
+        parts.append(f"oauth:{oauth_count}:{_s(oauth_max)}")
+    parts.append(f"wf:{mode}:{workflow_id}:{wf_stamp}")
+    version = "|".join(parts)
     return version, config
 
 

@@ -61,7 +61,18 @@ async def probe_in_pipeline(
     from pipecat.pipeline.task import PipelineTask
     from pipecat.processors.frame_processor import FrameDirection, FrameProcessor
 
-    # ---- Frame capture sink -------------------------------------------------
+    # ---- Frame capture sinks ------------------------------------------------
+    #
+    # Two capture points, one per direction — pipecat services push data frames
+    # DOWNSTREAM (LLMTextFrame, TTSAudioRawFrame, TranscriptionFrame) and error
+    # frames UPSTREAM (``FrameProcessor.push_error_frame`` → ``push_frame(
+    # error, FrameDirection.UPSTREAM)``). A single downstream sink misses every
+    # auth / quota / 4xx signal from OpenAI-compat providers (Grok, DeepSeek,
+    # Cerebras, Fireworks, Perplexity, xAI, …) whose bad-key path emits
+    # ``ErrorFrame`` upstream followed by a clean ``LLMFullResponseEndFrame``
+    # downstream — the old probe accepted EndFrame as PASS and false-passed
+    # every wrong Grok key it ever saw. Both queues feed the same
+    # ``frames_out`` so the polling loop only has one thing to watch.
 
     frames_out: asyncio.Queue = asyncio.Queue()
 
@@ -79,6 +90,19 @@ async def probe_in_pipeline(
                 await frames_out.put(frame)
             await self.push_frame(frame, direction)
 
+    class _UpstreamErrorObserver(FrameProcessor):
+        """Sits at the pipeline source position so ``ErrorFrame``s pushed
+        UPSTREAM by the service under test are observed here on their way
+        back to the source. Transparent for every other frame — the pipeline
+        lifecycle is unchanged, this only *watches*.
+        """
+        async def process_frame(self, frame, direction):
+            await super().process_frame(frame, direction)
+            if direction == FrameDirection.UPSTREAM and isinstance(frame, ErrorFrame):
+                await frames_out.put(frame)
+            await self.push_frame(frame, direction)
+
+    error_observer = _UpstreamErrorObserver()
     capture = _Capture()
 
     # ---- Pipeline + Task construction ---------------------------------------
@@ -91,7 +115,10 @@ async def probe_in_pipeline(
     #   - check_dangling_tasks=True → shouts on cleanup if the service
     #     leaves anything behind, noisy in the probe path.
 
-    pipeline = Pipeline([service, capture])
+    # ``error_observer`` first: upstream ErrorFrames from ``service`` pass
+    # through it on their way back to the pipeline source, so bad-key /
+    # quota / 4xx signals surface here instead of being silently swallowed.
+    pipeline = Pipeline([error_observer, service, capture])
     task = PipelineTask(
         pipeline,
         params=params,
