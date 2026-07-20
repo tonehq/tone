@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from core.models.agent import Agent
 from core.models.channel import Channel
+from core.models.contact import Contact
 from core.models.phone_number import PhoneNumber
 from core.models.scheduled_call import ScheduledCall
 from core.services.base import BaseService
@@ -32,25 +33,28 @@ from shared.config import settings
 _E164_RE = re.compile(r"^\+[1-9]\d{6,14}$")
 
 # scheduled_calls lifecycle ranks — status only moves strictly forward.
+# scheduled < processing < dispatched < in_progress < terminal.
 _STATUS_RANK = {
     "scheduled": 0,
     "processing": 1,
     "dispatched": 2,
-    "completed": 3,
-    "busy": 3,
-    "no_answer": 3,
-    "failed": 3,
-    "canceled": 3,
+    "in_progress": 3,
+    "completed": 4,
+    "busy": 4,
+    "no_answer": 4,
+    "failed": 4,
+    "canceled": 4,
 }
 _TERMINAL = {"completed", "busy", "no_answer", "failed", "canceled"}
 
-# Twilio CallStatus -> scheduled_calls status. In-flight states collapse to
-# "dispatched"; the connected call's own log carries the detail.
+# Twilio CallStatus -> scheduled_calls status. Pre-answer in-flight states collapse to
+# "dispatched"; Twilio "in-progress" (the call is connected/live) maps to "in_progress"
+# so the list can show an "In progress" chip. The connected call's own log carries detail.
 _TWILIO_STATUS_MAP = {
     "queued": "dispatched",
     "initiated": "dispatched",
     "ringing": "dispatched",
-    "in-progress": "dispatched",
+    "in-progress": "in_progress",
     "completed": "completed",
     "busy": "busy",
     "no-answer": "no_answer",
@@ -273,12 +277,31 @@ class OutboundCallService(BaseService):
             )
             for num in numbers
         ]
+        self._persist_and_enqueue_rows(rows)
+        logger.info(
+            "[outbound] queued batch agent={} count={} invalid={} scheduled_at={}",
+            agent.id, len(rows), len(invalid), scheduled_at,
+        )
+        return {
+            "mode": "bulk" if len(numbers) > 1 else "scheduled",
+            "count": len(rows),
+            "invalid": invalid,
+            "data": [self._to_response(sc) for sc in rows],
+        }
+
+    def _persist_and_enqueue_rows(self, rows: List[ScheduledCall]) -> None:
+        """Persist ``scheduled_calls`` rows then defer one Procrastinate job per row at
+        that row's own ``scheduled_at`` (so a batch can carry per-contact times). Enqueue
+        failures are isolated per row (marked ``failed``) so one bad defer doesn't drop
+        the rest of the batch."""
+        if not rows:
+            return
         self.db.add_all(rows)
         # flush() assigns PKs while the instances' attributes are still live; reading
-        # sc.id here (all rows share `when`) avoids the per-row reload that a post-commit
-        # access would trigger under expire_on_commit.
+        # sc.id / sc.scheduled_at here avoids the per-row reload a post-commit access
+        # would trigger under expire_on_commit.
         self.db.flush()
-        batch = [(sc.id, self.org_id, when) for sc in rows]
+        batch = [(sc.id, self.org_id, sc.scheduled_at) for sc in rows]
         self.db.commit()
 
         from core.services.ingestion_queue import enqueue_outbound_calls_batch
@@ -294,15 +317,112 @@ class OutboundCallService(BaseService):
                 sc.queue_job_id = job_id
         self.db.commit()
 
-        logger.info(
-            "[outbound] queued batch agent={} count={} invalid={} scheduled_at={}",
-            agent.id, len(rows), len(invalid), scheduled_at,
+    # --------------------------------------------------- schedule for contacts
+
+    @staticmethod
+    def _resolve_contact_when(contact: Contact, request_when: Optional[datetime]) -> datetime:
+        """Per-row effective schedule time. A contact's own ``scheduled_at`` metadata wins
+        only when it is still in the FUTURE; a stale/past metadata time is ignored so it
+        can neither override the (already future-validated) request time nor force an
+        immediate dial. Falls back to the request-level time, then to ASAP (now)."""
+        now = datetime.now(timezone.utc)
+        meta_when: Optional[datetime] = None
+        raw = (contact.contact_metadata or {}).get("scheduled_at")
+        if raw:
+            try:
+                parsed = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+                meta_when = parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+            except (ValueError, TypeError):
+                logger.debug("[outbound] contact {} has unparseable scheduled_at {!r}", contact.id, raw)
+        # Contact metadata time wins only when still in the future; otherwise fall back to
+        # the (already future-validated) request time, else ASAP.
+        if meta_when is not None and meta_when > now:
+            return meta_when
+        if request_when is not None:
+            return request_when
+        return now
+
+    def schedule_calls_for_contacts(
+        self,
+        agent_id,
+        from_number: str,
+        contact_ids: List,
+        scheduled_at: Optional[datetime] = None,
+        created_by_user_id=None,
+    ) -> Dict[str, Any]:
+        """Schedule outbound calls to the given org-owned contacts.
+
+        Reuses ``_validate_agent_and_from`` (gates outbound/both agent + Twilio
+        from-number) and the ``scheduled_calls`` pipeline. Each row carries its
+        ``contact_id`` and a per-contact effective time (CSV ``scheduled_at`` overrides
+        the request time). Contacts with no/invalid phone are collected into ``invalid``
+        rather than failing the whole batch."""
+        if not contact_ids:
+            raise HTTPException(status_code=400, detail="Provide at least one contact.")
+        if len(contact_ids) > self.MAX_BULK:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Too many contacts in one request (max {self.MAX_BULK}).",
+            )
+
+        agent, channel_id, from_number = self._validate_agent_and_from(agent_id, from_number)
+
+        if scheduled_at is not None and scheduled_at.tzinfo is None:
+            scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+        if scheduled_at is not None and scheduled_at <= datetime.now(timezone.utc) - timedelta(seconds=60):
+            raise HTTPException(status_code=400, detail="scheduled_at must be in the future.")
+
+        # Org-scoped load; a spoofed id from another org simply won't be found.
+        contacts = (
+            self.query(Contact)
+            .filter(Contact.id.in_(contact_ids), Contact.deleted_at.is_(None))
+            .all()
         )
+        found = {c.id for c in contacts}
+        invalid: List[Dict[str, str]] = [
+            {"contact_id": str(cid), "error": "Contact not found."}
+            for cid in contact_ids if cid not in found
+        ]
+
+        rows: List[ScheduledCall] = []
+        for contact in contacts:
+            try:
+                to_number = self._normalize_e164(contact.phone_number or "", "phone_number")
+            except HTTPException:
+                invalid.append({
+                    "contact_id": str(contact.id),
+                    "error": "Contact has no valid E.164 phone number.",
+                })
+                continue
+            rows.append(ScheduledCall(
+                agent_id=agent.id,
+                organization_id=self.org_id,
+                channel_id=channel_id,
+                contact_id=contact.id,
+                from_number=from_number,
+                to_number=to_number,
+                scheduled_at=self._resolve_contact_when(contact, scheduled_at),
+                status="scheduled",
+                created_by_user_id=created_by_user_id,
+                metadata_={},
+            ))
+
+        if not rows:
+            raise HTTPException(
+                status_code=400,
+                detail="No contacts with a valid phone number were provided.",
+            )
+
+        self._persist_and_enqueue_rows(rows)
+        logger.info(
+            "[outbound] scheduled {} call(s) for contacts agent={} invalid={}",
+            len(rows), agent.id, len(invalid),
+        )
+        contact_by_id = {c.id: c for c in contacts}
         return {
-            "mode": "bulk" if len(numbers) > 1 else "scheduled",
             "count": len(rows),
             "invalid": invalid,
-            "data": [self._to_response(sc) for sc in rows],
+            "data": [self._to_response(sc, contact=contact_by_id.get(sc.contact_id)) for sc in rows],
         }
 
     # ---------------------------------------------------------------- dispatch
@@ -465,9 +585,9 @@ class OutboundCallService(BaseService):
         if sc is None:
             return
         sc.call_id = call_id
-        # A connected scheduled call is 'completed' from the scheduler's POV; guard so a
-        # later terminal callback (busy/no-answer can't happen post-connect) can't regress.
-        self._apply_status(sc, "completed")
+        # A connected call is 'in_progress'; the terminal Twilio status callback
+        # (completed/busy/no_answer/failed) advances it to its final state.
+        self._apply_status(sc, "in_progress")
         self.db.commit()
         logger.info("[outbound] linked scheduled call {} -> call {}", scheduled_call_id, call_id)
 
@@ -521,7 +641,12 @@ class OutboundCallService(BaseService):
         return sc
 
     def get_scheduled_call(self, scheduled_call_id) -> Dict[str, Any]:
-        return self._to_response(self._get_owned(scheduled_call_id))
+        sc = self._get_owned(scheduled_call_id)
+        agent = self.db.query(Agent).filter(Agent.id == sc.agent_id).first()
+        contact = None
+        if sc.contact_id:
+            contact = self.query(Contact).filter(Contact.id == sc.contact_id).first()
+        return self._to_response(sc, agent_name=agent.name if agent else None, contact=contact)
 
     def list_scheduled_calls(
         self,
@@ -565,19 +690,33 @@ class OutboundCallService(BaseService):
         names = {}
         if agent_ids:
             names = {a.id: a.name for a in self.db.query(Agent).filter(Agent.id.in_(agent_ids)).all()}
+
+        # Resolve the linked contact (FK) so the list can show contact name/phone.
+        contact_ids = {r.contact_id for r in rows if r.contact_id}
+        contacts_by_id = {}
+        if contact_ids:
+            contacts_by_id = {
+                c.id: c for c in self.query(Contact).filter(Contact.id.in_(contact_ids)).all()
+            }
         return {
-            "data": [self._to_response(r, agent_name=names.get(r.agent_id)) for r in rows],
+            "data": [
+                self._to_response(r, agent_name=names.get(r.agent_id), contact=contacts_by_id.get(r.contact_id))
+                for r in rows
+            ],
             "total": total,
             "page_no": page_no,
             "page_size": page_size,
         }
 
     @staticmethod
-    def _to_response(sc: ScheduledCall, agent_name: Optional[str] = None) -> Dict[str, Any]:
+    def _to_response(sc: ScheduledCall, agent_name: Optional[str] = None, contact: Optional[Contact] = None) -> Dict[str, Any]:
         return {
             "id": str(sc.id),
             "agent_id": str(sc.agent_id),
             "agent_name": agent_name,
+            "contact_id": str(sc.contact_id) if sc.contact_id else None,
+            "contact_name": contact.name if contact else None,
+            "contact_phone_number": contact.phone_number if contact else None,
             "status": sc.status,
             "from_number": sc.from_number,
             "to_number": sc.to_number,

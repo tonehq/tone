@@ -295,6 +295,35 @@ Wraps shadcn `Button` with semantic `type` and loading/icon support.
 
 ---
 
+## CollapsibleSection
+
+Reusable disclosure ("expand / collapse") primitive: a bordered section with an always-visible header (title + optional leading icon + optional sub-line) and a body that animates in/out (height + fade, `prefers-reduced-motion`-safe). When open it gains a primary-tinted accent. Uncontrolled by default; controllable via `expanded` + `onExpandedChange`. Use it for any optional/advanced form section or "show more" panel instead of re-wiring `useState` + chevron + framer-motion.
+
+| Prop             | Type                                                | Default | Description                                                         |
+| ---------------- | --------------------------------------------------- | ------- | ------------------------------------------------------------------ |
+| title            | string                                              | —       | Header heading.                                                    |
+| description      | `ReactNode \| (expanded: boolean) => ReactNode`     | —       | Sub-line under the title; pass a fn to vary copy by open state.    |
+| icon             | ReactNode                                           | —       | Leading icon; its tile tints to the primary colour when open.      |
+| defaultExpanded  | boolean                                             | `false` | Initial open state (uncontrolled).                                 |
+| expanded         | boolean                                             | —       | Controlled open state (pair with `onExpandedChange`).             |
+| onExpandedChange | `(expanded: boolean) => void`                       | —       | Fired on every header toggle.                                      |
+| children         | ReactNode                                           | —       | Body revealed when expanded.                                       |
+| className        | string                                              | —       | Extra classes on the outer container.                              |
+
+**Example:**
+
+```tsx
+<CollapsibleSection
+  title="Advanced configuration"
+  icon={<SlidersHorizontal className="size-4" aria-hidden />}
+  description={(open) => (open ? 'Choose a directory.' : 'Defaults to Global')}
+>
+  <SelectInput name="directory" label="Directory" options={options} value={id} onValueChange={setId} />
+</CollapsibleSection>
+```
+
+---
+
 ## CustomLink
 
 `next/link` styled like CustomButton `type="link"` (primary text, underline on hover). No navigation logic—just styling.
@@ -1030,6 +1059,40 @@ const params = {
 
 ---
 
+## DateTimePicker
+
+Timezone-aware **single-instant** picker — the sibling of `DateRangePicker`, styled identically (popover trigger → single calendar + `HH:mm` time + IANA timezone + Apply/Clear). No range, no relative presets. Emits `{ value, timeZone }` where `value` is a **UTC ISO** instant. Shares the `combineToIso`/`splitFromIso`/`getBrowserTimeZone` helpers in `@/utils/date` with `DateRangePicker`.
+
+### Props
+
+| Prop             | Type                               | Default                | Description                                       |
+| ---------------- | ---------------------------------- | ---------------------- | ------------------------------------------------- |
+| value            | `DateTimeValue`                    | —                      | Applied value `{ value, timeZone }` (`value` UTC ISO). |
+| onChange         | `(value: DateTimeValue) => void`   | —                      | Fired on Apply / Clear with the new value.        |
+| placeholder      | string                             | `'Select date & time'` | Trigger text when no instant is set.              |
+| align            | `'start' \| 'center' \| 'end'`     | `'start'`              | Popover alignment.                                |
+| triggerClassName | string                             | —                      | Extra classes for the trigger button.             |
+| disabled         | boolean                            | `false`                | Disables the trigger.                             |
+
+**DateTimeValue:** `{ value: string \| null; timeZone: string }`
+
+### Example
+
+```tsx
+const [when, setWhen] = useState<DateTimeValue>({ value: null, timeZone: getBrowserTimeZone() });
+
+<DateTimePicker value={when} onChange={setWhen} />;
+
+// Send to an API expecting a single ISO instant:
+const payload = { scheduled_at: when.value ?? undefined };
+```
+
+### Mandate
+
+Use **`DateTimePicker`** (single instant) or **`DateRangePicker`** (range) for ALL date/time selection across the app. Do **not** use native `<input type="date">` / `<input type="datetime-local">` or introduce another calendar library in app/feature code.
+
+---
+
 ## TokenSearchBar
 
 Tokenized `field:value` search bar with autocomplete chips (Vercel-style). Typing shows a field list; selecting a field loads its values (for `enum` fields, via `fetchValues`, cached after first load) and shows a value list; confirmed filters render as removable chips. Typing `status:` directly auto-activates that field. Emits a normalized `SearchToken[]`.
@@ -1083,7 +1146,7 @@ const filters = tokens.map((t) => ({ field: t.field, operator: 'in', value: [t.v
 
 ## Exports from `@/components/shared`
 
-- **Components:** `ActionMenu`, `CheckboxField`, `CustomButton`, `CustomLink`, `CustomModal`, `CustomTab`, `CustomTable`, `CustomTooltip`, `DateRangePicker`, `Divider`, `Form`, `Logo`, `MultiSelectField`, `RadioGroupField`, `SearchableSelect`, `SelectInput`, `SliderField`, `TextAreaField`, `TextInput`, `TokenSearchBar`
+- **Components:** `ActionMenu`, `CheckboxField`, `CustomButton`, `CustomLink`, `CustomModal`, `CustomTab`, `CustomTable`, `CustomTooltip`, `DateRangePicker`, `DateTimePicker`, `Divider`, `Form`, `Logo`, `MultiSelectField`, `RadioGroupField`, `SearchableSelect`, `SelectInput`, `SliderField`, `TextAreaField`, `TextInput`, `TokenSearchBar`
 - **Types:** `ActionMenuProps`, `CheckboxFieldBaseProps`, `CustomModalProps`, `CustomTableColumn`, `CustomTablePagination`, `CustomTableProps`, `FormCheckboxFieldProps`, `FormMultiSelectFieldProps`, `FormRadioGroupFieldProps`, `FormSelectInputProps`, `FormSliderFieldProps`, `FormTextAreaFieldProps`, `FormTextInputProps`, `MultiSelectFieldBaseProps`, `MultiSelectOption`, `RadioGroupOption`, `SearchableSelectOption`, `SelectInputBaseProps`, `SelectOption`, `SliderFieldBaseProps`, `TabItem`, `TextAreaFieldBaseProps`, `TextInputBaseProps`
 
 ---

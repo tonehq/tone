@@ -11,6 +11,7 @@ import {
   Home,
   Phone,
   Settings,
+  Users,
   Wrench,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -45,6 +46,7 @@ const NAV_SECTIONS: SidebarNavGroup[] = [
       { label: 'Tools', href: '/tools', icon: Wrench },
       { label: 'MCP', href: '/mcp', icon: Boxes },
       { label: 'Knowledge Base', href: '/knowledge-base', icon: BookOpen },
+      { label: 'Contacts', href: '/contacts', icon: Users },
       { label: 'Scheduled Calls', href: '/scheduled-calls', icon: CalendarClock },
       { label: 'Call History', href: '/call-history', icon: Phone },
     ],

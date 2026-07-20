@@ -197,10 +197,23 @@ try {
 
 ---
 
+## Contacts Directories — reusable components/hooks (reuse, don't re-implement)
+
+Import targets (all under `src/`):
+- **`usePaginatedList`** (`lib/api/usePaginatedList.ts`) — generic TanStack Query hook for `POST /…/list` (search/sort/paginate). **`queryKeys`** (`lib/api/queryKeys.ts`) — typed query-key factory for all contacts queries/invalidations.
+- **`buildContactFormSchema`** (`components/contacts/shared/buildContactFormSchema.ts`) — `schema_fields` → Zod schema at runtime. **`SchemaDrivenContactForm`** (same dir) — renders inputs from `schema_fields` (RHF+Zod). Used by Add + Edit contact.
+- **`ContactsTable`** (`components/contacts/shared/ContactsTable.tsx`) — wraps `CustomTable` (search/filter/sort/paginate). Directory General + Agent Contacts + Assign picker.
+- **`SchemaFieldsEditor`** (`components/contacts/shared/SchemaFieldsEditor.tsx`) — field CRUD editor.
+- **`SyncContactsModal`** + **`useSyncStatusPolling`** + **`SyncStatusChip`** (`components/contacts/shared/`) — sync stepper + poll to terminal; optional `agentId` auto-assign.
+- **`AssignContactsModal`** + **`DirectoryContactTree`** + **`useDirectoryContactTreeSelection`** (`components/contacts/shared/`) — tri-state directory→contacts multi-select; emits `{directory_ids, contact_ids}`.
+- **`ConfirmDeleteModal`** (`components/contacts/shared/ConfirmDeleteModal.tsx`) — impact-summary + confirm wrapper over `CustomModal`.
+- API clients: `lib/api/{contactDirectories,contactDatasources,contactSchemas,contactSyncs,agentContacts,contacts}.ts`.
+
 ## Project Rules
 
 Project-wide rules are defined in `.claude/rules.md`. This includes:
 
+- **Reuse & the service layer (single source of truth)** — one shared implementation per behavior; all HTTP through `src/services` / `src/lib/api` hooks (never raw `fetch`/`axios` in a component); components stay thin; code review flags duplication (rule §13)
 - **Skill error tracking** — How skills log errors, categories, severity levels, and the log format
 - **Error resolution workflow** — How to diagnose, fix, and update the error log
 - **Skill execution rules** — Pre-execution checks, error handling, output standards
@@ -290,8 +303,9 @@ Every `/code-review` run works through all nine sections below. No section is sk
 
 Applies **solid-checklist.md** in full — SRP, OCP, LSP, ISP, DIP, code smells, hook design, component design.
 
+- **Single source of truth (reuse first):** the same functionality has ONE implementation that every caller uses — a shared component (`src/components/shared`), hook (`src/hooks`), util (`src/lib`/`src/utils`), service (`src/services` / `src/lib/api`), or Jotai atom. Flag any PR that re-implements or copy-pastes behavior a shared piece already provides — call the shared function, don't duplicate it. When new logic will be needed from more than one place, factor it out from the start (extract by responsibility, not shape; rule of three).
 - **This project**: Service functions in `src/services/` must not import Jotai atoms directly (DIP). Atoms call services; services do not know about atoms.
-- Components must not call `src/services/` directly — all side effects go through Jotai write atoms.
+- Components must not call `src/services/` directly — all side effects go through Jotai write atoms; all HTTP goes through the service / `src/lib/api` layer (never raw `fetch`/`axios` in a component).
 - `agentFormUtils.ts` owns `AgentFormState` shape, `defaultFormState`, and serialisation — do not duplicate this logic in components.
 
 #### 5. Security
@@ -414,6 +428,8 @@ Write-only atoms (e.g., `atom(null, async (_get, set, payload) => {...})`) are t
 **UI**: shadcn/ui primitives in `src/components/ui/` styled with Tailwind v4 and theme tokens from `src/app/globals.css` (CSS variables for color, radius, etc.). The root font is **Geist Sans** (loaded via `next/font` in `src/app/layout.tsx`, exposed as `--font-geist-sans` and bound to Tailwind's `font-sans`); `font-mono` resolves to Geist Mono. Dark mode is handled by `next-themes`. Use **lucide-react** for icons (or `src/components/icons/` for brand marks). The codebase is MUI-free — do not introduce `@mui/*` or `@emotion/*` packages.
 
 **Shared components**: `src/components/shared/` holds reusable form/UI pieces (TextInput, CustomButton, Form, CheckboxField, RadioGroupField, SelectInput, TextAreaField, CustomLink). Each form component is **unified** — passing a `control` prop activates RHF `Controller` integration automatically (no separate `Form*` wrapper needed). Component prop types are defined in `src/types/components.ts`. To understand or use them without reading each file, read **`docs/shared-components.md`** (single reference, lower token usage). When adding or changing a shared component, update that doc.
+
+**Date/time input (mandatory)**: Use the shared `DateTimePicker` (a single instant → emits a UTC ISO string) or `DateRangePicker` (a range) for ALL date/time selection. Both are timezone-aware and share the `combineToIso`/`splitFromIso`/`getBrowserTimeZone` helpers in `@/utils/date`. Do NOT use native `<input type="date">` / `<input type="datetime-local">` or introduce another calendar library in app/feature code.
 
 **Form validation**: Two patterns are used for form validation:
 

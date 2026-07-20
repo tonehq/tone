@@ -11,10 +11,11 @@ import type { CustomTableColumn } from '@/components/shared';
 import { CustomButton, CustomModal, CustomTable, CustomTooltip } from '@/components/shared';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { ScheduledCallRow, ScheduledCallStatus } from '@/types/outboundCall';
+import { triggerCsvDownload } from '@/utils/download';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { Ban, PhoneForwarded, PhoneOutgoing } from 'lucide-react';
+import { Ban, Download, PhoneForwarded, PhoneOutgoing } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -188,6 +189,18 @@ export default function ScheduledCallsPage() {
       render: (_v, record) => <ScheduledCallStatusChip status={record.status} />,
     },
     {
+      key: 'provider_call_sid',
+      title: 'Call SID',
+      render: (_v, record) =>
+        record.provider_call_sid ? (
+          <span className="font-mono text-xs text-muted-foreground">
+            {record.provider_call_sid}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
       key: 'scheduled_at',
       title: 'Scheduled for',
       render: (_v, record) => (
@@ -226,19 +239,33 @@ export default function ScheduledCallsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="space-y-1">
           <h1 className="text-xl font-semibold tracking-tight">Scheduled Calls</h1>
           <p className="text-sm text-muted-foreground">
             Outbound calls queued to dial at a future time. Connected calls appear in Call History.
           </p>
         </div>
-        <CustomButton
-          type="primary"
-          icon={<PhoneOutgoing className="size-4" />}
-          onClick={() => setCreateOpen(true)}
-        >
-          Schedule Call
-        </CustomButton>
+        <div className="flex items-center gap-2">
+          <CustomButton
+            type="default"
+            icon={<Download className="size-4" />}
+            onClick={() =>
+              triggerCsvDownload(
+                'outbound-numbers-sample.csv',
+                ['phone_number', '+14155550123', '+14155550124', '+442071838750'].join('\n'),
+              )
+            }
+          >
+            Sample CSV
+          </CustomButton>
+          <CustomButton
+            type="primary"
+            icon={<PhoneOutgoing className="size-4" />}
+            onClick={() => setCreateOpen(true)}
+          >
+            Schedule Call
+          </CustomButton>
+        </div>
       </div>
 
       {selectedCount > 0 && (

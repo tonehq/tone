@@ -30,9 +30,14 @@ class TestE164:
 
 
 class TestTwilioStatusMap:
-    def test_inflight_collapses_to_dispatched(self):
-        for s in ("queued", "initiated", "ringing", "in-progress"):
+    def test_preanswer_inflight_collapses_to_dispatched(self):
+        # Pre-answer states collapse to "dispatched"; only the connected/live state
+        # ("in-progress") maps to the distinct "in_progress" status.
+        for s in ("queued", "initiated", "ringing"):
             assert _TWILIO_STATUS_MAP[s] == "dispatched"
+
+    def test_in_progress_maps_to_in_progress(self):
+        assert _TWILIO_STATUS_MAP["in-progress"] == "in_progress"
 
     def test_terminal_outcomes(self):
         assert _TWILIO_STATUS_MAP["completed"] == "completed"
@@ -42,7 +47,17 @@ class TestTwilioStatusMap:
         assert _TWILIO_STATUS_MAP["canceled"] == "canceled"
 
     def test_all_terminals_share_top_rank(self):
-        assert all(_STATUS_RANK[s] == 3 for s in _TERMINAL)
+        # Terminals sit above in_progress: scheduled<processing<dispatched<in_progress<terminal.
+        assert all(_STATUS_RANK[s] == 4 for s in _TERMINAL)
+
+    def test_rank_ordering(self):
+        assert (
+            _STATUS_RANK["scheduled"]
+            < _STATUS_RANK["processing"]
+            < _STATUS_RANK["dispatched"]
+            < _STATUS_RANK["in_progress"]
+            < _STATUS_RANK["completed"]
+        )
 
 
 class _FakeSc:
@@ -78,4 +93,24 @@ class TestRankGuard:
         svc = self._svc()
         sc = _FakeSc("completed")
         assert svc._apply_status(sc, "completed") is False
+        assert sc.status == "completed"
+
+    def test_in_progress_advances_from_dispatched(self):
+        svc = self._svc()
+        sc = _FakeSc("dispatched")
+        assert svc._apply_status(sc, "in_progress") is True
+        assert sc.status == "in_progress"
+
+    def test_terminal_advances_over_in_progress(self):
+        svc = self._svc()
+        sc = _FakeSc("in_progress")
+        assert svc._apply_status(sc, "completed") is True
+        assert sc.status == "completed"
+
+    def test_in_progress_cannot_regress_a_terminal(self):
+        # A connected call that already completed must not drop back to in_progress
+        # if a late "in-progress" callback arrives.
+        svc = self._svc()
+        sc = _FakeSc("completed")
+        assert svc._apply_status(sc, "in_progress") is False
         assert sc.status == "completed"

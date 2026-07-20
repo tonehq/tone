@@ -331,7 +331,9 @@ def require_org_member(claims: JWTClaims = Depends(get_jwt_claims)) -> JWTClaims
 
 
 def require_admin_or_owner(claims: JWTClaims = Depends(get_jwt_claims)) -> JWTClaims:
-    if not claims.user_id:
+    """Shared admin/owner guard — reuse this on every admin-gated route instead of
+    re-checking roles inline. Raises 403 unless the caller's role is admin or owner."""
+    if claims.role not in {"admin", "owner"}:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin or Owner role required"

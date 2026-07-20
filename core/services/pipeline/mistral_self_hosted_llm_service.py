@@ -69,7 +69,7 @@ class MistralSelfHostedLLMService(BaseOpenAILLMService):
         params = super().build_chat_completion_params(params_from_context)
         trace_id = get_trace_id()
         if trace_id and trace_id != "none":
-            params["extra_headers"] = {"X-Request-Id": trace_id}
+            params.setdefault("extra_headers", {})["X-Request-Id"] = trace_id
         messages = params.get("messages")
         if not messages:
             return params
