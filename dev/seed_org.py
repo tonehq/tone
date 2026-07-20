@@ -44,6 +44,7 @@ from dev.seed import (  # noqa: E402  (import after sys.path fix)
     _slugify,
     load_seed_data,
     prompt_setup_inputs,
+    seed_contact_directory,
     seed_member,
     seed_organization,
     seed_user,
@@ -92,6 +93,7 @@ class OrgSeeder:
             "api_keys_created": 0,
             "api_keys_none": 0,
             "api_keys_skipped": 0,
+            "contact_directory_created": False,
         }
 
     def run(self):
@@ -118,6 +120,13 @@ class OrgSeeder:
 
         if self.seed_api_keys:
             self._seed_api_keys_from_env(org.id)
+
+        # Default 'Global' ContactDirectory + its CSV datasource.
+        # ContactDirectoryService commits internally, which persists the
+        # pending user/org/member and any API-key rows above — so the
+        # trailing db.commit() becomes a safe no-op.
+        seed_contact_directory(self.db, org.id, user.id)
+        self.stats["contact_directory_created"] = True
 
         self.db.commit()
         return self.stats, org
@@ -279,6 +288,9 @@ def main():
             )
         else:
             print("   API keys:         skipped (pass --api-keys-from-env to seed)")
+        print(
+            f"   Contact Directory: {'created' if stats['contact_directory_created'] else 'skipped'} (Global)"
+        )
 
         # Scope the chained seeders to the new org only — avoids re-scanning
         # every existing org on each new-org bootstrap. Both seeders open
