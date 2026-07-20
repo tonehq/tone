@@ -102,15 +102,33 @@ BUILT_IN_TOOLS = [
 ]
 
 
-def main():
+def main(org_id=None):
+    """Seed built-in Tool rows.
+
+    Args:
+        org_id: If provided, only seed for this single organization
+            (used by the ``bootstrap/org-bootstrap.sh`` flow to avoid re-scanning
+            every org). If ``None``, iterate all orgs — the original
+            behaviour used by ``dev/seed.py`` on a fresh DB.
+    """
     engine = create_engine(DATABASE_URL)
     Session = sessionmaker(bind=engine)
     session = Session()
 
     try:
-        orgs = session.execute(text("SELECT id, name FROM organizations")).fetchall()
+        if org_id is None:
+            orgs = session.execute(text("SELECT id, name FROM organizations")).fetchall()
+        else:
+            orgs = session.execute(
+                text("SELECT id, name FROM organizations WHERE id = :org_id"),
+                {"org_id": str(org_id)},
+            ).fetchall()
+
         if not orgs:
-            print("No organizations found.")
+            if org_id is not None:
+                print(f"No organization found with id={org_id}.")
+            else:
+                print("No organizations found.")
             return
 
         print(f"Found {len(orgs)} organization(s).\n")

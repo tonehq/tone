@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # dev-bootstrap.sh — Full development environment setup for Tone
 #
-# Usage:
-#   ./dev-bootstrap.sh
+# To run:
+#   # One-shot full dev setup — no Infisical wrapper needed here; the script
+#   # itself validates Infisical login as a preflight step.
+#   ./bootstrap/dev-bootstrap.sh
 #
 # What it does:
 #   1. Installs Python 3.11 (via Homebrew on macOS, apt on Linux)
@@ -19,9 +21,10 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT"
 
-VENV_DIR="$SCRIPT_DIR/venv"
+VENV_DIR="$PROJECT_ROOT/venv"
 
 # ── Preflight: Cloudsmith URL ──────────────────────────────────────
 # Fail fast so we don't install Python/venv before discovering the
@@ -76,7 +79,7 @@ fi
 echo ""
 echo "==> Checking .env for Infisical config..."
 
-if [ ! -f "$SCRIPT_DIR/.env" ]; then
+if [ ! -f "$PROJECT_ROOT/.env" ]; then
     echo "ERROR: .env not found at $SCRIPT_DIR/.env"
     echo "       Create it and add at minimum:"
     echo "         INFISICAL_PROJECT_ID=<your-project-id>"
@@ -84,8 +87,8 @@ if [ ! -f "$SCRIPT_DIR/.env" ]; then
     exit 1
 fi
 
-INFISICAL_PROJECT_ID="$(grep -E '^INFISICAL_PROJECT_ID=' "$SCRIPT_DIR/.env" | head -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '[:space:]' || true)"
-INFISICAL_ENV="$(grep -E '^INFISICAL_ENV=' "$SCRIPT_DIR/.env" | head -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '[:space:]' || true)"
+INFISICAL_PROJECT_ID="$(grep -E '^INFISICAL_PROJECT_ID=' "$PROJECT_ROOT/.env" | head -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '[:space:]' || true)"
+INFISICAL_ENV="$(grep -E '^INFISICAL_ENV=' "$PROJECT_ROOT/.env" | head -n1 | cut -d= -f2- | tr -d '"' | tr -d "'" | tr -d '[:space:]' || true)"
 
 if [ -z "$INFISICAL_PROJECT_ID" ] || [ -z "$INFISICAL_ENV" ]; then
     echo "ERROR: .env is missing INFISICAL_PROJECT_ID or INFISICAL_ENV."
@@ -223,9 +226,9 @@ fi
 
 echo ""
 echo "==> Installing frontend dependencies..."
-cd "$SCRIPT_DIR/frontend"
+cd "$PROJECT_ROOT/frontend"
 npm install
-cd "$SCRIPT_DIR"
+cd "$PROJECT_ROOT"
 
 echo ""
 echo "==> Full setup complete."
