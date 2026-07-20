@@ -98,7 +98,7 @@ We believe in democratizing AI voice technology through open source solutions. O
    #   JWT_SECRET_KEY=<your-secret-key>
    #   ENCRYPTION_KEY=<your-encryption-key>
    #
-   # Infisical (used by dev-bootstrap.sh and to run the app):
+   # Infisical (used by bootstrap/dev-bootstrap.sh and to run the app):
    #   INFISICAL_PROJECT_ID=<your-project-id>
    #   INFISICAL_ENV=<staging|dev|production>
    #
@@ -130,8 +130,11 @@ We believe in democratizing AI voice technology through open source solutions. O
 Runs Python install, venv, dependencies, migrations, procrastinate schema, DB seed, Node.js install, and frontend `npm install` — all in one go.
 
 ```bash
-./dev-bootstrap.sh
+./bootstrap/dev-bootstrap.sh
 ```
+
+> Adding another organization on an already-initialized DB? See
+> **Adding a new organization** below.
 
 When it finishes, start the servers:
 
@@ -226,6 +229,40 @@ Prefer to run each step yourself? Follow the manual backend and frontend steps b
   - Frontend: [http://localhost:3000](http://localhost:3000)
   - Backend API: [http://localhost:8000](http://localhost:8000)
   - API Documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+### Adding a new organization
+
+Use `bootstrap/org-bootstrap.sh` when you need to add another organization to
+an **already-initialized** database (migrations + provider catalogue already
+seeded via `bootstrap/db-bootstrap.sh`). Creates the user + org + member,
+seeds `app_integrations` and built-in tools for **only the new org**, and
+optionally attaches provider API keys pulled from environment variables.
+
+```bash
+# Prompts for org name, owner email, password. Skips API keys.
+./bootstrap/org-bootstrap.sh
+
+# Same, but also seeds provider API keys from env vars
+# (OPENAI_API_KEY, DEEPGRAM_API_KEY, ELEVENLABS_API_KEY, etc.)
+./bootstrap/org-bootstrap.sh --api-keys-from-env
+
+# Run with Infisical-injected secrets (recommended — matches how the app runs)
+infisical run --projectId "$INFISICAL_PROJECT_ID" --env="$INFISICAL_ENV" -- \
+    ./bootstrap/org-bootstrap.sh --api-keys-from-env
+```
+
+Pre-flight checks it runs before touching the DB:
+- ❌ Fails fast if the global provider catalogue is empty
+  (`run ./bootstrap/db-bootstrap.sh first`)
+- ❌ Fails fast if the owner email or org slug is already taken
+
+**Which DB does it target?** The same one the app uses — resolved via
+`shared/config.py` from `DATABASE_URL` in your `.env` (or Infisical if you
+wrap with `infisical run`). Double-check by running:
+
+```bash
+python -c "from shared.config import settings; print(settings.DATABASE_URL)"
+```
 
 ### Docker Setup
 
