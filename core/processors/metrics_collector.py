@@ -25,7 +25,10 @@ from pipecat.frames.frames import (
     BotStartedSpeakingFrame,
     Frame,
     MetricsFrame,
+    UserStartedSpeakingFrame,
     UserStoppedSpeakingFrame,
+    VADUserStartedSpeakingFrame,
+    VADUserStoppedSpeakingFrame,
 )
 from pipecat.metrics.metrics import (
     LLMUsageMetricsData,
@@ -276,8 +279,10 @@ class MetricsCollectorProcessor(FrameProcessor):
         if isinstance(frame, MetricsFrame):
             for data in frame.data:
                 self._record_metric_data(data)
-        elif isinstance(frame, UserStoppedSpeakingFrame):
+        elif isinstance(frame, (UserStoppedSpeakingFrame, VADUserStoppedSpeakingFrame)):
             self._mark_user_stopped()
+        elif isinstance(frame, (UserStartedSpeakingFrame, VADUserStartedSpeakingFrame)):
+            self._mark_user_started()
         elif isinstance(frame, BotStartedSpeakingFrame):
             self._mark_bot_started()
 
@@ -319,10 +324,13 @@ class MetricsCollectorProcessor(FrameProcessor):
         if buffer.turn_number < 0:
             return
         now = time.time()
-        # end_to_end latency uses the first user-stop of the turn — that's
-        # the user-felt edge, not any later hesitation restart.
-        if buffer.user_stopped_at is None:
-            buffer.user_stopped_at = now
+        # end_to_end uses the latest user-stop before the bot starts — the
+        # real user-felt edge. Earlier stops that were followed by a
+        # UserStarted are VAD/STT false detections mid-sentence and must not
+        # anchor the timer, otherwise time the user was still speaking gets
+        # counted as bot latency. _mark_user_started() resets this to None
+        # on a resume; subsequent stops overwrite freely.
+        buffer.user_stopped_at = now
         # Reserve one pending slot per user-stop, not just the first of the
         # turn. STT services emit one TTFB per stop, so a 1:1 mapping keeps
         # ``_attribute_stt_ttfb`` correct under VAD flapping or multiple
@@ -330,6 +338,15 @@ class MetricsCollectorProcessor(FrameProcessor):
         self._pending_stt.append(
             _PendingSTT(turn_number=buffer.turn_number, user_stopped_at=now)
         )
+
+    def _mark_user_started(self) -> None:
+        # A UserStarted after a UserStopped in the same turn means the
+        # previous stop was a false detection (mid-sentence VAD flap). Clear
+        # the anchor so the next real stop wins.
+        buffer = self._active_buffer()
+        if buffer.turn_number < 0:
+            return
+        buffer.user_stopped_at = None
 
     def _mark_bot_started(self) -> None:
         buffer = self._active_buffer()
