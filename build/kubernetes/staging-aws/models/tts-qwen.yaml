@@ -17,6 +17,10 @@ spec:
     metadata:
       labels:
         app: staging-tts-qwen
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: /metrics
     spec:
       nodeSelector:
         gpu: speech
