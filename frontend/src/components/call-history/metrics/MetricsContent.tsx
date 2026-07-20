@@ -24,6 +24,7 @@ import { StatCard } from './StatCard';
 import { STTUsageSection } from './STTUsageSection';
 import { TTSUsageSection } from './TTSUsageSection';
 import { TurnLatencySection } from './TurnLatencySection';
+import { UserBotLatencySection } from './UserBotLatencySection';
 import { formatAudioMs, formatMs } from './utils';
 
 function CollapseToolbar() {
@@ -145,6 +146,7 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, toolExecutions
             {hasTurnMetrics && (
               <TurnLatencySection turns={turnMetrics} toolExecutions={toolExecutions} />
             )}
+            <UserBotLatencySection latencies={userBotLatency.map((l) => l.latency)} />
             <EndToEndLatencyPercentileSection latencies={userBotLatency.map((l) => l.latency)} />
             {hasTurnMetrics && <PerTurnCallsSection turns={turnMetrics} />}
             {hasProcessing && <ProcessingTimesSection processing={processingList} />}
