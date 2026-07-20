@@ -1,4 +1,5 @@
 from decimal import Decimal
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from typing import Dict, Any, Iterable, List, Optional, Tuple
@@ -904,14 +905,34 @@ class AgentService(BaseService):
 
     def list_templates(self) -> List[Dict[str, Any]]:
         """All template configs in the org (``is_template=true``), with the
-        display name and the owning agent's type/name for the picker."""
+        display name and (when present) the owning agent's type/name for the
+        picker.
+
+        Two kinds of templates coexist:
+          * ``save_as_template`` — snapshot of an existing agent → row has
+            an ``agent_id`` and the join populates ``agent_name`` /
+            ``agent_type``.
+          * Seeded standalone templates (dev/dev-templates.json) →
+            ``agent_id`` is NULL; the LEFT JOIN yields NULL for the agent
+            columns, and we fall back to the template's own ``name`` +
+            default ``agent_type='inbound'``.
+        """
         rows = (
             self.query(AgentConfig)
-            .join(Agent, Agent.id == AgentConfig.agent_id)
+            .outerjoin(
+                Agent,
+                and_(
+                    Agent.id == AgentConfig.agent_id,
+                    Agent.deleted_at.is_(None),
+                ),
+            )
             .filter(
                 AgentConfig.is_template.is_(True),
                 AgentConfig.deleted_at.is_(None),
-                Agent.deleted_at.is_(None),
+                # Exclude templates whose owning agent was soft-deleted
+                # (join yields NULL). Standalone templates (agent_id=NULL)
+                # legitimately have NULL Agent.id too — allow those.
+                or_(AgentConfig.agent_id.is_(None), Agent.id.isnot(None)),
             )
             .with_entities(
                 AgentConfig.id,
@@ -926,9 +947,9 @@ class AgentService(BaseService):
         return [
             {
                 "source_config_id": str(r.id),
-                "name": r.name or r.agent_name,
+                "name": r.name or r.agent_name or "Untitled Template",
                 "agent_name": r.agent_name,
-                "agent_type": r.agent_type,
+                "agent_type": r.agent_type or "inbound",
                 "mode": r.mode or "prompt",
             }
             for r in rows
@@ -1077,6 +1098,68 @@ class AgentService(BaseService):
             self.db.rollback()
             raise
 
+        return template
+
+    def create_standalone_template(
+        self,
+        *,
+        name: str,
+        user_id: UUID,
+        mode: str = "prompt",
+        system_prompt_template: Optional[str] = None,
+        first_message: Optional[str] = None,
+        end_call_message: Optional[str] = None,
+        conversation_history_token_limit: Optional[int] = None,
+        llm_settings: Optional[Dict[str, Any]] = None,
+        voice_settings: Optional[Dict[str, Any]] = None,
+        stt_settings: Optional[Dict[str, Any]] = None,
+        conversation_settings: Optional[Dict[str, Any]] = None,
+    ) -> AgentConfig:
+        """Insert a standalone template (``agent_id = NULL``, ``is_template = True``).
+
+        Unlike :meth:`save_as_template` — which snapshots an *existing*
+        agent's live config under that same agent — this creates a template
+        with **no source agent**. Used by the JSON-driven org seeder to
+        install a starter set of blueprints when a new org is provisioned;
+        also usable directly from any future admin path that lets users
+        author reusable templates from scratch.
+
+        DB rule (``ck_agent_configs_agent_required_unless_template``)
+        allows ``agent_id = NULL`` only when ``is_template = True`` — this
+        method is the sanctioned way to produce such rows. Caller owns the
+        transaction: this method only flushes, so a bulk seed can insert
+        many templates in one commit.
+        """
+        if not name or not name.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Template name is required",
+            )
+
+        template = AgentConfig(
+            organization_id=self.org_id,
+            agent_id=None,
+            version=1,
+            is_default=False,
+            is_template=True,
+            name=name.strip()[:200],
+            mode=mode or "prompt",
+            system_prompt_template=system_prompt_template,
+            first_message=first_message,
+            end_call_message=end_call_message,
+            conversation_history_token_limit=conversation_history_token_limit,
+            llm_settings=llm_settings,
+            voice_settings=voice_settings,
+            stt_settings=stt_settings,
+            conversation_settings=conversation_settings,
+            created_by_user_id=user_id,
+        )
+        self.db.add(template)
+        self.db.flush()
+        logger.info(
+            "[agent-template] standalone template created id={} name={} org={}",
+            template.id, template.name, self.org_id,
+        )
         return template
 
     def update_agent(self, agent_id: str, data: Dict[str, Any], user_id: Optional[UUID]) -> Agent:

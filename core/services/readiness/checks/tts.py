@@ -166,10 +166,13 @@ class TTSProviderReachableCheck(DeepCheck):
 
     @with_retry()
     # Pipeline harness (PipelineTask start + WS handshake) + sentence
-    # synthesis + first-audio consumption. Slower WS TTSs (ElevenLabs, LMNT,
-    # Cartesia streaming) can take 4–8s cold; 12s keeps us honest without
-    # false-flagging them.
-    @with_timeout(12.0)
+    # synthesis + first-audio consumption. Slower WS TTSs (ElevenLabs,
+    # LMNT, Cartesia streaming, Play.ht) can take 10-15s cold on heavy
+    # voices or distant regions; 22s keeps us honest without false-
+    # flagging a healthy provider. Must stay strictly greater than the
+    # probe's internal 18s timeout (see probes.probe_tts) so the harness
+    # has room to tear down cleanly on timeout.
+    @with_timeout(22.0)
     async def run(self, ctx: CheckContext) -> CheckResult:
         from core.services.readiness.probes import probe_tts
 
