@@ -186,6 +186,56 @@ class ReadinessService(BaseService):
         )
         return report.to_summary()
 
+    def latest_for_agents(self, agent_ids: List[UUID]) -> Dict[UUID, Dict]:
+        """Batch-fetch the latest readiness snapshot per agent for the list badge.
+
+        Read-only: returns the most recently computed stored snapshot (any
+        config / depth) verbatim — no recompute, no dependency-stamp
+        re-validation. Powers the agent-list badge in a single query instead of
+        one live readiness call per row (the old N+1); the editor drawer still
+        recomputes accurately when opened. An agent with no stored run yet is
+        simply absent from the map (badge renders "unavailable").
+
+        Org-scoped by ``self.org_id``. Projects only the badge columns (skips the
+        heavy ``checks`` blob) and reuses ``_counts_from_mapping`` so the count
+        fallback set stays single-sourced with the row mappers.
+
+        Returns ``{agent_id: {overall_status, blocker_count, warning_count,
+        info_count, run_number, computed_at}}``.
+        """
+        if not agent_ids:
+            return {}
+        rows = (
+            self.db.query(
+                AgentReadinessSnapshot.agent_id,
+                AgentReadinessSnapshot.overall_status,
+                AgentReadinessSnapshot.counts,
+                AgentReadinessSnapshot.run_number,
+                AgentReadinessSnapshot.computed_at,
+            )
+            .filter(
+                AgentReadinessSnapshot.organization_id == self.org_id,
+                AgentReadinessSnapshot.agent_id.in_(agent_ids),
+            )
+            .order_by(AgentReadinessSnapshot.computed_at.desc())
+            .all()
+        )
+        latest: Dict[UUID, Dict] = {}
+        for agent_id, overall_status, counts, run_number, computed_at in rows:
+            # Rows arrive newest-first; keep only the first (latest) per agent.
+            if agent_id in latest:
+                continue
+            tallies = _counts_from_mapping(counts)
+            latest[agent_id] = {
+                "overall_status": overall_status,
+                "blocker_count": tallies["blockers"],
+                "warning_count": tallies["warnings"],
+                "info_count": tallies["info"],
+                "run_number": run_number,
+                "computed_at": computed_at.isoformat() if computed_at else None,
+            }
+        return latest
+
     # Cap the history scan so a pathological agent can't force a huge read.
     _MAX_RUNS_LIMIT = 100
 
@@ -541,11 +591,13 @@ def _deep_snapshot_expired(row: AgentReadinessSnapshot) -> bool:
     return age > timedelta(seconds=_DEEP_SNAPSHOT_TTL_SECONDS)
 
 
-def _counts_from_row(row: Union[AgentReadinessSnapshot, AgentReadinessEvent]) -> Dict[str, int]:
-    """Extract the five severity/status tallies from a row's ``counts`` JSONB,
+def _counts_from_mapping(stored: Optional[Dict]) -> Dict[str, int]:
+    """Extract the five severity/status tallies from a raw ``counts`` mapping,
     defaulting any missing key to 0 so a row predating a new count key still
-    renders. Shared by both row mappers so the fallback set lives in one place."""
-    stored = row.counts or {}
+    renders. The single source of truth for the fallback set — used by the row
+    mappers (via ``_counts_from_row``) and by the batch list-badge lookup
+    (``latest_for_agents``), which projects the ``counts`` column directly."""
+    stored = stored or {}
     return {
         "blockers": int(stored.get("blockers", 0)),
         "warnings": int(stored.get("warnings", 0)),
@@ -553,6 +605,11 @@ def _counts_from_row(row: Union[AgentReadinessSnapshot, AgentReadinessEvent]) ->
         "passed": int(stored.get("passed", 0)),
         "skipped": int(stored.get("skipped", 0)),
     }
+
+
+def _counts_from_row(row: Union[AgentReadinessSnapshot, AgentReadinessEvent]) -> Dict[str, int]:
+    """Tallies for a full row — delegates to ``_counts_from_mapping``."""
+    return _counts_from_mapping(row.counts)
 
 
 def _row_to_report(row: Union[AgentReadinessSnapshot, AgentReadinessEvent]) -> ReadinessReport:
