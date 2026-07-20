@@ -67,6 +67,32 @@ export interface ReadinessReport {
   summary: ReadinessSummaryCounts;
   checks: ReadinessCheckResult[];
   generated_at: string;
+  /** Wall-clock start of the run (ISO-8601). Null on older reports. */
+  started_at?: string | null;
+  /** Per-agent monotonically increasing run counter. Null when not persisted. */
+  run_number?: number | null;
+}
+
+/** One row in the readiness run-history dropdown. Metadata only — the full
+ * `checks` list is fetched per-run via GET /agent/{id}/readiness/runs/{n}. */
+export interface ReadinessRunListItem {
+  run_number: number;
+  depth: ReadinessDepth;
+  overall_status: ReadinessOverallStatus;
+  config_id: string | null;
+  trigger: string;
+  blocker_count: number;
+  warning_count: number;
+  info_count: number;
+  passed_count: number;
+  skipped_count: number;
+  started_at: string | null;
+  computed_at: string;
+  duration_ms: number | null;
+}
+
+export interface ReadinessRunList {
+  items: ReadinessRunListItem[];
 }
 
 export interface ReadinessSummary {

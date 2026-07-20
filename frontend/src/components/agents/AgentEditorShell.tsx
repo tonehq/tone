@@ -137,6 +137,15 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   /** Bump to force the summary effect to re-run (after save / publish / etc.). */
   const [readinessRefreshKey, setReadinessRefreshKey] = useState(0);
   const bumpReadiness = useCallback(() => setReadinessRefreshKey((k) => k + 1), []);
+  /** Keep the header pill (driven by `readinessSummary`) in sync whenever the
+   * drawer lands a fresh LIVE report (Refresh / Run deep test). Without this the
+   * drawer can show "3 blockers" while the header still reads "Ready". The
+   * drawer never calls this for historical run views, so browsing history can't
+   * corrupt the badge. Stable identity so the drawer's effects don't re-run. */
+  const handleReadinessReportChange = useCallback((report: ReadinessReport | null) => {
+    setReadinessReport(report);
+    if (report) setReadinessSummary(reportToSummary(report));
+  }, []);
   /** Set true immediately after a targeted-deep save lands so the shallow
    * readiness effect can skip its next run — otherwise a slower shallow
    * response overwrites the fresh deep summary and the badge silently drops
@@ -1054,7 +1063,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
                 configId={detail?.config?.id ?? null}
                 trigger="editor_load"
                 initialReport={readinessReport}
-                onReportChange={setReadinessReport}
+                onReportChange={handleReadinessReportChange}
               />
             )}
 

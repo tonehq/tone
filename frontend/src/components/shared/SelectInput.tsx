@@ -44,6 +44,8 @@ const PlainSelectInput = forwardRef<HTMLButtonElement, SelectInputBaseProps>(
       triggerClassName,
       size = 'default',
       position,
+      renderOption,
+      renderValue,
     },
     ref,
   ) => {
@@ -130,14 +132,28 @@ const PlainSelectInput = forwardRef<HTMLButtonElement, SelectInputBaseProps>(
               >
                 {isLoading ? (
                   <span className="text-sm text-muted-foreground">Loading...</span>
+                ) : renderValue ? (
+                  // Mark the custom value as the Select's value slot so the
+                  // trigger's `*:data-[slot=select-value]:flex-1/truncate` rules
+                  // apply — otherwise it packs left and the chevron floats mid-row.
+                  <span data-slot="select-value" className="min-w-0 flex-1 truncate text-left">
+                    {renderValue(value)}
+                  </span>
                 ) : (
                   <SelectValue placeholder={placeholder} />
                 )}
               </SelectTrigger>
               <SelectContent position={position}>
                 {options.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value} disabled={opt.disabled}>
-                    {opt.label}
+                  <SelectItem
+                    key={opt.value}
+                    value={opt.value}
+                    disabled={opt.disabled}
+                    // Keep the plain label as the accessible / typeahead text
+                    // even when a rich custom row is rendered.
+                    textValue={opt.label}
+                  >
+                    {renderOption ? renderOption(opt) : opt.label}
                   </SelectItem>
                 ))}
               </SelectContent>

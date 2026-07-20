@@ -159,6 +159,14 @@ export interface SelectInputBaseProps {
   triggerClassName?: string;
   size?: 'sm' | 'default';
   position?: 'item-aligned' | 'popper';
+  /** Optional custom renderer for each option row — lets callers render rich
+   * content (icons, two-line rows) in the list. Falls back to the plain string
+   * `label` when omitted. The string `label` is still used as the Radix
+   * typeahead / accessible text value. */
+  renderOption?: (option: SelectOption) => React.ReactNode;
+  /** Optional custom renderer for the selected value shown in the trigger.
+   * Receives the current value; falls back to the default text when omitted. */
+  renderValue?: (value: string | undefined) => React.ReactNode;
 }
 
 export interface SelectOption {
