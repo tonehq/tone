@@ -47,6 +47,24 @@ class BaseService:
             q = q.filter(model.organization_id == self.org_id)
         return q
 
+    def get_or_404(self, model: Type[T], id: Any, name: str = "Resource") -> T:
+        """Fetch a single row of ``model`` by primary key, org-scoped (via ``query``)
+        and excluding soft-deleted rows, or raise a 404.
+
+        Reuse this instead of re-writing per-service get-by-id lookups: it enforces the
+        org filter (no IDOR) and the ``deleted_at IS NULL`` guard in one place. ``name``
+        is used only for the 404 message (e.g. "Directory not found.").
+        """
+        from fastapi import HTTPException
+
+        q = self.query(model).filter(model.id == id)
+        if hasattr(model, 'deleted_at'):
+            q = q.filter(model.deleted_at.is_(None))
+        row = q.first()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"{name} not found.")
+        return row
+
     def upsert(self, model, values: Dict[str, Any], conflict_fields: List[str],
                update_fields: List[str], extra_update: Optional[Dict[str, Any]] = None,
                auto_commit: bool = True):

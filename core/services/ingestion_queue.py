@@ -24,6 +24,38 @@ def ingest_upload(upload_id: str, org_id: str, delete_existing: bool = False) ->
     DocumentProcessingService().process_upload(UUID(upload_id), UUID(org_id), delete_existing=delete_existing)
 
 
+@app.task(name="run_contact_sync", queue="contact_import")
+def run_contact_sync(sync_id: str, org_id: str) -> None:
+    """Execute one directory sync run: source → map → validate → upsert → auto-assign.
+
+    Idempotent: ``ContactSyncService.run_contact_sync`` upserts by
+    ``(directory_id, external_id)``, so a re-delivered job re-parses the same file to the
+    same result rather than duplicating contacts.
+    """
+    from uuid import UUID as _UUID
+
+    from core.database.session import get_db_context
+    from core.services.contacts.contact_sync_service import ContactSyncService
+
+    logger.info("[contact-sync] worker running sync sync_id={} org={}", sync_id, org_id)
+    with get_db_context() as db:
+        service = ContactSyncService(db, org_id=_UUID(org_id))
+        sync = service.get_contact_sync(_UUID(sync_id))
+        service.run_contact_sync(sync)
+
+
+async def enqueue_contact_sync(sync_id, org_id) -> int:
+    async with app.open_async():
+        return await run_contact_sync.defer_async(sync_id=str(sync_id), org_id=str(org_id))
+
+
+def enqueue_contact_sync_sync(sync_id, org_id) -> int:
+    """Sync counterpart for callers inside a sync route handler (the contact-syncs router
+    runs in the threadpool)."""
+    with app.open():
+        return run_contact_sync.defer(sync_id=str(sync_id), org_id=str(org_id))
+
+
 @app.periodic(cron="* * * * *")
 @app.task(name="sync_pods_and_nodes", queue="pod_sync")
 def sync_pods_and_nodes_task(timestamp: int) -> None:

@@ -94,6 +94,7 @@ The `pipecat/` directory is a custom fork (`tonehq/pipecat`) of the Pipecat AI f
 
 ## Key Conventions
 
+- **Service layer & reuse (single source of truth):** Business logic lives in a service extending `BaseService` — **never in routers/controllers**. Routers only: parse/validate input → authorize → call a service method → shape the response. Any behavior that is (or will be) invoked from more than one place — another router, a worker, a CLI, a test — MUST be a shared service method or a helper in `core/services/common/` / `core/utils/`, called by everyone; do not copy-paste or re-implement the same logic in a second location. Before writing new logic, search for an existing service/helper and extend it; when the same functionality is needed from anywhere, factor it out so there is exactly one implementation. On the frontend the mirror rule holds: shared UI → `@/components/shared`, shared logic → `@/hooks`/`@/lib`/`@/utils`, all HTTP through `@/services` / `@/lib/api` hooks — never duplicate fetch/format/validation per page. Follow the rule of three (extract on the 3rd occurrence) but extract by *responsibility*, not by shape. See the reusable-functions catalog below and `docs/code-review/`.
 - **Auth pattern:** Routes use FastAPI dependency injection — `require_authenticated`, `require_admin_or_owner`, `require_org_member`
 - **Encryption:** API keys stored AES-encrypted in DB (`core/utils/encryption.py`)
 - **Multi-tenancy:** Core edition defaults to single-tenant (`IS_MULTI_TENANT=false`, all users share `DEFAULT_ORG_ID`)
@@ -101,10 +102,26 @@ The `pipecat/` directory is a custom fork (`tonehq/pipecat`) of the Pipecat AI f
 - **Config:** Settings loaded from Infisical (if `USE_INFISICAL=true`) or `.env` with fallback defaults
 - **Logging & observability:** Use the shared loguru `logger`. Every error-handling `except` must capture a full traceback via `logger.exception(...)` (never message-only `logger.error("...", e)` or `print`); expected control-flow `except`s (parse fallbacks, cache miss, optional import, hot-loop/per-frame) use `logger.debug`; never silently swallow and never swallow `asyncio.CancelledError`. Prefix logs with a context tag (`[bot]`, `[inbound]`, `[outbound]`, service name); correlate by the per-call `trace_id`. Never call `logger.add/remove/configure` outside `core/logging.py` (it owns the single sink; pipecat shares the same loguru singleton). Per-call verbosity is DB-driven — `agent.log_level > organization.log_level > env LOG_LEVEL > INFO`, resolved only in `core/services/log_level_resolver.py` and applied by `run_bot` via `setup_logging(level=...)`; never read the `log_level` columns directly. Full reference: `docs/LOGGING_OBSERVABILITY.md`.
 
+### Common reusable functions (Contacts Directories module — reuse, don't re-implement)
+
+Registered so future work discovers them (paths are import targets):
+- **`require_admin_or_owner`** (`core/middleware/auth.py`) — shared admin/owner route guard; enforces `claims.role in {"admin","owner"}`. Use on every admin-gated route; never re-check roles inline.
+- **`apply_search_sort_pagination`** (`core/services/common/list_query.py`) — search + whitelisted sort + paginate a scoped query → `(rows, total)`. Use in every `POST /…/list`.
+- **`BaseService.get_or_404`** (`core/services/base.py`) — org-scoped, soft-delete-aware fetch-or-404.
+- **`build_contact_field_json_schema` / `make_contact_metadata_validator` / `validate_contact_metadata`** (`core/services/contacts/contact_metadata_validation.py`) — `SchemaField`s → JSON-Schema + Draft7 validator + per-row errors (manual create, multi-add, sync validation).
+- **`map_source_row_to_contact`** (`core/services/contact_ingestion/contact_mapping.py`) — `source_key→field_name` map + type coercion (null = identity).
+- **`upsert_contact`** (`core/services/contacts/contact_upsert.py`) — upsert by `(directory_id, external_id)` → `(contact, action)`; sets `sync_id`.
+- **`ContactService.list_contact_ids_in_directories`** (`core/services/contacts/contact_service.py`) — active contact ids across directories (agent-assign expansion).
+- **`get_contact_source(datasource)`** (`core/services/contact_ingestion/__init__.py`) — datasource-type → `ContactSource` factory.
+- **`run_contact_sync` / `enqueue_contact_sync[_sync]`** (`core/services/contacts/contact_sync_service.py`, `core/services/ingestion_queue.py`) — the single sync pipeline + Procrastinate deferral.
+- **`create_default_datasource`** (`core/services/contacts/contact_directory_service.py`) — provision the CSV datasource on directory create (no schema is auto-created; `default_schema_id` is optional/user-selected).
+- **`summarize_directory_deletion` / `hard_delete_directory_and_children`** (`core/services/contacts/directory_delete.py`) — delete-impact counts; FK-safe hard delete (cancels queued dial jobs, keeps org schemas, detaches syncs).
+
 ### Frontend: shared components
 
 - **Buttons:** Use `CustomButton` from `@/components/shared` only. Do not use native `<button>` or `Button` from `@/components/ui/button` in app/feature code (exception: inside `CustomButton.tsx` itself).
 - **Other UI:** Prefer shared components (`CustomModal`, `CustomTable`, `TextInput`, `SelectInput`, `CustomTab`, `CustomLink`, etc.) over raw `@/components/ui/*` or native elements. Use `@/components/ui/*` only when building or composing shared components.
+- **Date/time selection:** Use the shared `DateTimePicker` (single instant → UTC ISO) or `DateRangePicker` (range) for ALL date/time input. Do NOT use native `<input type="date"/datetime-local">` or other calendar libraries in app/feature code.
 - See `.cursor/rules/shared-components.mdc` for full rule and exceptions.
 
 ## Code Review Rules
@@ -118,8 +135,9 @@ rulebook in `docs/code-review/`. These rules are mandatory for all agents:
 
 Do not comment on style the linter/formatter already fixes (ESLint+Prettier on FE, Ruff on BE) —
 focus on correctness, security, design, and tests. Always-check blockers:
-- **FE:** no type-erasing `any`/`!`; correct `useEffect` deps (`exhaustive-deps` is OFF — the reviewer is the guard); stable list keys; no secrets in the client bundle; server state in TanStack Query; buttons use `CustomButton` and prefer shared components.
-- **BE:** every route has the right auth guard; **every query is tenant/org-scoped** (no IDOR); no raw/interpolated SQL; schema changes ship a safe Alembic migration; secrets stay AES-encrypted and are never logged; no blocking I/O in async paths; logic lives in a `BaseService`, not routers; **every `except` logs a full traceback (`logger.exception`) — no silent swallow, no message-only error log, `CancelledError` never dropped** (see Logging & observability above).
+- **Reuse & layering (both stacks):** flag logic that belongs in a service but sits in a router/component; flag duplicated logic that should be a shared service method / helper / hook (especially the *same* functionality re-implemented in a second call site instead of calling the existing one); flag a new endpoint/component that rebuilds something a shared function already provides. The fix is "call the shared service", not "copy it here."
+- **FE:** no type-erasing `any`/`!`; correct `useEffect` deps (`exhaustive-deps` is OFF — the reviewer is the guard); stable list keys; no secrets in the client bundle; server state in TanStack Query; buttons use `CustomButton` and prefer shared components; HTTP via `@/services` / `@/lib/api` hooks.
+- **BE:** every route has the right auth guard; **every query is tenant/org-scoped** (no IDOR); no raw/interpolated SQL; schema changes ship a safe Alembic migration; secrets stay AES-encrypted and are never logged; no blocking I/O in async paths; logic lives in a `BaseService`, not routers, and is reused (not duplicated) wherever the same behavior is needed; **every `except` logs a full traceback (`logger.exception`) — no silent swallow, no message-only error log, `CancelledError` never dropped** (see Logging & observability above).
 
 New behavior needs tests; bug fixes need a regression test.
 

@@ -1,6 +1,5 @@
 'use client';
 
-import { TZDate } from '@date-fns/tz';
 import { CalendarDays, ChevronDown, Clock } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
@@ -13,7 +12,13 @@ import SearchableSelect, {
 import { Calendar } from '@/components/ui/calendar';
 import type { DateRangePickerProps } from '@/types/components';
 import { cn } from '@/utils/cn';
-import { formatTzDateTime, getBrowserTimeZone } from '@/utils/date';
+import {
+  combineToIso,
+  formatTzDateTime,
+  getBrowserTimeZone,
+  getTimeZones,
+  splitFromIso,
+} from '@/utils/date';
 
 export type { DateRangePickerProps, DateRangeValue } from '@/types/components';
 
@@ -27,8 +32,6 @@ const PRESETS: Array<{ key: string; label: string; title: string; ms: number }> 
   { key: '7d', label: '7d', title: 'Last 7 days', ms: 7 * 24 * 60 * 60_000 },
 ];
 
-const pad = (n: number) => String(n).padStart(2, '0');
-
 /** `Jun 5, 2026` for the Start/End summary rows. */
 function formatDayLabel(day?: Date): string {
   if (!day) return 'Select a day';
@@ -37,44 +40,6 @@ function formatDayLabel(day?: Date): string {
     day: 'numeric',
     year: 'numeric',
   }).format(day);
-}
-
-/**
- * Combine a calendar day + `HH:mm` time, interpreted in `tz`, into a `Z`-normalized
- * UTC ISO instant (e.g. `2026-06-05T11:14:00.000Z`) — the form the backend's
- * `started_at` comparison expects.
- */
-function combineToIso(day: Date, time: string, tz: string): string {
-  const [h, m] = time.split(':').map((s) => parseInt(s, 10));
-  const tzDate = TZDate.tz(
-    tz,
-    day.getFullYear(),
-    day.getMonth(),
-    day.getDate(),
-    Number.isFinite(h) ? h : 0,
-    Number.isFinite(m) ? m : 0,
-  );
-  return new Date(tzDate.getTime()).toISOString();
-}
-
-/** Split a UTC ISO instant into its wall-clock day + `HH:mm` time within `tz`. */
-function splitFromIso(iso: string, tz: string): { day: Date; time: string } {
-  const d = new TZDate(new Date(iso), tz);
-  return {
-    day: new Date(d.getFullYear(), d.getMonth(), d.getDate()),
-    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
-  };
-}
-
-function getTimeZones(): string[] {
-  try {
-    const supported = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] })
-      .supportedValuesOf;
-    if (typeof supported === 'function') return supported('timeZone');
-  } catch {
-    /* older runtimes — fall through */
-  }
-  return ['UTC', BROWSER_TZ];
 }
 
 /**

@@ -1,9 +1,12 @@
+import { TZDate } from '@date-fns/tz';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import utc from 'dayjs/plugin/utc';
 
 dayjs.extend(utc);
 dayjs.extend(relativeTime);
+
+const pad = (n: number) => String(n).padStart(2, '0');
 
 export const DATE_FORMAT = 'DD MMM YYYY, HH:mm A';
 
@@ -41,6 +44,45 @@ export function getBrowserTimeZone(): string {
   } catch {
     return 'UTC';
   }
+}
+
+/**
+ * Combine a calendar day + `HH:mm` time, interpreted in `tz`, into a `Z`-normalized
+ * UTC ISO instant (e.g. `2026-06-05T11:14:00.000Z`). Shared by the DateRangePicker and
+ * the single-instant DateTimePicker so both emit the same UTC form the backend expects.
+ */
+export function combineToIso(day: Date, time: string, tz: string): string {
+  const [h, m] = time.split(':').map((s) => parseInt(s, 10));
+  const tzDate = TZDate.tz(
+    tz,
+    day.getFullYear(),
+    day.getMonth(),
+    day.getDate(),
+    Number.isFinite(h) ? h : 0,
+    Number.isFinite(m) ? m : 0,
+  );
+  return new Date(tzDate.getTime()).toISOString();
+}
+
+/** Split a UTC ISO instant into its wall-clock day + `HH:mm` time within `tz`. */
+export function splitFromIso(iso: string, tz: string): { day: Date; time: string } {
+  const d = new TZDate(new Date(iso), tz);
+  return {
+    day: new Date(d.getFullYear(), d.getMonth(), d.getDate()),
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  };
+}
+
+/** All IANA timezones the runtime exposes, falling back to `['UTC', browserTz]`. */
+export function getTimeZones(): string[] {
+  try {
+    const supported = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] })
+      .supportedValuesOf;
+    if (typeof supported === 'function') return supported('timeZone');
+  } catch {
+    /* older runtimes — fall through */
+  }
+  return ['UTC', getBrowserTimeZone()];
 }
 
 /**

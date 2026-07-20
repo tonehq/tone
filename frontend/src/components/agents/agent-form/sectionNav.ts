@@ -6,11 +6,13 @@ import {
   LayoutGrid,
   MessageSquare,
   Radio,
+  Users,
   Volume2,
   Wrench,
 } from 'lucide-react';
 
 import type { SidebarNavGroup } from '@/components/layout/SidebarShell';
+import type { AgentDirection } from '@/types/agent';
 
 // Single source of truth for the agent editor's configuration sections. The
 // editor rail (AgentEditorShell) and the routed section pages both derive from
@@ -35,11 +37,28 @@ export const AGENT_SECTIONS: AgentSection[] = [
   { key: 'tools', label: 'Tools & MCP', icon: Wrench },
   { key: 'knowledge', label: 'Knowledge', icon: Book },
   { key: 'channels', label: 'Channels', icon: Radio },
+  { key: 'contacts', label: 'Contacts', icon: Users },
   { key: 'call-history', label: 'Call History', icon: Clock },
 ];
 
-/** Sections shown only for a saved agent (edit mode) — omitted while creating. */
-const EDIT_ONLY_SECTION_KEYS = new Set<string>(['call-history']);
+/**
+ * Sections shown only for a saved agent (edit mode) — omitted while creating.
+ * `contacts` (C-5): assigning contacts needs a persisted `agent_id`, which only
+ * exists after the agent is saved, so the tab must not render in create mode.
+ */
+const EDIT_ONLY_SECTION_KEYS = new Set<string>(['call-history', 'contacts']);
+
+/**
+ * Sections gated on the agent's call mode. `contacts` only makes sense for agents
+ * that place outbound calls (`outbound` or `both`) — an inbound-only agent never
+ * dials a contact, so the tab is hidden for it.
+ */
+const OUTBOUND_ONLY_SECTION_KEYS = new Set<string>(['contacts']);
+
+/** True when the agent handles outbound calls (`outbound` or `both`). */
+function handlesOutbound(callMode: AgentDirection): boolean {
+  return callMode === 'outbound' || callMode === 'both';
+}
 
 export const AGENT_SECTION_KEYS = AGENT_SECTIONS.map((s) => s.key);
 
@@ -49,14 +68,23 @@ export const DEFAULT_SECTION = { edit: 'overview', create: 'basics' } as const;
 /**
  * Build the rail nav for the agent editor. `edit` mode prepends an "Overview"
  * entry (a saved agent has something to summarise); `create` mode omits it.
+ *
+ * `callMode` is the agent's current call direction (live form value in the
+ * editor). Sections in `OUTBOUND_ONLY_SECTION_KEYS` (e.g. `contacts`) are shown
+ * only when the agent handles outbound calls (`outbound`/`both`).
  */
-export function buildAgentNav(basePath: string, mode: 'edit' | 'create'): SidebarNavGroup[] {
+export function buildAgentNav(
+  basePath: string,
+  mode: 'edit' | 'create',
+  callMode: AgentDirection,
+): SidebarNavGroup[] {
   const items = [];
   if (mode === 'edit') {
     items.push({ label: 'Overview', href: `${basePath}/overview`, icon: LayoutGrid });
   }
   for (const s of AGENT_SECTIONS) {
     if (mode === 'create' && EDIT_ONLY_SECTION_KEYS.has(s.key)) continue;
+    if (OUTBOUND_ONLY_SECTION_KEYS.has(s.key) && !handlesOutbound(callMode)) continue;
     items.push({ label: s.label, href: `${basePath}/${s.key}`, icon: s.icon });
   }
   return [{ heading: null, items }];
