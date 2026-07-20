@@ -242,6 +242,10 @@ export interface ToolExecution {
    * observer existed.
    */
   proposed_at: string | null;
+  /** ISO-8601 timestamp of when the tool handler body started running. */
+  invoked_at: string | null;
+  /** ISO-8601 timestamp of when the tool handler returned (success or error). */
+  completed_at: string | null;
   meta_data: Record<string, unknown> | null;
   created_at: string | null;
   updated_at: string | null;
