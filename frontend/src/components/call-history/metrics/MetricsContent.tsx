@@ -91,6 +91,11 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, toolExecutions
     return { avgLatency, totalTokens, totalChars, totalSttAudioMs, totalTurns };
   }, [userBotLatency, llmUsage, ttsUsage, sttUsage, turnsList, turnMetrics]);
 
+  const userBotLatencyValues = useMemo(
+    () => userBotLatency.map((l) => l.latency),
+    [userBotLatency],
+  );
+
   const hasProcessing = processingList.some((p) => p.model && p.value > 0);
   const hasTurnMetrics = turnMetrics.length > 0;
   const hasLatency = hasTurnMetrics || hasProcessing || userBotLatency.length > 0;
@@ -146,8 +151,8 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, toolExecutions
             {hasTurnMetrics && (
               <TurnLatencySection turns={turnMetrics} toolExecutions={toolExecutions} />
             )}
-            <UserBotLatencySection latencies={userBotLatency.map((l) => l.latency)} />
-            <EndToEndLatencyPercentileSection latencies={userBotLatency.map((l) => l.latency)} />
+            <UserBotLatencySection latencies={userBotLatencyValues} />
+            <EndToEndLatencyPercentileSection latencies={userBotLatencyValues} />
             {hasTurnMetrics && <PerTurnCallsSection turns={turnMetrics} />}
             {hasProcessing && <ProcessingTimesSection processing={processingList} />}
           </MetricsCategory>
