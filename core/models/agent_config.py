@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Boolean, Text, ForeignKey, DateTime, UniqueConstraint
+from sqlalchemy import CheckConstraint, Column, String, Integer, Boolean, Text, ForeignKey, DateTime, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from core.models.base import OrgScopedModel
@@ -8,9 +8,19 @@ class AgentConfig(OrgScopedModel):
     __tablename__ = "agent_configs"
     __table_args__ = (
         UniqueConstraint("agent_id", "version", name="uq_agent_configs_agent_version"),
+        # A standalone template (seeded from JSON, no source agent) has
+        # ``agent_id IS NULL``. Every other row — versions of a live agent,
+        # or a template snapshotted from an existing agent — MUST have an
+        # agent_id. Enforced in the DB so no code path can produce an
+        # orphan non-template row.
+        CheckConstraint(
+            "is_template = true OR agent_id IS NOT NULL",
+            name="ck_agent_configs_agent_required_unless_template",
+        ),
     )
 
-    agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=False)
+    # NULL is only legal when ``is_template = true`` (see CHECK above).
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=True)
     version = Column(Integer, nullable=False)
     canvas_label = Column(String(200), nullable=True)
     # Conversation-flow driver: "prompt" (single system prompt) | "workflow" (assigned graph).

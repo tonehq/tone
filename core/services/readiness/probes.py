@@ -174,12 +174,18 @@ async def probe_llm(ctx) -> ProbeResult:
         return isinstance(frame, LLMFullResponseEndFrame)
 
     llm_context = LLMContext(messages=[{"role": "user", "content": _LLM_PROBE_PROMPT}])
-    # Cap generation cost. max_completion_tokens covers OpenAI reasoning
-    # models (gpt-5, o1/o3/o4); max_tokens covers the older OpenAI-compat +
-    # Anthropic + Google path. Pipecat's LLM services drop NOT_GIVEN keys, so
-    # sending both is safe — whichever the provider honours wins.
+    # Budget sized for reasoning models, not for cost. OpenAI o1/o3/o4 enforce
+    # a hard minimum of max_completion_tokens=1024 (anything smaller 400s);
+    # Anthropic claude-*-thinking and Google gemini-*-thinking spend most of
+    # the budget on internal reasoning before emitting visible output, so a
+    # tight cap would either error or yield an empty response and false-flag
+    # a healthy provider. 1024 keeps cost negligible (~$0.015 worst case) and
+    # covers every reasoning model in the wild. Non-reasoning models rarely
+    # come close to the cap. Pipecat drops NOT_GIVEN keys, so sending both
+    # max_tokens and max_completion_tokens is safe — whichever the provider
+    # honours wins.
     input_frames = [
-        LLMUpdateSettingsFrame(settings={"max_tokens": 16, "max_completion_tokens": 16}),
+        LLMUpdateSettingsFrame(settings={"max_tokens": 1024, "max_completion_tokens": 1024}),
         LLMContextFrame(context=llm_context),
         EndFrame(),
     ]
@@ -195,7 +201,7 @@ async def probe_llm(ctx) -> ProbeResult:
             input_frames,
             _is_llm_response,
             params=params,
-            timeout_s=10.0,   # under the check's 12s wrapper — leave room for teardown
+            timeout_s=20.0,   # under the check's 25s wrapper — leave room for teardown
             provider=provider,
         )
     except Exception as exc:  # noqa: BLE001
@@ -309,7 +315,7 @@ async def probe_stt(ctx) -> ProbeResult:
             input_frames,
             _is_transcript,
             params=params,
-            timeout_s=18.0,   # under the check's 20s wrapper — leave room for teardown
+            timeout_s=25.0,   # under the check's 30s wrapper — leave room for teardown
             provider=provider,
         )
     except Exception as exc:  # noqa: BLE001
@@ -519,7 +525,7 @@ async def probe_tts(ctx) -> ProbeResult:
             input_frames,
             _is_audio,
             params=params,
-            timeout_s=10.0,   # under the check's 12s wrapper — leave room for teardown
+            timeout_s=18.0,   # under the check's 22s wrapper — leave room for teardown
             provider=provider,
         )
     except Exception as exc:  # noqa: BLE001

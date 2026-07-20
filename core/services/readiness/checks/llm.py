@@ -106,10 +106,14 @@ class LLMProviderReachableCheck(DeepCheck):
 
     @with_retry()
     # Pipeline harness (PipelineTask start + provider HTTP/WS handshake) +
-    # first-token streaming. Slower LLMs (Cohere/Groq cold, Anthropic on a
-    # heavy Claude model) can take 4-8s cold; 12s keeps headroom without
-    # false-flagging.
-    @with_timeout(12.0)
+    # first-token streaming. Cold reasoning models (o1/o3, claude-*-thinking,
+    # gemini-*-thinking) and cold self-hosted / cross-region endpoints
+    # (Ollama, Bedrock, custom Azure deployments) can take 10-18s to emit the
+    # first token; 25s keeps headroom without false-flagging a healthy
+    # provider. Must stay strictly greater than the probe's internal 20s
+    # timeout (see probes.probe_llm) so the harness has room to tear down
+    # cleanly on timeout.
+    @with_timeout(25.0)
     async def run(self, ctx: CheckContext) -> CheckResult:
         from core.services.readiness.probes import probe_llm
 
