@@ -48,3 +48,6 @@ export const SEVERITY_TEXT_CLASS: Record<ReadinessSeverity, string> = {
   warning: 'text-amber-600 dark:text-amber-400',
   info: 'text-muted-foreground',
 };
+
+/** Sentinel value for the "Latest run" option in the run-history select. */
+export const RUN_HISTORY_LATEST_VALUE = 'latest';

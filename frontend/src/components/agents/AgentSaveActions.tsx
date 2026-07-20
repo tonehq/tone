@@ -115,7 +115,7 @@ export default function AgentSaveActions({
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuItem onSelect={() => onAction('test')}>
             <Beaker className={MENU_ICON_CLASS} />
-            Test
+            Readiness Check
           </DropdownMenuItem>
           <DropdownMenuItem disabled={busy} onSelect={() => onAction('create-version')}>
             {creatingVersion ? (
