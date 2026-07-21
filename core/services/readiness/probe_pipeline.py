@@ -41,6 +41,7 @@ async def probe_in_pipeline(
     params,
     timeout_s: float,
     provider: str,
+    warmup_s: float = 0.3,
 ) -> Tuple[bool, Optional[object], Optional[str]]:
     """Run ``service`` inside a minimal pipecat pipeline, feed ``input_frames``,
     and wait for a downstream frame satisfying ``is_target``.
@@ -136,18 +137,31 @@ async def probe_in_pipeline(
     # we can concurrently feed input frames and watch the capture queue.
 
     async def _feed_after_start():
-        # Warm-up so StartFrame propagates through the service and any
-        # per-service setup (WebSocket connect, aiohttp session, remote
-        # session token) has a chance to complete before we push data.
-        # 100 ms used to be enough for HTTP-only providers but WS-STT / WS-TTS
-        # handshakes (Deepgram, AssemblyAI, ElevenLabs streaming) routinely
-        # take 150-250ms under load, and a frame pushed before the handshake
-        # completes gets dropped silently — producing a "no transcript" /
-        # "no audio" timeout on a HEALTHY provider. 300ms fits comfortably
-        # under every probe's outer timeout budget (10s / 18s / 12s) and
-        # matches what the runtime effectively gets from real transport
-        # setup latency.
-        await asyncio.sleep(0.3)
+        # Wait for the service to be ready to receive data. WS-based providers
+        # (streaming STT: Deepgram, AssemblyAI, Soniox, Sarvam, Gladia;
+        # streaming TTS: ElevenLabs, Cartesia) schedule the actual WebSocket
+        # handshake in a background task from their ``_connect`` method — so
+        # ``StartFrame`` propagates in microseconds but the connection isn't
+        # actually usable until the handshake completes 200ms-2s later.
+        # Deepgram's ``run_stt`` (line 539) and ``_handle_vad_user_stopped``
+        # (line 746) both guard on ``if self._connection:`` and silently drop
+        # audio / skip finalize when the connection isn't up — a probe that
+        # pushes data too early sees zero transcripts on a HEALTHY provider
+        # and times out.
+        #
+        # Two paths:
+        #   1) Service exposes an ``asyncio.Event`` readiness signal
+        #      (Deepgram's ``_connection_ready``). Wait for it up to
+        #      ``warmup_s`` and proceed as soon as it fires — no wasted
+        #      latency on a fast handshake.
+        #   2) No explicit signal (most services). Sleep the full ``warmup_s``
+        #      as a best-effort budget.
+        ready = getattr(service, "_connection_ready", None)
+        if isinstance(ready, asyncio.Event):
+            with contextlib.suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(ready.wait(), timeout=warmup_s)
+        else:
+            await asyncio.sleep(warmup_s)
         for f in input_frames:
             await task.queue_frame(f)
 
