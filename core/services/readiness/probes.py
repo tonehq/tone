@@ -279,7 +279,6 @@ async def probe_stt(ctx) -> ProbeResult:
     # out on a HEALTHY provider. Using the VAD classes mirrors what the
     # transport does and is what every STT service is written to consume.
     from pipecat.frames.frames import (
-        EndFrame,
         InputAudioRawFrame,
         InterimTranscriptionFrame,
         TranscriptionFrame,
@@ -295,6 +294,12 @@ async def probe_stt(ctx) -> ProbeResult:
             return bool(text)
         return False
 
+    # NO ``EndFrame`` — sending it here triggers the service's ``stop()`` →
+    # ``_disconnect()`` which closes the WebSocket immediately. Streaming STTs
+    # emit their final transcript ASYNC ~100-500ms after ``send_finalize``;
+    # closing the WS in that window drops the response and the probe times
+    # out on a HEALTHY provider. The harness's ``_teardown`` will
+    # ``task.cancel()`` once we've captured a transcript OR hit the timeout.
     input_frames = [
         # Start the "user turn" — resets TTFB tracking, kicks metrics, and
         # tells segmented STTs to begin buffering. Without this, some
@@ -305,7 +310,6 @@ async def probe_stt(ctx) -> ProbeResult:
         # (Deepgram: connection.finalize; AssemblyAI: force_endpoint) so the
         # provider flushes buffered audio and emits its final transcript.
         VADUserStoppedSpeakingFrame(),
-        EndFrame(),
     ]
     params = PipelineParams(
         audio_in_sample_rate=target_rate,
