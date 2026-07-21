@@ -21,6 +21,9 @@ export interface Organization {
   subscription_plan?: string | null;
   subscription_status?: string | null;
   status?: string | null;
+  industry?: string | null;
+  use_case?: string | null;
+  onboarding_completed?: boolean;
 }
 
 export interface UserOrganization {

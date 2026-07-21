@@ -5,6 +5,7 @@ from fastapi import (APIRouter, Body, Depends, Header, HTTPException, Query,
                      Request, Response, status)
 from sqlalchemy.orm import Session
 
+from core.api.v1.auth import CompleteOnboardingRequest
 from core.database.session import get_db
 from core.middleware.auth import (
     REFRESH_COOKIE,
@@ -242,6 +243,23 @@ def change_password(
             status_code=status.HTTP_400_BAD_REQUEST, detail="new_password is required"
         )
     return EEAuthService(db).change_password_for_user(claims.user_id, new_password)
+
+
+@router.post("/onboarding")
+def complete_onboarding(
+    body: CompleteOnboardingRequest,
+    claims: EEJWTClaims = Depends(get_ee_jwt_claims),
+    db: Session = Depends(get_db),
+):
+    svc = EEAuthService(db)
+    result = svc.complete_onboarding(
+        user_id=claims.user_id,
+        workspace_name=body.workspace_name,
+        use_case=body.use_case,
+        industry=body.industry,
+        invites=[entry.model_dump() for entry in body.invites],
+    )
+    return svc.onboarding_response(*result)
 
 
 @router.get("/validate-invitation")
