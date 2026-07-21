@@ -12,10 +12,31 @@ export const signupSchema = z.object({
   last_name: z.string().min(1, 'Last name is required'),
   email: z.string().min(1, 'Email is required').email('Please enter a valid email'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
-  organization_name: z.string().optional(),
 });
 
 export type SignupFormData = z.infer<typeof signupSchema>;
+
+// Invite rows are optional per-step (skip is allowed), but if the user has typed
+// a non-empty email it must be a valid one. Blank rows are dropped by the
+// wizard before submit rather than errored on.
+const onboardingInviteEntrySchema = z.object({
+  email: z.string().refine((v) => v.length === 0 || z.string().email().safeParse(v).success, {
+    message: 'Please enter a valid email',
+  }),
+  role: z.string().min(1, 'Role is required'),
+});
+
+export const onboardingSchema = z.object({
+  workspace_name: z
+    .string()
+    .min(1, 'Workspace name is required')
+    .max(100, 'Workspace name must be 100 characters or fewer'),
+  invites: z.array(onboardingInviteEntrySchema),
+  use_case: z.string().min(1, 'Please pick a use case'),
+  industry: z.string(),
+});
+
+export type OnboardingFormData = z.infer<typeof onboardingSchema>;
 
 export const onboardOrgSchema = z.object({
   org_name: z

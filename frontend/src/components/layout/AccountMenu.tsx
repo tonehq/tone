@@ -2,7 +2,6 @@
 
 import { ChevronDown, LogOut, Settings } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 
 import { AvatarBadge } from '@/components/layout/AvatarBadge';
 import { ThemeToggleRow } from '@/components/layout/ThemeToggleRow';
@@ -39,7 +38,6 @@ export function AccountMenu({
   collapsed: boolean;
   children?: React.ReactNode;
 }) {
-  const router = useRouter();
   const { user, clearAuth } = useAuthStore();
 
   const handleLogout = async () => {
@@ -52,7 +50,9 @@ export function AccountMenu({
       console.error('Logout error:', error);
     } finally {
       clearAuth();
-      router.replace('/login');
+      // Hard nav — throws away the whole React tree so no mounted effects can
+      // keep firing /me + /refresh 401s in a redirect loop with the middleware.
+      window.location.href = '/login';
     }
   };
 
