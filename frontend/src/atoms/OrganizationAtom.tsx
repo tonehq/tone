@@ -38,10 +38,17 @@ export const fetchOrganizationList = atom(null, async (_get, set) => {
   await refetchAndSync(set);
 });
 
-export const createOrganizationAtom = atom(null, async (_get, set, name: string) => {
-  await createOrganization(name);
-  await refetchAndSync(set);
-});
+export const createOrganizationAtom = atom(
+  null,
+  async (
+    _get,
+    set,
+    { name, schedulingTimezone }: { name: string; schedulingTimezone?: string },
+  ) => {
+    await createOrganization(name, schedulingTimezone);
+    await refetchAndSync(set);
+  },
+);
 
 export const updateOrganizationAtom = atom(
   null,

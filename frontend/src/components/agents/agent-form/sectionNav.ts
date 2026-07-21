@@ -1,6 +1,7 @@
 import {
   Book,
   Bot,
+  CalendarClock,
   Clock,
   Cpu,
   LayoutGrid,
@@ -38,22 +39,23 @@ export const AGENT_SECTIONS: AgentSection[] = [
   { key: 'knowledge', label: 'Knowledge', icon: Book },
   { key: 'channels', label: 'Channels', icon: Radio },
   { key: 'contacts', label: 'Contacts', icon: Users },
+  { key: 'schedule', label: 'Schedule', icon: CalendarClock },
   { key: 'call-history', label: 'Call History', icon: Clock },
 ];
 
 /**
  * Sections shown only for a saved agent (edit mode) — omitted while creating.
- * `contacts` (C-5): assigning contacts needs a persisted `agent_id`, which only
- * exists after the agent is saved, so the tab must not render in create mode.
+ * `contacts`/`schedule` (C-5): they need a persisted `agent_id`, which only exists
+ * after the agent is saved, so the tabs must not render in create mode.
  */
-const EDIT_ONLY_SECTION_KEYS = new Set<string>(['call-history', 'contacts']);
+const EDIT_ONLY_SECTION_KEYS = new Set<string>(['call-history', 'contacts', 'schedule']);
 
 /**
- * Sections gated on the agent's call mode. `contacts` only makes sense for agents
- * that place outbound calls (`outbound` or `both`) — an inbound-only agent never
- * dials a contact, so the tab is hidden for it.
+ * Sections gated on the agent's call mode. `contacts`/`schedule` only make sense for
+ * agents that place outbound calls (`outbound` or `both`) — an inbound-only agent never
+ * dials a contact, so the tabs are hidden for it.
  */
-const OUTBOUND_ONLY_SECTION_KEYS = new Set<string>(['contacts']);
+const OUTBOUND_ONLY_SECTION_KEYS = new Set<string>(['contacts', 'schedule']);
 
 /** True when the agent handles outbound calls (`outbound` or `both`). */
 function handlesOutbound(callMode: AgentDirection): boolean {

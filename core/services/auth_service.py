@@ -1168,9 +1168,13 @@ class AuthService(BaseService):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found"
             )
-        org.settings = new_settings
+        # Merge (read-modify-write) rather than replace so a partial update — e.g. saving
+        # only the scheduling timezone — never clobbers other settings keys. Reassign a new
+        # dict so SQLAlchemy detects the JSONB change.
+        merged = {**(org.settings or {}), **(new_settings or {})}
+        org.settings = merged
         self.db.commit()
-        return {"message": "Settings updated successfully", "settings": new_settings}
+        return {"message": "Settings updated successfully", "settings": merged}
 
     # ── Compatibility shims for older callers ────────────────────────
 

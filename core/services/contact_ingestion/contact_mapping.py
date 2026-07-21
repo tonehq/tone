@@ -20,8 +20,14 @@ from typing import Any, Dict, Optional, Sequence
 
 from loguru import logger
 
+from core.services.contact_ingestion.row_mapping import parse_datetime_value
+
 # Targets that are first-class contact columns rather than metadata keys.
 _RESERVED_TARGETS = {"name", "phone_number", "external_id"}
+
+# Field ``format`` values that mark a datetime column (parsed via parse_datetime_value
+# using the field's ``field_metadata`` {datetime_format, timezone}).
+_DATETIME_FORMATS = {"date", "datetime"}
 
 
 def _coerce(value: Any, type_: str) -> Any:
@@ -69,7 +75,19 @@ def map_source_row_to_contact(raw: Dict[str, Any], schema_fields: Sequence) -> D
         source_key = f.source_key if f.source_key else f.field_name
         if source_key not in raw:
             continue
-        value = _coerce(raw.get(source_key), f.type)
+        # A field marked as a date/datetime format parses through the shared datetime
+        # parser using its configured source format + timezone (field_metadata), yielding
+        # a normalized UTC ISO string; all other types use best-effort type coercion.
+        if getattr(f, "format", None) in _DATETIME_FORMATS:
+            raw_val = raw.get(source_key)
+            cfg = getattr(f, "field_metadata", None) or {}
+            value = parse_datetime_value(
+                str(raw_val) if raw_val is not None else "",
+                fmt=(cfg.get("datetime_format") or None),
+                tz=(cfg.get("timezone") or None),
+            )
+        else:
+            value = _coerce(raw.get(source_key), f.type)
         if f.field_name == "name":
             name = value if value in (None,) or isinstance(value, str) else str(value)
         elif f.field_name == "phone_number":

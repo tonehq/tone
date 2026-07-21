@@ -14,7 +14,8 @@ on redelivery: ``upsert_contact`` keys on ``(directory_id, external_id)`` and a 
 sync short-circuits, so a re-delivered job converges to the same result rather than
 duplicating contacts.
 
-Reuse map: ``get_contact_source`` (datasource → parser), ``map_source_row_to_contact``
+Reuse map: ``select_source_for_upload`` (uploaded blob → CSV/``.xlsx`` parser by magic
+bytes) / ``get_contact_source`` (datasource → parser), ``map_source_row_to_contact``
 (schema mapping), ``make_contact_metadata_validator`` / ``validate_contact_metadata``
 (per-row validation), ``upsert_contact`` (the single directory-scoped write-site),
 ``ContactDatasourceService.ensure_csv_datasource`` (pinned), ``AgentContactService.
@@ -37,7 +38,7 @@ from core.models.schema_field import SchemaField
 from core.models.upload import Upload
 from core.services.base import BaseService
 from core.services.common.list_query import apply_search_sort_pagination
-from core.services.contact_ingestion import get_contact_source
+from core.services.contact_ingestion import get_contact_source, select_source_for_upload
 from core.services.contact_ingestion.contact_mapping import map_source_row_to_contact
 from core.services.contacts.contact_metadata_validation import (
     make_contact_metadata_validator,
@@ -257,7 +258,7 @@ class ContactSyncService(BaseService):
 
         try:
             managed, validator = make_contact_metadata_validator(schema_fields)
-            source = get_contact_source(datasource)
+            source = self._resolve_source(datasource, blob)
             for i, parsed in enumerate(source.parse(blob)):
                 parsed_any = True
                 if i >= self.MAX_SYNC_ROWS:
@@ -307,7 +308,9 @@ class ContactSyncService(BaseService):
 
                 errors = validate_contact_metadata(mapped.get("contact_metadata"), managed, validator)
                 if errors:
-                    skipped += 1
+                    # A row that fails metadata validation is a genuine failure (distinct from
+                    # `skipped`, which is a structural no-op like an unresolvable external_id).
+                    failed += 1
                     for msg in errors:
                         row_errors.append(_err(None, msg))
                     continue
@@ -410,6 +413,20 @@ class ContactSyncService(BaseService):
             raise ValueError("Sync upload not found.")
         blob = R2StorageService().download_file(upload.file_path)
         return datasource, schema_fields, blob
+
+    @staticmethod
+    def _resolve_source(datasource, blob: bytes):
+        """Pick the parser for a sync's blob.
+
+        Uploaded-file datasources (``csv`` type) sniff the blob's magic bytes so a user can
+        upload a real CSV **or** an ``.xlsx`` interchangeably (and legacy ``.xls`` fails with
+        a friendly message). Non-upload datasource types (``rest``, …) keep dispatching on
+        ``datasource.type`` via ``get_contact_source``.
+        """
+        ds_type = (getattr(datasource, "type", None) or "csv").strip().lower()
+        if ds_type == "csv":
+            return select_source_for_upload(blob)
+        return get_contact_source(datasource)
 
     @staticmethod
     def _parsed_to_raw(parsed) -> Dict[str, Any]:

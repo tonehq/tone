@@ -8,7 +8,14 @@ import {
   useDeleteSchemaField,
   useUpdateSchemaField,
 } from '@/lib/api/contactSchemas';
-import { CheckboxField, CustomButton, SelectInput, TextInput } from '@/components/shared';
+import {
+  CheckboxField,
+  CustomButton,
+  SelectInput,
+  TextInput,
+  TimezoneSelect,
+} from '@/components/shared';
+import { DATETIME_FORMAT_OPTIONS, DEFAULT_DATETIME_FORMAT } from '@/constants/contactSchema';
 import type {
   CreateSchemaFieldPayload,
   SchemaField,
@@ -33,13 +40,23 @@ import ConfirmDeleteModal from './ConfirmDeleteModal';
  * shared org schema library (F5). It owns only field editing — the parent owns the
  * schema-level create/rename/delete + set-as-default.
  */
-const FIELD_TYPES: { value: SchemaFieldType; label: string }[] = [
+/** UI-only field type. `date` / `datetime` are conveniences that persist as a string
+ *  field carrying `format` = date/datetime (the backend keys date parsing off `format`,
+ *  so the stored `type` stays a primitive). */
+type UiFieldType = SchemaFieldType | 'date' | 'datetime';
+
+const FIELD_TYPES: { value: UiFieldType; label: string }[] = [
   { value: 'string', label: 'Text' },
   { value: 'number', label: 'Number' },
   { value: 'integer', label: 'Integer' },
   { value: 'boolean', label: 'Boolean' },
   { value: 'enum', label: 'Enum' },
+  { value: 'datetime', label: 'Date & time' },
 ];
+
+// `date` is still recognised for pre-existing fields, but only `datetime` is offered as a
+// new choice above (a plain date is just a datetime without a time component).
+const DATETIME_TYPES = new Set<UiFieldType>(['date', 'datetime']);
 
 export interface SchemaFieldsEditorProps {
   schemaId: string;
@@ -51,22 +68,26 @@ export interface SchemaFieldsEditorProps {
 interface DraftField {
   field_name: string;
   label: string;
-  type: SchemaFieldType;
-  format: string;
+  type: UiFieldType;
   is_mandatory: boolean;
   source_key: string;
   /** Comma-separated enum values (only used when `type === 'enum'`). */
   optionsText: string;
+  /** strptime format for date/datetime fields (e.g. `%m/%d/%Y %H:%M`); blank = ISO. */
+  datetimeFormat: string;
+  /** IANA source timezone for date/datetime fields; blank = UTC. */
+  timezone: string;
 }
 
 const EMPTY_DRAFT: DraftField = {
   field_name: '',
   label: '',
   type: 'string',
-  format: '',
   is_mandatory: false,
   source_key: '',
   optionsText: '',
+  datetimeFormat: DEFAULT_DATETIME_FORMAT,
+  timezone: '',
 };
 
 function optionsFromText(text: string): SchemaFieldOption[] {
@@ -78,14 +99,21 @@ function optionsFromText(text: string): SchemaFieldOption[] {
 }
 
 function draftToPayload(draft: DraftField): CreateSchemaFieldPayload {
+  const isDatetime = DATETIME_TYPES.has(draft.type);
   return {
     field_name: draft.field_name.trim(),
-    type: draft.type,
+    // Date / Date & time persist as a string field carrying a date/datetime `format`.
+    type: isDatetime ? 'string' : (draft.type as SchemaFieldType),
     label: draft.label.trim() || null,
-    format: draft.format.trim() || null,
+    format: isDatetime ? draft.type : null,
     is_mandatory: draft.is_mandatory,
     source_key: draft.source_key.trim() || null,
     options: draft.type === 'enum' ? optionsFromText(draft.optionsText) : null,
+    // For date/datetime fields carry the importer parse config (a selected format + source
+    // timezone); otherwise clear it.
+    field_metadata: isDatetime
+      ? { datetime_format: draft.datetimeFormat || null, timezone: draft.timezone || null }
+      : {},
   };
 }
 
@@ -114,14 +142,21 @@ export default function SchemaFieldsEditor({
 
   const openEdit = (field: SchemaField) => {
     setEditingId(field.id);
+    const meta = (field.field_metadata ?? {}) as Record<string, unknown>;
+    const isDatetime = field.format === 'date' || field.format === 'datetime';
     setDraft({
       field_name: field.field_name,
       label: field.label ?? '',
-      type: field.type,
-      format: field.format ?? '',
+      // Surface a date/datetime-formatted string field as the "Date"/"Date & time" type.
+      type: isDatetime ? (field.format as UiFieldType) : field.type,
       is_mandatory: field.is_mandatory,
       source_key: field.source_key ?? '',
       optionsText: (field.options ?? []).map((o) => o.value).join(', '),
+      datetimeFormat:
+        typeof meta.datetime_format === 'string' && meta.datetime_format
+          ? meta.datetime_format
+          : DEFAULT_DATETIME_FORMAT,
+      timezone: typeof meta.timezone === 'string' ? meta.timezone : '',
     });
     setShowForm(true);
   };
@@ -199,7 +234,9 @@ export default function SchemaFieldsEditor({
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <span className="truncate">{field.label || field.field_name}</span>
                   <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                    {field.type}
+                    {field.format === 'date' || field.format === 'datetime'
+                      ? field.format
+                      : field.type}
                   </span>
                   {field.is_mandatory && (
                     <span className="text-[11px] font-medium text-red-600">required</span>
@@ -265,7 +302,7 @@ export default function SchemaFieldsEditor({
               label="Type"
               options={FIELD_TYPES}
               value={draft.type}
-              onValueChange={(v) => set('type', v as SchemaFieldType)}
+              onValueChange={(v) => set('type', v as UiFieldType)}
             />
             <TextInput
               name="source_key"
@@ -278,11 +315,28 @@ export default function SchemaFieldsEditor({
               <TextInput
                 name="options"
                 label="Options (comma-separated)"
-                className="col-span-2"
                 value={draft.optionsText}
                 onChange={(e) => set('optionsText', e.target.value)}
                 placeholder="low, medium, high"
               />
+            )}
+            {DATETIME_TYPES.has(draft.type) && (
+              <>
+                <TimezoneSelect
+                  name="field-timezone"
+                  label="Source timezone"
+                  value={draft.timezone}
+                  onValueChange={(v) => set('timezone', v)}
+                  placeholder="UTC if blank"
+                />
+                <SelectInput
+                  name="datetime_format"
+                  label="Date/time format"
+                  options={DATETIME_FORMAT_OPTIONS}
+                  value={draft.datetimeFormat}
+                  onValueChange={(v) => set('datetimeFormat', v)}
+                />
+              </>
             )}
           </div>
 

@@ -20,7 +20,7 @@ import { PhoneNumberDisplay } from '@/components/shared/PhoneNumberDisplay';
 import ContactsTable from '@/components/contacts/shared/ContactsTable';
 import ConfirmDeleteModal from '@/components/contacts/shared/ConfirmDeleteModal';
 import SchemaDrivenContactForm from '@/components/contacts/shared/SchemaDrivenContactForm';
-import SyncContactsModal from '@/components/contacts/shared/SyncContactsModal';
+import UploadContactsModal from '@/components/contacts/shared/UploadContactsModal';
 import { useSyncStatusPolling } from '@/components/contacts/shared/useSyncStatusPolling';
 import { buildContactFormSchema } from '@/components/contacts/shared/buildContactFormSchema';
 import type { Contact, ListContactsParams } from '@/types/contact';
@@ -36,7 +36,7 @@ import AddContactsModal from './AddContactsModal';
  *
  * WHAT: lists a directory's contacts (server search / sort / paginate via
  * `useContactsList`) with per-row edit + delete and bulk-delete; hosts the multi-row
- * "Add Contacts" modal and the shared "Sync Contacts" CSV modal. It drives the
+ * "Add Contacts" modal and the shared "Upload Contacts" (CSV / Excel) modal. It drives the
  * directory's default-schema fields (fetched via the directory → schema hooks) into the
  * add / edit forms so metadata inputs match the schema. After a sync completes it shows a
  * completed-with-warnings banner (linking the error report) and refreshes the list.
@@ -78,7 +78,7 @@ export default function DirectoryContactsSection({ directoryId }: DirectoryConta
 
   // Modals / dialogs.
   const [addOpen, setAddOpen] = useState(false);
-  const [syncOpen, setSyncOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [editContact, setEditContact] = useState<Contact | null>(null);
   const [deleteContact, setDeleteContact] = useState<Contact | null>(null);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
@@ -266,13 +266,13 @@ export default function DirectoryContactsSection({ directoryId }: DirectoryConta
             <div className="flex flex-col gap-1">
               <p className="text-sm font-medium text-foreground">No contacts yet</p>
               <p className="text-xs text-muted-foreground">
-                Add contacts manually or sync them from a CSV to get started.
+                Add contacts manually or upload a CSV / Excel file to get started.
               </p>
             </div>
             <div className="mt-1 flex items-center gap-2">
-              <CustomButton type="default" size="sm" onClick={() => setSyncOpen(true)}>
+              <CustomButton type="default" size="sm" onClick={() => setUploadOpen(true)}>
                 <Upload className="size-4" aria-hidden />
-                Sync Contacts
+                Upload Contacts
               </CustomButton>
               <CustomButton type="primary" size="sm" onClick={() => setAddOpen(true)}>
                 <Plus className="size-4" aria-hidden />
@@ -289,9 +289,9 @@ export default function DirectoryContactsSection({ directoryId }: DirectoryConta
                 Delete ({selectedIds.length})
               </CustomButton>
             )}
-            <CustomButton type="default" onClick={() => setSyncOpen(true)}>
+            <CustomButton type="default" onClick={() => setUploadOpen(true)}>
               <Upload className="size-4" aria-hidden />
-              Sync Contacts
+              Upload Contacts
             </CustomButton>
             <CustomButton type="primary" onClick={() => setAddOpen(true)}>
               <Plus className="size-4" aria-hidden />
@@ -309,9 +309,9 @@ export default function DirectoryContactsSection({ directoryId }: DirectoryConta
         onCompleted={() => refetch()}
       />
 
-      <SyncContactsModal
-        open={syncOpen}
-        onClose={() => setSyncOpen(false)}
+      <UploadContactsModal
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
         directoryId={directoryId}
         defaultSchemaId={defaultSchemaId}
         onCompleted={(syncId) => {

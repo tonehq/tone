@@ -12,6 +12,7 @@ from fastapi import HTTPException
 
 from core.models.agent import Agent
 from core.models.channel import Channel
+from core.models.contact import Contact
 from core.models.phone_number import PhoneNumber
 from core.models.scheduled_call import ScheduledCall
 from core.services.call_log_service import CallLogService
@@ -87,11 +88,42 @@ class TestCreateSuccess:
         # No scheduled_calls row is added for a single immediate call.
         assert not db.add_all.called
 
+    def _db_with_contacts(self, numbers):
+        """A mock DB plus fake Contact rows the create+assign+schedule path resolves to.
+
+        Bulk/scheduled create now routes through the shared Schedule → Assign → Create path
+        (#10): the numbers become contacts in the default directory (assigned to the agent),
+        then ``schedule_calls_for_contacts`` loads them back and builds the scheduled rows."""
+        ch = SimpleNamespace(id=uuid4(), channel_type="twilio")
+        pn = SimpleNamespace(id=uuid4(), channel_id=ch.id)
+        contacts = [
+            SimpleNamespace(id=uuid4(), phone_number=n, name=None, contact_metadata={})
+            for n in numbers
+        ]
+        db = make_db(
+            {Agent: _agent(), PhoneNumber: pn, Channel: ch, (Contact, "all"): contacts}
+        )
+        return db, contacts
+
+    def _patch_contact_services(self, mock_dir, mock_contacts, contacts):
+        mock_dir.return_value.get_or_create_default_directory.return_value = SimpleNamespace(
+            id=uuid4()
+        )
+        mock_contacts.return_value.create_contacts.return_value = {
+            "created": [{"id": str(c.id)} for c in contacts],
+            "assigned": len(contacts),
+        }
+
+    @patch("core.services.contacts.contact_service.ContactService")
+    @patch("core.services.contacts.contact_directory_service.ContactDirectoryService")
     @patch("core.services.outbound_call_service.get_call_engine")
-    def test_bulk_immediate_queues_one_row_per_number(self, mock_engine, _creds, monkeypatch):
+    def test_bulk_immediate_queues_one_row_per_number(
+        self, mock_engine, mock_dir, mock_contacts, _creds, monkeypatch
+    ):
         enq = MagicMock(side_effect=lambda items: [(99, None) for _ in items])
         monkeypatch.setattr("core.services.ingestion_queue.enqueue_outbound_calls_batch", enq)
-        db = self._db()
+        db, contacts = self._db_with_contacts(["+15552220001", "+15552220002"])
+        self._patch_contact_services(mock_dir, mock_contacts, contacts)
         svc = OutboundCallService(db, org_id=uuid4())
 
         res = svc.create_outbound_call(
@@ -100,6 +132,8 @@ class TestCreateSuccess:
         )
 
         assert res["mode"] == "bulk" and res["count"] == 2
+        # Numbers were created + assigned as contacts (single Schedule→Assign→Create path).
+        mock_contacts.return_value.create_contacts.assert_called_once()
         rows = db.add_all.call_args.args[0]
         assert len(rows) == 2 and all(isinstance(r, ScheduledCall) for r in rows)
         # One batched defer over a single connection, carrying both rows.
@@ -107,17 +141,24 @@ class TestCreateSuccess:
         assert len(enq.call_args.args[0]) == 2
         mock_engine.return_value.initiate_call.assert_not_called()  # bulk goes to the queue
 
+    @patch("core.services.contacts.contact_service.ContactService")
+    @patch("core.services.contacts.contact_directory_service.ContactDirectoryService")
     @patch("core.services.outbound_call_service.get_call_engine")
-    def test_invalid_numbers_reported_valid_proceed(self, mock_engine, _creds, monkeypatch):
+    def test_invalid_numbers_reported_valid_proceed(
+        self, mock_engine, mock_dir, mock_contacts, _creds, monkeypatch
+    ):
         enq = MagicMock(side_effect=lambda items: [(1, None) for _ in items])
         monkeypatch.setattr("core.services.ingestion_queue.enqueue_outbound_calls_batch", enq)
-        svc = OutboundCallService(self._db(), org_id=uuid4())
+        db, contacts = self._db_with_contacts(["+15552220001", "+15552220003"])
+        self._patch_contact_services(mock_dir, mock_contacts, contacts)
+        svc = OutboundCallService(db, org_id=uuid4())
         res = svc.create_outbound_call(
             agent_id=uuid4(), from_number="+15551110000",
             to_numbers=["+15552220001", "nope", "+15552220003"],
         )
         assert res["count"] == 2
-        assert len(res["invalid"]) == 1 and res["invalid"][0]["to_number"] == "nope"
+        # The parse-invalid number is surfaced back through the merged response.
+        assert any(i["to_number"] == "nope" for i in res["invalid"])
 
     def test_all_invalid_numbers_400(self, _creds):
         svc = OutboundCallService(self._db(), org_id=uuid4())
@@ -125,13 +166,18 @@ class TestCreateSuccess:
             svc.create_outbound_call(agent_id=uuid4(), from_number="+15551110000", to_numbers=["nope", "bad"])
         assert exc.value.status_code == 400
 
+    @patch("core.services.contacts.contact_service.ContactService")
+    @patch("core.services.contacts.contact_directory_service.ContactDirectoryService")
     @patch("core.services.outbound_call_service.get_call_engine")
-    def test_scheduled_inserts_rows_and_enqueues(self, mock_engine, _creds, monkeypatch):
+    def test_scheduled_inserts_rows_and_enqueues(
+        self, mock_engine, mock_dir, mock_contacts, _creds, monkeypatch
+    ):
         from datetime import datetime, timedelta, timezone
 
         enq = MagicMock(side_effect=lambda items: [(4242, None) for _ in items])
         monkeypatch.setattr("core.services.ingestion_queue.enqueue_outbound_calls_batch", enq)
-        db = self._db()
+        db, contacts = self._db_with_contacts(["+15552220000"])
+        self._patch_contact_services(mock_dir, mock_contacts, contacts)
         svc = OutboundCallService(db, org_id=uuid4())
         future = datetime.now(timezone.utc) + timedelta(hours=1)
 

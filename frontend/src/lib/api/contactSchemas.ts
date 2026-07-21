@@ -33,6 +33,24 @@ export const schemasApi = {
     const { data } = await axios.get<ContactSchemaDetail>(`/contact-schemas/${id}`);
     return data;
   },
+  /**
+   * Download a schema-shaped sample import file. The file (columns + example row) is built
+   * SERVER-SIDE and streamed back as a blob — the client only triggers the download, so no
+   * sample content is generated in the browser.
+   */
+  downloadSample: async (
+    id: string,
+    format: 'csv' | 'xlsx',
+    filenameSlug?: string,
+  ): Promise<void> => {
+    const { triggerBlobDownload } = await import('@/utils/download');
+    const res = await axios.get(`/contact-schemas/${id}/sample`, {
+      params: { format },
+      responseType: 'blob',
+    });
+    const slug = (filenameSlug || 'schema').trim().replace(/\s+/g, '-').toLowerCase() || 'schema';
+    triggerBlobDownload(`sample-${slug}.${format}`, res.data as Blob);
+  },
   create: async (payload: CreateSchemaPayload): Promise<ContactSchema> => {
     const { data } = await axios.post<ContactSchema>('/contact-schemas', payload);
     return data;

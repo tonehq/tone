@@ -128,9 +128,16 @@ function DirectoryRow({
   onSelect: () => void;
 }) {
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
       aria-current={active ? 'true' : undefined}
       className={cn(
         ROW_BASE,
@@ -154,7 +161,7 @@ function DirectoryRow({
       >
         {directory.contact_count}
       </span>
-    </button>
+    </div>
   );
 }
 

@@ -15,19 +15,21 @@ import SampleDownloadMenu from './SampleDownloadMenu';
 import SyncProgressPanel from './SyncProgressPanel';
 
 /**
- * The contact-sync stepper: pick datasource → mapping schema → (for CSV) upload file →
- * confirm → progress (polled).
+ * Upload Contacts — the local-file import flow: pick a mapping schema → upload a CSV or
+ * `.xlsx` (agent context also exposes a target-directory override) → progress (polled).
  *
- * DORMANT: no page currently mounts this. It is kept, refactored onto the shared
- * {@link ContactFileInput} + {@link SyncProgressPanel} (zero duplication with
- * UploadContactsModal), reserved for a future third-party ("rest") datasource rebuild.
- * The live local-file upload UX now lives in `UploadContactsModal`.
+ * WHAT: creates a `ContactSync` for a directory from an uploaded file mapped through a
+ * chosen org schema, then polls it to a terminal status via the shared
+ * {@link SyncProgressPanel}. If an `agentId` is passed, the worker auto-assigns imported
+ * contacts to that agent on completion. The upload uses the existing `POST /contact-syncs`
+ * endpoint (no new API); the backend sniffs CSV vs `.xlsx` from the file's content.
  *
- * WHAT: creates a `ContactSync` for a directory from an uploaded CSV mapped through a
- * chosen org schema, then polls the sync to a terminal status. If an `agentId` is passed,
- * it is sent so the worker auto-assigns imported contacts to that agent on completion.
+ * WHEN: this is the single Upload-launch UI — mounted on both the directory General view
+ * (no `agentId`) and the Agent Contacts tab (`agentId` set). Third-party *sync* (as opposed
+ * to local upload) is intentionally not offered here; that lives in the dormant
+ * `SyncContactsModal`.
  */
-export interface SyncContactsModalProps {
+export interface UploadContactsModalProps {
   open: boolean;
   onClose: () => void;
   /**
@@ -41,26 +43,26 @@ export interface SyncContactsModalProps {
   /** The directory's default schema id — preselected in the schema picker. */
   defaultSchemaId?: string | null;
   /**
-   * Called when a sync finishes so the parent can refresh its contacts list. Receives the
+   * Called when an upload finishes so the parent can refresh its contacts list. Receives the
    * finished sync's id (optional) so the parent can poll/link it directly instead of
    * re-deriving it from a possibly-stale "most recent sync" query.
    */
   onCompleted?: (syncId?: string) => void;
 }
 
-/** Datasource types a sync can pull from. CSV is the only type at launch; the picker
- * is future-proofed for REST/others (which would swap the CSV upload for their own
- * config). Only `csv` reveals the file-upload control. */
-const DATASOURCE_OPTIONS = [{ value: 'csv', label: 'CSV file' }];
+/** The `accept` hint for the OS file dialog: CSV + `.xlsx` (extensions + MIME types). */
+const UPLOAD_ACCEPT =
+  '.csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const UPLOAD_ALLOWED_EXTENSIONS = ['.csv', '.xlsx'];
 
-export default function SyncContactsModal({
+export default function UploadContactsModal({
   open,
   onClose,
   directoryId,
   agentId,
   defaultSchemaId,
   onCompleted,
-}: SyncContactsModalProps) {
+}: UploadContactsModalProps) {
   const { data: schemasPage } = useSchemasList({ page_size: 100 });
   const createSync = useCreateContactSync();
 
@@ -76,7 +78,6 @@ export default function SyncContactsModal({
   // normal directories list (there is no /global endpoint).
   const globalDirectory = directoriesQuery.data?.data?.find((d) => d.name === 'Global');
 
-  const [datasourceType, setDatasourceType] = useState<string>('csv');
   const [schemaId, setSchemaId] = useState<string>(defaultSchemaId ?? '');
   const [file, setFile] = useState<File | null>(null);
   const [syncId, setSyncId] = useState<string | null>(null);
@@ -90,7 +91,6 @@ export default function SyncContactsModal({
   const { data: schemaDetail } = useSchema(schemaId || null);
 
   const schemaOptions = (schemasPage?.data ?? []).map((s) => ({ value: s.id, label: s.name }));
-  const isCsv = datasourceType === 'csv';
 
   // Agent context: default the target to the "Global" directory once the list arrives, if
   // the user hasn't overridden it. If no "Global" exists, the pick stays empty and the user
@@ -102,7 +102,6 @@ export default function SyncContactsModal({
   }, [open, isAgentContext, pickedDirectoryId, globalDirectory]);
 
   const reset = () => {
-    setDatasourceType('csv');
     setSchemaId(defaultSchemaId ?? '');
     setFile(null);
     setSyncId(null);
@@ -113,9 +112,9 @@ export default function SyncContactsModal({
     onClose();
   };
 
-  const startSync = async () => {
-    if (!effectiveDirectoryId || !schemaId || (isCsv && !file)) {
-      showToast.error('Pick a directory, a schema and a CSV file first.');
+  const startUpload = async () => {
+    if (!effectiveDirectoryId || !schemaId || !file) {
+      showToast.error('Pick a directory, a schema and a file first.');
       return;
     }
     try {
@@ -123,7 +122,7 @@ export default function SyncContactsModal({
         directory_id: effectiveDirectoryId,
         schema_id: schemaId,
         agent_id: agentId ?? undefined,
-        file: file as File,
+        file,
       });
       setSyncId(sync.id);
     } catch (err) {
@@ -131,13 +130,13 @@ export default function SyncContactsModal({
     }
   };
 
-  const canStart = !!effectiveDirectoryId && !!schemaId && (!isCsv || !!file);
+  const canStart = !!effectiveDirectoryId && !!schemaId && !!file;
 
   return (
     <CustomModal
       open={open}
       onClose={handleClose}
-      title="Sync Contacts"
+      title="Upload Contacts"
       hideFooter
       width="sm:max-w-lg"
     >
@@ -145,16 +144,7 @@ export default function SyncContactsModal({
         {!syncId && (
           <>
             <SelectInput
-              name="sync-datasource"
-              label="Datasource"
-              options={DATASOURCE_OPTIONS}
-              value={datasourceType}
-              onValueChange={setDatasourceType}
-              placeholder="Select a datasource"
-            />
-
-            <SelectInput
-              name="sync-schema"
+              name="upload-schema"
               label="Mapping schema"
               options={schemaOptions}
               value={schemaId}
@@ -162,25 +152,23 @@ export default function SyncContactsModal({
               placeholder="Select a schema"
             />
 
-            {isCsv && (
-              <ContactFileInput
-                label="CSV file"
-                accept=".csv,text/csv"
-                allowedExtensions={['.csv']}
-                value={file}
-                onChange={setFile}
-                hint={
-                  schemaId
-                    ? 'Upload a CSV whose columns match the selected schema, or download the sample above. Columns marked * are required.'
-                    : 'Select a mapping schema to download a matching sample template.'
-                }
-                sampleSlot={
-                  schemaId && schemaDetail ? (
-                    <SampleDownloadMenu schemaId={schemaId} schemaName={schemaDetail.name} />
-                  ) : undefined
-                }
-              />
-            )}
+            <ContactFileInput
+              label="Contact file"
+              accept={UPLOAD_ACCEPT}
+              allowedExtensions={UPLOAD_ALLOWED_EXTENSIONS}
+              value={file}
+              onChange={setFile}
+              hint={
+                schemaId
+                  ? 'Upload a CSV or .xlsx whose columns match the selected schema, or download the sample above. Columns marked * are required.'
+                  : 'Select a mapping schema to download a matching sample template.'
+              }
+              sampleSlot={
+                schemaId && schemaDetail ? (
+                  <SampleDownloadMenu schemaId={schemaId} schemaName={schemaDetail.name} />
+                ) : undefined
+              }
+            />
 
             {isAgentContext && (
               <AdvancedDirectoryConfig
@@ -197,11 +185,11 @@ export default function SyncContactsModal({
               </CustomButton>
               <CustomButton
                 type="primary"
-                onClick={startSync}
+                onClick={startUpload}
                 loading={createSync.isPending}
                 disabled={!canStart}
               >
-                Start sync
+                Upload
               </CustomButton>
             </div>
           </>
